@@ -212,7 +212,7 @@ subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * (compact ? 1.7 : 1.9))), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###l1") {
 				ui.spacer(ui.px(em * 0.95))
-				lamp("###st", sub_state_color(v.state), off ? 0.3 : 1, pulse = running, size = em * (off ? 0.75 : 0.95))
+				if running { lamp("###st", sub_state_color(v.state), 1, pulse = true, size = em * 0.95) } else { pip("###st", off ? with_alpha(sub_state_color(v.state), 0.5) : sub_state_color(v.state), em * 0.8) }
 				ui.spacer(ui.px(em * 0.45))
 				glyph(ICO_ROBOT, acol, math.round(em * 0.95))
 				ui.spacer(ui.px(em * 0.25))
@@ -455,7 +455,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 					text("a", s.agent, acol, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
 					if known {
 						ui.spacer(ui.px(em * 0.5))
-						lamp("###l", sub_state_color(st), 1, pulse = st == .Running, size = em * 0.75)
+						state_mark("###l", sub_state_color(st), st == .Running, size = em * 0.75)
 						if st == .Running { app.animating = true }
 						ui.spacer(ui.px(em * 0.25))
 						text("s", sub_state_label(st), sub_state_color(st), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.76)})

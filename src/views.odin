@@ -125,10 +125,9 @@ title_bar :: proc(app: ^App, em: f32) {
 		}
 		ui.spacer(ui.fill())
 		if app.chat.busy {
-			lamp("###tlamp", accent(), pulse = true, size = em * 0.9)
-			app.animating = true
-			ui.spacer(ui.px(em * 0.4))
 			text("busy", "working", accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8)})
+			ui.spacer(ui.px(em * 0.5))
+			scanner("###tscan", accent(), math.round(em * 3), math.round(em * 0.75))
 			ui.spacer(ui.px(em))
 		}
 		_, _ = ui.window_buttons()
@@ -330,7 +329,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				case "interrupted": st = .Cancelled
 				}
 				if busy { st = .Running; app.animating = true }
-				lamp("###st", sub_state_color(st), 1, pulse = busy, size = em * 0.75)
+				state_mark("###st", sub_state_color(st), busy, size = em * 0.75)
 				ui.spacer(ui.px(em * 0.3))
 				text("ag", s.agent, agent_color(s.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.7)})
 				ui.spacer(ui.px(em * 0.35))
@@ -619,7 +618,10 @@ messages :: proc(app: ^App, em: f32) {
 	for &m, i in c.messages {
 		switch m.kind {
 		case .User:        user_message(app, &m, em)
-		case .Assistant:   assistant_message(app, &m, em)
+		case .Assistant:
+			prev := i > 0 ? &c.messages[i - 1] : nil
+			next := i + 1 < len(c.messages) ? &c.messages[i + 1] : nil
+			assistant_message(app, &m, em, continues(prev, &m), next != nil && continues(&m, next) ? next : nil, prev)
 		case .Synthetic:
 			if m.sub_child != "" { subagent_result(app, &m, em) } else { note_line(app, &m, em, ICO_BOLT, m.text != "" ? first_line(m.text) : "synthetic message") }
 		case .Shell:       note_line(app, &m, em, ICO_TERMINAL, fmt.tprintf("$ %s", m.text))
@@ -632,11 +634,10 @@ messages :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.6))
 		ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###working") {
-			lamp("###wl", accent(), pulse = true, size = em * 0.95)
-			app.animating = true
-			ui.spacer(ui.px(em * 0.5))
-			dots := int(ui.now_ms() / 400) % 4
-			text("w", fmt.tprintf("Working%s", strings.repeat(".", dots, context.temp_allocator)), accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.85)})
+			ui.spacer(ui.px(em * 0.4))
+			text("w", "Working", accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.85)})
+			ui.spacer(ui.px(em * 0.7))
+			scanner("###wl", accent(), math.round(em * 7), math.round(em * 0.9))
 			ui.spacer(ui.fill())
 			if ui.tags("weak") { text("hint", "Ctrl+Esc to stop", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.8)}) }
 		}
@@ -720,16 +721,45 @@ agent_color :: proc(agent: string) -> Color {
 	return hex(HEX_GREEN)
 }
 
-assistant_message :: proc(app: ^App, m: ^Message, em: f32) {
+// `m` goes on from `prev` (an assistant step of the same agent and model, right after it): no header of its own.
+continues :: proc(prev, m: ^Message) -> bool {
+	return prev != nil && prev.kind == .Assistant && m.kind == .Assistant && (len(prev.parts) > 0 || prev.streaming) &&
+		prev.agent == m.agent && prev.model == m.model
+}
+
+// A tool call drawn on the timeline (a sub-agent has its own card).
+plain_tool :: proc(p: ^Part) -> bool { return p.kind == .Tool && p.tool_name != "subagent" && p.sub_agent == "" }
+
+@(private = "file")
+Who_Draw :: struct { col: Color, live: bool }
+
+// `cont`: it goes on from the step before (no header); `next`: the step after when it goes on from this one.
+assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: ^Message = nil, prev: ^Message = nil) {
 	if len(m.parts) == 0 && !m.streaming { return }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.column(id = fmt.tprintf("###a_%s", m.id)) {
-		// the speaker: agent lamp, agent, model, time
+		// the speaker, once per run of steps: a rail in the agent's colour, agent, model, time
+		if !cont {
 		ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###who") {
-			lamp("###al", agent_color(m.agent), m.streaming ? 1 : 0.55, pulse = m.streaming, size = em * 0.85)
+			ui.next({width = ui.px(math.round(em * 0.5)), height = ui.px(math.round(em * 1.0))})
+			rb := ui.build_box({}, "###al")
+			wd := ui.frame_new(Who_Draw)
+			wd^ = {agent_color(m.agent), m.streaming}
+			rb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+				d := (^Who_Draw)(user)
+				s := ui.scale()
+				c := draw.rect_center(b.rect)
+				r := Rect{{c.x - 1.5 * s, b.rect.min.y}, {c.x + 1.5 * s, b.rect.max.y}}
+				if d.live && the_app.prefs.glow {
+					a := 0.35 + 0.3 * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * 0.006))
+					draw.box_shadow(dc, r, radii4(1.5 * s), 4 * s, with_alpha(d.col, a))
+				}
+				draw.rect(dc, r, d.live ? d.col : with_alpha(d.col, 0.75), 1.5 * s)
+			}
+			rb.custom_user = wd
 			if m.streaming { app.animating = true }
-			ui.spacer(ui.px(em * 0.45))
+			ui.spacer(ui.px(em * 0.4))
 			name := m.agent != "" ? m.agent : "assistant"
 			text("ag", strings.to_upper(name[:1], context.temp_allocator), agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
 			text("ag2", name[1:], agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
@@ -741,6 +771,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32) {
 			text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.74)})
 		}
 		ui.spacer(ui.px(em * 0.4))
+		}
 		for &p, i in m.parts {
 			pid := fmt.tprintf("%s_%d", m.id, i)
 			switch p.kind {
@@ -751,7 +782,11 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32) {
 				}
 			case .Reasoning: reasoning_part(app, &p, pid, em)
 			case .Tool:
-				if p.tool_name == "subagent" || p.sub_agent != "" { subagent_card(app, &p, pid, em) } else { tool_part(app, &p, pid, em) }
+				if !plain_tool(&p) { subagent_card(app, &p, pid, em); break }
+				// consecutive calls share the timeline's rail, across the steps that go on from each other
+				above := i > 0 ? plain_tool(&m.parts[i - 1]) : cont && prev != nil && len(prev.parts) > 0 && plain_tool(&prev.parts[len(prev.parts) - 1])
+				below := i + 1 < len(m.parts) ? plain_tool(&m.parts[i + 1]) : next != nil && len(next.parts) > 0 && plain_tool(&next.parts[0])
+				tool_part(app, &p, pid, em, above, below)
 			}
 		}
 		if app.prefs.usage && !m.streaming && m.tokens_out > 0 && m.finish == "stop" {
@@ -761,7 +796,8 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32) {
 			}
 		}
 	}
-	ui.spacer(ui.px(em * 0.9))
+	// a step that goes on in the next one stays close to it (the rail runs on when both meet on a tool call)
+	if next == nil { ui.spacer(ui.px(em * 0.9)) }
 }
 
 part_open :: proc(app: ^App, id: string, default := false) -> bool {
@@ -812,25 +848,59 @@ status_color :: proc(s: Tool_Status) -> Color {
 	return {}
 }
 
-tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
+@(private = "file")
+Rail_Draw :: struct { status: Tool_Status, above, below: bool, head: f32 }
+
+// The timeline's gutter: a carved rail through the calls of a run, and at the height of the header the call's mark:
+// a lamp while it runs, a pip once it is done, a red pip when it failed.
+@(private = "file")
+rail_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+	d := (^Rail_Draw)(user)
+	r := b.rect
+	if b.parent != nil { r.max.y = b.parent.rect.max.y }   // (the box is as tall as the header; the row may be taller)
+	x := math.round((r.min.x + r.max.x) * 0.5)
+	cy := math.round(r.min.y + d.head * 0.5)
+	if d.above { draw_groove(dc, {x, r.min.y}, {x, cy}, true) }
+	if d.below { draw_groove(dc, {x, cy}, {x, r.max.y}, true) }
+	sz := math.round(d.head * 0.38)
+	switch d.status {
+	case .Running, .Pending:
+		lit := 0.45 + 0.55 * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * 0.006))
+		draw_lamp(dc, {x, cy}, math.round(sz * 0.85), status_color(d.status), lit)
+	case .Done:  draw_pip(dc, {x, cy}, sz, hex(0x4f8a5eff))
+	case .Error: draw_pip(dc, {x, cy}, sz, hex(HEX_RED))
+	}
+}
+
+// A tool call on the timeline: a flat row (its header lights under the pointer), its input and output in wells when
+// open. `above`, `below`: calls right before and after it, joined by the rail.
+tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, below := false) {
 	open := part_open(app, p.tool_id != "" ? p.tool_id : pid, app.prefs.expand_tools)
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if plate(fmt.tprintf("###tp_%s", pid), top = 0x151515ff, bottom = 0x111111ff, radius = 8, shadow = 4, rim = 0.06) {
+	head_h := math.round(em * 2.0)
+	running := p.status == .Running || p.status == .Pending
+	if running { app.animating = true }
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+	if ui.row(id = fmt.tprintf("###tp_%s", pid)) {
+		ui.next({width = ui.px(math.round(em * 1.5)), height = ui.px(head_h)})   // (the rail draws down to the row's bottom: fill() in a row sized by its children resolves far above)
+		gb := ui.build_box({}, "###rail")
+		rd := ui.frame_new(Rail_Draw)
+		rd^ = {p.status, above, below, head_h}
+		gb.custom = rail_draw
+		gb.custom_user = rd
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+		if ui.column(id = "###col") {
 		// header (click to open)
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), axis = .X, cross = .Center})
+		ui.next({width = ui.fill(), height = ui.px(head_h), axis = .X, cross = .Center})
 		hb := ui.build_box({.Clickable, .Focusable}, "###head")
 		hb.custom = head_draw
 		hs := ui.signal(hb)
 		if hs.clicked { part_toggle(app, p.tool_id != "" ? p.tool_id : pid, hb) }
 		if ui.parent(hb) {
-			ui.spacer(ui.px(em * 0.75))
-			running := p.status == .Running || p.status == .Pending
-			lamp("###st", status_color(p.status), 1, pulse = running, size = em * 0.8)
-			if running { app.animating = true }
-			ui.spacer(ui.px(em * 0.45))
-			glyph(tool_icon(p.tool_name), hex(HEX_WEAK), math.round(em * 0.85))
-			ui.spacer(ui.px(em * 0.3))
-			text("nm", p.tool_name != "" ? p.tool_name : "tool", hex(HEX_TEXT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.85)})
+			ui.spacer(ui.px(em * 0.5))
+			failed := p.status == .Error
+			glyph(tool_icon(p.tool_name), failed ? hex(HEX_RED) : hex(HEX_FAINT), math.round(em * 0.85))
+			ui.spacer(ui.px(em * 0.35))
+			text("nm", p.tool_name != "" ? p.tool_name : "tool", failed ? hex(0xf0a0a6ff) : running ? hex(0xffffffff) : hex(HEX_TEXT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.85)})
 			ui.spacer(ui.px(em * 0.6))
 			text("sj", p.subject, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8)}, ui.fill())
 			ui.spacer(ui.px(em * 0.4))
@@ -863,8 +933,9 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 				ui.spacer(ui.px(em * 0.6))
 			}
 		}
+		}
 	}
-	ui.spacer(ui.px(em * 0.5))
+	if !below { ui.spacer(ui.px(em * 0.5)) }
 }
 
 section_label :: proc(id, s: string, em: f32) {
@@ -1111,8 +1182,7 @@ status_bar :: proc(app: ^App, em: f32) {
 		small := ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.75)}
 		ui.spacer(ui.px(em * 0.8))
 		col := app.online ? hex(HEX_GREEN) : app.auth_failed ? hex(HEX_RED) : hex(HEX_YELLOW)
-		lamp("###online", col, 1, pulse = !app.online, size = em * 0.8)
-		if !app.online { app.animating = true }
+		state_mark("###online", col, !app.online, size = em * 0.8)   // (connected is the normal state: a pip)
 		ui.spacer(ui.px(em * 0.45))
 		state := app.online ? "connected" : app.auth_failed ? "auth refused" : "connecting"
 		text("st", fmt.tprintf("%s  %s", state, app.http.base), app.online ? hex(HEX_WEAK) : col, small)
@@ -1131,8 +1201,6 @@ status_bar :: proc(app: ^App, em: f32) {
 		}
 		nbusy := len(app.busy)
 		if nbusy > 0 {
-			lamp("###nb", accent(), pulse = true, size = em * 0.7)
-			ui.spacer(ui.px(em * 0.3))
 			text("b", fmt.tprintf("%d running", nbusy), accent(), small)
 			ui.spacer(ui.px(em * 0.8))
 		}

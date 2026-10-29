@@ -171,6 +171,19 @@ draw_lamp :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color, lit: f32 = 1) 
 	draw.rect(dc, hl, {1, 1, 1, 0.22 + 0.2 * lit}, d * 0.18, 0, d * 0.12)
 }
 
+// A pip: a small hole drilled in the surface with a dab of colour at its bottom, unlit. What is over (done, failed,
+// stopped) shows as a pip; only what is live gets a glowing lamp, so the lamps stay rare enough to mean something.
+draw_pip :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color) {
+	prev := draw.set_circular_corners(dc, true)
+	defer draw.set_circular_corners(dc, prev)
+	p := px1()
+	r := Rect{c - d * 0.5, c + d * 0.5}
+	draw.rect(dc, r, {0, 0, 0, 0.75}, d * 0.5)
+	draw.rect(dc, {{r.min.x, r.max.y - p}, {r.max.x, r.max.y + p}}, {1, 1, 1, 0.05}, d * 0.5)   // the lit lower lip
+	in_r := draw.rect_pad(r, -max(p, math.round(d * 0.22)))
+	draw.rect(dc, in_r, with_alpha(col, col.a * 0.8), (in_r.max.x - in_r.min.x) * 0.5)
+}
+
 ////////////////////////////////
 // Boxes painted by those primitives
 
@@ -291,6 +304,54 @@ lamp :: proc(id: string, color: Color, lit: f32 = 1, pulse := false, size: f32 =
 	d^ = {color = color, lit = lit, pulse = pulse}
 	b.custom = lamp_box_draw
 	b.custom_user = d
+}
+
+// A pip (see draw_pip) in a box of `size`.
+pip :: proc(id: string, color: Color, size: f32 = 0) {
+	em := ui.font_size()
+	sz := size > 0 ? size : math.round(em * 0.8)
+	ui.next({width = ui.px(sz), height = ui.px(sz)})
+	b := ui.build_box({}, id)
+	d := ui.frame_new(Color)
+	d^ = color
+	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		sz := min(b.rect.max.x - b.rect.min.x, b.rect.max.y - b.rect.min.y)
+		draw_pip(dc, draw.rect_center(b.rect), math.round(sz * 0.6), (^Color)(user)^)
+	}
+	b.custom_user = d
+}
+
+// A scanner: a slot carved in the surface with a glint of `color` sweeping to and fro (work going on, no lamp).
+scanner :: proc(id: string, color: Color, width, height: f32) {
+	ui.next({width = ui.px(width), height = ui.px(height)})
+	b := ui.build_box({}, id)
+	d := ui.frame_new(Color)
+	d^ = color
+	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		col := (^Color)(user)^
+		s := ui.scale()
+		r := b.rect
+		h := max(3 * s, math.round((r.max.y - r.min.y) * 0.4))
+		cy := math.round((r.min.y + r.max.y) * 0.5)
+		slot := Rect{{r.min.x, cy - h * 0.5}, {r.max.x, cy + h * 0.5}}
+		draw_well(dc, slot, h * 0.5, hex(0x070707ff))
+		w := slot.max.x - slot.min.x
+		t := 0.5 - 0.5 * math.cos(f32(ui.now_ms()) * 0.0028)   // eased back and forth
+		gw := w * 0.28
+		x := slot.min.x + (w - gw) * t
+		g := Rect{{x, slot.min.y + s}, {x + gw, slot.max.y - s}}
+		draw.push_clip(dc, slot)
+		if the_app.prefs.glow { draw.box_shadow(dc, g, radii4(h * 0.5), 4 * s, with_alpha(col, 0.5)) }
+		draw.rect(dc, g, with_alpha(col, 0.9), h * 0.5)
+		draw.pop_clip(dc)
+	}
+	b.custom_user = d
+	the_app.animating = true
+}
+
+// A live state as a pulsing lamp, a finished one as a pip.
+state_mark :: proc(id: string, color: Color, live: bool, size: f32 = 0) {
+	if live { lamp(id, color, 1, pulse = true, size = size); the_app.animating = true } else { pip(id, color, size) }
 }
 
 @(private = "file")

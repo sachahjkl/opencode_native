@@ -138,6 +138,9 @@ pace :: proc(app: ^App, inner: bool) -> (at_once: bool) {
 		d := platform.frame_decision(&app.cadence, {
 			now_ns = time.tick_now()._nsec, idled = app.idled, input = false,
 			presented = app.presented, resized = resized, slot_held = app.slot_held,
+			// a splitter, a scrollbar held: one frame per slot, and on a variable refresh screen shown at once (a frame
+			// waiting for a refresh waits at the rate the screen rests at, 60 Hz, while the window's edge moves at its top)
+			dragging = ui.active_key() != 0,
 		})
 		at_once, latency = d.present_at_once, d.latency
 		if d.wait_swap_chain && !app.slot_held { app.slot_held = render.wait_for_frame(&app.r) }
