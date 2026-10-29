@@ -29,6 +29,7 @@ build_ui :: proc(app: ^App) {
 	}
 	delete_dialog(app, em)
 	setup_dialog(app, em)
+	server_dialog(app, em)
 	settings_dialog(app, em)
 	image_viewer(app, em)
 	stats_dialog(app, em)
@@ -42,6 +43,7 @@ app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 			if app.chat.id != "" { load_messages(app, app.chat.id) }
 		}
 		if ui.menu_item("Settings…", "Ctrl+,").clicked { settings_open(app) }
+		if ui.menu_item("Add a server…").clicked { server_edit_open(app, -1) }
 		if ui.menu_item("Session statistics", "Ctrl+I", enabled = app.chat.id != "").clicked { stats_open(app) }
 		if ui.menu_item("Sub-agent sessions in the list", "", app.prefs.subagents == "flat").clicked { pref_set(app, "sidebar.subagents", app.prefs.subagents == "flat" ? "nested" : "flat") }
 		ui.menu_separator()
@@ -114,6 +116,12 @@ title_bar :: proc(app: ^App, em: f32) {
 		ui.next({height = ui.px(h * 0.55)})
 		groove("###tg")
 		ui.spacer(ui.px(em * 0.7))
+		if !app.servers[app.server].local {   // another computer's server: its name first
+			glyph(ICO_GLOBE, hex(HEX_CYAN), math.round(em * 0.8))
+			ui.spacer(ui.px(em * 0.3))
+			text("srv", server_name(app), hex(HEX_CYAN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
+			if app.chat.id != "" { text("srvsep", "  /  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.92)}) }
+		}
 		s := find_session(app, app.chat.id)
 		if s == nil && app.chat.have_self { s = &app.chat.self }
 		if s != nil {
@@ -595,7 +603,7 @@ empty_state :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.fill())
 	}
 	ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
-	if ui.tags("weak") { ui.label(app.online ? "Pick a session on the left, or start a new one.###hint" : fmt.tprintf("Connecting to %s…###hint", app.http.base)) }
+	if ui.tags("weak") { ui.label(app.online ? "Pick a session on the left, or start a new one.###hint" : fmt.tprintf("Connecting to %s…###hint", server_base(app))) }
 }
 
 messages :: proc(app: ^App, em: f32) {
@@ -1180,12 +1188,32 @@ status_bar :: proc(app: ^App, em: f32) {
 		b.custom = bar_draw
 		b.custom_user = d
 		small := ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.75)}
-		ui.spacer(ui.px(em * 0.8))
+		ui.spacer(ui.px(em * 0.35))
+		// the server: a button that opens the menu of the servers (switch, add, edit)
 		col := app.online ? hex(HEX_GREEN) : app.auth_failed ? hex(HEX_RED) : hex(HEX_YELLOW)
-		state_mark("###online", col, !app.online, size = em * 0.8)   // (connected is the normal state: a pip)
-		ui.spacer(ui.px(em * 0.45))
-		state := app.online ? "connected" : app.auth_failed ? "auth refused" : "connecting"
-		text("st", fmt.tprintf("%s  %s", state, app.http.base), app.online ? hex(HEX_WEAK) : col, small)
+		ui.next({width = ui.children_sum(), height = ui.px(h - 4 * ui.scale()), axis = .X, cross = .Center})
+		sb := ui.build_box({.Clickable, .Focusable}, "###server_btn")
+		sb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+			if b.hot_t > 0.01 || b.active_t > 0.01 { draw_bevel(dc, b.rect, 5 * ui.scale(), hex(0x1e1e1eff), b.hot_t, b.active_t * b.hot_t) }
+		}
+		ssig := ui.signal(sb)
+		skey := ui.key_from_string(0, "server_menu")
+		if ssig.clicked { ui.ctx_menu_open_rect(skey, sb.rect, sb.key) }
+		if ui.parent(sb) {
+			ui.spacer(ui.px(em * 0.45))
+			state_mark("###online", col, !app.online, size = em * 0.8)   // (connected is the normal state: a pip)
+			ui.spacer(ui.px(em * 0.4))
+			if len(app.servers) > 1 || !app.servers[app.server].local {
+				text("sn", server_name(app), app.online ? hex(HEX_TEXT) : col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.75)})
+				ui.spacer(ui.px(em * 0.5))
+			}
+			state := app.online ? "connected" : app.auth_failed ? "auth refused" : "connecting"
+			text("st", fmt.tprintf("%s  %s", state, server_base(app)), app.online ? hex(HEX_WEAK) : col, small)
+			ui.spacer(ui.px(em * 0.35))
+			glyph(ICO_DOWN, hex(HEX_FAINT), math.round(em * 0.55))
+			ui.spacer(ui.px(em * 0.45))
+		}
+		server_menu(app, skey, em)
 		if app.server_version != "" {
 			ui.spacer(ui.px(em * 0.8))
 			ui.next({height = ui.px(h * 0.6)})

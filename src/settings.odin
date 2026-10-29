@@ -554,10 +554,11 @@ page_server :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well("###srv", radius = 7, base = 0x0b0b0bff) {
 		ui.spacer(ui.px(em * 0.4))
-		fact("###s1", "address", app.http.base, em)
+		fact("###s1", "address", server_base(app), em)
 		fact("###s2", "status", app.online ? "connected" : "not connected", em, app.online ? hex(HEX_GREEN) : hex(HEX_YELLOW))
 		fact("###s3", "version", app.server_version != "" ? app.server_version : "?", em)
-		fact("###s4", "auth", app.cfg.password != "" ? "Basic (password from service.json)" : "none", em)
+		fact("###s0", "name", server_name(app), em)
+		fact("###s4", "auth", app.servers[app.server].password == "" ? "none" : app.servers[app.server].local ? "Basic (password from service.json)" : "Basic", em)
 		fact("###s5", "sessions", fmt.tprintf("%d loaded · %d running", len(app.sessions), len(app.busy)), em)
 		fact("###s6", "client", fmt.tprintf("opencode native %s", APP_VERSION), em)
 		ui.spacer(ui.px(em * 0.4))

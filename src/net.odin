@@ -164,6 +164,7 @@ Request :: struct {
 	body:   string,
 	tag:    string,    // the session it is about
 	gen:    u64,       // the chat generation it was made for (answers for a chat since left are dropped)
+	conn:   ^Conn,     // the connection it goes by (answers from a server since left are dropped)
 	// the answer
 	status: int,
 	resp:   string,
@@ -172,11 +173,11 @@ Request :: struct {
 
 request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "") {
 	r := new(Request)
-	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen}
+	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = app.conn}
 	sync.atomic_add(&app.pending, 1)
 	thread.create_and_start_with_poly_data(r, proc(r: ^Request) {
 		app := the_app
-		r.status, r.resp, r.ok = http_request(&app.http, r.method, r.path, r.body)
+		r.status, r.resp, r.ok = http_request(&r.conn.http, r.method, r.path, r.body)
 		if !ui.post(&app.ui_state, on_answer, r) { request_free(r) }
 	}, self_cleanup = true)
 }
@@ -192,6 +193,7 @@ on_answer :: proc(data: rawptr, word: u64) {
 	r := (^Request)(data)
 	defer request_free(r)
 	sync.atomic_sub(&app.pending, 1)
+	if r.conn != app.conn { return }   // a server left
 	if !r.ok {
 		fmt.eprintfln("request failed: %s %s: %s", r.method, r.path, r.resp)
 		app.online = false
@@ -290,23 +292,29 @@ delete_session :: proc(app: ^App, session: string) {
 ////////////////////////////////
 // The event stream
 
-events_thread :: proc(t: ^thread.Thread) {
-	app := (^App)(t.data)
-	for !sync.atomic_load(&app.stop) {
-		st := http_sse(&app.http, "/api/event", &app.stop, proc(data: string, user: rawptr) -> bool {
-			app := (^App)(user)
-			s := strings.clone(data)
-			if !ui.post(&app.ui_state, on_event, raw_data(s), u64(len(s))) { delete(s); return false }
+events_thread :: proc(data: rawptr) {
+	c := (^Conn)(data)
+	app := the_app
+	for !sync.atomic_load(&c.stop) {
+		st := http_sse(&c.http, "/api/event", &c.stop, proc(data: string, user: rawptr) -> bool {
+			c := (^Conn)(user)
+			e := new(Event_Msg)
+			e^ = {conn = c, text = strings.clone(data)}
+			if !ui.post(&the_app.ui_state, on_event, e, EVENT_WORD) { delete(e.text); free(e); return false }
 			return true
-		}, app, proc(user: rawptr) {
-			app := (^App)(user)
-			ui.post(&app.ui_state, proc(data: rawptr, word: u64) { stream_state(the_app, true) })
+		}, c, proc(user: rawptr) {
+			ui.post(&the_app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_state(the_app, true) } }, user)
 		})
-		if sync.atomic_load(&app.stop) { break }
-		ui.post(&app.ui_state, proc(data: rawptr, word: u64) { stream_state(the_app, false) }, nil, u64(st))
+		if sync.atomic_load(&c.stop) { break }
+		ui.post(&app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_state(the_app, false) } }, c, u64(st))
 		time.sleep(2 * time.Second)
 	}
 }
+
+// An event's text and the connection it came by (dropped when that is no longer the one connected).
+Event_Msg :: struct { conn: ^Conn, text: string }
+
+EVENT_WORD :: u64(0x4556454e54)   // a post's word for an Event_Msg (on_drop frees it)
 
 // The stream (re)connected or dropped: on a reconnection everything is read again (events were missed meanwhile).
 stream_state :: proc(app: ^App, up: bool) {
@@ -324,13 +332,15 @@ stream_state :: proc(app: ^App, up: bool) {
 
 on_event :: proc(data: rawptr, word: u64) {
 	app := the_app
-	text := strings.string_from_ptr((^u8)(data), int(word))
-	defer delete(text)
-	v, err := json.parse_string(text, parse_integers = true, allocator = context.temp_allocator)
+	e := (^Event_Msg)(data)
+	defer { delete(e.text); free(e) }
+	if e.conn != app.conn { return }   // a server left
+	v, err := json.parse_string(e.text, parse_integers = true, allocator = context.temp_allocator)
 	if err != nil { return }
 	apply_event(app, v)
 }
 
 on_drop :: proc(data: rawptr, word: u64) {
-	if word > 0 { free(data) }   // an event's text (a Request is never dropped: the queue closes after the workers)
+	// an event (a Request is never dropped: the queue closes after the workers; the stream's states carry their Conn)
+	if word == EVENT_WORD { e := (^Event_Msg)(data); delete(e.text); free(e) }
 }

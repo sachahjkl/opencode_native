@@ -11,7 +11,6 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 import "core:sync"
-import "core:thread"
 import "core:time"
 import "gt:config"
 import "gt:draw"
@@ -31,11 +30,11 @@ App :: struct {
 	font, mono, mono_bold, icons, tk_icons: font.Font_Id,
 
 	// the server
-	cfg:            Server_Config,
-	http:           Http,
-	stop:           bool,      // (atomic) the event thread stops
+	servers:        [dynamic]Server,   // (servers.odin) this computer's first
+	server:         int,               // the one connected
+	conn:           ^Conn,             // its connection
+	server_edit:    Server_Edit,
 	pending:        i32,       // (atomic) requests in flight
-	events:         ^thread.Thread,
 	online:         bool,
 	auth_failed:    bool,
 	server_version: string,
@@ -283,11 +282,7 @@ main :: proc() {
 	app.stick_bottom = true
 	chat_reset(&app.chat)
 
-	app.cfg = discover_server()
-	if !http_init(&app.http, server_url(app.cfg), "opencode", app.cfg.password) {
-		fmt.eprintln("opencode-native: the HTTP client failed to start")
-		os.exit(1)
-	}
+	servers_init(app)
 
 	font.init(&app.fonts)
 	// a composition swap chain whose buffers keep the monitor's size while the window is resized: the window shows their
@@ -319,9 +314,8 @@ main :: proc() {
 	app.frames = 3
 
 	// the event stream: its first connection loads everything (stream_state)
-	app.events = thread.create(events_thread)
-	app.events.data = app
-	thread.start(app.events)
+	server_connect(app, app.server)
+	if app.conn == nil { fmt.eprintln("opencode-native: the HTTP client failed to start"); os.exit(1) }
 
 	if frames >= 0 {
 		for _ in 0 ..< frames { frame(app); time.sleep(50 * time.Millisecond) }
@@ -352,7 +346,7 @@ main :: proc() {
 		if app.frames > 0 { app.frames -= 1 }
 	}
 	// the event thread may be blocked in a read: the process ends with it
-	sync.atomic_store(&app.stop, true)
+	sync.atomic_store(&app.conn.stop, true)
 	ui.post_close(&app.ui_state)
 	os.exit(0)
 }
