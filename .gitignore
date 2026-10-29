@@ -1,0 +1,7 @@
+build/
+*.exe
+*.pdb
+*.obj
+*.ilk
+native/target/
+*.res

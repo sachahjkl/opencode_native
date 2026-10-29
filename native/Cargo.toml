@@ -1,0 +1,15 @@
+# The client's Rust code: one workspace, one static library linked into opencode-native.exe
+# (tools\build_native.ps1 -> build\native\occ_native.lib). A program links one Rust static library at most (each carries
+# Rust's standard library): another Rust library (the toolkit's text backend or accessibility adapter) would join this
+# one as a dependency of the assembly crate, never as a second .lib.
+[workspace]
+resolver = "2"
+members = ["occ_native"]
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = "fat"
+debug = false
+panic = "unwind"   # every entry point catches panics: a bug in a request is a failed request, not a dead client
+incremental = false

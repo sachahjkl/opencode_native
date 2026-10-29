@@ -1,0 +1,44 @@
+name: CI
+
+# Every push to master and every pull request: the Rust library and the exe build (Odin pinned by SHA-256, MSVC, the
+# stable Rust of the runner), the exe is kept as an artifact.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/setup-odin
+
+      # Cargo's target directory: a change of the crates or of Cargo.lock builds again, else only the stamp is compared
+      - uses: actions/cache@v4
+        with:
+          path: build/native
+          key: native-${{ hashFiles('native/Cargo.toml', 'native/Cargo.lock', 'native/**/Cargo.toml', 'native/**/src/**', 'tools/build_native.ps1') }}
+
+      - name: Build (build.bat)
+        shell: cmd
+        run: call build.bat
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opencode-native-${{ github.sha }}
+          path: build/opencode-native.exe
+          if-no-files-found: error

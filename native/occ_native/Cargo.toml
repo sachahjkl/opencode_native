@@ -1,0 +1,20 @@
+# HTTP for the opencode client: requests and the server-sent event stream, over ureq (HTTP/1.1, blocking, called from
+# the client's worker threads), TLS by rustls with the ring provider, certificates checked against the operating
+# system's trust store (rustls-platform-verifier). Exposed as C functions (src/lib.rs), used by src/http.odin.
+# Versions are pinned here and by ../Cargo.lock; tools\build_native.ps1 builds with --locked.
+[package]
+name = "occ_native"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+
+[lib]
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+ureq = { version = "=3.5.0", default-features = false, features = ["rustls", "platform-verifier", "gzip"] }
+base64 = "=0.22.1"
+# images in messages and project logos: decoded and scaled down here, on the client's worker threads
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp"] }

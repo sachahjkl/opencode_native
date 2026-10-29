@@ -1,0 +1,54 @@
+name: Release
+
+# A version tag vX.Y.Z builds the exe and publishes it with the release (made from the CHANGELOG's section of that
+# version when it does not exist yet; its assets replaced when it does). The tag must match APP_VERSION (src/setup.odin).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/setup-odin
+
+      - name: Check the version
+        id: version
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $m = Select-String -Path src\setup.odin -Pattern 'APP_VERSION\s*::\s*"([^"]+)"'
+          $v = $m.Matches[0].Groups[1].Value
+          if ("v$v" -ne $tag) { throw "tag $tag does not match APP_VERSION $v (src/setup.odin)" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build (build.bat)
+        shell: cmd
+        run: call build.bat
+
+      - name: Package
+        run: ./tools/package.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $files = Get-ChildItem build\dist -File | Where-Object { $_.Name -ne 'NOTES.md' } | ForEach-Object { $_.FullName }
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @files --clobber
+          } else {
+            gh release create $tag @files --title "opencode native ${{ steps.version.outputs.version }}" --notes-file build\dist\NOTES.md
+          }
+          if ($LASTEXITCODE) { exit 1 }

@@ -1,0 +1,334 @@
+// The link to the opencode server: where it is (service.json), requests on worker threads, the event stream on a
+// thread of its own. Every answer reaches the interface through ui.post: it runs on the interface's thread, in
+// begin_build, and wakes the window.
+package occ
+
+import "core:encoding/json"
+import "core:fmt"
+import "core:os"
+import "core:strconv"
+import "core:strings"
+import "core:sync"
+import "core:thread"
+import "core:time"
+import "gt:ui"
+
+Server_Config :: struct {
+	host:     string,
+	port:     u16,
+	password: string,
+	tls:      bool,     // https (a remote server, a tunnel)
+}
+
+// The desktop app's service (~/.config/opencode/service.json), unless --url= / --password= say otherwise.
+discover_server :: proc() -> Server_Config {
+	cfg := Server_Config{host = "127.0.0.1", port = 4096}
+	home := os.get_env("USERPROFILE", context.temp_allocator)
+	if home == "" { home = os.get_env("HOME", context.temp_allocator) }
+	path := fmt.tprintf("%s/.config/opencode/service.json", home)
+	if data, err := os.read_entire_file(path, context.temp_allocator); err == nil {
+		if v, jerr := json.parse_string(string(data), parse_integers = true, allocator = context.temp_allocator); jerr == nil {
+			if p := jnum(v, "port"); p > 0 { cfg.port = u16(p) }
+			if h := jstr(v, "hostname"); h != "" && h != "0.0.0.0" && h != "::" { cfg.host = h }
+			cfg.password = jstr(v, "password")
+		}
+	}
+	for a in os.args[1:] {
+		if strings.has_prefix(a, "--password=") { cfg.password = a[len("--password="):] }
+		if strings.has_prefix(a, "--url=") {
+			u := a[len("--url="):]
+			cfg.tls = strings.has_prefix(u, "https://")
+			u = strings.trim_prefix(strings.trim_prefix(u, "http://"), "https://")
+			u = strings.trim_suffix(u, "/")
+			if i := strings.last_index_byte(u, ':'); i >= 0 {
+				if p, ok := strconv.parse_int(u[i + 1:]); ok { cfg.port = u16(p) }
+				cfg.host = u[:i]
+			} else {
+				cfg.host = u
+				cfg.port = 0   // the default port of the scheme
+			}
+		}
+	}
+	cfg.host = strings.clone(cfg.host)
+	cfg.password = strings.clone(cfg.password)
+	return cfg
+}
+
+////////////////////////////////
+// JSON helpers (paths of object keys; a missing key gives the zero value)
+
+jget :: proc(v: json.Value, keys: ..string) -> json.Value {
+	cur := v
+	for k in keys {
+		obj, ok := cur.(json.Object)
+		if !ok { return nil }
+		cur = obj[k] or_else nil
+	}
+	return cur
+}
+
+jstr :: proc(v: json.Value, keys: ..string) -> string {
+	#partial switch x in jget(v, ..keys) {
+	case json.String: return string(x)
+	}
+	return ""
+}
+
+jnum :: proc(v: json.Value, keys: ..string) -> f64 {
+	#partial switch x in jget(v, ..keys) {
+	case json.Float:   return f64(x)
+	case json.Integer: return f64(x)
+	}
+	return 0
+}
+
+jbool :: proc(v: json.Value, keys: ..string) -> bool {
+	#partial switch x in jget(v, ..keys) {
+	case json.Boolean: return bool(x)
+	}
+	return false
+}
+
+jarr :: proc(v: json.Value, keys: ..string) -> json.Array {
+	#partial switch x in jget(v, ..keys) {
+	case json.Array: return x
+	}
+	return nil
+}
+
+// A JSON string literal (quotes included).
+jquote :: proc(s: string, allocator := context.temp_allocator) -> string {
+	b := strings.builder_make(0, len(s) + 8, allocator)
+	strings.write_byte(&b, '"')
+	for r in s {
+		switch r {
+		case '"':  strings.write_string(&b, `\"`)
+		case '\\': strings.write_string(&b, `\\`)
+		case '\n': strings.write_string(&b, `\n`)
+		case '\r': strings.write_string(&b, `\r`)
+		case '\t': strings.write_string(&b, `\t`)
+		case:
+			if r < 0x20 { fmt.sbprintf(&b, `\u%04x`, int(r)) } else { strings.write_rune(&b, r) }
+		}
+	}
+	strings.write_byte(&b, '"')
+	return strings.to_string(b)
+}
+
+// Compact JSON text of a value (tool inputs shown to the user).
+jtext :: proc(v: json.Value, allocator := context.temp_allocator) -> string {
+	data, err := json.marshal(v, {pretty = true, use_spaces = true, spaces = 2}, allocator)
+	if err != nil { return "" }
+	return string(data)
+}
+
+// A query string value.
+url_escape :: proc(s: string) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	for c in transmute([]u8)s {
+		switch c {
+		case 'A' ..= 'Z', 'a' ..= 'z', '0' ..= '9', '-', '_', '.', '~': strings.write_byte(&b, c)
+		case: fmt.sbprintf(&b, "%%%02X", c)
+		}
+	}
+	return strings.to_string(b)
+}
+
+////////////////////////////////
+// Requests
+
+Req_Kind :: enum u8 {
+	Sessions,       // GET /api/session
+	Messages,       // GET /api/session/:id/message (newest page)
+	Older,          // GET /api/session/:id/message?cursor= (an older page)
+	Agents,
+	Models,
+	Info,
+	Permissions,    // GET /api/session/:id/permission
+	Active,         // GET /api/session/active: the sessions running now
+	Self,           // GET /api/session/:id: the session shown
+	Parent,         // GET /api/session/:parent: the title of the session shown's parent
+	Children,       // GET /api/session?parentID=: the sub-agents of the session shown
+	// the settings' pages (settings.odin server_facts_answer)
+	Cfg, Shells, Mcp, Saved, Usage, Providers, Skills, Commands,
+	Projects,       // GET /api/project: the projects and their logos
+	Created,        // POST /api/session: the new session
+	Action,         // a POST whose answer only matters when it fails
+}
+
+Request :: struct {
+	kind:   Req_Kind,
+	method: string,
+	path:   string,
+	body:   string,
+	tag:    string,    // the session it is about
+	gen:    u64,       // the chat generation it was made for (answers for a chat since left are dropped)
+	// the answer
+	status: int,
+	resp:   string,
+	ok:     bool,
+}
+
+request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "") {
+	r := new(Request)
+	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen}
+	sync.atomic_add(&app.pending, 1)
+	thread.create_and_start_with_poly_data(r, proc(r: ^Request) {
+		app := the_app
+		r.status, r.resp, r.ok = http_request(&app.http, r.method, r.path, r.body)
+		if !ui.post(&app.ui_state, on_answer, r) { request_free(r) }
+	}, self_cleanup = true)
+}
+
+request_free :: proc(r: ^Request) {
+	delete(r.method); delete(r.path); delete(r.body); delete(r.tag); delete(r.resp)
+	free(r)
+}
+
+// On the interface's thread.
+on_answer :: proc(data: rawptr, word: u64) {
+	app := the_app
+	r := (^Request)(data)
+	defer request_free(r)
+	sync.atomic_sub(&app.pending, 1)
+	if !r.ok {
+		fmt.eprintfln("request failed: %s %s: %s", r.method, r.path, r.resp)
+		app.online = false
+		if r.kind != .Action { ui.toast(.Bad, "Server unreachable (%s)", r.path) }
+		return
+	}
+	if r.status == 401 { app.auth_failed = true; ui.toast(.Bad, "Authentication refused by the server"); return }
+	if r.status >= 400 {
+		v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
+		msg := jstr(v, "message")
+		ui.toast(.Bad, "%s %s: %d %s", r.method, r.path, r.status, msg if msg != "" else r.resp[:min(len(r.resp), 80)])
+		if r.kind == .Messages || r.kind == .Older { app.chat.loading = false }
+		return
+	}
+	v, err := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
+	if err != nil && r.kind != .Action { ui.toast(.Warn, "Unreadable answer (%s)", r.path); return }
+	switch r.kind {
+	case .Sessions:    sessions_load(app, v)
+	case .Messages:    if r.gen == app.chat.gen && r.tag == app.chat.id { chat_load(app, v, false) }
+	case .Older:       if r.gen == app.chat.gen && r.tag == app.chat.id { chat_load(app, v, true) }
+	case .Agents:      agents_load(app, v)
+	case .Models:      models_load(app, v)
+	case .Info:        app.server_version = strings.clone(jstr(v, "version"))
+	case .Permissions: if r.tag == app.chat.id { permissions_load(app, jarr(v, "data")) }
+	case .Active:      active_load(app, v)
+	case .Self:        if r.tag == app.chat.id && r.gen == app.chat.gen { self_load(app, v) }
+	case .Parent:      if r.tag == app.chat.id && r.gen == app.chat.gen { parent_load(app, v) }
+	case .Children:    if r.tag == app.chat.id && r.gen == app.chat.gen { children_load(app, v) }
+	case .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands: server_facts_answer(app, r.kind, v)
+	case .Projects:    projects_load(app, v)
+	case .Created:
+		id := jstr(v, "data", "id")
+		if id != "" {
+			refresh_sessions(app)
+			open_chat(app, id)
+			if app.pending_prompt != "" {
+				send_prompt(app, id, app.pending_prompt)
+				delete(app.pending_prompt)
+				app.pending_prompt = ""
+			}
+		}
+	case .Action:
+	}
+}
+
+refresh_sessions :: proc(app: ^App) {
+	request(app, .Sessions, "GET", "/api/session?limit=200&order=desc")
+	request(app, .Active, "GET", "/api/session/active")
+}
+
+load_messages :: proc(app: ^App, id: string) {
+	request(app, .Messages, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&order=desc", id, app.prefs.page_size), tag = id)
+}
+
+load_older :: proc(app: ^App) {
+	if app.chat.older == "" || app.chat.loading { return }
+	app.chat.loading = true
+	request(app, .Older, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&order=desc&cursor=%s", app.chat.id, app.prefs.page_size, url_escape(app.chat.older)), tag = app.chat.id)
+}
+
+send_prompt :: proc(app: ^App, id, text: string) {
+	request(app, .Action, "POST", fmt.tprintf("/api/session/%s/prompt", id), fmt.tprintf(`{{"text":%s}}`, jquote(text)), id)
+}
+
+create_session :: proc(app: ^App, directory: string) {
+	body := directory != "" ? fmt.tprintf(`{{"location":{{"directory":%s}}}}`, jquote(directory)) : "{}"
+	request(app, .Created, "POST", "/api/session", body)
+}
+
+interrupt_session :: proc(app: ^App, id: string) {
+	request(app, .Action, "POST", fmt.tprintf("/api/session/%s/interrupt", id), "", id)
+}
+
+reply_permission :: proc(app: ^App, session, id, decision: string) {
+	request(app, .Action, "POST", fmt.tprintf("/api/session/%s/permission/%s/reply", session, id), fmt.tprintf(`{{"decision":%s}}`, jquote(decision)), session)
+}
+
+switch_model :: proc(app: ^App, session: string, m: Model_Info) {
+	request(app, .Action, "POST", fmt.tprintf("/api/session/%s/model", session),
+		fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s}}}}`, jquote(m.id), jquote(m.provider)), session)
+}
+
+switch_agent :: proc(app: ^App, session, agent: string) {
+	request(app, .Action, "POST", fmt.tprintf("/api/session/%s/agent", session), fmt.tprintf(`{{"agent":%s}}`, jquote(agent)), session)
+}
+
+rename_session :: proc(app: ^App, session, title: string) {
+	request(app, .Action, "PATCH", fmt.tprintf("/api/session/%s", session), fmt.tprintf(`{{"title":%s}}`, jquote(title)), session)
+}
+
+delete_session :: proc(app: ^App, session: string) {
+	request(app, .Action, "DELETE", fmt.tprintf("/api/session/%s", session), "", session)
+}
+
+////////////////////////////////
+// The event stream
+
+events_thread :: proc(t: ^thread.Thread) {
+	app := (^App)(t.data)
+	for !sync.atomic_load(&app.stop) {
+		st := http_sse(&app.http, "/api/event", &app.stop, proc(data: string, user: rawptr) -> bool {
+			app := (^App)(user)
+			s := strings.clone(data)
+			if !ui.post(&app.ui_state, on_event, raw_data(s), u64(len(s))) { delete(s); return false }
+			return true
+		}, app, proc(user: rawptr) {
+			app := (^App)(user)
+			ui.post(&app.ui_state, proc(data: rawptr, word: u64) { stream_state(the_app, true) })
+		})
+		if sync.atomic_load(&app.stop) { break }
+		ui.post(&app.ui_state, proc(data: rawptr, word: u64) { stream_state(the_app, false) }, nil, u64(st))
+		time.sleep(2 * time.Second)
+	}
+}
+
+// The stream (re)connected or dropped: on a reconnection everything is read again (events were missed meanwhile).
+stream_state :: proc(app: ^App, up: bool) {
+	was := app.online
+	app.online = up
+	if up && !was {
+		refresh_sessions(app)
+		if app.chat.id != "" { load_messages(app, app.chat.id) }
+		if !app.have_agents { request(app, .Agents, "GET", "/api/agent") }
+		if !app.have_models { request(app, .Models, "GET", "/api/model") }
+		request(app, .Info, "GET", "/api/info")
+		request(app, .Projects, "GET", "/api/project")
+	}
+}
+
+on_event :: proc(data: rawptr, word: u64) {
+	app := the_app
+	text := strings.string_from_ptr((^u8)(data), int(word))
+	defer delete(text)
+	v, err := json.parse_string(text, parse_integers = true, allocator = context.temp_allocator)
+	if err != nil { return }
+	apply_event(app, v)
+}
+
+on_drop :: proc(data: rawptr, word: u64) {
+	if word > 0 { free(data) }   // an event's text (a Request is never dropped: the queue closes after the workers)
+}
