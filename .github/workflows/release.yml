@@ -1,21 +1,24 @@
 name: Release
 
-# A version tag vX.Y.Z builds the exe and publishes it with the release (made from the CHANGELOG's section of that
-# version when it does not exist yet; its assets replaced when it does). The tag must match APP_VERSION (src/setup.odin).
+# A version tag vX.Y.Z builds the program for Windows and for Linux and publishes both with the release (made from the
+# CHANGELOG's section of that version when it does not exist yet; its assets replaced when it does), with one
+# SHA256SUMS.txt. The tag must match APP_VERSION (src/setup.odin).
 on:
   push:
     tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  windows:
     runs-on: windows-2025
     timeout-minutes: 40
     defaults:
       run:
         shell: pwsh
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -39,16 +42,59 @@ jobs:
       - name: Package
         run: ./tools/package.ps1 -Version ${{ steps.version.outputs.version }}
 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-windows
+          path: build/dist/*
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/setup-odin-linux
+
+      - name: Build (build.sh)
+        run: ./build.sh
+
+      - name: Package
+        run: tools/package.sh "${GITHUB_REF_NAME#v}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-linux
+          path: build/dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: [windows, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.windows.outputs.version }}
         run: |
-          $tag = '${{ github.ref_name }}'
-          $files = Get-ChildItem build\dist -File | Where-Object { $_.Name -ne 'NOTES.md' } | ForEach-Object { $_.FullName }
-          gh release view $tag *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag @files --clobber
-          } else {
-            gh release create $tag @files --title "opencode native ${{ steps.version.outputs.version }}" --notes-file build\dist\NOTES.md
-          }
-          if ($LASTEXITCODE) { exit 1 }
+          cd dist
+          rm -f SHA256SUMS.txt
+          sha256sum opencode-native-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          files=(opencode-native-* SHA256SUMS.txt)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${files[@]}" --clobber
+          else
+            gh release create "$TAG" "${files[@]}" --title "opencode native $VERSION" --notes-file NOTES.md
+          fi

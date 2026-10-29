@@ -34,6 +34,6 @@ for ($i = 0; $i -lt $lines.Count; $i++) {
 if ($start -lt 0) { throw "CHANGELOG.md has no section for $Version" }
 if (-not $end) { $end = $lines.Count }
 $notes = ($lines[$start..($end - 1)] -join "`n").Trim()
-$notes += "`n`nOne executable for Windows 10 and 11 (x64): run it, or install it for your user from its Setup (title bar menu > Setup...). It finds the opencode desktop app's server by itself."
+$notes += "`n`n**Windows 10 and 11 (x64)**: one executable; run it, or install it for your user from its Setup (title bar menu > Setup...).`n**Linux (x64)**: the archive holds one program; run it, or ./opencode-native --install (an entry in the applications menu). Needs Vulkan, libxkbcommon, fontconfig, Wayland or X11.`n`nIt finds the opencode server of the computer by itself (another one: --url, or the status bar's server menu)."
 Set-Content -Path (Join-Path $dist 'NOTES.md') -Value $notes
 "packaged build\dist\$name ($sum)"

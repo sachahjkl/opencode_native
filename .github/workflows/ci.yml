@@ -1,7 +1,8 @@
 name: CI
 
-# Every push to master and every pull request: the Rust library and the exe build (Odin pinned by SHA-256, MSVC, the
-# stable Rust of the runner), the exe is kept as an artifact.
+# Every push to master and every pull request: the program builds for Windows (build.bat: MSVC) and for Linux (build.sh:
+# clang, Vulkan through wgpu-native), Odin pinned by SHA-256, the stable Rust of the runners; both programs are kept as
+# artifacts.
 on:
   push:
     branches: [master]
@@ -16,8 +17,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build
+  windows:
+    name: Windows x64
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
@@ -39,6 +40,37 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: opencode-native-${{ github.sha }}
+          name: opencode-native-windows-x64-${{ github.sha }}
           path: build/opencode-native.exe
+          if-no-files-found: error
+
+  linux:
+    name: Linux x64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/setup-odin-linux
+
+      # (the toolkit's text backend is built into the Rust library on Linux: its sources count too)
+      - uses: actions/cache@v6
+        with:
+          path: |
+            build/native
+            ~/.cargo/registry
+          key: native-linux-${{ hashFiles('native/Cargo.toml', 'native/Cargo.lock', 'native/**/Cargo.toml', 'native/**/src/**', 'ext/gui_toolkit/native/text/**', 'tools/build_native.sh') }}
+
+      - name: Build (build.sh)
+        run: ./build.sh
+
+      - name: The libraries it needs
+        run: ldd build/opencode-native
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: opencode-native-linux-x64-${{ github.sha }}
+          path: build/opencode-native
           if-no-files-found: error
