@@ -109,6 +109,7 @@ open_chat :: proc(app: ^App, session_id: string) {
 	app.chat.id = strings.clone(id, app.chat.alloc)
 	app.chat.loading = true
 	app.opened_ms = ui.now_ms()
+	app.chat_target = 0
 	app.stick_bottom = true
 	if s := find_session(app, id); s != nil {
 		app.chat.model = strings.clone(s.model, app.chat.alloc)

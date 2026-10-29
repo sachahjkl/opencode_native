@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.3.0] - 2026-10-29
+
+### Added
+
+- **Statistics of a session**: the header's token count (and Ctrl+I, the menu) opens them: totals in tiles (tokens in,
+  out, reasoning, cost, cache hits), the context the last step filled against the model's window, tokens in detail, time
+  (created, last change, the model at work, output pace), tool calls by tool with failures, models, sub-agents, and the
+  project's totals from the server (sessions, sub-agents, prompts, steps, tokens, cost, active days, streak, tools with
+  their median duration, models).
+- **Markdown tables** as grids: columns as wide as their cells, the header row bold on a tint, alignments from the
+  separator row, alternate rows shaded (they were shown as raw text in a code block).
+- Screenshots in the README; `--search=<text>` fills the sidebar's search at start, `--stats` opens the statistics.
+
+### Fixed
+
+- Dragging the conversation's scrollbar moved nothing while it followed its bottom (the drag, applied before the build,
+  was undone by the following).
+- The halo of a lit button reached the carved edge above it and darkened under it (tighter now).
+
+### Changed
+
+- CI: actions/checkout v7, actions/cache v6, actions/upload-artifact v7 (Node 24); the MSVC environment is set by a
+  step of the setup action (vcvars64 through vswhere) instead of ilammy/msvc-dev-cmd, whose releases still run on Node 20.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added

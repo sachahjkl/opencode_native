@@ -111,7 +111,7 @@ draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius: f32, base: Color, hot, pr
 	face := lighten(base, 0.06 * hot)
 	if pressed < 0.5 {
 		draw.box_shadow(dc, draw.rect_shift(r, {0, 1.5 * s}), rr, 2.2 * s, {0, 0, 0, 0.65})
-		if glow.a > 0 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 7 * s, with_alpha(glow, 0.35 + 0.25 * hot)) }
+		if glow.a > 0 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 3.5 * s, with_alpha(glow, 0.22 + 0.33 * hot)) }   // (tight: a wide halo reached the carved edge above and darkened under it)
 		top := lighten(face, 0.10)
 		bot := darken(face, 0.16)
 		draw.rect_corners(dc, r, {top, bot, top, bot}, rr)

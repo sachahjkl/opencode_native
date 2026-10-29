@@ -5,3 +5,4 @@ build/
 *.ilk
 native/target/
 *.res
+.claude/

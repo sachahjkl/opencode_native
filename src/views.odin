@@ -31,6 +31,7 @@ build_ui :: proc(app: ^App) {
 	setup_dialog(app, em)
 	settings_dialog(app, em)
 	image_viewer(app, em)
+	stats_dialog(app, em)
 }
 
 app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
@@ -41,6 +42,7 @@ app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 			if app.chat.id != "" { load_messages(app, app.chat.id) }
 		}
 		if ui.menu_item("Settings…", "Ctrl+,").clicked { settings_open(app) }
+		if ui.menu_item("Session statistics", "Ctrl+I", enabled = app.chat.id != "").clicked { stats_open(app) }
 		if ui.menu_item("Sub-agent sessions in the list", "", app.prefs.subagents == "flat").clicked { pref_set(app, "sidebar.subagents", app.prefs.subagents == "flat" ? "nested" : "flat") }
 		ui.menu_separator()
 		if ui.menu_item("Setup…").clicked { setup_open(app) }
@@ -53,6 +55,7 @@ app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 global_keys :: proc(app: ^App) {
 	if ui.key_press(.N, {.Ctrl}) { new_session(app) }
 	if ui.key_press(.Comma, {.Ctrl}) { settings_open(app) }
+	if app.chat.id != "" && ui.key_press(.I, {.Ctrl}) { stats_open(app) }
 	if ui.key_press(.F5) {
 		refresh_sessions(app)
 		if app.chat.id != "" { load_messages(app, app.chat.id) }
@@ -171,7 +174,7 @@ Group :: struct { dir: string, items: [dynamic]int }
 sidebar :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.px(app.sidebar_w * ui.scale()), height = ui.fill(), axis = .Y, bg = hex(HEX_BG1)})
 	if ui.column(flags = {.Draw_Background}, id = "###sidebar") {
-		ui.spacer(ui.px(em * 0.8))
+		ui.spacer(ui.px(em * 1.0))
 		pad_row :: proc(em: f32) { ui.spacer(ui.px(em * 0.75)) }
 		// new session + refresh
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
@@ -479,6 +482,9 @@ conversation :: proc(app: ^App, em: f32) {
 		sb := ui.prev_box("###chat")
 		if sb != nil {
 			limit := max(0, sb.view_bounds.y - sb.size.y)
+			// the scrollbar's drag (and the keyboard) moved it before this build (begin_build): up means let go of the bottom,
+			// or following it would put it back at once and the thumb would stay stuck there
+			if app.stick_bottom && sb.view_target.y < app.chat_target - 1 && sb.view_target.y < limit - 4 * ui.scale() { app.stick_bottom = false }
 			if app.stick_bottom {
 				sb.view_target.y = limit
 				if app.stick_jump { sb.view_off.y = limit }
@@ -502,6 +508,7 @@ conversation :: proc(app: ^App, em: f32) {
 			// (with following off, only the first moments of a conversation just opened follow its bottom)
 			follow := app.prefs.follow || ui.now_ms() - app.opened_ms < 2000
 			if app.anchor == nil { app.stick_bottom = at_bottom && follow }   // (a part just toggled: it let go of the bottom)
+			app.chat_target = sb.view_target.y
 		}
 		dock(app, em, side, col)
 	}
@@ -557,11 +564,11 @@ chat_header :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.6))
 		}
 		if c.tokens_in + c.tokens_out > 0 {
-			pill("###tok", fmt.tprintf("%s in · %s out", kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, ICO_BOLT)
+			if pill_button("###tok", fmt.tprintf("%s in · %s out", kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, ICO_BOLT).clicked { stats_open(app) }
 			ui.spacer(ui.px(em * 0.4))
 		}
 		if c.cost > 0 {
-			pill("###cost", fmt.tprintf("$%.2f", c.cost), hex(HEX_GREEN))
+			if pill_button("###cost", fmt.tprintf("$%.2f", c.cost), hex(HEX_GREEN)).clicked { stats_open(app) }
 			ui.spacer(ui.px(em * 0.4))
 		}
 		if c.busy {

@@ -198,7 +198,7 @@ subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 		head.custom_user = rd
 		hs := ui.signal(head)
 		if hs.clicked { part_toggle(app, p.tool_id != "" ? p.tool_id : pid, head) }
-		if app.seek_subagent && app.anchor == nil && head.rect.max.y > 0 && app.chat.loaded {
+		if app.seek_subagent && app.anchor == nil && head.rect.max.y != head.rect.min.y && app.chat.loaded {
 			// --seek-subagent (tests): bring the first card near the top, as an anchor does
 			app.seek_subagent = false
 			app.anchor = head

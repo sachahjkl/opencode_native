@@ -87,6 +87,10 @@ App :: struct {
 	column_w:         f32,    // the conversation column, frame pixels (this frame)
 	chat_sb:          ^ui.Box, // the conversation scroll box, when built this frame
 	stick_jump:       bool,    // the second build of a frame: the bottom is reached at once, no glide
+	chat_target:      f32,     // the conversation's scroll target at the end of the last build (a drag before this one moved it)
+	stats_open:       bool,           // the statistics of the session shown (stats.odin)
+	proj_stats:       Project_Stats,
+	stats_pending:    bool,           // --stats (tests): open them once the session is loaded
 	images:           map[u64]Image_Entry,   // decoded images, by key (images.odin)
 	frame_no:         u64,
 	view_open:        bool,                  // the image viewer
@@ -216,6 +220,7 @@ frame :: proc(app: ^App, inner := false) {
 		app.refresh_ms = ui.now_ms()
 		refresh_sessions(app)
 	}
+	if app.stats_pending && app.chat.loaded && app.chat.have_self { app.stats_pending = false; stats_open(app) }
 	if app.facts_due && ui.now_ms() - app.facts_ms > 700 {
 		// an action of the settings (connect an MCP server, revoke a permission): read the pages again
 		app.facts_due = false
@@ -271,6 +276,7 @@ main :: proc() {
 	app.sidebar_w = 290
 	app.start_session = start_session
 	app.seek_subagent = slice.contains(os.args, "--seek-subagent")
+	app.stats_pending = slice.contains(os.args, "--stats")
 	app.stick_bottom = true
 	chat_reset(&app.chat)
 
@@ -321,6 +327,9 @@ main :: proc() {
 	}
 
 	setup_offer_at_start(app)
+	for a in os.args[1:] {   // --search=<text>: the sidebar's search, filled at start
+		if strings.has_prefix(a, "--search=") { ui.field_set(&app.search, a[len("--search="):]) }
+	}
 	for a in os.args[1:] {   // --settings[=page number]: the settings open at start
 		if a == "--settings" || strings.has_prefix(a, "--settings=") {
 			settings_open(app)

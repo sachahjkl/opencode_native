@@ -179,7 +179,7 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 		case .Code:
 			code_block(bid, bl.lang, strings.join(bl.lines[:], "\n", context.temp_allocator))
 		case .Table:
-			code_block(bid, "", strings.join(bl.lines[:], "\n", context.temp_allocator), table = true)
+			table_block(bid, bl.lines[:], color, fs)
 		case .Heading:
 			runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
 			k := [7]f32{1, 1.45, 1.25, 1.1, 1, 1, 1}
@@ -222,6 +222,80 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 @(private = "file")
 link_clicked :: proc(res: ui.Rich_Result) {
 	if res.link_clicked >= 0 { platform.open_url(res.link) }
+}
+
+// The cells of a table row: `| a | b |` -> {"a", "b"}.
+@(private = "file")
+table_cells :: proc(line: string) -> []string {
+	t := strings.trim_space(line)
+	t = strings.trim_prefix(t, "|")
+	t = strings.trim_suffix(t, "|")
+	cells := strings.split(t, "|", context.temp_allocator)
+	for &c in cells { c = strings.trim_space(c) }
+	return cells
+}
+
+// A Markdown table as a grid: the header row bold, columns as wide as their widest cell (shrunk to the room when the
+// table is wider), each column aligned as its separator says (":--", ":-:", "--:"), alternate rows shaded.
+table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
+	em := ui.font_size()
+	rows := make([dynamic][]string, context.temp_allocator)
+	aligns: []ui.Text_Align
+	for l in lines {
+		cells := table_cells(l)
+		sep := len(cells) > 0
+		for c in cells { if strings.trim(c, ":- ") != "" || c == "" { sep = false } }
+		if sep && len(rows) == 1 {
+			aligns = make([]ui.Text_Align, len(cells), context.temp_allocator)
+			for c, i in cells {
+				switch {
+				case strings.has_prefix(c, ":") && strings.has_suffix(c, ":"): aligns[i] = .Center
+				case strings.has_suffix(c, ":"):                               aligns[i] = .Right
+				}
+			}
+			continue
+		}
+		append(&rows, cells)
+	}
+	if len(rows) == 0 { return }
+	ncol := 0
+	for r in rows { ncol = max(ncol, len(r)) }
+	// widths: the widest cell of each column (inline Markdown markers stripped for the measure)
+	pad := math.round(em * 0.7)
+	widths := make([]f32, ncol, context.temp_allocator)
+	cell_size := math.round(fs * 0.92)
+	for r, ri in rows {
+		for c, ci in r {
+			plain, _ := strings.remove_all(c, "**", context.temp_allocator)
+			plain, _ = strings.remove_all(plain, "`", context.temp_allocator)
+			w := ui.text_width(ri == 0 ? the_app.mono_bold : the_app.font, cell_size, plain) + 2 * pad
+			widths[ci] = max(widths[ci], w)
+		}
+	}
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+	if well(id, radius = 6, base = 0x090909ff) {
+		ui.spacer(ui.px(em * 0.3))
+		for r, ri in rows {
+			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, bg = ri == 0 ? with_alpha(accent(), 0.10) : ri % 2 == 0 ? Color{1, 1, 1, 0.01} : {}})
+			if ui.row(flags = {.Draw_Background}, id = fmt.tprintf("###tr%d", ri)) {
+				for ci in 0 ..< ncol {
+					c := ci < len(r) ? r[ci] : ""
+					runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
+					inline_runs(c, {bold = ri == 0, color = ri == 0 ? hex(0xffffffff) : color}, &runs)
+					al := ci < len(aligns) ? aligns[ci] : ui.Text_Align.Left
+					ui.next({width = ui.px(widths[ci], 0.4), height = ui.children_sum(), axis = .X})
+					if ui.row(id = fmt.tprintf("###tc%d", ci)) {
+						ui.spacer(ui.px(pad))
+						ui.next({width = ui.fill(), font_size = cell_size, flags = {.Selectable}, text_align = al})
+						ui.rich_paragraph("###p", runs[:])
+						ui.spacer(ui.px(pad))
+					}
+				}
+			}
+			if ri == 0 { ui.next({width = ui.fill(), height = ui.px(2), bg = with_alpha(accent(), 0.35)}); ui.build_box({.Draw_Background}, "###hl") }
+		}
+		ui.spacer(ui.px(em * 0.3))
+	}
 }
 
 // Code in a sunken well, under a header with its language and a copy button.

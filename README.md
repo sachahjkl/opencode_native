@@ -4,7 +4,9 @@
 
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server.</b></p>
 
-<p align="center"><a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.2.0-fab283" alt="version 0.2.0"></a></p>
+<p align="center"><a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.3.0-fab283" alt="version 0.3.0"></a></p>
+
+![Sub-agents at work: lit cards with what each does now, the strip of the running ones above the composer](docs/screenshots/subagents.png)
 
 One Windows executable, 4 MB, no runtime to install: [Odin](https://odin-lang.org) on
 [gui_toolkit](https://github.com/sachahjkl/gui_toolkit) (Direct3D 11, DirectWrite, a retained-state immediate-mode UI),
@@ -17,12 +19,21 @@ glowing status lamps.
 
 Prebuilt binaries are attached to the [GitHub releases](https://github.com/sachahjkl/opencode_native/releases).
 
+## Screenshots
+
+| | |
+|---|---|
+| ![A conversation: Markdown tables, the answer of an agent, a running sub-agent](docs/screenshots/conversation.png) | ![The conversation of a sub-agent: where it comes from, the way back](docs/screenshots/subagent-session.png) |
+| **The conversation**: Markdown (here a table), the running sub-agents above the composer | **A sub-agent's own conversation**: its banner, the breadcrumb and Return |
+| ![Session statistics](docs/screenshots/statistics.png) | ![Settings](docs/screenshots/settings.png) |
+| **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Settings**: the client's preferences and the server's pages |
+
 ## What it does
 
 - **Sessions** grouped by project folder, with the project's logo; search; running ones lit; sub-agents nested under
   the session that launched them (the active ones counted and shown first).
-- **The conversation, streamed live** from the server's event stream: Markdown (headings, lists, quotes, tables, code
-  blocks with a copy button), the model's reasoning (folded, unfolded or hidden), every tool call as a card (its state
+- **The conversation, streamed live** from the server's event stream: Markdown (headings, lists, quotes, tables as
+  aligned grids, code blocks with a copy button), the model's reasoning (folded, unfolded or hidden), every tool call as a card (its state
   lamp, what it works on, its input and output), tokens and cost.
 - **Images**: those attached to prompts and those tools hand back (screenshots, images read) as thumbnails, opened in
   a viewer; projects' logos in the sidebar, the title bar and the header. PNG, JPEG, WebP, GIF and BMP, decoded off the
@@ -32,6 +43,10 @@ Prebuilt binaries are attached to the [GitHub releases](https://github.com/sacha
   them; drill down into one and back (breadcrumb, Alt+Left).
 - **The composer**: Enter or Ctrl+Enter to send (a setting), the agent and the model of the session, Stop while it runs.
 - **Permission requests** answered in place (once, always, reject).
+- **Statistics of a session** (its token count in the header, Ctrl+I): tokens in, out, reasoning, cache reads and
+  writes, cost, cache hits, the context the last step filled against the model's window, time and pace, tool calls by
+  tool (failures counted), models, its sub-agents, and the whole project's totals from the server (sessions, active
+  days, streak, tools with their median duration, models).
 - **Settings** (Ctrl+,): accent colour, text size, zoom, density, rounding, animations, glow; how the conversation shows;
   the send key; sub-agents in the sidebar; notifications when a session finishes or asks (a toast, the taskbar button
   flashing). And what the server lets one see or change: its shell, its MCP servers (connect, disconnect), the usage
@@ -55,6 +70,8 @@ TLS is rustls, checked against the system's trust store.
 |---|---|
 | `--url=...`, `--password=...` | another server |
 | `--session=<id>` | open that session at start |
+| `--search=<text>` | the sidebar's search, filled at start |
+| `--stats` | open the session's statistics once it is loaded |
 | `--install [--desktop]` | install this copy for the user (`%LOCALAPPDATA%\Programs\opencode-native`, Start menu, Settings > Apps) |
 | `--uninstall [--quiet]` | remove it (what Settings > Apps runs) |
 | `--status` | exit code 0 installed, 2 needs repair, 1 not installed |
@@ -89,6 +106,7 @@ Needs the Odin compiler named in `odin.version` (`dev-2026-10`), MSVC (Visual St
 | `src/subagents.odin` | sub-agent cards, results, navigation, the running strip, the sidebar tree |
 | `src/images.odin` | image decoding (worker threads), the texture cache, thumbnails, the viewer, logos |
 | `src/settings.odin` | preferences (`gt:config`) and the settings dialog, with the server's pages |
+| `src/stats.odin` | the statistics of a session and of its project |
 | `src/style.odin` | the palette and the machined surfaces |
 | `src/setup.odin`, `src/desktop_windows.odin` | version, Setup dialog, install / uninstall |
 | `native/occ_native` | the Rust library (C functions): ureq + rustls, image decoding |

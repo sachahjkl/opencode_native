@@ -152,6 +152,7 @@ Req_Kind :: enum u8 {
 	// the settings' pages (settings.odin server_facts_answer)
 	Cfg, Shells, Mcp, Saved, Usage, Providers, Skills, Commands,
 	Projects,       // GET /api/project: the projects and their logos
+	Stats,          // GET /api/experimental/session/stats: the project's totals (stats.odin)
 	Created,        // POST /api/session: the new session
 	Action,         // a POST whose answer only matters when it fails
 }
@@ -221,6 +222,7 @@ on_answer :: proc(data: rawptr, word: u64) {
 	case .Children:    if r.tag == app.chat.id && r.gen == app.chat.gen { children_load(app, v) }
 	case .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands: server_facts_answer(app, r.kind, v)
 	case .Projects:    projects_load(app, v)
+	case .Stats:       stats_load(app, v)
 	case .Created:
 		id := jstr(v, "data", "id")
 		if id != "" {
