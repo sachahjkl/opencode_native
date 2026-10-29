@@ -60,6 +60,7 @@ theme_setup :: proc(t: ^ui.Theme) {
 	ui.theme_add(t, "link", hex(HEX_BLUE))
 	ui.theme_add(t, "floating background", hex(0x181818ff))
 	ui.theme_add(t, "floating border", hex(0x333333ff))
+	ui.theme_add(t, "floating scrim background", CLEAR)   // (dialog_backdrop paints it; "floating background" made it opaque)
 	ui.theme_add(t, "selection", with_alpha(hex(HEX_PEACH), 0.28))
 	ui.apply_palette(t, OPENCODE_PALETTE)
 }
@@ -312,6 +313,33 @@ groove :: proc(id: string = "", thickness: f32 = 0, across := false) {
 	b := ui.build_box({}, id)
 	b.custom = groove_box_draw
 	b.custom_user = rawptr(uintptr((p.layout_axis == .X) != across ? 1 : 0))
+}
+
+// Right after ui.modal opened: the window behind the dialog shows through its scrim, blurred and darkened. (The scrim
+// is the box ui.modal builds just before the panel, the current parent.)
+dialog_backdrop :: proc() {
+	scrim := ui.parent_box().prev
+	if scrim == nil { return }
+	scrim.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		s := ui.scale()
+		draw.backdrop(dc, b.rect, {}, {draw.filter_blur(6 * s)})
+		draw.rect(dc, b.rect, {0, 0, 0, 0.45})
+	}
+}
+
+// The carved line between two regions, in a box exactly as thick as the line (two device pixels at 100%, more when
+// scaled): a thinner box let the next region paint over the line's lit half.
+edge_line :: proc(id: string, vertical := false) {
+	t := ui.px(2 * px1())
+	if vertical { ui.next({width = t, height = ui.fill()}) } else { ui.next({width = ui.fill(), height = t}) }
+	b := ui.build_box({}, id)
+	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		if b.rect.max.x - b.rect.min.x < b.rect.max.y - b.rect.min.y {
+			draw_groove(dc, b.rect.min, {b.rect.min.x, b.rect.max.y}, true)
+		} else {
+			draw_groove(dc, b.rect.min, {b.rect.max.x, b.rect.min.y})
+		}
+	}
 }
 
 @(private = "file")

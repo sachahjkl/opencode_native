@@ -320,6 +320,7 @@ settings_open :: proc(app: ^App) {
 
 settings_dialog :: proc(app: ^App, em: f32) {
 	if ui.modal("settings", em * 52, &app.settings_open, 0.08) {
+		dialog_backdrop()
 		h := math.round(min(em * 36, app.ui_state.window_size.y * 0.8))
 		ui.next({width = ui.fill(), height = ui.px(h), axis = .X})
 		if ui.row(id = "###settings_body") {

@@ -134,9 +134,7 @@ title_bar :: proc(app: ^App, em: f32) {
 		_, _ = ui.window_buttons()
 	}
 	// the bar's lower edge: a carved line
-	ui.next({width = ui.fill(), height = ui.px(2)})
-	g := ui.build_box({}, "###tbedge")
-	g.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) { draw_groove(dc, b.rect.min, {b.rect.max.x, b.rect.min.y}) }
+	edge_line("###tbedge")
 }
 
 base_name :: proc(path: string) -> string {
@@ -172,7 +170,7 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 Group :: struct { dir: string, items: [dynamic]int }
 
 sidebar :: proc(app: ^App, em: f32) {
-	ui.next({width = ui.px(app.sidebar_w * ui.scale()), height = ui.fill(), axis = .Y, bg = hex(HEX_BG1)})
+	ui.next({width = ui.px(app.sidebar_w * ui.scale()), height = ui.fill(), axis = .Y, bg = hex(HEX_BG1), radius = 0})   // (square: its rounded corner notched the bar's edge)
 	if ui.column(flags = {.Draw_Background}, id = "###sidebar") {
 		ui.spacer(ui.px(em * 1.0))
 		pad_row :: proc(em: f32) { ui.spacer(ui.px(em * 0.75)) }
@@ -211,9 +209,7 @@ sidebar :: proc(app: ^App, em: f32) {
 		}
 	}
 	// the sidebar's right edge: a carved line
-	ui.next({width = ui.px(2), height = ui.fill()})
-	e := ui.build_box({}, "###side_edge")
-	e.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) { draw_groove(dc, b.rect.min, {b.rect.min.x, b.rect.max.y}, true) }
+	edge_line("###side_edge", vertical = true)
 }
 
 sessions_list :: proc(app: ^App, em: f32) {
@@ -400,6 +396,7 @@ session_menu :: proc(app: ^App, em: f32) {
 
 delete_dialog :: proc(app: ^App, em: f32) {
 	if ui.modal("delete", em * 26, &app.delete_open) {
+		dialog_backdrop()
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row() {
@@ -464,7 +461,7 @@ clock_time :: proc(t: f64) -> string {
 // Conversation
 
 conversation :: proc(app: ^App, em: f32) {
-	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = hex(HEX_BG0)})
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = hex(HEX_BG0), radius = 0})
 	if ui.column(flags = {.Draw_Background}, id = "###main") {
 		sc := ui.scale()
 		// this frame's width, from the window (the box's own size is the last frame's: a resize would lag a frame behind):
@@ -577,9 +574,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		}
 		ui.spacer(ui.px(em * 1.2))
 	}
-	ui.next({width = ui.fill(), height = ui.px(2)})
-	g := ui.build_box({}, "###hdredge")
-	g.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) { draw_groove(dc, b.rect.min, {b.rect.max.x, b.rect.min.y}) }
+	edge_line("###hdredge")
 }
 
 kfmt :: proc(v: f64) -> string {
@@ -1104,9 +1099,7 @@ submit_prompt :: proc(app: ^App) {
 // Status bar
 
 status_bar :: proc(app: ^App, em: f32) {
-	ui.next({width = ui.fill(), height = ui.px(2)})
-	g := ui.build_box({}, "###sbedge")
-	g.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) { draw_groove(dc, b.rect.min, {b.rect.max.x, b.rect.min.y}) }
+	edge_line("###sbedge")
 	h := math.round(em * 1.9)
 	ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###status") {

@@ -197,6 +197,7 @@ stats_dialog :: proc(app: ^App, em: f32) {
 	c := &app.chat
 	s := c.have_self ? &c.self : find_session(app, c.id)
 	if ui.modal("stats", em * 46, &app.stats_open, 0.06) {
+		dialog_backdrop()
 		h := math.round(min(em * 38, app.ui_state.window_size.y * 0.84))
 		ui.next({width = ui.fill(), height = ui.px(h)})
 		if ui.scroll_y("###stats_scroll") {

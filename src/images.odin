@@ -218,6 +218,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 	k := min(win.x * 0.9 / f32(e.w), (win.y * 0.9 - em * 4) / f32(e.h), sc)
 	w, h := math.round(f32(e.w) * k), math.round(f32(e.h) * k)
 	if ui.modal("image_view", max(w + em * 2, em * 22), &app.view_open, max(0.02, (win.y - h - em * 5) * 0.5 / win.y)) {
+		dialog_backdrop()
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row() {

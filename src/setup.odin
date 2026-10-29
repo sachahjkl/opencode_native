@@ -154,7 +154,8 @@ setup_offer_at_start :: proc(app: ^App) {
 setup_dialog :: proc(app: ^App, em: f32) {
 	st := &app.setup
 	was_open := st.open
-	if ui.modal("setup", em * 34, &st.open, 0.18) {
+	if ui.modal("setup", em * 36, &st.open, 0.18) {
+		dialog_backdrop()
 		f := &st.facts
 		ui.spacer(ui.px(em * 1.3))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -239,7 +240,15 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				}
 			}
 			ui.spacer(ui.fill())
-			if f.state == .Not_Installed || f.state == .Other_Copy {
+			// just installed: what is left to do is to start that copy (four buttons overflowed the dialog)
+			just_installed := st.installed != "" && f.state != .This_Copy
+			if just_installed {
+				if bevel_button("###close", "Close", "", .Normal).clicked { st.open = false }
+				ui.spacer(ui.px(em * 0.5))
+				if bevel_button("###launch", "Open installed copy", ICO_RIGHT, .Accent).clicked {
+					if launch(st.installed) { app.quit = true }
+				}
+			} else if f.state == .Not_Installed || f.state == .Other_Copy {
 				if bevel_button("###standalone", "Keep standalone", "", .Normal).clicked {
 					settings_set("setup", "standalone")
 					st.open = false
@@ -249,30 +258,26 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				if bevel_button("###close", "Close", "", .Normal).clicked { st.open = false }
 				ui.spacer(ui.px(em * 0.5))
 			}
-			label := "Install"
-			switch f.state {
-			case .Not_Installed: label = "Install"
-			case .Other_Copy:    label = "Replace installed copy"
-			case .Repair:        label = "Repair"
-			case .This_Copy:     label = "Update shortcuts"
-			}
-			if bevel_button("###install", label, ICO_CHECK, .Accent).clicked {
-				ok, msg := desktop_install(st.desktop)
-				if ok {
-					settings_set("setup", "installed")
-					running_installed := same_path(running_exe(), msg)
-					set_message(app, true, running_installed ? "Done: shortcuts and Settings entry are in place." : "Installed. Start it from the Start menu, or now:")
-					if !running_installed {
-						delete(st.installed)
-						st.installed = strings.clone(msg)
-					}
-				} else { set_message(app, false, msg) }
-				setup_refresh(app)
-			}
-			if st.installed != "" && f.state != .This_Copy {
-				ui.spacer(ui.px(em * 0.5))
-				if bevel_button("###launch", "Open installed copy", ICO_RIGHT, .Normal).clicked {
-					if launch(st.installed) { app.quit = true }
+			if !just_installed {
+				label := "Install"
+				switch f.state {
+				case .Not_Installed: label = "Install"
+				case .Other_Copy:    label = "Replace installed copy"
+				case .Repair:        label = "Repair"
+				case .This_Copy:     label = "Update shortcuts"
+				}
+				if bevel_button("###install", label, ICO_CHECK, .Accent).clicked {
+					ok, msg := desktop_install(st.desktop)
+					if ok {
+						settings_set("setup", "installed")
+						running_installed := same_path(running_exe(), msg)
+						set_message(app, true, running_installed ? "Done: shortcuts and Settings entry are in place." : "Installed. Start it from the Start menu, or now:")
+						if !running_installed {
+							delete(st.installed)
+							st.installed = strings.clone(msg)
+						}
+					} else { set_message(app, false, msg) }
+					setup_refresh(app)
 				}
 			}
 			ui.spacer(ui.px(em * 1.5))

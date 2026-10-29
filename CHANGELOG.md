@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- The carved line under the title bar was half covered by the sidebar, whose rounded corner also notched it: the lines
+  between regions now have a box as thick as they are drawn (more than 2 px when the display is scaled), and the
+  sidebar and the conversation have square corners.
+- Dialogs hid the window behind them (an opaque backdrop): it shows through now, blurred and darkened.
+- Setup: once installed, four buttons overflowed the dialog; what is left is Close and Open installed copy.
+
+### Added
+
+- `--setup` opens the Setup dialog at start.
+
 ## [0.3.0] - 2026-10-29
 
 ### Added

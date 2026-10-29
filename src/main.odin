@@ -327,8 +327,9 @@ main :: proc() {
 	}
 
 	setup_offer_at_start(app)
-	for a in os.args[1:] {   // --search=<text>: the sidebar's search, filled at start
+	for a in os.args[1:] {   // --search=<text>: the sidebar's search, filled at start; --setup: the Setup dialog
 		if strings.has_prefix(a, "--search=") { ui.field_set(&app.search, a[len("--search="):]) }
+		if a == "--setup" { setup_open(app) }
 	}
 	for a in os.args[1:] {   // --settings[=page number]: the settings open at start
 		if a == "--settings" || strings.has_prefix(a, "--settings=") {
