@@ -1097,13 +1097,11 @@ composer :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.6))
 			agent := app.chat.agent != "" ? app.chat.agent : "build"
 			asig := bevel_button("###agent", agent, ICO_ROBOT, .Normal, height = math.round(em * 1.9))
-			agent_key := ui.key_from_string(0, "agent_menu")
-			if asig.clicked { ui.ctx_menu_open_rect(agent_key, asig.box.rect, asig.box.key) }
+			if asig.clicked { if app.picker.open && app.picker.id == "agent" { app.picker.open = false } else { picker_open(&app.picker, "agent", asig.box.rect) } }
 			ui.spacer(ui.px(em * 0.4))
 			model := app.chat.model != "" ? app.chat.model : "default model"
 			msig := bevel_button("###model", model, ICO_CHIP, .Normal, height = math.round(em * 1.9))
-			model_key := ui.key_from_string(0, "model_menu")
-			if msig.clicked { ui.ctx_menu_open_rect(model_key, msig.box.rect, msig.box.key) }
+			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(&app.picker, "model", msig.box.rect) } }
 			ui.spacer(ui.fill())
 			if app.column_w > em * 44 {   // (room for it beside the agent and model buttons)
 				text("hint", app.prefs.ctrl_enter ? "Ctrl+Enter  send   ·   Enter  new line" : "Enter  send   ·   Shift+Enter  new line", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
@@ -1117,35 +1115,27 @@ composer :: proc(app: ^App, em: f32) {
 			if bevel_button("###send", "", ICO_SEND, .Accent, ui.px(math.round(em * 2.6)), math.round(em * 2.1), disabled = empty || !app.online).clicked { submit = true }
 			ui.spacer(ui.px(em * 0.55))
 
-			if ui.ctx_menu(agent_key, em * 18) {
-				ui.menu_heading("Agent")
-				for a in app.agents {
-					if a.mode == "subagent" { continue }
-					if ui.menu_item(a.name != "" ? a.name : a.id, "", a.id == agent).clicked {
-						if app.chat.id != "" { switch_agent(app, app.chat.id, a.id) }
-						app.chat.agent = strings.clone(a.id, app.chat.alloc)
-					}
-				}
+			// the agent and the model: pickers searched as one types
+			agent_items := make([dynamic]Pick_Item, context.temp_allocator)
+			agent_ids := make([dynamic]string, context.temp_allocator)
+			for a in app.agents {
+				if a.mode == "subagent" { continue }
+				append(&agent_items, Pick_Item{label = a.name != "" ? a.name : a.id, detail = a.mode == "primary" ? "" : a.mode, current = a.id == agent, color = agent_color(a.id)})
+				append(&agent_ids, a.id)
 			}
-			if ui.ctx_menu(model_key, em * 20) {
-				ui.menu_heading("Model")
-				// one submenu per provider
-				i := 0
-				for i < len(app.models) {
-					prov := app.models[i].provider
-					j := i
-					for j < len(app.models) && app.models[j].provider == prov { j += 1 }
-					if ui.menu_submenu(prov) {
-						for &m in app.models[i:j] {
-							if ui.menu_item(m.name != "" ? m.name : m.id, m.ctx_len > 0 ? kfmt(m.ctx_len) : "", m.id == app.chat.model && m.provider == app.chat.provider).clicked {
-								if app.chat.id != "" { switch_model(app, app.chat.id, m) }
-								app.chat.model = strings.clone(m.id, app.chat.alloc)
-								app.chat.provider = strings.clone(m.provider, app.chat.alloc)
-							}
-						}
-					}
-					i = j
-				}
+			if k := picker(app, &app.picker, "agent", "agents", agent_items[:], em); k >= 0 {
+				if app.chat.id != "" { switch_agent(app, app.chat.id, agent_ids[k]) }
+				app.chat.agent = strings.clone(agent_ids[k], app.chat.alloc)
+			}
+			model_items := make([dynamic]Pick_Item, len(app.models), context.temp_allocator)
+			for m, i in app.models {
+				model_items[i] = Pick_Item{label = m.name != "" ? m.name : m.id, group = m.provider, detail = m.ctx_len > 0 ? kfmt(m.ctx_len) : "", current = m.id == app.chat.model && m.provider == app.chat.provider}
+			}
+			if k := picker(app, &app.picker, "model", "models", model_items[:], em); k >= 0 {
+				m := app.models[k]
+				if app.chat.id != "" { switch_model(app, app.chat.id, m) }
+				app.chat.model = strings.clone(m.id, app.chat.alloc)
+				app.chat.provider = strings.clone(m.provider, app.chat.alloc)
 			}
 		}
 	}

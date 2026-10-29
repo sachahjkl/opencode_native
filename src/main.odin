@@ -34,6 +34,7 @@ App :: struct {
 	server:         int,               // the one connected
 	conn:           ^Conn,             // its connection
 	server_edit:    Server_Edit,
+	picker:         Picker,            // the composer's agent or model picker (picker.odin)
 	pending:        i32,       // (atomic) requests in flight
 	online:         bool,
 	auth_failed:    bool,
