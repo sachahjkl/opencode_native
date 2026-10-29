@@ -10,7 +10,6 @@ import "core:mem/virtual"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
-import win "core:sys/windows"
 import "gt:config"
 import "gt:draw"
 import "gt:platform"
@@ -148,22 +147,7 @@ animations_on :: proc(app: ^App) -> bool {
 ////////////////////////////////
 // Notifications
 
-window_in_front :: proc(app: ^App) -> bool {
-	return rawptr(win.GetForegroundWindow()) == rawptr(app.win.hwnd)
-}
-
-FLASHWINFO :: struct { cbSize: u32, hwnd: win.HWND, dwFlags: u32, uCount: u32, dwTimeout: u32 }
-
-foreign import user32_flash "system:User32.lib"
-@(default_calling_convention = "system", private = "file")
-foreign user32_flash {
-	FlashWindowEx :: proc(fi: ^FLASHWINFO) -> win.BOOL ---
-}
-
-flash_taskbar :: proc(app: ^App) {
-	fi := FLASHWINFO{cbSize = size_of(FLASHWINFO), hwnd = app.win.hwnd, dwFlags = 0x3 | 0xC, uCount = 3}   // FLASHW_ALL | FLASHW_TIMERNOFG
-	FlashWindowEx(&fi)
-}
+window_in_front :: proc(app: ^App) -> bool { return app.win.active }
 
 // A run ended in the session `sid`: told when it is not the one in front of the user.
 notify_finished :: proc(app: ^App, sid, outcome: string) {

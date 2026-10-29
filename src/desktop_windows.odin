@@ -18,29 +18,9 @@ import "core:strings"
 import win "core:sys/windows"
 
 APP_ID        :: "FromentSoftware.OpencodeNative"   // AppUserModelID of the windows and the shortcuts
-APP_NAME      :: "opencode native"
-APP_PUBLISHER :: "Froment Software"
 EXE_NAME      :: "opencode-native.exe"
 UNINSTALL_KEY :: `Software\Microsoft\Windows\CurrentVersion\Uninstall\OpencodeNative`
 MARK_VALUE    :: "OpencodeNativeIntegration"         // in our registry key: the mark that makes it ours
-
-Install_State :: enum u8 {
-	Not_Installed,
-	This_Copy,        // the running program is the installed copy, everything in place
-	Repair,           // this is the installed copy, but a shortcut or the Settings entry is missing
-	Other_Copy,       // a copy is installed elsewhere: this one runs standalone (Install replaces that one)
-}
-
-Install_Facts :: struct {
-	state:     Install_State,
-	dir:       string,   // where the installed copy is (or would go)
-	exe:       string,
-	running:   string,   // this program
-	start_lnk: bool,
-	desk_lnk:  bool,
-	record:    bool,
-	version:   string,   // of the installed copy, from its record
-}
 
 ////////////////////////////////
 // COM: IShellLinkW, IPersistFile, IPropertyStore (vtables in the order of the SDK headers; the offsets are what matters)
@@ -386,8 +366,3 @@ pclean :: proc(p: string) -> string {
 	return s
 }
 
-// A path made of `parts` (temp memory).
-pjoin :: proc(parts: []string) -> string {
-	s, _ := filepath.join(parts, context.temp_allocator)
-	return s
-}

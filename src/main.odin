@@ -18,7 +18,6 @@ import "gt:font"
 import "gt:platform"
 import "gt:render"
 import "gt:ui"
-import win "core:sys/windows"
 
 App :: struct {
 	win:      ^platform.Window,
@@ -28,6 +27,7 @@ App :: struct {
 	theme:    ui.Theme,
 	ui_state: ui.State,
 	font, mono, mono_bold, icons, tk_icons: font.Font_Id,
+	ui_face:  string,   // the system face of the interface ("": the embedded one)
 
 	// the server
 	servers:        [dynamic]Server,   // (servers.odin) this computer's first
@@ -87,6 +87,7 @@ App :: struct {
 	column_w:         f32,    // the conversation column, frame pixels (this frame)
 	chat_sb:          ^ui.Box, // the conversation scroll box, when built this frame
 	stick_jump:       bool,    // the second build of a frame: the bottom is reached at once, no glide
+	snap_bottom:      bool,           // the conversation's first page arrived: shown at its bottom in that frame (frame)
 	chat_target:      f32,     // the conversation's scroll target at the end of the last build (a drag before this one moved it)
 	stats_open:       bool,           // the statistics of the session shown (stats.odin)
 	proj_stats:       Project_Stats,
@@ -199,14 +200,18 @@ frame :: proc(app: ^App, inner := false) {
 	// (a wider window re-wraps every paragraph on fewer lines), the picture would be scrolled past the end, empty, for a
 	// frame. Build it again, placed from this layout (no events: they were the first build's). (Content that grew is
 	// caught up by the scroll's own glide.)
+	// A conversation's first page just arrived (a session opened): this build placed it from the empty one's bounds, at
+	// its top. Build it again at its bottom, at once: no frame at the top, no glide down.
 	if b := app.chat_sb; b != nil && app.stick_bottom {
 		limit := max(0, b.view_bounds.y - b.size.y)
-		if b.view_off.y > limit + 1 {
+		if b.view_off.y > limit + 1 || app.snap_bottom {
+			b.view_anim[1] = {}
 			app.stick_jump = true
 			build(app, size, nil, 0)
 			app.stick_jump = false
 		}
 	}
+	app.snap_bottom = false
 	platform.set_cursor(app.win, ui.cursor(&app.ui_state))
 	draw.begin_frame(&app.dc, size)
 	render.frame_begin(&app.r, hex(HEX_BG0))
@@ -239,27 +244,44 @@ frame :: proc(app: ^App, inner := false) {
 
 load_fonts :: proc(app: ^App) -> bool {
 	ok: bool
-	// Segoe UI Variable (Windows 11), else Segoe UI, else the toolkit's embedded Roboto
-	if app.font, ok = font.load_system(&app.fonts, "Segoe UI Variable Text"); !ok {
-		app.font, ok, _ = font.load_system_or_embedded(&app.fonts, platform.system_font_path("segoeui.ttf"), font.FALLBACK_UI_DATA)
+	when ODIN_OS == .Windows {
+		ui_faces   := []string{"Segoe UI Variable Text", "Segoe UI"}
+		mono_faces := []string{"Cascadia Mono", "Cascadia Code", "JetBrains Mono", "Consolas"}
+	} else {
+		ui_faces   := []string{"Inter", "Cantarell", "Noto Sans", "Ubuntu", "DejaVu Sans"}
+		mono_faces := []string{"JetBrains Mono", "Cascadia Mono", "Fira Code", "Noto Sans Mono", "Ubuntu Mono", "DejaVu Sans Mono"}
+	}
+	// the system's face, else the toolkit's embedded Roboto
+	for f in ui_faces {
+		if app.font, ok = font.load_system(&app.fonts, f); ok { app.ui_face = f; break }
+	}
+	if !ok {
+		app.font, ok = font.load_embedded(&app.fonts, font.FALLBACK_UI_DATA)
 		if !ok { return false }
 	}
-	families := []string{"Cascadia Mono", "Cascadia Code", "JetBrains Mono", "Consolas"}
-	for f in families {
+	for f in mono_faces {
 		if app.mono, ok = font.load_system(&app.fonts, f); ok {
 			app.mono_bold, _ = font.load_system(&app.fonts, f, 700)
 			break
 		}
 	}
 	if !ok {
-		app.mono, _, _ = font.load_system_or_embedded(&app.fonts, platform.system_font_path("consola.ttf"), font.FALLBACK_MONO_DATA)
+		app.mono, _ = font.load_embedded(&app.fonts, font.FALLBACK_MONO_DATA)
 		app.mono_bold = app.mono
 	}
-	if app.icons, ok = font.load_system(&app.fonts, "Segoe Fluent Icons"); !ok {
-		app.icons, ok = font.load_system(&app.fonts, "Segoe MDL2 Assets")
+	when ODIN_OS == .Windows {
+		if app.icons, ok = font.load_system(&app.fonts, "Segoe Fluent Icons"); !ok {
+			app.icons, ok = font.load_system(&app.fonts, "Segoe MDL2 Assets")
+		}
+	} else {
+		app.icons, ok = font.load_embedded(&app.fonts, LUCIDE_TTF)
 	}
 	app.tk_icons, _ = font.load_embedded(&app.fonts, ui.ICON_FONT_DATA)
 	return true
+}
+
+when ODIN_OS != .Windows {
+	LUCIDE_TTF :: #load("../assets/fonts/lucide.ttf")
 }
 
 main :: proc() {
@@ -302,9 +324,9 @@ main :: proc() {
 	app.ui_state.mono_font = app.mono
 	ui.set_toast_position(&app.ui_state, .Bottom_Right)
 	prefs_init(app)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
-	if bold, bok := font.load_system(&app.fonts, "Segoe UI Variable Text", 600); bok {
-		italic, _ := font.load_system(&app.fonts, "Segoe UI Variable Text", 400, .Italic)
-		bi, _ := font.load_system(&app.fonts, "Segoe UI Variable Text", 600, .Italic)
+	if bold, bok := font.load_system(&app.fonts, app.ui_face, 600); bok {
+		italic, _ := font.load_system(&app.fonts, app.ui_face, 400, .Italic)
+		bi, _ := font.load_system(&app.fonts, app.ui_face, 600, .Italic)
 		ui.rich_set_faces(&app.ui_state, app.font, bold, italic, bi)
 	}
 	ui.post_configure(&app.ui_state, capacity = 4096, overflow = .Block, per_build = 4000, on_drop = on_drop)
@@ -352,22 +374,3 @@ main :: proc() {
 	os.exit(0)
 }
 
-foreign import kernel32 "system:Kernel32.lib"
-
-@(default_calling_convention = "system")
-foreign kernel32 {
-	GetTimeZoneInformation :: proc(tzi: ^win.TIME_ZONE_INFORMATION) -> u32 ---
-}
-
-// Minutes to add to UTC for the machine's local time (daylight saving included).
-local_offset_minutes :: proc() -> int {
-	@(static) cached: int
-	@(static) known: bool
-	if !known {
-		tzi: win.TIME_ZONE_INFORMATION
-		r := GetTimeZoneInformation(&tzi)
-		bias := int(tzi.Bias) + (r == 2 ? int(tzi.DaylightBias) : int(tzi.StandardBias))
-		cached, known = -bias, true
-	}
-	return cached
-}

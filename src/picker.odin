@@ -23,7 +23,7 @@ Picker :: struct {
 	anchor: Rect,
 	field:  ui.Text_Field,
 	sel:    int,       // in the filtered list
-	top:    int,       // the first row shown
+	reveal: bool,      // bring the selected row into view (the keyboard moved it, it was opened, the search changed)
 	fresh:  bool,      // opened in this frame: focus the field, select the current item
 	mouse:  Vec2,
 }
@@ -32,7 +32,7 @@ PICK_ROWS :: 10
 
 picker_open :: proc(p: ^Picker, id: string, anchor: Rect) {
 	p.open, p.id, p.anchor, p.fresh = true, id, anchor, true
-	p.sel, p.top = 0, 0
+	p.sel = 0
 	ui.field_set(&p.field, "")
 }
 
@@ -54,18 +54,16 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 	n := len(hits)
 	if p.fresh {
 		for h, k in hits { if items[h.index].current { p.sel = k } }
+		p.reveal = true
 	}
 	// the keyboard
 	if n > 0 {
-		if ui.key_press(.Down) { p.sel = (p.sel + 1) % n }
-		if ui.key_press(.Up) { p.sel = (p.sel + n - 1) % n }
-		if ui.key_press(.Page_Down) { p.sel = min(p.sel + PICK_ROWS, n - 1) }
-		if ui.key_press(.Page_Up) { p.sel = max(p.sel - PICK_ROWS, 0) }
+		if ui.key_press(.Down) { p.sel = (p.sel + 1) % n; p.reveal = true }
+		if ui.key_press(.Up) { p.sel = (p.sel + n - 1) % n; p.reveal = true }
+		if ui.key_press(.Page_Down) { p.sel = min(p.sel + PICK_ROWS, n - 1); p.reveal = true }
+		if ui.key_press(.Page_Up) { p.sel = max(p.sel - PICK_ROWS, 0); p.reveal = true }
 	}
 	p.sel = clamp(p.sel, 0, max(n - 1, 0))
-	if p.sel < p.top { p.top = p.sel }
-	if p.sel >= p.top + PICK_ROWS { p.top = p.sel - PICK_ROWS + 1 }
-	p.top = clamp(p.top, 0, max(n - PICK_ROWS, 0))
 	mouse := ui.mouse_pos()
 	moved := abs(mouse.x - p.mouse.x) + abs(mouse.y - p.mouse.y) > 0.5
 	p.mouse = mouse
@@ -86,7 +84,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 					res := ui.line_edit("###pf", &p.field, fmt.tprintf("Search %s", title))
 					if p.fresh { ui.set_focus(res.box.key) }
-					if res.changed { p.sel, p.top = 0, 0 }
+					if res.changed { p.sel = 0; p.reveal = true }
 					if res.committed && n > 0 { chosen = hits[p.sel].index }
 					if res.cancelled { p.open = false }
 				}
@@ -96,18 +94,23 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 			ui.spacer(ui.px(em * 0.5))
 		}
 		ui.spacer(ui.px(em * 0.4))
-		// the rows (the wheel moves the window of rows)
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-		lb := ui.build_box({.Scroll_Self}, "###pl")
-		if ws := ui.signal(lb); ws.scrolled.y != 0 {
-			p.top = clamp(p.top - int(math.sign(ws.scrolled.y)) * 3, 0, max(n - PICK_ROWS, 0))
-		}
-		if ui.parent(lb) {
+		// the rows: a scroll box (smooth wheel scrolling), the selected row kept in view
+		view_h := f32(clamp(n, 1, PICK_ROWS)) * row_h
+		ui.next({width = ui.fill(), height = ui.px(view_h)})
+		if ui.scroll_y("###pl") {
+			lb := ui.parent_box()
+			if p.reveal {
+				top := f32(p.sel) * row_h
+				if top < lb.view_target.y { lb.view_target.y = top }
+				if top + row_h > lb.view_target.y + view_h { lb.view_target.y = top + row_h - view_h }
+				if p.fresh { lb.view_off.y = lb.view_target.y }   // (opened: at once)
+				p.reveal = false
+			}
 			if n == 0 {
 				ui.next({width = ui.fill(), height = ui.px(row_h), text_align = .Center})
 				if ui.tags("weak") { ui.label("Nothing matches###none") }
 			}
-			for k in p.top ..< min(n, p.top + PICK_ROWS) {
+			for k in 0 ..< n {
 				h := hits[k]
 				it := items[h.index]
 				ui.next({width = ui.fill(), height = ui.px(row_h), axis = .X, cross = .Center})
@@ -151,13 +154,6 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 					if it.current { glyph(ICO_CHECK, accent(), math.round(em * 0.75)) } else { ui.spacer(ui.px(math.round(em * 0.75))) }
 					ui.spacer(ui.px(em * 0.75))
 				}
-			}
-		}
-		if n > PICK_ROWS {
-			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.4)), axis = .X, cross = .Center})
-			if ui.row(.Center, id = "###pmore") {
-				ui.spacer(ui.px(em * 0.9))
-				text("m", fmt.tprintf("%d–%d of %d", p.top + 1, min(n, p.top + PICK_ROWS), n), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.7)})
 			}
 		}
 		ui.spacer(ui.px(em * 0.4))

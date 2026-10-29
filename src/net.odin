@@ -212,7 +212,12 @@ on_answer :: proc(data: rawptr, word: u64) {
 	if err != nil && r.kind != .Action { ui.toast(.Warn, "Unreadable answer (%s)", r.path); return }
 	switch r.kind {
 	case .Sessions:    sessions_load(app, v)
-	case .Messages:    if r.gen == app.chat.gen && r.tag == app.chat.id { chat_load(app, v, false) }
+	case .Messages:
+		if r.gen == app.chat.gen && r.tag == app.chat.id {
+			first := !app.chat.loaded
+			chat_load(app, v, false)
+			if first && app.stick_bottom { app.snap_bottom = true }   // (shown at its bottom in the very frame it arrives: frame)
+		}
 	case .Older:       if r.gen == app.chat.gen && r.tag == app.chat.id { chat_load(app, v, true) }
 	case .Agents:      agents_load(app, v)
 	case .Models:      models_load(app, v)

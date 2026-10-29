@@ -9,7 +9,6 @@ import "core:os"
 import "core:path/filepath"
 import "core:slice"
 import "core:strings"
-import win "core:sys/windows"
 import "gt:draw"
 import "gt:render"
 import "gt:ui"
@@ -72,11 +71,6 @@ desktop_cli :: proc() -> (handled: bool, code: int) {
 	return false, 0
 }
 
-// A system message box (before any window of ours): 6 = Yes.
-message_box :: proc(text: string, question: bool) -> int {
-	flags := u32(question ? 0x4 | 0x20 : 0x40)   // MB_YESNO | MB_ICONQUESTION, else MB_ICONINFORMATION
-	return int(win.MessageBoxW(nil, win.utf8_to_wstring(text, context.temp_allocator), win.L("opencode native"), flags))
-}
 
 ////////////////////////////////
 // The logo, as a texture (the Setup dialog, the empty conversation)
