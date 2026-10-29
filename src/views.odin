@@ -166,7 +166,7 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		draw_well(dc, r, rad, hex(0x0b0b0bff))
 		// the peach rail, glowing
 		rail := Rect{{r.min.x + 3 * s, r.min.y + 7 * s}, {r.min.x + 6 * s, r.max.y - 7 * s}}
-		draw.box_shadow(dc, rail, radii4(1.5 * s), 4 * s, with_alpha(accent(), 0.6))
+		draw.box_shadow(dc, rail, radii4(1.5 * s), 3 * s, with_alpha(accent(), 0.3))
 		draw.rect(dc, rail, accent(), 1.5 * s)
 	} else if b.hot_t > 0.01 {
 		draw_bevel(dc, r, rad, hex(0x1c1c1cff), 0, b.active_t)
@@ -760,7 +760,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 				c := draw.rect_center(b.rect)
 				r := Rect{{c.x - 1.5 * s, b.rect.min.y}, {c.x + 1.5 * s, b.rect.max.y}}
 				if d.live && the_app.prefs.glow {
-					a := 0.35 + 0.3 * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * 0.006))
+					a := 0.15 + 0.15 * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * 0.006))
 					draw.box_shadow(dc, r, radii4(1.5 * s), 4 * s, with_alpha(d.col, a))
 				}
 				draw.rect(dc, r, d.live ? d.col : with_alpha(d.col, 0.75), 1.5 * s)

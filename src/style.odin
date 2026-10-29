@@ -112,7 +112,7 @@ draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius: f32, base: Color, hot, pr
 	face := lighten(base, 0.06 * hot)
 	if pressed < 0.5 {
 		draw.box_shadow(dc, draw.rect_shift(r, {0, 1.5 * s}), rr, 2.2 * s, {0, 0, 0, 0.65})
-		if glow.a > 0 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 3.5 * s, with_alpha(glow, 0.22 + 0.33 * hot)) }   // (tight: a wide halo reached the carved edge above and darkened under it)
+		if glow.a > 0 && hot > 0.01 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 2.5 * s, with_alpha(glow, 0.2 * hot)) }   // (under the pointer only, and tight: a wide halo reached the carved edge above)
 		top := lighten(face, 0.10)
 		bot := darken(face, 0.16)
 		draw.rect_corners(dc, r, {top, bot, top, bot}, rr)
@@ -136,7 +136,7 @@ draw_well :: proc(dc: ^draw.Context, r: Rect, radius: f32, base: Color, focus: f
 	s := ui.scale()
 	p := px1()
 	rr := radii4(radius)
-	if focus > 0.01 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 6 * s, with_alpha(accent, 0.30 * focus)) }
+	if focus > 0.01 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 4 * s, with_alpha(accent, 0.12 * focus)) }
 	draw.rect(dc, r, base, radius)
 	draw.inset_shadow(dc, r, rr, draw.rect_shift(draw.rect_pad(r, -0.5 * s), {0, 2.5 * s}), rr, 3.5 * s, {0, 0, 0, 0.85})
 	draw.rect(dc, {{r.min.x + radius * 0.6, r.max.y}, {r.max.x - radius * 0.6, r.max.y + p}}, {1, 1, 1, 0.07})
@@ -163,7 +163,7 @@ draw_lamp :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color, lit: f32 = 1) 
 	defer draw.set_circular_corners(dc, prev)
 	r := Rect{c - d * 0.5, c + d * 0.5}
 	rr := radii4(d * 0.5)
-	if lit > 0.01 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, d * 0.6, with_alpha(col, 0.75 * lit)) }
+	if lit > 0.01 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, d * 0.45, with_alpha(col, 0.4 * lit)) }
 	draw.rect(dc, draw.rect_pad(r, 1 * s), {0, 0, 0, 0.8}, d * 0.5 + s)
 	body := draw.mix(darken(col, 0.65), col, lit)
 	draw.rect_corners(dc, r, {lighten(body, 0.25), darken(body, 0.2), lighten(body, 0.25), darken(body, 0.2)}, rr)
@@ -341,7 +341,7 @@ scanner :: proc(id: string, color: Color, width, height: f32) {
 		x := slot.min.x + (w - gw) * t
 		g := Rect{{x, slot.min.y + s}, {x + gw, slot.max.y - s}}
 		draw.push_clip(dc, slot)
-		if the_app.prefs.glow { draw.box_shadow(dc, g, radii4(h * 0.5), 4 * s, with_alpha(col, 0.5)) }
+		if the_app.prefs.glow { draw.box_shadow(dc, g, radii4(h * 0.5), 4 * s, with_alpha(col, 0.22)) }
 		draw.rect(dc, g, with_alpha(col, 0.9), h * 0.5)
 		draw.pop_clip(dc)
 	}
@@ -415,7 +415,7 @@ plate_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	rad := d.radius * s
 	rr := radii4(rad)
 	if d.shadow > 0 { draw.box_shadow(dc, draw.rect_shift(r, {0, 2 * s}), rr, d.shadow * s, {0, 0, 0, 0.6}) }
-	if d.glow.a > 0 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 9 * s, d.glow) }
+	if d.glow.a > 0 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 6 * s, with_alpha(d.glow, d.glow.a * 0.5)) }
 	draw.rect_corners(dc, r, {d.top, d.bottom, d.top, d.bottom}, rr)
 	if d.rim > 0 {
 		draw.rect_corners(dc, draw.rect_pad(r, -p), {{1, 1, 1, d.rim}, {1, 1, 1, 0}, {1, 1, 1, d.rim}, {1, 1, 1, 0}}, radii4(max(0, rad - p)), p)
