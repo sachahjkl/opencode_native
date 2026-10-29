@@ -287,12 +287,12 @@ server_facts_answer :: proc(app: ^App, kind: Req_Kind, v: json.Value) {
 Settings_Page :: enum u8 { Appearance, Conversation, Behaviour, Server, Mcp, Usage, Permissions, Catalog }
 
 SETTINGS_PAGES := [Settings_Page]struct { title, icon: string, opencode: bool }{
-	.Appearance   = {"Appearance", "", false},
+	.Appearance   = {"Appearance", ICO_PALETTE, false},
 	.Conversation = {"Conversation", ICO_CHAT, false},
-	.Behaviour    = {"Behaviour", "", false},
+	.Behaviour    = {"Behaviour", ICO_SLIDERS, false},
 	.Server       = {"Server & shell", ICO_TERMINAL, true},
-	.Mcp          = {"MCP servers", "", true},
-	.Usage        = {"Usage & limits", "", true},
+	.Mcp          = {"MCP servers", ICO_PLUG, true},
+	.Usage        = {"Usage & limits", ICO_GAUGE, true},
 	.Permissions  = {"Permissions", ICO_SHIELD, true},
 	.Catalog      = {"Providers & skills", ICO_LIST, true},
 }
@@ -496,7 +496,7 @@ page_behaviour :: proc(app: ^App, em: f32) {
 	if setting(app, "notify.finished", em) { pref_choice(app, "notify.finished", {"Off", "Toast", "Flash"}, em) }
 	if setting(app, "notify.permission", em) { pref_switch(app, "notify.permission", em) }
 	ui.spacer(ui.px(em * 0.6))
-	info_line(app, "###hint_setup", "Installation, shortcuts and the Settings > Apps entry are in Setup… (title bar menu).", em)
+	info_line(app, "###hint_setup", "Installation and " + LBL_PIECES + " are in Setup… (title bar menu).", em)
 }
 
 // A line of quiet text.

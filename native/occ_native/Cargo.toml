@@ -18,3 +18,9 @@ ureq = { version = "=3.5.0", default-features = false, features = ["rustls", "pl
 base64 = "=0.22.1"
 # images in messages and project logos: decoded and scaled down here, on the client's worker threads
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp"] }
+
+# Linux: the toolkit's native text backend (Fontations, HarfRust, ICU4X; there is no DirectWrite) built into this library,
+# the program's only Rust one (its gt_* functions stay exported; build.sh builds with -define:FONT_BACKEND=native
+# -define:FONT_NATIVE_LINK=false). Its crates are pinned by its own Cargo.toml and by ../Cargo.lock.
+[target.'cfg(target_os = "linux")'.dependencies]
+gt_text = { path = "../../ext/gui_toolkit/native/text" }

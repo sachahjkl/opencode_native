@@ -23,7 +23,10 @@ if [ -z "${OCC_ANY_ODIN:-}" ] && ! "$ODIN" version 2>/dev/null | grep -q "$want"
 fi
 tools/build_native.sh
 mkdir -p "$(dirname "$OUT")"
-flags=(-collection:gt="$GT" -out:"$OUT" -vet)
+# the text backend is the toolkit's native one, inside the Rust library (no DirectWrite here); wgpu-native is a second Rust
+# library: both carry Rust's standard library, whose few unmangled symbols (rust_eh_personality) are the same code
+flags=(-collection:gt="$GT" -out:"$OUT" -vet -define:FONT_BACKEND=native -define:FONT_NATIVE_LINK=false
+       -extra-linker-flags:"-Wl,--allow-multiple-definition")
 if [ "${1:-}" = debug ]; then
   "$ODIN" build src "${flags[@]}" -debug
 else

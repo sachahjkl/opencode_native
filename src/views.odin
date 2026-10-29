@@ -532,7 +532,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		if s == nil && app.chat.have_self { s = &app.chat.self }   // (a sub-agent, or an old session: not in the sidebar's list)
 		if back := back_target(app); back != "" {
 			// the way back up: to the session drilled down from, or the parent
-			if bevel_button("###back", "", "", .Normal, ui.px(math.round(em * 2.1)), math.round(em * 2.1)).clicked { go_back(app) }
+			if bevel_button("###back", "", ICO_BACK, .Normal, ui.px(math.round(em * 2.1)), math.round(em * 2.1)).clicked { go_back(app) }
 			ui.spacer(ui.px(em * 0.7))
 		}
 		if logo_of(app, "###hlogo", project_logo(app, chat_project(app)), math.round(em * 2.3)) { ui.spacer(ui.px(em * 0.7)) }

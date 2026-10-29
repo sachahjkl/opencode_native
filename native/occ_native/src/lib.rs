@@ -14,6 +14,10 @@ use std::time::Duration;
 use base64::Engine;
 use ureq::Agent;
 
+// Linux: the toolkit's text backend lives in this library (its exported gt_* functions are what font/backend_native.odin calls)
+#[cfg(target_os = "linux")]
+pub extern crate gt_text;
+
 pub struct Client {
     base: String,
     auth: Option<String>,

@@ -59,7 +59,7 @@ desktop_cli :: proc() -> (handled: bool, code: int) {
 		return true, ok ? 0 : 1
 	case slice.contains(args, "--uninstall"):
 		quiet := slice.contains(args, "--quiet")
-		if !quiet && message_box("Remove opencode native from this computer?\n\nThe shortcuts, the Settings > Apps entry and the program are removed. Nothing on the opencode server changes.", true) != 6 { return true, 1 }
+		if !quiet && message_box("Remove opencode native from this computer?\n\n" + LBL_PIECES + " and the program are removed. Nothing on the opencode server changes.", true) != 6 { return true, 1 }
 		ok, _, msg := desktop_uninstall()
 		if !quiet { message_box(ok ? "opencode native was removed." : fmt.tprintf("The removal failed: %s", msg), false) }
 		return true, ok ? 0 : 1
@@ -197,8 +197,8 @@ setup_dialog :: proc(app: ^App, em: f32) {
 					}
 				}
 				line("###l1", "program", f.exe, em)
-				line("###l2", "start menu", f.start_lnk ? APP_NAME + ".lnk" : "-", em)
-				line("###l3", "settings", f.record ? "Settings > Apps > opencode native" : "-", em)
+				line("###l2", LBL_MENU, f.start_lnk ? LBL_MENU_ITEM : "-", em)
+				line("###l3", LBL_RECORD, f.record ? LBL_RECORD_IT : "-", em)
 				line("###l4", "this copy", f.running, em)
 				ui.spacer(ui.px(em * 0.6))
 			}
@@ -265,7 +265,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 					if ok {
 						settings_set("setup", "installed")
 						running_installed := same_path(running_exe(), msg)
-						set_message(app, true, running_installed ? "Done: shortcuts and Settings entry are in place." : "Installed. Start it from the Start menu, or now:")
+						set_message(app, true, running_installed ? "Done: everything is in place." : "Installed. Start it from " + LBL_START + ", or now:")
 						if !running_installed {
 							delete(st.installed)
 							st.installed = strings.clone(msg)

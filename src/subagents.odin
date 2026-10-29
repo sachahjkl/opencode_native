@@ -393,7 +393,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 		if hs.clicked { part_toggle(app, m.id, hb) }
 		if ui.parent(hb) {
 			ui.spacer(ui.px(em * 0.3))
-			glyph("", acol, math.round(em * 0.85), em * 1.3)   // (Undo arrow: it came back)
+			glyph(ICO_UNDO, acol, math.round(em * 0.85), em * 1.3)   // (Undo arrow: it came back)
 			text("ag", v.agent != "" ? v.agent : "sub-agent", acol, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
 			text("w", fmt.tprintf("  %s  ", st == .Done ? "returned" : sub_state_label(st)), sub_state_color(st), ui.Style_Mod{font_size = math.round(em * 0.86)})
 			desc := m.sub_desc != "" ? m.sub_desc : v.desc
@@ -469,7 +469,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 				text("f", facts, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72), height = ui.px(em * 1.3)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
-			if bevel_button("###back", "Return to main session", "", .Accent).clicked { go_back(app) }
+			if bevel_button("###back", "Return to main session", ICO_BACK, .Accent).clicked { go_back(app) }
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.7))

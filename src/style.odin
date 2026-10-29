@@ -97,6 +97,12 @@ when ODIN_OS == .Windows {
 	ICO_MENU     :: ""
 	ICO_CHIP     :: ""
 	ICO_HISTORY  :: ""
+	ICO_PALETTE  :: ""
+	ICO_SLIDERS  :: ""
+	ICO_PLUG     :: ""
+	ICO_GAUGE    :: ""
+	ICO_UNDO     :: ""
+	ICO_BACK     :: ""
 } else {
 	ICO_ADD      :: "\ue13d"   // plus
 	ICO_SEND     :: "\ue4f2"   // send-horizontal
@@ -127,6 +133,12 @@ when ODIN_OS == .Windows {
 	ICO_MENU     :: "\ue115"   // menu
 	ICO_CHIP     :: "\ue0a9"   // cpu
 	ICO_HISTORY  :: "\ue1f5"   // history
+	ICO_PALETTE  :: "\ue1dd"   // palette
+	ICO_SLIDERS  :: "\ue29a"   // sliders-horizontal
+	ICO_PLUG     :: "\ue37f"   // plug
+	ICO_GAUGE    :: "\ue1bf"   // gauge
+	ICO_UNDO     :: "\ue2a1"   // undo-2
+	ICO_BACK     :: "\ue048"   // arrow-left
 }
 
 px1 :: proc() -> f32 { return max(1, math.round(ui.scale())) }

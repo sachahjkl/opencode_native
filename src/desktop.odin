@@ -30,3 +30,20 @@ pjoin :: proc(parts: []string) -> string {
 	s, _ := filepath.join(parts, context.temp_allocator)
 	return s
 }
+
+// What the Setup dialog calls the pieces of an install, on this system.
+when ODIN_OS == .Windows {
+	LBL_MENU      :: "start menu"
+	LBL_MENU_ITEM :: APP_NAME + ".lnk"
+	LBL_RECORD    :: "settings"
+	LBL_RECORD_IT :: "Settings > Apps > opencode native"
+	LBL_PIECES    :: "the shortcuts, the Settings > Apps entry"
+	LBL_START     :: "the Start menu"
+} else {
+	LBL_MENU      :: "menu entry"
+	LBL_MENU_ITEM :: "opencode-native.desktop"
+	LBL_RECORD    :: "icon"
+	LBL_RECORD_IT :: "hicolor/256x256/apps/opencode-native.png"
+	LBL_PIECES    :: "the applications menu entry, the icon"
+	LBL_START     :: "the applications menu"
+}
