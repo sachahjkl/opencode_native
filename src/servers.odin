@@ -29,7 +29,7 @@ Conn :: struct {
 }
 
 servers_path :: proc() -> string {
-	return pjoin({os.get_env("APPDATA", context.temp_allocator), "opencode-native", "servers.txt"})
+	return pjoin({config_dir(), "servers.txt"})
 }
 
 // The list at start: this computer's server, the saved ones (a line "name<TAB>url<TAB>password"), then --url's.

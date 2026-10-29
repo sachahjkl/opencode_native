@@ -2,6 +2,7 @@
 // shows (desktop_windows.odin, desktop_linux.odin do the work).
 package occ
 
+import "core:os"
 import "core:path/filepath"
 
 APP_NAME      :: "opencode native"
@@ -46,4 +47,15 @@ when ODIN_OS == .Windows {
 	LBL_RECORD_IT :: "hicolor/256x256/apps/opencode-native.png"
 	LBL_PIECES    :: "the applications menu entry, the icon"
 	LBL_START     :: "the applications menu"
+}
+
+// The client's own files (preferences, servers): %APPDATA%\opencode-native on Windows, $XDG_CONFIG_HOME/opencode-native
+// (~/.config/opencode-native) elsewhere.
+config_dir :: proc() -> string {
+	when ODIN_OS == .Windows {
+		return pjoin({os.get_env("APPDATA", context.temp_allocator), "opencode-native"})
+	} else {
+		if d := os.get_env("XDG_CONFIG_HOME", context.temp_allocator); d != "" { return pjoin({d, "opencode-native"}) }
+		return pjoin({os.get_env("HOME", context.temp_allocator), ".config", "opencode-native"})
+	}
 }

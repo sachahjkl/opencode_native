@@ -1,18 +1,38 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.0] - 2026-10-29
+
+### Added
+
+- **Linux** (x64): the same program, built by `build.sh` (Vulkan through wgpu-native, the toolkit's native text backend
+  in the Rust library, Lucide icons, fontconfig's fonts); Setup installs it in `~/.local/share` with an applications menu
+  entry and its icon; preferences in `~/.config/opencode-native`. CI and releases build Windows and Linux.
+- **Several servers**: the status bar's server is a menu (switch, add, edit, remove; a password field that shows bullets),
+  saved in `servers.txt`; each connection has its own client and event stream, and switching drops what was read from the
+  last one. Another computer's server is named in the title bar. `--server=<name>`.
+- **Pickers searched as one types** for the agent and the model: subsequence matching ("cs5" finds Claude Sonnet 5, the
+  provider counts too), the matched letters lit, the keyboard, the wheel (smooth), the current one checked.
+- **A timeline of tool calls**: a carved rail through a run of calls, across the steps that go on from each other; a lamp
+  only on the running call, a pip on the finished ones (red when it failed). Consecutive steps of the same agent and model
+  share one header (a rail in the agent's colour). Work going on: a slot with a sweeping glint.
+- `--setup` opens the Setup dialog at start; `build.bat` / `build.sh` take `OUT=<file>`.
+
+### Changed
+
+- Fewer lamps and calmer glows: finished sub-agents and the connected state are pips; accent buttons glow only under the
+  pointer; halos about half as strong.
 
 ### Fixed
 
+- Opening a session showed it at its top for a moment, then scrolled down: it lands at its bottom in the frame it arrives.
+- Holding a splitter or a scrollbar on a high refresh rate screen was paced like a window at rest (the cadence's Drag
+  state now: shown at once on a variable refresh screen).
+- The composer showed a horizontal scrollbar (toolkit: a wrapped editor measured its width from the last layout).
 - The carved line under the title bar was half covered by the sidebar, whose rounded corner also notched it: the lines
   between regions now have a box as thick as they are drawn (more than 2 px when the display is scaled), and the
   sidebar and the conversation have square corners.
 - Dialogs hid the window behind them (an opaque backdrop): it shows through now, blurred and darkened.
 - Setup: once installed, four buttons overflowed the dialog; what is left is Close and Open installed copy.
-
-### Added
-
-- `--setup` opens the Setup dialog at start.
 
 ## [0.3.0] - 2026-10-29
 

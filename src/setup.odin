@@ -13,7 +13,7 @@ import "gt:draw"
 import "gt:render"
 import "gt:ui"
 
-APP_VERSION :: "0.3.0"
+APP_VERSION :: "0.4.0"
 
 LOGO_PNG :: #load("../assets/logo_256.png")
 
@@ -21,7 +21,7 @@ LOGO_PNG :: #load("../assets/logo_256.png")
 // Preferences: %APPDATA%\opencode-native\settings.txt, "key=value" lines
 
 settings_path :: proc() -> string {
-	return pjoin({os.get_env("APPDATA", context.temp_allocator), "opencode-native", "settings.txt"})
+	return pjoin({config_dir(), "settings.txt"})
 }
 
 settings_get :: proc(key: string) -> string {

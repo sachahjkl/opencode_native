@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>opencode native</title>
+<meta name="description" content="A native desktop client for the opencode server, for Windows and Linux: one program, no runtime, machined surfaces.">
+<link rel="icon" href="img/logo.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="#"><img src="img/logo.png" alt="" width="28" height="28"><span><span class="dim">open</span>code <em>native</em></span></a>
+  <nav>
+    <a href="#features">Features</a>
+    <a href="#download">Download</a>
+    <a href="https://github.com/sachahjkl/opencode_native">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <img class="mark" src="img/logo.png" alt="opencode native logo" width="112" height="112">
+    <h1><span class="dim">open</span>code <em>native</em></h1>
+    <p class="lead">A native desktop client for the <a href="https://opencode.ai">opencode</a> server. One program for
+      Windows or Linux, no runtime to install, every session and sub-agent streamed live.</p>
+    <div class="actions">
+      <a class="btn accent" href="https://github.com/sachahjkl/opencode_native/releases/latest">Download the latest release</a>
+      <a class="btn" href="https://github.com/sachahjkl/opencode_native">Source on GitHub</a>
+    </div>
+    <p class="small">Windows 10 / 11 x64 &nbsp;·&nbsp; Linux x64 (Vulkan) &nbsp;·&nbsp; MIT</p>
+  </section>
+
+  <figure class="shot wide">
+    <img src="img/subagents.png" alt="A conversation: tool calls on their timeline, sub-agents, the agent's reasoning" loading="lazy">
+    <figcaption>Tool calls on a timeline, sub-agents as cards, the model's reasoning folded.</figcaption>
+  </figure>
+
+  <section id="features" class="grid">
+    <article class="card">
+      <h3>Streamed live</h3>
+      <p>Sessions grouped by project, the conversation from the server's event stream: Markdown with real tables, code with
+        a copy button, reasoning, every tool call with its input and output, tokens and cost.</p>
+    </article>
+    <article class="card">
+      <h3>Sub-agents in front</h3>
+      <p>A card per launch with its state, live activity, model and cost; the running ones lit and counted; drill down into
+        any of them and come back with Alt+Left.</p>
+    </article>
+    <article class="card">
+      <h3>Search as you type</h3>
+      <p>The agent and model pickers match subsequences ("cs5" finds Claude Sonnet 5) and light the letters that matched.
+        Keyboard first, smooth wheel.</p>
+    </article>
+    <article class="card">
+      <h3>Several servers</h3>
+      <p>The opencode desktop app's server is found by itself; add others (an address, a password) and switch from the
+        status bar.</p>
+    </article>
+    <article class="card">
+      <h3>Statistics</h3>
+      <p>Click the token count: totals, the context window filled, time and pace, tools with their failures, models,
+        sub-agents, and the whole project's numbers.</p>
+    </article>
+    <article class="card">
+      <h3>Machined, and quiet</h3>
+      <p>opencode's dark palette with bevelled buttons, sunken wells and carved grooves; lamps only where something is
+        live. Resizing never stretches a frame.</p>
+    </article>
+  </section>
+
+  <section class="gallery">
+    <figure class="shot"><img src="img/conversation.png" alt="A conversation with a Markdown table" loading="lazy"><figcaption>Markdown tables as grids</figcaption></figure>
+    <figure class="shot"><img src="img/picker.png" alt="The model picker searched with 'son'" loading="lazy"><figcaption>The model picker</figcaption></figure>
+    <figure class="shot"><img src="img/statistics.png" alt="Session statistics" loading="lazy"><figcaption>Session statistics</figcaption></figure>
+    <figure class="shot"><img src="img/subagent-session.png" alt="A sub-agent's conversation" loading="lazy"><figcaption>Inside a sub-agent</figcaption></figure>
+    <figure class="shot"><img src="img/settings.png" alt="Settings" loading="lazy"><figcaption>Settings: the client's and the server's</figcaption></figure>
+    <figure class="shot"><img src="img/linux.png" alt="The client on Linux" loading="lazy"><figcaption>On Linux (Wayland, Vulkan)</figcaption></figure>
+  </section>
+
+  <section id="download" class="download">
+    <h2>Download</h2>
+    <div class="cols">
+      <div class="well">
+        <h3>Windows</h3>
+        <p>One executable (Windows 10 and 11, x64). Run it, or install it for your user from its Setup (title bar menu):
+          a Start menu shortcut and a Settings &gt; Apps entry, no administrator rights.</p>
+        <code>opencode-native-&lt;version&gt;-windows-x64.exe</code>
+      </div>
+      <div class="well">
+        <h3>Linux</h3>
+        <p>One program in an archive (x64). Run it, or <code>./opencode-native --install</code> for an entry in the
+          applications menu. Needs Vulkan, libxkbcommon, fontconfig, Wayland or X11.</p>
+        <code>opencode-native-&lt;version&gt;-linux-x64.tar.gz</code>
+      </div>
+    </div>
+    <p><a class="btn accent" href="https://github.com/sachahjkl/opencode_native/releases/latest">All files of the latest release</a></p>
+    <p class="small">It finds the opencode desktop app's server by itself (<code>~/.config/opencode/service.json</code>);
+      another one: <code>--url=https://host:port --password=…</code> or the status bar's server menu.</p>
+  </section>
+</main>
+
+<footer>
+  <p>Built in <a href="https://odin-lang.org">Odin</a> on <a href="https://sachahjkl.github.io/gui_toolkit/">gui_toolkit</a>.
+    MIT licence. opencode is a project of its own (<a href="https://opencode.ai">opencode.ai</a>); this client is not
+    affiliated with it.</p>
+</footer>
+</body>
+</html>
