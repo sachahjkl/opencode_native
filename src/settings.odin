@@ -407,6 +407,7 @@ setting :: proc(app: ^App, name: string, em: f32) -> bool {
 	}
 	ui.spacer(ui.px(em * 0.8))
 	if !config.is_default(p, r) {
+		ui.a11y({name = "Reset to default"})
 		if glyph_button("###reset", ICO_REFRESH, math.round(em * 1.6)).clicked {
 			config.reset(p, name)
 			config.save_user(p, prefs_path())
@@ -444,6 +445,7 @@ pref_choice :: proc(app: ^App, name: string, labels: []string, em: f32, width: f
 pref_switch :: proc(app: ^App, name: string, em: f32) {
 	v := config.bool_of(&app.cfg_prefs, name)
 	ui.next({width = ui.px(em * 3.6), height = ui.px(math.round(em * 2))})
+	ui.a11y({name = config.title_of(config.entry(&app.cfg_prefs, config.ref_of(&app.cfg_prefs, name)).def)})
 	if ui.toggle("###sw", "", &v).clicked { pref_set(app, name, v ? "true" : "false") }
 }
 
@@ -453,6 +455,7 @@ pref_slider :: proc(app: ^App, name: string, lo, hi, step: f32, format: string, 
 	d := config.entry(p, config.ref_of(p, name)).def
 	v := d.kind == .Int ? f32(config.int_of(p, name)) : f32(config.float_of(p, name))
 	ui.next({width = ui.px(em * 15), height = ui.px(math.round(em * 2))})
+	ui.a11y({name = config.title_of(d)})
 	sig := ui.slider("###sl", &v, lo, hi, step, format)
 	// written when the drag ends (or at each key step): the file is not rewritten at the pointer's rate
 	if (sig.released || (sig.focused && !sig.dragging)) && (d.kind == .Int ? i64(math.round(v)) != config.int_of(p, name) : abs(f64(v) - config.float_of(p, name)) > 1e-4) {
@@ -467,6 +470,7 @@ page_appearance :: proc(app: ^App, em: f32) {
 		// swatches: a lit bead per colour
 		for name, i in ACCENTS {
 			ui.next({width = ui.px(math.round(em * 2.1)), height = ui.px(math.round(em * 2.1))})
+			ui.a11y({role = .Radio_Button, name = name, toggled = config.string_of(&app.cfg_prefs, "appearance.accent") == name ? .True : .False})
 			b := ui.build_box({.Clickable, .Focusable}, fmt.tprintf("###acc%d", i))
 			col := ui.frame_new(Color)
 			col^ = hex(ACCENT_HEX[i])

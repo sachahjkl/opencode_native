@@ -22,6 +22,7 @@ build_ui :: proc(app: ^App) {
 			sidebar(app, em)
 			room := ui.parent_box().size.x / ui.scale()
 			ui.next({height = ui.fill()})
+			ui.a11y({name = "Sidebar width"})
 			ui.splitter("###side_split", .X, &app.sidebar_w, 200, 520, {default_size = 290, total = room, min_other = 420})
 			conversation(app, em)
 		}
