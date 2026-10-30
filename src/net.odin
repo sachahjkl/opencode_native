@@ -20,19 +20,40 @@ Server_Config :: struct {
 	tls:      bool,     // https (a remote server, a tunnel)
 }
 
-// The desktop app's service (~/.config/opencode/service.json), unless --url= / --password= say otherwise.
+// This computer's opencode server, unless --url= / --password= say otherwise. Where it really runs first: the state the
+// background service writes while it runs (~/.local/state/opencode/service.json: its url and password, what
+// `opencode service status` prints); else what its configuration asks for (~/.config/opencode/service.json: a port
+// that may be stale or absent); else the default port.
 discover_server :: proc() -> Server_Config {
 	cfg := Server_Config{host = "127.0.0.1", port = 4096}
 	home := os.get_env("USERPROFILE", context.temp_allocator)
 	if home == "" { home = os.get_env("HOME", context.temp_allocator) }
-	path := fmt.tprintf("%s/.config/opencode/service.json", home)
-	if data, err := os.read_entire_file(path, context.temp_allocator); err == nil {
+	xdg :: proc(name, home, fallback: string) -> string {
+		when ODIN_OS != .Windows { if v := os.get_env(name, context.temp_allocator); v != "" { return v } }
+		return fmt.tprintf("%s/%s", home, fallback)
+	}
+	found := false
+	// the running service
+	if data, err := os.read_entire_file(fmt.tprintf("%s/opencode/service.json", xdg("XDG_STATE_HOME", home, ".local/state")), context.temp_allocator); err == nil {
 		if v, jerr := json.parse_string(string(data), parse_integers = true, allocator = context.temp_allocator); jerr == nil {
-			if p := jnum(v, "port"); p > 0 { cfg.port = u16(p) }
-			if h := jstr(v, "hostname"); h != "" && h != "0.0.0.0" && h != "::" { cfg.host = h }
-			cfg.password = jstr(v, "password")
+			if host, port, ok := split_url(jstr(v, "url")); ok {
+				cfg.host, cfg.port, found = host, port, true
+				cfg.password = jstr(v, "password")
+			}
 		}
 	}
+	// its configuration
+	if data, err := os.read_entire_file(fmt.tprintf("%s/opencode/service.json", xdg("XDG_CONFIG_HOME", home, ".config")), context.temp_allocator); err == nil {
+		if v, jerr := json.parse_string(string(data), parse_integers = true, allocator = context.temp_allocator); jerr == nil {
+			if !found {
+				if p := jnum(v, "port"); p > 0 { cfg.port = u16(p) }
+				if h := jstr(v, "hostname"); h != "" { cfg.host = h }
+			}
+			if cfg.password == "" { cfg.password = jstr(v, "password") }
+		}
+	}
+	// a server listening everywhere is reached here
+	if cfg.host == "0.0.0.0" || cfg.host == "::" || cfg.host == "[::]" { cfg.host = "127.0.0.1" }
 	for a in os.args[1:] {
 		if strings.has_prefix(a, "--password=") { cfg.password = a[len("--password="):] }
 		if strings.has_prefix(a, "--url=") {
@@ -348,4 +369,14 @@ on_event :: proc(data: rawptr, word: u64) {
 on_drop :: proc(data: rawptr, word: u64) {
 	// an event (a Request is never dropped: the queue closes after the workers; the stream's states carry their Conn)
 	if word == EVENT_WORD { e := (^Event_Msg)(data); delete(e.text); free(e) }
+}
+
+// "http://host:port[/]" -> host, port (ok false: not that form).
+split_url :: proc(u: string) -> (host: string, port: u16, ok: bool) {
+	v := strings.trim_suffix(strings.trim_prefix(strings.trim_prefix(u, "http://"), "https://"), "/")
+	i := strings.last_index_byte(v, ':')
+	if i <= 0 { return }
+	p, pok := strconv.parse_int(v[i + 1:])
+	if !pok || p <= 0 || p > 65535 { return }
+	return v[:i], u16(p), true
 }

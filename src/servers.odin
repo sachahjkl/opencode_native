@@ -37,14 +37,7 @@ servers_init :: proc(app: ^App) {
 	cfg := discover_server()
 	argv := false
 	for a in os.args[1:] { if strings.has_prefix(a, "--url=") { argv = true } }
-	local := cfg
-	if argv {   // (the address of this computer's server, without what --url / --password changed)
-		local = Server_Config{host = "127.0.0.1", port = 4096}
-		saved_args := os.args
-		os.args = os.args[:1]
-		local = discover_server()
-		os.args = saved_args
-	}
+	local := argv ? local_server_config() : cfg
 	append(&app.servers, Server{name = strings.clone("This computer"), url = server_url(local), password = strings.clone(local.password), local = true})
 	if data, err := os.read_entire_file(servers_path(), context.temp_allocator); err == nil {
 		text := string(data)
@@ -66,6 +59,30 @@ servers_init :: proc(app: ^App) {
 			for s, i in app.servers { if s.name == a[len("--server="):] { app.server = i } }
 		}
 	}
+}
+
+// This computer's server as its files say now, whatever --url / --password say.
+local_server_config :: proc() -> Server_Config {
+	saved_args := os.args
+	os.args = os.args[:1]
+	defer os.args = saved_args
+	return discover_server()
+}
+
+// While this computer's server does not answer, look again every few seconds where it runs: the service may have
+// started since, or restarted on another port. A new address reconnects at once.
+servers_rediscover :: proc(app: ^App) {
+	if app.online || app.server < 0 || app.server >= len(app.servers) || !app.servers[app.server].local { return }
+	now := ui.now_ms()
+	if now - app.rediscover_ms < 2500 { return }
+	app.rediscover_ms = now
+	cfg := local_server_config()
+	url := server_url(cfg)
+	s := &app.servers[app.server]
+	if url == s.url && cfg.password == s.password { delete(url); return }
+	delete(s.url); delete(s.password)
+	s.url, s.password = url, strings.clone(cfg.password)
+	server_connect(app, app.server)
 }
 
 servers_save :: proc(app: ^App) {
@@ -182,7 +199,7 @@ server_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 
 server_dialog :: proc(app: ^App, em: f32) {
 	e := &app.server_edit
-	if ui.modal("server", em * 28, &e.open, 0.2) {
+	if ui.modal("server", em * 32, &e.open, 0.2) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em * 1.2))
 		pad :: proc(em: f32) { ui.spacer(ui.px(em * 1.4)) }
@@ -219,7 +236,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row() {
 				ui.spacer(ui.px(em * 7.4))
-				text("h", "OPENCODE_SERVER_PASSWORD of the server, sent as user opencode", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.78)}, ui.fill())
+				text("h", "the server's OPENCODE_SERVER_PASSWORD, as user opencode", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.78)}, ui.fill())
 				ui.spacer(ui.px(em * 1.4))
 			}
 		}

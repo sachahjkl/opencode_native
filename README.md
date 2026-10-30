@@ -5,7 +5,7 @@
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.4.2-fab283" alt="version 0.4.2"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.4.3-fab283" alt="version 0.4.3"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -66,8 +66,9 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 
 ## The server
 
-Without arguments the client uses the server of the opencode desktop app: `~/.config/opencode/service.json` gives its
-port and password (Basic authentication as `opencode`). Others: the status bar's server menu (saved in
+Without arguments the client uses this computer's opencode server: where the background service runs
+(`~/.local/state/opencode/service.json`, what `opencode service status` prints), else what `~/.config/opencode/service.json`
+asks for; with its password (Basic authentication as `opencode`). Until it answers, the client looks again every few seconds. Others: the status bar's server menu (saved in
 `servers.txt` beside the preferences), or
 
     opencode-native --url=https://host[:port] --password=...
@@ -87,6 +88,7 @@ TLS is rustls, checked against the system's trust store.
 | `--uninstall [--quiet]` | remove it |
 | `--status` | exit code 0 installed, 2 needs repair, 1 not installed |
 | `--setup` | open Setup at start |
+| `--add-server` | open the dialog that adds a server at start |
 | `--pref name=value` | set a preference for the run (names in Settings, e.g. `appearance.accent=blue`) |
 | `--settings[=n]` | open the settings at start (on page n) |
 | `--frames=N` | N frames of a hidden window, then exit (a check that it runs) |

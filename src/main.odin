@@ -1,7 +1,7 @@
 // opencode, native: a desktop client for the opencode v2 server, on gui_toolkit (Direct3D 11, DirectWrite).
 //   build.bat            -> build\opencode-native.exe
 //   opencode-native.exe [--url=http://127.0.0.1:4096] [--password=...]
-// Without arguments it finds the desktop app's server through ~/.config/opencode/service.json.
+// Without arguments it finds this computer's opencode server (~/.local/state/opencode/service.json, else ~/.config/opencode/service.json).
 package occ
 
 import "core:fmt"
@@ -37,7 +37,8 @@ App :: struct {
 	server:         int,               // the one connected
 	conn:           ^Conn,             // its connection
 	server_edit:    Server_Edit,
-	picker:         Picker,            // the composer's agent or model picker (picker.odin)
+	picker:         Picker,
+	rediscover_ms:  f64,               // when this computer's server was last looked for (servers_rediscover)            // the composer's agent or model picker (picker.odin)
 	pending:        i32,       // (atomic) requests in flight
 	online:         bool,
 	auth_failed:    bool,
@@ -232,6 +233,7 @@ frame :: proc(app: ^App, inner := false) {
 		refresh_sessions(app)
 	}
 	if app.stats_pending && app.chat.loaded && app.chat.have_self { app.stats_pending = false; stats_open(app) }
+	servers_rediscover(app)
 	if app.facts_due && ui.now_ms() - app.facts_ms > 700 {
 		// an action of the settings (connect an MCP server, revoke a permission): read the pages again
 		app.facts_due = false
@@ -368,6 +370,7 @@ main :: proc() {
 	for a in os.args[1:] {   // --search=<text>: the sidebar's search, filled at start; --setup: the Setup dialog
 		if strings.has_prefix(a, "--search=") { ui.field_set(&app.search, a[len("--search="):]) }
 		if a == "--setup" { setup_open(app) }
+		if a == "--add-server" { server_edit_open(app, -1) }
 	}
 	for a in os.args[1:] {   // --settings[=page number]: the settings open at start
 		if a == "--settings" || strings.has_prefix(a, "--settings=") {

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.3] - 2026-10-30
+
+### Fixed
+
+- **This computer's server is found where it runs**: the background service's own state
+  (`~/.local/state/opencode/service.json`, what `opencode service status` prints) comes before its configuration, whose
+  port may be stale or absent. While it does not answer, the client looks again every few seconds and reconnects when
+  the address changed (a service started later, or on another port).
+- **The dialog that adds a server** was stretched down to the window's height (labels sized as a percentage inside rows
+  sized by their content): it fits its fields again, and its hint is no longer cut.
+
+### Added
+
+- `--add-server` opens that dialog at start.
+
 ## [0.4.2] - 2026-10-30
 
 ### Added
