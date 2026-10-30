@@ -94,6 +94,7 @@ TLS is rustls, checked against the system's trust store.
 | `--setup` | open Setup at start |
 | `--add-server` | open the dialog that adds a server at start |
 | `--find=<text>` | open the find bar (Ctrl+F) with that text |
+| `--scale=<factor>` | the interface's scale whatever the screen's (`1`: 100 %; screenshots) |
 | `--pref name=value` | set a preference for the run (names in Settings, e.g. `appearance.accent=blue`) |
 | `--settings[=n]` | open the settings at start (on page n) |
 | `--frames=N` | N frames of a hidden window, then exit (a check that it runs) |

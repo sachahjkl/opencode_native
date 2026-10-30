@@ -39,6 +39,7 @@ App :: struct {
 	server_edit:    Server_Edit,
 	picker:         Picker,
 	find:           Find,              // find in the conversation (find.odin)
+	scale:          f32,               // --scale=<factor>: the interface's scale whatever the screen says (0: the screen's)
 	rediscover_ms:  f64,               // when this computer's server was last looked for (servers_rediscover)            // the composer's agent or model picker (picker.odin)
 	pending:        i32,       // (atomic) requests in flight
 	online:         bool,
@@ -179,7 +180,7 @@ frame :: proc(app: ^App, inner := false) {
 		ui.begin_build(&app.ui_state, {
 			window_size = size, events = events, dt = dt, animations = animations_on(app),
 			smooth_scroll = app.prefs.smooth_scroll ? .On : .Off,
-			dpi_scale = app.win.dpi_scale, window = app.win,
+			dpi_scale = app.scale > 0 ? app.scale : app.win.dpi_scale, window = app.win,
 			base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(30)}, font = app.font, font_size = app.prefs.font_size, text_pad = 6, cursor = .Arrow, radius = 6},
 			clipboard_get = clip_get, clipboard_set = clip_set,
 		})
@@ -316,10 +317,12 @@ fonts_apply :: proc(app: ^App) {
 
 main :: proc() {
 	frames := -1   // --frames=N: N frames of the hidden window, then exit (a check that it runs)
+	forced_scale: f32 = 0   // --scale=<factor>
 	start_session := ""   // --session=<id>: the session opened at start (else the latest)
 	for a in os.args[1:] {
 		if strings.has_prefix(a, "--frames=") { frames, _ = strconv.parse_int(a[len("--frames="):]) }
 		if strings.has_prefix(a, "--session=") { start_session = a[len("--session="):] }
+		if strings.has_prefix(a, "--scale=") { if v, ok := strconv.parse_f32(a[len("--scale="):]); ok && v >= 0.5 && v <= 4 { forced_scale = v } }
 	}
 	// --install / --uninstall / --status: the desktop integration, without a window
 	if handled, code := desktop_cli(); handled { os.exit(code) }
@@ -330,6 +333,7 @@ main :: proc() {
 	the_app = app
 	app.sidebar_w = 290
 	app.start_session = start_session
+	app.scale = forced_scale
 	app.seek_subagent = slice.contains(os.args, "--seek-subagent")
 	app.stats_pending = slice.contains(os.args, "--stats")
 	app.stick_bottom = true
