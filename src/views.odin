@@ -628,7 +628,30 @@ messages :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
 		if ui.tags("weak") { ui.label("Loading the conversation…###loading") }
 	}
+	// Only the messages near the view are built: the others stand as a space of the height they had when last built (the
+	// build of a long conversation, Markdown and all, made every frame slow: a pointer's highlight trailed). Everything
+	// is built when the column's width changed (the heights no longer hold) and while finding (the search reads the text).
+	sb := ui.prev_box("###chat")
+	virt := sb != nil && app.virt_w == app.column_w && !app.find.open && !app.chat.loading
+	app.virt_w = app.column_w
+	lo, hi: f32
+	if sb != nil { lo, hi = sb.view_off.y - sb.size.y, sb.view_off.y + sb.size.y * 2 }
+	y := app.virt_top
 	for &m, i in c.messages {
+		id := fmt.tprintf("###msg_%s_%d", m.id, i)
+		if pb := ui.prev_box(id); pb != nil {
+			m.virt_h = pb.size.y
+			if i == 0 && sb != nil { app.virt_top = pb.rect.min.y - sb.rect.min.y + sb.view_off.y; y = app.virt_top }
+		}
+		if virt && m.virt_h > 0 && i < len(c.messages) - 1 && (y + m.virt_h < lo || y > hi) {
+			ui.spacer(ui.px(m.virt_h))
+			y += m.virt_h
+			continue
+		}
+		y += m.virt_h
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+		ui.push_parent(ui.build_box({}, id))
+		defer ui.pop_parent()
 		switch m.kind {
 		case .User:        user_message(app, &m, em)
 		case .Assistant:
