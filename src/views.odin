@@ -56,6 +56,7 @@ app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 
 global_keys :: proc(app: ^App) {
 	if ui.key_press(.N, {.Ctrl}) { new_session(app) }
+	find_keys(app)
 	if ui.key_press(.Comma, {.Ctrl}) { settings_open(app) }
 	if app.chat.id != "" && ui.key_press(.I, {.Ctrl}) { stats_open(app) }
 	if ui.key_press(.F5) {
@@ -482,8 +483,10 @@ conversation :: proc(app: ^App, em: f32) {
 		if app.chat.id != "" || app.chat.loaded {
 			chat_header(app, em)
 		}
+		main := ui.parent_box()
 		ui.next({width = ui.fill(), height = ui.fill()})
 		sb := ui.prev_box("###chat")
+		find_update(app, sb, em)
 		if sb != nil {
 			limit := max(0, sb.view_bounds.y - sb.size.y)
 			// the scrollbar's drag (and the keyboard) moved it before this build (begin_build): up means let go of the bottom,
@@ -515,6 +518,8 @@ conversation :: proc(app: ^App, em: f32) {
 			app.chat_target = sb.view_target.y
 		}
 		dock(app, em, side, col)
+		// the find bar over the conversation's top-right corner, under the header
+		find_bar(app, em, avail - em * 1.4, sb != nil ? sb.rect.min.y - main.rect.min.y + em * 0.6 : em * 4)
 	}
 }
 

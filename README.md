@@ -5,7 +5,7 @@
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.4.3-fab283" alt="version 0.4.3"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.5.0-fab283" alt="version 0.5.0"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -27,12 +27,14 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 
 | | |
 |---|---|
-| ![A conversation: Markdown tables, the answer of an agent](docs/screenshots/conversation.png) | ![The conversation of a sub-agent: where it comes from, the way back](docs/screenshots/subagent-session.png) |
-| **The conversation**: Markdown (here a table), tokens per answer | **A sub-agent's own conversation**: the breadcrumb, Back |
-| ![The model picker, searched as one types](docs/screenshots/picker.png) | ![Session statistics](docs/screenshots/statistics.png) |
-| **The model picker**: subsequence search ("son"), the matched letters lit | **Statistics** (click the token count): totals, context window, time, tools, models, the project |
-| ![Settings](docs/screenshots/settings.png) | ![On Linux](docs/screenshots/linux.png) |
-| **Settings**: the client's preferences and the server's pages | **On Linux** (Wayland, Vulkan): the same program |
+| ![A conversation: Markdown tables, the answer of an agent](docs/screenshots/conversation.png) | ![Find in the conversation: the matches lit, the current one brighter](docs/screenshots/find.png) |
+| **The conversation**: Markdown, code, tokens per answer | **Find** (Ctrl+F): every match lit, Enter / F3 to the next one |
+| ![The conversation of a sub-agent: where it comes from, the way back](docs/screenshots/subagent-session.png) | ![The model picker, searched as one types](docs/screenshots/picker.png) |
+| **A sub-agent's own conversation**: the breadcrumb, Back | **The model picker**: subsequence search ("son"), the matched letters lit |
+| ![Session statistics](docs/screenshots/statistics.png) | ![Settings](docs/screenshots/settings.png) |
+| **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Settings**: the client's preferences (fonts among them) and the server's pages |
+| ![On Linux](docs/screenshots/linux.png) | |
+| **On Linux** (Wayland, Vulkan): the same program | |
 
 ## What it does
 
@@ -52,11 +54,13 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
   as one types (subsequence matching, the matched letters lit, the keyboard or the wheel), Stop while it runs.
 - **Several servers**: this computer's (found by itself), others added from the status bar's server menu (a name, an
   address, a password), `--url`; switch from the menu. Another computer's server is named in the title bar.
+- **Find in the conversation** (Ctrl+F): every match of the text shown lit, the current one brighter and scrolled into
+  view; Enter or F3 for the next, Shift+Enter or Shift+F3 for the previous, Escape to close.
 - **Permission requests** answered in place (once, always, reject).
 - **Statistics of a session** (its token count in the header, Ctrl+I): tokens in, out, reasoning, cache reads and
   writes, cost, cache hits, the context the last step filled against the model's window, time and pace, tool calls by
   tool (failures counted), models, its sub-agents, and the whole project's totals from the server.
-- **Settings** (Ctrl+,): accent colour, the interface and code fonts (automatic, built in, or any installed one, in a searched picker), text size, zoom, density, rounding, animations, glow; how the conversation shows;
+- **Settings** (Ctrl+,): accent colour, the interface and code fonts (automatic, built in, or any installed one, in a searched picker), text size, zoom, density, rounding, animations, smooth scrolling, glow; how the conversation shows;
   the send key; sub-agents in the sidebar; notifications when a session finishes or asks. And what the server lets one see
   or change: its shell, its MCP servers (connect, disconnect), the usage limits and budgets of an OpenCode workspace, the
   saved permissions (revoke), providers, models, agents, skills, commands, the configuration files.
@@ -89,6 +93,7 @@ TLS is rustls, checked against the system's trust store.
 | `--status` | exit code 0 installed, 2 needs repair, 1 not installed |
 | `--setup` | open Setup at start |
 | `--add-server` | open the dialog that adds a server at start |
+| `--find=<text>` | open the find bar (Ctrl+F) with that text |
 | `--pref name=value` | set a preference for the run (names in Settings, e.g. `appearance.accent=blue`) |
 | `--settings[=n]` | open the settings at start (on page n) |
 | `--frames=N` | N frames of a hidden window, then exit (a check that it runs) |

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0] - 2026-10-30
+
+### Added
+
+- **Find in the conversation** (Ctrl+F): a bar over the conversation's top-right corner; every match of the text shown
+  (Markdown, code, tool outputs, sub-agent cards) lit, the current one brighter and scrolled into view; Enter or F3 for
+  the next, Shift+Enter or Shift+F3 for the previous, Escape or the cross to close. `--find=<text>` opens it at start.
+  (gui_toolkit 0.53.0: find in page.)
+- **Smooth scrolling** (Settings > Appearance, on by default): the wheel glides even when Windows turns animations off,
+  where every notch used to jump (gui_toolkit 0.54.0).
+
+### Changed
+
+- **Fields show their edge** when they are not focused: a lit rim around the composer, the searches and the dialogs'
+  fields, which the accent replaces under the focus.
+
 ## [0.4.3] - 2026-10-30
 
 ### Fixed

@@ -73,6 +73,7 @@ ICO_STOP     :: "\ue167"   // square
 ICO_SEARCH   :: "\ue151"   // search
 ICO_FOLDER   :: "\ue0d7"   // folder
 ICO_DOWN     :: "\ue06d"   // chevron-down
+ICO_UP       :: "\ue070"   // chevron-up
 ICO_RIGHT    :: "\ue06f"   // chevron-right
 ICO_CHAT     :: "\ue117"   // message-square
 ICO_DELETE   :: "\ue18e"   // trash-2
@@ -500,12 +501,7 @@ glyph :: proc(icon: string, color: Color, size: f32 = 0, width: f32 = 0) {
 text :: proc(id: string, s: string, color: Color, f: Maybe(ui.Style_Mod) = nil, width: Maybe(ui.Size) = nil) {
 	m := f.? or_else ui.Style_Mod{}
 	m.width = width.? or_else ui.text_size(0)
-	if m.height == nil {
-		// the row's height when the row has one; in a row sized by its children a percentage would be of a distant
-		// ancestor (the window): the line's own height there
-		p := ui.parent_box()
-		m.height = p != nil && p.pref[.Y].kind == .Children_Sum ? ui.text_size(0) : ui.pct(1)
-	}
+	if m.height == nil { m.height = ui.pct(1) }
 	m.fg = color
 	if m.text_pad == nil { m.text_pad = 0 }
 	ui.next(m)

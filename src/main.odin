@@ -38,6 +38,7 @@ App :: struct {
 	conn:           ^Conn,             // its connection
 	server_edit:    Server_Edit,
 	picker:         Picker,
+	find:           Find,              // find in the conversation (find.odin)
 	rediscover_ms:  f64,               // when this computer's server was last looked for (servers_rediscover)            // the composer's agent or model picker (picker.odin)
 	pending:        i32,       // (atomic) requests in flight
 	online:         bool,
@@ -175,6 +176,7 @@ frame :: proc(app: ^App, inner := false) {
 		app.chat_sb = nil
 		ui.begin_build(&app.ui_state, {
 			window_size = size, events = events, dt = dt, animations = animations_on(app),
+			smooth_scroll = app.prefs.smooth_scroll ? .On : .Off,
 			dpi_scale = app.win.dpi_scale, window = app.win,
 			base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(30)}, font = app.font, font_size = app.prefs.font_size, text_pad = 6, cursor = .Arrow, radius = 6},
 			clipboard_get = clip_get, clipboard_set = clip_set,
@@ -371,6 +373,7 @@ main :: proc() {
 		if strings.has_prefix(a, "--search=") { ui.field_set(&app.search, a[len("--search="):]) }
 		if a == "--setup" { setup_open(app) }
 		if a == "--add-server" { server_edit_open(app, -1) }
+		if strings.has_prefix(a, "--find=") { find_open(app); ui.field_set(&app.find.field, a[len("--find="):]) }
 	}
 	for a in os.args[1:] {   // --settings[=page number]: the settings open at start
 		if a == "--settings" || strings.has_prefix(a, "--settings=") {

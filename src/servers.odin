@@ -208,7 +208,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 			pad(em)
 			glyph(ICO_GLOBE, accent(), math.round(em * 1.1))
 			ui.spacer(ui.px(em * 0.5))
-			text("t", e.index >= 0 ? "Edit the server" : "Add a server", hex(0xffffffff), ui.Style_Mod{font_size = math.round(em * 1.2)})
+			text("t", e.index >= 0 ? "Edit the server" : "Add a server", hex(0xffffffff), ui.Style_Mod{font_size = math.round(em * 1.2), height = ui.px(em * 1.8)})
 		}
 		ui.spacer(ui.px(em * 0.9))
 		field :: proc(id, label, hint: string, f: ^ui.Text_Field, em: f32, secret := false) -> ui.Edit_Result {
@@ -216,7 +216,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = id) {
 				ui.spacer(ui.px(em * 1.4))
-				text("k", label, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * 0.88)}, ui.px(em * 6))
+				text("k", label, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * 0.88), height = ui.px(em * 1.5)}, ui.px(em * 6))
 				ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.1)), axis = .X, cross = .Center})
 				if well("###w", .X, radius = 7) {
 					if ui.tags("bare") {
@@ -236,7 +236,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row() {
 				ui.spacer(ui.px(em * 7.4))
-				text("h", "the server's OPENCODE_SERVER_PASSWORD, as user opencode", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.78)}, ui.fill())
+				text("h", "the server's OPENCODE_SERVER_PASSWORD, as user opencode", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.78), height = ui.px(em * 1.3)}, ui.fill())
 				ui.spacer(ui.px(em * 1.4))
 			}
 		}
@@ -257,7 +257,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 				}
 			}
 			ui.spacer(ui.fill())
-			if taken { text("tk", "That name is taken", hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * 0.8)}); ui.spacer(ui.px(em * 0.6)) }
+			if taken { text("tk", "That name is taken", hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * 0.8), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
 			if bevel_button("###cancel", "Cancel", "", .Normal).clicked { e.open = false }
 			ui.spacer(ui.px(em * 0.5))
 			if bevel_button("###ok", e.index >= 0 ? "Save and connect" : "Add and connect", ICO_CHECK, .Accent, disabled = !valid).clicked { save = true }
