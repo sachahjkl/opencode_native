@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.1] - 2026-10-30
+
+### Fixed
+
+- **A long conversation no longer slows every frame**: only the messages near the view are built, the others stand as a
+  space of their measured height (all are built again when the column's width changes, and while finding). Sweeping the
+  pointer over the sessions of a long conversation drew about 21 frames a second; 60 now, measured.
+- **The dialogs' close cross** sits clear of the scroll bar along a scrolling dialog's right edge.
+
 ## [0.5.0] - 2026-10-30
 
 ### Added
