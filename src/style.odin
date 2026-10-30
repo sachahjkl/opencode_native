@@ -214,6 +214,29 @@ bevel_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	}
 }
 
+// The close cross in the top-right corner of a dialog (call it last inside ui.modal, so it sits over the content and takes
+// its clicks; Escape and a click outside close the dialog too). Placed from the panel's width of the last frame.
+dialog_close :: proc(open: ^bool) {
+	panel := ui.parent_box()
+	w := panel.rect.max.x - panel.rect.min.x
+	if w < 1 { return }
+	em := ui.font_size()
+	sz := math.round(em * 1.9)
+	m := math.round(em * 0.5)
+	ui.next({fixed_x = w - sz - m, fixed_y = m, width = ui.px(sz), height = ui.px(sz), axis = .X, cross = .Center})
+	ui.a11y({role = .Button, name = "Close"})
+	b := ui.build_box({.Clickable, .Focusable}, "###dialog_close")
+	d := ui.frame_new(Bevel_Draw)
+	d^ = {kind = .Ghost, radius = 5}
+	b.custom, b.custom_user = bevel_box_draw, d
+	sig := ui.signal(b)
+	if ui.parent(b) {
+		ui.next({width = ui.fill(), height = ui.fill(), font = the_app.icons, font_size = math.round(em * 0.9), fg = sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), text_align = .Center, text_pad = 0})
+		ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###g", ICO_CANCEL))
+	}
+	if sig.clicked { open^ = false }
+}
+
 // A machined push button: an icon (Lucide glyph) and/or a label. `width`: its width (text size by default).
 bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Normal, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false) -> ui.Signal {
 	em := ui.font_size()

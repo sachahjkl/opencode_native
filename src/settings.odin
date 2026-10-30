@@ -371,6 +371,7 @@ settings_dialog :: proc(app: ^App, em: f32) {
 				}
 			}
 		}
+		dialog_close(&app.settings_open)
 	}
 }
 

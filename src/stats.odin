@@ -211,6 +211,7 @@ stats_dialog :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 1.4))
 			}
 		}
+		dialog_close(&app.stats_open)
 	}
 }
 
@@ -224,7 +225,7 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 	if ui.row(.Center, id = "###title") {
 		if logo_of(app, "###lg", project_logo(app, chat_project(app)), math.round(em * 1.8)) { ui.spacer(ui.px(em * 0.5)) }
 		text("t", s != nil && s.title != "" ? s.title : "Session", hex(0xffffffff), ui.Style_Mod{font_size = math.round(em * 1.3)}, ui.fill())
-		if bevel_button("###close", "", ICO_CANCEL, .Ghost, ui.px(em * 2), math.round(em * 2)).clicked { app.stats_open = false }
+		ui.spacer(ui.px(em * 1.6))   // (room for the dialog's close cross)
 	}
 	// totals: the session's (the server's), else the live ones
 	tin, tout, reas, cread, cwrite, cost := c.tokens_in, c.tokens_out, 0.0, c.cache_read, 0.0, c.cost

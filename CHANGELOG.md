@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.2] - 2026-10-30
+
+### Added
+
+- **A close cross** in the top-right corner of the dialogs (Settings, Statistics, Setup, a server, an image), as well as
+  Escape and a click outside.
+
+### Fixed
+
+- **The segmented choices** (Settings): the selected label and the others sit on the same line (gui_toolkit 0.52.0).
+
 ## [0.4.1] - 2026-10-30
 
 ### Added

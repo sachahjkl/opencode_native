@@ -262,6 +262,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 			server_connect(app, i)
 		}
 		ui.spacer(ui.px(em * 1.2))
+		dialog_close(&e.open)
 	}
 }
 

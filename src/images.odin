@@ -243,5 +243,6 @@ image_viewer :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.4))
+		dialog_close(&app.view_open)
 	}
 }

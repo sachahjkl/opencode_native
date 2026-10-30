@@ -13,7 +13,7 @@ import "gt:draw"
 import "gt:render"
 import "gt:ui"
 
-APP_VERSION :: "0.4.1"
+APP_VERSION :: "0.4.2"
 
 LOGO_PNG :: #load("../assets/logo_256.png")
 
@@ -277,6 +277,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 1.5))
 		}
 		ui.spacer(ui.px(em * 1.3))
+		dialog_close(&st.open)
 	}
 	// closed without an answer: not again for this version
 	if was_open && !st.open {
