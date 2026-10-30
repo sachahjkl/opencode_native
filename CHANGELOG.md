@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.3] - 2026-10-30
+
+### Added
+
+- **Timelines of the window**, with `TOOLKIT_DEVTOOLS=<port>` and gui_toolkit's `tools/cdp.mjs`: a run kept whole, each
+  action with its time and a picture, as one page to share, then played back and compared (gui_toolkit 0.56).
+
+### Fixed
+
+- **Screen readers**: the images of a conversation had no name, and were not announced at all.
+- **A screenshot over the DevTools Protocol** took two seconds and froze the window; 66 ms now, measured on a window of
+  2310x1505 (gui_toolkit 0.56.1).
+
 ## [0.5.2] - 2026-10-30
 
 ### Added
