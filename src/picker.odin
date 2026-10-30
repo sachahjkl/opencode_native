@@ -40,7 +40,7 @@ picker_open :: proc(p: ^Picker, id: string, anchor: Rect) {
 Hit :: struct { index, score: int, ranges: []ui.Fuzzy_Range }
 
 // Builds the picker `id` while it is open; returns the index in `items` of the one chosen in this frame (-1: none).
-picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_Item, em: f32) -> (chosen: int) {
+picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_Item, em: f32, align_right := false) -> (chosen: int) {
 	chosen = -1
 	if !p.open || p.id != id { return }
 	needle := ui.field_string(&p.field)
@@ -70,7 +70,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 
 	width := math.round(em * 26)
 	row_h := math.round(em * 2.0)
-	if ui.popover(fmt.tprintf("###pick_%s", id), p.anchor, width, .Above, align_right = false) {
+	if ui.popover(fmt.tprintf("###pick_%s", id), p.anchor, width, .Above, align_right = align_right) {
 		ui.spacer(ui.px(em * 0.5))
 		// the search
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})

@@ -12,6 +12,7 @@ import "core:path/filepath"
 import "core:strings"
 import "gt:config"
 import "gt:draw"
+import "gt:font"
 import "gt:platform"
 import "gt:ui"
 
@@ -23,6 +24,8 @@ ACCENT_HEX := [?]u32{HEX_PEACH, HEX_BLUE, HEX_PURPLE, HEX_GREEN, HEX_CYAN, 0xf28
 
 PREF_DEFS := [?]config.Def{
 	{name = "appearance.accent", description = "The colour of primary buttons, the selection, links of attention and focus rings.", kind = .String, default = {s = "peach"}, choices = ACCENTS[:]},
+	{name = "appearance.font", description = "The face of the interface's text: the system's usual one (automatic), the one built into the program, or any installed family.", kind = .String, default = {s = ""}},
+	{name = "appearance.mono_font", description = "The face of code, paths and figures: automatic, built in, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.font_size", description = "Size of the interface's text, in points at 100 % zoom.", kind = .Int, default = {i = 14}, bounded = true, min = 11, max = 20},
 	{name = "appearance.zoom", description = "Zoom of the whole window (Ctrl + wheel, Ctrl + / -, Ctrl 0 change it too).", kind = .Float, default = {f = 1}, bounded = true, min = 0.6, max = 2.5},
 	{name = "appearance.density", description = "Compact rows fit more on screen at the same text size.", kind = .String, default = {s = "comfortable"}, choices = {"comfortable", "compact"}},
@@ -103,6 +106,11 @@ prefs_refresh :: proc(app: ^App) {
 	s.subagents = config.string_of(p, "sidebar.subagents")
 	s.notify = config.string_of(p, "notify.finished")
 	s.notify_perm = config.bool_of(p, "notify.permission")
+
+	// the faces, when either preference changed (a family is opened once: the font state keeps it)
+	if wanted := fmt.tprintf("%s\n%s", config.string_of(p, "appearance.font"), config.string_of(p, "appearance.mono_font")); wanted != app.fonts_wanted {
+		fonts_apply(app)
+	}
 
 	ui.set_zoom(&app.ui_state, s.zoom)
 	ui.set_density(&app.ui_state, s.density)
@@ -471,12 +479,50 @@ page_appearance :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.2))
 		}
 	}
+	if setting(app, "appearance.font", em) { font_button(app, "appearance.font", em) }
+	if setting(app, "appearance.mono_font", em) { font_button(app, "appearance.mono_font", em) }
 	if setting(app, "appearance.font_size", em) { pref_slider(app, "appearance.font_size", 11, 20, 1, "%.0f pt", em) }
 	if setting(app, "appearance.zoom", em) { pref_slider(app, "appearance.zoom", 0.6, 2.5, 0.05, "%.2f×", em) }
 	if setting(app, "appearance.density", em) { pref_choice(app, "appearance.density", {"Comfortable", "Compact"}, em) }
 	if setting(app, "appearance.rounding", em) { pref_slider(app, "appearance.rounding", 0, 2, 0.05, "%.2f", em) }
 	if setting(app, "appearance.animations", em) { pref_choice(app, "appearance.animations", {"System", "On", "Off"}, em) }
 	if setting(app, "appearance.glow", em) { pref_switch(app, "appearance.glow", em) }
+}
+
+// The button of a font preference (its face, in that face) and its picker: Automatic, Built in, then the installed
+// families, matched as one types.
+font_button :: proc(app: ^App, name: string, em: f32) {
+	mono := name == "appearance.mono_font"
+	want := config.string_of(&app.cfg_prefs, name)
+	face := mono ? app.mono_face : app.ui_face
+	// the button names the face in use; a faint word before it says how it was chosen
+	mode, shown: string
+	switch want {
+	case "":           mode, shown = "auto", face != "" ? face : (mono ? "Inconsolata" : "Roboto")
+	case FONT_BUILTIN: mode, shown = "built in", mono ? "Inconsolata" : "Roboto"
+	case:              mode, shown = face == want ? "" : "not installed", want
+	}
+	if mode != "" {
+		text("fm", mode, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.78), height = ui.px(em * 1.5)})
+		ui.spacer(ui.px(em * 0.5))
+	}
+	sig := bevel_button(fmt.tprintf("###fb_%s", name), shown, "", .Normal, ui.px(em * 13))
+	if sig.clicked {
+		if app.picker.open && app.picker.id == name { app.picker.open = false } else { picker_open(&app.picker, name, sig.box.rect) }
+	}
+	if !(app.picker.open && app.picker.id == name) { return }
+	if app.font_families == nil { app.font_families = font.system_families(&app.fonts) }
+	items := make([dynamic]Pick_Item, context.temp_allocator)
+	append(&items, Pick_Item{label = "Automatic", detail = "the system's usual face", current = want == ""})
+	append(&items, Pick_Item{label = "Built in", detail = mono ? "Inconsolata" : "Roboto", current = want == FONT_BUILTIN})
+	for fam in app.font_families { append(&items, Pick_Item{label = fam, current = fam == want}) }
+	if k := picker(app, &app.picker, name, mono ? "code fonts" : "fonts", items[:], em, align_right = true); k >= 0 {
+		switch k {
+		case 0: pref_set(app, name, "")
+		case 1: pref_set(app, name, FONT_BUILTIN)
+		case:   pref_set(app, name, app.font_families[k - 2])
+		}
+	}
 }
 
 page_conversation :: proc(app: ^App, em: f32) {

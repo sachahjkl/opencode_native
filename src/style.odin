@@ -65,81 +65,43 @@ theme_setup :: proc(t: ^ui.Theme) {
 	ui.apply_palette(t, OPENCODE_PALETTE)
 }
 
-// The icons: Segoe Fluent Icons on Windows (Windows 11; the same code points in Segoe MDL2 Assets on Windows 10), Lucide
-// elsewhere (assets/fonts/lucide.ttf, embedded: ISC licence, assets/fonts/LUCIDE-LICENSE.txt).
-when ODIN_OS == .Windows {
-	ICO_ADD      :: ""
-	ICO_SEND     :: ""
-	ICO_STOP     :: ""
-	ICO_SEARCH   :: ""
-	ICO_FOLDER   :: ""
-	ICO_DOWN     :: ""
-	ICO_RIGHT    :: ""
-	ICO_CHAT     :: ""
-	ICO_DELETE   :: ""
-	ICO_REFRESH  :: ""
-	ICO_COPY     :: ""
-	ICO_CODE     :: ""
-	ICO_ROBOT    :: ""
-	ICO_EDIT     :: ""
-	ICO_DOC      :: ""
-	ICO_TERMINAL :: ""
-	ICO_GLOBE    :: ""
-	ICO_BULB     :: ""
-	ICO_CANCEL   :: ""
-	ICO_CHECK    :: ""
-	ICO_WARN     :: ""
-	ICO_SHIELD   :: ""
-	ICO_BOLT     :: ""
-	ICO_LIST     :: ""
-	ICO_TOOL     :: ""
-	ICO_PERSON   :: ""
-	ICO_MENU     :: ""
-	ICO_CHIP     :: ""
-	ICO_HISTORY  :: ""
-	ICO_PALETTE  :: ""
-	ICO_SLIDERS  :: ""
-	ICO_PLUG     :: ""
-	ICO_GAUGE    :: ""
-	ICO_UNDO     :: ""
-	ICO_BACK     :: ""
-} else {
-	ICO_ADD      :: "\ue13d"   // plus
-	ICO_SEND     :: "\ue4f2"   // send-horizontal
-	ICO_STOP     :: "\ue167"   // square
-	ICO_SEARCH   :: "\ue151"   // search
-	ICO_FOLDER   :: "\ue0d7"   // folder
-	ICO_DOWN     :: "\ue06d"   // chevron-down
-	ICO_RIGHT    :: "\ue06f"   // chevron-right
-	ICO_CHAT     :: "\ue117"   // message-square
-	ICO_DELETE   :: "\ue18e"   // trash-2
-	ICO_REFRESH  :: "\ue145"   // refresh-cw
-	ICO_COPY     :: "\ue09e"   // copy
-	ICO_CODE     :: "\ue093"   // code
-	ICO_ROBOT    :: "\ue1bb"   // bot
-	ICO_EDIT     :: "\ue1f9"   // pencil
-	ICO_DOC      :: "\ue0c0"   // file
-	ICO_TERMINAL :: "\ue20a"   // square-terminal
-	ICO_GLOBE    :: "\ue0e8"   // globe
-	ICO_BULB     :: "\ue1c2"   // lightbulb
-	ICO_CANCEL   :: "\ue1b2"   // x
-	ICO_CHECK    :: "\ue06c"   // check
-	ICO_WARN     :: "\ue193"   // triangle-alert
-	ICO_SHIELD   :: "\ue158"   // shield
-	ICO_BOLT     :: "\ue1b4"   // zap
-	ICO_LIST     :: "\ue106"   // list
-	ICO_TOOL     :: "\ue1b1"   // wrench
-	ICO_PERSON   :: "\ue19f"   // user
-	ICO_MENU     :: "\ue115"   // menu
-	ICO_CHIP     :: "\ue0a9"   // cpu
-	ICO_HISTORY  :: "\ue1f5"   // history
-	ICO_PALETTE  :: "\ue1dd"   // palette
-	ICO_SLIDERS  :: "\ue29a"   // sliders-horizontal
-	ICO_PLUG     :: "\ue37f"   // plug
-	ICO_GAUGE    :: "\ue1bf"   // gauge
-	ICO_UNDO     :: "\ue2a1"   // undo-2
-	ICO_BACK     :: "\ue048"   // arrow-left
-}
+// The icons: Lucide on every system (assets/fonts/lucide.ttf, embedded: ISC licence, assets/fonts/LUCIDE-LICENSE.txt),
+// so they look the same everywhere and nothing depends on the fonts installed.
+ICO_ADD      :: "\ue13d"   // plus
+ICO_SEND     :: "\ue4f2"   // send-horizontal
+ICO_STOP     :: "\ue167"   // square
+ICO_SEARCH   :: "\ue151"   // search
+ICO_FOLDER   :: "\ue0d7"   // folder
+ICO_DOWN     :: "\ue06d"   // chevron-down
+ICO_RIGHT    :: "\ue06f"   // chevron-right
+ICO_CHAT     :: "\ue117"   // message-square
+ICO_DELETE   :: "\ue18e"   // trash-2
+ICO_REFRESH  :: "\ue145"   // refresh-cw
+ICO_COPY     :: "\ue09e"   // copy
+ICO_CODE     :: "\ue093"   // code
+ICO_ROBOT    :: "\ue1bb"   // bot
+ICO_EDIT     :: "\ue1f9"   // pencil
+ICO_DOC      :: "\ue0c0"   // file
+ICO_TERMINAL :: "\ue20a"   // square-terminal
+ICO_GLOBE    :: "\ue0e8"   // globe
+ICO_BULB     :: "\ue1c2"   // lightbulb
+ICO_CANCEL   :: "\ue1b2"   // x
+ICO_CHECK    :: "\ue06c"   // check
+ICO_WARN     :: "\ue193"   // triangle-alert
+ICO_SHIELD   :: "\ue158"   // shield
+ICO_BOLT     :: "\ue1b4"   // zap
+ICO_LIST     :: "\ue106"   // list
+ICO_TOOL     :: "\ue1b1"   // wrench
+ICO_PERSON   :: "\ue19f"   // user
+ICO_MENU     :: "\ue115"   // menu
+ICO_CHIP     :: "\ue0a9"   // cpu
+ICO_HISTORY  :: "\ue1f5"   // history
+ICO_PALETTE  :: "\ue1dd"   // palette
+ICO_SLIDERS  :: "\ue29a"   // sliders-horizontal
+ICO_PLUG     :: "\ue37f"   // plug
+ICO_GAUGE    :: "\ue1bf"   // gauge
+ICO_UNDO     :: "\ue2a1"   // undo-2
+ICO_BACK     :: "\ue048"   // arrow-left
 
 px1 :: proc() -> f32 { return max(1, math.round(ui.scale())) }
 
@@ -252,7 +214,7 @@ bevel_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	}
 }
 
-// A machined push button: an icon (Fluent glyph) and/or a label. `width`: its width (text size by default).
+// A machined push button: an icon (Lucide glyph) and/or a label. `width`: its width (text size by default).
 bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Normal, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false) -> ui.Signal {
 	em := ui.font_size()
 	h := height > 0 ? height : math.round(em * 2.1)

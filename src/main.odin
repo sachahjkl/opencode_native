@@ -27,7 +27,10 @@ App :: struct {
 	theme:    ui.Theme,
 	ui_state: ui.State,
 	font, mono, mono_bold, icons, tk_icons: font.Font_Id,
-	ui_face:  string,   // the system face of the interface ("": the embedded one)
+	ui_face:       string,     // the system face of the interface ("": the embedded one)
+	mono_face:     string,     // the same for code
+	fonts_wanted:  string,     // the two font preferences fonts_apply last applied (prefs_refresh compares)
+	font_families: []string,   // the installed families (read when a font picker first opens)
 
 	// the server
 	servers:        [dynamic]Server,   // (servers.odin) this computer's first
@@ -242,46 +245,67 @@ frame :: proc(app: ^App, inner := false) {
 	}
 }
 
+// The faces looked for when the preference is "" (automatic), in order; the toolkit's embedded Roboto and Inconsolata
+// when none is installed (or when the preference says "built-in").
+when ODIN_OS == .Windows {
+	UI_FACES   :: []string{"Segoe UI Variable Text", "Segoe UI"}
+	MONO_FACES :: []string{"Cascadia Mono", "Cascadia Code", "JetBrains Mono", "Consolas"}
+} else {
+	UI_FACES   :: []string{"Inter", "Cantarell", "Noto Sans", "Ubuntu", "DejaVu Sans"}
+	MONO_FACES :: []string{"JetBrains Mono", "Cascadia Mono", "Fira Code", "Noto Sans Mono", "Ubuntu Mono", "DejaVu Sans Mono"}
+}
+FONT_BUILTIN :: "built-in"   // the preference's value for the embedded face
+
+LUCIDE_TTF :: #load("../assets/fonts/lucide.ttf")
+
+// The fonts that do not change: the icons (Lucide, embedded) and the toolkit's own glyphs. The faces of the text come
+// from the preferences (fonts_apply).
 load_fonts :: proc(app: ^App) -> bool {
 	ok: bool
-	when ODIN_OS == .Windows {
-		ui_faces   := []string{"Segoe UI Variable Text", "Segoe UI"}
-		mono_faces := []string{"Cascadia Mono", "Cascadia Code", "JetBrains Mono", "Consolas"}
-	} else {
-		ui_faces   := []string{"Inter", "Cantarell", "Noto Sans", "Ubuntu", "DejaVu Sans"}
-		mono_faces := []string{"JetBrains Mono", "Cascadia Mono", "Fira Code", "Noto Sans Mono", "Ubuntu Mono", "DejaVu Sans Mono"}
-	}
-	// the system's face, else the toolkit's embedded Roboto
-	for f in ui_faces {
-		if app.font, ok = font.load_system(&app.fonts, f); ok { app.ui_face = f; break }
-	}
-	if !ok {
-		app.font, ok = font.load_embedded(&app.fonts, font.FALLBACK_UI_DATA)
-		if !ok { return false }
-	}
-	for f in mono_faces {
-		if app.mono, ok = font.load_system(&app.fonts, f); ok {
-			app.mono_bold, _ = font.load_system(&app.fonts, f, 700)
-			break
-		}
-	}
-	if !ok {
-		app.mono, _ = font.load_embedded(&app.fonts, font.FALLBACK_MONO_DATA)
-		app.mono_bold = app.mono
-	}
-	when ODIN_OS == .Windows {
-		if app.icons, ok = font.load_system(&app.fonts, "Segoe Fluent Icons"); !ok {
-			app.icons, ok = font.load_system(&app.fonts, "Segoe MDL2 Assets")
-		}
-	} else {
-		app.icons, ok = font.load_embedded(&app.fonts, LUCIDE_TTF)
-	}
+	if app.icons, ok = font.load_embedded(&app.fonts, LUCIDE_TTF); !ok { return false }
 	app.tk_icons, _ = font.load_embedded(&app.fonts, ui.ICON_FONT_DATA)
-	return true
+	app.font, ok = font.load_embedded(&app.fonts, font.FALLBACK_UI_DATA)   // (until the preferences are read)
+	app.mono, _ = font.load_embedded(&app.fonts, font.FALLBACK_MONO_DATA)
+	app.mono_bold = app.mono
+	return ok
 }
 
-when ODIN_OS != .Windows {
-	LUCIDE_TTF :: #load("../assets/fonts/lucide.ttf")
+// The face of `want` ("" automatic: the first of `auto` installed; FONT_BUILTIN: the embedded one); `name` "": embedded.
+@(private = "file")
+face_resolve :: proc(app: ^App, want: string, auto: []string, builtin: []u8) -> (id: font.Font_Id, name: string) {
+	if want != "" && want != FONT_BUILTIN {
+		if f, ok := font.load_system(&app.fonts, want); ok { return f, want }
+	}
+	if want == "" {
+		for a in auto { if f, ok := font.load_system(&app.fonts, a); ok { return f, a } }
+	}
+	f, _ := font.load_embedded(&app.fonts, builtin)
+	return f, ""
+}
+
+// The text faces from the preferences appearance.font and appearance.mono_font (at start, and when either changes).
+fonts_apply :: proc(app: ^App) {
+	want_ui := config.string_of(&app.cfg_prefs, "appearance.font")
+	want_mono := config.string_of(&app.cfg_prefs, "appearance.mono_font")
+	app.font, app.ui_face = face_resolve(app, want_ui, UI_FACES, font.FALLBACK_UI_DATA)
+	mono_face: string
+	app.mono, mono_face = face_resolve(app, want_mono, MONO_FACES, font.FALLBACK_MONO_DATA)
+	app.mono_bold = app.mono
+	if mono_face != "" {
+		if b, ok := font.load_system(&app.fonts, mono_face, 700); ok { app.mono_bold = b }
+	}
+	app.ui_state.mono_font = app.mono
+	bold, italic, bi := app.font, app.font, app.font
+	if app.ui_face != "" {
+		if f, ok := font.load_system(&app.fonts, app.ui_face, 600); ok { bold = f }
+		if f, ok := font.load_system(&app.fonts, app.ui_face, 400, .Italic); ok { italic = f }
+		if f, ok := font.load_system(&app.fonts, app.ui_face, 600, .Italic); ok { bi = f }
+	}
+	ui.rich_set_faces(&app.ui_state, app.font, bold, italic, bi)
+	delete(app.mono_face)
+	app.mono_face = strings.clone(mono_face)
+	delete(app.fonts_wanted)
+	app.fonts_wanted = strings.concatenate({want_ui, "\n", want_mono})
 }
 
 main :: proc() {
@@ -321,14 +345,8 @@ main :: proc() {
 	theme_setup(&app.theme)
 	ui.init(&app.ui_state, &app.fonts, &app.theme)
 	app.ui_state.icon_font = app.tk_icons
-	app.ui_state.mono_font = app.mono
 	ui.set_toast_position(&app.ui_state, .Bottom_Right)
 	prefs_init(app)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
-	if bold, bok := font.load_system(&app.fonts, app.ui_face, 600); bok {
-		italic, _ := font.load_system(&app.fonts, app.ui_face, 400, .Italic)
-		bi, _ := font.load_system(&app.fonts, app.ui_face, 600, .Italic)
-		ui.rich_set_faces(&app.ui_state, app.font, bold, italic, bi)
-	}
 	ui.post_configure(&app.ui_state, capacity = 4096, overflow = .Block, per_build = 4000, on_drop = on_drop)
 	platform.set_dark_title(app.win, true)
 	app.win.user = app

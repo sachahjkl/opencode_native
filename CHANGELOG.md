@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.1] - 2026-10-30
+
+### Added
+
+- **Fonts in Settings > Appearance**: the interface's face and the code's, each "automatic" (the system's usual one),
+  "built in" (Roboto, Inconsolata: in the program) or any installed family, chosen in a picker searched as one types.
+
+### Changed
+
+- **The icons are Lucide everywhere**, embedded in the program: Windows no longer depends on Segoe Fluent Icons, and the
+  icons look the same on every system.
+
 ## [0.4.0] - 2026-10-29
 
 ### Added

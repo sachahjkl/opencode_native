@@ -5,7 +5,7 @@
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.4.0-fab283" alt="version 0.4.0"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.4.1-fab283" alt="version 0.4.1"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -32,7 +32,7 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 | ![The model picker, searched as one types](docs/screenshots/picker.png) | ![Session statistics](docs/screenshots/statistics.png) |
 | **The model picker**: subsequence search ("son"), the matched letters lit | **Statistics** (click the token count): totals, context window, time, tools, models, the project |
 | ![Settings](docs/screenshots/settings.png) | ![On Linux](docs/screenshots/linux.png) |
-| **Settings**: the client's preferences and the server's pages | **On Linux** (Wayland, Vulkan): the same program, Lucide icons |
+| **Settings**: the client's preferences and the server's pages | **On Linux** (Wayland, Vulkan): the same program |
 
 ## What it does
 
@@ -56,7 +56,7 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 - **Statistics of a session** (its token count in the header, Ctrl+I): tokens in, out, reasoning, cache reads and
   writes, cost, cache hits, the context the last step filled against the model's window, time and pace, tool calls by
   tool (failures counted), models, its sub-agents, and the whole project's totals from the server.
-- **Settings** (Ctrl+,): accent colour, text size, zoom, density, rounding, animations, glow; how the conversation shows;
+- **Settings** (Ctrl+,): accent colour, the interface and code fonts (automatic, built in, or any installed one, in a searched picker), text size, zoom, density, rounding, animations, glow; how the conversation shows;
   the send key; sub-agents in the sidebar; notifications when a session finishes or asks. And what the server lets one see
   or change: its shell, its MCP servers (connect, disconnect), the usage limits and budgets of an OpenCode workspace, the
   saved permissions (revoke), providers, models, agents, skills, commands, the configuration files.
