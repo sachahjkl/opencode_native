@@ -13,6 +13,7 @@ import "core:strings"
 import "core:sync"
 import "core:time"
 import "gt:config"
+import "gt:devtools"
 import "gt:draw"
 import "gt:font"
 import "gt:platform"
@@ -109,6 +110,7 @@ App :: struct {
 	anchor_y:         f32,
 	// pacing (frame / pace)
 	pacer:            render.Pacer,   // the toolkit's frame pacing (render/pacer.odin)
+	devtools:         ^devtools.Server,   // TOOLKIT_DEVTOOLS=<port>: driven over the Chrome DevTools Protocol (tools/cdp.mjs)
 	idled:            bool,   // the loop slept before this frame
 	setup:            Setup_UI,
 	quit:             bool,
@@ -135,6 +137,7 @@ frame :: proc(app: ^App, inner := false) {
 	app.frame_no += 1
 	at_once := pace(app, inner)
 	app.idled = false
+	devtools.service(app.devtools, &app.ui_state, &app.r)
 	events := platform.poll_events(app.win, false)
 	render.mark_input(&app.r)
 	if len(events) > 0 { app.frames = max(app.frames, 3) }
@@ -326,6 +329,7 @@ main :: proc() {
 	prefs_init(app)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
 	ui.post_configure(&app.ui_state, capacity = 4096, overflow = .Block, per_build = 4000, on_drop = on_drop)
 	platform.set_dark_title(app.win, true)
+	app.devtools = devtools.start_from_env(app.win, "opencode")
 	app.win.user = app
 	app.win.on_frame = proc(user: rawptr) { frame((^App)(user), inner = true) }
 	app.last_tick = time.tick_now()
