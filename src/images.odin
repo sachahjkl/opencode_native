@@ -156,6 +156,7 @@ image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) ->
 	}
 	if state == .Pending { app.animating = true }
 	ui.next({width = ui.px(w), height = ui.px(h), cursor = .Hand})
+	ui.a11y({role = .Button, name = ref.name != "" ? ref.name : "Image"})
 	b := ui.build_box({.Clickable, .Focusable}, id)
 	d := ui.frame_new(Image_Draw)
 	d^ = {tex = tex, radius = 6, frame = true, state = state}
