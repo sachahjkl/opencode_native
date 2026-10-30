@@ -5,7 +5,7 @@
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.5.1-fab283" alt="version 0.5.1"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.5.2-fab283" alt="version 0.5.2"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -101,7 +101,9 @@ TLS is rustls, checked against the system's trust store.
 
 Preferences live in `%APPDATA%\opencode-native\prefs.txt` on Windows, `~/.config/opencode-native/prefs.txt` on Linux (only
 what differs from the defaults), the servers in `servers.txt` beside them;
-`OPENCODE_NATIVE_NO_SETUP=1` never offers Setup.
+`OPENCODE_NATIVE_NO_SETUP=1` never offers Setup. `TOOLKIT_DEVTOOLS=<port>` lets a script drive the window over the Chrome
+DevTools Protocol on 127.0.0.1 (gui_toolkit's docs/devtools.md): for development only, since a program on this computer
+can then type into a session.
 
 ## Building
 

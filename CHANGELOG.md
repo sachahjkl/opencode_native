@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.2] - 2026-10-30
+
+### Added
+
+- **The window driven by a script**: `TOOLKIT_DEVTOOLS=<port>` serves it over the Chrome DevTools Protocol on 127.0.0.1,
+  for tests and tools: clicks, keys, screenshots, the accessibility tree, without the machine's mouse. Off unless asked
+  for, and a web page cannot use it (gui_toolkit 0.55.0).
+
+### Changed
+
+- **A frame less between input and screen**: 34 ms instead of 48, measured from a key to the screen (gui_toolkit 0.55.0).
+- **Long conversations**: the toolkit's lazy column replaces the app's own. Items not built stand as estimates and the
+  view stays on what it shows, so a change of width no longer builds every message again.
+
+### Fixed
+
+- **Screen readers**: the accent colours, sliders and switches of the settings, their reset buttons and the sidebar's
+  splitter had no name; the colours and the splitter were not announced at all.
+
 ## [0.5.1] - 2026-10-30
 
 ### Fixed
