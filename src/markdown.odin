@@ -8,6 +8,16 @@ import "core:strings"
 import "gt:platform"
 import "gt:ui"
 
+// A name for a piece of the source (where its bytes lie, how far, at which size): the rich layout cache finds the block by
+// it instead of hashing its text at every frame. A message's text only grows: a block keeps its bytes until they move,
+// and then it is a new name (the toolkit mixes in the paragraph's box, so two messages never share one).
+src_version :: proc(first, last: string, size: f32) -> u64 {
+	if len(first) == 0 && len(last) == 0 { return 0 }
+	a := u64(uintptr(raw_data(first)))
+	b := u64(uintptr(raw_data(last))) + u64(len(last))
+	return ((a * 0x9e3779b97f4a7c15) ~ (b * 0xc2b2ae3d27d4eb4f) ~ u64(transmute(u32)size)) | 1
+}
+
 // Inline Markdown of one block into runs (temp memory).
 inline_runs :: proc(text: string, base: ui.Rich_Style, out: ^[dynamic]ui.Rich_Run) {
 	st := base
@@ -177,7 +187,7 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 		case .Rule:
 			groove(bid)
 		case .Code:
-			code_block(bid, bl.lang, strings.join(bl.lines[:], "\n", context.temp_allocator))
+			code_block(bid, bl.lang, strings.join(bl.lines[:], "\n", context.temp_allocator), version = len(bl.lines) > 0 ? src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], em) : 0)
 		case .Table:
 			table_block(bid, bl.lines[:], color, fs)
 		case .Heading:
@@ -186,7 +196,7 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 			inline_runs(bl.lines[0], {bold = true, color = bl.level <= 2 ? hex(0xffffffff) : color}, &runs)
 			if bl.level >= 2 { ui.spacer(ui.px(em * 0.3)) }
 			ui.next({width = ui.fill(), font_size = math.round(fs * k[bl.level]), flags = {.Selectable}})
-			res := ui.rich_paragraph(bid, runs[:])
+			res := ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[0], fs))
 			link_clicked(res)
 		case .Para, .Quote:
 			runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
@@ -196,11 +206,11 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 				if rail_row(fmt.tprintf("%s_q", bid), with_alpha(accent(), 0.6)) {
 					ui.spacer(ui.px(em * 0.9))
 					ui.next({width = ui.fill(), font_size = fs, flags = {.Selectable}})
-					link_clicked(ui.rich_paragraph(bid, runs[:]))
+					link_clicked(ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], fs)))
 				}
 			} else {
 				ui.next({width = ui.fill(), font_size = fs, flags = {.Selectable}})
-				link_clicked(ui.rich_paragraph(bid, runs[:]))
+				link_clicked(ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], fs)))
 			}
 		case .Bullet, .Number:
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -213,7 +223,7 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 				runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
 				inline_runs(joined(bl.lines[:]), {color = color}, &runs)
 				ui.next({width = ui.fill(), font_size = fs, flags = {.Selectable}})
-				link_clicked(ui.rich_paragraph(bid, runs[:]))
+				link_clicked(ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], fs)))
 			}
 		}
 	}
@@ -287,7 +297,7 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 					if ui.row(id = fmt.tprintf("###tc%d", ci)) {
 						ui.spacer(ui.px(pad))
 						ui.next({width = ui.fill(), font_size = cell_size, flags = {.Selectable}, text_align = al})
-						ui.rich_paragraph("###p", runs[:])
+						ui.rich_paragraph("###p", runs[:], version = src_version(c, c, cell_size))
 						ui.spacer(ui.px(pad))
 					}
 				}
@@ -299,7 +309,7 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 }
 
 // Code in a sunken well, under a header with its language and a copy button.
-code_block :: proc(id: string, lang: string, code: string, table := false) {
+code_block :: proc(id: string, lang: string, code: string, table := false, version: u64 = 0) {
 	em := ui.font_size()
 	ui.next({width = ui.fill(), height = ui.children_sum()})
 	if well(id, radius = 6, base = 0x060606ff) {
@@ -325,7 +335,7 @@ code_block :: proc(id: string, lang: string, code: string, table := false) {
 			ui.spacer(ui.px(em * 0.9))
 			runs := [1]ui.Rich_Run{{text = code, style = {font = the_app.mono, color = hex(table ? HEX_TEXT : 0xd4d4d4ff)}}}
 			ui.next({width = ui.fill(), font_size = math.round(em * 0.86), flags = {.Selectable}})
-			ui.rich_paragraph("###code", runs[:])
+			ui.rich_paragraph("###code", runs[:], version = version)
 			ui.spacer(ui.px(em * 0.9))
 		}
 		ui.spacer(ui.px(em * 0.7))

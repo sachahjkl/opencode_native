@@ -60,7 +60,6 @@ Message :: struct {
 	tokens_in, tokens_out, reasoning, cache_read: f64,
 	cost:      f64,
 	streaming: bool,
-	virt_h:    f32,           // its height in the conversation at the last layout that built it (0: never built)
 	// a sub-agent's result handed back to this session (a synthetic message whose metadata.source is "subagent")
 	sub_child, sub_state, sub_agent, sub_desc: string,
 	images:    [dynamic]Image_Ref,   // attached to a user's prompt

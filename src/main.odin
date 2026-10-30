@@ -92,8 +92,6 @@ App :: struct {
 	logo:             Logo,
 	column_w:         f32,    // the conversation column, frame pixels (this frame)
 	chat_sb:          ^ui.Box, // the conversation scroll box, when built this frame
-	virt_top:         f32,    // where the first message starts in the conversation's content (last layout that built it)
-	virt_w:           f32,    // the column width the messages' heights were measured at
 	stick_jump:       bool,    // the second build of a frame: the bottom is reached at once, no glide
 	snap_bottom:      bool,           // the conversation's first page arrived: shown at its bottom in that frame (frame)
 	chat_target:      f32,     // the conversation's scroll target at the end of the last build (a drag before this one moved it)
@@ -110,12 +108,7 @@ App :: struct {
 	anchor:           ^ui.Box, // a part header just clicked: kept where it is on screen (part_toggle, frame)
 	anchor_y:         f32,
 	// pacing (frame / pace)
-	cadence:          platform.Cadence,
-	display_serial:   u64,
-	paced_size:       [2]int,
-	presented:        bool,   // a frame reached the swap chain
-	slot_held:        bool,   // the swap chain's slot was waited for, no present since
-	latency:          int,    // the swap chain's maximum frame latency, as last set
+	pacer:            render.Pacer,   // the toolkit's frame pacing (render/pacer.odin)
 	idled:            bool,   // the loop slept before this frame
 	setup:            Setup_UI,
 	quit:             bool,
@@ -128,37 +121,13 @@ the_app: ^App
 clip_get :: proc() -> string { return platform.get_clipboard(the_app.win, context.temp_allocator) }
 clip_set :: proc(text: string) { platform.set_clipboard(the_app.win, text) }
 
-// When the frame starts and how it is shown: the toolkit's cadence model (platform/pacing.odin) decides, this executes
-// it. What matters most here is the resize step: a frame at a new size is presented at once (no wait for the swap chain,
-// none for the refresh, two frames queued); waiting, the compositor shows the last frame stretched over the new size
-// until one of that size arrives. `inner`: a frame asked for from a loop of the system (the live resize's WM_PAINT).
+// When the frame starts and how it is shown: the toolkit's pacer (render/pacer.odin, on the cadence model). What matters
+// most here is the resize step: a frame at a new size is presented at once (no wait for the swap chain, none for the
+// refresh, two frames queued); waiting, the compositor shows the last frame stretched over the new size until one of that
+// size arrives. Input after a rest is answered at once too. `inner`: a frame asked for from a loop of the system (the
+// live resize's WM_PAINT). A splitter or a scroll bar held paces as a drag: one frame per slot.
 pace :: proc(app: ^App, inner: bool) -> (at_once: bool) {
-	if d := platform.display_info(app.win); d.serial != app.display_serial {
-		app.display_serial = d.serial
-		platform.cadence_adopt(&app.cadence, platform.cadence_plan(d, {}))
-	}
-	resized := app.win.size != app.paced_size
-	app.paced_size = app.win.size
-	latency := 1
-	if inner {
-		at_once = platform.cadence_inner_frame(&app.cadence, resized, app.presented)
-		if at_once { latency = 2 } else if !app.slot_held { app.slot_held = render.wait_for_frame(&app.r) }
-	} else {
-		d := platform.frame_decision(&app.cadence, {
-			now_ns = time.tick_now()._nsec, idled = app.idled, input = false,   // (an input answer queues two frames: measured, the pointer then trailed by twice as much)
-			presented = app.presented, resized = resized, slot_held = app.slot_held,
-			// a splitter, a scrollbar held: one frame per slot, and on a variable refresh screen shown at once (a frame
-			// waiting for a refresh waits at the rate the screen rests at, 60 Hz, while the window's edge moves at its top)
-			dragging = ui.active_key() != 0,
-		})
-		at_once, latency = d.present_at_once, d.latency
-		if d.wait_swap_chain && !app.slot_held { app.slot_held = render.wait_for_frame(&app.r) }
-	}
-	if latency != app.latency {
-		render.set_max_frame_latency(&app.r, latency)
-		app.latency = latency
-	}
-	return
+	return render.pace_frame(&app.pacer, &app.r, app.win, idled = app.idled, dragging = ui.active_key() != 0, inner = inner)
 }
 
 frame :: proc(app: ^App, inner := false) {
@@ -227,9 +196,7 @@ frame :: proc(app: ^App, inner := false) {
 	ui.draw_tree(&app.ui_state, &app.dc)
 	draw.end_frame(&app.dc)
 	render.frame_end(&app.r, !at_once)
-	app.presented = true
-	app.slot_held = false   // (the present used it)
-	platform.cadence_presented(&app.cadence, time.tick_now()._nsec)
+	render.paced_present(&app.pacer)
 	free_all(context.temp_allocator)
 
 	if app.refresh_due && ui.now_ms() - app.refresh_ms > 1200 {
