@@ -227,7 +227,9 @@ dialog_close :: proc(open: ^bool) {
 	em := ui.font_size()
 	sz := math.round(em * 1.9)
 	m := math.round(em * 0.5)
-	ui.next({fixed_x = w - sz - m, fixed_y = m, width = ui.px(sz), height = ui.px(sz), axis = .X, cross = .Center})
+	// clear of the scroll bar a scrolling dialog has along its right edge
+	right := math.round(em * 1.4)
+	ui.next({fixed_x = w - sz - right, fixed_y = m, width = ui.px(sz), height = ui.px(sz), axis = .X, cross = .Center})
 	ui.a11y({role = .Button, name = "Close"})
 	b := ui.build_box({.Clickable, .Focusable}, "###dialog_close")
 	d := ui.frame_new(Bevel_Draw)
