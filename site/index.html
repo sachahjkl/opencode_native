@@ -11,7 +11,8 @@
 <body>
 <header class="bar">
   <a class="brand" href="#"><img src="img/logo.png" alt="" width="28" height="28"><span><span class="dim">open</span>code <em>native</em></span></a>
-  <nav>
+  <button class="burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav"><span></span></button>
+  <nav id="nav">
     <a href="#features">Features</a>
     <a href="#download">Download</a>
     <a href="https://github.com/sachahjkl/opencode_native">GitHub</a>
@@ -105,5 +106,14 @@
     MIT licence. opencode is a project of its own (<a href="https://opencode.ai">opencode.ai</a>); this client is not
     affiliated with it.</p>
 </footer>
+<script>
+  // the bar's menu on narrow screens: the button opens it, a link or a click elsewhere closes it
+  const bar = document.querySelector('.bar'), burger = bar.querySelector('.burger');
+  const shut = () => { bar.classList.remove('open'); burger.setAttribute('aria-expanded', 'false'); };
+  burger.addEventListener('click', e => { e.stopPropagation(); burger.setAttribute('aria-expanded', String(bar.classList.toggle('open'))); });
+  bar.querySelectorAll('nav a').forEach(a => a.addEventListener('click', shut));
+  document.addEventListener('click', e => { if (!bar.contains(e.target)) shut(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') shut(); });
+</script>
 </body>
 </html>
