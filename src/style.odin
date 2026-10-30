@@ -149,6 +149,9 @@ draw_well :: proc(dc: ^draw.Context, r: Rect, radius: f32, base: Color, focus: f
 	draw.rect(dc, {{r.min.x + radius * 0.6, r.max.y}, {r.max.x - radius * 0.6, r.max.y + p}}, {1, 1, 1, 0.07})
 	edge := focus > 0.01 ? draw.mix(Color{0, 0, 0, 0.9}, with_alpha(accent, 0.85), focus) : Color{0, 0, 0, 0.9}
 	draw.rect(dc, r, edge, radius, p)
+	// the rim of the opening, lit: without it a dark well on a dark panel has no visible edge (the accent replaces it
+	// under the focus)
+	if focus < 0.99 { draw.rect(dc, draw.rect_pad(r, p), {1, 1, 1, 0.1 * (1 - focus)}, radius + p, p) }
 }
 
 // A carved line: a dark cut with the light catching its lower edge.
