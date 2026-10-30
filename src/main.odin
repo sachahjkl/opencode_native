@@ -129,7 +129,8 @@ clip_set :: proc(text: string) { platform.set_clipboard(the_app.win, text) }
 // it. What matters most here is the resize step: a frame at a new size is presented at once (no wait for the swap chain,
 // none for the refresh, two frames queued); waiting, the compositor shows the last frame stretched over the new size
 // until one of that size arrives. `inner`: a frame asked for from a loop of the system (the live resize's WM_PAINT).
-pace :: proc(app: ^App, inner: bool) -> (at_once: bool) {
+// `input`: the user's input woke the loop (a frame that answers it after a rest is shown at once).
+pace :: proc(app: ^App, inner: bool, input := false) -> (at_once: bool) {
 	if d := platform.display_info(app.win); d.serial != app.display_serial {
 		app.display_serial = d.serial
 		platform.cadence_adopt(&app.cadence, platform.cadence_plan(d, {}))
@@ -142,7 +143,7 @@ pace :: proc(app: ^App, inner: bool) -> (at_once: bool) {
 		if at_once { latency = 2 } else if !app.slot_held { app.slot_held = render.wait_for_frame(&app.r) }
 	} else {
 		d := platform.frame_decision(&app.cadence, {
-			now_ns = time.tick_now()._nsec, idled = app.idled, input = false,
+			now_ns = time.tick_now()._nsec, idled = app.idled, input = input,
 			presented = app.presented, resized = resized, slot_held = app.slot_held,
 			// a splitter, a scrollbar held: one frame per slot, and on a variable refresh screen shown at once (a frame
 			// waiting for a refresh waits at the rate the screen rests at, 60 Hz, while the window's edge moves at its top)
@@ -161,7 +162,19 @@ pace :: proc(app: ^App, inner: bool) -> (at_once: bool) {
 frame :: proc(app: ^App, inner := false) {
 	if ui.building() { return }
 	app.frame_no += 1
-	at_once := pace(app, inner)
+	// woken from rest: is it the user? A pointer or a key that wakes the window is answered at once (two frames queued),
+	// not a refresh or two later: a highlight trailing the pointer. The batch read here is handed out again below.
+	input := false
+	if app.idled && !inner {
+		for e in platform.poll_events(app.win, false) {
+			#partial switch e.kind {
+			case .Key_Press, .Key_Release, .Text, .Mouse_Move, .Mouse_Press, .Mouse_Release, .Scroll, .Pointer_Down, .Pointer_Move, .Pointer_Up:
+				input = true
+			}
+		}
+		app.win.keep_events = true
+	}
+	at_once := pace(app, inner, input)
 	app.idled = false
 	events := platform.poll_events(app.win, false)
 	render.mark_input(&app.r)
