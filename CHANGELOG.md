@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.5] - 2026-10-31
+
+### Added
+
+- **Chrome's DevTools on the window**, with `TOOLKIT_DEVTOOLS=<port>`: the interface's boxes in Elements, their colours and sizes
+  edited live, what a screen reader gets for each (gui_toolkit 0.57).
+
 ## [0.5.4] - 2026-10-31
 
 ### Added
