@@ -75,6 +75,9 @@ Chat :: struct {
 	messages:  [dynamic]Message,   // oldest first
 	older:     string,             // cursor of the page before the first message ("": none)
 	loading:   bool,
+	loading_older: bool,           // that page is on its way
+	older_failed:  f64,            // when it could not be read (ui.now_ms): tried again a little later, on the next scroll
+	keep_id:   string,             // the message built whatever while the page before it comes in (the view stays on it)
 	loaded:    bool,
 	busy:      bool,
 	cost:      f64,
@@ -110,6 +113,7 @@ open_chat :: proc(app: ^App, session_id: string) {
 	app.chat.loading = true
 	app.opened_ms = ui.now_ms()
 	app.chat_target = 0
+	app.first_msg = nil
 	app.stick_bottom = true
 	if s := find_session(app, id); s != nil {
 		app.chat.model = strings.clone(s.model, app.chat.alloc)
@@ -309,7 +313,8 @@ permission_remove :: proc(app: ^App, id: string) {
 	}
 }
 
-// A page of messages (newest first in the answer). `older`: it goes before the ones already shown.
+// A page of messages (newest first in the answer). `older`: it goes before the ones already shown; without it, it replaces
+// the newest ones (and what the stream had added to them), and the pages read before them stay.
 chat_load :: proc(app: ^App, v: json.Value, older: bool) {
 	c := &app.chat
 	a := c.alloc
@@ -320,14 +325,25 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool) {
 	#reverse for it in items {
 		m := message_from_json(it, a)
 		if m.kind == .Idle && len(page) > 0 && page[len(page) - 1].kind == .Idle { continue }
+		if older && m.id != "" && find_message(c, m.id) != nil { continue }
 		append(&page, m)
 	}
-	c.older = strings.clone(jstr(v, "cursor", "next"), a)
+	cursor := strings.clone(jstr(v, "cursor", "next"), a)
 	if older {
+		c.loading_older = false
+		c.older = cursor
+		// the view stays on what it shows: at the very top the lazy column does not move it (frame does)
+		if b := app.first_msg; b != nil && !app.stick_bottom && len(c.messages) > 0 {
+			c.keep_id = c.messages[0].id
+			app.anchor = b
+			app.anchor_y = b.rect.min.y
+		}
 		inject_at(&page, len(page), ..c.messages[:])
 		c.messages = page
 	} else {
-		// a reload replaces the page (and whatever the stream had added to it)
+		kept := -1
+		if len(page) > 0 { for m, i in c.messages { if m.id == page[0].id { kept = i; break } } }
+		if kept > 0 { inject_at(&page, 0, ..c.messages[:kept]) } else { c.older = cursor }
 		c.messages = page
 	}
 	for m in c.messages {

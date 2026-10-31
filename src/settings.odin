@@ -37,7 +37,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "conversation.reasoning", description = "How the model's reasoning shows: folded under a line, unfolded, or not at all.", kind = .String, default = {s = "collapsed"}, choices = {"collapsed", "expanded", "hidden"}},
 	{name = "conversation.expand_tools", description = "Tool calls open with their input and output shown.", kind = .Bool, default = {b = false}},
 	{name = "conversation.tool_lines", description = "Lines of a tool's output shown before the rest is counted.", kind = .Int, default = {i = 60}, bounded = true, min = 5, max = 1000},
-	{name = "conversation.page_size", description = "Messages read at a time (Load earlier reads the next page).", kind = .Int, default = {i = 80}, bounded = true, min = 20, max = 200},
+	{name = "conversation.page_size", description = "Messages read at a time (scrolling up reads the next page by itself).", kind = .Int, default = {i = 80}, bounded = true, min = 20, max = 200},
 	{name = "conversation.follow", description = "Follow new messages to the bottom while you are there.", kind = .Bool, default = {b = true}},
 	{name = "conversation.usage", description = "Tokens and cost under each answer.", kind = .Bool, default = {b = true}},
 	{name = "conversation.clock", description = "Times of messages in 24-hour or 12-hour form.", kind = .String, default = {s = "24h"}, choices = {"24h", "12h"}},

@@ -218,6 +218,7 @@ on_answer :: proc(data: rawptr, word: u64) {
 	if !r.ok {
 		fmt.eprintfln("request failed: %s %s: %s", r.method, r.path, r.resp)
 		app.online = false
+		if r.kind == .Older { older_failed(app, r) }
 		if r.kind != .Action { ui.toast(.Bad, "Server unreachable (%s)", r.path) }
 		return
 	}
@@ -226,11 +227,16 @@ on_answer :: proc(data: rawptr, word: u64) {
 		v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
 		msg := jstr(v, "message")
 		ui.toast(.Bad, "%s %s: %d %s", r.method, r.path, r.status, msg if msg != "" else r.resp[:min(len(r.resp), 80)])
-		if r.kind == .Messages || r.kind == .Older { app.chat.loading = false }
+		if r.kind == .Messages { app.chat.loading = false }
+		if r.kind == .Older { older_failed(app, r) }
 		return
 	}
 	v, err := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if err != nil && r.kind != .Action { ui.toast(.Warn, "Unreadable answer (%s)", r.path); return }
+	if err != nil && r.kind != .Action {
+		ui.toast(.Warn, "Unreadable answer (%s)", r.path)
+		if r.kind == .Older { older_failed(app, r) }
+		return
+	}
 	switch r.kind {
 	case .Sessions:    sessions_load(app, v)
 	case .Messages:
@@ -266,6 +272,13 @@ on_answer :: proc(data: rawptr, word: u64) {
 	}
 }
 
+// The page before the first message was not read: said where it would have been.
+older_failed :: proc(app: ^App, r: ^Request) {
+	if r.gen != app.chat.gen || r.tag != app.chat.id { return }
+	app.chat.loading_older = false
+	app.chat.older_failed = ui.now_ms()
+}
+
 refresh_sessions :: proc(app: ^App) {
 	request(app, .Sessions, "GET", "/api/session?limit=200&order=desc")
 	request(app, .Active, "GET", "/api/session/active")
@@ -275,10 +288,18 @@ load_messages :: proc(app: ^App, id: string) {
 	request(app, .Messages, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&order=desc", id, app.prefs.page_size), tag = id)
 }
 
-load_older :: proc(app: ^App) {
-	if app.chat.older == "" || app.chat.loading { return }
-	app.chat.loading = true
-	request(app, .Older, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&order=desc&cursor=%s", app.chat.id, app.prefs.page_size, url_escape(app.chat.older)), tag = app.chat.id)
+// How near, in screens: the page is there before the reader, unless they scroll fast (then messages() shows it coming).
+OLDER_MARGIN :: 1.5
+
+// The page before the first message, when the view comes near it: read in good time, the reader does not ask for it.
+load_older :: proc(app: ^App, b: ^ui.Box) {
+	c := &app.chat
+	if c.older == "" || c.loading || c.loading_older || !c.loaded { return }
+	if c.older_failed > 0 && ui.now_ms() - c.older_failed < 3000 { return }
+	if min(b.view_off.y, b.view_target.y) > b.size.y * OLDER_MARGIN { return }
+	c.loading_older = true
+	c.older_failed = 0
+	request(app, .Older, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", app.chat.id, app.prefs.page_size, url_escape(app.chat.older)), tag = app.chat.id)
 }
 
 send_prompt :: proc(app: ^App, id, text: string) {

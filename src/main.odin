@@ -93,6 +93,7 @@ App :: struct {
 	logo:             Logo,
 	column_w:         f32,    // the conversation column, frame pixels (this frame)
 	chat_sb:          ^ui.Box, // the conversation scroll box, when built this frame
+	first_msg:        ^ui.Box, // the conversation's first message, when built at the last build (an answer arrives before the next one: begin_build)
 	stick_jump:       bool,    // the second build of a frame: the bottom is reached at once, no glide
 	snap_bottom:      bool,           // the conversation's first page arrived: shown at its bottom in that frame (frame)
 	chat_target:      f32,     // the conversation's scroll target at the end of the last build (a drag before this one moved it)
@@ -167,14 +168,17 @@ frame :: proc(app: ^App, inner := false) {
 	if a := app.anchor; a != nil {
 		defer app.anchor = nil   // (kept through these builds: the bottom stays let go of)
 		build(app, size, nil, 0)
-		if b := app.chat_sb; b != nil {
-			if delta := a.rect.min.y - app.anchor_y; abs(delta) > 0.5 {
-				limit := max(0, b.view_bounds.y - b.size.y)
-				y := clamp(b.view_off.y + delta, 0, limit)
-				b.view_off.y, b.view_target.y = y, y
-				b.view_anim[1] = {}   // (no glide toward an older target)
-				build(app, size, nil, 0)
-			}
+		// (again while it moves: what this offset builds around it is measured only then, a page read before it above all)
+		for _ in 0 ..< 4 {
+			b := app.chat_sb
+			if b == nil { break }
+			delta := a.rect.min.y - app.anchor_y
+			if abs(delta) <= 0.5 { break }
+			limit := max(0, b.view_bounds.y - b.size.y)
+			y := clamp(b.view_off.y + delta, 0, limit)
+			b.view_off.y, b.view_target.y = y, y
+			b.view_anim[1] = {}   // (no glide toward an older target)
+			build(app, size, nil, 0)
 		}
 	}
 	// The conversation follows its bottom, placed from the last layout's content height: when this layout made it shorter
@@ -193,6 +197,8 @@ frame :: proc(app: ^App, inner := false) {
 		}
 	}
 	app.snap_bottom = false
+	app.chat.keep_id = ""
+	if b := app.chat_sb; b != nil { load_older(app, b) }
 	platform.set_cursor(app.win, ui.cursor(&app.ui_state))
 	draw.begin_frame(&app.dc, size)
 	render.frame_begin(&app.r, hex(HEX_BG0))

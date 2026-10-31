@@ -489,6 +489,7 @@ conversation :: proc(app: ^App, em: f32) {
 		sb := ui.prev_box("###chat")
 		find_update(app, sb, em)
 		if sb != nil {
+			chat_keys(app, sb, em)
 			limit := max(0, sb.view_bounds.y - sb.size.y)
 			// the scrollbar's drag (and the keyboard) moved it before this build (begin_build): up means let go of the bottom,
 			// or following it would put it back at once and the thumb would stay stuck there
@@ -522,6 +523,25 @@ conversation :: proc(app: ^App, em: f32) {
 		// the find bar over the conversation's top-right corner, under the header
 		find_bar(app, em, avail - em * 1.4, sb != nil ? sb.rect.min.y - main.rect.min.y + em * 0.6 : em * 4)
 	}
+}
+
+// The keyboard scrolls the conversation, before this build reads where it is. Page Up and Page Down whatever has the focus
+// (the composer too: the conversation is what one reads while typing); the arrows, Home and End when they mean nothing else:
+// not in a text field, not while the focus is moved with the keyboard (a click gives a button the focus, and no ring).
+chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) {
+	if app.settings_open || app.delete_open || app.stats_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || len(app.ui_state.menus) > 0 { return }
+	limit := max(0, sb.view_bounds.y - sb.size.y)
+	y := sb.view_target.y
+	if ui.key_press(.Page_Up) { y -= sb.size.y * 0.9 }
+	if ui.key_press(.Page_Down) { y += sb.size.y * 0.9 }
+	f := ui.box_from_key(ui.focus_key())
+	if f == nil || (.Text_Input not_in f.flags && !app.ui_state.focus_visible) {
+		if ui.key_press(.Up) { y -= em * 3 }
+		if ui.key_press(.Down) { y += em * 3 }
+		if ui.key_press(.Home) { y = 0 }
+		if ui.key_press(.End) { y = limit }
+	}
+	sb.view_target.y = clamp(y, 0, limit)
 }
 
 chat_header :: proc(app: ^App, em: f32) {
@@ -613,17 +633,23 @@ empty_state :: proc(app: ^App, em: f32) {
 }
 
 messages :: proc(app: ^App, em: f32) {
+	app.first_msg = nil
 	c := &app.chat
 	ui.spacer(ui.px(em * 1.2))
 	subagent_banner(app, em)
+	// Scrolling up reads the pages before this one by itself (load_older): this row is what is seen when it gets here first.
 	if c.older != "" {
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row(id = "###older") {
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###older") {
 			ui.spacer(ui.fill())
-			if bevel_button("###load_older", c.loading ? "Loading…" : "Load earlier messages", ICO_HISTORY, .Normal).clicked { load_older(app) }
+			if c.loading_older {
+				scanner("###older_bar", accent(), math.round(em * 5), math.round(em * 0.9))
+				ui.spacer(ui.px(em * 0.7))
+			}
+			if ui.tags("weak") { text("older_t", c.older_failed > 0 ? "Earlier messages could not be read: scroll to try again" : "Loading earlier messages…", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.85)}) }
 			ui.spacer(ui.fill())
 		}
-		ui.spacer(ui.px(em * 1.2))
+		ui.spacer(ui.px(em * 0.6))
 	}
 	if c.loading && len(c.messages) == 0 {
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
@@ -637,7 +663,12 @@ messages :: proc(app: ^App, em: f32) {
 	{
 		lz := ui.lazy_begin(all = app.find.open || app.chat.loading)
 		for &m, i in c.messages {
-			if ui.lazy_item(lz, fmt.tprintf("###msg_%s_%d", m.id, i), always = i == len(c.messages) - 1) { message(app, c, &m, i, em) }
+			// (by its id: a page read before it does not change what it is, its height is still known)
+			id := m.id != "" ? fmt.tprintf("###msg_%s", m.id) : fmt.tprintf("###msg_end%d", len(c.messages) - i)
+			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || (c.keep_id != "" && m.id == c.keep_id)) {
+				if i == 0 { app.first_msg = ui.parent_box() }
+				message(app, c, &m, i, em)
+			}
 		}
 	}
 	if c.busy {
