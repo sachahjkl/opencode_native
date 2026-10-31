@@ -1,5 +1,10 @@
 # Changelog
 
+All notable changes to opencode native. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
+project follows [semantic versioning](https://semver.org).
+
+## [Unreleased]
+
 ## [0.5.5] - 2026-10-31
 
 ### Added
@@ -208,5 +213,21 @@
 
 ## [0.1.0] - 2026-10-29
 
-First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
-tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
+### Added
+
+- First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
+  tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
+
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.5.5...HEAD
+[0.5.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.5
+[0.5.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.4
+[0.5.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.3
+[0.5.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.2
+[0.5.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.1
+[0.5.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.0
+[0.4.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.4.3
+[0.4.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.4.2
+[0.4.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.4.1
+[0.4.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.4.0
+[0.3.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.3.0
+[0.2.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.2.0
