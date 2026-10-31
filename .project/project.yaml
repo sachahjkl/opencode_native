@@ -1,0 +1,14 @@
+name: "opencode_native"
+description: "A native desktop client for the opencode server: one program for Windows or Linux, no runtime to install."
+topics:
+  - "odin"
+  - "opencode"
+  - "desktop-client"
+  - "immediate-mode-ui"
+  - "windows"
+  - "linux"
+homepage: "https://sachahjkl.github.io/opencode_native/"
+source:
+  provider: github
+  namespace: "sachahjkl"
+  path: "sachahjkl/opencode_native"
