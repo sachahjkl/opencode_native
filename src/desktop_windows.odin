@@ -253,6 +253,23 @@ install_facts :: proc() -> (f: Install_Facts) {
 ////////////////////////////////
 // Install and uninstall
 
+// The program over the installed copy. That copy may be running: its file can be renamed, not overwritten. A copy that
+// fails puts it back.
+install_copy :: proc(src, exe: string) -> (msg: string, ok: bool) {
+	old := strings.concatenate({exe, ".old"}, context.temp_allocator)
+	moved := false
+	if os.exists(exe) {
+		_ = os.remove(old)
+		if !win.MoveFileExW(wide(exe), wide(old), win.MOVEFILE_REPLACE_EXISTING) { return fmt.tprintf("cannot replace %s (in use?)", exe), false }
+		moved = true
+	}
+	if !win.CopyFileW(wide(src), wide(exe), false) {
+		if moved { _ = win.MoveFileExW(wide(old), wide(exe), win.MOVEFILE_REPLACE_EXISTING) }
+		return fmt.tprintf("cannot copy the program to %s", exe), false
+	}
+	return "", true
+}
+
 // Copies this program into the install folder (unless it runs from there), writes the shortcuts and the Settings entry.
 desktop_install :: proc(desktop_shortcut: bool) -> (ok: bool, msg: string) {
 	src := running_exe()
@@ -261,18 +278,7 @@ desktop_install :: proc(desktop_shortcut: bool) -> (ok: bool, msg: string) {
 	exe := pjoin({dir, EXE_NAME})
 	if err := os.make_directory_all(dir); err != nil && !os.exists(dir) { return false, fmt.tprintf("cannot create %s", dir) }
 	if !same_path(src, exe) {
-		// a running installed copy: its file can be renamed, not overwritten
-		old := strings.concatenate({exe, ".old"}, context.temp_allocator)
-		moved := false
-		if os.exists(exe) {
-			_ = os.remove(old)
-			if !win.MoveFileExW(wide(exe), wide(old), win.MOVEFILE_REPLACE_EXISTING) { return false, fmt.tprintf("cannot replace %s (in use?)", exe) }
-			moved = true
-		}
-		if !win.CopyFileW(wide(src), wide(exe), false) {
-			if moved { _ = win.MoveFileExW(wide(old), wide(exe), win.MOVEFILE_REPLACE_EXISTING) }   // (the copy that was there stays)
-			return false, fmt.tprintf("cannot copy the program to %s", exe)
-		}
+		if why, copied := install_copy(src, exe); !copied { return false, why }
 	}
 	if !make_shortcut(start_lnk_path(), exe) { return false, "cannot write the Start menu shortcut" }
 	if desktop_shortcut {

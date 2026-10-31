@@ -41,6 +41,7 @@ App :: struct {
 	picker:         Picker,            // the composer's agent or model picker (picker.odin)
 	find:           Find,              // find in the conversation (find.odin)
 	scale:          f32,               // --scale=<factor>: the interface's scale whatever the screen says (0: the screen's)
+	servers_in_clear: bool,            // read passwords in clear from an older version's file: saved protected at start
 	rediscover_ms:  f64,               // when this computer's server was last looked for (servers_rediscover)
 	pending:        i32,       // (atomic) requests in flight
 	online:         bool,
@@ -355,8 +356,9 @@ main :: proc() {
 	theme_setup(&app.theme)
 	ui.init(&app.ui_state, &app.fonts, &app.theme)
 	app.ui_state.icon_font = app.tk_icons
-	ui.set_toast_position(&app.ui_state, .Bottom_Right)
+	ui.set_toast_position(&app.ui_state, .Top_Right)
 	prefs_init(app)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
+	if app.servers_in_clear { servers_save(app) }
 	ui.post_configure(&app.ui_state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
 	platform.set_dark_title(app.win, true)
 	app.devtools = devtools.start_from_env(app.win, "opencode")

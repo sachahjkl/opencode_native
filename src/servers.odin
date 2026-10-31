@@ -16,6 +16,7 @@ Server :: struct {
 	name:     string,
 	url:      string,   // "http(s)://host[:port]"
 	password: string,   // Basic authentication as "opencode" ("" : none)
+	stored:   string,   // its field in the file when it could not be opened (another account, a locked keyring): kept as it is
 	local:    bool,     // the desktop app's (found again at every start, not saved)
 	argv:     bool,     // given by --url (not saved)
 }
@@ -31,7 +32,16 @@ servers_path :: proc() -> string {
 	return pjoin({config_dir(), "servers.txt"})
 }
 
-// The list at start: this computer's server, the saved ones (a line "name<TAB>url<TAB>password"), then --url's.
+// A field of the file as a password: what password_seal wrote, or a password in clear from an older version.
+password_from_field :: proc(name, field: string) -> (password, stored: string, clear_text: bool) {
+	if field == "" { return "", "", false }
+	if p, is_sealed, ok := password_open(name, field); is_sealed {
+		return p, ok ? "" : field, false
+	}
+	return field, "", true
+}
+
+// The list at start: this computer's server, the saved ones (a line "name<TAB>url<TAB>protected password"), then --url's.
 servers_init :: proc(app: ^App) {
 	cfg := discover_server()
 	argv := false
@@ -43,7 +53,9 @@ servers_init :: proc(app: ^App) {
 		for line in strings.split_lines_iterator(&text) {
 			f := strings.split(line, "\t", context.temp_allocator)
 			if len(f) < 2 || strings.trim_space(f[0]) == "" { continue }
-			append(&app.servers, Server{name = strings.clone(f[0]), url = strings.clone(f[1]), password = strings.clone(len(f) > 2 ? f[2] : "")})
+			password, stored, clear_text := password_from_field(f[0], len(f) > 2 ? f[2] : "")
+			append(&app.servers, Server{name = strings.clone(f[0]), url = strings.clone(f[1]), password = strings.clone(password), stored = strings.clone(stored)})
+			if clear_text { app.servers_in_clear = true }
 		}
 	}
 	app.server = 0
@@ -87,14 +99,31 @@ servers_rediscover :: proc(app: ^App) {
 	server_connect(app, app.server)
 }
 
+// Written beside it, then moved over it, readable by the user only: a failure leaves the file as it was, no password lost.
 servers_save :: proc(app: ^App) {
 	b := strings.builder_make(context.temp_allocator)
 	for s in app.servers {
 		if s.local || s.argv { continue }
-		fmt.sbprintf(&b, "%s\t%s\t%s\n", s.name, s.url, s.password)
+		field := s.stored
+		if s.password != "" {
+			f, ok := password_seal(s.name, s.password)
+			if !ok { ui.toast(.Bad, "The password of %s could not be protected: the list of servers was not saved", label_safe(s.name)); return }
+			field = f
+		}
+		fmt.sbprintf(&b, "%s\t%s\t%s\n", s.name, s.url, field)
 	}
-	_ = os.make_directory_all(filepath.dir(servers_path()))
-	if os.write_entire_file(servers_path(), transmute([]u8)strings.to_string(b)) != nil { ui.toast(.Bad, "The list of servers could not be saved") }
+	path := servers_path()
+	tmp := strings.concatenate({path, ".tmp"}, context.temp_allocator)
+	_ = os.make_directory_all(filepath.dir(path))
+	_ = os.remove(tmp)
+	err := os.write_entire_file(tmp, transmute([]u8)strings.to_string(b), perm = {.Read_User, .Write_User})
+	if err == nil { err = os.rename(tmp, path) }
+	if err != nil {
+		_ = os.remove(tmp)
+		ui.toast(.Bad, "The list of servers could not be saved")
+		return
+	}
+	app.servers_in_clear = false
 }
 
 // "host:port" or "https://host" as typed: a full address ("http://" when no scheme is said, no trailing slash).
@@ -209,9 +238,9 @@ server_dialog :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center) {
 			pad(em)
-			glyph(ICO_GLOBE, accent(), math.round(em * 1.1))
+			glyph(ICO_GLOBE, accent(), math.round(em * ICON_LARGE))
 			ui.spacer(ui.px(em * 0.5))
-			text("t", e.index >= 0 ? "Edit the server" : "Add a server", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * 1.2), height = ui.px(em * 1.8)})
+			text("t", e.index >= 0 ? "Edit the server" : "Add a server", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 1.8)})
 		}
 		ui.spacer(ui.px(em * 0.9))
 		field :: proc(id, label, hint: string, f: ^ui.Text_Field, em: f32, secret := false) -> ui.Edit_Result {
@@ -219,7 +248,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = id) {
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-				text("k", label, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * 0.88), height = ui.px(em * 1.5)}, ui.px(em * 6))
+				text("k", label, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.5)}, ui.px(em * 6))
 				ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 				if well("###w", .X, radius = 7) {
 					if ui.tags("bare") {
@@ -239,8 +268,17 @@ server_dialog :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row() {
 				ui.spacer(ui.px(em * 7.4))
-				text("h", "the server's OPENCODE_SERVER_PASSWORD, as user opencode", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.78), height = ui.px(em * 1.3)}, ui.fill())
+				text("h", "the server's OPENCODE_SERVER_PASSWORD, as user opencode", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.3)}, ui.fill())
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+			}
+			if note := password_note(); note != "" {
+				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+				if ui.row(id = "###storenote") {
+					ui.spacer(ui.px(em * 7.4))
+					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+					if ui.column() { info_line(app, "###note", note, em, hex(HEX_YELLOW)) }
+					ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+				}
 			}
 		}
 		ui.spacer(ui.px(em * 1.1))
@@ -260,7 +298,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 				}
 			}
 			ui.spacer(ui.fill())
-			if taken { text("tk", "That name is taken", hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * 0.8), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
+			if taken { text("tk", "That name is taken", hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
 			if bevel_button("###cancel", "Cancel", "", .Normal).clicked { e.open = false }
 			ui.spacer(ui.px(em * 0.5))
 			if bevel_button("###ok", e.index >= 0 ? "Save and connect" : "Add and connect", ICO_CHECK, .Accent, disabled = !valid).clicked { save = true }
@@ -271,7 +309,9 @@ server_dialog :: proc(app: ^App, em: f32) {
 			i := e.index
 			if i >= 0 {
 				old := app.servers[i]
-				delete(old.name); delete(old.url); delete(old.password)
+				if s.password == "" { s.stored = strings.clone(old.stored) }   // (left empty: one that could not be opened stays)
+				if s.password == "" && s.stored == "" || s.name != old.name { password_forget(old.name) }
+				delete(old.name); delete(old.url); delete(old.password); delete(old.stored)
 				app.servers[i] = s
 			} else {
 				append(&app.servers, s)
@@ -291,7 +331,8 @@ server_remove :: proc(app: ^App, i: int) {
 	if i <= 0 || i >= len(app.servers) || app.servers[i].local { return }
 	s := app.servers[i]
 	ordered_remove(&app.servers, i)
-	delete(s.name); delete(s.url); delete(s.password)
+	password_forget(s.name)
+	delete(s.name); delete(s.url); delete(s.password); delete(s.stored)
 	servers_save(app)
 	if app.server == i {
 		server_connect(app, 0)

@@ -12,26 +12,18 @@ import "gt:draw"
 import "gt:ui"
 
 HEX_SUB_CANCELLED    :: 0xb08a5aff
-HEX_SUB_LIT_TITLE    :: 0xf4ead8ff   // the title of one that runs
-HEX_CARD_LIT_TOP     :: 0x221e17ff
-HEX_CARD_LIT_BOTTOM  :: 0x17140fff
 HEX_CARD_OFF_TOP     :: 0x111111ff
 HEX_CARD_OFF_BOTTOM  :: 0x0e0e0eff
-HEX_CARD_DESC_LIT    :: 0xf6f6f6ff
-HEX_CARD_DESC_OFF    :: 0x8c8c8cff
 HEX_CARD_RESULT_LINE :: 0xa8a8a8ff
 HEX_CARD_RESULT      :: 0xd8d8d8ff
-HEX_CARD_ACTIVITY    :: 0xf0d8a8ff
 HEX_RETURNED_TEXT    :: 0xcfcfcfff
-HEX_BANNER_TOP       :: 0x1d1a16ff
-HEX_BANNER_BOTTOM    :: 0x151310ff
-HEX_BANNER_PARENT    :: 0xc8bca8ff
-HEX_CHIP             :: 0x2a2416ff
-HEX_CHIP_SEP         :: 0x8a7a5aff
-HEX_CHIP_ACTIVITY    :: 0xd8c09aff
 HEX_SUB_TOGGLE_HOT   :: 0x161616ff
 
-CARD_INDENT_EM     :: 2.45   // where the lines under a card's first one start: under its description
+// A card's first line, in font sizes: its padding, its mark, the gap after it; the lines under it start under the name.
+CARD_PAD_EM      :: 0.8
+CARD_MARK_EM     :: 0.9
+CARD_MARK_GAP_EM :: 0.45
+CARD_INDENT_EM   :: CARD_PAD_EM + CARD_MARK_EM + CARD_MARK_GAP_EM
 SEEK_ANCHOR_EM     :: 7      // --seek-subagent: how far down the view it lands
 PROMPT_LINES_MAX   :: 18
 FINISHED_SHOWN     :: 40     // in the menu of the sub-agents
@@ -114,7 +106,7 @@ sub_view :: proc(app: ^App, child: string, p: ^Part = nil) -> (v: Sub_View) {
 		switch p.status {
 		case .Pending: v.state = .Starting
 		case .Running: v.state = .Running
-		case .Error:   v.state = .Failed; v.result = p.output
+		case .Error:   v.state = .Failed; v.result = p.output; v.ended = p.ended_ms
 		case .Done:
 			// a foreground call ends with the sub-agent: its output is the result; a background one only launched it
 			if !p.sub_background { v.state = .Done; v.result = p.output; v.ended = p.ended_ms }
@@ -215,117 +207,117 @@ nav_back :: proc(app: ^App) {
 ////////////////////////////////
 // The card of a sub-agent call (in the parent's conversation)
 
+// A card's header, lit a little under the pointer.
 @(private = "file")
-Rail_Draw :: struct { color: Color }
-
-@(private = "file")
-rail_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	d := (^Rail_Draw)(user)
-	s := ui.scale()
-	r := b.rect
-	// the agent's colour down the left edge, and a faint wash of it at the top
-	draw.rect_corners(dc, {r.min, {r.max.x, r.min.y + 40 * s}}, {with_alpha(d.color, 0.07), {0, 0, 0, 0}, with_alpha(d.color, 0.07), {0, 0, 0, 0}}, {CARD_RADIUS * s, 0, CARD_RADIUS * s, 0})
-	draw.rect(dc, {{r.min.x + 1 * s, r.min.y + 8 * s}, {r.min.x + 4 * s, r.max.y - 8 * s}}, with_alpha(d.color, 0.85), 1.5 * s)
-	if b.hot_t > FADE_VISIBLE { draw.rect(dc, r, {1, 1, 1, 0.02 * b.hot_t}, CARD_RADIUS * s) }
+card_head_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+	if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.012 * b.hot_t}, CARD_RADIUS * ui.scale()) }
 }
 
+// A sub-agent's call: a calm plate of the neutral steps, the only colour its state's, on its mark. One that runs is raised
+// and carries a pulsing lamp; one that is over is flat and dim, one line until it is opened.
 subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 	v := sub_view(app, p.sub_session, p)
-	open := part_open(app, p.tool_id != "" ? p.tool_id : pid)
-	acol := agent_color(v.agent)
-	now := now_epoch_ms()
+	part_id := p.tool_id != "" ? p.tool_id : pid
+	open := part_open(app, part_id)
 	running := v.state == .Running || v.state == .Starting
 	if running { app.animating = true }
-	// a running sub-agent is lit (warm face, glowing edge, full contrast); a finished one is switched off: flat, dim,
-	// one line until it is opened
-	off := !running
-	compact := off && !open
-	if off { acol = with_alpha(acol, 0.55) }
-	desc_col := off ? hex(HEX_CARD_DESC_OFF) : hex(HEX_CARD_DESC_LIT)
-
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	pt, pb: u32 = HEX_CARD_LIT_TOP, HEX_CARD_LIT_BOTTOM
-	shadow, rim: f32 = 8, 0.11
-	border, glow := with_alpha(hex(HEX_YELLOW), 0.6), with_alpha(hex(HEX_YELLOW), 0.22)
-	if off { pt, pb, shadow, rim, border, glow = HEX_CARD_OFF_TOP, HEX_CARD_OFF_BOTTOM, 0, 0.03, {0, 0, 0, 0.7}, {} }
-	if plate(fmt.tprintf("###sa_%s", pid), top = pt, bottom = pb, radius = CARD_RADIUS, shadow = shadow, rim = rim, border = border, glow = glow) {
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-		head := ui.build_box({.Clickable, .Focusable, .Hot_Within}, "###head")
-		rd := ui.frame_new(Rail_Draw)
-		rd.color = acol
-		head.custom = rail_draw
-		head.custom_user = rd
-		hs := ui.signal(head)
-		if hs.clicked { part_toggle(app, p.tool_id != "" ? p.tool_id : pid, head) }
-		if app.seek_subagent && app.anchor == nil && head.rect.max.y != head.rect.min.y && app.chat.loaded {
-			// --seek-subagent (tests): bring the first card near the top, as an anchor does
-			app.seek_subagent = false
-			app.anchor = head
-			app.anchor_y = math.round(em * SEEK_ANCHOR_EM)
-			app.stick_bottom = false
-		}
-		if hs.double_clicked && v.id != "" { drill_down(app, v.id) }
-		if ui.parent(head) {
-			ui.spacer(ui.px(em * 0.55))
-			// line 1: status lamp, robot, agent, description, duration, open
-			ui.next({width = ui.fill(), height = ui.px(math.round(em * (compact ? 1.7 : 1.9))), axis = .X, cross = .Center})
-			if ui.row(.Center, id = "###l1") {
-				ui.spacer(ui.px(em * 0.95))
-				if running { lamp("###st", sub_state_color(v.state), 1, pulse = true, size = em * 0.95) } else { pip("###st", off ? with_alpha(sub_state_color(v.state), 0.5) : sub_state_color(v.state), em * 0.8) }
-				ui.spacer(ui.px(em * 0.45))
-				glyph(ICO_ROBOT, acol, math.round(em * 0.95))
-				ui.spacer(ui.px(em * 0.25))
-				name := v.agent != "" ? v.agent : "sub-agent"
-				text("ag", strings.to_upper(name, context.temp_allocator), acol, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.78)})
-				ui.spacer(ui.px(em * 0.6))
-				text("ds", v.desc != "" ? v.desc : "(no description)", desc_col, ui.Style_Mod{font_size = math.round(em * (off ? 0.9 : 0.98))}, ui.fill())
-				ui.spacer(ui.px(em * 0.5))
-				if compact {
-					// switched off: its state in words, dimmed
-					text("sw", sub_state_label(v.state), with_alpha(sub_state_color(v.state), 0.75), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
-					ui.spacer(ui.px(em * 0.6))
-				}
-				end := v.ended > 0 ? v.ended : (running ? now : 0)
-				if d := duration(v.started, end); d != "" {
-					glyph(ICO_HISTORY, hex(HEX_FAINT), math.round(em * 0.7), em * 1.1)
-					text("du", d, off ? hex(HEX_FAINT) : hex(HEX_YELLOW), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.76)})
-					ui.spacer(ui.px(em * 0.6))
-				}
-				if v.id != "" {
-					if compact {
-						if glyph_button("###open", ICO_RIGHT, math.round(em * 1.5)).clicked { drill_down(app, v.id) }
-					} else if bevel_button("###open", "Open", ICO_RIGHT, running ? .Accent : .Normal, height = math.round(em * 1.6)).clicked {
-						drill_down(app, v.id)
-					}
-					ui.spacer(ui.px(em * 0.4))
-				}
-				glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * 0.6), em * 1.1)
-				ui.spacer(ui.px(em * 0.5))
-			}
-			// line 2: state (and what it does now), model, tokens, cost, tool calls, background
-			if !compact { card_line2(app, &v, running, em) }
-			// collapsed while lit: the first line of the result
-			if !open && !compact && v.result != "" {
-				ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.6)), axis = .X, cross = .Center})
-				if ui.row(.Center, id = "###l3") {
-					ui.spacer(ui.px(em * CARD_INDENT_EM))
-					glyph(ICO_CHAT, hex(HEX_FAINT), math.round(em * 0.75), em * 1.2)
-					text("rs", first_line(strings.trim_left(v.result, "# ")), hex(HEX_CARD_RESULT_LINE), ui.Style_Mod{font_size = math.round(em * 0.86)}, ui.fill())
-					ui.spacer(ui.px(em * 0.8))
-				}
-			}
-			ui.spacer(ui.px(em * (compact ? 0.15 : 0.5)))
-		}
+	pt, pb: u32 = HEX_PLATE_TOP, HEX_PLATE_BOTTOM
+	shadow, rim: f32 = 3, 0.07
+	border := Color{0, 0, 0, 0.85}
+	if !running { pt, pb, shadow, rim, border = HEX_CARD_OFF_TOP, HEX_CARD_OFF_BOTTOM, 0, 0.03, {0, 0, 0, 0.7} }
+	if plate(fmt.tprintf("###sa_%s", pid), top = pt, bottom = pb, radius = CARD_RADIUS, shadow = shadow, rim = rim, border = border) {
+		card_head(app, &v, part_id, open, running, em)
 		if open { card_body(app, &v, pid, running, em) }
 	}
 	ui.spacer(ui.px(em * 0.6))
+}
+
+// The clickable header of a card: its first line and, unless it is folded and over, the quiet line and a preview.
+@(private = "file")
+card_head :: proc(app: ^App, v: ^Sub_View, part_id: string, open, running: bool, em: f32) {
+	end := v.ended > 0 ? v.ended : (running ? now_epoch_ms() : 0)
+	name := v.agent != "" ? v.agent : "sub-agent"
+	desc := v.desc != "" ? v.desc : "(no description)"
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+	ui.a11y({role = .Button, name = fmt.tprintf("%s, %s: %s", sub_state_label(v.state), name, desc)})
+	head := ui.build_box({.Clickable, .Focusable, .Hot_Within}, "###head")
+	head.custom = card_head_draw
+	hs := ui.signal(head)
+	if hs.clicked { part_toggle(app, part_id, head) }
+	if app.seek_subagent && app.anchor == nil && head.rect.max.y != head.rect.min.y && app.chat.loaded {
+		// --seek-subagent (tests): bring the first card near the top, as an anchor does
+		app.seek_subagent = false
+		app.anchor = head
+		app.anchor_y = math.round(em * SEEK_ANCHOR_EM)
+		app.stick_bottom = false
+	}
+	if hs.double_clicked && v.id != "" { drill_down(app, v.id) }
+	if ui.parent(head) { card_lines(app, v, name, desc, open, running, end, em) }
+}
+
+// What a card's header shows.
+@(private = "file")
+card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: bool, end: f64, em: f32) {
+	compact := !running && !open
+	ui.spacer(ui.px(em * (compact ? 0.2 : 0.45)))
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
+	if ui.row(.Center, id = "###l1") {
+		ui.spacer(ui.px(em * CARD_PAD_EM))
+		state_mark("###st", sub_state_color(v.state), running, size = em * CARD_MARK_EM)
+		ui.spacer(ui.px(em * CARD_MARK_GAP_EM))
+		text("ag", name, running ? hex(HEX_WEAK) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+		ui.spacer(ui.px(em * 0.6))
+		text("ds", desc, running ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+		ui.spacer(ui.px(em * 0.5))
+		if compact {
+			// (over and folded: the state where it needs words, how long)
+			what := card_meta_compact(v, end)
+			if what != "" {
+				text("du", what, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				ui.spacer(ui.px(em * 0.5))
+			}
+		}
+		if v.id != "" {
+			if bevel_button("###open", "Open", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true).clicked { drill_down(app, v.id) }
+			ui.spacer(ui.px(em * 0.2))
+		}
+		glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
+		ui.spacer(ui.px(em * 0.5))
+	}
+	if !compact {
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.3)), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###l2") {
+			ui.spacer(ui.px(em * CARD_INDENT_EM))
+			text("mt", card_meta(v, running, end), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+			ui.spacer(ui.px(em * 0.8))
+		}
+		// folded while it runs: what it has said so far
+		if !open && v.result != "" {
+			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
+			if ui.row(.Center, id = "###l3") {
+				ui.spacer(ui.px(em * CARD_INDENT_EM))
+				text("rs", preview_text(v.result), hex(HEX_CARD_RESULT_LINE), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
+				ui.spacer(ui.px(em * 0.8))
+			}
+		}
+	}
+	ui.spacer(ui.px(em * (compact ? 0.2 : 0.5)))
+}
+
+// What a card folded and over keeps on its line.
+@(private = "file")
+card_meta_compact :: proc(v: ^Sub_View, end: f64) -> string {
+	d := duration(v.started, end)
+	if v.state != .Failed && v.state != .Cancelled { return d }
+	return d != "" ? fmt.tprintf("%s · %s", sub_state_label(v.state), d) : sub_state_label(v.state)
 }
 
 // A card opened: what its session says, its prompt, its result.
 card_body :: proc(app: ^App, v: ^Sub_View, pid: string, running: bool, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###body") {
-		ui.spacer(ui.px(em * 1.2))
+		ui.spacer(ui.px(em * CARD_PAD_EM))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column() {
 			if v.session != nil {
@@ -346,7 +338,7 @@ card_body :: proc(app: ^App, v: ^Sub_View, pid: string, running: bool, em: f32) 
 					if ui.row() {
 						ui.spacer(ui.px(em * 0.9))
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-						if ui.column() { markdown(fmt.tprintf("%s_res", pid), v.result, hex(HEX_CARD_RESULT), math.round(em * 0.95)) }
+						if ui.column() { markdown(fmt.tprintf("%s_res", pid), v.result, hex(HEX_CARD_RESULT), math.round(em * FS_LABEL)) }
 						ui.spacer(ui.px(em * 0.9))
 					}
 					ui.spacer(ui.px(em * 0.7))
@@ -354,36 +346,28 @@ card_body :: proc(app: ^App, v: ^Sub_View, pid: string, running: bool, em: f32) 
 				ui.spacer(ui.px(em * 0.4))
 			} else if running {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
-				if ui.row(.Center) { text("w", "No result yet: it is still working.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.86)}, ui.fill()) }
+				if ui.row(.Center) { text("w", "No result yet: it is still working.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill()) }
 			}
 			ui.spacer(ui.px(em * 0.7))
 		}
-		ui.spacer(ui.px(em * 1.0))
+		ui.spacer(ui.px(em * CARD_PAD_EM))
 	}
 }
 
-// The second line of a card: its state (and what it does now while it runs), background, model, tool calls, tokens, cost.
-card_line2 :: proc(app: ^App, v: ^Sub_View, running: bool, em: f32) {
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.7)), axis = .X, cross = .Center})
-	if ui.row(.Center, id = "###l2") {
-		ui.spacer(ui.px(em * CARD_INDENT_EM))
-		small := ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.74)}
-		text("st", sub_state_label(v.state), sub_state_color(v.state), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.74)})
-		if running && v.has_live && v.live.activity != "" {
-			text("sep", "  ·  ", hex(HEX_FAINT), small)
-			text("act", v.live.activity, hex(HEX_CARD_ACTIVITY), small, ui.fill())
-		} else {
-			ui.spacer(ui.fill())
-		}
-		ui.spacer(ui.px(em * 0.4))
-		if v.background { pill("###bg", "background", {}, ICO_HISTORY); ui.spacer(ui.px(em * 0.3)) }
-		if v.model != "" { pill("###md", short_model(v.model), {}, ICO_CHIP); ui.spacer(ui.px(em * 0.3)) }
-		tin, tout, cost := sub_totals(v)
-		if tools := v.live.tools; tools > 0 { pill("###tl", fmt.tprintf("%d tools", tools), {}, ICO_TOOL); ui.spacer(ui.px(em * 0.3)) }
-		if tin + tout > 0 { pill("###tk", fmt.tprintf("%s · %s", kfmt(tin), kfmt(tout)), {}, ICO_BOLT); ui.spacer(ui.px(em * 0.3)) }
-		if cost > 0 { pill("###co", fmt.tprintf("$%.2f", cost), hex(HEX_GREEN)); ui.spacer(ui.px(em * 0.3)) }
-		ui.spacer(ui.px(em * 0.5))
-	}
+// The quiet line of a card: what it does now, a state that needs saying in words (the mark says the others), how long,
+// the model, tool calls, tokens, cost.
+card_meta :: proc(v: ^Sub_View, running: bool, end: f64) -> string {
+	parts := make([dynamic]string, context.temp_allocator)
+	if running && v.has_live && v.live.activity != "" { append(&parts, v.live.activity) }
+	if v.state == .Failed || v.state == .Cancelled { append(&parts, sub_state_label(v.state)) }
+	if d := duration(v.started, end); d != "" { append(&parts, d) }
+	if v.background { append(&parts, "background") }
+	if v.model != "" { append(&parts, short_model(v.model)) }
+	if v.live.tools > 0 { append(&parts, fmt.tprintf("%d tools", v.live.tools)) }
+	tin, tout, cost := sub_totals(v)
+	if tin + tout > 0 { append(&parts, fmt.tprintf("%s in", kfmt(tin)), fmt.tprintf("%s out", kfmt(tout))) }
+	if cost > 0 { append(&parts, fmt.tprintf("$%.2f", cost)) }
+	return strings.join(parts[:], " · ", context.temp_allocator)
 }
 
 // "claude-sonnet-5-5" from "anthropic/claude-sonnet-5-5".
@@ -412,18 +396,17 @@ sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 	if well("###facts", radius = 7, base = HEX_FACTS_WELL) {
 		ui.spacer(ui.px(em * 0.45))
 		row :: proc(id, k, val: string, em: f32, col := Color{}) {
-			kv_row(id, k, val, em, {h = 1.4, key_w = 7, key_fs = 0.74, val_fs = 0.74, pad_l = 0.8, val = HEX_TEXT_SOFT}, col)
+			kv_row(id, k, val, em, {h = 1.4, key_w = 7, key_fs = FS_CAPTION, val_fs = FS_CAPTION, pad_l = 0.8, val = HEX_TEXT_SOFT}, col)
 		}
 		row("###f1", "session", s.id, em)
 		row("###f2", "title", s.title, em)
 		row("###f3", "started", fmt.tprintf("%s  (%s ago)", clock_time(s.created), duration(s.created, now_epoch_ms())), em)
 		if s.idle > 0 { row("###f4", "finished", fmt.tprintf("%s  after %s", clock_time(s.idle), duration(s.created, s.idle)), em) }
 		if s.outcome != "" {
-			st, _ := state_of_word(s.outcome)
-			row("###f5", "outcome", s.outcome, em, sub_state_color(st))
+			row("###f5", "outcome", s.outcome, em)
 		}
 		row("###f6", "tokens", fmt.tprintf("in %s · out %s · reasoning %s · cache read %s · cache write %s", kfmt(s.tokens_in), kfmt(s.tokens_out), kfmt(s.reasoning), kfmt(s.cache_read), kfmt(s.cache_write)), em)
-		if s.cost > 0 { row("###f7", "cost", fmt.tprintf("$%.4f", s.cost), em, hex(HEX_GREEN)) }
+		if s.cost > 0 { row("###f7", "cost", fmt.tprintf("$%.4f", s.cost), em) }
 		if v.has_live && v.live.steps + v.live.tools > 0 { row("###f8", "seen live", fmt.tprintf("%d steps · %d tool calls", v.live.steps, v.live.tools), em) }
 		ui.spacer(ui.px(em * 0.45))
 	}
@@ -436,7 +419,6 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 	v := sub_view(app, m.sub_child)
 	st, _ := state_of_word(m.sub_state)
 	open := part_open(app, m.id)
-	acol := agent_color(v.agent)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.column(id = fmt.tprintf("###sr_%s", m.id)) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
@@ -447,27 +429,31 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 		hs := ui.signal(hb)
 		if hs.clicked { part_toggle(app, m.id, hb) }
 		if ui.parent(hb) {
-			ui.spacer(ui.px(em * 0.3))
-			glyph(ICO_UNDO, acol, math.round(em * 0.85), em * 1.3)   // (Undo arrow: it came back)
-			text("ag", v.agent != "" ? v.agent : "sub-agent", acol, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
-			text("w", fmt.tprintf("  %s  ", st == .Done ? "returned" : sub_state_label(st)), sub_state_color(st), ui.Style_Mod{font_size = math.round(em * 0.86)})
+			ui.spacer(ui.px(em * CARD_PAD_EM))
+			pip("###st", sub_state_color(st), em * CARD_MARK_EM)
+			ui.spacer(ui.px(em * CARD_MARK_GAP_EM))
+			word := st == .Done ? "returned" : sub_state_label(st)
+			text("ag", fmt.tprintf("%s %s", v.agent != "" ? v.agent : "sub-agent", word), hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			ui.spacer(ui.px(em * 0.6))
 			desc := m.sub_desc != "" ? m.sub_desc : v.desc
-			text("d", desc, hex(HEX_TEXT_SOFT), ui.Style_Mod{font_size = math.round(em * 0.88)}, ui.fill())
-			text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
-			ui.spacer(ui.px(em * 0.4))
+			text("d", desc, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+			text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			ui.spacer(ui.px(em * 0.5))
 			if m.sub_child != "" {
-				if glyph_button("###open", ICO_RIGHT, math.round(em * 1.5), hex(HEX_WEAK)).clicked { drill_down(app, m.sub_child) }
+				if bevel_button("###open", "Open", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true).clicked { drill_down(app, m.sub_child) }
+				ui.spacer(ui.px(em * 0.2))
 			}
-			glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * 0.6), em * 1.1)
+			glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
+			ui.spacer(ui.px(em * 0.5))
 		}
 		if open && m.text != "" {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-			if rail_row(fmt.tprintf("###srb_%s", m.id), with_alpha(acol, 0.5)) {
+			if rail_row(fmt.tprintf("###srb_%s", m.id), with_alpha(hex(HEX_WEAK), 0.4)) {
 				ui.spacer(ui.px(em * 1.0))
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column() {
 					ui.spacer(ui.px(em * 0.3))
-					markdown(fmt.tprintf("%s_sr", m.id), m.text, hex(HEX_RETURNED_TEXT), math.round(em * 0.95))
+					markdown(fmt.tprintf("%s_sr", m.id), m.text, hex(HEX_RETURNED_TEXT), math.round(em * FS_LABEL))
 					ui.spacer(ui.px(em * 0.3))
 				}
 			}
@@ -483,12 +469,11 @@ subagent_banner :: proc(app: ^App, em: f32) {
 	c := &app.chat
 	if !c.have_self || c.self.parent == "" { return }
 	s := &c.self
-	acol := agent_color(s.agent)
 	st, known := state_of_word(s.outcome)
 	if app.busy[s.id] or_else false { st, known = .Running, true }
 	ui.spacer(ui.px(em * 0.4))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if plate("###sub_banner", top = HEX_BANNER_TOP, bottom = HEX_BANNER_BOTTOM, radius = CARD_RADIUS, shadow = 6, rim = 0.08, border = with_alpha(acol, 0.45)) {
+	if plate("###sub_banner", radius = CARD_RADIUS, shadow = 3) {
 		if bx := ui.parent_box(); app.seek_subagent && app.anchor == nil && bx.rect.max.y > 0 && c.loaded {
 			app.seek_subagent = false   // --seek-subagent (tests): bring the banner into view
 			app.anchor = bx
@@ -499,32 +484,32 @@ subagent_banner :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###r1") {
 			ui.spacer(ui.px(em))
-			glyph(ICO_ROBOT, acol, math.round(em * 1.2), em * 1.8)
+			glyph(ICO_ROBOT, hex(HEX_FAINT), math.round(em * ICON_LARGE), em * 1.8)
 			ui.spacer(ui.px(em * 0.4))
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 				if ui.row(.Center) {
-					text("k", "SUB-AGENT", hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.7)})
+					text("k", "SUB-AGENT", hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 					ui.spacer(ui.px(em * 0.5))
-					text("a", s.agent, acol, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
+					text("a", s.agent, hex(HEX_TEXT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 					if known {
 						ui.spacer(ui.px(em * 0.5))
 						state_mark("###l", sub_state_color(st), st == .Running, size = em * 0.75)
 						if st == .Running { app.animating = true }
 						ui.spacer(ui.px(em * 0.25))
-						text("s", sub_state_label(st), sub_state_color(st), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.76)})
+						text("s", sub_state_label(st), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 					}
 					ui.spacer(ui.fill())
 				}
 				parent := c.parent_title != "" ? c.parent_title : s.parent
-				text("p", fmt.tprintf("launched by “%s”", parent), hex(HEX_BANNER_PARENT), ui.Style_Mod{font_size = math.round(em * 0.88), height = ui.px(em * 1.4)}, ui.fill())
+				text("p", fmt.tprintf("launched by “%s”", parent), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.4)}, ui.fill())
 				end := s.idle > 0 && st != .Running ? s.idle : now_epoch_ms()
 				facts := fmt.tprintf("started %s · %s · %s in · %s out%s", clock_time(s.created), duration(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out), s.cost > 0 ? fmt.tprintf(" · $%.2f", s.cost) : "")
-				text("f", facts, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72), height = ui.px(em * 1.3)}, ui.fill())
+				text("f", facts, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
-			if bevel_button("###back", "Return to main session", ICO_BACK, .Accent).clicked { go_back(app) }
+			if bevel_button("###back", "Return to main session", ICO_BACK, .Normal).clicked { go_back(app) }
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -554,9 +539,9 @@ subagents_button :: proc(app: ^App, em: f32) {
 		app.animating = true
 		lamp("###sub_lamp", hex(HEX_YELLOW), 1, pulse = true, size = em * 1.0)
 		ui.spacer(ui.px(em * 0.3))
-		sig = bevel_button("###subs", fmt.tprintf("%d active", len(active)), ICO_ROBOT, .Accent, height = math.round(em * BUTTON_COMPACT_H_EM))
+		sig = bevel_button("###subs", fmt.tprintf("%d active", len(active)), ICO_ROBOT, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM))
 		ui.spacer(ui.px(em * 0.3))
-		text("of", fmt.tprintf("/ %d", len(c.children)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.76)})
+		text("of", fmt.tprintf("/ %d", len(c.children)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 	} else {
 		sig = glyph_label_button(app, "###subs", fmt.tprintf("%d past sub-agents", len(c.children)), em)
 	}
@@ -600,16 +585,16 @@ glyph_label_button :: proc(app: ^App, id, label: string, em: f32) -> ui.Signal {
 	sig := ui.signal(b)
 	if ui.parent(b) {
 		ui.spacer(ui.px(em * 0.5))
-		glyph(ICO_ROBOT, hex(HEX_FAINT), math.round(em * 0.85))
+		glyph(ICO_ROBOT, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 		ui.spacer(ui.px(em * 0.2))
-		text("t", label, sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * 0.86)})
+		text("t", label, sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		ui.spacer(ui.px(em * 0.6))
 	}
 	return sig
 }
 
-// Above the composer, while sub-agents of the session shown run: one lit chip each (what it does now, for how long);
-// a click opens it.
+// Above the composer, while sub-agents of the session shown run: one chip each, in the language of their cards: a neutral
+// plate, the lamp the only colour, what it does now and for how long quietly after its name. A click opens it.
 active_strip :: proc(app: ^App, em: f32) {
 	active := active_children(app)
 	if len(active) == 0 { return }
@@ -619,28 +604,24 @@ active_strip :: proc(app: ^App, em: f32) {
 	if ui.flow({em * 0.5, em * 0.5}, "###active_strip") {
 		for s in active {
 			v := sub_view(app, s.id)
-			acol := agent_color(s.agent)
-			ui.next({width = ui.children_sum(), height = ui.px(math.round(em * 2.3)), axis = .X, cross = .Center})
+			ui.next({width = ui.children_sum(), height = ui.px(math.round(em * BUTTON_COMPACT_H_EM)), axis = .X, cross = .Center})
 			b := ui.build_box({.Clickable, .Focusable}, fmt.tprintf("###act_%s", s.id))
 			b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-				s := ui.scale()
-				draw_bevel(dc, b.rect, 8 * s, hex(HEX_CHIP), b.hot_t, b.active_t, hex(HEX_YELLOW))
+				draw_bevel(dc, b.rect, BUTTON_RADIUS * ui.scale(), hex(HEX_BG3), b.hot_t, b.active_t)
 			}
 			sig := ui.signal(b)
 			if sig.clicked { drill_down(app, s.id) }
 			if ui.parent(b) {
-				ui.spacer(ui.px(em * 0.6))
-				lamp("###l", hex(HEX_YELLOW), 1, pulse = true, size = em * 0.85)
+				ui.spacer(ui.px(em * 0.55))
+				lamp("###l", hex(HEX_YELLOW), 1, pulse = true, size = em * CARD_MARK_EM)
 				ui.spacer(ui.px(em * 0.35))
-				text("a", s.agent, acol, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.74)})
-				ui.spacer(ui.px(em * 0.4))
-				text("t", ellipsize(s.title, CHIP_TITLE_CHARS), hex(HEX_SUB_LIT_TITLE), ui.Style_Mod{font_size = math.round(em * 0.88)})
-				if v.has_live && v.live.activity != "" {
-					text("s", "  ·  ", hex(HEX_CHIP_SEP), ui.Style_Mod{font_size = math.round(em * 0.8)})
-					text("w", ellipsize(v.live.activity, CHIP_ACTIVITY_CHARS), hex(HEX_CHIP_ACTIVITY), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
-				}
+				text("a", s.agent, hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+				ui.spacer(ui.px(em * 0.45))
+				text("t", ellipsize(s.title, CHIP_TITLE_CHARS), hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 				ui.spacer(ui.px(em * 0.5))
-				text("d", duration(s.created, now), hex(HEX_YELLOW), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
+				what := duration(s.created, now)
+				if v.has_live && v.live.activity != "" { what = fmt.tprintf("%s · %s", ellipsize(v.live.activity, CHIP_ACTIVITY_CHARS), what) }
+				text("w", what, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.6))
 			}
 		}
@@ -675,13 +656,13 @@ sub_toggle :: proc(app: ^App, id: string, n: int, running: int, em: f32) -> bool
 			lamp("###l", hex(HEX_YELLOW), 1, pulse = true, size = em * 0.7)
 			the_app.animating = true
 			ui.spacer(ui.px(em * 0.2))
-			text("r", fmt.tprintf("%d", running), hex(HEX_YELLOW), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * 0.74)})
-			text("n", fmt.tprintf("/%d", n), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.68)})
+			text("r", fmt.tprintf("%d", running), hex(HEX_YELLOW), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+			text("n", fmt.tprintf("/%d", n), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)})
 		} else {
-			glyph(ICO_ROBOT, hex(HEX_FAINT), math.round(em * 0.62), em * 0.9)
-			text("n", fmt.tprintf("%d", n), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.7)})
+			glyph(ICO_ROBOT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
+			text("n", fmt.tprintf("%d", n), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
-		glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * 0.5), em * 0.9)
+		glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
 		ui.spacer(ui.px(em * 0.2))
 	}
 	return open

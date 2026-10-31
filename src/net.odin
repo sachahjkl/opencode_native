@@ -57,10 +57,13 @@ discover_server :: proc() -> Server_Config {
 	}
 	// a server listening everywhere is reached here
 	if cfg.host == "0.0.0.0" || cfg.host == "::" || cfg.host == "[::]" { cfg.host = "127.0.0.1" }
+	local := cfg
+	url_given, password_given := false, false
 	for a in os.args[1:] {
-		if strings.has_prefix(a, "--password=") { cfg.password = a[len("--password="):] }
+		if strings.has_prefix(a, "--password=") { cfg.password = a[len("--password="):]; password_given = true }
 		if strings.has_prefix(a, "--url=") {
 			u := a[len("--url="):]
+			url_given = true
 			cfg.tls = strings.has_prefix(u, "https://")
 			u = strings.trim_prefix(strings.trim_prefix(u, "http://"), "https://")
 			u = strings.trim_suffix(u, "/")
@@ -73,9 +76,18 @@ discover_server :: proc() -> Server_Config {
 			}
 		}
 	}
+	// the password of this computer's server goes to that server only
+	if url_given && !password_given && !same_server(local.host, local.port, cfg.host, cfg.port) { cfg.password = "" }
 	cfg.host = strings.clone(cfg.host)
 	cfg.password = strings.clone(cfg.password)
 	return cfg
+}
+
+// Two addresses of one server: the same port and the same host, the names of this computer being one.
+same_server :: proc(host_a: string, port_a: u16, host_b: string, port_b: u16) -> bool {
+	here :: proc(h: string) -> bool { return h == "localhost" || h == "::1" || h == "[::1]" || strings.has_prefix(h, "127.") }
+	if port_a != port_b { return false }
+	return host_a == host_b || (here(host_a) && here(host_b))
 }
 
 ////////////////////////////////

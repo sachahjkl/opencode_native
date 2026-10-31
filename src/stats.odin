@@ -170,9 +170,9 @@ tile :: proc(id, value, caption: string, color: Color, em: f32) {
 	ui.next({width = ui.px(em * 9.5), height = ui.children_sum(), axis = .Y})
 	if plate(id, top = HEX_TILE_TOP, bottom = HEX_TILE_BOTTOM, radius = 8, shadow = 3) {
 		ui.spacer(ui.px(em * 0.5))
-		ui.next({width = ui.fill(), height = ui.px(em * 1.9), fg = color, font = the_app.mono_bold, font_size = math.round(em * 1.25), text_align = .Center})
+		ui.next({width = ui.fill(), height = ui.px(em * 1.9), fg = color, font = the_app.mono_bold, font_size = math.round(em * FS_TITLE), text_align = .Center})
 		ui.build_box({.Draw_Text}, fmt.tprintf("%s###v", value))
-		ui.next({width = ui.fill(), height = ui.px(em * 1.3), fg = hex(HEX_FAINT), font_size = math.round(em * 0.74), text_align = .Center})
+		ui.next({width = ui.fill(), height = ui.px(em * 1.3), fg = hex(HEX_FAINT), font_size = math.round(em * FS_CAPTION), text_align = .Center})
 		ui.build_box({.Draw_Text}, fmt.tprintf("%s###c", caption))
 		ui.spacer(ui.px(em * 0.4))
 	}
@@ -180,7 +180,7 @@ tile :: proc(id, value, caption: string, color: Color, em: f32) {
 
 @(private = "file")
 kv :: proc(id, k, v: string, em: f32, col := Color{}) {
-	kv_row(id, k, v, em, {h = 1.45, key_w = 11, key_fs = 0.76, val_fs = 0.78, val = HEX_STAT_VALUE}, col)
+	kv_row(id, k, v, em, {h = 1.45, key_w = 11, key_fs = FS_SMALL, val_fs = FS_SMALL, val = HEX_STAT_VALUE}, col)
 }
 
 // A row of a ranking: name, a bar of its share, its count (and failures).
@@ -188,12 +188,12 @@ kv :: proc(id, k, v: string, em: f32, col := Color{}) {
 rank_row :: proc(id, name: string, n, max_n, failed: int, extra: string, em: f32, color: Color) {
 	ui.next({width = ui.fill(), height = ui.px(em * 1.55), axis = .X, cross = .Center})
 	if ui.row(.Center, id = id) {
-		text("n", ellipsize(name, RANK_NAME_CHARS), hex(HEX_RANK_NAME), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.78)}, ui.px(em * 11))
+		text("n", ellipsize(name, RANK_NAME_CHARS), hex(HEX_RANK_NAME), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)}, ui.px(em * 11))
 		meter("###m", max_n > 0 ? f32(n) / f32(max_n) : 0, color, em)
 		ui.spacer(ui.px(em * 0.6))
-		text("c", fmt.tprintf("%d", n), hex(HEX_STAT_VALUE), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * 0.78)}, ui.px(em * 3))
-		text("f", failed > 0 ? fmt.tprintf("%d failed", failed) : "", hex(HEX_RED), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.72)}, ui.px(em * 5))
-		text("x", extra, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.72)}, ui.px(em * 6.5))
+		text("c", fmt.tprintf("%d", n), hex(HEX_STAT_VALUE), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 3))
+		text("f", failed > 0 ? fmt.tprintf("%d failed", failed) : "", hex(HEX_RED), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 5))
+		text("x", extra, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 6.5))
 	}
 }
 
@@ -236,15 +236,36 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 2.2), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###title") {
 		if logo_of(app, "###lg", project_logo(app, chat_project(app)), math.round(em * 1.8)) { ui.spacer(ui.px(em * 0.5)) }
-		text("t", s != nil && s.title != "" ? s.title : "Session", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * 1.3)}, ui.fill())
+		text("t", s != nil && s.title != "" ? s.title : "Session", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE)}, ui.fill())
 		ui.spacer(ui.px(em * 1.6))   // (room for the dialog's close cross)
 	}
-	// totals: the session's (the server's), else the live ones
-	tin, tout, reas, cread, cwrite, cost := c.tokens_in, c.tokens_out, 0.0, c.cache_read, 0.0, c.cost
+	totals := stats_totals(c, s)
+	stats_tiles(totals, em)
+	stats_context(app, c, &l, em)
+	stats_tokens(totals, em)
+	stats_time(c, s, &l, now, em)
+	stats_rankings(app, &l, em)
+	stats_children(app, c, em)
+	stats_project(app, now, em)
+	ui.spacer(ui.px(em * 1.3))
+}
+
+// The session's totals: the server's, else the live ones.
+@(private = "file")
+Totals :: struct { tin, tout, reas, cread, cwrite, cost: f64 }
+
+@(private = "file")
+stats_totals :: proc(c: ^Chat, s: ^Session_Info) -> (t: Totals) {
+	t = {c.tokens_in, c.tokens_out, 0, c.cache_read, 0, c.cost}
 	if s != nil {
-		tin, tout, reas, cread, cwrite = max(tin, s.tokens_in), max(tout, s.tokens_out), s.reasoning, max(cread, s.cache_read), s.cache_write
-		cost = max(cost, s.cost)
+		t = {max(t.tin, s.tokens_in), max(t.tout, s.tokens_out), s.reasoning, max(t.cread, s.cache_read), s.cache_write, max(t.cost, s.cost)}
 	}
+	return
+}
+
+@(private = "file")
+stats_tiles :: proc(t: Totals, em: f32) {
+	tin, tout, reas, cread, cost := t.tin, t.tout, t.reas, t.cread, t.cost
 	ui.spacer(ui.px(em * 0.7))
 	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.6, em * 0.6}})
 	if ui.flow({em * 0.6, em * 0.6}, "###tiles") {
@@ -255,7 +276,11 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 		hit := tin + cread > 0 ? cread / (tin + cread) : 0
 		tile("###t5", fmt.tprintf("%.0f %%", hit * 100), "cache hits", hex(HEX_CYAN), em)
 	}
+}
 
+// The context the last step filled, against the model's window.
+@(private = "file")
+stats_context :: proc(app: ^App, c: ^Chat, l: ^Local, em: f32) {
 	heading("CONTEXT", em)
 	ctx := 0.0
 	for m in app.models { if m.id == (l.last_model != "" ? l.last_model : c.model) { ctx = m.ctx_len; break } }
@@ -266,13 +291,17 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 		if ui.row(.Center, id = "###ctx") {
 			meter("###m", t, col, em)
 			ui.spacer(ui.px(em * 0.7))
-			text("p", fmt.tprintf("%.0f %%  ·  %s / %s", t * 100, kfmt(l.last_context), kfmt(ctx)), col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
+			text("p", fmt.tprintf("%.0f %%  ·  %s / %s", t * 100, kfmt(l.last_context), kfmt(ctx)), col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 		}
 		info_line(app, "###ctxh", "What the last step sent the model (its prompt, cache included) against the model's context window. Near the top, opencode compacts the conversation.", em)
 	} else {
 		info_line(app, "###ctxn", "Not known yet (no step in the loaded messages, or the model's window is not listed).", em, hex(HEX_FAINT))
 	}
+}
 
+@(private = "file")
+stats_tokens :: proc(t: Totals, em: f32) {
+	tin, tout, reas, cread, cwrite, cost := t.tin, t.tout, t.reas, t.cread, t.cwrite, t.cost
 	heading("TOKENS", em)
 	kv("###k1", "input", fmt.tprintf("%s  (uncached)", kfmt(tin)), em)
 	kv("###k2", "cache read", kfmt(cread), em)
@@ -280,7 +309,10 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 	kv("###k4", "output", kfmt(tout), em)
 	kv("###k5", "reasoning", kfmt(reas), em)
 	kv("###k6", "cost", fmt.tprintf("$%.4f", cost), em, hex(HEX_GREEN))
+}
 
+@(private = "file")
+stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local, now: f64, em: f32) {
 	heading("TIME", em)
 	if s != nil {
 		kv("###d1", "created", fmt.tprintf("%s  (%s ago)", clock_time(s.created), duration(s.created, now)), em)
@@ -291,7 +323,11 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 		if l.out_tokens > 0 { kv("###d4", "output pace", fmt.tprintf("%.0f tokens / s", l.out_tokens / (l.active_ms / MS_PER_S)), em) }
 	}
 	kv("###d5", "loaded", fmt.tprintf("%d messages · %d prompts · %d steps%s", l.msgs, l.prompts, l.steps, c.older != "" ? " (earlier ones not loaded)" : ""), em)
+}
 
+// What the loaded messages called, and which models answered.
+@(private = "file")
+stats_rankings :: proc(app: ^App, l: ^Local, em: f32) {
 	heading(fmt.tprintf("TOOLS  (%d calls, %d failed)", l.calls, l.failed), em)
 	max_t := len(l.tools) > 0 ? l.tools[0].calls : 0
 	for t, i in l.tools {
@@ -307,7 +343,10 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 			rank_row(fmt.tprintf("###ml%d", i), m.name, m.steps, max_m, 0, fmt.tprintf("%s out", kfmt(m.tokens_out)), em, hex(HEX_BLUE))
 		}
 	}
+}
 
+@(private = "file")
+stats_children :: proc(app: ^App, c: ^Chat, em: f32) {
 	if len(c.children) > 0 {
 		heading("SUB-AGENTS", em)
 		running, scost, sin, sout := 0, 0.0, 0.0, 0.0
@@ -319,9 +358,6 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 		kv("###s2", "their tokens", fmt.tprintf("%s in · %s out", kfmt(sin), kfmt(sout)), em)
 		if scost > 0 { kv("###s3", "their cost", fmt.tprintf("$%.2f", scost), em, hex(HEX_GREEN)) }
 	}
-
-	stats_project(app, now, em)
-	ui.spacer(ui.px(em * 1.3))
 }
 
 // The project's totals, from the server.
@@ -369,7 +405,7 @@ ms_text :: proc(ms: f64) -> string {
 // A pill of text that is a button (the header's token count): sunken, lit under the pointer.
 pill_button :: proc(id: string, label: string, color := Color{}, icon := "") -> ui.Signal {
 	em := ui.font_size()
-	fs := math.round(em * 0.8)
+	fs := math.round(em * FS_SMALL)
 	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * PILL_H_EM)), axis = .X, cross = .Center, cursor = .Hand})
 	b := ui.build_box({.Clickable, .Focusable}, id)
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
@@ -382,7 +418,7 @@ pill_button :: proc(id: string, label: string, color := Color{}, icon := "") -> 
 		fg := color.a > 0 ? color : hex(HEX_WEAK)
 		if sig.hovering { fg = lighten(fg, 0.4) }
 		if icon != "" {
-			ui.next({width = ui.px(em), height = ui.pct(1), font = the_app.icons, font_size = math.round(em * 0.7), fg = fg, text_pad = 0, text_align = .Center})
+			ui.next({width = ui.px(em), height = ui.pct(1), font = the_app.icons, font_size = math.round(em * ICON_SMALL), fg = fg, text_pad = 0, text_align = .Center})
 			ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###i", icon))
 			ui.spacer(ui.px(em * 0.25))
 		}

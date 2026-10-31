@@ -294,7 +294,7 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 	// widths: the widest cell of each column (inline Markdown markers stripped for the measure)
 	pad := math.round(em * 0.7)
 	widths := make([]f32, ncol, context.temp_allocator)
-	cell_size := math.round(fs * 0.92)
+	cell_size := math.round(fs * FS_LABEL)
 	for r, ri in rows {
 		for c, ci in r {
 			plain, _ := strings.remove_all(c, "**", context.temp_allocator)
@@ -338,9 +338,9 @@ code_block :: proc(id: string, lang: string, code: string, table := false, versi
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###hdr") {
 				ui.spacer(ui.px(em * 0.7))
-				glyph(ICO_CODE, hex(HEX_FAINT), math.round(em * 0.75), em)
+				glyph(ICO_CODE, hex(HEX_FAINT), math.round(em * ICON_SMALL), em)
 				ui.spacer(ui.px(em * 0.3))
-				text("lang", lang != "" ? lang : "text", hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.78)})
+				text("lang", lang != "" ? lang : "text", hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.fill())
 				if glyph_button("###copy", ICO_COPY, math.round(em * 1.6)).clicked {
 					platform.set_clipboard(the_app.win, code)
@@ -355,7 +355,7 @@ code_block :: proc(id: string, lang: string, code: string, table := false, versi
 		if ui.row(id = "###body") {
 			ui.spacer(ui.px(em * 0.9))
 			runs := [1]ui.Rich_Run{{text = code, style = {font = the_app.mono, color = hex(table ? HEX_TEXT : HEX_CODE_TEXT)}}}
-			ui.next({width = ui.fill(), font_size = math.round(em * 0.86), flags = {.Selectable}})
+			ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}})
 			ui.rich_paragraph("###code", runs[:], version = version)
 			ui.spacer(ui.px(em * 0.9))
 		}

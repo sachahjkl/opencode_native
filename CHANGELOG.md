@@ -5,8 +5,20 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+
+- **The sub-agent card and the strip above the composer are redesigned**: neutral plates, colour only on the state mark, the
+  details in one quiet line.
+- **Saved server passwords are no longer stored in clear**: DPAPI on Windows; on Linux the Secret Service, else `servers.txt` at
+  mode 0600, with a note in the server dialog. Older files are converted at start, and older versions cannot read them afterwards.
+- **Folded reasoning and collapsed results read as text**, without Markdown marks.
+- **Text sizes follow one named scale**, with small differences in some labels.
+- **The Tool lines slider reaches 1000**, as the setting does.
+- **Notifications appear at the top right**: at the bottom they covered Send.
+
 ### Fixed
 
+- **The password of this computer's server is no longer sent** to the server named by `--url`.
 - **A link in a conversation could run a program**: only http, https and mailto links open now; anything else says so.
 - **The app could read freed memory** when opening a sub-agent during a frame, and when sending a new session after changing
   server.

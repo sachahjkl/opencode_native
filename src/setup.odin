@@ -163,8 +163,8 @@ setup_dialog :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
 				ui.spacer(ui.px(em * 0.4))
-				text("t", "opencode native", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * 1.5), height = ui.px(em * 2)})
-				text("v", fmt.tprintf("version %s  ·  Froment Software", APP_VERSION), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.78), height = ui.px(em * 1.3)})
+				text("t", "opencode native", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_DISPLAY), height = ui.px(em * 2)})
+				text("v", fmt.tprintf("version %s  ·  Froment Software", APP_VERSION), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.3)})
 				ui.spacer(ui.px(em * 0.7))
 				col := hex(HEX_YELLOW)
 				state := ""
@@ -178,7 +178,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				if ui.row(.Center) {
 					lamp("###sl", col, 1, size = em * 0.9)
 					ui.spacer(ui.px(em * 0.45))
-					text("s", state, hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * 0.92)}, ui.fill())
+					text("s", state, hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 				}
 			}
 			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
@@ -191,7 +191,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 			if well("###where", radius = 8, base = HEX_SETUP_WELL) {
 				ui.spacer(ui.px(em * 0.6))
 				line :: proc(id, k, v: string, em: f32) {
-					kv_row(id, k, v, em, {h = 1.5, key_w = 7.5, key_fs = 0.75, val_fs = 0.75, pad_l = 0.8, pad_r = 0.8, val = HEX_TEXT_SOFT})
+					kv_row(id, k, v, em, {h = 1.5, key_w = 7.5, key_fs = FS_SMALL, val_fs = FS_SMALL, pad_l = 0.8, pad_r = 0.8, val = HEX_TEXT_SOFT})
 				}
 				line("###l1", "program", f.exe, em)
 				line("###l2", LBL_MENU, f.start_lnk ? LBL_MENU_ITEM : "-", em)
@@ -212,9 +212,9 @@ setup_dialog :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 			if ui.row(.Center) {
 				ui.spacer(ui.px(em * SETUP_MARGIN_EM))
-				glyph(st.good ? ICO_CHECK : ICO_WARN, st.good ? hex(HEX_GREEN) : hex(HEX_RED), math.round(em * 0.85))
+				glyph(st.good ? ICO_CHECK : ICO_WARN, st.good ? hex(HEX_GREEN) : hex(HEX_RED), math.round(em * ICON_REGULAR))
 				ui.spacer(ui.px(em * 0.3))
-				text("m", st.message, st.good ? hex(HEX_GREEN) : hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * 0.88)}, ui.fill())
+				text("m", st.message, st.good ? hex(HEX_GREEN) : hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 			}
 		}
 		ui.spacer(ui.px(em * 1.1))

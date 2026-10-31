@@ -81,7 +81,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 			if well("###psw", .X, radius = 7, focus = 1) {
 				ui.spacer(ui.px(em * 0.5))
-				glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * 0.8))
+				glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 					res := ui.line_edit("###pf", &p.field, fmt.tprintf("Search %s", title))
@@ -90,7 +90,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 					if res.committed && n > 0 { chosen = hits[p.sel].index }
 					if res.cancelled { p.open = false }
 				}
-				text("pn", fmt.tprintf("%d", n), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
+				text("pn", fmt.tprintf("%d", n), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.6))
 			}
 			ui.spacer(ui.px(em * 0.5))
@@ -150,10 +150,10 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 					lit_text(app, hay, len(it.label), h.ranges, sel || it.current ? hex(HEX_BRIGHT) : hex(HEX_TEXT), em)
 					ui.spacer(ui.fill())
 					if it.detail != "" {
-						text("d", it.detail, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
+						text("d", it.detail, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 						ui.spacer(ui.px(em * 0.5))
 					}
-					if it.current { glyph(ICO_CHECK, accent(), math.round(em * 0.75)) } else { ui.spacer(ui.px(math.round(em * 0.75))) }
+					if it.current { glyph(ICO_CHECK, accent(), math.round(em * ICON_SMALL)) } else { ui.spacer(ui.px(math.round(em * 0.75))) }
 					ui.spacer(ui.px(em * 0.75))
 				}
 			}
@@ -177,13 +177,13 @@ rect_has :: proc(r: Rect, p: Vec2) -> bool { return p.x >= r.min.x && p.x < r.ma
 // `s` in runs: the matched ones lit in the accent on a tint, the rest plain; from byte `split` on (a group), faint.
 @(private = "file")
 lit_text :: proc(app: ^App, s: string, split: int, ranges: []ui.Fuzzy_Range, col: Color, em: f32) {
-	fs := math.round(em * 0.92)
+	fs := math.round(em * FS_LABEL)
 	at := 0
 	k := 0
 	seg :: proc(app: ^App, k: ^int, s: string, lit, faint: bool, col: Color, fs: f32) {
 		if s == "" { return }
 		c := faint ? hex(HEX_FAINT) : col
-		m := ui.Style_Mod{font_size = faint ? math.round(fs * 0.85) : fs}
+		m := ui.Style_Mod{font_size = faint ? math.round(fs * FS_NOTE) : fs}
 		if lit {
 			c = accent()
 			m.bg = with_alpha(accent(), 0.16)

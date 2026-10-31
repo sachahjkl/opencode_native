@@ -176,7 +176,7 @@ image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) ->
 	if state == .Failed {
 		if ui.parent(b) {
 			em := ui.font_size()
-			ui.next({width = ui.fill(), height = ui.fill(), fg = hex(HEX_IMAGE_FAILED_TEXT), font_size = math.round(em * 0.8), text_align = .Center})
+			ui.next({width = ui.fill(), height = ui.fill(), fg = hex(HEX_IMAGE_FAILED_TEXT), font_size = math.round(em * FS_SMALL), text_align = .Center})
 			ui.build_box({.Draw_Text}, "image unreadable###f")
 		}
 	}
@@ -250,8 +250,8 @@ image_viewer :: proc(app: ^App, em: f32) {
 		if ui.row(.Center) {
 			ui.spacer(ui.px(em))
 			name := app.view_name != "" ? app.view_name : "image"
-			text("n", ellipsize(name, IMAGE_NAME_CHARS), hex(HEX_VIEWER_NAME), ui.Style_Mod{font_size = math.round(em * 0.9)}, ui.fill())
-			text("d", fmt.tprintf("%d × %d", e.w, e.h), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.76)})
+			text("n", ellipsize(name, IMAGE_NAME_CHARS), hex(HEX_VIEWER_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+			text("d", fmt.tprintf("%d × %d", e.w, e.h), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.8))
 			if bevel_button("###close", "Close", ICO_CANCEL, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { app.view_open = false }
 			ui.spacer(ui.px(em))

@@ -30,7 +30,6 @@ COLUMN_W_MIN          :: 560
 COLUMN_W_MAX          :: 1800
 TOOL_LINES_MIN        :: 5
 TOOL_LINES_MAX        :: 1000
-TOOL_LINES_SLIDER_MAX :: 400
 PAGE_SIZE_MIN         :: 20
 PAGE_SIZE_MAX         :: 200
 
@@ -380,7 +379,7 @@ settings_dialog :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if ui.row(id = "###nav_foot") {
 					ui.spacer(ui.px(em * 0.9))
-					text("f", fmt.tprintf("prefs: %s", filepath.base(prefs_path())), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.7), height = ui.px(em * 1.4)})
+					text("f", fmt.tprintf("prefs: %s", filepath.base(prefs_path())), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.4)})
 				}
 				ui.spacer(ui.px(em * 0.9))
 			}
@@ -395,7 +394,7 @@ settings_dialog :: proc(app: ^App, em: f32) {
 					if ui.column() {
 						ui.spacer(ui.px(em * 1.1))
 						info := SETTINGS_PAGES[app.settings_page]
-						text("pt", info.title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * 1.35), height = ui.px(em * 2)}, ui.fill())
+						text("pt", info.title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
 						ui.spacer(ui.px(em * 0.6))
 						switch app.settings_page {
 						case .Appearance:   page_appearance(app, em)
@@ -422,7 +421,7 @@ nav_heading :: proc(s: string, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###nh_%s", s)) {
 		ui.spacer(ui.px(em * 1.1))
-		text("h", s, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * 0.68)})
+		text("h", s, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 	}
 }
 
@@ -439,8 +438,8 @@ setting :: proc(app: ^App, name: string, em: f32) -> bool {
 	ui.push_parent(ui.build_box({}, "###line"))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.column(id = "###words") {
-		text("t", config.title_of(e.def), hex(HEX_SETTING_NAME), ui.Style_Mod{font_size = math.round(em * 0.95), height = ui.px(em * 1.5)}, ui.fill())
-		ui.next({width = ui.fill(), font_size = math.round(em * 0.82), flags = {.Text_Wrap}, fg = hex(HEX_WEAK), text_pad = 0})
+		text("t", config.title_of(e.def), hex(HEX_SETTING_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
+		ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Text_Wrap}, fg = hex(HEX_WEAK), text_pad = 0})
 		ui.paragraph(fmt.tprintf("%s###d", e.def.description))
 		ui.spacer(ui.px(em * 0.2))
 	}
@@ -557,7 +556,7 @@ font_button :: proc(app: ^App, name: string, em: f32) {
 	case:              mode, shown = face == want ? "" : "not installed", want
 	}
 	if mode != "" {
-		text("fm", mode, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.78), height = ui.px(em * 1.5)})
+		text("fm", mode, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)})
 		ui.spacer(ui.px(em * 0.5))
 	}
 	sig := bevel_button(fmt.tprintf("###fb_%s", name), shown, "", .Normal, ui.px(em * 13))
@@ -583,7 +582,7 @@ page_conversation :: proc(app: ^App, em: f32) {
 	if setting(app, "conversation.width", em) { pref_slider(app, "conversation.width", COLUMN_W_MIN, COLUMN_W_MAX, 20, "%.0f px", em) }
 	if setting(app, "conversation.reasoning", em) { pref_choice(app, "conversation.reasoning", {"Folded", "Unfolded", "Hidden"}, em) }
 	if setting(app, "conversation.expand_tools", em) { pref_switch(app, "conversation.expand_tools", em) }
-	if setting(app, "conversation.tool_lines", em) { pref_slider(app, "conversation.tool_lines", TOOL_LINES_MIN, TOOL_LINES_SLIDER_MAX, 5, "%.0f lines", em) }
+	if setting(app, "conversation.tool_lines", em) { pref_slider(app, "conversation.tool_lines", TOOL_LINES_MIN, TOOL_LINES_MAX, 5, "%.0f lines", em) }
 	if setting(app, "conversation.page_size", em) { pref_slider(app, "conversation.page_size", PAGE_SIZE_MIN, PAGE_SIZE_MAX, 10, "%.0f", em) }
 	if setting(app, "conversation.follow", em) { pref_switch(app, "conversation.follow", em) }
 	if setting(app, "conversation.usage", em) { pref_switch(app, "conversation.usage", em) }
@@ -601,14 +600,14 @@ page_behaviour :: proc(app: ^App, em: f32) {
 
 // A line of quiet text.
 info_line :: proc(app: ^App, id, s: string, em: f32, color := Color{}) {
-	ui.next({width = ui.fill(), font_size = math.round(em * 0.84), flags = {.Text_Wrap}, fg = color.a > 0 ? color : hex(HEX_WEAK), text_pad = 0})
+	ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Text_Wrap}, fg = color.a > 0 ? color : hex(HEX_WEAK), text_pad = 0})
 	ui.paragraph(fmt.tprintf("%s%s", label_safe(s), id))
 }
 
 // A key / value line in a well.
 @(private = "file")
 fact :: proc(id, k, v: string, em: f32, col := Color{}) {
-	kv_row(id, k, v, em, {h = 1.5, key_w = 8.5, key_fs = 0.76, val_fs = 0.76, pad_l = 0.8, pad_r = 0.6, val = HEX_FACT_VALUE}, col)
+	kv_row(id, k, v, em, {h = 1.5, key_w = 8.5, key_fs = FS_SMALL, val_fs = FS_SMALL, pad_l = 0.8, pad_r = 0.6, val = HEX_FACT_VALUE}, col)
 }
 
 @(private = "file")
@@ -669,7 +668,7 @@ page_server :: proc(app: ^App, em: f32) {
 				ui.toast(.Good, "Shell: %s", s.name)
 			}
 			ui.spacer(ui.px(em * 0.7))
-			text("p", s.path, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.74)}, ui.fill())
+			text("p", s.path, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 		}
 		ui.spacer(ui.px(em * 0.25))
 	}
@@ -680,8 +679,8 @@ page_server :: proc(app: ^App, em: f32) {
 		if ui.row(.Center, id = fmt.tprintf("###cf%d", i)) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
-				text("p", c.path, hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.78), height = ui.px(em * 1.5)}, ui.fill())
-				text("k", strings.join(c.keys, " · ", context.temp_allocator), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72), height = ui.px(em * 1.3)}, ui.fill())
+				text("p", c.path, hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}, ui.fill())
+				text("k", strings.join(c.keys, " · ", context.temp_allocator), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
 			}
 			// (only this computer's server speaks of this computer's files)
 			if app.servers[app.server].local && config_file_shaped(c.path) && os.is_file(c.path) {
@@ -713,9 +712,9 @@ page_mcp :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.9))
 				lamp("###l", col, connected ? 1 : 0.4, size = em * 0.9)
 				ui.spacer(ui.px(em * 0.5))
-				text("n", m.name, hex(HEX_MCP_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.9)})
+				text("n", m.name, hex(HEX_MCP_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL)})
 				ui.spacer(ui.px(em * 0.6))
-				text("s", m.status != "" ? m.status : "?", col, ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.76)}, ui.fill())
+				text("s", m.status != "" ? m.status : "?", col, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 				if connected {
 					if bevel_button("###dc", "Disconnect", "", .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked {
 						request(app, .Action, "POST", fmt.tprintf("/api/experimental/mcp/%s/disconnect", url_escape(m.name)))
@@ -754,7 +753,7 @@ page_usage :: proc(app: ^App, em: f32) {
 	if f.workspace != "" {
 		ui.next({width = ui.fill(), height = ui.px(em * SETTINGS_ROW_H_EM), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###ws") {
-			text("w", fmt.tprintf("Workspace “%s”", f.workspace), hex(HEX_WORKSPACE_NAME), ui.Style_Mod{font_size = math.round(em * 0.95)}, ui.fill())
+			text("w", fmt.tprintf("Workspace “%s”", f.workspace), hex(HEX_WORKSPACE_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			if f.usage_url != "" {
 				if bevel_button("###web", "Usage on opencode.ai", ICO_GLOBE, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { link_open(f.usage_url) }
 			}
@@ -765,26 +764,26 @@ page_usage :: proc(app: ^App, em: f32) {
 	for l, i in f.limits {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = fmt.tprintf("###lim%d", i)) {
-			text("n", l.name, hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8)}, ui.px(em * 6))
+			text("n", l.name, hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.px(em * 6))
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 0.7))})
 			ui.progress("###bar", f32(l.percent / 100))
 			ui.spacer(ui.px(em * 0.7))
 			col := l.limited ? hex(HEX_RED) : l.percent >= USAGE_WARN_PERCENT ? hex(HEX_YELLOW) : hex(HEX_WEAK)
-			text("p", fmt.tprintf("%.0f %%", l.percent), col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)}, ui.px(em * 3.5))
-			text("r", l.resets > now ? fmt.tprintf("resets in %s", duration(now, l.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)}, ui.px(em * 9))
+			text("p", fmt.tprintf("%.0f %%", l.percent), col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 3.5))
+			text("r", l.resets > now ? fmt.tprintf("resets in %s", duration(now, l.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
 		}
 	}
 	if len(f.budgets) > 0 { section("BUDGETS", em) }
 	for b, i in f.budgets {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = fmt.tprintf("###bud%d", i)) {
-			text("n", b.scope != "" ? b.scope : "budget", hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8)}, ui.px(em * 6))
+			text("n", b.scope != "" ? b.scope : "budget", hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.px(em * 6))
 			t := b.limit > 0 ? f32(b.spent / b.limit) : 0
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 0.7))})
 			ui.progress("###bar", t)
 			ui.spacer(ui.px(em * 0.7))
-			text("p", fmt.tprintf("$%.2f / $%.0f", b.spent, b.limit), t >= BUDGET_WARN_SHARE ? hex(HEX_YELLOW) : hex(HEX_GREEN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)}, ui.px(em * 8))
-			text("r", b.resets > now ? fmt.tprintf("resets in %s", duration(now, b.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)}, ui.px(em * 9))
+			text("p", fmt.tprintf("$%.2f / $%.0f", b.spent, b.limit), t >= BUDGET_WARN_SHARE ? hex(HEX_YELLOW) : hex(HEX_GREEN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 8))
+			text("r", b.resets > now ? fmt.tprintf("resets in %s", duration(now, b.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
 		}
 	}
 }
@@ -802,9 +801,9 @@ page_permissions :: proc(app: ^App, em: f32) {
 			col := s.effect == "deny" ? hex(HEX_RED) : s.effect == "allow" ? hex(HEX_GREEN) : hex(HEX_YELLOW)
 			pill("###e", s.effect != "" ? s.effect : "?", col)
 			ui.spacer(ui.px(em * 0.5))
-			text("a", s.action, hex(HEX_SETTING_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.82)})
+			text("a", s.action, hex(HEX_SETTING_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
 			ui.spacer(ui.px(em * 0.5))
-			text("r", s.resource, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.78)}, ui.fill())
+			text("r", s.resource, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 			if bevel_button("###rv", "Revoke", ICO_DELETE, .Danger, height = math.round(em * BUTTON_SMALL_H_EM)).clicked {
 				request(app, .Action, "DELETE", fmt.tprintf("/api/permission/saved/%s", s.id))
 				app.facts_due = true
@@ -825,8 +824,8 @@ page_catalog :: proc(app: ^App, em: f32) {
 		for it, i in items {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row(id = fmt.tprintf("###%s%d", title, i)) {
-				text("n", it.name, hex(HEX_CATALOG_NAME), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * 0.8), height = ui.px(em * 1.5)}, ui.px(em * 13))
-				ui.next({width = ui.fill(), font_size = math.round(em * 0.8), flags = {.Text_Wrap}, fg = hex(HEX_WEAK), text_pad = 0})
+				text("n", it.name, hex(HEX_CATALOG_NAME), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}, ui.px(em * 13))
+				ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Text_Wrap}, fg = hex(HEX_WEAK), text_pad = 0})
 				ui.paragraph(fmt.tprintf("%s###d", label_safe(it.detail)))
 			}
 			ui.spacer(ui.px(em * 0.25))

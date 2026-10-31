@@ -11,6 +11,7 @@ import "gt:draw"
 import "gt:ui"
 
 
+TOAST_TOP_EM          :: 5.5
 SIDEBAR_W_DEFAULT     :: 290
 SIDEBAR_W_MIN         :: 200
 SIDEBAR_W_MAX         :: 520
@@ -63,6 +64,8 @@ build_ui :: proc(app: ^App) {
 	settings_dialog(app, em)
 	image_viewer(app, em)
 	stats_dialog(app, em)
+	// (over the top of the conversation, under its header: at the bottom they hid the send button, when one wants to try again)
+	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.ui_state.window_size})
 	ui.toasts_build()
 }
 
@@ -141,7 +144,7 @@ title_bar :: proc(app: ^App, em: f32) {
 		logo_box(app, "###tlogo", math.round(h * 0.6))
 		ui.spacer(ui.px(em * 0.5))
 		// the wordmark: "open" dim, "code" bright, in the mono face
-		mono := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 1.1)}
+		mono := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_HEADING)}
 		text("w1", "open", hex(HEX_WEAK), mono)
 		text("w2", "code", hex(HEX_TEXT), mono)
 		ui.spacer(ui.px(em * 0.9))
@@ -149,23 +152,23 @@ title_bar :: proc(app: ^App, em: f32) {
 		groove("###tg")
 		ui.spacer(ui.px(em * 0.7))
 		if !app.servers[app.server].local {   // another computer's server: its name first
-			glyph(ICO_GLOBE, hex(HEX_CYAN), math.round(em * 0.8))
+			glyph(ICO_GLOBE, hex(HEX_CYAN), math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.3))
-			text("srv", server_name(app), hex(HEX_CYAN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
-			if app.chat.id != "" { text("srvsep", "  /  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.92)}) }
+			text("srv", server_name(app), hex(HEX_CYAN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			if app.chat.id != "" { text("srvsep", "  /  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}) }
 		}
 		s := find_session(app, app.chat.id)
 		if s == nil && app.chat.have_self { s = &app.chat.self }
 		if s != nil {
 			// the project's logo before its folder
 			if logo_of(app, "###tproj", project_logo(app, s.project), math.round(h * 0.55)) { ui.spacer(ui.px(em * 0.45)) }
-			text("dir", base_name(s.directory), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * 0.92)})
-			text("sep", "  /  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.92)})
-			text("ttl", ellipsize(s.title, TITLE_BAR_TITLE_CHARS), hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * 0.92)})
+			text("dir", base_name(s.directory), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
+			text("sep", "  /  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
+			text("ttl", ellipsize(s.title, TITLE_BAR_TITLE_CHARS), hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
 		}
 		ui.spacer(ui.fill())
 		if app.chat.busy {
-			text("busy", "working", accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8)})
+			text("busy", "working", accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.5))
 			scanner("###tscan", accent(), math.round(em * 3), math.round(em * 0.75))
 			ui.spacer(ui.px(em))
@@ -230,7 +233,7 @@ sidebar :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 			if well("###search_well", .X, radius = 7) {
 				ui.spacer(ui.px(em * 0.5))
-				glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * 0.8))
+				glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 					ui.line_edit("###search", &app.search, "Search sessions")
@@ -292,15 +295,15 @@ sessions_list :: proc(app: ^App, em: f32) {
 		if hs.clicked { app.folded[gkey] = !folded }
 		if ui.parent(hdr) {
 			ui.spacer(ui.px(em * 0.8))
-			glyph(folded ? ICO_RIGHT : ICO_DOWN, hex(HEX_FAINT), math.round(em * 0.6), em * 0.9)
+			glyph(folded ? ICO_RIGHT : ICO_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
 			// the project's logo, else a folder
 			logo := len(gr.items) > 0 ? project_logo(app, app.sessions[gr.items[0]].project) : nil
-			if !logo_of(app, "###glogo", logo, math.round(em * 1.25)) { glyph(ICO_FOLDER, accent(), math.round(em * 0.85)) }
+			if !logo_of(app, "###glogo", logo, math.round(em * 1.25)) { glyph(ICO_FOLDER, accent(), math.round(em * ICON_REGULAR)) }
 			ui.spacer(ui.px(em * 0.35))
 			name := gr.dir != "" ? base_name(gr.dir) : "(no folder)"
-			text("n", strings.to_upper(name, context.temp_allocator), hs.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.78)})
+			text("n", strings.to_upper(name, context.temp_allocator), hs.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.4))
-			text("c", fmt.tprintf("%d", len(gr.items)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.75)})
+			text("c", fmt.tprintf("%d", len(gr.items)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.fill())
 			// "+": always there (built only while the header was hovered, it vanished as soon as the pointer moved onto
 			// it: the header is no longer the box under the pointer), shown while the header is hot (Hot_Within keeps it
@@ -371,7 +374,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				if busy { st = .Running; app.animating = true }
 				state_mark("###st", sub_state_color(st), busy, size = em * 0.75)
 				ui.spacer(ui.px(em * 0.3))
-				text("ag", s.agent, agent_color(s.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.7)})
+				text("ag", s.agent, hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.35))
 			} else if busy {
 				lamp("###busy", accent(), pulse = true, size = em * 0.85)
@@ -381,9 +384,9 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			title := s.title != "" ? s.title : "Untitled"
 			// a sub-agent: lit while it runs, dimmed once it is done
 			tcol := hex(HEX_TEXT_SOFT)
-			if depth > 0 { tcol = busy ? hex(HEX_SUB_LIT_TITLE) : hex(HEX_SUB_OFF_TITLE) }
+			if depth > 0 { tcol = busy ? hex(HEX_TEXT) : hex(HEX_SUB_OFF_TITLE) }
 			if selected { tcol = hex(HEX_BRIGHT) }
-			text("t", title, tcol, ui.Style_Mod{font_size = math.round(em * (depth > 0 ? 0.86 : 0.95))}, ui.fill())
+			text("t", title, tcol, ui.Style_Mod{font_size = math.round(em * (depth > 0 ? FS_NOTE : FS_LABEL))}, ui.fill())
 			ui.spacer(ui.px(em * 0.4))
 			if len(kids) > 0 {
 				running := 0
@@ -391,7 +394,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				sub_list = sub_toggle(app, s.id, len(kids), running, em)
 				ui.spacer(ui.px(em * 0.35))
 			}
-			text("a", rel_time(now, s.updated), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.74)})
+			text("a", rel_time(now, s.updated), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.7))
 		}
 		ui.spacer(ui.px(em * 0.5))
@@ -407,7 +410,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 				if ui.row(.Center, id = fmt.tprintf("###more_%s", s.id)) {
 					ui.spacer(ui.px(em * 2.6))
-					text("m", fmt.tprintf("… %d more: open the session and use its sub-agents menu", len(kids) - LIMIT), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.78)}, ui.fill())
+					text("m", fmt.tprintf("… %d more: open the session and use its sub-agents menu", len(kids) - LIMIT), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
 				}
 				break
 			}
@@ -444,7 +447,7 @@ delete_dialog :: proc(app: ^App, em: f32) {
 			if ui.column() {
 				title := "this session"
 				if s := find_session(app, app.delete_id); s != nil { title = s.title }
-				ui.next({width = ui.fill(), height = ui.px(em * 2), font_size = math.round(em * 1.15)})
+				ui.next({width = ui.fill(), height = ui.px(em * 2), font_size = math.round(em * FS_HEADING)})
 				ui.label("Delete the session?###dt")
 				ui.next({width = ui.fill(), flags = {.Text_Wrap}})
 				if ui.tags("weak") { ui.paragraph(fmt.tprintf("“%s” and its messages will be removed from the server.###dp", label_safe(title))) }
@@ -625,15 +628,15 @@ chat_header :: proc(app: ^App, em: f32) {
 						if back_target(app) == app.chat.self.parent { go_back(app) } else { drill_down(app, app.chat.self.parent) }
 					}
 					if ui.parent(pb) {
-						text("p", ellipsize(parent, CRUMB_PARENT_CHARS), ps.hovering ? accent() : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * 0.78)})
+						text("p", ellipsize(parent, CRUMB_PARENT_CHARS), ps.hovering ? accent() : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 					}
-					text("s", "  ›  sub-agent", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.78)})
+					text("s", "  ›  sub-agent", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 				}
 			}
 			title := s != nil ? s.title : "New session"
-			text("title", title != "" ? title : "Untitled", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * 1.12), height = ui.px(em * 1.5)}, ui.fill())
+			text("title", title != "" ? title : "Untitled", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_HEADING), height = ui.px(em * 1.5)}, ui.fill())
 			dir := s != nil ? s.directory : app.chat.new_dir
-			text("dir", dir != "" ? dir : "default folder", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.76), height = ui.px(em * 1.2)}, ui.fill())
+			text("dir", dir != "" ? dir : "default folder", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2)}, ui.fill())
 			ui.spacer(ui.fill())
 		}
 		c := &app.chat
@@ -671,7 +674,7 @@ empty_state :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 4), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###logo") {
 		ui.spacer(ui.fill())
-		big := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 3)}
+		big := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_WORDMARK)}
 		text("l1", "open", hex(HEX_FAINT), big)
 		text("l2", "code", hex(HEX_TEXT), big)
 		ui.spacer(ui.fill())
@@ -694,7 +697,7 @@ messages :: proc(app: ^App, em: f32) {
 				scanner("###older_bar", accent(), math.round(em * 5), math.round(em * 0.9))
 				ui.spacer(ui.px(em * 0.7))
 			}
-			if ui.tags("weak") { text("older_t", c.older_failed > 0 ? "Earlier messages could not be read: scroll to try again" : "Loading earlier messages…", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.85)}) }
+			if ui.tags("weak") { text("older_t", c.older_failed > 0 ? "Earlier messages could not be read: scroll to try again" : "Loading earlier messages…", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
 			ui.spacer(ui.fill())
 		}
 		ui.spacer(ui.px(em * 0.6))
@@ -724,11 +727,11 @@ messages :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###working") {
 			ui.spacer(ui.px(em * 0.4))
-			text("w", "Working", accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.85)})
+			text("w", "Working", accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_NOTE)})
 			ui.spacer(ui.px(em * 0.7))
 			scanner("###wl", accent(), math.round(em * 7), math.round(em * 0.9))
 			ui.spacer(ui.fill())
-			if ui.tags("weak") { text("hint", "Ctrl+Esc to stop", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.8)}) }
+			if ui.tags("weak") { text("hint", "Ctrl+Esc to stop", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}) }
 		}
 	}
 	ui.spacer(ui.px(em * 2))
@@ -751,6 +754,21 @@ message :: proc(app: ^App, c: ^Chat, m: ^Message, i: int, em: f32) {
 	}
 }
 
+// The first line of Markdown that says something, as text: a preview shows no marks (headings, quotes, lists, emphasis).
+preview_text :: proc(s: string) -> string {
+	rest := s
+	for line in strings.split_lines_iterator(&rest) {
+		t := strings.trim_left(strings.trim_space(line), "#>-*+ \t")
+		digits := 0
+		for digits < len(t) && t[digits] >= '0' && t[digits] <= '9' { digits += 1 }
+		if digits > 0 && digits + 1 < len(t) && (t[digits] == '.' || t[digits] == ')') && t[digits + 1] == ' ' { t = t[digits + 2:] }
+		if t == "" || strings.trim(t, "-*_=~` ") == "" { continue }
+		for mark in ([]string{"**", "__", "~~", "`"}) { t, _ = strings.remove_all(t, mark, context.temp_allocator) }
+		return t
+	}
+	return ""
+}
+
 first_line :: proc(s: string) -> string {
 	t := strings.trim_space(s)
 	if i := strings.index_byte(t, '\n'); i >= 0 { return t[:i] }
@@ -760,9 +778,9 @@ first_line :: proc(s: string) -> string {
 note_line :: proc(app: ^App, m: ^Message, em: f32, icon: string, s: string) {
 	ui.next({width = ui.fill(), height = ui.px(em * 1.9), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###n_%s", m.id)) {
-		glyph(icon, hex(HEX_FAINT), math.round(em * 0.8))
+		glyph(icon, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 		ui.spacer(ui.px(em * 0.3))
-		text("t", s, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.85)}, ui.fill())
+		text("t", s, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 	}
 	ui.spacer(ui.px(em * 0.6))
 }
@@ -774,7 +792,7 @@ turn_end :: proc(app: ^App, m: ^Message, em: f32) {
 		if m.finish != "" && m.finish != "succeeded" {
 			ui.spacer(ui.px(em * 0.5))
 			col := m.finish == "interrupted" ? hex(HEX_YELLOW) : hex(HEX_RED)
-			text("o", m.finish, col, ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.75)})
+			text("o", m.finish, col, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.5))
 			groove(across = true)
 		}
@@ -797,11 +815,11 @@ user_message :: proc(app: ^App, m: ^Message, em: f32) {
 			if ui.column() {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 				if ui.row(.Center, id = "###who") {
-					glyph(ICO_PERSON, accent(), math.round(em * 0.8), em * 1.1)
+					glyph(ICO_PERSON, accent(), math.round(em * ICON_SMALL), em * 1.1)
 					ui.spacer(ui.px(em * 0.2))
-					text("you", "You", accent(), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
+					text("you", "You", accent(), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 					ui.spacer(ui.fill())
-					text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.74)})
+					text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}
 				ui.spacer(ui.px(em * 0.35))
 				runs := [1]ui.Rich_Run{{text = m.text, style = {color = hex(HEX_USER_TEXT)}}}
@@ -870,14 +888,14 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 			if m.streaming { app.animating = true }
 			ui.spacer(ui.px(em * 0.4))
 			name := m.agent != "" ? m.agent : "assistant"
-			text("ag", strings.to_upper(name[:1], context.temp_allocator), agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
-			text("ag2", name[1:], agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
+			text("ag", strings.to_upper(name[:1], context.temp_allocator), agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			text("ag2", name[1:], agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			if m.model != "" {
-				text("dot", "  ·  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.8)})
-				text("md", m.model, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.78)})
+				text("dot", "  ·  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+				text("md", m.model, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			}
 			ui.spacer(ui.fill())
-			text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.74)})
+			text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
 		ui.spacer(ui.px(em * 0.4))
 		}
@@ -901,7 +919,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 		if app.prefs.usage && !m.streaming && m.tokens_out > 0 && m.finish == "stop" {
 			ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###foot") {
-				text("tk", fmt.tprintf("%s in · %s out%s", kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), m.cost > 0 ? fmt.tprintf(" · $%.3f", m.cost) : ""), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
+				text("tk", fmt.tprintf("%s in · %s out%s", kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), m.cost > 0 ? fmt.tprintf(" · $%.3f", m.cost) : ""), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			}
 		}
 	}
@@ -1011,13 +1029,13 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 		if ui.parent(hb) {
 			ui.spacer(ui.px(em * 0.5))
 			failed := p.status == .Error
-			glyph(tool_icon(p.tool_name), failed ? hex(HEX_RED) : hex(HEX_FAINT), math.round(em * 0.85))
+			glyph(tool_icon(p.tool_name), failed ? hex(HEX_RED) : hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 			ui.spacer(ui.px(em * 0.35))
-			text("nm", p.tool_name != "" ? p.tool_name : "tool", failed ? hex(HEX_ERROR_TEXT) : running ? hex(HEX_BRIGHT) : hex(HEX_TEXT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.85)})
+			text("nm", p.tool_name != "" ? p.tool_name : "tool", failed ? hex(HEX_ERROR_TEXT) : running ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
 			ui.spacer(ui.px(em * 0.6))
-			text("sj", p.subject, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8)}, ui.fill())
+			text("sj", p.subject, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 			ui.spacer(ui.px(em * 0.4))
-			glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * 0.6))
+			glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY))
 			ui.spacer(ui.px(em * 0.6))
 		}
 		show_error := p.status == .Error && p.output != ""
@@ -1054,7 +1072,7 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 section_label :: proc(id, s: string, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###sl_%s", id)) {
-		text("l", s, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * 0.68)})
+		text("l", s, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 	}
 }
 
@@ -1083,7 +1101,7 @@ mono_well :: proc(id: string, s: string, em: f32, max_lines: int, color := Color
 		if ui.row(id = "###r") {
 			ui.spacer(ui.px(em * 0.75))
 			runs := [1]ui.Rich_Run{{text = body, style = {font = the_app.mono, color = color.a > 0 ? color : hex(HEX_TOOL_OUTPUT)}}}
-			ui.next({width = ui.fill(), font_size = math.round(em * 0.82), flags = {.Selectable}})
+			ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}})
 			ui.rich_paragraph("###t", runs[:])
 			ui.spacer(ui.px(em * 0.75))
 		}
@@ -1091,7 +1109,7 @@ mono_well :: proc(id: string, s: string, em: f32, max_lines: int, color := Color
 			ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###more") {
 				ui.spacer(ui.px(em * 0.75))
-				text("m", fmt.tprintf("… %d more lines", extra), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.75)})
+				text("m", fmt.tprintf("… %d more lines", extra), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
 			}
 		}
 		ui.spacer(ui.px(em * 0.5))
@@ -1108,22 +1126,22 @@ reasoning_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 	if hs.clicked { part_toggle(app, pid, hb) }
 	if ui.parent(hb) {
 		ui.spacer(ui.px(em * 0.2))
-		glyph(ICO_BULB, hex(HEX_PURPLE), math.round(em * 0.85))
+		glyph(ICO_BULB, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 		ui.spacer(ui.px(em * 0.3))
-		text("t", p.done ? "Thought" : "Thinking…", hex(HEX_PURPLE), ui.Style_Mod{font_size = math.round(em * 0.88)})
+		text("t", p.done ? "Thought" : "Thinking…", hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		ui.spacer(ui.px(em * 0.5))
 		if !open {
-			text("pv", first_line(string(p.text[:])), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.85)}, ui.fill())
+			text("pv", preview_text(string(p.text[:])), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		} else { ui.spacer(ui.fill()) }
-		glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * 0.6))
+		glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY))
 		ui.spacer(ui.px(em * 0.4))
 	}
 	if open {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if rail_row(fmt.tprintf("###rb_%s", pid), with_alpha(hex(HEX_PURPLE), 0.45)) {
+		if rail_row(fmt.tprintf("###rb_%s", pid), with_alpha(hex(HEX_WEAK), 0.4)) {
 			ui.spacer(ui.px(em * 0.9))
 			runs := [1]ui.Rich_Run{{text = string(p.text[:]), style = {italic = true, color = hex(HEX_REASONING_TEXT)}}}
-			ui.next({width = ui.fill(), font_size = math.round(em * 0.92), flags = {.Selectable}})
+			ui.next({width = ui.fill(), font_size = math.round(em * FS_LABEL), flags = {.Selectable}})
 			ui.rich_paragraph("###t", runs[:])
 		}
 	}
@@ -1156,13 +1174,13 @@ permission_card :: proc(app: ^App, p: ^Permission, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###r") {
 			ui.spacer(ui.px(em))
-			glyph(ICO_SHIELD, hex(HEX_YELLOW), math.round(em * 1.1), em * 1.6)
+			glyph(ICO_SHIELD, hex(HEX_YELLOW), math.round(em * ICON_LARGE), em * 1.6)
 			ui.spacer(ui.px(em * 0.5))
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
-				text("a", fmt.tprintf("Permission requested: %s", p.action), hex(HEX_YELLOW), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.9), height = ui.px(em * 1.5)}, ui.fill())
+				text("a", fmt.tprintf("Permission requested: %s", p.action), hex(HEX_YELLOW), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
 				detail := p.message != "" ? p.message : strings.join(p.resources, ", ", context.temp_allocator)
-				text("d", detail, hex(HEX_PERM_DETAIL), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8), height = ui.px(em * 1.4)}, ui.fill())
+				text("d", detail, hex(HEX_PERM_DETAIL), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.4)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
 			if bevel_button("###once", "Allow once", ICO_CHECK, .Accent).clicked { reply_permission(app, p.session, p.id, "once") }
@@ -1195,7 +1213,7 @@ composer :: proc(app: ^App, em: f32) {
 		if ui.row(id = "###edrow") {
 			ui.spacer(ui.px(em * 0.35))
 			if ui.tags("bare") {
-				ui.next({width = ui.fill(), font_size = math.round(em * 1.02), text_pad = em * 0.5})
+				ui.next({width = ui.fill(), font_size = math.round(em * FS_BODY), text_pad = em * 0.5})
 				res := ui.text_edit("###composer", &app.composer, "Ask anything…", wrap = true, auto_height = true, min_lines = 2, max_lines = COMPOSER_MAX_LINES)
 				app.composer_focused = res.focused
 				if res.committed { submit = true }
@@ -1215,7 +1233,7 @@ composer :: proc(app: ^App, em: f32) {
 			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(&app.picker, "model", msig.box.rect) } }
 			ui.spacer(ui.fill())
 			if app.column_w > em * COMPOSER_HINT_MIN_EM {   // (room for it beside the agent and model buttons)
-				text("hint", app.prefs.ctrl_enter ? "Ctrl+Enter  send   ·   Enter  new line" : "Enter  send   ·   Shift+Enter  new line", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
+				text("hint", app.prefs.ctrl_enter ? "Ctrl+Enter  send   ·   Enter  new line" : "Enter  send   ·   Shift+Enter  new line", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			}
 			ui.spacer(ui.px(em * 0.8))
 			if app.chat.busy {
@@ -1298,7 +1316,7 @@ status_bar :: proc(app: ^App, em: f32) {
 		d^ = {hex(HEX_STATUS_TOP), hex(HEX_STATUS_BOTTOM)}
 		b.custom = bar_draw
 		b.custom_user = d
-		small := ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.75)}
+		small := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
 		ui.spacer(ui.px(em * 0.35))
 		// the server: a button that opens the menu of the servers (switch, add, edit)
 		col := app.online ? hex(HEX_GREEN) : app.auth_failed ? hex(HEX_RED) : hex(HEX_YELLOW)
@@ -1315,13 +1333,13 @@ status_bar :: proc(app: ^App, em: f32) {
 			state_mark("###online", col, !app.online, size = em * 0.8)   // (connected is the normal state: a pip)
 			ui.spacer(ui.px(em * 0.4))
 			if len(app.servers) > 1 || !app.servers[app.server].local {
-				text("sn", server_name(app), app.online ? hex(HEX_TEXT) : col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.75)})
+				text("sn", server_name(app), app.online ? hex(HEX_TEXT) : col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.5))
 			}
 			state := app.online ? "connected" : app.auth_failed ? "auth refused" : "connecting"
 			text("st", fmt.tprintf("%s  %s", state, server_base(app)), app.online ? hex(HEX_WEAK) : col, small)
 			ui.spacer(ui.px(em * 0.35))
-			glyph(ICO_DOWN, hex(HEX_FAINT), math.round(em * 0.55))
+			glyph(ICO_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY))
 			ui.spacer(ui.px(em * 0.45))
 		}
 		server_menu(app, skey, em)

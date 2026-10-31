@@ -141,6 +141,22 @@ LINE_HEIGHT_RATIO   :: 1.35   // of the font size
 SELECTION_ALPHA     :: 0.28
 FADE_VISIBLE        :: 0.01   // a hover or focus fade above this shows on screen
 
+// The type scale, in font sizes: what every label is set in, by its role.
+FS_CAPTION  :: 0.72   // timestamps, counts, section labels, pills: what is read last
+FS_SMALL    :: 0.78   // details in the mono face, hints, keys and values
+FS_NOTE     :: 0.86   // secondary sentences, previews, code
+FS_LABEL    :: 0.92   // row titles and text in rows
+FS_BODY     :: 1      // what is read: prompts and answers
+FS_HEADING  :: 1.12   // the title of a page or a conversation
+FS_TITLE    :: 1.3    // the title of a dialog
+FS_DISPLAY  :: 1.5
+FS_WORDMARK :: 3
+// And of the icons (Lucide draws them smaller than their size says).
+ICON_TINY    :: 0.6    // disclosure chevrons
+ICON_SMALL   :: 0.75   // beside a caption
+ICON_REGULAR :: 0.85   // beside a label
+ICON_LARGE   :: 1.1    // beside a title
+
 // The animations: phases in radians per millisecond of ui.now_ms.
 PULSE_RATE     :: 0.006
 PULSE_LIT_MIN  :: 0.45
@@ -219,7 +235,7 @@ draw_lamp :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color, lit: f32 = 1) 
 	rr := radii4(d * 0.5)
 	if lit > FADE_VISIBLE && the_app.prefs.glow { draw.box_shadow(dc, r, rr, d * 0.45, with_alpha(col, 0.4 * lit)) }
 	draw.rect(dc, draw.rect_pad(r, 1 * s), {0, 0, 0, 0.8}, d * 0.5 + s)
-	body := draw.mix(darken(col, 0.65), col, lit)
+	body := draw.mix(darken(col, 0.3), col, lit)   // (dimmed, not browned: the colour stays clean through a pulse)
 	draw.rect_corners(dc, r, {lighten(body, 0.25), darken(body, 0.2), lighten(body, 0.25), darken(body, 0.2)}, rr)
 	hl := Rect{{c.x - d * 0.26, c.y - d * 0.36}, {c.x + d * 0.10, c.y - d * 0.10}}
 	draw.rect(dc, hl, {1, 1, 1, 0.22 + 0.2 * lit}, d * 0.18, 0, d * 0.12)
@@ -280,14 +296,14 @@ dialog_close :: proc(open: ^bool) {
 	b.custom, b.custom_user = bevel_box_draw, d
 	sig := ui.signal(b)
 	if ui.parent(b) {
-		ui.next({width = ui.fill(), height = ui.fill(), font = the_app.icons, font_size = math.round(em * 0.9), fg = sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), text_align = .Center, text_pad = 0})
+		ui.next({width = ui.fill(), height = ui.fill(), font = the_app.icons, font_size = math.round(em * ICON_REGULAR), fg = sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), text_align = .Center, text_pad = 0})
 		ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###g", ICO_CANCEL))
 	}
 	if sig.clicked { open^ = false }
 }
 
 // A machined push button: an icon (Lucide glyph) and/or a label. `width`: its width (text size by default).
-bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Normal, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false) -> ui.Signal {
+bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Normal, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false, quiet := false) -> ui.Signal {
 	em := ui.font_size()
 	h := height > 0 ? height : math.round(em * BUTTON_H_EM)
 	fg := kind == .Accent ? hex(HEX_ON_ACCENT) : kind == .Danger ? WHITE : hex(HEX_TEXT)
@@ -301,16 +317,17 @@ bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Nor
 	b.custom = bevel_box_draw
 	b.custom_user = d
 	sig := ui.signal(b)
+	if quiet && !disabled { fg = sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK) }   // (a secondary action: lit only under the pointer)
 	if ui.parent(b) {
 		pad := label != "" ? em * 0.75 : em * 0.55
 		if _, fixed := width.?; fixed && !left { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(left ? em * 0.8 : pad)) }
 		if icon != "" {
-			ui.next({width = ui.px(em * 1.25), height = ui.pct(1), font = the_app.icons, font_size = math.round(em * 0.95), fg = fg, text_align = .Center, text_pad = 0})
+			ui.next({width = ui.px(em * 1.25), height = ui.pct(1), font = the_app.icons, font_size = math.round(em * ICON_REGULAR), fg = fg, text_align = .Center, text_pad = 0})
 			ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###ico", icon))
 			if label != "" { ui.spacer(ui.px(em * 0.4)) }
 		}
 		if label != "" {
-			ui.next({width = ui.text_size(0), height = ui.pct(1), fg = fg, text_pad = 0})
+			ui.next({width = ui.text_size(0), height = ui.pct(1), fg = fg, text_pad = 0, font_size = quiet ? math.round(em * FS_NOTE) : em})
 			ui.build_box({.Draw_Text}, fmt.tprintf("%s###txt", label_safe(label)))
 		}
 		if _, fixed := width.?; fixed { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(pad)) }
@@ -333,7 +350,7 @@ glyph_button :: proc(id: string, icon: string, size: f32 = 0, color := Color{}) 
 	fg := color.a > 0 ? color : hex(HEX_WEAK)
 	if sig.hovering { fg = lighten(fg, 0.5) }
 	if ui.parent(b) {
-		ui.next({width = ui.fill(), height = ui.fill(), font = the_app.icons, font_size = math.round(em * 0.85), fg = fg, text_align = .Center, text_pad = 0})
+		ui.next({width = ui.fill(), height = ui.fill(), font = the_app.icons, font_size = math.round(em * ICON_REGULAR), fg = fg, text_align = .Center, text_pad = 0})
 		ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###g", icon))
 	}
 	return sig
@@ -518,13 +535,13 @@ plate :: proc(id: string, top: u32 = HEX_PLATE_TOP, bottom: u32 = HEX_PLATE_BOTT
 // A small pill of text (model names, token counts): a tiny sunken capsule.
 pill :: proc(id: string, text: string, color := Color{}, icon := "") {
 	em := ui.font_size()
-	fs := math.round(em * 0.8)
+	fs := math.round(em * FS_SMALL)
 	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * PILL_H_EM)), axis = .X, cross = .Center})
 	if well(id, .X, radius = PILL_RADIUS, base = HEX_PILL) {
 		ui.spacer(ui.px(em * 0.5))
 		fg := color.a > 0 ? color : hex(HEX_WEAK)
 		if icon != "" {
-			ui.next({width = ui.px(em), height = ui.pct(1), font = the_app.icons, font_size = math.round(em * 0.7), fg = fg, text_pad = 0, text_align = .Center})
+			ui.next({width = ui.px(em), height = ui.pct(1), font = the_app.icons, font_size = math.round(em * ICON_SMALL), fg = fg, text_pad = 0, text_align = .Center})
 			ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###i", icon))
 			ui.spacer(ui.px(em * 0.25))
 		}
@@ -538,7 +555,7 @@ pill :: proc(id: string, text: string, color := Color{}, icon := "") {
 // (a fixed height, not the parent's: in a row sized by its children a percentage is of a distant ancestor, the whole view)
 glyph :: proc(icon: string, color: Color, size: f32 = 0, width: f32 = 0) {
 	em := ui.font_size()
-	ui.next({width = ui.px(width > 0 ? width : em * 1.3), height = ui.px(math.round(max((size > 0 ? size : em * 0.9) * 1.6, em * 1.2))), font = the_app.icons, font_size = size > 0 ? size : math.round(em * 0.9), fg = color, text_pad = 0, text_align = .Center})
+	ui.next({width = ui.px(width > 0 ? width : em * 1.3), height = ui.px(math.round(max((size > 0 ? size : em * ICON_REGULAR) * 1.6, em * 1.2))), font = the_app.icons, font_size = size > 0 ? size : math.round(em * ICON_REGULAR), fg = color, text_pad = 0, text_align = .Center})
 	ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###glyph_%s", icon, icon))
 }
 

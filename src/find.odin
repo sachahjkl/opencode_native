@@ -98,7 +98,7 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
 		if well("###fw", .X, radius = 6, focus = 1) {
 			ui.spacer(ui.px(em * 0.5))
-			glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * 0.8))
+			glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 				res := ui.line_edit("###ff", &f.field, "Find in the conversation")
@@ -108,7 +108,7 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 			}
 			needle := ui.field_string(&f.field)
 			count := needle == "" ? "" : n == 0 ? "no match" : fmt.tprintf("%d / %d", max(f.index, 0) + 1, n)
-			text("fc", count, n == 0 ? hex(HEX_RED) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.74), height = ui.px(em * 1.5)})
+			text("fc", count, n == 0 ? hex(HEX_RED) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)})
 			ui.spacer(ui.px(em * 0.5))
 		}
 		ui.spacer(ui.px(em * 0.3))
