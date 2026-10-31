@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.4] - 2026-10-31
+
+### Added
+
+- **The keyboard scrolls the conversation**: Page Up and Page Down from anywhere, the composer too; the arrows, Home and End
+  when no text field has the keyboard.
+
+### Changed
+
+- **Endless scrolling**: scrolling up reads earlier messages by itself, in place of the "Load earlier messages" button.
+  A line shows them on their way if you reach the top first, and what is on screen stays where it is when they arrive.
+- **A reload keeps the pages already read** (F5, the end of a run). It used to go back to the last page.
+
+### Fixed
+
+- **Earlier messages could not be read** on the current server: it refused the request (`Cursor cannot be combined with
+  order`).
+- **The scroll bar jumped up and down at the bottom of a conversation**, without end, after coming back to a session: events
+  that draw nothing changed the conversation's height at every frame (gui_toolkit 0.56.2).
+
 ## [0.5.3] - 2026-10-30
 
 ### Added

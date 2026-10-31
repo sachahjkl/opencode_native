@@ -5,7 +5,7 @@
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.5.3-fab283" alt="version 0.5.3"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.5.4-fab283" alt="version 0.5.4"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -43,7 +43,9 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 - **The conversation, streamed live** from the server's event stream: Markdown (headings, lists, quotes, tables as
   aligned grids, code blocks with a copy button), the model's reasoning (folded, unfolded or hidden), the tool calls on a
   timeline (a carved rail through a run of calls, a lamp on the one running, a pip on the finished ones, their input and
-  output in wells), tokens and cost. Switching sessions lands on the bottom at once.
+  output in wells), tokens and cost. Switching sessions lands on the bottom at once. Scrolling up reads earlier messages by itself, a line
+  showing the ones on their way if you get there first; Page Up and Page Down scroll it from anywhere, the arrows, Home and
+  End when no field has the keyboard.
 - **Images**: those attached to prompts and those tools hand back (screenshots, images read) as thumbnails, opened in
   a viewer; projects' logos in the sidebar, the title bar and the header. PNG, JPEG, WebP, GIF and BMP, decoded off the
   interface's thread.
