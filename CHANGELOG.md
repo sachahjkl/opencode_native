@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-10-31
+
+### Fixed
+
+- **Closing Chrome's DevTools** could leave the program on freed memory: its edits could stay, and it could hang. Only with
+  `TOOLKIT_DEVTOOLS=<port>` (gui_toolkit 0.57.1).
+
 ## [0.5.5] - 2026-10-31
 
 ### Added
@@ -218,7 +225,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.5.6...HEAD
+[0.5.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.6
 [0.5.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.5
 [0.5.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.4
 [0.5.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.3
