@@ -24,11 +24,13 @@ Image_Ref :: struct {
 	name:     string,
 }
 
+IMAGE_KEY_SAMPLE_BYTES :: 4096
+
 // (the key hashes the first and last 4 KiB and the length: images of several MiB are read again with every page)
 image_ref :: proc(data: string, encoding: Image_Encoding, mime, name: string) -> Image_Ref {
 	b := transmute([]u8)data
 	n := len(b)
-	k := hash.fnv64a(b[:min(n, 4096)]) ~ hash.fnv64a(b[max(0, n - 4096):]) * 31 ~ u64(n) * 0x9e3779b97f4a7c15
+	k := hash.fnv64a(b[:min(n, IMAGE_KEY_SAMPLE_BYTES)]) ~ hash.fnv64a(b[max(0, n - IMAGE_KEY_SAMPLE_BYTES):]) * 31 ~ u64(n) * HASH_MIX_A
 	return {key = k | 1, data = data, encoding = encoding, mime = mime, name = name}
 }
 
@@ -43,6 +45,7 @@ Image_Entry :: struct {
 }
 
 MAX_TEXTURES :: 96
+IMAGE_MAX_DIM_PX :: 2048   // what a decode scales down to, when the textures allow more
 
 @(private = "file")
 Decode_Job :: struct {
@@ -65,7 +68,7 @@ image_get :: proc(app: ^App, ref: Image_Ref) -> ^Image_Entry {
 	}
 	app.images[ref.key] = {state = .Pending, used = app.frame_no}
 	job := new(Decode_Job)
-	job^ = {key = ref.key, data = strings.clone(ref.data), encoding = ref.encoding, max_dim = u32(min(2048, render.max_texture_size(&app.r)))}
+	job^ = {key = ref.key, data = strings.clone(ref.data), encoding = ref.encoding, max_dim = u32(min(IMAGE_MAX_DIM_PX, render.max_texture_size(&app.r)))}
 	sync.atomic_add(&app.pending, 1)
 	thread.create_and_start_with_poly_data(job, proc(job: ^Decode_Job) {
 		r := occ_image_decode(raw_data(job.data), len(job.data), i32(job.encoding), job.max_dim, &job.w, &job.h, &job.out)
@@ -116,6 +119,12 @@ images_trim :: proc(app: ^App) {
 ////////////////////////////////
 // Boxes
 
+HEX_IMAGE_PENDING     :: 0x0b0b0bff
+HEX_IMAGE_FAILED      :: 0x140b0bff
+HEX_IMAGE_FAILED_TEXT :: 0xc08080ff
+SHIMMER_RATE          :: 0.002   // radians per millisecond
+THUMB_PENDING_SCALE   :: 0.6     // of the room given, until its size is known
+
 @(private = "file")
 Image_Draw :: struct { tex: render.Texture, radius: f32, frame: bool, state: Image_State }
 
@@ -131,20 +140,20 @@ image_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		draw.image(dc, d.tex, r, {}, draw.WHITE, rad)
 		if d.frame { draw.rect(dc, r, {1, 1, 1, 0.08 + 0.18 * b.hot_t}, rad, max(1, math.round(s))) }
 	case .Pending:
-		draw_well(dc, r, rad, hex(0x0b0b0bff))
+		draw_well(dc, r, rad, hex(HEX_IMAGE_PENDING))
 		// a slow shimmer while it decodes
-		t := f32(ui.now_ms()) * 0.002
+		t := f32(ui.now_ms()) * SHIMMER_RATE
 		x := r.min.x + (r.max.x - r.min.x) * (0.5 + 0.5 * math.sin(t))
 		draw.rect(dc, {{x - 20 * s, r.min.y + 2 * s}, {x + 20 * s, r.max.y - 2 * s}}, {1, 1, 1, 0.03}, rad, 0, 14 * s)
 	case .Failed:
-		draw_well(dc, r, rad, hex(0x140b0bff))
+		draw_well(dc, r, rad, hex(HEX_IMAGE_FAILED))
 	}
 }
 
 // A thumbnail of `ref` fitting `max_w` x `max_h` (frame pixels), clickable: a click opens the viewer.
 image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) -> ui.Signal {
 	e := image_get(app, ref)
-	w, h := max_w * 0.6, max_h * 0.6
+	w, h := max_w * THUMB_PENDING_SCALE, max_h * THUMB_PENDING_SCALE
 	state := Image_State.Pending
 	tex: render.Texture
 	if e != nil {
@@ -167,7 +176,7 @@ image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) ->
 	if state == .Failed {
 		if ui.parent(b) {
 			em := ui.font_size()
-			ui.next({width = ui.fill(), height = ui.fill(), fg = hex(0xc08080ff), font_size = math.round(em * 0.8), text_align = .Center})
+			ui.next({width = ui.fill(), height = ui.fill(), fg = hex(HEX_IMAGE_FAILED_TEXT), font_size = math.round(em * 0.8), text_align = .Center})
 			ui.build_box({.Draw_Text}, "image unreadable###f")
 		}
 	}
@@ -208,6 +217,10 @@ image_view_open :: proc(app: ^App, ref: Image_Ref) {
 	app.view_open = true
 }
 
+VIEWER_FILL      :: 0.9   // of the window
+IMAGE_NAME_CHARS :: 80
+HEX_VIEWER_NAME  :: 0xe0e0e0ff
+
 image_viewer :: proc(app: ^App, em: f32) {
 	if !app.view_open { return }
 	e, ok := &app.images[app.view_key]
@@ -216,7 +229,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 	win := app.ui_state.window_size
 	sc := ui.scale()
 	// the image fits 90 % of the window (never enlarged beyond its pixels times the scale)
-	k := min(win.x * 0.9 / f32(e.w), (win.y * 0.9 - em * 4) / f32(e.h), sc)
+	k := min(win.x * VIEWER_FILL / f32(e.w), (win.y * VIEWER_FILL - em * 4) / f32(e.h), sc)
 	w, h := math.round(f32(e.w) * k), math.round(f32(e.h) * k)
 	if ui.modal("image_view", max(w + em * 2, em * 22), &app.view_open, max(0.02, (win.y - h - em * 5) * 0.5 / win.y)) {
 		dialog_backdrop()
@@ -237,10 +250,10 @@ image_viewer :: proc(app: ^App, em: f32) {
 		if ui.row(.Center) {
 			ui.spacer(ui.px(em))
 			name := app.view_name != "" ? app.view_name : "image"
-			text("n", ellipsize(name, 80), hex(0xe0e0e0ff), ui.Style_Mod{font_size = math.round(em * 0.9)}, ui.fill())
+			text("n", ellipsize(name, IMAGE_NAME_CHARS), hex(HEX_VIEWER_NAME), ui.Style_Mod{font_size = math.round(em * 0.9)}, ui.fill())
 			text("d", fmt.tprintf("%d × %d", e.w, e.h), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.76)})
 			ui.spacer(ui.px(em * 0.8))
-			if bevel_button("###close", "Close", ICO_CANCEL, .Normal, height = math.round(em * 1.8)).clicked { app.view_open = false }
+			if bevel_button("###close", "Close", ICO_CANCEL, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { app.view_open = false }
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.4))

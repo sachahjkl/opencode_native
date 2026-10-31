@@ -30,6 +30,8 @@ Picker :: struct {
 
 PICK_ROWS :: 10
 
+HEX_PICK_SELECTED :: 0x0c0c0cff
+
 picker_open :: proc(p: ^Picker, id: string, anchor: Rect) {
 	p.open, p.id, p.anchor, p.fresh = true, id, anchor, true
 	p.sel = 0
@@ -76,7 +78,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###ps") {
 			ui.spacer(ui.px(em * 0.5))
-			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.1)), axis = .X, cross = .Center})
+			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 			if well("###psw", .X, radius = 7, focus = 1) {
 				ui.spacer(ui.px(em * 0.5))
 				glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * 0.8))
@@ -123,7 +125,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 					r := draw.rect_pad(b.rect, -2 * s)
 					r.min.x += 4 * s
 					r.max.x -= 4 * s
-					if (^bool)(user)^ { draw_well(dc, r, 6 * s, hex(0x0c0c0cff)) } else if b.hot_t > 0.01 { draw.rect(dc, r, {1, 1, 1, 0.04 * b.hot_t}, 6 * s) }
+					if (^bool)(user)^ { draw_well(dc, r, 6 * s, hex(HEX_PICK_SELECTED)) } else if b.hot_t > FADE_VISIBLE { draw.rect(dc, r, {1, 1, 1, 0.04 * b.hot_t}, 6 * s) }
 				}
 				rb.custom_user = rd
 				rs := ui.signal(rb)
@@ -145,7 +147,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 						ui.spacer(ui.px(em * 0.3))
 					}
 					hay := it.group != "" ? fmt.tprintf("%s  %s", it.label, it.group) : it.label
-					lit_text(app, hay, len(it.label), h.ranges, sel || it.current ? hex(0xffffffff) : hex(HEX_TEXT), em)
+					lit_text(app, hay, len(it.label), h.ranges, sel || it.current ? hex(HEX_BRIGHT) : hex(HEX_TEXT), em)
 					ui.spacer(ui.fill())
 					if it.detail != "" {
 						text("d", it.detail, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
@@ -187,7 +189,7 @@ lit_text :: proc(app: ^App, s: string, split: int, ranges: []ui.Fuzzy_Range, col
 			m.bg = with_alpha(accent(), 0.16)
 			m.radius = 3 * ui.scale()
 			m.width = ui.text_size(0)
-			m.height = ui.px(math.round(fs * 1.35))
+			m.height = ui.px(math.round(fs * LINE_HEIGHT_RATIO))
 			m.fg = c
 			m.text_pad = 0
 			ui.next(m)

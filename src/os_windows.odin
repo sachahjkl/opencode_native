@@ -31,8 +31,10 @@ local_offset_minutes :: proc() -> int {
 	return cached
 }
 
+FLASH_COUNT :: 3   // of the taskbar button
+
 flash_taskbar :: proc(app: ^App) {
-	fi := FLASHWINFO{cbSize = size_of(FLASHWINFO), hwnd = win.HWND(app.win.hwnd), dwFlags = 0x3 | 0xC, uCount = 3}   // FLASHW_ALL | FLASHW_TIMERNOFG
+	fi := FLASHWINFO{cbSize = size_of(FLASHWINFO), hwnd = win.HWND(app.win.hwnd), dwFlags = 0x3 | 0xC, uCount = FLASH_COUNT}   // FLASHW_ALL | FLASHW_TIMERNOFG
 	FlashWindowEx(&fi)
 }
 

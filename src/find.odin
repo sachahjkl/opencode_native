@@ -37,6 +37,10 @@ find_step :: proc(app: ^App, d: int) {
 	f.reveal = true
 }
 
+FIND_SETTLE_MS        :: 1500   // a conversation just opened moves under the reader that long
+FIND_BOTTOM_MARGIN_EM :: 3      // a match nearer the bottom of the view is scrolled to
+FIND_REVEAL_AT        :: 0.35   // where it lands, from the top of the view
+
 // Called by conversation() before the scroll box is built: the needle for this build's layout, a new needle's first
 // match, and the scroll that brings the current match into view (from the rects of the last layout).
 find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
@@ -55,7 +59,7 @@ find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	}
 	if n == 0 { f.index = -1; ui.find_set_current(-1); return }
 	// a conversation just opened is still loading and jumping to its bottom: its matches move under the reader
-	if f.index < 0 && (app.chat.loading || ui.now_ms() - app.opened_ms < 1500) { return }
+	if f.index < 0 && (app.chat.loading || ui.now_ms() - app.opened_ms < FIND_SETTLE_MS) { return }
 	if f.index < 0 && sb != nil {
 		// the first match from the top of the view down, like a browser
 		f.index = 0
@@ -72,9 +76,9 @@ find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 			h := sb.size.y
 			y0 := m.rect.min.y - top + sb.view_off.y   // in the content
 			y1 := m.rect.max.y - top + sb.view_off.y
-			if y0 < sb.view_off.y + em || y1 > sb.view_off.y + h - em * 3 {
+			if y0 < sb.view_off.y + em || y1 > sb.view_off.y + h - em * FIND_BOTTOM_MARGIN_EM {
 				limit := max(0, sb.view_bounds.y - h)
-				sb.view_target.y = clamp(y0 - h * 0.35, 0, limit)
+				sb.view_target.y = clamp(y0 - h * FIND_REVEAL_AT, 0, limit)
 				app.stick_bottom = false
 			}
 			break
@@ -108,9 +112,9 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 			ui.spacer(ui.px(em * 0.5))
 		}
 		ui.spacer(ui.px(em * 0.3))
-		if glyph_button("###fprev", ICO_UP, math.round(em * 1.8)).clicked { find_step(app, -1) }
-		if glyph_button("###fnext", ICO_DOWN, math.round(em * 1.8)).clicked { find_step(app, 1) }
-		if glyph_button("###fclose", ICO_CANCEL, math.round(em * 1.8)).clicked { find_close(app) }
+		if glyph_button("###fprev", ICO_UP, math.round(em * GLYPH_BUTTON_EM)).clicked { find_step(app, -1) }
+		if glyph_button("###fnext", ICO_DOWN, math.round(em * GLYPH_BUTTON_EM)).clicked { find_step(app, 1) }
+		if glyph_button("###fclose", ICO_CANCEL, math.round(em * GLYPH_BUTTON_EM)).clicked { find_close(app) }
 		ui.spacer(ui.px(em * 0.3))
 	}
 }

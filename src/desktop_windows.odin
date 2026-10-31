@@ -107,6 +107,8 @@ wide :: proc(s: string) -> cstring16 { return win.utf8_to_wstring(s, context.tem
 ////////////////////////////////
 // Places
 
+PATH_BUF_CHARS :: 1024
+
 @(private = "file")
 known_folder :: proc(id: win.KNOWNFOLDERID) -> string {
 	id := id
@@ -128,7 +130,7 @@ start_lnk_path :: proc() -> string { return pjoin({known_folder(win.FOLDERID_Pro
 desk_lnk_path :: proc() -> string { return pjoin({known_folder(win.FOLDERID_Desktop), APP_NAME + ".lnk"}) }
 
 running_exe :: proc() -> string {
-	buf: [1024]u16
+	buf: [PATH_BUF_CHARS]u16
 	n := win.GetModuleFileNameW(nil, &buf[0], len(buf))
 	s, _ := win.utf16_to_utf8(buf[:n], context.temp_allocator)
 	return s
@@ -215,7 +217,7 @@ shortcut_target :: proc(lnk: string) -> string {
 	if link->QueryInterface(&IID_IPersistFile, cast(^rawptr)&file) < 0 || file == nil { return "" }
 	defer file->Release()
 	if file->Load(wide(lnk), 0) < 0 { return "" }
-	buf: [1024]u16
+	buf: [PATH_BUF_CHARS]u16
 	if link->GetPath(&buf[0], len(buf), nil, 0x4) < 0 { return "" }   // SLGP_RAWPATH
 	n := 0
 	for n < len(buf) && buf[n] != 0 { n += 1 }

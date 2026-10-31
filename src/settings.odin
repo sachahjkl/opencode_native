@@ -19,25 +19,59 @@ import "gt:ui"
 ////////////////////////////////
 // The preferences
 
+HEX_ROSE :: 0xf28ba8ff
+
+// The bounds of the preferences (PREF_DEFS) that their sliders share.
+FONT_SIZE_MIN         :: 11
+FONT_SIZE_MAX         :: 20
+ZOOM_MIN              :: 0.6
+ZOOM_MAX              :: 2.5
+COLUMN_W_MIN          :: 560
+COLUMN_W_MAX          :: 1800
+TOOL_LINES_MIN        :: 5
+TOOL_LINES_MAX        :: 1000
+TOOL_LINES_SLIDER_MAX :: 400
+PAGE_SIZE_MIN         :: 20
+PAGE_SIZE_MAX         :: 200
+
+COMPACT_DENSITY     :: 0.8
+ZOOM_EPSILON        :: 0.001
+SLIDER_EPSILON      :: 1e-4
+TOAST_TITLE_CHARS   :: 60
+SETTINGS_DIALOG_TOP :: 0.08   // of the window's height
+SETTINGS_ROW_H_EM   :: 2.2
+USAGE_WARN_PERCENT  :: 80
+BUDGET_WARN_SHARE   :: 0.8
+
+HEX_SETTING_NAME   :: 0xeeeeeeff
+HEX_SWATCH_WELL    :: 0x0a0a0aff
+HEX_FACT_VALUE     :: 0xd0d0d0ff
+HEX_FACT_NAME      :: 0xd8d8d8ff
+HEX_MCP_TOP        :: 0x171717ff
+HEX_MCP_BOTTOM     :: 0x121212ff
+HEX_MCP_NAME       :: 0xf0f0f0ff
+HEX_WORKSPACE_NAME :: 0xe0e0e0ff
+HEX_CATALOG_NAME   :: 0xe8e8e8ff
+
 ACCENTS := [?]string{"peach", "blue", "purple", "green", "cyan", "rose"}
-ACCENT_HEX := [?]u32{HEX_PEACH, HEX_BLUE, HEX_PURPLE, HEX_GREEN, HEX_CYAN, 0xf28ba8ff}
+ACCENT_HEX := [?]u32{HEX_PEACH, HEX_BLUE, HEX_PURPLE, HEX_GREEN, HEX_CYAN, HEX_ROSE}
 
 PREF_DEFS := [?]config.Def{
 	{name = "appearance.accent", description = "The colour of primary buttons, the selection, links of attention and focus rings.", kind = .String, default = {s = "peach"}, choices = ACCENTS[:]},
 	{name = "appearance.font", description = "The face of the interface's text: the system's usual one (automatic), the one built into the program, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.mono_font", description = "The face of code, paths and figures: automatic, built in, or any installed family.", kind = .String, default = {s = ""}},
-	{name = "appearance.font_size", description = "Size of the interface's text, in points at 100 % zoom.", kind = .Int, default = {i = 14}, bounded = true, min = 11, max = 20},
-	{name = "appearance.zoom", description = "Zoom of the whole window (Ctrl + wheel, Ctrl + / -, Ctrl 0 change it too).", kind = .Float, default = {f = 1}, bounded = true, min = 0.6, max = 2.5},
+	{name = "appearance.font_size", description = "Size of the interface's text, in points at 100 % zoom.", kind = .Int, default = {i = 14}, bounded = true, min = FONT_SIZE_MIN, max = FONT_SIZE_MAX},
+	{name = "appearance.zoom", description = "Zoom of the whole window (Ctrl + wheel, Ctrl + / -, Ctrl 0 change it too).", kind = .Float, default = {f = 1}, bounded = true, min = ZOOM_MIN, max = ZOOM_MAX},
 	{name = "appearance.density", description = "Compact rows fit more on screen at the same text size.", kind = .String, default = {s = "comfortable"}, choices = {"comfortable", "compact"}},
 	{name = "appearance.rounding", description = "Corner rounding of buttons, fields and menus (0: square).", kind = .Float, default = {f = 1}, bounded = true, min = 0, max = 2},
 	{name = "appearance.animations", description = "Interface animations: the system's setting, always, or never.", kind = .String, default = {s = "system"}, choices = {"system", "on", "off"}},
 	{name = "appearance.smooth_scroll", description = "Scrolling glides to where the wheel or the keys send it, even when the system turns animations off.", kind = .Bool, default = {b = true}},
 	{name = "appearance.glow", description = "Halos around lit buttons, lamps and running sub-agents.", kind = .Bool, default = {b = true}},
-	{name = "conversation.width", description = "Widest the conversation column gets, in logical pixels.", kind = .Int, default = {i = 880}, bounded = true, min = 560, max = 1800},
+	{name = "conversation.width", description = "Widest the conversation column gets, in logical pixels.", kind = .Int, default = {i = 880}, bounded = true, min = COLUMN_W_MIN, max = COLUMN_W_MAX},
 	{name = "conversation.reasoning", description = "How the model's reasoning shows: folded under a line, unfolded, or not at all.", kind = .String, default = {s = "collapsed"}, choices = {"collapsed", "expanded", "hidden"}},
 	{name = "conversation.expand_tools", description = "Tool calls open with their input and output shown.", kind = .Bool, default = {b = false}},
-	{name = "conversation.tool_lines", description = "Lines of a tool's output shown before the rest is counted.", kind = .Int, default = {i = 60}, bounded = true, min = 5, max = 1000},
-	{name = "conversation.page_size", description = "Messages read at a time (scrolling up reads the next page by itself).", kind = .Int, default = {i = 80}, bounded = true, min = 20, max = 200},
+	{name = "conversation.tool_lines", description = "Lines of a tool's output shown before the rest is counted.", kind = .Int, default = {i = 60}, bounded = true, min = TOOL_LINES_MIN, max = TOOL_LINES_MAX},
+	{name = "conversation.page_size", description = "Messages read at a time (scrolling up reads the next page by itself).", kind = .Int, default = {i = 80}, bounded = true, min = PAGE_SIZE_MIN, max = PAGE_SIZE_MAX},
 	{name = "conversation.follow", description = "Follow new messages to the bottom while you are there.", kind = .Bool, default = {b = true}},
 	{name = "conversation.usage", description = "Tokens and cost under each answer.", kind = .Bool, default = {b = true}},
 	{name = "conversation.clock", description = "Times of messages in 24-hour or 12-hour form.", kind = .String, default = {s = "24h"}, choices = {"24h", "12h"}},
@@ -92,7 +126,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.accent = hex(s.accent_hex)
 	s.font_size = f32(config.int_of(p, "appearance.font_size"))
 	s.zoom = f32(config.float_of(p, "appearance.zoom"))
-	s.density = config.string_of(p, "appearance.density") == "compact" ? 0.8 : 1
+	s.density = config.string_of(p, "appearance.density") == "compact" ? COMPACT_DENSITY : 1
 	s.rounding = f32(config.float_of(p, "appearance.rounding"))
 	s.animations = config.string_of(p, "appearance.animations")
 	s.glow = config.bool_of(p, "appearance.glow")
@@ -121,7 +155,7 @@ prefs_refresh :: proc(app: ^App) {
 	pal := OPENCODE_PALETTE
 	pal.accent = s.accent_hex
 	ui.apply_palette(&app.theme, pal)
-	ui.theme_set(&app.theme, "selection", with_alpha(s.accent, 0.28))
+	ui.theme_set(&app.theme, "selection", with_alpha(s.accent, SELECTION_ALPHA))
 }
 
 // Sets a preference from its text, saves the user's changes, applies them.
@@ -140,7 +174,7 @@ accent :: proc() -> Color { return the_app.prefs.accent }
 // Ctrl + wheel changed the zoom: keep it.
 prefs_track_zoom :: proc(app: ^App) {
 	z := ui.zoom(&app.ui_state)
-	if abs(z - app.prefs.zoom) > 0.001 {
+	if abs(z - app.prefs.zoom) > ZOOM_EPSILON {
 		app.prefs.zoom = z
 		config.set_from_string(&app.cfg_prefs, "appearance.zoom", fmt.tprintf("%.3f", z), .User)
 		config.save_user(&app.cfg_prefs, prefs_path())
@@ -170,9 +204,9 @@ notify_finished :: proc(app: ^App, sid, outcome: string) {
 	title := sid
 	if s := find_session(app, sid); s != nil { title = s.title } else if sid == app.chat.id && app.chat.have_self { title = app.chat.self.title }
 	switch outcome {
-	case "failed":      ui.toast(.Bad, "Failed: %s", ellipsize(title, 60))
-	case "interrupted": ui.toast(.Warn, "Stopped: %s", ellipsize(title, 60))
-	case:               ui.toast(.Good, "Done: %s", ellipsize(title, 60))
+	case "failed":      ui.toast(.Bad, "Failed: %s", ellipsize(title, TOAST_TITLE_CHARS))
+	case "interrupted": ui.toast(.Warn, "Stopped: %s", ellipsize(title, TOAST_TITLE_CHARS))
+	case:               ui.toast(.Good, "Done: %s", ellipsize(title, TOAST_TITLE_CHARS))
 	}
 	if mode == "flash" && !front { flash_taskbar(app) }
 }
@@ -314,7 +348,7 @@ settings_open :: proc(app: ^App) {
 }
 
 settings_dialog :: proc(app: ^App, em: f32) {
-	if ui.modal("settings", em * 52, &app.settings_open, 0.08) {
+	if ui.modal("settings", em * 52, &app.settings_open, SETTINGS_DIALOG_TOP) {
 		dialog_backdrop()
 		h := math.round(min(em * 36, app.ui_state.window_size.y * 0.8))
 		ui.next({width = ui.fill(), height = ui.px(h), axis = .X})
@@ -330,7 +364,7 @@ settings_dialog :: proc(app: ^App, em: f32) {
 					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 					if ui.row(id = fmt.tprintf("###nv%d", int(page))) {
 						ui.spacer(ui.px(em * 0.7))
-						if bevel_button(fmt.tprintf("###nav%d", int(page)), info.title, info.icon, app.settings_page == page ? .Toggled : .Ghost, ui.fill(), math.round(em * 2.1), left = true).clicked {
+						if bevel_button(fmt.tprintf("###nav%d", int(page)), info.title, info.icon, app.settings_page == page ? .Toggled : .Ghost, ui.fill(), math.round(em * BUTTON_H_EM), left = true).clicked {
 							app.settings_page = page
 						}
 						ui.spacer(ui.px(em * 0.4))
@@ -351,12 +385,12 @@ settings_dialog :: proc(app: ^App, em: f32) {
 			if ui.scroll_y("###settings_page") {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if ui.row(id = "###pg") {
-					ui.spacer(ui.px(em * 1.4))
+					ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 					if ui.column() {
 						ui.spacer(ui.px(em * 1.1))
 						info := SETTINGS_PAGES[app.settings_page]
-						text("pt", info.title, hex(0xffffffff), ui.Style_Mod{font_size = math.round(em * 1.35), height = ui.px(em * 2)}, ui.fill())
+						text("pt", info.title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * 1.35), height = ui.px(em * 2)}, ui.fill())
 						ui.spacer(ui.px(em * 0.6))
 						switch app.settings_page {
 						case .Appearance:   page_appearance(app, em)
@@ -370,7 +404,7 @@ settings_dialog :: proc(app: ^App, em: f32) {
 						}
 						ui.spacer(ui.px(em * 1.5))
 					}
-					ui.spacer(ui.px(em * 1.4))
+					ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 				}
 			}
 		}
@@ -400,7 +434,7 @@ setting :: proc(app: ^App, name: string, em: f32) -> bool {
 	ui.push_parent(ui.build_box({}, "###line"))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.column(id = "###words") {
-		text("t", config.title_of(e.def), hex(0xeeeeeeff), ui.Style_Mod{font_size = math.round(em * 0.95), height = ui.px(em * 1.5)}, ui.fill())
+		text("t", config.title_of(e.def), hex(HEX_SETTING_NAME), ui.Style_Mod{font_size = math.round(em * 0.95), height = ui.px(em * 1.5)}, ui.fill())
 		ui.next({width = ui.fill(), font_size = math.round(em * 0.82), flags = {.Text_Wrap}, fg = hex(HEX_WEAK), text_pad = 0})
 		ui.paragraph(fmt.tprintf("%s###d", e.def.description))
 		ui.spacer(ui.px(em * 0.2))
@@ -458,7 +492,7 @@ pref_slider :: proc(app: ^App, name: string, lo, hi, step: f32, format: string, 
 	ui.a11y({name = config.title_of(d)})
 	sig := ui.slider("###sl", &v, lo, hi, step, format)
 	// written when the drag ends (or at each key step): the file is not rewritten at the pointer's rate
-	if (sig.released || (sig.focused && !sig.dragging)) && (d.kind == .Int ? i64(math.round(v)) != config.int_of(p, name) : abs(f64(v) - config.float_of(p, name)) > 1e-4) {
+	if (sig.released || (sig.focused && !sig.dragging)) && (d.kind == .Int ? i64(math.round(v)) != config.int_of(p, name) : abs(f64(v) - config.float_of(p, name)) > SLIDER_EPSILON) {
 		pref_set(app, name, d.kind == .Int ? fmt.tprintf("%d", i64(math.round(v))) : fmt.tprintf("%.2f", v))
 	} else if sig.dragging && d.kind == .Float && name == "appearance.rounding" {
 		ui.set_rounding(&app.ui_state, v)   // (live while dragged)
@@ -479,7 +513,7 @@ page_appearance :: proc(app: ^App, em: f32) {
 				c := (^Color)(user)^
 				sel := b.text == "*"
 				sz := min(b.rect.max.x - b.rect.min.x, b.rect.max.y - b.rect.min.y)
-				if sel { draw_well(dc, b.rect, sz * 0.5, hex(0x0a0a0aff), 1, c) }
+				if sel { draw_well(dc, b.rect, sz * 0.5, hex(HEX_SWATCH_WELL), 1, c) }
 				draw_lamp(dc, draw.rect_center(b.rect), sz * (sel ? 0.55 : 0.5 + 0.06 * b.hot_t), c, sel ? 1 : 0.55 + 0.45 * b.hot_t)
 			}
 			if config.string_of(&app.cfg_prefs, "appearance.accent") == name { b.text = "*" }
@@ -489,8 +523,8 @@ page_appearance :: proc(app: ^App, em: f32) {
 	}
 	if setting(app, "appearance.font", em) { font_button(app, "appearance.font", em) }
 	if setting(app, "appearance.mono_font", em) { font_button(app, "appearance.mono_font", em) }
-	if setting(app, "appearance.font_size", em) { pref_slider(app, "appearance.font_size", 11, 20, 1, "%.0f pt", em) }
-	if setting(app, "appearance.zoom", em) { pref_slider(app, "appearance.zoom", 0.6, 2.5, 0.05, "%.2f×", em) }
+	if setting(app, "appearance.font_size", em) { pref_slider(app, "appearance.font_size", FONT_SIZE_MIN, FONT_SIZE_MAX, 1, "%.0f pt", em) }
+	if setting(app, "appearance.zoom", em) { pref_slider(app, "appearance.zoom", ZOOM_MIN, ZOOM_MAX, 0.05, "%.2f×", em) }
 	if setting(app, "appearance.density", em) { pref_choice(app, "appearance.density", {"Comfortable", "Compact"}, em) }
 	if setting(app, "appearance.rounding", em) { pref_slider(app, "appearance.rounding", 0, 2, 0.05, "%.2f", em) }
 	if setting(app, "appearance.animations", em) { pref_choice(app, "appearance.animations", {"System", "On", "Off"}, em) }
@@ -535,11 +569,11 @@ font_button :: proc(app: ^App, name: string, em: f32) {
 }
 
 page_conversation :: proc(app: ^App, em: f32) {
-	if setting(app, "conversation.width", em) { pref_slider(app, "conversation.width", 560, 1800, 20, "%.0f px", em) }
+	if setting(app, "conversation.width", em) { pref_slider(app, "conversation.width", COLUMN_W_MIN, COLUMN_W_MAX, 20, "%.0f px", em) }
 	if setting(app, "conversation.reasoning", em) { pref_choice(app, "conversation.reasoning", {"Folded", "Unfolded", "Hidden"}, em) }
 	if setting(app, "conversation.expand_tools", em) { pref_switch(app, "conversation.expand_tools", em) }
-	if setting(app, "conversation.tool_lines", em) { pref_slider(app, "conversation.tool_lines", 5, 400, 5, "%.0f lines", em) }
-	if setting(app, "conversation.page_size", em) { pref_slider(app, "conversation.page_size", 20, 200, 10, "%.0f", em) }
+	if setting(app, "conversation.tool_lines", em) { pref_slider(app, "conversation.tool_lines", TOOL_LINES_MIN, TOOL_LINES_SLIDER_MAX, 5, "%.0f lines", em) }
+	if setting(app, "conversation.page_size", em) { pref_slider(app, "conversation.page_size", PAGE_SIZE_MIN, PAGE_SIZE_MAX, 10, "%.0f", em) }
 	if setting(app, "conversation.follow", em) { pref_switch(app, "conversation.follow", em) }
 	if setting(app, "conversation.usage", em) { pref_switch(app, "conversation.usage", em) }
 	if setting(app, "conversation.clock", em) { pref_choice(app, "conversation.clock", {"24 h", "12 h"}, em) }
@@ -567,7 +601,7 @@ fact :: proc(id, k, v: string, em: f32, col := Color{}) {
 	if ui.row(.Center, id = id) {
 		ui.spacer(ui.px(em * 0.8))
 		text("k", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.76)}, ui.px(em * 8.5))
-		text("v", v, col.a > 0 ? col : hex(0xd0d0d0ff), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.76)}, ui.fill())
+		text("v", v, col.a > 0 ? col : hex(HEX_FACT_VALUE), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.76)}, ui.fill())
 		ui.spacer(ui.px(em * 0.6))
 	}
 }
@@ -591,7 +625,7 @@ page_server :: proc(app: ^App, em: f32) {
 	f := &app.facts
 	section("SERVER", em)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well("###srv", radius = 7, base = 0x0b0b0bff) {
+	if well("###srv", radius = 7, base = HEX_FACTS_WELL) {
 		ui.spacer(ui.px(em * 0.4))
 		fact("###s1", "address", server_base(app), em)
 		fact("###s2", "status", app.online ? "connected" : "not connected", em, app.online ? hex(HEX_GREEN) : hex(HEX_YELLOW))
@@ -609,9 +643,9 @@ page_server :: proc(app: ^App, em: f32) {
 	sel := -1
 	for s, i in f.shells { if f.shell != "" && same_path(s.path, f.shell) { sel = i } }
 	for s, i in f.shells {
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), axis = .X, cross = .Center})
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = fmt.tprintf("###sh%d", i)) {
-			if bevel_button(fmt.tprintf("###shb%d", i), s.name, ICO_TERMINAL, sel == i ? .Accent : .Normal, ui.px(em * 9), math.round(em * 1.9), disabled = !s.ok).clicked {
+			if bevel_button(fmt.tprintf("###shb%d", i), s.name, ICO_TERMINAL, sel == i ? .Accent : .Normal, ui.px(em * 9), math.round(em * BUTTON_COMPACT_H_EM), disabled = !s.ok).clicked {
 				body := fmt.tprintf(`{{"shell":%s}}`, jquote(s.path))
 				request(app, .Action, "PATCH", "/api/experimental/config", body)
 				app.facts.shell = strings.clone(s.path, virtual.arena_allocator(&app.facts.arena))
@@ -629,12 +663,12 @@ page_server :: proc(app: ^App, em: f32) {
 		if ui.row(.Center, id = fmt.tprintf("###cf%d", i)) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
-				text("p", c.path, hex(0xd8d8d8ff), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.78), height = ui.px(em * 1.5)}, ui.fill())
+				text("p", c.path, hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.78), height = ui.px(em * 1.5)}, ui.fill())
 				text("k", strings.join(c.keys, " · ", context.temp_allocator), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72), height = ui.px(em * 1.3)}, ui.fill())
 			}
-			if bevel_button("###open", "Open", ICO_DOC, .Normal, height = math.round(em * 1.8)).clicked { platform.open_url(c.path) }
+			if bevel_button("###open", "Open", ICO_DOC, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_url(c.path) }
 			ui.spacer(ui.px(em * 0.3))
-			if bevel_button("###dir", "", ICO_FOLDER, .Normal, height = math.round(em * 1.8)).clicked { platform.open_url(filepath.dir(c.path)) }
+			if bevel_button("###dir", "", ICO_FOLDER, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_url(filepath.dir(c.path)) }
 		}
 		ui.spacer(ui.px(em * 0.4))
 	}
@@ -653,23 +687,23 @@ page_mcp :: proc(app: ^App, em: f32) {
 		connected := m.status == "connected"
 		col := connected ? hex(HEX_GREEN) : m.status == "failed" || m.error != "" ? hex(HEX_RED) : hex(HEX_FAINT)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-		if plate(fmt.tprintf("###mcp%d", i), top = 0x171717ff, bottom = 0x121212ff, radius = 8, shadow = 4) {
+		if plate(fmt.tprintf("###mcp%d", i), top = HEX_MCP_TOP, bottom = HEX_MCP_BOTTOM, radius = 8, shadow = 4) {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
 			if ui.row(.Center) {
 				ui.spacer(ui.px(em * 0.9))
 				lamp("###l", col, connected ? 1 : 0.4, size = em * 0.9)
 				ui.spacer(ui.px(em * 0.5))
-				text("n", m.name, hex(0xf0f0f0ff), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.9)})
+				text("n", m.name, hex(HEX_MCP_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.9)})
 				ui.spacer(ui.px(em * 0.6))
 				text("s", m.status != "" ? m.status : "?", col, ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.76)}, ui.fill())
 				if connected {
-					if bevel_button("###dc", "Disconnect", "", .Normal, height = math.round(em * 1.8)).clicked {
+					if bevel_button("###dc", "Disconnect", "", .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked {
 						request(app, .Action, "POST", fmt.tprintf("/api/experimental/mcp/%s/disconnect", url_escape(m.name)))
 						m.status = "disconnecting…"
 						app.facts_due = true
 					}
 				} else {
-					if bevel_button("###co", "Connect", "", .Accent, height = math.round(em * 1.8)).clicked {
+					if bevel_button("###co", "Connect", "", .Accent, height = math.round(em * BUTTON_SMALL_H_EM)).clicked {
 						request(app, .Action, "POST", fmt.tprintf("/api/experimental/mcp/%s/connect", url_escape(m.name)))
 						m.status = "connecting…"
 						app.facts_due = true
@@ -681,7 +715,7 @@ page_mcp :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if ui.row() {
 					ui.spacer(ui.px(em * 2.2))
-					info_line(app, "###err", m.error, em, hex(0xf0a0a6ff))
+					info_line(app, "###err", m.error, em, hex(HEX_ERROR_TEXT))
 					ui.spacer(ui.px(em))
 				}
 				ui.spacer(ui.px(em * 0.5))
@@ -698,38 +732,38 @@ page_usage :: proc(app: ^App, em: f32) {
 		return
 	}
 	if f.workspace != "" {
-		ui.next({width = ui.fill(), height = ui.px(em * 2.2), axis = .X, cross = .Center})
+		ui.next({width = ui.fill(), height = ui.px(em * SETTINGS_ROW_H_EM), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###ws") {
-			text("w", fmt.tprintf("Workspace “%s”", f.workspace), hex(0xe0e0e0ff), ui.Style_Mod{font_size = math.round(em * 0.95)}, ui.fill())
+			text("w", fmt.tprintf("Workspace “%s”", f.workspace), hex(HEX_WORKSPACE_NAME), ui.Style_Mod{font_size = math.round(em * 0.95)}, ui.fill())
 			if f.usage_url != "" {
-				if bevel_button("###web", "Usage on opencode.ai", ICO_GLOBE, .Normal, height = math.round(em * 1.8)).clicked { platform.open_url(f.usage_url) }
+				if bevel_button("###web", "Usage on opencode.ai", ICO_GLOBE, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_url(f.usage_url) }
 			}
 		}
 	}
 	now := now_epoch_ms()
 	if len(f.limits) > 0 { section("OPENCODE GO", em) }
 	for l, i in f.limits {
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), axis = .X, cross = .Center})
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = fmt.tprintf("###lim%d", i)) {
-			text("n", l.name, hex(0xd8d8d8ff), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8)}, ui.px(em * 6))
+			text("n", l.name, hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8)}, ui.px(em * 6))
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 0.7))})
 			ui.progress("###bar", f32(l.percent / 100))
 			ui.spacer(ui.px(em * 0.7))
-			col := l.limited ? hex(HEX_RED) : l.percent >= 80 ? hex(HEX_YELLOW) : hex(HEX_WEAK)
+			col := l.limited ? hex(HEX_RED) : l.percent >= USAGE_WARN_PERCENT ? hex(HEX_YELLOW) : hex(HEX_WEAK)
 			text("p", fmt.tprintf("%.0f %%", l.percent), col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)}, ui.px(em * 3.5))
 			text("r", l.resets > now ? fmt.tprintf("resets in %s", duration(now, l.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)}, ui.px(em * 9))
 		}
 	}
 	if len(f.budgets) > 0 { section("BUDGETS", em) }
 	for b, i in f.budgets {
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), axis = .X, cross = .Center})
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = fmt.tprintf("###bud%d", i)) {
-			text("n", b.scope != "" ? b.scope : "budget", hex(0xd8d8d8ff), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8)}, ui.px(em * 6))
+			text("n", b.scope != "" ? b.scope : "budget", hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8)}, ui.px(em * 6))
 			t := b.limit > 0 ? f32(b.spent / b.limit) : 0
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 0.7))})
 			ui.progress("###bar", t)
 			ui.spacer(ui.px(em * 0.7))
-			text("p", fmt.tprintf("$%.2f / $%.0f", b.spent, b.limit), t >= 0.8 ? hex(HEX_YELLOW) : hex(HEX_GREEN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)}, ui.px(em * 8))
+			text("p", fmt.tprintf("$%.2f / $%.0f", b.spent, b.limit), t >= BUDGET_WARN_SHARE ? hex(HEX_YELLOW) : hex(HEX_GREEN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)}, ui.px(em * 8))
 			text("r", b.resets > now ? fmt.tprintf("resets in %s", duration(now, b.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)}, ui.px(em * 9))
 		}
 	}
@@ -748,10 +782,10 @@ page_permissions :: proc(app: ^App, em: f32) {
 			col := s.effect == "deny" ? hex(HEX_RED) : s.effect == "allow" ? hex(HEX_GREEN) : hex(HEX_YELLOW)
 			pill("###e", s.effect != "" ? s.effect : "?", col)
 			ui.spacer(ui.px(em * 0.5))
-			text("a", s.action, hex(0xeeeeeeff), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.82)})
+			text("a", s.action, hex(HEX_SETTING_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.82)})
 			ui.spacer(ui.px(em * 0.5))
 			text("r", s.resource, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.78)}, ui.fill())
-			if bevel_button("###rv", "Revoke", ICO_DELETE, .Danger, height = math.round(em * 1.8)).clicked {
+			if bevel_button("###rv", "Revoke", ICO_DELETE, .Danger, height = math.round(em * BUTTON_SMALL_H_EM)).clicked {
 				request(app, .Action, "DELETE", fmt.tprintf("/api/permission/saved/%s", s.id))
 				app.facts_due = true
 			}
@@ -771,7 +805,7 @@ page_catalog :: proc(app: ^App, em: f32) {
 		for it, i in items {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row(id = fmt.tprintf("###%s%d", title, i)) {
-				text("n", it.name, hex(0xe8e8e8ff), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * 0.8), height = ui.px(em * 1.5)}, ui.px(em * 13))
+				text("n", it.name, hex(HEX_CATALOG_NAME), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * 0.8), height = ui.px(em * 1.5)}, ui.px(em * 13))
 				ui.next({width = ui.fill(), font_size = math.round(em * 0.8), flags = {.Text_Wrap}, fg = hex(HEX_WEAK), text_pad = 0})
 				ui.paragraph(fmt.tprintf("%s###d", it.detail))
 			}

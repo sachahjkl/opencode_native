@@ -11,6 +11,39 @@ import "core:strings"
 import "gt:draw"
 import "gt:ui"
 
+HEX_SUB_CANCELLED    :: 0xb08a5aff
+HEX_SUB_LIT_TITLE    :: 0xf4ead8ff   // the title of one that runs
+HEX_CARD_LIT_TOP     :: 0x221e17ff
+HEX_CARD_LIT_BOTTOM  :: 0x17140fff
+HEX_CARD_OFF_TOP     :: 0x111111ff
+HEX_CARD_OFF_BOTTOM  :: 0x0e0e0eff
+HEX_CARD_DESC_LIT    :: 0xf6f6f6ff
+HEX_CARD_DESC_OFF    :: 0x8c8c8cff
+HEX_CARD_RESULT_LINE :: 0xa8a8a8ff
+HEX_CARD_RESULT      :: 0xd8d8d8ff
+HEX_CARD_ACTIVITY    :: 0xf0d8a8ff
+HEX_RETURNED_TEXT    :: 0xcfcfcfff
+HEX_BANNER_TOP       :: 0x1d1a16ff
+HEX_BANNER_BOTTOM    :: 0x151310ff
+HEX_BANNER_PARENT    :: 0xc8bca8ff
+HEX_CHIP             :: 0x2a2416ff
+HEX_CHIP_SEP         :: 0x8a7a5aff
+HEX_CHIP_ACTIVITY    :: 0xd8c09aff
+HEX_SUB_TOGGLE_HOT   :: 0x161616ff
+
+CARD_INDENT_EM     :: 2.45   // where the lines under a card's first one start: under its description
+SEEK_ANCHOR_EM     :: 7      // --seek-subagent: how far down the view it lands
+PROMPT_LINES_MAX   :: 18
+FINISHED_SHOWN     :: 40     // in the menu of the sub-agents
+DURATION_HOURS_MAX :: 48     // from there on a duration is told in days
+
+// What the menu and the chips keep of a title or an activity, in characters.
+MENU_TITLE_CHARS    :: 40
+MENU_ACTIVITY_CHARS :: 36
+MENU_FINISHED_CHARS :: 48
+CHIP_TITLE_CHARS    :: 34
+CHIP_ACTIVITY_CHARS :: 30
+
 Sub_State :: enum u8 { Starting, Running, Done, Failed, Cancelled, Unknown }
 
 // Everything known of one sub-agent, gathered from its call, its session, its result message and the live stream.
@@ -47,7 +80,7 @@ sub_state_color :: proc(s: Sub_State) -> Color {
 	case .Running:            return hex(HEX_YELLOW)
 	case .Done:               return hex(HEX_GREEN)
 	case .Failed:             return hex(HEX_RED)
-	case .Cancelled:          return hex(0xb08a5aff)
+	case .Cancelled:          return hex(HEX_SUB_CANCELLED)
 	}
 	return {}
 }
@@ -111,13 +144,13 @@ sub_view :: proc(app: ^App, child: string, p: ^Part = nil) -> (v: Sub_View) {
 // "4m 12s", "1h 03m": the time from `a` to `b` (epoch ms).
 duration :: proc(a, b: f64) -> string {
 	if a <= 0 || b <= a { return "" }
-	s := int((b - a) / 1000)
+	s := int((b - a) / MS_PER_S)
 	switch {
-	case s < 60:   return fmt.tprintf("%ds", s)
-	case s < 3600: return fmt.tprintf("%dm %02ds", s / 60, s % 60)
+	case s < SECS_PER_MINUTE:   return fmt.tprintf("%ds", s)
+	case s < SECS_PER_HOUR: return fmt.tprintf("%dm %02ds", s / SECS_PER_MINUTE, s % SECS_PER_MINUTE)
 	}
-	if s < 48 * 3600 { return fmt.tprintf("%dh %02dm", s / 3600, (s / 60) % 60) }
-	return fmt.tprintf("%dd %02dh", s / 86400, (s / 3600) % 24)
+	if s < DURATION_HOURS_MAX * SECS_PER_HOUR { return fmt.tprintf("%dh %02dm", s / SECS_PER_HOUR, (s / SECS_PER_MINUTE) % MINUTES_PER_HOUR) }
+	return fmt.tprintf("%dd %02dh", s / SECS_PER_DAY, (s / SECS_PER_HOUR) % 24)
 }
 
 ////////////////////////////////
@@ -165,9 +198,9 @@ rail_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	s := ui.scale()
 	r := b.rect
 	// the agent's colour down the left edge, and a faint wash of it at the top
-	draw.rect_corners(dc, {r.min, {r.max.x, r.min.y + 40 * s}}, {with_alpha(d.color, 0.07), {0, 0, 0, 0}, with_alpha(d.color, 0.07), {0, 0, 0, 0}}, {9 * s, 0, 9 * s, 0})
+	draw.rect_corners(dc, {r.min, {r.max.x, r.min.y + 40 * s}}, {with_alpha(d.color, 0.07), {0, 0, 0, 0}, with_alpha(d.color, 0.07), {0, 0, 0, 0}}, {CARD_RADIUS * s, 0, CARD_RADIUS * s, 0})
 	draw.rect(dc, {{r.min.x + 1 * s, r.min.y + 8 * s}, {r.min.x + 4 * s, r.max.y - 8 * s}}, with_alpha(d.color, 0.85), 1.5 * s)
-	if b.hot_t > 0.01 { draw.rect(dc, r, {1, 1, 1, 0.02 * b.hot_t}, 9 * s) }
+	if b.hot_t > FADE_VISIBLE { draw.rect(dc, r, {1, 1, 1, 0.02 * b.hot_t}, CARD_RADIUS * s) }
 }
 
 subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
@@ -182,14 +215,14 @@ subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 	off := !running
 	compact := off && !open
 	if off { acol = with_alpha(acol, 0.55) }
-	desc_col := off ? hex(0x8c8c8cff) : hex(0xf6f6f6ff)
+	desc_col := off ? hex(HEX_CARD_DESC_OFF) : hex(HEX_CARD_DESC_LIT)
 
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	pt, pb: u32 = 0x221e17ff, 0x17140fff
+	pt, pb: u32 = HEX_CARD_LIT_TOP, HEX_CARD_LIT_BOTTOM
 	shadow, rim: f32 = 8, 0.11
 	border, glow := with_alpha(hex(HEX_YELLOW), 0.6), with_alpha(hex(HEX_YELLOW), 0.22)
-	if off { pt, pb, shadow, rim, border, glow = 0x111111ff, 0x0e0e0eff, 0, 0.03, {0, 0, 0, 0.7}, {} }
-	if plate(fmt.tprintf("###sa_%s", pid), top = pt, bottom = pb, radius = 9, shadow = shadow, rim = rim, border = border, glow = glow) {
+	if off { pt, pb, shadow, rim, border, glow = HEX_CARD_OFF_TOP, HEX_CARD_OFF_BOTTOM, 0, 0.03, {0, 0, 0, 0.7}, {} }
+	if plate(fmt.tprintf("###sa_%s", pid), top = pt, bottom = pb, radius = CARD_RADIUS, shadow = shadow, rim = rim, border = border, glow = glow) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		head := ui.build_box({.Clickable, .Focusable, .Hot_Within}, "###head")
 		rd := ui.frame_new(Rail_Draw)
@@ -202,7 +235,7 @@ subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 			// --seek-subagent (tests): bring the first card near the top, as an anchor does
 			app.seek_subagent = false
 			app.anchor = head
-			app.anchor_y = math.round(em * 7)
+			app.anchor_y = math.round(em * SEEK_ANCHOR_EM)
 			app.stick_bottom = false
 		}
 		if hs.double_clicked && v.id != "" { drill_down(app, v.id) }
@@ -249,9 +282,9 @@ subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 			if !open && !compact && v.result != "" {
 				ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.6)), axis = .X, cross = .Center})
 				if ui.row(.Center, id = "###l3") {
-					ui.spacer(ui.px(em * 2.45))
+					ui.spacer(ui.px(em * CARD_INDENT_EM))
 					glyph(ICO_CHAT, hex(HEX_FAINT), math.round(em * 0.75), em * 1.2)
-					text("rs", first_line(strings.trim_left(v.result, "# ")), hex(0xa8a8a8ff), ui.Style_Mod{font_size = math.round(em * 0.86)}, ui.fill())
+					text("rs", first_line(strings.trim_left(v.result, "# ")), hex(HEX_CARD_RESULT_LINE), ui.Style_Mod{font_size = math.round(em * 0.86)}, ui.fill())
 					ui.spacer(ui.px(em * 0.8))
 				}
 			}
@@ -269,19 +302,19 @@ subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 					}
 					if v.prompt != "" {
 						section_label("pr", "PROMPT", em)
-						mono_well("###prompt", v.prompt, em, 18, hex(0xc8c8c8ff))
+						mono_well("###prompt", v.prompt, em, PROMPT_LINES_MAX, hex(HEX_TEXT_SOFT))
 						ui.spacer(ui.px(em * 0.6))
 					}
 					if v.result != "" {
 						section_label("re", v.state == .Failed ? "ERROR" : "RESULT", em)
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-						if well("###result", radius = 7, base = 0x0b0b0bff) {
+						if well("###result", radius = 7, base = HEX_FACTS_WELL) {
 							ui.spacer(ui.px(em * 0.7))
 							ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 							if ui.row() {
 								ui.spacer(ui.px(em * 0.9))
 								ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-								if ui.column() { markdown(fmt.tprintf("%s_res", pid), v.result, hex(0xd8d8d8ff), math.round(em * 0.95)) }
+								if ui.column() { markdown(fmt.tprintf("%s_res", pid), v.result, hex(HEX_CARD_RESULT), math.round(em * 0.95)) }
 								ui.spacer(ui.px(em * 0.9))
 							}
 							ui.spacer(ui.px(em * 0.7))
@@ -304,12 +337,12 @@ subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 card_line2 :: proc(app: ^App, v: ^Sub_View, running: bool, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.7)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###l2") {
-		ui.spacer(ui.px(em * 2.45))
+		ui.spacer(ui.px(em * CARD_INDENT_EM))
 		small := ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.74)}
 		text("st", sub_state_label(v.state), sub_state_color(v.state), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.74)})
 		if running && v.has_live && v.live.activity != "" {
 			text("sep", "  ·  ", hex(HEX_FAINT), small)
-			text("act", v.live.activity, hex(0xf0d8a8ff), small, ui.fill())
+			text("act", v.live.activity, hex(HEX_CARD_ACTIVITY), small, ui.fill())
 		} else {
 			ui.spacer(ui.fill())
 		}
@@ -347,14 +380,14 @@ sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 	s := v.session
 	section_label("fa", "SESSION", em)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well("###facts", radius = 7, base = 0x0b0b0bff) {
+	if well("###facts", radius = 7, base = HEX_FACTS_WELL) {
 		ui.spacer(ui.px(em * 0.45))
 		row :: proc(id, k, val: string, em: f32, col := Color{}) {
 			ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 			if ui.row(.Center, id = id) {
 				ui.spacer(ui.px(em * 0.8))
 				text("k", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.74)}, ui.px(em * 7))
-				text("v", val, col.a > 0 ? col : hex(0xc8c8c8ff), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.74)}, ui.fill())
+				text("v", val, col.a > 0 ? col : hex(HEX_TEXT_SOFT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.74)}, ui.fill())
 			}
 		}
 		row("###f1", "session", s.id, em)
@@ -387,7 +420,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 		hd := ui.frame_new(Rail_Draw)
 		hd.color = acol
 		hb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-			if b.hot_t > 0.01 { draw.rect(dc, b.rect, {1, 1, 1, 0.035 * b.hot_t}, 7 * ui.scale()) }
+			if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.035 * b.hot_t}, 7 * ui.scale()) }
 		}
 		hs := ui.signal(hb)
 		if hs.clicked { part_toggle(app, m.id, hb) }
@@ -397,7 +430,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 			text("ag", v.agent != "" ? v.agent : "sub-agent", acol, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.8)})
 			text("w", fmt.tprintf("  %s  ", st == .Done ? "returned" : sub_state_label(st)), sub_state_color(st), ui.Style_Mod{font_size = math.round(em * 0.86)})
 			desc := m.sub_desc != "" ? m.sub_desc : v.desc
-			text("d", desc, hex(0xc8c8c8ff), ui.Style_Mod{font_size = math.round(em * 0.88)}, ui.fill())
+			text("d", desc, hex(HEX_TEXT_SOFT), ui.Style_Mod{font_size = math.round(em * 0.88)}, ui.fill())
 			text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
 			ui.spacer(ui.px(em * 0.4))
 			if m.sub_child != "" {
@@ -412,7 +445,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column() {
 					ui.spacer(ui.px(em * 0.3))
-					markdown(fmt.tprintf("%s_sr", m.id), m.text, hex(0xcfcfcfff), math.round(em * 0.95))
+					markdown(fmt.tprintf("%s_sr", m.id), m.text, hex(HEX_RETURNED_TEXT), math.round(em * 0.95))
 					ui.spacer(ui.px(em * 0.3))
 				}
 			}
@@ -433,11 +466,11 @@ subagent_banner :: proc(app: ^App, em: f32) {
 	if app.busy[s.id] or_else false { st, known = .Running, true }
 	ui.spacer(ui.px(em * 0.4))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if plate("###sub_banner", top = 0x1d1a16ff, bottom = 0x151310ff, radius = 9, shadow = 6, rim = 0.08, border = with_alpha(acol, 0.45)) {
+	if plate("###sub_banner", top = HEX_BANNER_TOP, bottom = HEX_BANNER_BOTTOM, radius = CARD_RADIUS, shadow = 6, rim = 0.08, border = with_alpha(acol, 0.45)) {
 		if bx := ui.parent_box(); app.seek_subagent && app.anchor == nil && bx.rect.max.y > 0 && c.loaded {
 			app.seek_subagent = false   // --seek-subagent (tests): bring the banner into view
 			app.anchor = bx
-			app.anchor_y = math.round(em * 7)
+			app.anchor_y = math.round(em * SEEK_ANCHOR_EM)
 			app.stick_bottom = false
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -463,7 +496,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 					ui.spacer(ui.fill())
 				}
 				parent := c.parent_title != "" ? c.parent_title : s.parent
-				text("p", fmt.tprintf("launched by “%s”", parent), hex(0xc8bca8ff), ui.Style_Mod{font_size = math.round(em * 0.88), height = ui.px(em * 1.4)}, ui.fill())
+				text("p", fmt.tprintf("launched by “%s”", parent), hex(HEX_BANNER_PARENT), ui.Style_Mod{font_size = math.round(em * 0.88), height = ui.px(em * 1.4)}, ui.fill())
 				end := s.idle > 0 && st != .Running ? s.idle : now_epoch_ms()
 				facts := fmt.tprintf("started %s · %s · %s in · %s out%s", clock_time(s.created), duration(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out), s.cost > 0 ? fmt.tprintf(" · $%.2f", s.cost) : "")
 				text("f", facts, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72), height = ui.px(em * 1.3)}, ui.fill())
@@ -499,7 +532,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 		app.animating = true
 		lamp("###sub_lamp", hex(HEX_YELLOW), 1, pulse = true, size = em * 1.0)
 		ui.spacer(ui.px(em * 0.3))
-		sig = bevel_button("###subs", fmt.tprintf("%d active", len(active)), ICO_ROBOT, .Accent, height = math.round(em * 1.9))
+		sig = bevel_button("###subs", fmt.tprintf("%d active", len(active)), ICO_ROBOT, .Accent, height = math.round(em * BUTTON_COMPACT_H_EM))
 		ui.spacer(ui.px(em * 0.3))
 		text("of", fmt.tprintf("/ %d", len(c.children)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.76)})
 	} else {
@@ -512,7 +545,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 			for s in active {
 				v := sub_view(app, s.id)
 				what := v.has_live && v.live.activity != "" ? v.live.activity : s.agent
-				if ui.menu_item(fmt.tprintf("▶  %s  —  %s", ellipsize(s.title, 40), ellipsize(what, 36)), duration(s.created, now_epoch_ms())).clicked { drill_down(app, s.id) }
+				if ui.menu_item(fmt.tprintf("▶  %s  —  %s", ellipsize(s.title, MENU_TITLE_CHARS), ellipsize(what, MENU_ACTIVITY_CHARS)), duration(s.created, now_epoch_ms())).clicked { drill_down(app, s.id) }
 			}
 			ui.menu_separator()
 		}
@@ -520,7 +553,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 		shown := 0
 		for &s in c.children {
 			if app.busy[s.id] or_else false { continue }
-			if shown == 40 { ui.menu_item(fmt.tprintf("… and %d more", len(c.children) - len(active) - shown), enabled = false); break }
+			if shown == FINISHED_SHOWN { ui.menu_item(fmt.tprintf("… and %d more", len(c.children) - len(active) - shown), enabled = false); break }
 			v := sub_view(app, s.id)
 			mark := "·"
 			#partial switch v.state {
@@ -529,7 +562,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 			case .Cancelled: mark = "■"
 			}
 			end := v.ended > 0 ? v.ended : s.updated
-			if ui.menu_item(fmt.tprintf("%s  %s · %s", mark, ellipsize(s.title, 48), s.agent), duration(s.created, end)).clicked { drill_down(app, s.id) }
+			if ui.menu_item(fmt.tprintf("%s  %s · %s", mark, ellipsize(s.title, MENU_FINISHED_CHARS), s.agent), duration(s.created, end)).clicked { drill_down(app, s.id) }
 			shown += 1
 		}
 	}
@@ -537,10 +570,10 @@ subagents_button :: proc(app: ^App, em: f32) {
 
 // A quiet button: a dim glyph and text, a bevel only under the pointer.
 glyph_label_button :: proc(app: ^App, id, label: string, em: f32) -> ui.Signal {
-	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
+	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * BUTTON_COMPACT_H_EM)), axis = .X, cross = .Center})
 	b := ui.build_box({.Clickable, .Focusable}, id)
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-		if b.hot_t > 0.01 { draw_bevel(dc, b.rect, 6 * ui.scale(), hex(0x222222ff), b.hot_t, b.active_t) }
+		if b.hot_t > FADE_VISIBLE { draw_bevel(dc, b.rect, BUTTON_RADIUS * ui.scale(), hex(HEX_BTN_GHOST), b.hot_t, b.active_t) }
 	}
 	sig := ui.signal(b)
 	if ui.parent(b) {
@@ -569,7 +602,7 @@ active_strip :: proc(app: ^App, em: f32) {
 			b := ui.build_box({.Clickable, .Focusable}, fmt.tprintf("###act_%s", s.id))
 			b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 				s := ui.scale()
-				draw_bevel(dc, b.rect, 8 * s, hex(0x2a2416ff), b.hot_t, b.active_t, hex(HEX_YELLOW))
+				draw_bevel(dc, b.rect, 8 * s, hex(HEX_CHIP), b.hot_t, b.active_t, hex(HEX_YELLOW))
 			}
 			sig := ui.signal(b)
 			if sig.clicked { drill_down(app, s.id) }
@@ -579,10 +612,10 @@ active_strip :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.35))
 				text("a", s.agent, acol, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.74)})
 				ui.spacer(ui.px(em * 0.4))
-				text("t", ellipsize(s.title, 34), hex(0xf4ead8ff), ui.Style_Mod{font_size = math.round(em * 0.88)})
+				text("t", ellipsize(s.title, CHIP_TITLE_CHARS), hex(HEX_SUB_LIT_TITLE), ui.Style_Mod{font_size = math.round(em * 0.88)})
 				if v.has_live && v.live.activity != "" {
-					text("s", "  ·  ", hex(0x8a7a5aff), ui.Style_Mod{font_size = math.round(em * 0.8)})
-					text("w", ellipsize(v.live.activity, 30), hex(0xd8c09aff), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
+					text("s", "  ·  ", hex(HEX_CHIP_SEP), ui.Style_Mod{font_size = math.round(em * 0.8)})
+					text("w", ellipsize(v.live.activity, CHIP_ACTIVITY_CHARS), hex(HEX_CHIP_ACTIVITY), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
 				}
 				ui.spacer(ui.px(em * 0.5))
 				text("d", duration(s.created, now), hex(HEX_YELLOW), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
@@ -606,10 +639,10 @@ children_of :: proc(app: ^App, id: string, kids: map[string][dynamic]int) -> []i
 sub_toggle :: proc(app: ^App, id: string, n: int, running: int, em: f32) -> bool {
 	k := hash.fnv64a(transmute([]u8)id)
 	open := app.sub_open[k] or_else false
-	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * 1.45)), axis = .X, cross = .Center})
+	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * PILL_H_EM)), axis = .X, cross = .Center})
 	b := ui.build_box({.Clickable}, "###subt")
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-		draw_well(dc, b.rect, 999, hex(b.hot_t > 0.01 ? 0x161616ff : 0x0d0d0dff))
+		draw_well(dc, b.rect, PILL_RADIUS, hex(b.hot_t > FADE_VISIBLE ? HEX_SUB_TOGGLE_HOT : HEX_PILL))
 	}
 	sig := ui.signal(b)
 	if sig.clicked { app.sub_open[k] = !open }

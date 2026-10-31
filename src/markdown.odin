@@ -8,6 +8,16 @@ import "core:strings"
 import "gt:platform"
 import "gt:ui"
 
+// Odd 64-bit constants that spread the bits of what they multiply.
+HASH_MIX_A :: 0x9e3779b97f4a7c15
+HASH_MIX_B :: 0xc2b2ae3d27d4eb4f
+
+HEADING_LEVEL_MAX    :: 6
+TABLE_COL_STRICTNESS :: 0.4   // the share of its width a column keeps when the table is wider than the room
+HEX_INLINE_CODE      :: 0xe5c07bff
+HEX_CODE_TEXT        :: 0xd4d4d4ff
+HEX_TABLE_WELL       :: 0x090909ff
+
 // A name for a piece of the source (where its bytes lie, how far, at which size): the rich layout cache finds the block by
 // it instead of hashing its text at every frame. A message's text only grows: a block keeps its bytes until they move,
 // and then it is a new name (the toolkit mixes in the paragraph's box, so two messages never share one).
@@ -15,7 +25,7 @@ src_version :: proc(first, last: string, size: f32) -> u64 {
 	if len(first) == 0 && len(last) == 0 { return 0 }
 	a := u64(uintptr(raw_data(first)))
 	b := u64(uintptr(raw_data(last))) + u64(len(last))
-	return ((a * 0x9e3779b97f4a7c15) ~ (b * 0xc2b2ae3d27d4eb4f) ~ u64(transmute(u32)size)) | 1
+	return ((a * HASH_MIX_A) ~ (b * HASH_MIX_B) ~ u64(transmute(u32)size)) | 1
 }
 
 // Inline Markdown of one block into runs (temp memory).
@@ -40,7 +50,7 @@ inline_runs :: proc(text: string, base: ui.Rich_Style, out: ^[dynamic]ui.Rich_Ru
 			flush(out, text[start:i], st)
 			cs := st
 			cs.code = true
-			cs.color = hex(0xe5c07bff)
+			cs.color = hex(HEX_INLINE_CODE)
 			flush(out, text[i + 1:i + 1 + e], cs)
 			i += e + 2; start = i
 		case c == '[':
@@ -119,7 +129,7 @@ parse_blocks :: proc(src: string) -> [dynamic]Block {
 		if t[0] == '#' {
 			lvl := 0
 			for lvl < len(t) && t[lvl] == '#' { lvl += 1 }
-			if lvl <= 6 && lvl < len(t) && t[lvl] == ' ' {
+			if lvl <= HEADING_LEVEL_MAX && lvl < len(t) && t[lvl] == ' ' {
 				append(&blocks, Block{kind = .Heading, level = lvl, lines = make([dynamic]string, context.temp_allocator)})
 				append(&blocks[len(blocks) - 1].lines, strings.trim_space(t[lvl:]))
 				cur = nil
@@ -192,8 +202,8 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 			table_block(bid, bl.lines[:], color, fs)
 		case .Heading:
 			runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
-			k := [7]f32{1, 1.45, 1.25, 1.1, 1, 1, 1}
-			inline_runs(bl.lines[0], {bold = true, color = bl.level <= 2 ? hex(0xffffffff) : color}, &runs)
+			k := [HEADING_LEVEL_MAX + 1]f32{1, 1.45, 1.25, 1.1, 1, 1, 1}
+			inline_runs(bl.lines[0], {bold = true, color = bl.level <= 2 ? hex(HEX_BRIGHT) : color}, &runs)
 			if bl.level >= 2 { ui.spacer(ui.px(em * 0.3)) }
 			ui.next({width = ui.fill(), font_size = math.round(fs * k[bl.level]), flags = {.Selectable}})
 			res := ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[0], fs))
@@ -218,7 +228,7 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 				ui.spacer(ui.px(em * (0.3 + 1.2 * f32(bl.level))))
 				mk := bl.marker
 				if bl.kind == .Bullet { mk = bl.level == 0 ? "•" : "◦" }
-				ui.next({width = ui.px(em * 1.3), height = ui.px(math.round(fs * 1.35)), fg = accent(), font_size = fs, text_pad = 0})
+				ui.next({width = ui.px(em * 1.3), height = ui.px(math.round(fs * LINE_HEIGHT_RATIO)), fg = accent(), font_size = fs, text_pad = 0})
 				ui.build_box({.Draw_Text}, fmt.tprintf("%s###mk", mk))
 				runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
 				inline_runs(joined(bl.lines[:]), {color = color}, &runs)
@@ -283,7 +293,7 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 		}
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well(id, radius = 6, base = 0x090909ff) {
+	if well(id, radius = 6, base = HEX_TABLE_WELL) {
 		ui.spacer(ui.px(em * 0.3))
 		for r, ri in rows {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, bg = ri == 0 ? with_alpha(accent(), 0.10) : ri % 2 == 0 ? Color{1, 1, 1, 0.01} : {}})
@@ -291,9 +301,9 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 				for ci in 0 ..< ncol {
 					c := ci < len(r) ? r[ci] : ""
 					runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
-					inline_runs(c, {bold = ri == 0, color = ri == 0 ? hex(0xffffffff) : color}, &runs)
+					inline_runs(c, {bold = ri == 0, color = ri == 0 ? hex(HEX_BRIGHT) : color}, &runs)
 					al := ci < len(aligns) ? aligns[ci] : ui.Text_Align.Left
-					ui.next({width = ui.px(widths[ci], 0.4), height = ui.children_sum(), axis = .X})
+					ui.next({width = ui.px(widths[ci], TABLE_COL_STRICTNESS), height = ui.children_sum(), axis = .X})
 					if ui.row(id = fmt.tprintf("###tc%d", ci)) {
 						ui.spacer(ui.px(pad))
 						ui.next({width = ui.fill(), font_size = cell_size, flags = {.Selectable}, text_align = al})
@@ -312,7 +322,7 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 code_block :: proc(id: string, lang: string, code: string, table := false, version: u64 = 0) {
 	em := ui.font_size()
 	ui.next({width = ui.fill(), height = ui.children_sum()})
-	if well(id, radius = 6, base = 0x060606ff) {
+	if well(id, radius = 6, base = HEX_CODE_WELL) {
 		if !table {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###hdr") {
@@ -333,7 +343,7 @@ code_block :: proc(id: string, lang: string, code: string, table := false, versi
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###body") {
 			ui.spacer(ui.px(em * 0.9))
-			runs := [1]ui.Rich_Run{{text = code, style = {font = the_app.mono, color = hex(table ? HEX_TEXT : 0xd4d4d4ff)}}}
+			runs := [1]ui.Rich_Run{{text = code, style = {font = the_app.mono, color = hex(table ? HEX_TEXT : HEX_CODE_TEXT)}}}
 			ui.next({width = ui.fill(), font_size = math.round(em * 0.86), flags = {.Selectable}})
 			ui.rich_paragraph("###code", runs[:], version = version)
 			ui.spacer(ui.px(em * 0.9))

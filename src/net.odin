@@ -20,12 +20,14 @@ Server_Config :: struct {
 	tls:      bool,     // https (a remote server, a tunnel)
 }
 
+DEFAULT_PORT :: 4096
+
 // This computer's opencode server, unless --url= / --password= say otherwise. Where it really runs first: the state the
 // background service writes while it runs (~/.local/state/opencode/service.json: its url and password, what
 // `opencode service status` prints); else what its configuration asks for (~/.config/opencode/service.json: a port
 // that may be stale or absent); else the default port.
 discover_server :: proc() -> Server_Config {
-	cfg := Server_Config{host = "127.0.0.1", port = 4096}
+	cfg := Server_Config{host = "127.0.0.1", port = DEFAULT_PORT}
 	home := os.get_env("USERPROFILE", context.temp_allocator)
 	if home == "" { home = os.get_env("HOME", context.temp_allocator) }
 	xdg :: proc(name, home, fallback: string) -> string {
@@ -117,9 +119,11 @@ jarr :: proc(v: json.Value, keys: ..string) -> json.Array {
 	return nil
 }
 
+JQUOTE_SPARE_BYTES :: 8   // the quotes and a few escapes before the builder grows
+
 // A JSON string literal (quotes included).
 jquote :: proc(s: string, allocator := context.temp_allocator) -> string {
-	b := strings.builder_make(0, len(s) + 8, allocator)
+	b := strings.builder_make(0, len(s) + JQUOTE_SPARE_BYTES, allocator)
 	strings.write_byte(&b, '"')
 	for r in s {
 		switch r {
@@ -208,6 +212,8 @@ request_free :: proc(r: ^Request) {
 	free(r)
 }
 
+ERROR_EXCERPT_BYTES :: 80   // of an error's body, in its toast
+
 // On the interface's thread.
 on_answer :: proc(data: rawptr, word: u64) {
 	app := the_app
@@ -226,7 +232,7 @@ on_answer :: proc(data: rawptr, word: u64) {
 	if r.status >= 400 {
 		v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
 		msg := jstr(v, "message")
-		ui.toast(.Bad, "%s %s: %d %s", r.method, r.path, r.status, msg if msg != "" else r.resp[:min(len(r.resp), 80)])
+		ui.toast(.Bad, "%s %s: %d %s", r.method, r.path, r.status, msg if msg != "" else r.resp[:min(len(r.resp), ERROR_EXCERPT_BYTES)])
 		if r.kind == .Messages { app.chat.loading = false }
 		if r.kind == .Older { older_failed(app, r) }
 		return
@@ -279,8 +285,10 @@ older_failed :: proc(app: ^App, r: ^Request) {
 	app.chat.older_failed = ui.now_ms()
 }
 
+SESSIONS_LIMIT :: "200"   // most sessions read at a time (text of the query)
+
 refresh_sessions :: proc(app: ^App) {
-	request(app, .Sessions, "GET", "/api/session?limit=200&order=desc")
+	request(app, .Sessions, "GET", "/api/session?limit=" + SESSIONS_LIMIT + "&order=desc")
 	request(app, .Active, "GET", "/api/session/active")
 }
 
@@ -290,12 +298,13 @@ load_messages :: proc(app: ^App, id: string) {
 
 // How near, in screens: the page is there before the reader, unless they scroll fast (then messages() shows it coming).
 OLDER_MARGIN :: 1.5
+OLDER_RETRY_MS :: 3000   // a page that could not be read is not asked for again before this
 
 // The page before the first message, when the view comes near it: read in good time, the reader does not ask for it.
 load_older :: proc(app: ^App, b: ^ui.Box) {
 	c := &app.chat
 	if c.older == "" || c.loading || c.loading_older || !c.loaded { return }
-	if c.older_failed > 0 && ui.now_ms() - c.older_failed < 3000 { return }
+	if c.older_failed > 0 && ui.now_ms() - c.older_failed < OLDER_RETRY_MS { return }
 	if min(b.view_off.y, b.view_target.y) > b.size.y * OLDER_MARGIN { return }
 	c.loading_older = true
 	c.older_failed = 0
@@ -339,6 +348,8 @@ delete_session :: proc(app: ^App, session: string) {
 ////////////////////////////////
 // The event stream
 
+STREAM_RETRY_S :: 2   // between two connections of the event stream
+
 events_thread :: proc(data: rawptr) {
 	c := (^Conn)(data)
 	app := the_app
@@ -354,7 +365,7 @@ events_thread :: proc(data: rawptr) {
 		})
 		if sync.atomic_load(&c.stop) { break }
 		ui.post(&app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_state(the_app, false) } }, c, u64(st))
-		time.sleep(2 * time.Second)
+		time.sleep(STREAM_RETRY_S * time.Second)
 	}
 }
 

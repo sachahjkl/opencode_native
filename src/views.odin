@@ -11,6 +11,35 @@ import "gt:draw"
 import "gt:ui"
 
 
+SIDEBAR_W_DEFAULT     :: 290
+SIDEBAR_W_MIN         :: 200
+SIDEBAR_W_MAX         :: 520
+CONVERSATION_MIN_PX   :: 420   // what the sidebar's splitter leaves it
+TITLE_BAR_MIN_H_PX    :: 34
+TITLE_BAR_TITLE_CHARS :: 70
+CRUMB_PARENT_CHARS    :: 60
+
+HEX_TITLE_BAR_TOP     :: 0x181818ff
+HEX_TITLE_BAR_BOTTOM  :: 0x111111ff
+HEX_HEADER_TOP        :: 0x131313ff
+HEX_HEADER_BOTTOM     :: 0x0d0d0dff
+HEX_STATUS_TOP        :: 0x141414ff
+HEX_STATUS_BOTTOM     :: 0x0e0e0eff
+HEX_ITEM_SELECTED     :: 0x0b0b0bff
+HEX_ITEM_HOVER        :: 0x1c1c1cff
+HEX_SUB_OFF_TITLE     :: 0x7a7a7aff
+HEX_USER_PLATE_TOP    :: 0x222222ff
+HEX_USER_PLATE_BOTTOM :: 0x1a1a1aff
+HEX_USER_TEXT         :: 0xf2f2f2ff
+HEX_ANSWER_TEXT       :: 0xdcdcdcff
+HEX_TOOL_DONE_PIP     :: 0x4f8a5eff
+HEX_TOOL_OUTPUT       :: 0xbdbdbdff
+HEX_REASONING_TEXT    :: 0x9a9a9aff
+HEX_PERM_TOP          :: 0x2a2116ff
+HEX_PERM_BOTTOM       :: 0x1d170fff
+HEX_PERM_DETAIL       :: 0xd8c8b0ff
+HEX_COMPOSER_WELL     :: 0x080808ff
+
 build_ui :: proc(app: ^App) {
 	em := ui.font_size()
 	global_keys(app)
@@ -23,7 +52,7 @@ build_ui :: proc(app: ^App) {
 			room := ui.parent_box().size.x / ui.scale()
 			ui.next({height = ui.fill()})
 			ui.a11y({name = "Sidebar width"})
-			ui.splitter("###side_split", .X, &app.sidebar_w, 200, 520, {default_size = 290, total = room, min_other = 420})
+			ui.splitter("###side_split", .X, &app.sidebar_w, SIDEBAR_W_MIN, SIDEBAR_W_MAX, {default_size = SIDEBAR_W_DEFAULT, total = room, min_other = CONVERSATION_MIN_PX})
 			conversation(app, em)
 		}
 		status_bar(app, em)
@@ -94,12 +123,12 @@ bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 }
 
 title_bar :: proc(app: ^App, em: f32) {
-	h := max(math.round(em * 2.6), math.round(34 * ui.scale()))
+	h := max(math.round(em * 2.6), math.round(TITLE_BAR_MIN_H_PX * ui.scale()))
 	ui.next({width = ui.fill(), height = ui.px(h)})
 	if ui.title_bar("###titlebar") {
 		b := ui.parent_box()
 		d := ui.frame_new(Bar_Draw)
-		d^ = {hex(0x181818ff), hex(0x111111ff)}
+		d^ = {hex(HEX_TITLE_BAR_TOP), hex(HEX_TITLE_BAR_BOTTOM)}
 		b.custom = bar_draw
 		b.custom_user = d
 		ui.spacer(ui.px(em * 0.4))
@@ -131,7 +160,7 @@ title_bar :: proc(app: ^App, em: f32) {
 			if logo_of(app, "###tproj", project_logo(app, s.project), math.round(h * 0.55)) { ui.spacer(ui.px(em * 0.45)) }
 			text("dir", base_name(s.directory), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * 0.92)})
 			text("sep", "  /  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.92)})
-			text("ttl", ellipsize(s.title, 70), hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * 0.92)})
+			text("ttl", ellipsize(s.title, TITLE_BAR_TITLE_CHARS), hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * 0.92)})
 		}
 		ui.spacer(ui.fill())
 		if app.chat.busy {
@@ -165,13 +194,13 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	r := b.rect
 	rad := 6 * s
 	if d.selected {
-		draw_well(dc, r, rad, hex(0x0b0b0bff))
+		draw_well(dc, r, rad, hex(HEX_ITEM_SELECTED))
 		// the peach rail, glowing
 		rail := Rect{{r.min.x + 3 * s, r.min.y + 7 * s}, {r.min.x + 6 * s, r.max.y - 7 * s}}
 		draw.box_shadow(dc, rail, radii4(1.5 * s), 3 * s, with_alpha(accent(), 0.3))
 		draw.rect(dc, rail, accent(), 1.5 * s)
-	} else if b.hot_t > 0.01 {
-		draw_bevel(dc, r, rad, hex(0x1c1c1cff), 0, b.active_t)
+	} else if b.hot_t > FADE_VISIBLE {
+		draw_bevel(dc, r, rad, hex(HEX_ITEM_HOVER), 0, b.active_t)
 	}
 }
 
@@ -197,7 +226,7 @@ sidebar :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###side_search") {
 			pad_row(em)
-			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.1)), axis = .X, cross = .Center})
+			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 			if well("###search_well", .X, radius = 7) {
 				ui.spacer(ui.px(em * 0.5))
 				glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * 0.8))
@@ -209,7 +238,7 @@ sidebar :: proc(app: ^App, em: f32) {
 			pad_row(em)
 		}
 		ui.spacer(ui.px(em * 0.5))
-		ui.next({width = ui.fill(), height = ui.px(6)})
+		ui.next({width = ui.fill(), height = ui.px(GROOVE_BOX_PX)})
 		groove("###sg")
 
 		ui.next({width = ui.fill(), height = ui.fill()})
@@ -275,7 +304,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 			// "+": always there (built only while the header was hovered, it vanished as soon as the pointer moved onto
 			// it: the header is no longer the box under the pointer), shown while the header is hot (Hot_Within keeps it
 			// hot over its button)
-			plus_col := hdr.hot_t > 0.01 ? hex(HEX_WEAK) : Color{0, 0, 0, 0.001}
+			plus_col := hdr.hot_t > FADE_VISIBLE ? hex(HEX_WEAK) : Color{0, 0, 0, 0.001}
 			if glyph_button("###gadd", ICO_ADD, math.round(em * 1.5), plus_col).clicked {
 				new_session(app)
 				delete(app.new_dir, app.chat.alloc)
@@ -350,9 +379,9 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			}
 			title := s.title != "" ? s.title : "Untitled"
 			// a sub-agent: lit while it runs, dimmed once it is done
-			tcol := hex(0xc8c8c8ff)
-			if depth > 0 { tcol = busy ? hex(0xf4ead8ff) : hex(0x7a7a7aff) }
-			if selected { tcol = hex(0xffffffff) }
+			tcol := hex(HEX_TEXT_SOFT)
+			if depth > 0 { tcol = busy ? hex(HEX_SUB_LIT_TITLE) : hex(HEX_SUB_OFF_TITLE) }
+			if selected { tcol = hex(HEX_BRIGHT) }
 			text("t", title, tcol, ui.Style_Mod{font_size = math.round(em * (depth > 0 ? 0.86 : 0.95))}, ui.fill())
 			ui.spacer(ui.px(em * 0.4))
 			if len(kids) > 0 {
@@ -438,36 +467,54 @@ delete_dialog :: proc(app: ^App, em: f32) {
 	}
 }
 
-now_epoch_ms :: proc() -> f64 { return f64(time.time_to_unix_nano(time.now())) / 1e6 }
+MS_PER_S         :: 1000
+NS_PER_MS        :: 1e6
+SECS_PER_MINUTE  :: 60
+SECS_PER_HOUR    :: 3600
+SECS_PER_DAY     :: 86400
+SECS_PER_WEEK    :: 86400 * 7
+MINUTES_PER_HOUR :: 60
+MINUTES_PER_DAY  :: 24 * 60
+HOURS_HALF_DAY   :: 12
+
+now_epoch_ms :: proc() -> f64 { return f64(time.time_to_unix_nano(time.now())) / NS_PER_MS }
 
 rel_time :: proc(now, t: f64) -> string {
 	if t <= 0 { return "" }
-	d := (now - t) / 1000
+	d := (now - t) / MS_PER_S
 	switch {
-	case d < 60:        return "now"
-	case d < 3600:      return fmt.tprintf("%dm", int(d / 60))
-	case d < 86400:     return fmt.tprintf("%dh", int(d / 3600))
-	case d < 86400 * 7: return fmt.tprintf("%dd", int(d / 86400))
+	case d < SECS_PER_MINUTE:        return "now"
+	case d < SECS_PER_HOUR:      return fmt.tprintf("%dm", int(d / SECS_PER_MINUTE))
+	case d < SECS_PER_DAY:     return fmt.tprintf("%dh", int(d / SECS_PER_HOUR))
+	case d < SECS_PER_WEEK: return fmt.tprintf("%dd", int(d / SECS_PER_DAY))
 	}
-	return fmt.tprintf("%dw", int(d / (86400 * 7)))
+	return fmt.tprintf("%dw", int(d / SECS_PER_WEEK))
 }
 
 clock_time :: proc(t: f64) -> string {
 	if t <= 0 { return "" }
-	tm := time.unix(0, i64(t * 1e6))
+	tm := time.unix(0, i64(t * NS_PER_MS))
 	h, m, _ := time.clock_from_time(tm)
 	// (UTC + the machine's offset: Windows' local time)
 	off := local_offset_minutes()
-	total := (h * 60 + m + off + 24 * 60) % (24 * 60)
+	total := (h * MINUTES_PER_HOUR + m + off + MINUTES_PER_DAY) % MINUTES_PER_DAY
 	if !the_app.prefs.clock24 {
-		hh := (total / 60) % 12
-		return fmt.tprintf("%d:%02d %s", hh == 0 ? 12 : hh, total % 60, total / 60 < 12 ? "am" : "pm")
+		hh := (total / MINUTES_PER_HOUR) % HOURS_HALF_DAY
+		return fmt.tprintf("%d:%02d %s", hh == 0 ? HOURS_HALF_DAY : hh, total % MINUTES_PER_HOUR, total / MINUTES_PER_HOUR < HOURS_HALF_DAY ? "am" : "pm")
 	}
-	return fmt.tprintf("%02d:%02d", total / 60, total % 60)
+	return fmt.tprintf("%02d:%02d", total / MINUTES_PER_HOUR, total % MINUTES_PER_HOUR)
 }
 
 ////////////////////////////////
 // Conversation
+
+SPLITTER_W_PX     :: 5
+AVAIL_FALLBACK_PX :: 1000   // before the window has a width
+COLUMN_MIN_W_PX   :: 240
+BOTTOM_SLACK_PX   :: 4      // this near its end the conversation is at its bottom
+OPENED_FOLLOW_MS  :: 2000   // a conversation just opened follows its bottom that long, whatever the preference
+PAGE_SCROLL       :: 0.9    // of the view: the end of the last page stays in sight
+LINE_SCROLL_EM    :: 3
 
 conversation :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = hex(HEX_BG0), radius = 0})
@@ -475,10 +522,10 @@ conversation :: proc(app: ^App, em: f32) {
 		sc := ui.scale()
 		// this frame's width, from the window (the box's own size is the last frame's: a resize would lag a frame behind):
 		// the window less the sidebar, its edge and the splitter
-		avail := f32(app.win.size.x) - app.sidebar_w * sc - 2 - math.round(5 * sc)
-		if avail <= 0 { avail = 1000 * sc }
+		avail := f32(app.win.size.x) - app.sidebar_w * sc - 2 - math.round(SPLITTER_W_PX * sc)
+		if avail <= 0 { avail = AVAIL_FALLBACK_PX * sc }
 		app.column_w = 0
-		col := max(240 * sc, min(app.prefs.column_w * sc, avail - em * 3))
+		col := max(COLUMN_MIN_W_PX * sc, min(app.prefs.column_w * sc, avail - em * 3))
 		side := max(em * 1.5, (avail - col) * 0.5)
 		app.column_w = col
 		if app.chat.id != "" || app.chat.loaded {
@@ -493,7 +540,7 @@ conversation :: proc(app: ^App, em: f32) {
 			limit := max(0, sb.view_bounds.y - sb.size.y)
 			// the scrollbar's drag (and the keyboard) moved it before this build (begin_build): up means let go of the bottom,
 			// or following it would put it back at once and the thumb would stay stuck there
-			if app.stick_bottom && sb.view_target.y < app.chat_target - 1 && sb.view_target.y < limit - 4 * ui.scale() { app.stick_bottom = false }
+			if app.stick_bottom && sb.view_target.y < app.chat_target - 1 && sb.view_target.y < limit - BOTTOM_SLACK_PX * ui.scale() { app.stick_bottom = false }
 			if app.stick_bottom {
 				sb.view_target.y = limit
 				if app.stick_jump { sb.view_off.y = limit }
@@ -513,9 +560,9 @@ conversation :: proc(app: ^App, em: f32) {
 		if sb != nil {
 			// follow the bottom while the reader is there; scrolling up lets go of it
 			limit := max(0, sb.view_bounds.y - sb.size.y)
-			at_bottom := sb.view_target.y >= limit - 4 * ui.scale()
+			at_bottom := sb.view_target.y >= limit - BOTTOM_SLACK_PX * ui.scale()
 			// (with following off, only the first moments of a conversation just opened follow its bottom)
-			follow := app.prefs.follow || ui.now_ms() - app.opened_ms < 2000
+			follow := app.prefs.follow || ui.now_ms() - app.opened_ms < OPENED_FOLLOW_MS
 			if app.anchor == nil { app.stick_bottom = at_bottom && follow }   // (a part just toggled: it let go of the bottom)
 			app.chat_target = sb.view_target.y
 		}
@@ -532,12 +579,12 @@ chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	if app.settings_open || app.delete_open || app.stats_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || len(app.ui_state.menus) > 0 { return }
 	limit := max(0, sb.view_bounds.y - sb.size.y)
 	y := sb.view_target.y
-	if ui.key_press(.Page_Up) { y -= sb.size.y * 0.9 }
-	if ui.key_press(.Page_Down) { y += sb.size.y * 0.9 }
+	if ui.key_press(.Page_Up) { y -= sb.size.y * PAGE_SCROLL }
+	if ui.key_press(.Page_Down) { y += sb.size.y * PAGE_SCROLL }
 	f := ui.box_from_key(ui.focus_key())
 	if f == nil || (.Text_Input not_in f.flags && !app.ui_state.focus_visible) {
-		if ui.key_press(.Up) { y -= em * 3 }
-		if ui.key_press(.Down) { y += em * 3 }
+		if ui.key_press(.Up) { y -= em * LINE_SCROLL_EM }
+		if ui.key_press(.Down) { y += em * LINE_SCROLL_EM }
 		if ui.key_press(.Home) { y = 0 }
 		if ui.key_press(.End) { y = limit }
 	}
@@ -550,7 +597,7 @@ chat_header :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###hdr") {
 		b := ui.parent_box()
 		d := ui.frame_new(Bar_Draw)
-		d^ = {hex(0x131313ff), hex(0x0d0d0dff)}
+		d^ = {hex(HEX_HEADER_TOP), hex(HEX_HEADER_BOTTOM)}
 		b.custom = bar_draw
 		b.custom_user = d
 		ui.spacer(ui.px(em * 1.3))
@@ -558,7 +605,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		if s == nil && app.chat.have_self { s = &app.chat.self }   // (a sub-agent, or an old session: not in the sidebar's list)
 		if back := back_target(app); back != "" {
 			// the way back up: to the session drilled down from, or the parent
-			if bevel_button("###back", "", ICO_BACK, .Normal, ui.px(math.round(em * 2.1)), math.round(em * 2.1)).clicked { go_back(app) }
+			if bevel_button("###back", "", ICO_BACK, .Normal, ui.px(math.round(em * BUTTON_H_EM)), math.round(em * BUTTON_H_EM)).clicked { go_back(app) }
 			ui.spacer(ui.px(em * 0.7))
 		}
 		if logo_of(app, "###hlogo", project_logo(app, chat_project(app)), math.round(em * 2.3)) { ui.spacer(ui.px(em * 0.7)) }
@@ -577,13 +624,13 @@ chat_header :: proc(app: ^App, em: f32) {
 						if back_target(app) == app.chat.self.parent { go_back(app) } else { drill_down(app, strings.clone(app.chat.self.parent, context.temp_allocator)) }
 					}
 					if ui.parent(pb) {
-						text("p", ellipsize(parent, 60), ps.hovering ? accent() : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * 0.78)})
+						text("p", ellipsize(parent, CRUMB_PARENT_CHARS), ps.hovering ? accent() : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * 0.78)})
 					}
 					text("s", "  ›  sub-agent", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.78)})
 				}
 			}
 			title := s != nil ? s.title : "New session"
-			text("title", title != "" ? title : "Untitled", hex(0xffffffff), ui.Style_Mod{font_size = math.round(em * 1.12), height = ui.px(em * 1.5)}, ui.fill())
+			text("title", title != "" ? title : "Untitled", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * 1.12), height = ui.px(em * 1.5)}, ui.fill())
 			dir := s != nil ? s.directory : app.new_dir
 			text("dir", dir != "" ? dir : "default folder", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.76), height = ui.px(em * 1.2)}, ui.fill())
 			ui.spacer(ui.fill())
@@ -603,7 +650,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		}
 		if c.busy {
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###stop", "Stop", ICO_STOP, .Danger, height = math.round(em * 1.9)).clicked { interrupt_session(app, c.id) }
+			if bevel_button("###stop", "Stop", ICO_STOP, .Danger, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { interrupt_session(app, c.id) }
 		}
 		ui.spacer(ui.px(em * 1.2))
 	}
@@ -734,10 +781,13 @@ turn_end :: proc(app: ^App, m: ^Message, em: f32) {
 	ui.spacer(ui.px(em * 0.8))
 }
 
+USER_IMAGE_W_PX :: 320
+USER_IMAGE_H_PX :: 220
+
 user_message :: proc(app: ^App, m: ^Message, em: f32) {
 	ui.spacer(ui.px(em * 0.4))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if plate(fmt.tprintf("###u_%s", m.id), top = 0x222222ff, bottom = 0x1a1a1aff, radius = 9, shadow = 8, rim = 0.09) {
+	if plate(fmt.tprintf("###u_%s", m.id), top = HEX_USER_PLATE_TOP, bottom = HEX_USER_PLATE_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.09) {
 		ui.spacer(ui.px(em * 0.75))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###in") {
@@ -753,13 +803,13 @@ user_message :: proc(app: ^App, m: ^Message, em: f32) {
 					text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.74)})
 				}
 				ui.spacer(ui.px(em * 0.35))
-				runs := [1]ui.Rich_Run{{text = m.text, style = {color = hex(0xf2f2f2ff)}}}
+				runs := [1]ui.Rich_Run{{text = m.text, style = {color = hex(HEX_USER_TEXT)}}}
 				ui.next({width = ui.fill(), flags = {.Selectable}})
 				ui.rich_paragraph("###text", runs[:])
 				if len(m.images) > 0 {
 					ui.spacer(ui.px(em * 0.6))
 					sc := ui.scale()
-					image_strip(app, "###imgs", m.images[:], 320 * sc, 220 * sc)
+					image_strip(app, "###imgs", m.images[:], USER_IMAGE_W_PX * sc, USER_IMAGE_H_PX * sc)
 				}
 			}
 			ui.spacer(ui.px(em * 1.1))
@@ -810,7 +860,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 				c := draw.rect_center(b.rect)
 				r := Rect{{c.x - 1.5 * s, b.rect.min.y}, {c.x + 1.5 * s, b.rect.max.y}}
 				if d.live && the_app.prefs.glow {
-					a := 0.15 + 0.15 * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * 0.006))
+					a := 0.15 + 0.15 * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * PULSE_RATE))
 					draw.box_shadow(dc, r, radii4(1.5 * s), 4 * s, with_alpha(d.col, a))
 				}
 				draw.rect(dc, r, d.live ? d.col : with_alpha(d.col, 0.75), 1.5 * s)
@@ -835,7 +885,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 			switch p.kind {
 			case .Text:
 				if len(p.text) > 0 {
-					markdown(pid, string(p.text[:]), hex(0xdcdcdcff))
+					markdown(pid, string(p.text[:]), hex(HEX_ANSWER_TEXT))
 					ui.spacer(ui.px(em * 0.6))
 				}
 			case .Reasoning: reasoning_part(app, &p, pid, em)
@@ -877,7 +927,7 @@ Head_Draw :: struct { status: Tool_Status, open: bool }
 
 @(private = "file")
 head_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	if b.hot_t > 0.01 {
+	if b.hot_t > FADE_VISIBLE {
 		r := b.rect
 		draw.rect(dc, r, {1, 1, 1, 0.035 * b.hot_t}, 7 * ui.scale())
 	}
@@ -923,12 +973,19 @@ rail_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	sz := math.round(d.head * 0.38)
 	switch d.status {
 	case .Running, .Pending:
-		lit := 0.45 + 0.55 * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * 0.006))
+		lit := PULSE_LIT_MIN + PULSE_LIT_SPAN * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * PULSE_RATE))
 		draw_lamp(dc, {x, cy}, math.round(sz * 0.85), status_color(d.status), lit)
-	case .Done:  draw_pip(dc, {x, cy}, sz, hex(0x4f8a5eff))
+	case .Done:  draw_pip(dc, {x, cy}, sz, hex(HEX_TOOL_DONE_PIP))
 	case .Error: draw_pip(dc, {x, cy}, sz, hex(HEX_RED))
 	}
 }
+
+TOOL_INPUT_LINES_MAX    :: 40
+TOOL_ERROR_LINES_FOLDED :: 6
+TOOL_IMAGE_OPEN_W_PX    :: 520
+TOOL_IMAGE_OPEN_H_PX    :: 360
+TOOL_IMAGE_W_PX         :: 240
+TOOL_IMAGE_H_PX         :: 150
 
 // A tool call on the timeline: a flat row (its header lights under the pointer), its input and output in wells when
 // open. `above`, `below`: calls right before and after it, joined by the rail.
@@ -958,7 +1015,7 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 			failed := p.status == .Error
 			glyph(tool_icon(p.tool_name), failed ? hex(HEX_RED) : hex(HEX_FAINT), math.round(em * 0.85))
 			ui.spacer(ui.px(em * 0.35))
-			text("nm", p.tool_name != "" ? p.tool_name : "tool", failed ? hex(0xf0a0a6ff) : running ? hex(0xffffffff) : hex(HEX_TEXT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.85)})
+			text("nm", p.tool_name != "" ? p.tool_name : "tool", failed ? hex(HEX_ERROR_TEXT) : running ? hex(HEX_BRIGHT) : hex(HEX_TEXT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.85)})
 			ui.spacer(ui.px(em * 0.6))
 			text("sj", p.subject, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8)}, ui.fill())
 			ui.spacer(ui.px(em * 0.4))
@@ -974,17 +1031,17 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 				if ui.column() {
 					if open && p.input != "" {
 						section_label("in", "INPUT", em)
-						mono_well("###input", p.input, em, 40)
+						mono_well("###input", p.input, em, TOOL_INPUT_LINES_MAX)
 						ui.spacer(ui.px(em * 0.5))
 					}
 					if p.output != "" && (open || show_error) {
 						if open { section_label("out", p.status == .Error ? "ERROR" : "OUTPUT", em) }
-						mono_well("###output", p.output, em, open ? app.prefs.tool_lines : 6, p.status == .Error ? hex(0xf0a0a6ff) : hex(0xbdbdbdff))
+						mono_well("###output", p.output, em, open ? app.prefs.tool_lines : TOOL_ERROR_LINES_FOLDED, p.status == .Error ? hex(HEX_ERROR_TEXT) : hex(HEX_TOOL_OUTPUT))
 					}
 					if len(p.images) > 0 {
 						ui.spacer(ui.px(em * 0.5))
 						sc := ui.scale()
-						image_strip(app, "###imgs", p.images[:], (open ? 520 : 240) * sc, (open ? 360 : 150) * sc)
+						image_strip(app, "###imgs", p.images[:], (open ? TOOL_IMAGE_OPEN_W_PX : TOOL_IMAGE_W_PX) * sc, (open ? TOOL_IMAGE_OPEN_H_PX : TOOL_IMAGE_H_PX) * sc)
 					}
 					ui.spacer(ui.px(em * 0.6))
 				}
@@ -1003,6 +1060,8 @@ section_label :: proc(id, s: string, em: f32) {
 	}
 }
 
+MONO_WELL_MAX_BYTES :: 20000   // of a tool's text, whatever the lines allow
+
 // Monospace text in a sunken well, at most `max_lines` lines (the rest is counted).
 mono_well :: proc(id: string, s: string, em: f32, max_lines: int, color := Color{}) {
 	body := s
@@ -1018,14 +1077,14 @@ mono_well :: proc(id: string, s: string, em: f32, max_lines: int, color := Color
 		extra = n - max_lines + 1
 		body = s[:cut]
 	}
-	if len(body) > 20000 { body = body[:20000] }
+	if len(body) > MONO_WELL_MAX_BYTES { body = body[:MONO_WELL_MAX_BYTES] }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well(id, radius = 6, base = 0x060606ff) {
+	if well(id, radius = 6, base = HEX_CODE_WELL) {
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###r") {
 			ui.spacer(ui.px(em * 0.75))
-			runs := [1]ui.Rich_Run{{text = body, style = {font = the_app.mono, color = color.a > 0 ? color : hex(0xbdbdbdff)}}}
+			runs := [1]ui.Rich_Run{{text = body, style = {font = the_app.mono, color = color.a > 0 ? color : hex(HEX_TOOL_OUTPUT)}}}
 			ui.next({width = ui.fill(), font_size = math.round(em * 0.82), flags = {.Selectable}})
 			ui.rich_paragraph("###t", runs[:])
 			ui.spacer(ui.px(em * 0.75))
@@ -1065,7 +1124,7 @@ reasoning_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if rail_row(fmt.tprintf("###rb_%s", pid), with_alpha(hex(HEX_PURPLE), 0.45)) {
 			ui.spacer(ui.px(em * 0.9))
-			runs := [1]ui.Rich_Run{{text = string(p.text[:]), style = {italic = true, color = hex(0x9a9a9aff)}}}
+			runs := [1]ui.Rich_Run{{text = string(p.text[:]), style = {italic = true, color = hex(HEX_REASONING_TEXT)}}}
 			ui.next({width = ui.fill(), font_size = math.round(em * 0.92), flags = {.Selectable}})
 			ui.rich_paragraph("###t", runs[:])
 		}
@@ -1094,7 +1153,7 @@ dock :: proc(app: ^App, em: f32, side, col: f32) {
 
 permission_card :: proc(app: ^App, p: ^Permission, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if plate(fmt.tprintf("###perm_%s", p.id), top = 0x2a2116ff, bottom = 0x1d170fff, radius = 9, shadow = 8, rim = 0.1, border = with_alpha(hex(HEX_YELLOW), 0.55)) {
+	if plate(fmt.tprintf("###perm_%s", p.id), top = HEX_PERM_TOP, bottom = HEX_PERM_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.1, border = with_alpha(hex(HEX_YELLOW), 0.55)) {
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###r") {
@@ -1105,7 +1164,7 @@ permission_card :: proc(app: ^App, p: ^Permission, em: f32) {
 			if ui.column() {
 				text("a", fmt.tprintf("Permission requested: %s", p.action), hex(HEX_YELLOW), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * 0.9), height = ui.px(em * 1.5)}, ui.fill())
 				detail := p.message != "" ? p.message : strings.join(p.resources, ", ", context.temp_allocator)
-				text("d", detail, hex(0xd8c8b0ff), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8), height = ui.px(em * 1.4)}, ui.fill())
+				text("d", detail, hex(HEX_PERM_DETAIL), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.8), height = ui.px(em * 1.4)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
 			if bevel_button("###once", "Allow once", ICO_CHECK, .Accent).clicked { reply_permission(app, p.session, p.id, "once") }
@@ -1120,6 +1179,10 @@ permission_card :: proc(app: ^App, p: ^Permission, em: f32) {
 	ui.spacer(ui.px(em * 0.7))
 }
 
+COMPOSER_MAX_LINES   :: 12
+COMPOSER_HINT_MIN_EM :: 44
+COMPOSER_BUTTON_W_EM :: 2.6
+
 composer :: proc(app: ^App, em: f32) {
 	// Enter sends, Shift+Enter breaks the line (the editor itself breaks on Enter and commits on Ctrl+Enter)
 	submit := false
@@ -1128,14 +1191,14 @@ composer :: proc(app: ^App, em: f32) {
 		if ui.key_press(.Return, {.Shift}) { area_insert(&app.composer, "\n") }
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well("###composer_well", radius = 11, base = 0x080808ff, focus = app.composer_focused ? 1 : 0) {
+	if well("###composer_well", radius = 11, base = HEX_COMPOSER_WELL, focus = app.composer_focused ? 1 : 0) {
 		ui.spacer(ui.px(em * 0.45))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###edrow") {
 			ui.spacer(ui.px(em * 0.35))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), font_size = math.round(em * 1.02), text_pad = em * 0.5})
-				res := ui.text_edit("###composer", &app.composer, "Ask anything…", wrap = true, auto_height = true, min_lines = 2, max_lines = 12)
+				res := ui.text_edit("###composer", &app.composer, "Ask anything…", wrap = true, auto_height = true, min_lines = 2, max_lines = COMPOSER_MAX_LINES)
 				app.composer_focused = res.focused
 				if res.committed { submit = true }
 			}
@@ -1146,23 +1209,23 @@ composer :: proc(app: ^App, em: f32) {
 		if ui.row(.Center, id = "###tools") {
 			ui.spacer(ui.px(em * 0.6))
 			agent := app.chat.agent != "" ? app.chat.agent : "build"
-			asig := bevel_button("###agent", agent, ICO_ROBOT, .Normal, height = math.round(em * 1.9))
+			asig := bevel_button("###agent", agent, ICO_ROBOT, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM))
 			if asig.clicked { if app.picker.open && app.picker.id == "agent" { app.picker.open = false } else { picker_open(&app.picker, "agent", asig.box.rect) } }
 			ui.spacer(ui.px(em * 0.4))
 			model := app.chat.model != "" ? app.chat.model : "default model"
-			msig := bevel_button("###model", model, ICO_CHIP, .Normal, height = math.round(em * 1.9))
+			msig := bevel_button("###model", model, ICO_CHIP, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM))
 			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(&app.picker, "model", msig.box.rect) } }
 			ui.spacer(ui.fill())
-			if app.column_w > em * 44 {   // (room for it beside the agent and model buttons)
+			if app.column_w > em * COMPOSER_HINT_MIN_EM {   // (room for it beside the agent and model buttons)
 				text("hint", app.prefs.ctrl_enter ? "Ctrl+Enter  send   ·   Enter  new line" : "Enter  send   ·   Shift+Enter  new line", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72)})
 			}
 			ui.spacer(ui.px(em * 0.8))
 			if app.chat.busy {
-				if bevel_button("###stop2", "", ICO_STOP, .Danger, ui.px(math.round(em * 2.6)), math.round(em * 2.1)).clicked { interrupt_session(app, app.chat.id) }
+				if bevel_button("###stop2", "", ICO_STOP, .Danger, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM)).clicked { interrupt_session(app, app.chat.id) }
 				ui.spacer(ui.px(em * 0.4))
 			}
 			empty := len(strings.trim_space(ui.area_string(&app.composer))) == 0
-			if bevel_button("###send", "", ICO_SEND, .Accent, ui.px(math.round(em * 2.6)), math.round(em * 2.1), disabled = empty || !app.online).clicked { submit = true }
+			if bevel_button("###send", "", ICO_SEND, .Accent, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM), disabled = empty || !app.online).clicked { submit = true }
 			ui.spacer(ui.px(em * 0.55))
 
 			// the agent and the model: pickers searched as one types
@@ -1224,7 +1287,7 @@ status_bar :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###status") {
 		b := ui.parent_box()
 		d := ui.frame_new(Bar_Draw)
-		d^ = {hex(0x141414ff), hex(0x0e0e0eff)}
+		d^ = {hex(HEX_STATUS_TOP), hex(HEX_STATUS_BOTTOM)}
 		b.custom = bar_draw
 		b.custom_user = d
 		small := ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.75)}
@@ -1234,7 +1297,7 @@ status_bar :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.children_sum(), height = ui.px(h - 4 * ui.scale()), axis = .X, cross = .Center})
 		sb := ui.build_box({.Clickable, .Focusable}, "###server_btn")
 		sb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-			if b.hot_t > 0.01 || b.active_t > 0.01 { draw_bevel(dc, b.rect, 5 * ui.scale(), hex(0x1e1e1eff), b.hot_t, b.active_t * b.hot_t) }
+			if b.hot_t > FADE_VISIBLE || b.active_t > FADE_VISIBLE { draw_bevel(dc, b.rect, 5 * ui.scale(), hex(HEX_BG3), b.hot_t, b.active_t * b.hot_t) }
 		}
 		ssig := ui.signal(sb)
 		skey := ui.key_from_string(0, "server_menu")

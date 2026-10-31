@@ -133,6 +133,16 @@ pace :: proc(app: ^App, inner: bool) -> (at_once: bool) {
 	return render.pace_frame(&app.pacer, &app.r, app.win, idled = app.idled, dragging = ui.active_key() != 0, inner = inner)
 }
 
+FRAMES_AFTER_INPUT :: 3        // still drawn after an event, and at start: what it set off settles
+DT_MIN_S           :: 0.0005
+DT_MAX_S           :: 0.1      // after a long stall the animations go on, they do not jump
+ANCHOR_BUILDS_MAX  :: 4        // builds spent on keeping a part header in place
+
+// How soon an action is followed by reading again what it changed: a burst of events reads once.
+REFRESH_DEBOUNCE_MS  :: 1200
+FACTS_DEBOUNCE_MS    :: 700
+CHILDREN_DEBOUNCE_MS :: 800
+
 frame :: proc(app: ^App, inner := false) {
 	if ui.building() { return }
 	app.frame_no += 1
@@ -141,11 +151,11 @@ frame :: proc(app: ^App, inner := false) {
 	devtools.service(app.devtools, &app.ui_state, &app.r)
 	events := platform.poll_events(app.win, false)
 	render.mark_input(&app.r)
-	if len(events) > 0 { app.frames = max(app.frames, 3) }
+	if len(events) > 0 { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }
 	render.resize(&app.r, app.win.size)
 	size := draw.Vec2{f32(app.win.size.x), f32(app.win.size.y)}
 	now := time.tick_now()
-	dt := clamp(f32(time.duration_seconds(time.tick_diff(app.last_tick, now))), 0.0005, 0.1)
+	dt := clamp(f32(time.duration_seconds(time.tick_diff(app.last_tick, now))), DT_MIN_S, DT_MAX_S)
 	app.last_tick = now
 	build :: proc(app: ^App, size: draw.Vec2, events: []platform.Event, dt: f32) {
 		app.animating = false
@@ -169,7 +179,7 @@ frame :: proc(app: ^App, inner := false) {
 		defer app.anchor = nil   // (kept through these builds: the bottom stays let go of)
 		build(app, size, nil, 0)
 		// (again while it moves: what this offset builds around it is measured only then, a page read before it above all)
-		for _ in 0 ..< 4 {
+		for _ in 0 ..< ANCHOR_BUILDS_MAX {
 			b := app.chat_sb
 			if b == nil { break }
 			delta := a.rect.min.y - app.anchor_y
@@ -208,20 +218,20 @@ frame :: proc(app: ^App, inner := false) {
 	render.paced_present(&app.pacer)
 	free_all(context.temp_allocator)
 
-	if app.refresh_due && ui.now_ms() - app.refresh_ms > 1200 {
+	if app.refresh_due && ui.now_ms() - app.refresh_ms > REFRESH_DEBOUNCE_MS {
 		app.refresh_due = false
 		app.refresh_ms = ui.now_ms()
 		refresh_sessions(app)
 	}
 	if app.stats_pending && app.chat.loaded && app.chat.have_self { app.stats_pending = false; stats_open(app) }
 	servers_rediscover(app)
-	if app.facts_due && ui.now_ms() - app.facts_ms > 700 {
+	if app.facts_due && ui.now_ms() - app.facts_ms > FACTS_DEBOUNCE_MS {
 		// an action of the settings (connect an MCP server, revoke a permission): read the pages again
 		app.facts_due = false
 		app.facts_ms = ui.now_ms()
 		if app.settings_open { server_facts_load(app) }
 	}
-	if app.children_due && ui.now_ms() - app.children_ms > 800 {
+	if app.children_due && ui.now_ms() - app.children_ms > CHILDREN_DEBOUNCE_MS {
 		app.children_due = false
 		app.children_ms = ui.now_ms()
 		load_children(app)
@@ -266,6 +276,10 @@ face_resolve :: proc(app: ^App, want: string, auto: []string, builtin: []u8) -> 
 	return f, ""
 }
 
+WEIGHT_MONO_BOLD :: 700
+WEIGHT_UI_BOLD   :: 600
+WEIGHT_REGULAR   :: 400
+
 // The text faces from the preferences appearance.font and appearance.mono_font (at start, and when either changes).
 fonts_apply :: proc(app: ^App) {
 	want_ui := config.string_of(&app.cfg_prefs, "appearance.font")
@@ -275,14 +289,14 @@ fonts_apply :: proc(app: ^App) {
 	app.mono, mono_face = face_resolve(app, want_mono, MONO_FACES, font.FALLBACK_MONO_DATA)
 	app.mono_bold = app.mono
 	if mono_face != "" {
-		if b, ok := font.load_system(&app.fonts, mono_face, 700); ok { app.mono_bold = b }
+		if b, ok := font.load_system(&app.fonts, mono_face, WEIGHT_MONO_BOLD); ok { app.mono_bold = b }
 	}
 	app.ui_state.mono_font = app.mono
 	bold, italic, bi := app.font, app.font, app.font
 	if app.ui_face != "" {
-		if f, ok := font.load_system(&app.fonts, app.ui_face, 600); ok { bold = f }
-		if f, ok := font.load_system(&app.fonts, app.ui_face, 400, .Italic); ok { italic = f }
-		if f, ok := font.load_system(&app.fonts, app.ui_face, 600, .Italic); ok { bi = f }
+		if f, ok := font.load_system(&app.fonts, app.ui_face, WEIGHT_UI_BOLD); ok { bold = f }
+		if f, ok := font.load_system(&app.fonts, app.ui_face, WEIGHT_REGULAR, .Italic); ok { italic = f }
+		if f, ok := font.load_system(&app.fonts, app.ui_face, WEIGHT_UI_BOLD, .Italic); ok { bi = f }
 	}
 	ui.rich_set_faces(&app.ui_state, app.font, bold, italic, bi)
 	delete(app.mono_face)
@@ -291,6 +305,15 @@ fonts_apply :: proc(app: ^App) {
 	app.fonts_wanted = strings.concatenate({want_ui, "\n", want_mono})
 }
 
+SCALE_MIN            :: 0.5   // what --scale= accepts
+SCALE_MAX            :: 4
+WINDOW_W             :: 1320
+WINDOW_H             :: 860
+POSTS_CAPACITY       :: 4096
+POSTS_PER_BUILD      :: 4000
+CHECK_FRAME_SLEEP_MS :: 50    // --frames=N
+ANIMATION_WAIT_MS    :: 33    // the longest sleep while something pulses
+
 main :: proc() {
 	frames := -1   // --frames=N: N frames of the hidden window, then exit (a check that it runs)
 	forced_scale: f32 = 0   // --scale=<factor>
@@ -298,7 +321,7 @@ main :: proc() {
 	for a in os.args[1:] {
 		if strings.has_prefix(a, "--frames=") { frames, _ = strconv.parse_int(a[len("--frames="):]) }
 		if strings.has_prefix(a, "--session=") { start_session = a[len("--session="):] }
-		if strings.has_prefix(a, "--scale=") { if v, ok := strconv.parse_f32(a[len("--scale="):]); ok && v >= 0.5 && v <= 4 { forced_scale = v } }
+		if strings.has_prefix(a, "--scale=") { if v, ok := strconv.parse_f32(a[len("--scale="):]); ok && v >= SCALE_MIN && v <= SCALE_MAX { forced_scale = v } }
 	}
 	// --install / --uninstall / --status: the desktop integration, without a window
 	if handled, code := desktop_cli(); handled { os.exit(code) }
@@ -307,7 +330,7 @@ main :: proc() {
 
 	app := new(App)
 	the_app = app
-	app.sidebar_w = 290
+	app.sidebar_w = SIDEBAR_W_DEFAULT
 	app.start_session = start_session
 	app.scale = forced_scale
 	app.seek_subagent = slice.contains(os.args, "--seek-subagent")
@@ -321,7 +344,7 @@ main :: proc() {
 	// a composition swap chain whose buffers keep the monitor's size while the window is resized: the window shows their
 	// top-left part 1:1, clipped by its client area, so a frame of the old size is never stretched over the new one (as
 	// Wren's browser.window.fixed_surface). Where DirectComposition is missing it is an ordinary swap chain.
-	app.win = platform.open_window("opencode", {1320, 860}, transparent = true, integrated_title = true)
+	app.win = platform.open_window("opencode", {WINDOW_W, WINDOW_H}, transparent = true, integrated_title = true)
 	if app.win == nil { fmt.eprintln("opencode-native: no window"); os.exit(1) }
 	if !render.init_window(&app.r, app.win, app.win.size, transparent = true) { fmt.eprintln("opencode-native: no renderer"); os.exit(1) }
 	if !slice.contains(os.args, "--no-fixed-surface") { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
@@ -333,20 +356,20 @@ main :: proc() {
 	app.ui_state.icon_font = app.tk_icons
 	ui.set_toast_position(&app.ui_state, .Bottom_Right)
 	prefs_init(app)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
-	ui.post_configure(&app.ui_state, capacity = 4096, overflow = .Block, per_build = 4000, on_drop = on_drop)
+	ui.post_configure(&app.ui_state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
 	platform.set_dark_title(app.win, true)
 	app.devtools = devtools.start_from_env(app.win, "opencode")
 	app.win.user = app
 	app.win.on_frame = proc(user: rawptr) { frame((^App)(user), inner = true) }
 	app.last_tick = time.tick_now()
-	app.frames = 3
+	app.frames = FRAMES_AFTER_INPUT
 
 	// the event stream: its first connection loads everything (stream_state)
 	server_connect(app, app.server)
 	if app.conn == nil { fmt.eprintln("opencode-native: the HTTP client failed to start"); os.exit(1) }
 
 	if frames >= 0 {
-		for _ in 0 ..< frames { frame(app); time.sleep(50 * time.Millisecond) }
+		for _ in 0 ..< frames { frame(app); time.sleep(CHECK_FRAME_SLEEP_MS * time.Millisecond) }
 		fmt.printfln("opencode-native: %d frames, %d boxes, online=%v, %d sessions, %d messages", frames, app.ui_state.boxes_built, app.online, len(app.sessions), len(app.chat.messages))
 		os.exit(0)
 	}
@@ -368,7 +391,7 @@ main :: proc() {
 	for !platform.is_closed(app.win) && !app.quit {
 		if app.frames == 0 && !ui.needs_frame(&app.ui_state) {
 			wait := ui.wake_in_ms(&app.ui_state)
-			if app.animating { wait = wait > 0 ? min(wait, 33) : 33 }
+			if app.animating { wait = wait > 0 ? min(wait, ANIMATION_WAIT_MS) : ANIMATION_WAIT_MS }
 			platform.wait_event(app.win, wait)
 			app.idled = true
 		}

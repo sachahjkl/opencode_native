@@ -29,9 +29,28 @@ HEX_YELLOW  :: 0xf5a742ff
 HEX_RED     :: 0xe06c75ff
 HEX_CYAN    :: 0x56b6c2ff
 
+// The look's own colours, shared by several files
+HEX_PALETTE_BG      :: 0x0c0c0cff
+HEX_ON_ACCENT       :: 0x1c120bff   // text on an accent button
+HEX_CODE_BG         :: 0x202020ff
+HEX_FLOATING_BG     :: 0x181818ff   // menus, popovers
+HEX_FLOATING_BORDER :: 0x333333ff
+HEX_BRIGHT          :: 0xffffffff   // text at its brightest: titles, what is selected
+HEX_TEXT_SOFT       :: 0xc8c8c8ff   // quiet light text, a step under HEX_TEXT
+HEX_ERROR_TEXT      :: 0xf0a0a6ff   // the words of an error (HEX_RED is its mark)
+HEX_BTN_FACE        :: 0x2a2a2aff
+HEX_BTN_DANGER      :: 0xb8464fff
+HEX_BTN_GHOST       :: 0x222222ff   // a ghost button under the pointer
+HEX_WELL            :: 0x070707ff
+HEX_CODE_WELL       :: 0x060606ff   // code and tool output
+HEX_FACTS_WELL      :: 0x0b0b0bff   // key / value lines, a sub-agent's result
+HEX_PILL            :: 0x0d0d0dff
+HEX_PLATE_TOP       :: 0x1b1b1bff
+HEX_PLATE_BOTTOM    :: 0x141414ff
+
 OPENCODE_PALETTE :: ui.Palette{
-	bg = 0x0c0c0cff, panel = HEX_BG2, panel2 = HEX_BG3, text = HEX_TEXT, weak = HEX_WEAK, border = HEX_LINE,
-	accent = HEX_PEACH, accent_text = 0x1c120bff, good = HEX_GREEN, warn = HEX_YELLOW, bad = HEX_RED, dark = true,
+	bg = HEX_PALETTE_BG, panel = HEX_BG2, panel2 = HEX_BG3, text = HEX_TEXT, weak = HEX_WEAK, border = HEX_LINE,
+	accent = HEX_PEACH, accent_text = HEX_ON_ACCENT, good = HEX_GREEN, warn = HEX_YELLOW, bad = HEX_RED, dark = true,
 	finish = .Gradient, bar = HEX_BG1,
 }
 
@@ -56,12 +75,12 @@ theme_setup :: proc(t: ^ui.Theme) {
 	ui.theme_add(t, "bare focus border", CLEAR)
 	ui.theme_add(t, "bare input background", CLEAR)
 	ui.theme_add(t, "bare input border", CLEAR)
-	ui.theme_add(t, "code_bg", hex(0x202020ff))
+	ui.theme_add(t, "code_bg", hex(HEX_CODE_BG))
 	ui.theme_add(t, "link", hex(HEX_BLUE))
-	ui.theme_add(t, "floating background", hex(0x181818ff))
-	ui.theme_add(t, "floating border", hex(0x333333ff))
+	ui.theme_add(t, "floating background", hex(HEX_FLOATING_BG))
+	ui.theme_add(t, "floating border", hex(HEX_FLOATING_BORDER))
 	ui.theme_add(t, "floating scrim background", CLEAR)   // (dialog_backdrop paints it; "floating background" made it opaque)
-	ui.theme_add(t, "selection", with_alpha(hex(HEX_PEACH), 0.28))
+	ui.theme_add(t, "selection", with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
 	ui.apply_palette(t, OPENCODE_PALETTE)
 }
 
@@ -104,6 +123,29 @@ ICO_GAUGE    :: "\ue1bf"   // gauge
 ICO_UNDO     :: "\ue2a1"   // undo-2
 ICO_BACK     :: "\ue048"   // arrow-left
 
+// Sizes shared by several files (_EM: in font sizes, _PX: in logical pixels).
+BUTTON_H_EM         :: 2.1
+BUTTON_COMPACT_H_EM :: 1.9    // in a toolbar or a header
+BUTTON_SMALL_H_EM   :: 1.8    // in a row of a list
+FIELD_H_EM          :: 2.1    // a one-line field in its well
+GLYPH_BUTTON_EM     :: 1.8
+PILL_H_EM           :: 1.45
+PILL_RADIUS         :: 999    // far beyond half its height: the corners meet
+BUTTON_RADIUS       :: 6
+GLYPH_BUTTON_RADIUS :: 5
+CARD_RADIUS         :: 9      // the plates of the conversation
+GROOVE_BOX_PX       :: 6      // the box a groove lies in, thicker than its line
+DIALOG_MARGIN_EM    :: 1.4
+LINE_HEIGHT_RATIO   :: 1.35   // of the font size
+SELECTION_ALPHA     :: 0.28
+FADE_VISIBLE        :: 0.01   // a hover or focus fade above this shows on screen
+
+// The animations: phases in radians per millisecond of ui.now_ms.
+PULSE_RATE     :: 0.006
+PULSE_LIT_MIN  :: 0.45
+PULSE_LIT_SPAN :: 0.55
+SCANNER_RATE   :: 0.0028
+
 px1 :: proc() -> f32 { return max(1, math.round(ui.scale())) }
 
 radii4 :: proc(r: f32) -> [4]f32 { return {r, r, r, r} }
@@ -120,7 +162,7 @@ draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius: f32, base: Color, hot, pr
 	face := lighten(base, 0.06 * hot)
 	if pressed < 0.5 {
 		draw.box_shadow(dc, draw.rect_shift(r, {0, 1.5 * s}), rr, 2.2 * s, {0, 0, 0, 0.65})
-		if glow.a > 0 && hot > 0.01 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 2.5 * s, with_alpha(glow, 0.2 * hot)) }   // (under the pointer only, and tight: a wide halo reached the carved edge above)
+		if glow.a > 0 && hot > FADE_VISIBLE && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 2.5 * s, with_alpha(glow, 0.2 * hot)) }   // (under the pointer only, and tight: a wide halo reached the carved edge above)
 		top := lighten(face, 0.10)
 		bot := darken(face, 0.16)
 		draw.rect_corners(dc, r, {top, bot, top, bot}, rr)
@@ -144,11 +186,11 @@ draw_well :: proc(dc: ^draw.Context, r: Rect, radius: f32, base: Color, focus: f
 	s := ui.scale()
 	p := px1()
 	rr := radii4(radius)
-	if focus > 0.01 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 4 * s, with_alpha(accent, 0.12 * focus)) }
+	if focus > FADE_VISIBLE && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 4 * s, with_alpha(accent, 0.12 * focus)) }
 	draw.rect(dc, r, base, radius)
 	draw.inset_shadow(dc, r, rr, draw.rect_shift(draw.rect_pad(r, -0.5 * s), {0, 2.5 * s}), rr, 3.5 * s, {0, 0, 0, 0.85})
 	draw.rect(dc, {{r.min.x + radius * 0.6, r.max.y}, {r.max.x - radius * 0.6, r.max.y + p}}, {1, 1, 1, 0.07})
-	edge := focus > 0.01 ? draw.mix(Color{0, 0, 0, 0.9}, with_alpha(accent, 0.85), focus) : Color{0, 0, 0, 0.9}
+	edge := focus > FADE_VISIBLE ? draw.mix(Color{0, 0, 0, 0.9}, with_alpha(accent, 0.85), focus) : Color{0, 0, 0, 0.9}
 	draw.rect(dc, r, edge, radius, p)
 	// the rim of the opening, lit: without it a dark well on a dark panel has no visible edge (the accent replaces it
 	// under the focus)
@@ -174,7 +216,7 @@ draw_lamp :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color, lit: f32 = 1) 
 	defer draw.set_circular_corners(dc, prev)
 	r := Rect{c - d * 0.5, c + d * 0.5}
 	rr := radii4(d * 0.5)
-	if lit > 0.01 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, d * 0.45, with_alpha(col, 0.4 * lit)) }
+	if lit > FADE_VISIBLE && the_app.prefs.glow { draw.box_shadow(dc, r, rr, d * 0.45, with_alpha(col, 0.4 * lit)) }
 	draw.rect(dc, draw.rect_pad(r, 1 * s), {0, 0, 0, 0.8}, d * 0.5 + s)
 	body := draw.mix(darken(col, 0.65), col, lit)
 	draw.rect_corners(dc, r, {lighten(body, 0.25), darken(body, 0.2), lighten(body, 0.25), darken(body, 0.2)}, rr)
@@ -209,12 +251,12 @@ bevel_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	held := b.active_t * b.hot_t
 	rad := d.radius * ui.scale()
 	switch d.kind {
-	case .Normal:  draw_bevel(dc, b.rect, rad, hex(0x2a2a2aff), b.hot_t, held)
+	case .Normal:  draw_bevel(dc, b.rect, rad, hex(HEX_BTN_FACE), b.hot_t, held)
 	case .Accent:  draw_bevel(dc, b.rect, rad, accent(), b.hot_t, held, accent())
-	case .Danger:  draw_bevel(dc, b.rect, rad, hex(0xb8464fff), b.hot_t, held, hex(HEX_RED))
-	case .Toggled: draw_bevel(dc, b.rect, rad, hex(0x2a2a2aff), b.hot_t, 1)
+	case .Danger:  draw_bevel(dc, b.rect, rad, hex(HEX_BTN_DANGER), b.hot_t, held, hex(HEX_RED))
+	case .Toggled: draw_bevel(dc, b.rect, rad, hex(HEX_BTN_FACE), b.hot_t, 1)
 	case .Ghost:
-		if b.hot_t > 0.01 || held > 0.01 { draw_bevel(dc, b.rect, rad, hex(0x222222ff), b.hot_t, held) }
+		if b.hot_t > FADE_VISIBLE || held > FADE_VISIBLE { draw_bevel(dc, b.rect, rad, hex(HEX_BTN_GHOST), b.hot_t, held) }
 	}
 }
 
@@ -233,7 +275,7 @@ dialog_close :: proc(open: ^bool) {
 	ui.a11y({role = .Button, name = "Close"})
 	b := ui.build_box({.Clickable, .Focusable}, "###dialog_close")
 	d := ui.frame_new(Bevel_Draw)
-	d^ = {kind = .Ghost, radius = 5}
+	d^ = {kind = .Ghost, radius = GLYPH_BUTTON_RADIUS}
 	b.custom, b.custom_user = bevel_box_draw, d
 	sig := ui.signal(b)
 	if ui.parent(b) {
@@ -246,15 +288,15 @@ dialog_close :: proc(open: ^bool) {
 // A machined push button: an icon (Lucide glyph) and/or a label. `width`: its width (text size by default).
 bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Normal, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false) -> ui.Signal {
 	em := ui.font_size()
-	h := height > 0 ? height : math.round(em * 2.1)
-	fg := kind == .Accent ? hex(0x1c120bff) : kind == .Danger ? WHITE : hex(HEX_TEXT)
+	h := height > 0 ? height : math.round(em * BUTTON_H_EM)
+	fg := kind == .Accent ? hex(HEX_ON_ACCENT) : kind == .Danger ? WHITE : hex(HEX_TEXT)
 	if disabled { fg = hex(HEX_FAINT) }
 	ui.next({width = width.? or_else ui.children_sum(), height = ui.px(h), axis = .X, cross = .Center})
 	flags: ui.Box_Flags = {.Clickable, .Focusable}
 	if disabled { flags = {} }
 	b := ui.build_box(flags, id)
 	d := ui.frame_new(Bevel_Draw)
-	d^ = {kind = disabled ? .Ghost : kind, radius = 6}
+	d^ = {kind = disabled ? .Ghost : kind, radius = BUTTON_RADIUS}
 	b.custom = bevel_box_draw
 	b.custom_user = d
 	sig := ui.signal(b)
@@ -279,11 +321,11 @@ bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Nor
 // A round, icon-only ghost button (the glyph only lights up under the pointer).
 glyph_button :: proc(id: string, icon: string, size: f32 = 0, color := Color{}) -> ui.Signal {
 	em := ui.font_size()
-	sz := size > 0 ? size : math.round(em * 1.8)
+	sz := size > 0 ? size : math.round(em * GLYPH_BUTTON_EM)
 	ui.next({width = ui.px(sz), height = ui.px(sz), axis = .X, cross = .Center})
 	b := ui.build_box({.Clickable, .Focusable}, id)
 	d := ui.frame_new(Bevel_Draw)
-	d^ = {kind = .Ghost, radius = 5}
+	d^ = {kind = .Ghost, radius = GLYPH_BUTTON_RADIUS}
 	b.custom = bevel_box_draw
 	b.custom_user = d
 	sig := ui.signal(b)
@@ -307,7 +349,7 @@ well_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 
 // `if well("###id", ...) { ... }`: a sunken container (size it with `next`).
 @(deferred_none = ui.pop_parent)
-well :: proc(id: string, axis := ui.Axis.Y, radius: f32 = 7, base: u32 = 0x070707ff, focus: f32 = 0, flags: ui.Box_Flags = {}) -> bool {
+well :: proc(id: string, axis := ui.Axis.Y, radius: f32 = 7, base: u32 = HEX_WELL, focus: f32 = 0, flags: ui.Box_Flags = {}) -> bool {
 	b := ui.build_box(flags, id)
 	b.layout_axis = axis
 	d := ui.frame_new(Well_Draw)
@@ -325,7 +367,7 @@ Lamp_Draw :: struct { color: Color, lit: f32, pulse: bool }
 lamp_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Lamp_Draw)(user)
 	lit := d.lit
-	if d.pulse { lit = 0.45 + 0.55 * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * 0.006)) }
+	if d.pulse { lit = PULSE_LIT_MIN + PULSE_LIT_SPAN * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * PULSE_RATE)) }
 	sz := min(b.rect.max.x - b.rect.min.x, b.rect.max.y - b.rect.min.y)
 	draw_lamp(dc, draw.rect_center(b.rect), math.round(sz * 0.62), d.color, lit)
 }
@@ -370,9 +412,9 @@ scanner :: proc(id: string, color: Color, width, height: f32) {
 		h := max(3 * s, math.round((r.max.y - r.min.y) * 0.4))
 		cy := math.round((r.min.y + r.max.y) * 0.5)
 		slot := Rect{{r.min.x, cy - h * 0.5}, {r.max.x, cy + h * 0.5}}
-		draw_well(dc, slot, h * 0.5, hex(0x070707ff))
+		draw_well(dc, slot, h * 0.5, hex(HEX_WELL))
 		w := slot.max.x - slot.min.x
-		t := 0.5 - 0.5 * math.cos(f32(ui.now_ms()) * 0.0028)   // eased back and forth
+		t := 0.5 - 0.5 * math.cos(f32(ui.now_ms()) * SCANNER_RATE)   // eased back and forth
 		gw := w * 0.28
 		x := slot.min.x + (w - gw) * t
 		g := Rect{{x, slot.min.y + s}, {x + gw, slot.max.y - s}}
@@ -405,7 +447,7 @@ groove_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 // A carved separator across the parent (horizontal in a column, vertical in a row).
 groove :: proc(id: string = "", thickness: f32 = 0, across := false) {
 	p := ui.parent_box()
-	t := thickness > 0 ? thickness : 6
+	t := thickness > 0 ? thickness : GROOVE_BOX_PX
 	if (p.layout_axis == .Y) != across { ui.next({width = ui.fill(), height = ui.px(t)}) } else { ui.next({width = ui.px(t), height = ui.fill()}) }
 	b := ui.build_box({}, id)
 	b.custom = groove_box_draw
@@ -462,7 +504,7 @@ plate_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 // `if plate("###id", ...) { ... }`: a raised panel (cards, the user's prompt, popover bodies): gradient face, lit rim,
 // soft shadow. Size and axis with `next` before it.
 @(deferred_none = ui.pop_parent)
-plate :: proc(id: string, top: u32 = 0x1b1b1bff, bottom: u32 = 0x141414ff, radius: f32 = 8, shadow: f32 = 6, rim: f32 = 0.07, border: Color = {0, 0, 0, 0.85}, glow := Color{}) -> bool {
+plate :: proc(id: string, top: u32 = HEX_PLATE_TOP, bottom: u32 = HEX_PLATE_BOTTOM, radius: f32 = 8, shadow: f32 = 6, rim: f32 = 0.07, border: Color = {0, 0, 0, 0.85}, glow := Color{}) -> bool {
 	b := ui.build_box({}, id)
 	d := ui.frame_new(Plate_Draw)
 	d^ = {radius = radius, top = hex(top), bottom = hex(bottom), border = border, shadow = shadow, rim = rim, glow = glow}
@@ -476,8 +518,8 @@ plate :: proc(id: string, top: u32 = 0x1b1b1bff, bottom: u32 = 0x141414ff, radiu
 pill :: proc(id: string, text: string, color := Color{}, icon := "") {
 	em := ui.font_size()
 	fs := math.round(em * 0.8)
-	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * 1.45)), axis = .X, cross = .Center})
-	if well(id, .X, radius = 999, base = 0x0d0d0dff) {
+	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * PILL_H_EM)), axis = .X, cross = .Center})
+	if well(id, .X, radius = PILL_RADIUS, base = HEX_PILL) {
 		ui.spacer(ui.px(em * 0.5))
 		fg := color.a > 0 ? color : hex(HEX_WEAK)
 		if icon != "" {

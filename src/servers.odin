@@ -69,12 +69,14 @@ local_server_config :: proc() -> Server_Config {
 	return discover_server()
 }
 
+REDISCOVER_MS :: 2500
+
 // While this computer's server does not answer, look again every few seconds where it runs: the service may have
 // started since, or restarted on another port. A new address reconnects at once.
 servers_rediscover :: proc(app: ^App) {
 	if app.online || app.server < 0 || app.server >= len(app.servers) || !app.servers[app.server].local { return }
 	now := ui.now_ms()
-	if now - app.rediscover_ms < 2500 { return }
+	if now - app.rediscover_ms < REDISCOVER_MS { return }
 	app.rediscover_ms = now
 	cfg := local_server_config()
 	url := server_url(cfg)
@@ -197,34 +199,36 @@ server_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 	}
 }
 
+SERVER_DIALOG_TOP :: 0.2   // of the window's height
+
 server_dialog :: proc(app: ^App, em: f32) {
 	e := &app.server_edit
-	if ui.modal("server", em * 32, &e.open, 0.2) {
+	if ui.modal("server", em * 32, &e.open, SERVER_DIALOG_TOP) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em * 1.2))
-		pad :: proc(em: f32) { ui.spacer(ui.px(em * 1.4)) }
+		pad :: proc(em: f32) { ui.spacer(ui.px(em * DIALOG_MARGIN_EM)) }
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center) {
 			pad(em)
 			glyph(ICO_GLOBE, accent(), math.round(em * 1.1))
 			ui.spacer(ui.px(em * 0.5))
-			text("t", e.index >= 0 ? "Edit the server" : "Add a server", hex(0xffffffff), ui.Style_Mod{font_size = math.round(em * 1.2), height = ui.px(em * 1.8)})
+			text("t", e.index >= 0 ? "Edit the server" : "Add a server", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * 1.2), height = ui.px(em * 1.8)})
 		}
 		ui.spacer(ui.px(em * 0.9))
 		field :: proc(id, label, hint: string, f: ^ui.Text_Field, em: f32, secret := false) -> ui.Edit_Result {
 			res: ui.Edit_Result
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = id) {
-				ui.spacer(ui.px(em * 1.4))
+				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 				text("k", label, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * 0.88), height = ui.px(em * 1.5)}, ui.px(em * 6))
-				ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.1)), axis = .X, cross = .Center})
+				ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 				if well("###w", .X, radius = 7) {
 					if ui.tags("bare") {
 						ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.5})
 						res = ui.line_edit("###e", f, hint, secret = secret)
 					}
 				}
-				ui.spacer(ui.px(em * 1.4))
+				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			}
 			ui.spacer(ui.px(em * 0.5))
 			return res
@@ -237,7 +241,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 			if ui.row() {
 				ui.spacer(ui.px(em * 7.4))
 				text("h", "the server's OPENCODE_SERVER_PASSWORD, as user opencode", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.78), height = ui.px(em * 1.3)}, ui.fill())
-				ui.spacer(ui.px(em * 1.4))
+				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			}
 		}
 		ui.spacer(ui.px(em * 1.1))

@@ -145,22 +145,26 @@ setup_offer_at_start :: proc(app: ^App) {
 	if f.state == .Not_Installed || f.state == .Repair { setup_open(app) }
 }
 
+SETUP_DIALOG_TOP :: 0.18   // of the window's height
+SETUP_MARGIN_EM  :: 1.5
+HEX_SETUP_WELL   :: 0x0a0a0aff
+
 setup_dialog :: proc(app: ^App, em: f32) {
 	st := &app.setup
 	was_open := st.open
-	if ui.modal("setup", em * 36, &st.open, 0.18) {
+	if ui.modal("setup", em * 36, &st.open, SETUP_DIALOG_TOP) {
 		dialog_backdrop()
 		f := &st.facts
 		ui.spacer(ui.px(em * 1.3))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row() {
-			ui.spacer(ui.px(em * 1.5))
+			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
 			logo_box(app, "###setup_logo", math.round(em * 4.2))
 			ui.spacer(ui.px(em * 1.1))
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
 				ui.spacer(ui.px(em * 0.4))
-				text("t", "opencode native", hex(0xffffffff), ui.Style_Mod{font_size = math.round(em * 1.5), height = ui.px(em * 2)})
+				text("t", "opencode native", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * 1.5), height = ui.px(em * 2)})
 				text("v", fmt.tprintf("version %s  ·  Froment Software", APP_VERSION), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.78), height = ui.px(em * 1.3)})
 				ui.spacer(ui.px(em * 0.7))
 				col := hex(HEX_YELLOW)
@@ -178,21 +182,21 @@ setup_dialog :: proc(app: ^App, em: f32) {
 					text("s", state, hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * 0.92)}, ui.fill())
 				}
 			}
-			ui.spacer(ui.px(em * 1.5))
+			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
 		}
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row() {
-			ui.spacer(ui.px(em * 1.5))
+			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-			if well("###where", radius = 8, base = 0x0a0a0aff) {
+			if well("###where", radius = 8, base = HEX_SETUP_WELL) {
 				ui.spacer(ui.px(em * 0.6))
 				line :: proc(id, k, v: string, em: f32) {
 					ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 					if ui.row(.Center, id = id) {
 						ui.spacer(ui.px(em * 0.8))
 						text("k", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.75)}, ui.px(em * 7.5))
-						text("v", v, hex(0xc8c8c8ff), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.75)}, ui.fill())
+						text("v", v, hex(HEX_TEXT_SOFT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.75)}, ui.fill())
 						ui.spacer(ui.px(em * 0.8))
 					}
 				}
@@ -202,7 +206,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				line("###l4", "this copy", f.running, em)
 				ui.spacer(ui.px(em * 0.6))
 			}
-			ui.spacer(ui.px(em * 1.5))
+			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
 		}
 		ui.spacer(ui.px(em * 0.8))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -214,7 +218,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.5))
 			ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 			if ui.row(.Center) {
-				ui.spacer(ui.px(em * 1.5))
+				ui.spacer(ui.px(em * SETUP_MARGIN_EM))
 				glyph(st.good ? ICO_CHECK : ICO_WARN, st.good ? hex(HEX_GREEN) : hex(HEX_RED), math.round(em * 0.85))
 				ui.spacer(ui.px(em * 0.3))
 				text("m", st.message, st.good ? hex(HEX_GREEN) : hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * 0.88)}, ui.fill())
@@ -223,7 +227,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 1.1))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center) {
-			ui.spacer(ui.px(em * 1.5))
+			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
 			if f.state == .This_Copy || f.state == .Repair || f.state == .Other_Copy {
 				if bevel_button("###uninstall", "Uninstall", ICO_DELETE, .Danger).clicked {
 					ok, deferred, msg := desktop_uninstall()
@@ -274,7 +278,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 					setup_refresh(app)
 				}
 			}
-			ui.spacer(ui.px(em * 1.5))
+			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
 		}
 		ui.spacer(ui.px(em * 1.3))
 		dialog_close(&st.open)

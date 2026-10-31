@@ -221,7 +221,7 @@ find_child :: proc(c: ^Chat, id: string) -> ^Session_Info {
 
 load_children :: proc(app: ^App) {
 	if app.chat.id == "" { return }
-	request(app, .Children, "GET", strings.concatenate({"/api/session?limit=200&parentID=", app.chat.id}, context.temp_allocator), tag = app.chat.id)
+	request(app, .Children, "GET", strings.concatenate({"/api/session?limit=" + SESSIONS_LIMIT + "&parentID=", app.chat.id}, context.temp_allocator), tag = app.chat.id)
 }
 
 sessions_load :: proc(app: ^App, v: json.Value) {
