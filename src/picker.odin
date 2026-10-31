@@ -193,7 +193,7 @@ lit_text :: proc(app: ^App, s: string, split: int, ranges: []ui.Fuzzy_Range, col
 			m.fg = c
 			m.text_pad = 0
 			ui.next(m)
-			ui.build_box({.Draw_Text, .Draw_Background}, fmt.tprintf("%s###s%d", s, k^))
+			ui.build_box({.Draw_Text, .Draw_Background}, fmt.tprintf("%s###s%d", label_safe(s), k^))
 		} else {
 			text(fmt.tprintf("s%d", k^), s, c, m)
 		}

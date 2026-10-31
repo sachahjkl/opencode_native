@@ -63,10 +63,11 @@ Message :: struct {
 	// a sub-agent's result handed back to this session (a synthetic message whose metadata.source is "subagent")
 	sub_child, sub_state, sub_agent, sub_desc: string,
 	images:    [dynamic]Image_Ref,   // attached to a user's prompt
+	from_page: bool,                 // read from a page (what the stream builds is only pieces)
 }
 
-// The open conversation. Everything in it lives in its arena, dropped when another conversation opens or the page is
-// read again.
+// The open conversation. Everything in it lives in its arena, dropped when another conversation opens. A page read again
+// keeps the messages that are final (chat_load), the sub-agents have an arena of their own: reading does not make it grow.
 Chat :: struct {
 	id:        string,
 	gen:       u64,
@@ -78,6 +79,7 @@ Chat :: struct {
 	loading_older: bool,           // that page is on its way
 	older_failed:  f64,            // when it could not be read (ui.now_ms): tried again a little later, on the next scroll
 	keep_id:   string,             // the message built whatever while the page before it comes in (the view stays on it)
+	new_dir:   string,             // the folder of the session about to be made
 	loaded:    bool,
 	busy:      bool,
 	cost:      f64,
@@ -87,7 +89,8 @@ Chat :: struct {
 	self:         Session_Info,
 	have_self:    bool,
 	parent_title: string,
-	children:     [dynamic]Session_Info,   // sessions whose parent is this one (newest first)
+	children:     [dynamic]Session_Info,   // sessions whose parent is this one (newest first; in children_arena: read often)
+	children_arena: virtual.Arena,
 	live:         map[string]Sub_Live,     // keyed by child session id (keys and strings in the arena)
 }
 
@@ -96,7 +99,7 @@ Model_Info :: struct { id, provider, name, family: string, ctx_len: f64 }
 Permission :: struct { id, session, action, message: string, resources: []string }
 
 chat_reset :: proc(c: ^Chat) {
-	if c.alloc.procedure != nil { virtual.arena_destroy(&c.arena) }
+	if c.alloc.procedure != nil { virtual.arena_destroy(&c.arena); virtual.arena_destroy(&c.children_arena) }
 	gen := c.gen
 	c^ = {}
 	c.gen = gen + 1
@@ -106,9 +109,8 @@ chat_reset :: proc(c: ^Chat) {
 
 open_chat :: proc(app: ^App, session_id: string) {
 	if session_id == app.chat.id { return }
-	id := strings.clone(session_id, context.temp_allocator)   // (it may live in the arena chat_reset drops: a sub-agent's id from a card)
+	id := strings.clone(session_id, context.temp_allocator)   // (it may live in the arena chat_reset drops)
 	chat_reset(&app.chat)
-	app.new_dir = ""
 	app.chat.id = strings.clone(id, app.chat.alloc)
 	app.chat.loading = true
 	app.opened_ms = ui.now_ms()
@@ -210,8 +212,11 @@ parent_load :: proc(app: ^App, v: json.Value) {
 // The sub-agents of the session shown (its children), newest first.
 children_load :: proc(app: ^App, v: json.Value) {
 	c := &app.chat
-	c.children = make([dynamic]Session_Info, c.alloc)
-	for it in jarr(v, "data") { append(&c.children, session_from_json(it, c.alloc)) }
+	virtual.arena_destroy(&c.children_arena)
+	_ = virtual.arena_init_growing(&c.children_arena)
+	a := virtual.arena_allocator(&c.children_arena)
+	c.children = make([dynamic]Session_Info, a)
+	for it in jarr(v, "data") { append(&c.children, session_from_json(it, a)) }
 }
 
 find_child :: proc(c: ^Chat, id: string) -> ^Session_Info {
@@ -323,9 +328,12 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool) {
 	page := make([dynamic]Message, a)
 	items := jarr(v, "data")
 	#reverse for it in items {
-		m := message_from_json(it, a)
+		id := jstr(it, "id")
+		old := id != "" ? find_message(c, id) : nil
+		if older && old != nil { continue }
+		// (what is final stays as it is: cloned at each reading, images and all, it would pile up in the arena)
+		m := old != nil && message_final(old, it) ? old^ : message_from_json(it, a)
 		if m.kind == .Idle && len(page) > 0 && page[len(page) - 1].kind == .Idle { continue }
-		if older && m.id != "" && find_message(c, m.id) != nil { continue }
 		append(&page, m)
 	}
 	cursor := strings.clone(jstr(v, "cursor", "next"), a)
@@ -353,8 +361,16 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool) {
 	}
 }
 
+// `m`, read from a page, is what the server says of `it` now: only an assistant's message changes, until it is completed.
+@(private = "file")
+message_final :: proc(m: ^Message, it: json.Value) -> bool {
+	if !m.from_page { return false }
+	return m.kind != .Assistant || (m.completed > 0 && m.completed == jnum(it, "time", "completed"))
+}
+
 message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 	m: Message
+	m.from_page = true
 	m.id = strings.clone(jstr(it, "id"), a)
 	m.created = jnum(it, "time", "created")
 	m.completed = jnum(it, "time", "completed")

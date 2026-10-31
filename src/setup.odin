@@ -44,7 +44,7 @@ settings_set :: proc(key, value: string) {
 	}
 	fmt.sbprintf(&b, "%s=%s\n", key, value)
 	_ = os.make_directory_all(filepath.dir(settings_path()))
-	_ = os.write_entire_file(settings_path(), transmute([]u8)strings.to_string(b))
+	if os.write_entire_file(settings_path(), transmute([]u8)strings.to_string(b)) != nil { ui.toast(.Bad, "The settings could not be saved") }
 }
 
 ////////////////////////////////
@@ -75,14 +75,13 @@ desktop_cli :: proc() -> (handled: bool, code: int) {
 ////////////////////////////////
 // The logo, as a texture (the Setup dialog, the empty conversation)
 
-Logo :: struct { tex: render.Texture, size: int }
+Logo :: struct { tex: render.Texture }
 
 logo_load :: proc(app: ^App) {
 	img, err := png.load_from_bytes(LOGO_PNG, {.alpha_add_if_missing}, context.temp_allocator)
 	if err != nil || img == nil || img.channels != 4 || img.depth != 8 { return }
 	app.logo.tex = render.create_texture_rgba(&app.r, img.width, img.height)
 	render.update_texture_rgba(&app.r, app.logo.tex, 0, 0, img.width, img.height, img.pixels.buf[:])
-	app.logo.size = img.width
 }
 
 @(private = "file")
@@ -192,13 +191,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 			if well("###where", radius = 8, base = HEX_SETUP_WELL) {
 				ui.spacer(ui.px(em * 0.6))
 				line :: proc(id, k, v: string, em: f32) {
-					ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
-					if ui.row(.Center, id = id) {
-						ui.spacer(ui.px(em * 0.8))
-						text("k", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.75)}, ui.px(em * 7.5))
-						text("v", v, hex(HEX_TEXT_SOFT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.75)}, ui.fill())
-						ui.spacer(ui.px(em * 0.8))
-					}
+					kv_row(id, k, v, em, {h = 1.5, key_w = 7.5, key_fs = 0.75, val_fs = 0.75, pad_l = 0.8, pad_r = 0.8, val = HEX_TEXT_SOFT})
 				}
 				line("###l1", "program", f.exe, em)
 				line("###l2", LBL_MENU, f.start_lnk ? LBL_MENU_ITEM : "-", em)

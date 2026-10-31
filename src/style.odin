@@ -4,6 +4,7 @@ package occ
 
 import "core:fmt"
 import "core:math"
+import "core:strings"
 import "gt:draw"
 import "gt:ui"
 
@@ -310,7 +311,7 @@ bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Nor
 		}
 		if label != "" {
 			ui.next({width = ui.text_size(0), height = ui.pct(1), fg = fg, text_pad = 0})
-			ui.build_box({.Draw_Text}, fmt.tprintf("%s###txt", label))
+			ui.build_box({.Draw_Text}, fmt.tprintf("%s###txt", label_safe(label)))
 		}
 		if _, fixed := width.?; fixed { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(pad)) }
 	}
@@ -528,7 +529,7 @@ pill :: proc(id: string, text: string, color := Color{}, icon := "") {
 			ui.spacer(ui.px(em * 0.25))
 		}
 		ui.next({width = ui.text_size(0), height = ui.pct(1), font = the_app.mono, font_size = fs, fg = fg, text_pad = 0})
-		ui.build_box({.Draw_Text}, fmt.tprintf("%s###t", text))
+		ui.build_box({.Draw_Text}, fmt.tprintf("%s###t", label_safe(text)))
 		ui.spacer(ui.px(em * 0.5))
 	}
 }
@@ -541,6 +542,17 @@ glyph :: proc(icon: string, color: Color, size: f32 = 0, width: f32 = 0) {
 	ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###glyph_%s", icon, icon))
 }
 
+// Text from elsewhere in a box's id: the toolkit's id rules cut it at its first "##", so a zero-width space parts them.
+label_safe :: proc(s: string) -> string {
+	if !strings.contains(s, "##") { return s }
+	b := strings.builder_make(context.temp_allocator)
+	for i in 0 ..< len(s) {
+		strings.write_byte(&b, s[i])
+		if s[i] == '#' && i + 1 < len(s) && s[i + 1] == '#' { strings.write_string(&b, "\u200b") }
+	}
+	return strings.to_string(b)
+}
+
 // A label with a colour and an optional font, as wide as its text.
 text :: proc(id: string, s: string, color: Color, f: Maybe(ui.Style_Mod) = nil, width: Maybe(ui.Size) = nil) {
 	m := f.? or_else ui.Style_Mod{}
@@ -549,7 +561,20 @@ text :: proc(id: string, s: string, color: Color, f: Maybe(ui.Style_Mod) = nil, 
 	m.fg = color
 	if m.text_pad == nil { m.text_pad = 0 }
 	ui.next(m)
-	ui.build_box({.Draw_Text}, fmt.tprintf("%s###%s", s, id))
+	ui.build_box({.Draw_Text}, fmt.tprintf("%s###%s", label_safe(s), id))
+}
+
+// A key / value line in a mono face; each panel has its own sizes (in font sizes).
+Kv_Row :: struct { h, key_w, key_fs, val_fs, pad_l, pad_r: f32, val: u32 }
+
+kv_row :: proc(id, k, v: string, em: f32, st: Kv_Row, col := Color{}) {
+	ui.next({width = ui.fill(), height = ui.px(em * st.h), axis = .X, cross = .Center})
+	if ui.row(.Center, id = id) {
+		if st.pad_l > 0 { ui.spacer(ui.px(em * st.pad_l)) }
+		text("k", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * st.key_fs)}, ui.px(em * st.key_w))
+		text("v", v, col.a > 0 ? col : hex(st.val), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * st.val_fs)}, ui.fill())
+		if st.pad_r > 0 { ui.spacer(ui.px(em * st.pad_r)) }
+	}
 }
 
 @(private = "file")

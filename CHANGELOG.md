@@ -5,6 +5,21 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A link in a conversation could run a program**: only http, https and mailto links open now; anything else says so.
+- **The app could read freed memory** when opening a sub-agent during a frame, and when sending a new session after changing
+  server.
+- **Messages from the app never appeared**: its toasts were never drawn.
+- **One failed request no longer disables Send**: the status follows the event stream.
+- **A prompt that could not be sent comes back** to the composer, ahead of anything typed since.
+- **Reading a long session again no longer grows the memory**, and answers from an earlier read of the settings no longer add
+  rows twice.
+- **A title or a text with `##` is shown whole.**
+- **Tabbing to a slider no longer rewrites a setting.**
+- **Failed saves say so**, and a failed update puts the installed program back.
+- **An `https://` address in `service.json` is used as https.**
+
 ## [0.5.6] - 2026-10-31
 
 ### Fixed

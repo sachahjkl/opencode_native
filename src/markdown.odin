@@ -241,7 +241,18 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 
 @(private = "file")
 link_clicked :: proc(res: ui.Rich_Result) {
-	if res.link_clicked >= 0 { platform.open_url(res.link) }
+	if res.link_clicked >= 0 { link_open(res.link) }
+}
+
+// Links come from the model or the server, and the system runs what it is handed (a program, a batch file, a share): only
+// what a browser or a mail client is for.
+link_allowed :: proc(url: string) -> bool {
+	u := strings.to_lower(url, context.temp_allocator)
+	return strings.has_prefix(u, "http://") || strings.has_prefix(u, "https://") || strings.has_prefix(u, "mailto:")
+}
+
+link_open :: proc(url: string) {
+	if link_allowed(url) { platform.open_url(url) } else { ui.toast(.Warn, "Link not opened: %s", ellipsize(url, TOAST_TITLE_CHARS)) }
 }
 
 // The cells of a table row: `| a | b |` -> {"a", "b"}.

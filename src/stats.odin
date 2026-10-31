@@ -180,11 +180,7 @@ tile :: proc(id, value, caption: string, color: Color, em: f32) {
 
 @(private = "file")
 kv :: proc(id, k, v: string, em: f32, col := Color{}) {
-	ui.next({width = ui.fill(), height = ui.px(em * 1.45), axis = .X, cross = .Center})
-	if ui.row(.Center, id = id) {
-		text("k", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.76)}, ui.px(em * 11))
-		text("v", v, col.a > 0 ? col : hex(HEX_STAT_VALUE), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.78)}, ui.fill())
-	}
+	kv_row(id, k, v, em, {h = 1.45, key_w = 11, key_fs = 0.76, val_fs = 0.78, val = HEX_STAT_VALUE}, col)
 }
 
 // A row of a ranking: name, a bar of its share, its count (and failures).
@@ -324,6 +320,13 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 		if scost > 0 { kv("###s3", "their cost", fmt.tprintf("$%.2f", scost), em, hex(HEX_GREEN)) }
 	}
 
+	stats_project(app, now, em)
+	ui.spacer(ui.px(em * 1.3))
+}
+
+// The project's totals, from the server.
+@(private = "file")
+stats_project :: proc(app: ^App, now: f64, em: f32) {
 	ps := &app.proj_stats
 	if ps.project != "" {
 		heading("THE PROJECT", em)
@@ -356,7 +359,6 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 			}
 		}
 	}
-	ui.spacer(ui.px(em * 1.3))
 }
 
 ms_text :: proc(ms: f64) -> string {

@@ -34,7 +34,6 @@ Occ_Buf :: struct {
 @(default_calling_convention = "c")
 foreign occ_native {
 	occ_client_new :: proc(base: [^]u8, base_len: uint, user: [^]u8, user_len: uint, pass: [^]u8, pass_len: uint) -> rawptr ---
-	occ_client_free :: proc(c: rawptr) ---
 	occ_buf_free :: proc(b: Occ_Buf) ---
 	occ_request :: proc(c: rawptr, method: [^]u8, method_len: uint, path: [^]u8, path_len: uint, body: [^]u8, body_len: uint, out_status: ^i32, out_body: ^Occ_Buf) -> i32 ---
 	occ_sse_open :: proc(c: rawptr, path: [^]u8, path_len: uint, out_status: ^i32) -> rawptr ---
@@ -52,12 +51,6 @@ http_init :: proc(h: ^Http, base: string, user, password: string) -> bool {
 	h.base = strings.clone(base)
 	h.client = occ_client_new(raw_data(base), len(base), raw_data(user), len(user), raw_data(password), len(password))
 	return h.client != nil
-}
-
-http_destroy :: proc(h: ^Http) {
-	if h.client != nil { occ_client_free(h.client) }
-	delete(h.base)
-	h^ = {}
 }
 
 @(private = "file")

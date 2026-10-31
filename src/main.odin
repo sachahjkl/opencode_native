@@ -38,10 +38,10 @@ App :: struct {
 	server:         int,               // the one connected
 	conn:           ^Conn,             // its connection
 	server_edit:    Server_Edit,
-	picker:         Picker,
+	picker:         Picker,            // the composer's agent or model picker (picker.odin)
 	find:           Find,              // find in the conversation (find.odin)
 	scale:          f32,               // --scale=<factor>: the interface's scale whatever the screen says (0: the screen's)
-	rediscover_ms:  f64,               // when this computer's server was last looked for (servers_rediscover)            // the composer's agent or model picker (picker.odin)
+	rediscover_ms:  f64,               // when this computer's server was last looked for (servers_rediscover)
 	pending:        i32,       // (atomic) requests in flight
 	online:         bool,
 	auth_failed:    bool,
@@ -63,17 +63,18 @@ App :: struct {
 	composer:         ui.Text_Area,
 	composer_focused: bool,
 	search:           ui.Text_Field,
-	model_filter:     ui.Text_Field,
 	pending_prompt:   string,
 	refresh_due:      bool,
 	children_due:     bool,           // the sub-agents of the session shown changed: read them again (debounced)
 	children_ms:      f64,
 	nav:              [dynamic]string, // the sessions drilled down from, outermost first (owned): Back returns to the last
+	nav_steps:        [dynamic]Nav_Step, // navigation asked for in this frame (subagents.odin)
 	sub_open:         map[u64]bool,   // sidebar: sessions whose sub-agents are listed under them
 	start_session:    string,
 	cfg_prefs:        config.Prefs,   // the preferences (settings.odin)
 	prefs:            Prefs,          // their plain values
 	facts:            Server_Facts,   // what the server said for the settings pages
+	facts_gen:        u64,            // which reading of them is the current one
 	facts_due:        bool,
 	facts_ms:         f64,
 	settings_open:    bool,
@@ -88,7 +89,6 @@ App :: struct {
 	delete_id:        string,
 	delete_open:      bool,
 	animating:        bool,           // something pulses this frame: keep drawing
-	new_dir:          string,         // the folder of the session about to be made (in the chat arena)
 	menu_session:     string,         // the session the context menu is about (owned)
 	logo:             Logo,
 	column_w:         f32,    // the conversation column, frame pixels (this frame)
@@ -218,6 +218,7 @@ frame :: proc(app: ^App, inner := false) {
 	render.paced_present(&app.pacer)
 	free_all(context.temp_allocator)
 
+	nav_apply(app)
 	if app.refresh_due && ui.now_ms() - app.refresh_ms > REFRESH_DEBOUNCE_MS {
 		app.refresh_due = false
 		app.refresh_ms = ui.now_ms()

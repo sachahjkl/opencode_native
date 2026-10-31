@@ -40,6 +40,7 @@ discover_server :: proc() -> Server_Config {
 		if v, jerr := json.parse_string(string(data), parse_integers = true, allocator = context.temp_allocator); jerr == nil {
 			if host, port, ok := split_url(jstr(v, "url")); ok {
 				cfg.host, cfg.port, found = host, port, true
+				cfg.tls = strings.has_prefix(jstr(v, "url"), "https://")
 				cfg.password = jstr(v, "password")
 			}
 		}
@@ -140,7 +141,7 @@ jquote :: proc(s: string, allocator := context.temp_allocator) -> string {
 	return strings.to_string(b)
 }
 
-// Compact JSON text of a value (tool inputs shown to the user).
+// Indented JSON text of a value (tool inputs shown to the user).
 jtext :: proc(v: json.Value, allocator := context.temp_allocator) -> string {
 	data, err := json.marshal(v, {pretty = true, use_spaces = true, spaces = 2}, allocator)
 	if err != nil { return "" }
@@ -180,6 +181,7 @@ Req_Kind :: enum u8 {
 	Stats,          // GET /api/experimental/session/stats: the project's totals (stats.odin)
 	Created,        // POST /api/session: the new session
 	Action,         // a POST whose answer only matters when it fails
+	Prompt,         // POST /api/session/:id/prompt: the same, and its text comes back to the composer
 }
 
 Request :: struct {
@@ -190,6 +192,7 @@ Request :: struct {
 	tag:    string,    // the session it is about
 	gen:    u64,       // the chat generation it was made for (answers for a chat since left are dropped)
 	conn:   ^Conn,     // the connection it goes by (answers from a server since left are dropped)
+	facts_gen: u64,    // the reading of the settings' pages it belongs to (answers of an earlier one are dropped)
 	// the answer
 	status: int,
 	resp:   string,
@@ -198,7 +201,7 @@ Request :: struct {
 
 request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "") {
 	r := new(Request)
-	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = app.conn}
+	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = app.conn, facts_gen = app.facts_gen}
 	sync.atomic_add(&app.pending, 1)
 	thread.create_and_start_with_poly_data(r, proc(r: ^Request) {
 		app := the_app
@@ -222,25 +225,24 @@ on_answer :: proc(data: rawptr, word: u64) {
 	sync.atomic_sub(&app.pending, 1)
 	if r.conn != app.conn { return }   // a server left
 	if !r.ok {
+		// (this request failed: whether the connection is down is for the event stream to say, stream_state)
 		fmt.eprintfln("request failed: %s %s: %s", r.method, r.path, r.resp)
-		app.online = false
-		if r.kind == .Older { older_failed(app, r) }
-		if r.kind != .Action { ui.toast(.Bad, "Server unreachable (%s)", r.path) }
+		request_failed(app, r)
+		ui.toast(.Bad, "Server unreachable (%s)", r.path)
 		return
 	}
-	if r.status == 401 { app.auth_failed = true; ui.toast(.Bad, "Authentication refused by the server"); return }
+	if r.status == 401 { app.auth_failed = true; request_failed(app, r); ui.toast(.Bad, "Authentication refused by the server"); return }
 	if r.status >= 400 {
 		v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
 		msg := jstr(v, "message")
 		ui.toast(.Bad, "%s %s: %d %s", r.method, r.path, r.status, msg if msg != "" else r.resp[:min(len(r.resp), ERROR_EXCERPT_BYTES)])
-		if r.kind == .Messages { app.chat.loading = false }
-		if r.kind == .Older { older_failed(app, r) }
+		request_failed(app, r)
 		return
 	}
 	v, err := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if err != nil && r.kind != .Action {
+	if err != nil && r.kind != .Action && r.kind != .Prompt {
 		ui.toast(.Warn, "Unreadable answer (%s)", r.path)
-		if r.kind == .Older { older_failed(app, r) }
+		request_failed(app, r)
 		return
 	}
 	switch r.kind {
@@ -254,13 +256,13 @@ on_answer :: proc(data: rawptr, word: u64) {
 	case .Older:       if r.gen == app.chat.gen && r.tag == app.chat.id { chat_load(app, v, true) }
 	case .Agents:      agents_load(app, v)
 	case .Models:      models_load(app, v)
-	case .Info:        app.server_version = strings.clone(jstr(v, "version"))
+	case .Info:        delete(app.server_version); app.server_version = strings.clone(jstr(v, "version"))
 	case .Permissions: if r.tag == app.chat.id { permissions_load(app, jarr(v, "data")) }
 	case .Active:      active_load(app, v)
 	case .Self:        if r.tag == app.chat.id && r.gen == app.chat.gen { self_load(app, v) }
 	case .Parent:      if r.tag == app.chat.id && r.gen == app.chat.gen { parent_load(app, v) }
 	case .Children:    if r.tag == app.chat.id && r.gen == app.chat.gen { children_load(app, v) }
-	case .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands: server_facts_answer(app, r.kind, v)
+	case .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands: if r.facts_gen == app.facts_gen { server_facts_answer(app, r.kind, v) }
 	case .Projects:    projects_load(app, v)
 	case .Stats:       stats_load(app, v)
 	case .Created:
@@ -273,8 +275,28 @@ on_answer :: proc(data: rawptr, word: u64) {
 				delete(app.pending_prompt)
 				app.pending_prompt = ""
 			}
+		} else {
+			request_failed(app, r)
 		}
-	case .Action:
+	case .Action, .Prompt:
+	}
+}
+
+// What a request that failed leaves undone, whatever the way it failed.
+request_failed :: proc(app: ^App, r: ^Request) {
+	#partial switch r.kind {
+	case .Messages:
+		if r.gen == app.chat.gen { app.chat.loading = false }
+	case .Older:
+		older_failed(app, r)
+	case .Created:
+		if app.pending_prompt != "" {
+			prompt_restore(app, app.pending_prompt)
+			delete(app.pending_prompt)
+			app.pending_prompt = ""
+		}
+	case .Prompt:
+		if v, err := json.parse_string(r.body, allocator = context.temp_allocator); err == nil { prompt_restore(app, jstr(v, "text")) }
 	}
 }
 
@@ -312,7 +334,7 @@ load_older :: proc(app: ^App, b: ^ui.Box) {
 }
 
 send_prompt :: proc(app: ^App, id, text: string) {
-	request(app, .Action, "POST", fmt.tprintf("/api/session/%s/prompt", id), fmt.tprintf(`{{"text":%s}}`, jquote(text)), id)
+	request(app, .Prompt, "POST", fmt.tprintf("/api/session/%s/prompt", id), fmt.tprintf(`{{"text":%s}}`, jquote(text)), id)
 }
 
 create_session :: proc(app: ^App, directory: string) {

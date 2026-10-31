@@ -25,7 +25,6 @@ Server :: struct {
 Conn :: struct {
 	http:   Http,
 	stop:   bool,      // (atomic) the event thread stops at its next event or retry
-	server: int,       // its index in app.servers when it was made
 }
 
 servers_path :: proc() -> string {
@@ -79,6 +78,7 @@ servers_rediscover :: proc(app: ^App) {
 	if now - app.rediscover_ms < REDISCOVER_MS { return }
 	app.rediscover_ms = now
 	cfg := local_server_config()
+	defer { delete(cfg.host); delete(cfg.password) }
 	url := server_url(cfg)
 	s := &app.servers[app.server]
 	if url == s.url && cfg.password == s.password { delete(url); return }
@@ -94,7 +94,7 @@ servers_save :: proc(app: ^App) {
 		fmt.sbprintf(&b, "%s\t%s\t%s\n", s.name, s.url, s.password)
 	}
 	_ = os.make_directory_all(filepath.dir(servers_path()))
-	_ = os.write_entire_file(servers_path(), transmute([]u8)strings.to_string(b))
+	if os.write_entire_file(servers_path(), transmute([]u8)strings.to_string(b)) != nil { ui.toast(.Bad, "The list of servers could not be saved") }
 }
 
 // "host:port" or "https://host" as typed: a full address ("http://" when no scheme is said, no trailing slash).
@@ -116,7 +116,6 @@ server_connect :: proc(app: ^App, i: int) {
 	if i < 0 || i >= len(app.servers) { return }
 	s := app.servers[i]
 	c := new(Conn)
-	c.server = i
 	if !http_init(&c.http, s.url, "opencode", s.password) {
 		ui.toast(.Bad, "No HTTP client for %s", s.url)
 		free(c)
@@ -189,7 +188,7 @@ server_edit_open :: proc(app: ^App, i: int) {
 server_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 	if ui.ctx_menu(key, em * 26) {
 		for s, i in app.servers {
-			label := fmt.tprintf("%s   %s###srv%d", s.name, s.url, i)
+			label := fmt.tprintf("%s   %s###srv%d", label_safe(s.name), label_safe(s.url), i)
 			if ui.menu_item(label, "", i == app.server).clicked && i != app.server { server_connect(app, i) }
 		}
 		ui.menu_separator()
@@ -299,6 +298,5 @@ server_remove :: proc(app: ^App, i: int) {
 	} else if app.server > i {
 		app.server -= 1
 	}
-	if app.conn != nil { app.conn.server = app.server }
 }
 

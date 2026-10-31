@@ -156,18 +156,43 @@ duration :: proc(a, b: f64) -> string {
 ////////////////////////////////
 // Navigation
 
+// Navigation is asked for while the interface is built, by boxes that go on reading what they show, and opening a session
+// drops the arena that holds it. So these only note it: nav_apply does it after the frame (frame).
+Nav_Kind :: enum u8 { Root, Drill, Back }
+Nav_Step :: struct { kind: Nav_Kind, id: string }   // (id owned)
+
 // Opens a session from the sidebar: no way back but its parent.
-open_root :: proc(app: ^App, id: string) {
-	for s in app.nav { delete(s) }
-	clear(&app.nav)
-	open_chat(app, id)
-}
+open_root :: proc(app: ^App, id: string) { append(&app.nav_steps, Nav_Step{.Root, strings.clone(id)}) }
 
 // Opens the sub-agent `child` of the session shown; Back comes here again.
 drill_down :: proc(app: ^App, child: string) {
-	if child == "" || child == app.chat.id { return }
-	if app.chat.id != "" { append(&app.nav, strings.clone(app.chat.id)) }
-	open_chat(app, child)
+	if child == "" { return }
+	append(&app.nav_steps, Nav_Step{.Drill, strings.clone(child)})
+}
+
+go_back :: proc(app: ^App) { append(&app.nav_steps, Nav_Step{kind = .Back}) }
+
+// What was asked for during the frame, in order.
+nav_apply :: proc(app: ^App) {
+	if len(app.nav_steps) == 0 { return }
+	for st in app.nav_steps {
+		switch st.kind {
+		case .Root:
+			for s in app.nav { delete(s) }
+			clear(&app.nav)
+			open_chat(app, st.id)
+		case .Drill:
+			if st.id != app.chat.id {
+				if app.chat.id != "" { append(&app.nav, strings.clone(app.chat.id)) }
+				open_chat(app, st.id)
+			}
+		case .Back:
+			nav_back(app)
+		}
+		delete(st.id)
+	}
+	clear(&app.nav_steps)
+	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
 }
 
 // The session to go back to: the one drilled down from, else the parent.
@@ -176,7 +201,8 @@ back_target :: proc(app: ^App) -> string {
 	return app.chat.self.parent
 }
 
-go_back :: proc(app: ^App) {
+@(private = "file")
+nav_back :: proc(app: ^App) {
 	if len(app.nav) > 0 {
 		id := pop(&app.nav)
 		defer delete(id)
@@ -190,7 +216,7 @@ go_back :: proc(app: ^App) {
 // The card of a sub-agent call (in the parent's conversation)
 
 @(private = "file")
-Rail_Draw :: struct { color: Color, hot: bool }
+Rail_Draw :: struct { color: Color }
 
 @(private = "file")
 rail_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
@@ -290,47 +316,50 @@ subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 			}
 			ui.spacer(ui.px(em * (compact ? 0.15 : 0.5)))
 		}
-		if open {
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-			if ui.row(id = "###body") {
-				ui.spacer(ui.px(em * 1.2))
+		if open { card_body(app, &v, pid, running, em) }
+	}
+	ui.spacer(ui.px(em * 0.6))
+}
+
+// A card opened: what its session says, its prompt, its result.
+card_body :: proc(app: ^App, v: ^Sub_View, pid: string, running: bool, em: f32) {
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+	if ui.row(id = "###body") {
+		ui.spacer(ui.px(em * 1.2))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+		if ui.column() {
+			if v.session != nil {
+				sub_facts(app, v, em)
+				ui.spacer(ui.px(em * 0.5))
+			}
+			if v.prompt != "" {
+				section_label("pr", "PROMPT", em)
+				mono_well("###prompt", v.prompt, em, PROMPT_LINES_MAX, hex(HEX_TEXT_SOFT))
+				ui.spacer(ui.px(em * 0.6))
+			}
+			if v.result != "" {
+				section_label("re", v.state == .Failed ? "ERROR" : "RESULT", em)
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-				if ui.column() {
-					if v.session != nil {
-						sub_facts(app, &v, em)
-						ui.spacer(ui.px(em * 0.5))
-					}
-					if v.prompt != "" {
-						section_label("pr", "PROMPT", em)
-						mono_well("###prompt", v.prompt, em, PROMPT_LINES_MAX, hex(HEX_TEXT_SOFT))
-						ui.spacer(ui.px(em * 0.6))
-					}
-					if v.result != "" {
-						section_label("re", v.state == .Failed ? "ERROR" : "RESULT", em)
+				if well("###result", radius = 7, base = HEX_FACTS_WELL) {
+					ui.spacer(ui.px(em * 0.7))
+					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+					if ui.row() {
+						ui.spacer(ui.px(em * 0.9))
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-						if well("###result", radius = 7, base = HEX_FACTS_WELL) {
-							ui.spacer(ui.px(em * 0.7))
-							ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-							if ui.row() {
-								ui.spacer(ui.px(em * 0.9))
-								ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-								if ui.column() { markdown(fmt.tprintf("%s_res", pid), v.result, hex(HEX_CARD_RESULT), math.round(em * 0.95)) }
-								ui.spacer(ui.px(em * 0.9))
-							}
-							ui.spacer(ui.px(em * 0.7))
-						}
-						ui.spacer(ui.px(em * 0.4))
-					} else if running {
-						ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
-						if ui.row(.Center) { text("w", "No result yet: it is still working.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.86)}, ui.fill()) }
+						if ui.column() { markdown(fmt.tprintf("%s_res", pid), v.result, hex(HEX_CARD_RESULT), math.round(em * 0.95)) }
+						ui.spacer(ui.px(em * 0.9))
 					}
 					ui.spacer(ui.px(em * 0.7))
 				}
-				ui.spacer(ui.px(em * 1.0))
+				ui.spacer(ui.px(em * 0.4))
+			} else if running {
+				ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
+				if ui.row(.Center) { text("w", "No result yet: it is still working.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * 0.86)}, ui.fill()) }
 			}
+			ui.spacer(ui.px(em * 0.7))
 		}
+		ui.spacer(ui.px(em * 1.0))
 	}
-	ui.spacer(ui.px(em * 0.6))
 }
 
 // The second line of a card: its state (and what it does now while it runs), background, model, tool calls, tokens, cost.
@@ -383,12 +412,7 @@ sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 	if well("###facts", radius = 7, base = HEX_FACTS_WELL) {
 		ui.spacer(ui.px(em * 0.45))
 		row :: proc(id, k, val: string, em: f32, col := Color{}) {
-			ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
-			if ui.row(.Center, id = id) {
-				ui.spacer(ui.px(em * 0.8))
-				text("k", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.74)}, ui.px(em * 7))
-				text("v", val, col.a > 0 ? col : hex(HEX_TEXT_SOFT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.74)}, ui.fill())
-			}
+			kv_row(id, k, val, em, {h = 1.4, key_w = 7, key_fs = 0.74, val_fs = 0.74, pad_l = 0.8, val = HEX_TEXT_SOFT}, col)
 		}
 		row("###f1", "session", s.id, em)
 		row("###f2", "title", s.title, em)
@@ -417,8 +441,6 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 	if ui.column(id = fmt.tprintf("###sr_%s", m.id)) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
 		hb := ui.build_box({.Clickable, .Focusable, .Hot_Within}, "###head")
-		hd := ui.frame_new(Rail_Draw)
-		hd.color = acol
 		hb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 			if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.035 * b.hot_t}, 7 * ui.scale()) }
 		}
@@ -545,7 +567,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 			for s in active {
 				v := sub_view(app, s.id)
 				what := v.has_live && v.live.activity != "" ? v.live.activity : s.agent
-				if ui.menu_item(fmt.tprintf("▶  %s  —  %s", ellipsize(s.title, MENU_TITLE_CHARS), ellipsize(what, MENU_ACTIVITY_CHARS)), duration(s.created, now_epoch_ms())).clicked { drill_down(app, s.id) }
+				if ui.menu_item(fmt.tprintf("▶  %s  —  %s", label_safe(ellipsize(s.title, MENU_TITLE_CHARS)), label_safe(ellipsize(what, MENU_ACTIVITY_CHARS))), duration(s.created, now_epoch_ms())).clicked { drill_down(app, s.id) }
 			}
 			ui.menu_separator()
 		}
@@ -562,7 +584,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 			case .Cancelled: mark = "■"
 			}
 			end := v.ended > 0 ? v.ended : s.updated
-			if ui.menu_item(fmt.tprintf("%s  %s · %s", mark, ellipsize(s.title, MENU_FINISHED_CHARS), s.agent), duration(s.created, end)).clicked { drill_down(app, s.id) }
+			if ui.menu_item(fmt.tprintf("%s  %s · %s", mark, label_safe(ellipsize(s.title, MENU_FINISHED_CHARS)), label_safe(s.agent)), duration(s.created, end)).clicked { drill_down(app, s.id) }
 			shown += 1
 		}
 	}

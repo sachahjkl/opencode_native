@@ -63,6 +63,7 @@ build_ui :: proc(app: ^App) {
 	settings_dialog(app, em)
 	image_viewer(app, em)
 	stats_dialog(app, em)
+	ui.toasts_build()
 }
 
 app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
@@ -103,7 +104,7 @@ new_session :: proc(app: ^App) {
 	chat_reset(&app.chat)
 	app.chat.loaded = true
 	app.stick_bottom = true
-	app.new_dir = strings.clone(dir, app.chat.alloc)
+	app.chat.new_dir = strings.clone(dir, app.chat.alloc)
 	permissions_clear(app)
 }
 
@@ -307,8 +308,8 @@ sessions_list :: proc(app: ^App, em: f32) {
 			plus_col := hdr.hot_t > FADE_VISIBLE ? hex(HEX_WEAK) : Color{0, 0, 0, 0.001}
 			if glyph_button("###gadd", ICO_ADD, math.round(em * 1.5), plus_col).clicked {
 				new_session(app)
-				delete(app.new_dir, app.chat.alloc)
-				app.new_dir = strings.clone(gr.dir, app.chat.alloc)
+				delete(app.chat.new_dir, app.chat.alloc)
+				app.chat.new_dir = strings.clone(gr.dir, app.chat.alloc)
 			}
 			ui.spacer(ui.px(em * 0.5))
 		}
@@ -446,7 +447,7 @@ delete_dialog :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), height = ui.px(em * 2), font_size = math.round(em * 1.15)})
 				ui.label("Delete the session?###dt")
 				ui.next({width = ui.fill(), flags = {.Text_Wrap}})
-				if ui.tags("weak") { ui.paragraph(fmt.tprintf("“%s” and its messages will be removed from the server.###dp", title)) }
+				if ui.tags("weak") { ui.paragraph(fmt.tprintf("“%s” and its messages will be removed from the server.###dp", label_safe(title))) }
 				ui.spacer(ui.px(em * 1.2))
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if ui.row() {
@@ -621,7 +622,7 @@ chat_header :: proc(app: ^App, em: f32) {
 					pb := ui.build_box({.Clickable}, "###crumb_parent")
 					ps := ui.signal(pb)
 					if ps.clicked {
-						if back_target(app) == app.chat.self.parent { go_back(app) } else { drill_down(app, strings.clone(app.chat.self.parent, context.temp_allocator)) }
+						if back_target(app) == app.chat.self.parent { go_back(app) } else { drill_down(app, app.chat.self.parent) }
 					}
 					if ui.parent(pb) {
 						text("p", ellipsize(parent, CRUMB_PARENT_CHARS), ps.hovering ? accent() : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * 0.78)})
@@ -631,7 +632,7 @@ chat_header :: proc(app: ^App, em: f32) {
 			}
 			title := s != nil ? s.title : "New session"
 			text("title", title != "" ? title : "Untitled", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * 1.12), height = ui.px(em * 1.5)}, ui.fill())
-			dir := s != nil ? s.directory : app.new_dir
+			dir := s != nil ? s.directory : app.chat.new_dir
 			text("dir", dir != "" ? dir : "default folder", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.76), height = ui.px(em * 1.2)}, ui.fill())
 			ui.spacer(ui.fill())
 		}
@@ -676,7 +677,7 @@ empty_state :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.fill())
 	}
 	ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
-	if ui.tags("weak") { ui.label(app.online ? "Pick a session on the left, or start a new one.###hint" : fmt.tprintf("Connecting to %s…###hint", server_base(app))) }
+	if ui.tags("weak") { ui.label(app.online ? "Pick a session on the left, or start a new one.###hint" : fmt.tprintf("Connecting to %s…###hint", label_safe(server_base(app)))) }
 }
 
 messages :: proc(app: ^App, em: f32) {
@@ -921,9 +922,6 @@ part_toggle :: proc(app: ^App, id: string, head: ^ui.Box, default := false) {
 	app.anchor_y = head.rect.min.y
 	app.stick_bottom = false
 }
-
-@(private = "file")
-Head_Draw :: struct { status: Tool_Status, open: bool }
 
 @(private = "file")
 head_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
@@ -1228,31 +1226,35 @@ composer :: proc(app: ^App, em: f32) {
 			if bevel_button("###send", "", ICO_SEND, .Accent, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM), disabled = empty || !app.online).clicked { submit = true }
 			ui.spacer(ui.px(em * 0.55))
 
-			// the agent and the model: pickers searched as one types
-			agent_items := make([dynamic]Pick_Item, context.temp_allocator)
-			agent_ids := make([dynamic]string, context.temp_allocator)
-			for a in app.agents {
-				if a.mode == "subagent" { continue }
-				append(&agent_items, Pick_Item{label = a.name != "" ? a.name : a.id, detail = a.mode == "primary" ? "" : a.mode, current = a.id == agent, color = agent_color(a.id)})
-				append(&agent_ids, a.id)
-			}
-			if k := picker(app, &app.picker, "agent", "agents", agent_items[:], em); k >= 0 {
-				if app.chat.id != "" { switch_agent(app, app.chat.id, agent_ids[k]) }
-				app.chat.agent = strings.clone(agent_ids[k], app.chat.alloc)
-			}
-			model_items := make([dynamic]Pick_Item, len(app.models), context.temp_allocator)
-			for m, i in app.models {
-				model_items[i] = Pick_Item{label = m.name != "" ? m.name : m.id, group = m.provider, detail = m.ctx_len > 0 ? kfmt(m.ctx_len) : "", current = m.id == app.chat.model && m.provider == app.chat.provider}
-			}
-			if k := picker(app, &app.picker, "model", "models", model_items[:], em); k >= 0 {
-				m := app.models[k]
-				if app.chat.id != "" { switch_model(app, app.chat.id, m) }
-				app.chat.model = strings.clone(m.id, app.chat.alloc)
-				app.chat.provider = strings.clone(m.provider, app.chat.alloc)
-			}
+			composer_pickers(app, agent, em)
 		}
 	}
 	if submit { submit_prompt(app) }
+}
+
+composer_pickers :: proc(app: ^App, agent: string, em: f32) {
+	// the agent and the model: pickers searched as one types
+	agent_items := make([dynamic]Pick_Item, context.temp_allocator)
+	agent_ids := make([dynamic]string, context.temp_allocator)
+	for a in app.agents {
+		if a.mode == "subagent" { continue }
+		append(&agent_items, Pick_Item{label = a.name != "" ? a.name : a.id, detail = a.mode == "primary" ? "" : a.mode, current = a.id == agent, color = agent_color(a.id)})
+		append(&agent_ids, a.id)
+	}
+	if k := picker(app, &app.picker, "agent", "agents", agent_items[:], em); k >= 0 {
+		if app.chat.id != "" { switch_agent(app, app.chat.id, agent_ids[k]) }
+		app.chat.agent = strings.clone(agent_ids[k], app.chat.alloc)
+	}
+	model_items := make([dynamic]Pick_Item, len(app.models), context.temp_allocator)
+	for m, i in app.models {
+		model_items[i] = Pick_Item{label = m.name != "" ? m.name : m.id, group = m.provider, detail = m.ctx_len > 0 ? kfmt(m.ctx_len) : "", current = m.id == app.chat.model && m.provider == app.chat.provider}
+	}
+	if k := picker(app, &app.picker, "model", "models", model_items[:], em); k >= 0 {
+		m := app.models[k]
+		if app.chat.id != "" { switch_model(app, app.chat.id, m) }
+		app.chat.model = strings.clone(m.id, app.chat.alloc)
+		app.chat.provider = strings.clone(m.provider, app.chat.alloc)
+	}
 }
 
 area_insert :: proc(a: ^ui.Text_Area, s: string) {
@@ -1263,13 +1265,19 @@ area_insert :: proc(a: ^ui.Text_Area, s: string) {
 	a.mark = a.cursor
 }
 
+// A prompt that did not reach the server comes back to the composer, ahead of what was typed since.
+prompt_restore :: proc(app: ^App, text: string) {
+	typed := ui.area_string(&app.composer)
+	ui.area_set(&app.composer, strings.trim_space(typed) == "" ? text : fmt.tprintf("%s\n%s", text, typed))
+}
+
 submit_prompt :: proc(app: ^App) {
 	t := strings.trim_space(ui.area_string(&app.composer))
 	if t == "" || !app.online { return }
 	if app.chat.id == "" {
 		delete(app.pending_prompt)
 		app.pending_prompt = strings.clone(t)
-		create_session(app, app.new_dir)
+		create_session(app, app.chat.new_dir)
 	} else {
 		send_prompt(app, app.chat.id, t)
 	}

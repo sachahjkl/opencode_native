@@ -262,12 +262,17 @@ desktop_install :: proc(desktop_shortcut: bool) -> (ok: bool, msg: string) {
 	if err := os.make_directory_all(dir); err != nil && !os.exists(dir) { return false, fmt.tprintf("cannot create %s", dir) }
 	if !same_path(src, exe) {
 		// a running installed copy: its file can be renamed, not overwritten
+		old := strings.concatenate({exe, ".old"}, context.temp_allocator)
+		moved := false
 		if os.exists(exe) {
-			old := strings.concatenate({exe, ".old"}, context.temp_allocator)
 			_ = os.remove(old)
 			if !win.MoveFileExW(wide(exe), wide(old), win.MOVEFILE_REPLACE_EXISTING) { return false, fmt.tprintf("cannot replace %s (in use?)", exe) }
+			moved = true
 		}
-		if !win.CopyFileW(wide(src), wide(exe), false) { return false, fmt.tprintf("cannot copy the program to %s", exe) }
+		if !win.CopyFileW(wide(src), wide(exe), false) {
+			if moved { _ = win.MoveFileExW(wide(old), wide(exe), win.MOVEFILE_REPLACE_EXISTING) }   // (the copy that was there stays)
+			return false, fmt.tprintf("cannot copy the program to %s", exe)
+		}
 	}
 	if !make_shortcut(start_lnk_path(), exe) { return false, "cannot write the Start menu shortcut" }
 	if desktop_shortcut {

@@ -158,13 +158,17 @@ prefs_refresh :: proc(app: ^App) {
 	ui.theme_set(&app.theme, "selection", with_alpha(s.accent, SELECTION_ALPHA))
 }
 
+prefs_save :: proc(app: ^App) {
+	if !config.save_user(&app.cfg_prefs, prefs_path()) { ui.toast(.Bad, "The preferences could not be saved") }
+}
+
 // Sets a preference from its text, saves the user's changes, applies them.
 pref_set :: proc(app: ^App, name, value: string) {
 	if err := config.set_from_string(&app.cfg_prefs, name, value, .User); err != nil {
 		ui.toast(.Bad, "%s: %s", name, config.set_error_text(err))
 		return
 	}
-	config.save_user(&app.cfg_prefs, prefs_path())
+	prefs_save(app)
 	prefs_refresh(app)
 }
 
@@ -177,7 +181,7 @@ prefs_track_zoom :: proc(app: ^App) {
 	if abs(z - app.prefs.zoom) > ZOOM_EPSILON {
 		app.prefs.zoom = z
 		config.set_from_string(&app.cfg_prefs, "appearance.zoom", fmt.tprintf("%.3f", z), .User)
-		config.save_user(&app.cfg_prefs, prefs_path())
+		prefs_save(app)
 	}
 }
 
@@ -241,6 +245,7 @@ Server_Facts :: struct {
 
 server_facts_reset :: proc(app: ^App) {
 	f := &app.facts
+	app.facts_gen += 1
 	virtual.arena_destroy(&f.arena)
 	f^ = {}
 	_ = virtual.arena_init_growing(&f.arena)
@@ -444,7 +449,7 @@ setting :: proc(app: ^App, name: string, em: f32) -> bool {
 		ui.a11y({name = "Reset to default"})
 		if glyph_button("###reset", ICO_REFRESH, math.round(em * 1.6)).clicked {
 			config.reset(p, name)
-			config.save_user(p, prefs_path())
+			prefs_save(app)
 			prefs_refresh(app)
 		}
 		ui.spacer(ui.px(em * 0.3))
@@ -483,6 +488,11 @@ pref_switch :: proc(app: ^App, name: string, em: f32) {
 	if ui.toggle("###sw", "", &v).clicked { pref_set(app, name, v ? "true" : "false") }
 }
 
+// What a focused slider makes of `v` with no key pressed: it snaps it to its step and its range.
+slider_idle :: proc(v, lo, hi, step: f32) -> f32 {
+	return clamp(step > 0 ? math.round(v / step) * step : v, lo, hi)
+}
+
 @(private = "file")
 pref_slider :: proc(app: ^App, name: string, lo, hi, step: f32, format: string, em: f32) {
 	p := &app.cfg_prefs
@@ -490,9 +500,10 @@ pref_slider :: proc(app: ^App, name: string, lo, hi, step: f32, format: string, 
 	v := d.kind == .Int ? f32(config.int_of(p, name)) : f32(config.float_of(p, name))
 	ui.next({width = ui.px(em * 15), height = ui.px(math.round(em * 2))})
 	ui.a11y({name = config.title_of(d)})
+	idle := slider_idle(v, lo, hi, step)
 	sig := ui.slider("###sl", &v, lo, hi, step, format)
-	// written when the drag ends (or at each key step): the file is not rewritten at the pointer's rate
-	if (sig.released || (sig.focused && !sig.dragging)) && (d.kind == .Int ? i64(math.round(v)) != config.int_of(p, name) : abs(f64(v) - config.float_of(p, name)) > SLIDER_EPSILON) {
+	// written when the drag ends (or at each key step): the file is not rewritten at the pointer's rate, nor by the focus alone
+	if (sig.released || (sig.focused && !sig.dragging && abs(v - idle) > SLIDER_EPSILON)) && (d.kind == .Int ? i64(math.round(v)) != config.int_of(p, name) : abs(f64(v) - config.float_of(p, name)) > SLIDER_EPSILON) {
 		pref_set(app, name, d.kind == .Int ? fmt.tprintf("%d", i64(math.round(v))) : fmt.tprintf("%.2f", v))
 	} else if sig.dragging && d.kind == .Float && name == "appearance.rounding" {
 		ui.set_rounding(&app.ui_state, v)   // (live while dragged)
@@ -591,19 +602,13 @@ page_behaviour :: proc(app: ^App, em: f32) {
 // A line of quiet text.
 info_line :: proc(app: ^App, id, s: string, em: f32, color := Color{}) {
 	ui.next({width = ui.fill(), font_size = math.round(em * 0.84), flags = {.Text_Wrap}, fg = color.a > 0 ? color : hex(HEX_WEAK), text_pad = 0})
-	ui.paragraph(fmt.tprintf("%s%s", s, id))
+	ui.paragraph(fmt.tprintf("%s%s", label_safe(s), id))
 }
 
 // A key / value line in a well.
 @(private = "file")
 fact :: proc(id, k, v: string, em: f32, col := Color{}) {
-	ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
-	if ui.row(.Center, id = id) {
-		ui.spacer(ui.px(em * 0.8))
-		text("k", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.76)}, ui.px(em * 8.5))
-		text("v", v, col.a > 0 ? col : hex(HEX_FACT_VALUE), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * 0.76)}, ui.fill())
-		ui.spacer(ui.px(em * 0.6))
-	}
+	kv_row(id, k, v, em, {h = 1.5, key_w = 8.5, key_fs = 0.76, val_fs = 0.76, pad_l = 0.8, pad_r = 0.6, val = HEX_FACT_VALUE}, col)
 }
 
 @(private = "file")
@@ -619,6 +624,18 @@ loading :: proc(app: ^App, em: f32) -> bool {
 		return true
 	}
 	return false
+}
+
+// A path the server names as a configuration file is opened by the system: only an absolute path on this computer (no
+// share, no scheme) to a file of a kind that opens in an editor, not one that runs.
+config_file_shaped :: proc(path: string) -> bool {
+	when ODIN_OS == .Windows {
+		drive := len(path) >= 3 && ((path[0] >= 'a' && path[0] <= 'z') || (path[0] >= 'A' && path[0] <= 'Z')) && path[1] == ':' && (path[2] == '\\' || path[2] == '/')
+	} else {
+		drive := strings.has_prefix(path, "/") && !strings.has_prefix(path, "//")
+	}
+	ext := strings.to_lower(filepath.ext(path), context.temp_allocator)
+	return drive && (ext == ".json" || ext == ".jsonc")
 }
 
 page_server :: proc(app: ^App, em: f32) {
@@ -666,9 +683,12 @@ page_server :: proc(app: ^App, em: f32) {
 				text("p", c.path, hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.78), height = ui.px(em * 1.5)}, ui.fill())
 				text("k", strings.join(c.keys, " · ", context.temp_allocator), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * 0.72), height = ui.px(em * 1.3)}, ui.fill())
 			}
-			if bevel_button("###open", "Open", ICO_DOC, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_url(c.path) }
-			ui.spacer(ui.px(em * 0.3))
-			if bevel_button("###dir", "", ICO_FOLDER, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_url(filepath.dir(c.path)) }
+			// (only this computer's server speaks of this computer's files)
+			if app.servers[app.server].local && config_file_shaped(c.path) && os.is_file(c.path) {
+				if bevel_button("###open", "Open", ICO_DOC, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_path(c.path) }
+				ui.spacer(ui.px(em * 0.3))
+				if bevel_button("###dir", "", ICO_FOLDER, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_path(filepath.dir(c.path)) }
+			}
 		}
 		ui.spacer(ui.px(em * 0.4))
 	}
@@ -736,7 +756,7 @@ page_usage :: proc(app: ^App, em: f32) {
 		if ui.row(.Center, id = "###ws") {
 			text("w", fmt.tprintf("Workspace “%s”", f.workspace), hex(HEX_WORKSPACE_NAME), ui.Style_Mod{font_size = math.round(em * 0.95)}, ui.fill())
 			if f.usage_url != "" {
-				if bevel_button("###web", "Usage on opencode.ai", ICO_GLOBE, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_url(f.usage_url) }
+				if bevel_button("###web", "Usage on opencode.ai", ICO_GLOBE, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { link_open(f.usage_url) }
 			}
 		}
 	}
@@ -807,7 +827,7 @@ page_catalog :: proc(app: ^App, em: f32) {
 			if ui.row(id = fmt.tprintf("###%s%d", title, i)) {
 				text("n", it.name, hex(HEX_CATALOG_NAME), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * 0.8), height = ui.px(em * 1.5)}, ui.px(em * 13))
 				ui.next({width = ui.fill(), font_size = math.round(em * 0.8), flags = {.Text_Wrap}, fg = hex(HEX_WEAK), text_pad = 0})
-				ui.paragraph(fmt.tprintf("%s###d", it.detail))
+				ui.paragraph(fmt.tprintf("%s###d", label_safe(it.detail)))
 			}
 			ui.spacer(ui.px(em * 0.25))
 		}
