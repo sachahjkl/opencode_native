@@ -5,6 +5,8 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-31
+
 ### Changed
 
 - **The sub-agent card and the strip above the composer are redesigned**: neutral plates, colour only on the state mark, the
@@ -31,6 +33,8 @@ project follows [semantic versioning](https://semver.org).
 - **Tabbing to a slider no longer rewrites a setting.**
 - **Failed saves say so**, and a failed update puts the installed program back.
 - **An `https://` address in `service.json` is used as https.**
+- **Linux, from gui_toolkit 0.58**: copy and paste and drag and drop on X11, input during an animation on Wayland, key repeat. A
+  resize no longer stretches the window, and the sizes of thin lines follow the scale.
 
 ## [0.5.6] - 2026-10-31
 
@@ -252,7 +256,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.5.6...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.6.0
 [0.5.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.6
 [0.5.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.5
 [0.5.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.4
