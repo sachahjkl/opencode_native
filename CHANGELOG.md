@@ -5,6 +5,19 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-01
+
+### Changed
+
+- gui_toolkit 0.60.1.
+
+### Fixed
+
+- **Find in code**: a match in inline code showed only as a line at each end, the code's background over it. The selection
+  had the same fault.
+- **Find is legible**: the letters of a match are dark, on stronger backgrounds (contrast about 9 on the current match, 7 on
+  the others, against 1.8 and 2.9 for code).
+
 ## [0.8.0] - 2026-11-01
 
 ### Added
@@ -294,7 +307,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.8.1
 [0.8.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.8.0
 [0.7.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.7.0
 [0.6.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.6.0
