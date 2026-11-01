@@ -34,7 +34,7 @@
   </section>
 
   <figure class="shot wide">
-    <img src="img/subagents.png" alt="A conversation: tool calls on their timeline, sub-agents, the agent's reasoning" loading="lazy">
+    <a class="frame" href="img/subagents.png"><img src="img/subagents.png" alt="A conversation: tool calls on their timeline, sub-agents, the agent's reasoning" loading="lazy"></a>
     <figcaption>Tool calls on a timeline, sub-agents as cards, the model's reasoning folded.</figcaption>
   </figure>
 
@@ -75,13 +75,13 @@
   <!-- whats-new -->
 
   <section class="gallery">
-    <figure class="shot"><img src="img/find.png" alt="Find in the conversation, the matches lit" loading="lazy"><figcaption>Find in the conversation</figcaption></figure>
-    <figure class="shot"><img src="img/picker.png" alt="The model picker searched with 'son'" loading="lazy"><figcaption>The model picker</figcaption></figure>
-    <figure class="shot"><img src="img/statistics.png" alt="Session statistics" loading="lazy"><figcaption>Session statistics</figcaption></figure>
-    <figure class="shot"><img src="img/subagent-session.png" alt="A sub-agent's conversation" loading="lazy"><figcaption>Inside a sub-agent</figcaption></figure>
-    <figure class="shot"><img src="img/settings.png" alt="Settings" loading="lazy"><figcaption>Settings: the client's and the server's</figcaption></figure>
-    <figure class="shot"><img src="img/viewer.png" alt="An image in the viewer, zoomed in" loading="lazy"><figcaption>The image viewer: zoom where the pointer is, drag to move</figcaption></figure>
-    <figure class="shot"><img src="img/linux.png" alt="The client on Linux" loading="lazy"><figcaption>On Linux (Wayland, Vulkan)</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/find.png"><img src="img/find.png" alt="Find in the conversation, the matches lit" loading="lazy"></a><figcaption>Find in the conversation</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/picker.png"><img src="img/picker.png" alt="The model picker searched with 'son'" loading="lazy"></a><figcaption>The model picker</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/statistics.png"><img src="img/statistics.png" alt="Session statistics" loading="lazy"></a><figcaption>Session statistics</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/subagent-session.png"><img src="img/subagent-session.png" alt="A sub-agent's conversation" loading="lazy"></a><figcaption>Inside a sub-agent</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/settings.png"><img src="img/settings.png" alt="Settings" loading="lazy"></a><figcaption>Settings: the client's and the server's</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/viewer.png"><img src="img/viewer.png" alt="An image in the viewer, zoomed in" loading="lazy"></a><figcaption>The image viewer: zoom where the pointer is, drag to move</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/linux.png"><img src="img/linux.png" alt="The client on Linux" loading="lazy"></a><figcaption>On Linux (Wayland, Vulkan)</figcaption></figure>
   </section>
 
   <section id="download" class="download">
@@ -120,5 +120,6 @@
   document.addEventListener('click', e => { if (!bar.contains(e.target)) shut(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') shut(); });
 </script>
+<script src="gallery.js" defer></script>
 </body>
 </html>
