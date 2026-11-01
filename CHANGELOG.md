@@ -5,10 +5,19 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-01
+
 ### Added
 
 - `flake.nix`: `nix develop -c ./build.sh` builds on Linux with the Odin, wgpu-native and libraries the CI uses; `tools/screenshots.mjs
   --linux-build` takes the Linux picture from this tree, no release needed.
+- **On Linux, color emoji**: from the system's emoji font, COLR or CBDT.
+- **On Linux, cursors**: from the user's theme, on X11 and on Wayland.
+- **On Linux, fractional scaling on Wayland**: at 150 % the window is drawn at 150 %, not at 200 % and shrunk.
+
+### Changed
+
+- gui_toolkit 0.61.0.
 
 ## [0.8.2] - 2026-11-01
 
@@ -323,7 +332,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.9.0
 [0.8.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.8.2
 [0.8.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.8.1
 [0.8.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.8.0

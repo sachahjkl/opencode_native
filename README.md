@@ -5,7 +5,7 @@
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.8.2-fab283" alt="version 0.8.2"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.9.0-fab283" alt="version 0.9.0"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -123,7 +123,7 @@ since a program on this computer can then type into a session.
 
 **Linux**: the same Odin, wgpu-native's static library in its vendor folder (`ext/gui_toolkit/tools/fetch_wgpu.sh`),
 clang, fontconfig's headers and Rust (stable), then `./build.sh`. At run time: Vulkan, libxkbcommon, fontconfig, and
-Wayland or X11.
+Wayland or X11; libxcb-cursor for the theme's cursors on X11, an emoji font for color emoji.
 
 Both build the Rust library first (`tools/build_native.*`, nothing when it is up to date; crates pinned by
 `native/Cargo.lock`; on Linux it carries the toolkit's text backend), then the program. The toolkit is the submodule

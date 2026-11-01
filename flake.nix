@@ -43,7 +43,7 @@
 
       # What the client opens at run time (dlopen): nothing is in a standard path on NixOS.
       runtime = with pkgs; [
-        vulkan-loader mesa libxkbcommon wayland libx11 libxcb libxcursor libxrandr libxi libxext fontconfig freetype dbus
+        vulkan-loader mesa libxkbcommon wayland libx11 libxcb libxcursor libxrandr libxi libxext xcb-util-cursor fontconfig freetype dbus
       ];
     in
     {
@@ -52,7 +52,7 @@
       devShells.${system}.default = pkgs.mkShell {
         packages = [ odin ] ++ (with pkgs; [ clang lld cargo rustc nodejs rsync socat ]);
         buildInputs = [ pkgs.fontconfig ];
-        shellHook = "export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath runtime}";   # (nix develop clears the variable if set as an attribute)
+        shellHook = "export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath runtime} FONTCONFIG_FILE=${pkgs.makeFontsConf { fontDirectories = [ pkgs.noto-fonts-color-emoji ]; }}";   # (nix develop clears the variable if set as an attribute)
         # the system's Vulkan drivers where it has them; under WSL, tools/wsl_client.sh says which
         MESA_ICD_DIR = "${pkgs.mesa}/share/vulkan/icd.d";
       };
