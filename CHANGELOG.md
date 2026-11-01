@@ -5,6 +5,17 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-11-01
+
+### Changed
+
+- gui_toolkit 0.60.2.
+
+### Fixed
+
+- **Command line arguments keep every character on Windows**: `--search=Łódź` arrived as `L�dz`, and paths and passwords
+  outside the system's code page were damaged the same way.
+
 ## [0.8.1] - 2026-11-01
 
 ### Changed
@@ -307,7 +318,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.8.2
 [0.8.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.8.1
 [0.8.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.8.0
 [0.7.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.7.0
