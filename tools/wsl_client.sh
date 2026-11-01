@@ -14,19 +14,26 @@ if command -v nix >/dev/null; then
   nx=(nix --extra-experimental-features "nix-command flakes")
   libs=/usr/lib/wsl/lib
   for p in vulkan-loader mesa libxkbcommon wayland libx11 libxcb libxcursor libxrandr libxi libxext fontconfig freetype dbus; do
-    libs="$libs:$("${nx[@]}" build --no-link --print-out-paths "nixpkgs#$p.out")/lib"
+    for o in $("${nx[@]}" build --no-link --print-out-paths "nixpkgs#$p^*"); do libs="$libs:$o/lib"; done   # (fontconfig keeps them in an output of its own)
   done
   export LD_LIBRARY_PATH="$libs"
   mesa="$("${nx[@]}" build --no-link --print-out-paths nixpkgs#mesa.out)"
-  export VK_ICD_FILENAMES="$mesa/share/vulkan/icd.d/dzn_icd.x86_64.json"
+  # the GPU through WSL, else the software driver
+  export VK_ICD_FILENAMES="$mesa/share/vulkan/icd.d/dzn_icd.x86_64.json:$mesa/share/vulkan/icd.d/lvp_icd.x86_64.json"
 fi
 
 settings="$(mktemp -d)"
 trap 'rm -rf "$settings"; kill "${relay:-}" 2>/dev/null || true' EXIT
 export XDG_CONFIG_HOME="$settings" OPENCODE_NATIVE_NO_SETUP=1
-socat "TCP-LISTEN:$OC_PORT,bind=127.0.0.1,fork,reuseaddr" \
-  "EXEC:node.exe '$(wslpath -w "$here/stdio_tcp.mjs")' 127.0.0.1 $OC_PORT" &
+# (node.exe runs on the Windows side, where 127.0.0.1 is the server. From this folder: a colon in a path would end socat's argument)
+(cd "$here" && exec socat "TCP-LISTEN:$OC_PORT,bind=127.0.0.1,fork,reuseaddr" "EXEC:node.exe stdio_tcp.mjs 127.0.0.1 $OC_PORT") &
 relay=$!
 
+# What the opencode service writes where it runs: the client finds "This computer" by itself, and no command line holds the password.
+mkdir -p "$settings/state/opencode"
+export XDG_STATE_HOME="$settings/state"
+password="${OC_PASSWORD//\\/\\\\}"
+printf '{"url":"http://127.0.0.1:%s","password":"%s"}\n' "$OC_PORT" "${password//\"/\\\"}" > "$settings/state/opencode/service.json"
+
 program="$1"; shift
-"$program" "--url=http://127.0.0.1:$OC_PORT" "--password=$OC_PASSWORD" "$@"
+"$program" "$@"

@@ -10,7 +10,7 @@
 //     --toolkit   where gui_toolkit is (default ext/gui_toolkit, for tools/cdp.mjs and the build)
 //     --linux     just linux.png: this Linux build of the client, run in WSL (tools/wsl_client.sh), Windows only
 import { spawn, spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -105,12 +105,13 @@ const SHOTS = [
 ].filter((s) => (opt.linux ? s.linux : !s.linux && (!only || only.includes(s.name))))
 
 function startLinux(args) {
+  const log = openSync(join(repo, 'build', 'wsl_client.log'), 'w')   // (what went wrong in WSL; the password is not in it)
   const service = JSON.parse(readFileSync(join(homedir(), '.local', 'state', 'opencode', 'service.json'), 'utf8'))
   const env = {
     ...process.env, TOOLKIT_DEVTOOLS: String(PORT), OC_PORT: new URL(service.url).port, OC_PASSWORD: service.password,
     WSLENV: 'TOOLKIT_DEVTOOLS:OC_PORT:OC_PASSWORD',
   }
-  return spawn('wsl.exe', ['--exec', 'bash', '-l', wslPath(join(repo, 'tools', 'wsl_client.sh')), wslPath(resolve(opt.linux)), ...args], { env, stdio: 'ignore' })
+  return spawn('wsl.exe', ['--exec', 'bash', '-l', wslPath(join(repo, 'tools', 'wsl_client.sh')), wslPath(resolve(opt.linux)), ...args], { env, stdio: ['ignore', log, log] })
 }
 
 if (opt.build) {
@@ -130,7 +131,8 @@ async function capture(shot) {
   try {
     for (let i = 0; ; i++) {
       if (cdp('state').ok) break
-      if (i > (shot.linux ? 1800 : 100)) throw new Error(`no answer on port ${PORT}`)   // (WSL may fetch its libraries first)
+      if (child.exitCode !== null) throw new Error(`the client ended (${child.exitCode})${shot.linux ? ': see build/wsl_client.log' : ''}`)
+      if (i > (shot.linux ? 600 : 100)) throw new Error(`no answer on port ${PORT}`)   // (WSL may fetch its libraries first)
       await sleep(100)
     }
     must('wait-for', 'connected', '--timeout', '15000')
@@ -139,6 +141,7 @@ async function capture(shot) {
     if (shot.go) await shot.go()
     must(...AWAY)
     must('wait', '500')   // (what hover lit goes out)
+    if (shot.linux) must('wait', '3000')   // (through the relay, the last requests are slower)
     must('idle')
     const out = join(docs, shot.name + '.png')
     must('shot', out)
