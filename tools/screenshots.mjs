@@ -83,7 +83,10 @@ async function scrollTo(text, y) {
 const SHOTS = [
   { name: 'conversation', args: SESSION },
   { name: 'subagents', args: SESSION, go: () => scrollTo('Yes, but first launch', 150) },
-  { name: 'find', args: [...SESSION, '--find=http'] },
+  { name: 'find', args: [...SESSION, '--find=http'], go: () => {   // the last match, in view: the picture shows the current one
+    must('key', 'shift+Enter')
+    must('idle')
+  } },
   { name: 'picker', args: SESSION, go: async () => {
     must('click', '--name', 'model')
     must('idle')
