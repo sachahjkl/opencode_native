@@ -65,6 +65,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "appearance.rounding", description = "Corner rounding of buttons, fields and menus (0: square).", kind = .Float, default = {f = 1}, bounded = true, min = 0, max = 2},
 	{name = "appearance.animations", description = "Interface animations: the system's setting, always, or never.", kind = .String, default = {s = "system"}, choices = {"system", "on", "off"}},
 	{name = "appearance.smooth_scroll", description = "Scrolling glides to where the wheel or the keys send it, even when the system turns animations off.", kind = .Bool, default = {b = true}},
+	{name = "appearance.autohide_scrollbars", description = "Scroll bars show only while the pointer is over what they scroll.", kind = .Bool, default = {b = true}},
 	{name = "appearance.glow", description = "Halos around lit buttons, lamps and running sub-agents.", kind = .Bool, default = {b = true}},
 	{name = "conversation.width", description = "Widest the conversation column gets, in logical pixels.", kind = .Int, default = {i = 880}, bounded = true, min = COLUMN_W_MIN, max = COLUMN_W_MAX},
 	{name = "conversation.reasoning", description = "How the model's reasoning shows: folded under a line, unfolded, or not at all.", kind = .String, default = {s = "collapsed"}, choices = {"collapsed", "expanded", "hidden"}},
@@ -91,6 +92,7 @@ Prefs :: struct {
 	animations:   string,
 	glow:         bool,
 	smooth_scroll: bool,
+	autohide_scrollbars: bool,
 	column_w:     f32,
 	reasoning:    string,
 	expand_tools: bool,
@@ -130,6 +132,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.animations = config.string_of(p, "appearance.animations")
 	s.glow = config.bool_of(p, "appearance.glow")
 	s.smooth_scroll = config.bool_of(p, "appearance.smooth_scroll")
+	s.autohide_scrollbars = config.bool_of(p, "appearance.autohide_scrollbars")
 	s.column_w = f32(config.int_of(p, "conversation.width"))
 	s.reasoning = config.string_of(p, "conversation.reasoning")
 	s.expand_tools = config.bool_of(p, "conversation.expand_tools")
@@ -539,6 +542,7 @@ page_appearance :: proc(app: ^App, em: f32) {
 	if setting(app, "appearance.rounding", em) { pref_slider(app, "appearance.rounding", 0, 2, 0.05, "%.2f", em) }
 	if setting(app, "appearance.animations", em) { pref_choice(app, "appearance.animations", {"System", "On", "Off"}, em) }
 	if setting(app, "appearance.smooth_scroll", em) { pref_switch(app, "appearance.smooth_scroll", em) }
+	if setting(app, "appearance.autohide_scrollbars", em) { pref_switch(app, "appearance.autohide_scrollbars", em) }
 	if setting(app, "appearance.glow", em) { pref_switch(app, "appearance.glow", em) }
 }
 

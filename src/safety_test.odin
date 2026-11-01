@@ -117,3 +117,36 @@ when ODIN_OS == .Windows {
 		testing.expect(t, err == nil && string(data) == "the new copy")
 	}
 }
+
+@(test)
+versions_compare_by_number :: proc(t: ^testing.T) {
+	testing.expect(t, version_older("0.5.6", "0.6.0"))
+	testing.expect(t, version_older("0.9.0", "0.10.0"))
+	testing.expect(t, version_older("0.6", "0.6.1"))
+	testing.expect(t, !version_older("0.6.0", "0.6.0"))
+	testing.expect(t, !version_older("0.6.0", "0.6"))
+	testing.expect(t, !version_older("0.7.0", "0.6.9"))
+	testing.expect(t, !version_older("", "0.6.0"), "no version read: nothing to offer")
+	testing.expect(t, !version_older("x", "0.6.0"))
+}
+
+@(test)
+setup_opens_for_an_older_install :: proc(t: ^testing.T) {
+	testing.expect(t, setup_wanted(.Other_Copy, "0.0.1", ""), "older")
+	testing.expect(t, setup_wanted(.Other_Copy, "0.0.1", "standalone"), "what was said for no install is not an answer to this")
+	testing.expect(t, setup_wanted(.Other_Copy, "0.0.1", "installed"))
+	testing.expect(t, !setup_wanted(.Other_Copy, "0.0.1", "dismissed:" + APP_VERSION), "declined for this version")
+	testing.expect(t, setup_wanted(.Other_Copy, "0.0.1", "dismissed:0.0.0"), "declined for another one")
+	testing.expect(t, !setup_wanted(.Other_Copy, APP_VERSION, ""), "the same version")
+	testing.expect(t, !setup_wanted(.Other_Copy, "99.0.0", ""), "a newer one")
+	testing.expect(t, !setup_wanted(.This_Copy, "0.0.1", ""), "this is the installed copy")
+	testing.expect(t, setup_wanted(.Not_Installed, "", ""))
+	testing.expect(t, !setup_wanted(.Not_Installed, "", "standalone"))
+}
+
+@(test)
+the_viewer_stays_within_its_limits :: proc(t: ^testing.T) {
+	testing.expect_value(t, view_pan_clamp({50, 50}, {100, 100}, {200, 200}), [2]f32{0, 0})
+	testing.expect_value(t, view_pan_clamp({500, -500}, {400, 300}, {200, 200}), [2]f32{100, -50})
+	testing.expect_value(t, view_pan_clamp({10, 10}, {400, 300}, {200, 200}), [2]f32{10, 10})
+}

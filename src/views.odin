@@ -53,7 +53,10 @@ build_ui :: proc(app: ^App) {
 			room := ui.parent_box().size.x / ui.scale()
 			ui.next({height = ui.fill()})
 			ui.a11y({name = "Sidebar width"})
-			ui.splitter("###side_split", .X, &app.sidebar_w, SIDEBAR_W_MIN, SIDEBAR_W_MAX, {default_size = SIDEBAR_W_DEFAULT, total = room, min_other = CONVERSATION_MIN_PX})
+			groove_y: f32
+			if ui.parent(ui.prev_box("###sidebar")) { if g := ui.prev_box("###sg"); g != nil { groove_y = (g.rect.min.y + g.rect.max.y) * 0.5 } }
+			split := ui.splitter("###side_split", .X, &app.sidebar_w, SIDEBAR_W_MIN, SIDEBAR_W_MAX, {default_size = SIDEBAR_W_DEFAULT, total = room, min_other = CONVERSATION_MIN_PX})
+			side_handle(split, groove_y)
 			conversation(app, em)
 		}
 		status_bar(app, em)
@@ -115,15 +118,51 @@ new_session :: proc(app: ^App) {
 // Title bar
 
 @(private = "file")
-Bar_Draw :: struct { top, bottom: Color }
+Bar_Draw :: struct { top, bottom: Color, lit_top: bool }
 
 @(private = "file")
 bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Bar_Draw)(user)
 	r := b.rect
 	draw.rect_corners(dc, r, {d.top, d.bottom, d.top, d.bottom}, {})
-	p := px1()
-	draw.rect(dc, {r.min, {r.max.x, r.min.y + p}}, {1, 1, 1, 0.05})
+	// (only with nothing above it: under a carved line, whose lower half is lit, it would be a second line)
+	if d.lit_top { draw.rect(dc, {r.min, {r.max.x, r.min.y + px1()}}, {1, 1, 1, 0.05}) }
+}
+
+@(private = "file")
+Side_Handle_Draw :: struct { hot: bool, groove_y: f32 }
+
+// The sidebar's edge and the handle that resizes it are one thing: the handle goes on with the sidebar's surface, and the one
+// line between the sidebar and the conversation is at its right. The sidebar's own groove comes all the way to that line.
+@(private = "file")
+side_handle :: proc(split: ui.Splitter_Result, groove_y: f32) {
+	d := ui.frame_new(Side_Handle_Draw)
+	d^ = {split.hovering || split.dragging || split.focused, groove_y}
+	split.box.custom_user = d
+	split.box.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		d := (^Side_Handle_Draw)(user)
+		r := b.rect
+		draw.rect(dc, r, hex(HEX_BG1))
+		line := 2 * px1()
+		if d.groove_y > 0 {
+			y := math.round(d.groove_y) - px1()
+			draw_groove(dc, {r.min.x, y}, {r.max.x - line, y})
+		}
+		if d.hot {
+			draw.rect(dc, {{r.max.x - line, r.min.y}, r.max}, accent())
+		} else {
+			draw_groove(dc, {r.max.x - line, r.min.y}, {r.max.x - line, r.max.y}, true)
+		}
+	}
+}
+
+// The line between the sidebar and the conversation goes on through the title bar and the status bar: after what a bar puts
+// over the sidebar (`last`, its last box), at least `gap` then the line; a bar with more than the sidebar's width pushes it on.
+@(private = "file")
+side_line :: proc(id: string, last: ^ui.Box, gap: f32) {
+	x := ui.parent_box().rect.min.x + math.round(the_app.sidebar_w * ui.scale()) + math.round(SPLITTER_W_PX * ui.scale()) - 2 * px1()
+	ui.spacer(ui.px(max(gap, x - last.rect.max.x)))
+	edge_line(id, vertical = true)
 }
 
 title_bar :: proc(app: ^App, em: f32) {
@@ -132,7 +171,7 @@ title_bar :: proc(app: ^App, em: f32) {
 	if ui.title_bar("###titlebar") {
 		b := ui.parent_box()
 		d := ui.frame_new(Bar_Draw)
-		d^ = {hex(HEX_TITLE_BAR_TOP), hex(HEX_TITLE_BAR_BOTTOM)}
+		d^ = {hex(HEX_TITLE_BAR_TOP), hex(HEX_TITLE_BAR_BOTTOM), true}
 		b.custom = bar_draw
 		b.custom_user = d
 		ui.spacer(ui.px(em * 0.4))
@@ -147,10 +186,8 @@ title_bar :: proc(app: ^App, em: f32) {
 		mono := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_HEADING)}
 		text("w1", "open", hex(HEX_WEAK), mono)
 		text("w2", "code", hex(HEX_TEXT), mono)
-		ui.spacer(ui.px(em * 0.9))
-		ui.next({height = ui.px(h * 0.55)})
-		groove("###tg")
-		ui.spacer(ui.px(em * 0.7))
+		side_line("###tg", b.last, em * 0.9)
+		ui.spacer(ui.px(em * 1.3))
 		if !app.servers[app.server].local {   // another computer's server: its name first
 			glyph(ICO_GLOBE, hex(HEX_CYAN), math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.3))
@@ -251,7 +288,6 @@ sidebar :: proc(app: ^App, em: f32) {
 		}
 	}
 	// the sidebar's right edge: a carved line
-	edge_line("###side_edge", vertical = true)
 }
 
 sessions_list :: proc(app: ^App, em: f32) {
@@ -525,8 +561,8 @@ conversation :: proc(app: ^App, em: f32) {
 	if ui.column(flags = {.Draw_Background}, id = "###main") {
 		sc := ui.scale()
 		// this frame's width, from the window (the box's own size is the last frame's: a resize would lag a frame behind):
-		// the window less the sidebar, its edge and the splitter
-		avail := f32(app.win.size.x) - app.sidebar_w * sc - 2 - math.round(SPLITTER_W_PX * sc)
+		// the window less the sidebar and the splitter
+		avail := f32(app.win.size.x) - app.sidebar_w * sc - math.round(SPLITTER_W_PX * sc)
 		if avail <= 0 { avail = AVAIL_FALLBACK_PX * sc }
 		app.column_w = 0
 		col := max(COLUMN_MIN_W_PX * sc, min(app.prefs.column_w * sc, avail - em * 3))
@@ -592,7 +628,9 @@ chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 		if ui.key_press(.Home) { y = 0 }
 		if ui.key_press(.End) { y = limit }
 	}
-	sb.view_target.y = clamp(y, 0, limit)
+	y = clamp(y, 0, limit)
+	if y != sb.view_target.y { ui.scrollbar_reveal(sb) }
+	sb.view_target.y = y
 }
 
 chat_header :: proc(app: ^App, em: f32) {
@@ -601,7 +639,7 @@ chat_header :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###hdr") {
 		b := ui.parent_box()
 		d := ui.frame_new(Bar_Draw)
-		d^ = {hex(HEX_HEADER_TOP), hex(HEX_HEADER_BOTTOM)}
+		d^ = {hex(HEX_HEADER_TOP), hex(HEX_HEADER_BOTTOM), false}
 		b.custom = bar_draw
 		b.custom_user = d
 		ui.spacer(ui.px(em * 1.3))
@@ -1313,7 +1351,7 @@ status_bar :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###status") {
 		b := ui.parent_box()
 		d := ui.frame_new(Bar_Draw)
-		d^ = {hex(HEX_STATUS_TOP), hex(HEX_STATUS_BOTTOM)}
+		d^ = {hex(HEX_STATUS_TOP), hex(HEX_STATUS_BOTTOM), false}
 		b.custom = bar_draw
 		b.custom_user = d
 		small := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
@@ -1344,10 +1382,8 @@ status_bar :: proc(app: ^App, em: f32) {
 		}
 		server_menu(app, skey, em)
 		if app.server_version != "" {
-			ui.spacer(ui.px(em * 0.8))
-			ui.next({height = ui.px(h * 0.6)})
-			groove()
-			ui.spacer(ui.px(em * 0.6))
+			side_line("###sg_status", sb, em * 0.8)
+			ui.spacer(ui.px(em * 1.3))
 			text("v", fmt.tprintf("opencode %s", app.server_version), hex(HEX_FAINT), small)
 		}
 		ui.spacer(ui.fill())

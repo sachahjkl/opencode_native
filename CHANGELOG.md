@@ -5,6 +5,26 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-01
+
+### Added
+
+- **Zoom and pan in the image viewer**: the wheel zooms where the pointer is, a drag or the arrows move the picture, + - 0 and
+  buttons, a double click between fit and 100 %. From half of what fits up to 8 times its pixels. A click no longer closes it.
+- **Scroll bars hide** unless the pointer is over what they scroll, or the keyboard just scrolled it (a setting, on by default).
+- **An older installed copy is offered an upgrade**: Setup opens at the start of a newer copy, once per version.
+- `tools/screenshots.mjs` regenerates every picture of the README and the site over the DevTools protocol, the mouse and the
+  windows in front left alone; `--linux` takes the Linux one from a release's build in WSL (`tools/wsl_client.sh`).
+  `--size=<w>x<h>` sets the window's size in pixels, `--image=<file>` opens the viewer on a file.
+
+### Changed
+
+- gui_toolkit 0.59.0.
+
+### Fixed
+
+- **The join of the sidebar, its splitter and the bars**: one carved line, from the title bar down through the status bar, no doubled borders or gaps.
+
 ## [0.6.0] - 2026-10-31
 
 ### Changed
@@ -256,7 +276,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.7.0
 [0.6.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.6.0
 [0.5.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.6
 [0.5.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.5

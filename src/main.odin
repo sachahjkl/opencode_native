@@ -6,6 +6,7 @@ package occ
 
 import "core:fmt"
 import "core:mem/virtual"
+import "core:math"
 import "core:os"
 import "core:slice"
 import "core:strconv"
@@ -106,6 +107,10 @@ App :: struct {
 	view_open:        bool,                  // the image viewer
 	view_key:         u64,
 	view_name:        string,
+	view_zoom:        f32,                   // times what fits (image_viewer)
+	view_pan:         [2]f32,                // of the picture's centre from the view's, frame pixels
+	view_grab:        [2]f32,                // view_pan when the drag began
+	view_start:       Image_Ref,             // --image=<file>: opened in the viewer once it is decoded (its data owned)
 	projects:         map[string]Project_Logo,   // by project id (in proj_arena)
 	proj_arena:       virtual.Arena,
 	anchor:           ^ui.Box, // a part header just clicked: kept where it is on screen (part_toggle, frame)
@@ -161,6 +166,7 @@ frame :: proc(app: ^App, inner := false) {
 	build :: proc(app: ^App, size: draw.Vec2, events: []platform.Event, dt: f32) {
 		app.animating = false
 		app.chat_sb = nil
+		ui.set_scrollbar_autohide(&app.ui_state, app.prefs.autohide_scrollbars)
 		ui.begin_build(&app.ui_state, {
 			window_size = size, events = events, dt = dt, animations = animations_on(app),
 			smooth_scroll = app.prefs.smooth_scroll ? .On : .Off,
@@ -348,6 +354,14 @@ main :: proc() {
 	// Wren's browser.window.fixed_surface). Where DirectComposition is missing it is an ordinary swap chain.
 	app.win = platform.open_window("opencode", {WINDOW_W, WINDOW_H}, transparent = true, integrated_title = true)
 	if app.win == nil { fmt.eprintln("opencode-native: no window"); os.exit(1) }
+	for a in os.args[1:] {   // --size=<w>x<h>: the window's size in pixels, whichever screen it opens on (tools/screenshots.mjs)
+		if !strings.has_prefix(a, "--size=") { continue }
+		wh := strings.split(a[len("--size="):], "x", context.temp_allocator)
+		if len(wh) != 2 { continue }
+		w, w_ok := strconv.parse_f32(wh[0])
+		h, h_ok := strconv.parse_f32(wh[1])
+		if w_ok && h_ok { platform.set_size(app.win, {int(math.round(w / app.win.dpi_scale)), int(math.round(h / app.win.dpi_scale))}) }
+	}
 	if !render.init_window(&app.r, app.win, app.win.size, transparent = true) { fmt.eprintln("opencode-native: no renderer"); os.exit(1) }
 	if !slice.contains(os.args, "--no-fixed-surface") { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
 	if !load_fonts(app) { fmt.eprintln("opencode-native: no UI font"); os.exit(1) }
@@ -383,6 +397,7 @@ main :: proc() {
 		if a == "--setup" { setup_open(app) }
 		if a == "--add-server" { server_edit_open(app, -1) }
 		if strings.has_prefix(a, "--find=") { find_open(app); ui.field_set(&app.find.field, a[len("--find="):]) }
+		if strings.has_prefix(a, "--image=") { image_view_start(app, a[len("--image="):]) }
 	}
 	for a in os.args[1:] {   // --settings[=page number]: the settings open at start
 		if a == "--settings" || strings.has_prefix(a, "--settings=") {

@@ -5,7 +5,7 @@
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.6.0-fab283" alt="version 0.6.0"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.7.0-fab283" alt="version 0.7.0"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -33,8 +33,8 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 | **A sub-agent's own conversation**: the breadcrumb, Back | **The model picker**: subsequence search ("son"), the matched letters lit |
 | ![Session statistics](docs/screenshots/statistics.png) | ![Settings](docs/screenshots/settings.png) |
 | **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Settings**: the client's preferences (fonts among them) and the server's pages |
-| ![On Linux](docs/screenshots/linux.png) | |
-| **On Linux** (Wayland, Vulkan): the same program | |
+| ![An image in the viewer, zoomed in](docs/screenshots/viewer.png) | ![On Linux](docs/screenshots/linux.png) |
+| **The image viewer**: zoom where the pointer is, drag to move | **On Linux** (Wayland, Vulkan): the same program |
 
 ## What it does
 
@@ -47,7 +47,7 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
   showing the ones on their way if you get there first; Page Up and Page Down scroll it from anywhere, the arrows, Home and
   End when no field has the keyboard.
 - **Images**: those attached to prompts and those tools hand back (screenshots, images read) as thumbnails, opened in
-  a viewer; projects' logos in the sidebar, the title bar and the header. PNG, JPEG, WebP, GIF and BMP, decoded off the
+  a viewer that zooms where the pointer is and moves by a drag or the arrows, within limits; projects' logos in the sidebar, the title bar and the header. PNG, JPEG, WebP, GIF and BMP, decoded off the
   interface's thread.
 - **Sub-agents**: a card for each launch (its agent, state, live activity, duration, model, tokens, cost, prompt and
   result), the result line where it came back, a strip of the running ones above the composer, a header menu of all of
@@ -97,6 +97,8 @@ TLS is rustls, checked against the system's trust store.
 | `--add-server` | open the dialog that adds a server at start |
 | `--find=<text>` | open the find bar (Ctrl+F) with that text |
 | `--scale=<factor>` | the interface's scale whatever the screen's (`1`: 100 %; screenshots) |
+| `--size=<w>x<h>` | the window's size in pixels (screenshots) |
+| `--image=<file>` | open the image viewer on a file |
 | `--pref name=value` | set a preference for the run (names in Settings, e.g. `appearance.accent=blue`) |
 | `--settings[=n]` | open the settings at start (on page n) |
 | `--frames=N` | N frames of a hidden window, then exit (a check that it runs) |
@@ -141,6 +143,7 @@ Both build the Rust library first (`tools/build_native.*`, nothing when it is up
 | `src/setup.odin`, `src/desktop*.odin`, `src/os_*.odin` | version, Setup dialog, install / uninstall; what each system is asked |
 | `native/occ_native` | the Rust library (C functions): ureq + rustls, image decoding (and the text backend on Linux) |
 | `site/` | the GitHub Pages site |
+| `tools/` | the Rust library's build, packaging, the site's changelog; `screenshots.mjs` retakes every picture of the README and the site (over the DevTools protocol, with `--linux` from a release's build in WSL) |
 | `res/`, `assets/` | resources of the exe (icon, version, manifest), the logo, Lucide (`assets/fonts`, ISC) |
 
 ## License

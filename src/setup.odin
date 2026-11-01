@@ -8,12 +8,13 @@ import "core:math"
 import "core:os"
 import "core:path/filepath"
 import "core:slice"
+import "core:strconv"
 import "core:strings"
 import "gt:draw"
 import "gt:render"
 import "gt:ui"
 
-APP_VERSION :: "0.6.0"
+APP_VERSION :: "0.7.0"
 
 LOGO_PNG :: #load("../assets/logo_256.png")
 
@@ -134,14 +135,38 @@ set_message :: proc(app: ^App, good: bool, msg: string) {
 	app.setup.good = good
 }
 
-// At the start of a copy that is not the installed one, unless the user said "standalone" (for good) or closed the
-// dialog for this version.
+// "0.5.6" before "0.6.0", number by number (a version that does not read as one is not older: nothing to offer).
+version_older :: proc(a, b: string) -> bool {
+	if a == "" || b == "" { return false }
+	aa, bb := a, b
+	for {
+		x, x_ok := strings.split_iterator(&aa, ".")
+		y, y_ok := strings.split_iterator(&bb, ".")
+		if !x_ok && !y_ok { return false }
+		xn, xp := strconv.parse_int(x_ok ? x : "0")
+		yn, yp := strconv.parse_int(y_ok ? y : "0")
+		if !xp || !yp { return false }
+		if xn != yn { return xn < yn }
+	}
+}
+
+// An older copy is installed and this one could replace it.
+setup_is_upgrade :: proc(state: Install_State, installed: string) -> bool {
+	return state == .Other_Copy && version_older(installed, APP_VERSION)
+}
+
+// Whether a start opens the dialog: an older install to upgrade, unless the dialog was closed for this version; no install or one
+// to repair, unless the user also said "standalone" for good.
+setup_wanted :: proc(state: Install_State, installed, choice: string) -> bool {
+	if choice == fmt.tprintf("dismissed:%s", APP_VERSION) { return false }
+	if setup_is_upgrade(state, installed) { return true }
+	return choice != "standalone" && (state == .Not_Installed || state == .Repair)
+}
+
 setup_offer_at_start :: proc(app: ^App) {
 	if os.get_env("OPENCODE_NATIVE_NO_SETUP", context.temp_allocator) != "" { return }
-	choice := settings_get("setup")
-	if choice == "standalone" || choice == fmt.tprintf("dismissed:%s", APP_VERSION) { return }
 	f := install_facts()
-	if f.state == .Not_Installed || f.state == .Repair { setup_open(app) }
+	if setup_wanted(f.state, f.version, settings_get("setup")) { setup_open(app) }
 }
 
 SETUP_DIALOG_TOP :: 0.18   // of the window's height
@@ -174,6 +199,8 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				case .Repair:        state = "Installed, but a shortcut or the Settings entry is missing."; col = hex(HEX_RED)
 				case .Other_Copy:    state = fmt.tprintf("A copy is installed (%s): this one runs on its own.", f.version != "" ? f.version : "?")
 				}
+				upgrade := setup_is_upgrade(f.state, f.version)
+				if upgrade { state = fmt.tprintf("An older copy is installed (%s): upgrade it to %s?", f.version, APP_VERSION); col = accent() }
 				ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 				if ui.row(.Center) {
 					lamp("###sl", col, 1, size = em * 0.9)
@@ -239,6 +266,9 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				if bevel_button("###launch", "Open installed copy", ICO_RIGHT, .Accent).clicked {
 					if launch(st.installed) { app.quit = true }
 				}
+			} else if setup_is_upgrade(f.state, f.version) {
+				if bevel_button("###notnow", "Not now", "", .Normal).clicked { st.open = false }
+				ui.spacer(ui.px(em * 0.5))
 			} else if f.state == .Not_Installed || f.state == .Other_Copy {
 				if bevel_button("###standalone", "Keep standalone", "", .Normal).clicked {
 					settings_set("setup", "standalone")
@@ -253,7 +283,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				label := "Install"
 				switch f.state {
 				case .Not_Installed: label = "Install"
-				case .Other_Copy:    label = "Replace installed copy"
+				case .Other_Copy:    label = setup_is_upgrade(f.state, f.version) ? fmt.tprintf("Upgrade to %s", APP_VERSION) : "Replace installed copy"
 				case .Repair:        label = "Repair"
 				case .This_Copy:     label = "Update shortcuts"
 				}
@@ -276,9 +306,9 @@ setup_dialog :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 1.3))
 		dialog_close(&st.open)
 	}
-	// closed without an answer: not again for this version
+	// closed without an answer: not again for this version (an upgrade declined too, whatever was said about an earlier one)
 	if was_open && !st.open {
 		c := settings_get("setup")
-		if c != "standalone" && c != "installed" { settings_set("setup", fmt.tprintf("dismissed:%s", APP_VERSION)) }
+		if setup_is_upgrade(st.facts.state, st.facts.version) || (c != "standalone" && c != "installed") { settings_set("setup", fmt.tprintf("dismissed:%s", APP_VERSION)) }
 	}
 }
