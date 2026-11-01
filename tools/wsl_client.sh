@@ -6,20 +6,14 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 
-if ! command -v socat >/dev/null; then
-  exec nix-shell -p socat --run "$(printf '%q ' bash "$0" "$@")"
+# the flake's shell: socat, and the libraries the client opens
+if [ -z "${IN_NIX_SHELL:-}" ] && command -v nix >/dev/null; then
+  exec nix --extra-experimental-features "nix-command flakes" develop "$here/.." --command bash "$0" "$@"
 fi
-
-if command -v nix >/dev/null; then
-  nx=(nix --extra-experimental-features "nix-command flakes")
-  libs=/usr/lib/wsl/lib
-  for p in vulkan-loader mesa libxkbcommon wayland libx11 libxcb libxcursor libxrandr libxi libxext fontconfig freetype dbus; do
-    for o in $("${nx[@]}" build --no-link --print-out-paths "nixpkgs#$p^*"); do libs="$libs:$o/lib"; done   # (fontconfig keeps them in an output of its own)
-  done
-  export LD_LIBRARY_PATH="$libs"
-  mesa="$("${nx[@]}" build --no-link --print-out-paths nixpkgs#mesa.out)"
-  # the GPU through WSL, else the software driver
-  export VK_ICD_FILENAMES="$mesa/share/vulkan/icd.d/dzn_icd.x86_64.json:$mesa/share/vulkan/icd.d/lvp_icd.x86_64.json"
+# the GPU through WSL, else the software driver; /usr/lib/wsl/lib is what the first one talks to
+if [ -n "${MESA_ICD_DIR:-}" ]; then
+  export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
+  export VK_ICD_FILENAMES="$MESA_ICD_DIR/dzn_icd.x86_64.json:$MESA_ICD_DIR/lvp_icd.x86_64.json"
 fi
 
 settings="$(mktemp -d)"

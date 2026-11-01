@@ -11,6 +11,7 @@
 //     --out       write there instead, the site untouched
 //     --font-dir  try these faces (src/main.odin: fonts_from_dir)
 //     --linux     just linux.png: this Linux build of the client, run in WSL (tools/wsl_client.sh), Windows only
+//     --linux-build  the same from this tree, built in WSL with the flake (tools/wsl_build.sh): no release needed
 import { spawn, spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -23,12 +24,19 @@ const { values: opt } = parseArgs({ options: {
   build: { type: 'boolean' }, only: { type: 'string' }, exe: { type: 'string' },
   session: { type: 'string', default: 'ses_e7633e562ffeJfyNPycNzsVrb1' },
   toolkit: { type: 'string', default: join(repo, 'ext', 'gui_toolkit') },
-  linux: { type: 'string' },
+  linux: { type: 'string' }, 'linux-build': { type: 'boolean' },
   out: { type: 'string' }, 'font-dir': { type: 'string' },
 } })
 const windows = process.platform === 'win32'
 const only = opt.only ? opt.only.split(',') : null
 const toolkit = resolve(repo, opt.toolkit)
+if (opt['linux-build']) {
+  const script = spawnSync('wsl.exe', ['--exec', 'wslpath', '-a', join(repo, 'tools', 'wsl_build.sh').replaceAll('\\', '/')], { encoding: 'utf8' }).stdout.trim()
+  const r = spawnSync('wsl.exe', ['--exec', 'bash', '-l', script], { encoding: 'utf8', maxBuffer: 1 << 26 })
+  const built = (r.stdout ?? '').trim().split('\n').at(-1)
+  if (r.status !== 0 || !built.startsWith('/')) { console.error((r.stdout ?? '').slice(-2000), (r.stderr ?? '').slice(-2000)); process.exit(1) }
+  opt.linux = built
+}
 const wslPath = (f) => spawnSync('wsl.exe', ['--exec', 'wslpath', '-a', f.replaceAll('\\', '/')], { encoding: 'utf8' }).stdout.trim()
 const exe = opt.exe ? resolve(opt.exe) : join(repo, 'build', 'screenshots' + (windows ? '.exe' : ''))
 const docs = opt.out ? resolve(opt.out) : join(repo, 'docs', 'screenshots')
@@ -118,7 +126,7 @@ function startLinux(args) {
     ...process.env, TOOLKIT_DEVTOOLS: String(PORT), OC_PORT: new URL(service.url).port, OC_PASSWORD: service.password,
     WSLENV: 'TOOLKIT_DEVTOOLS:OC_PORT:OC_PASSWORD',
   }
-  return spawn('wsl.exe', ['--exec', 'bash', '-l', wslPath(join(repo, 'tools', 'wsl_client.sh')), wslPath(resolve(opt.linux)), ...args], { env, stdio: ['ignore', log, log] })
+  return spawn('wsl.exe', ['--exec', 'bash', '-l', wslPath(join(repo, 'tools', 'wsl_client.sh')), opt.linux.startsWith('/') ? opt.linux : wslPath(resolve(opt.linux)), ...args], { env, stdio: ['ignore', log, log] })
 }
 
 if (opt.build) {

@@ -5,6 +5,11 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- `flake.nix`: `nix develop -c ./build.sh` builds on Linux with the Odin, wgpu-native and libraries the CI uses; `tools/screenshots.mjs
+  --linux-build` takes the Linux picture from this tree, no release needed.
+
 ## [0.8.2] - 2026-11-01
 
 ### Changed

@@ -120,6 +120,8 @@ since a program on this computer can then type into a session.
 **Windows**: the Odin compiler named in `odin.version` (`dev-2026-10`), MSVC (Visual Studio or its Build Tools:
 `link.exe`, `rc.exe`) and Rust (stable, `x86_64-pc-windows-msvc`), then `build.bat`.
 
+**Linux with Nix**: `nix develop -c ./build.sh` (`flake.nix`: the Odin, wgpu-native and libraries the CI uses).
+
 **Linux**: the same Odin, wgpu-native's static library in its vendor folder (`ext/gui_toolkit/tools/fetch_wgpu.sh`),
 clang, fontconfig's headers and Rust (stable), then `./build.sh`. At run time: Vulkan, libxkbcommon, fontconfig, and
 Wayland or X11.
