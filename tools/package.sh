@@ -14,7 +14,7 @@ stage="build/stage/$name"
 rm -rf build/stage && mkdir -p "$stage" build/dist
 cp build/opencode-native "$stage/"
 cp LICENSE "$stage/LICENSE"
-cp assets/fonts/LUCIDE-LICENSE.txt "$stage/LUCIDE-LICENSE.txt"
+cp assets/fonts/*-LICENSE.txt "$stage/"
 cat > "$stage/README.txt" <<TXT
 opencode native $VERSION for Linux (x64): a native desktop client for the opencode server.
 

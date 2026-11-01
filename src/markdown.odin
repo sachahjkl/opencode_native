@@ -29,7 +29,8 @@ src_version :: proc(first, last: string, size: f32) -> u64 {
 }
 
 // Inline Markdown of one block into runs (temp memory).
-inline_runs :: proc(text: string, base: ui.Rich_Style, out: ^[dynamic]ui.Rich_Run) {
+// `code_size` (not 0): inline code at that size, when the text around it is at another.
+inline_runs :: proc(text: string, base: ui.Rich_Style, out: ^[dynamic]ui.Rich_Run, code_size: f32 = 0) {
 	st := base
 	i, start := 0, 0
 	flush :: proc(out: ^[dynamic]ui.Rich_Run, s: string, st: ui.Rich_Style) { if s != "" { append(out, ui.Rich_Run{text = s, style = st}) } }
@@ -50,6 +51,7 @@ inline_runs :: proc(text: string, base: ui.Rich_Style, out: ^[dynamic]ui.Rich_Ru
 			flush(out, text[start:i], st)
 			cs := st
 			cs.code = true
+			if code_size > 0 { cs.size = code_size }
 			cs.color = hex(HEX_INLINE_CODE)
 			flush(out, text[i + 1:i + 1 + e], cs)
 			i += e + 2; start = i
@@ -189,6 +191,9 @@ joined :: proc(lines: []string) -> string {
 markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 	em := ui.font_size()
 	fs := size > 0 ? size : em
+	// the answers' own face and size; every line the same height, inline code or not; tables stay in the interface's face
+	prose_fs := math.round(fs * the_app.prose_scale)
+	line_h := math.round(prose_fs * PROSE_LINE_RATIO)
 	blocks := parse_blocks(src)
 	for &bl, n in blocks {
 		bid := fmt.tprintf("###%s_b%d", id, n)
@@ -205,22 +210,22 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 			k := [HEADING_LEVEL_MAX + 1]f32{1, 1.45, 1.25, 1.1, 1, 1, 1}
 			inline_runs(bl.lines[0], {bold = true, color = bl.level <= 2 ? hex(HEX_BRIGHT) : color}, &runs)
 			if bl.level >= 2 { ui.spacer(ui.px(em * 0.3)) }
-			ui.next({width = ui.fill(), font_size = math.round(fs * k[bl.level]), flags = {.Selectable}})
+			ui.next({width = ui.fill(), font = the_app.prose, font_size = math.round(prose_fs * k[bl.level]), flags = {.Selectable}})
 			res := ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[0], fs))
 			link_clicked(res)
 		case .Para, .Quote:
 			runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
-			inline_runs(joined(bl.lines[:]), {color = bl.kind == .Quote ? hex(HEX_WEAK) : color}, &runs)
+			inline_runs(joined(bl.lines[:]), {color = bl.kind == .Quote ? hex(HEX_WEAK) : color}, &runs, code_size = fs)
 			if bl.kind == .Quote {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if rail_row(fmt.tprintf("%s_q", bid), with_alpha(accent(), 0.6)) {
 					ui.spacer(ui.px(em * 0.9))
-					ui.next({width = ui.fill(), font_size = fs, flags = {.Selectable}})
-					link_clicked(ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], fs)))
+					ui.next({width = ui.fill(), font = the_app.prose, font_size = prose_fs, flags = {.Selectable}})
+					link_clicked(ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], fs), line_height = line_h))
 				}
 			} else {
-				ui.next({width = ui.fill(), font_size = fs, flags = {.Selectable}})
-				link_clicked(ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], fs)))
+				ui.next({width = ui.fill(), font = the_app.prose, font_size = prose_fs, flags = {.Selectable}})
+				link_clicked(ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], fs), line_height = line_h))
 			}
 		case .Bullet, .Number:
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -228,12 +233,12 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 				ui.spacer(ui.px(em * (0.3 + 1.2 * f32(bl.level))))
 				mk := bl.marker
 				if bl.kind == .Bullet { mk = bl.level == 0 ? "•" : "◦" }
-				ui.next({width = ui.px(em * 1.3), height = ui.px(math.round(fs * LINE_HEIGHT_RATIO)), fg = accent(), font_size = fs, text_pad = 0})
+				ui.next({width = ui.px(em * 1.3), height = ui.px(line_h), fg = accent(), font_size = fs, text_pad = 0})
 				ui.build_box({.Draw_Text}, fmt.tprintf("%s###mk", mk))
 				runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
-				inline_runs(joined(bl.lines[:]), {color = color}, &runs)
-				ui.next({width = ui.fill(), font_size = fs, flags = {.Selectable}})
-				link_clicked(ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], fs)))
+				inline_runs(joined(bl.lines[:]), {color = color}, &runs, code_size = fs)
+				ui.next({width = ui.fill(), font = the_app.prose, font_size = prose_fs, flags = {.Selectable}})
+				link_clicked(ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], fs), line_height = line_h))
 			}
 		}
 	}

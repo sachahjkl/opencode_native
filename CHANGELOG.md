@@ -5,6 +5,24 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-01
+
+### Added
+
+- `tools/font_proposals.mjs` tries typefaces in the real client (`--font-dir=<folder>`, nothing installed);
+  `tools/check_embedded_fonts.mjs` checks that a build holds its fonts.
+
+### Changed
+
+- **A typeface of its own**: Hanken Grotesk for the interface, Newsreader for the answers, DM Mono for code, built into the
+  program, so it looks the same on Windows and Linux. Settings > Appearance goes back to the system's faces (Font, Mono font:
+  System; Prose font: As the interface). Characters outside Latin come from the system's fonts.
+- gui_toolkit 0.60.0.
+
+### Fixed
+
+- **Answers keep an even line height**: inline code no longer pushes its line apart.
+
 ## [0.7.0] - 2026-11-01
 
 ### Added
@@ -276,7 +294,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.8.0
 [0.7.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.7.0
 [0.6.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.6.0
 [0.5.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.5.6

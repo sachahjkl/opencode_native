@@ -5,7 +5,7 @@
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.7.0-fab283" alt="version 0.7.0"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.8.0-fab283" alt="version 0.8.0"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -38,6 +38,8 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 
 ## What it does
 
+- **A typeface of its own**, built into the program: Hanken Grotesk for the interface, Newsreader for the answers, DM Mono
+  for code. Settings > Appearance goes back to the system's faces.
 - **Sessions** grouped by project folder, with the project's logo; search; running ones lit; sub-agents nested under
   the session that launched them (the active ones counted and shown first).
 - **The conversation, streamed live** from the server's event stream: Markdown (headings, lists, quotes, tables as
@@ -99,6 +101,7 @@ TLS is rustls, checked against the system's trust store.
 | `--scale=<factor>` | the interface's scale whatever the screen's (`1`: 100 %; screenshots) |
 | `--size=<w>x<h>` | the window's size in pixels (screenshots) |
 | `--image=<file>` | open the image viewer on a file |
+| `--font-dir=<folder>` | try faces from files, nothing installed (`tools/font_proposals.mjs`) |
 | `--pref name=value` | set a preference for the run (names in Settings, e.g. `appearance.accent=blue`) |
 | `--settings[=n]` | open the settings at start (on page n) |
 | `--frames=N` | N frames of a hidden window, then exit (a check that it runs) |
@@ -148,5 +151,5 @@ Both build the Rust library first (`tools/build_native.*`, nothing when it is up
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Lucide's icons: ISC, see [assets/fonts/LUCIDE-LICENSE.txt](assets/fonts/LUCIDE-LICENSE.txt).
+MIT, see [LICENSE](LICENSE). Hanken Grotesk, Newsreader and DM Mono: SIL Open Font License, see `assets/fonts/*-LICENSE.txt`. Lucide's icons: ISC, see [assets/fonts/LUCIDE-LICENSE.txt](assets/fonts/LUCIDE-LICENSE.txt).
 opencode is a project of its own ([opencode.ai](https://opencode.ai)); this client is not affiliated with it.

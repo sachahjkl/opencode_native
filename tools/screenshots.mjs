@@ -8,9 +8,11 @@
 //     --exe       the client to run (default build/screenshots(.exe))
 //     --session   the session to show (only ever one made for pictures: they are published)
 //     --toolkit   where gui_toolkit is (default ext/gui_toolkit, for tools/cdp.mjs and the build)
+//     --out       write there instead, the site untouched
+//     --font-dir  try these faces (src/main.odin: fonts_from_dir)
 //     --linux     just linux.png: this Linux build of the client, run in WSL (tools/wsl_client.sh), Windows only
 import { spawn, spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,16 +24,18 @@ const { values: opt } = parseArgs({ options: {
   session: { type: 'string', default: 'ses_e7633e562ffeJfyNPycNzsVrb1' },
   toolkit: { type: 'string', default: join(repo, 'ext', 'gui_toolkit') },
   linux: { type: 'string' },
+  out: { type: 'string' }, 'font-dir': { type: 'string' },
 } })
 const windows = process.platform === 'win32'
 const only = opt.only ? opt.only.split(',') : null
 const toolkit = resolve(repo, opt.toolkit)
 const wslPath = (f) => spawnSync('wsl.exe', ['--exec', 'wslpath', '-a', f.replaceAll('\\', '/')], { encoding: 'utf8' }).stdout.trim()
 const exe = opt.exe ? resolve(opt.exe) : join(repo, 'build', 'screenshots' + (windows ? '.exe' : ''))
-const docs = join(repo, 'docs', 'screenshots')
+const docs = opt.out ? resolve(opt.out) : join(repo, 'docs', 'screenshots')
+mkdirSync(docs, { recursive: true })
 const PORT = 9391
 const SIZE = '1460x920'   // window pixels, whichever screen it opens on
-const COMMON = ['--pref', 'appearance.accent=peach', '--pref', 'appearance.zoom=1', '--scale=1.25', `--size=${SIZE}`]
+const COMMON = ['--pref', 'appearance.accent=peach', '--pref', 'appearance.zoom=1', '--scale=1.25', `--size=${SIZE}`, ...(opt['font-dir'] ? [`--font-dir=${resolve(opt['font-dir'])}`] : [])]
 const SESSION = [`--session=${opt.session}`, '--search=Tour']
 const AWAY = ['move', '700', '12']   // the pointer over the title bar: nothing hovered, no scroll bar called up
 
@@ -146,7 +150,7 @@ async function capture(shot) {
     const out = join(docs, shot.name + '.png')
     must('shot', out)
     const site = join(repo, 'site', 'img', shot.name + '.png')
-    if (existsSync(site) || shot.name === 'viewer') copyFileSync(out, site)
+    if (!opt.out && (existsSync(site) || shot.name === 'viewer')) copyFileSync(out, site)
     console.log('saved', shot.name)
   } finally {
     if (shot.linux) cdp('close')
