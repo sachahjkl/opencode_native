@@ -11,10 +11,9 @@
 
 ![A conversation: the tool calls on their timeline, sub-agents at work, the agent's reasoning](docs/screenshots/subagents.png)
 
-One program, no runtime to install: [Odin](https://odin-lang.org) on [gui_toolkit](https://github.com/sachahjkl/gui_toolkit)
-(Direct3D 11 and DirectWrite on Windows; Vulkan through wgpu-native, Fontations and HarfRust on Linux; a retained-state
-immediate-mode UI), with a small Rust library for HTTP and images. It talks to the opencode server the desktop app already
-runs on the machine (or any other), in opencode's dark palette with machined surfaces: bevelled and ridged buttons, sunken
+One program, no runtime to install, written in [Odin](https://odin-lang.org) on [gui_toolkit](https://github.com/sachahjkl/gui_toolkit),
+with a small Rust library for HTTP and images. It draws with Direct3D 11 on Windows and Vulkan on Linux. It talks to the opencode
+server running on this computer (or any other), in opencode's dark palette with machined surfaces: bevelled and ridged buttons, sunken
 wells, carved grooves, and lamps only where something is live.
 
     build.bat          ->  build\opencode-native.exe     (Windows)
@@ -64,11 +63,11 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 - **Statistics of a session** (its token count in the header, Ctrl+I): tokens in, out, reasoning, cache reads and
   writes, cost, cache hits, the context the last step filled against the model's window, time and pace, tool calls by
   tool (failures counted), models, its sub-agents, and the whole project's totals from the server.
-- **Settings** (Ctrl+,): accent colour, the interface and code fonts (automatic, built in, or any installed one, in a searched picker), text size, zoom, density, rounding, animations, smooth scrolling, glow; how the conversation shows;
+- **Settings** (Ctrl+,): accent colour, the fonts of the interface, the answers and code (built in, the system's, or any installed one, in a searched picker), text size, zoom, density, rounding, animations, smooth scrolling, scroll bars that hide, glow; how the conversation shows;
   the send key; sub-agents in the sidebar; notifications when a session finishes or asks. And what the server lets one see
   or change: its shell, its MCP servers (connect, disconnect), the usage limits and budgets of an OpenCode workspace, the
   saved permissions (revoke), providers, models, agents, skills, commands, the configuration files.
-- **Desktop integration** without administrator rights: Setup installs the running copy for the user. On Windows: a
+- **Desktop integration** without administrator rights: Setup installs the running copy for the user, and opens by itself to offer an upgrade when a newer copy starts over an older install. On Windows: a
   Start menu shortcut with its AppUserModelID, a Settings > Apps entry, an uninstaller. On Linux: `~/.local/share`, an
   entry in the applications menu and its icon.
 
@@ -148,7 +147,7 @@ Both build the Rust library first (`tools/build_native.*`, nothing when it is up
 | `src/setup.odin`, `src/desktop*.odin`, `src/os_*.odin` | version, Setup dialog, install / uninstall; what each system is asked |
 | `native/occ_native` | the Rust library (C functions): ureq + rustls, image decoding (and the text backend on Linux) |
 | `site/` | the GitHub Pages site |
-| `tools/` | the Rust library's build, packaging, the site's changelog; `screenshots.mjs` retakes every picture of the README and the site (over the DevTools protocol, with `--linux` from a release's build in WSL) |
+| `tools/` | the Rust library's build, packaging, the site's changelog; `screenshots.mjs` retakes every picture of the README and the site (over the DevTools protocol; `--linux-build` builds the Linux one in WSL with `flake.nix`); `doc_check` is in the toolkit |
 | `res/`, `assets/` | resources of the exe (icon, version, manifest), the logo, Lucide (`assets/fonts`, ISC) |
 
 ## License

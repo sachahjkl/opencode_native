@@ -18,7 +18,7 @@ cp assets/fonts/*-LICENSE.txt "$stage/"
 cat > "$stage/README.txt" <<TXT
 opencode native $VERSION for Linux (x64): a native desktop client for the opencode server.
 
-  ./opencode-native              run it (it finds the opencode server of this computer: ~/.config/opencode/service.json)
+  ./opencode-native              run it (it finds the opencode server of this computer by itself)
   ./opencode-native --install    install it for your user: ~/.local/share/opencode-native, an entry in the applications
                                  menu, its icon (or from its Setup: title bar menu > Setup...)
   ./opencode-native --url=https://host:port --password=...    another server
