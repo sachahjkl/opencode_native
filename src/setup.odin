@@ -82,7 +82,7 @@ logo_load :: proc(app: ^App) {
 	img, err := png.load_from_bytes(LOGO_PNG, {.alpha_add_if_missing}, context.temp_allocator)
 	if err != nil || img == nil || img.channels != 4 || img.depth != 8 { return }
 	app.logo.tex = render.create_texture_rgba(&app.r, img.width, img.height)
-	render.update_texture_rgba(&app.r, app.logo.tex, 0, 0, img.width, img.height, img.pixels.buf[:])
+	render.update_texture_rgba(&app.r, app.logo.tex, 0, 0, img.width, img.height, img.pixels[:])
 }
 
 @(private = "file")

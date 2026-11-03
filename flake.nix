@@ -21,10 +21,10 @@
       # (the compiler is statically linked: nothing to patch)
       odin = pkgs.stdenv.mkDerivation {
         pname = "odin";
-        version = "dev-2026-10";
+        version = "dev-2026-11";
         src = pkgs.fetchurl {
-          url = "https://github.com/odin-lang/Odin/releases/download/dev-2026-10/odin-linux-amd64-dev-2026-10.tar.gz";
-          sha256 = "c3c8b095621fd0c75f7f73e3a0829f1b4d45324225f20ba11ed8dc4da310a8ab";
+          url = "https://github.com/odin-lang/Odin/releases/download/dev-2026-11/odin-linux-amd64-dev-2026-11.tar.gz";
+          sha256 = "65c9f6e97d6f8a30930e151f270ce5aeaa98fe8b2ba49fe067394e2af04f7618";
         };
         nativeBuildInputs = [ pkgs.makeWrapper pkgs.unzip ];
         dontBuild = true;

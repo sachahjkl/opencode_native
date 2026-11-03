@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+
+- **Built with Odin dev-2026-11** (`odin.version`, the CI's archives pinned by SHA-256, `flake.nix`): `core:image`'s pixels are
+  a `[dynamic]u8`.
+- gui_toolkit 0.70.0: menus are denser and scroll when taller than the window; threads shaping text share the word cache's lock.
+
 ## [0.9.0] - 2026-11-01
 
 ### Added
