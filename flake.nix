@@ -12,7 +12,7 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
 
-      # Odin's Linux archive has no wgpu-native: it goes where vendor:wgpu looks for it (ext/gui_toolkit/tools/fetch_wgpu.sh)
+      # Odin's Linux archive has no wgpu-native: it goes where vendor:wgpu looks for it (ext/gui_toolkit/tools/tk fetch_wgpu)
       wgpu = pkgs.fetchurl {
         url = "https://github.com/gfx-rs/wgpu-native/releases/download/v29.0.1.1/wgpu-linux-x86_64-release.zip";
         sha256 = "95a4d90c071005a98d03eab348beaa6b07e16eb00d1dcdb9f8348f75eb97ec5a";

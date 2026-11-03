@@ -3,7 +3,7 @@
 # are in it; wgpu-native linked statically).
 #   ./build.sh            optimized (what is released)
 #   ./build.sh debug      debug information
-# Needs the Odin compiler (odin.version) with wgpu-native's static library in its vendor/wgpu/lib (tools/fetch_wgpu.sh),
+# Needs the Odin compiler (odin.version) with wgpu-native's static library in its vendor/wgpu/lib (the toolkit's tools/tk fetch_wgpu),
 # clang (Odin links with it) and Rust (cargo, stable). At run time: Vulkan (mesa), libxkbcommon, and Wayland or X11.
 # The toolkit is the submodule ext/gui_toolkit (git submodule update --init); GT=<folder> builds against another copy;
 # OUT=<file> writes the program elsewhere; ODIN=<compiler> another Odin.

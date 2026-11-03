@@ -23,7 +23,7 @@ runs:
         echo "$dir" >> "$GITHUB_PATH"
         "$dir/odin" version
 
-    # (Odin's Linux archive has no wgpu-native: the toolkit's script fetches it, pinned by SHA-256)
+    # (Odin's Linux archive has no wgpu-native: the toolkit's tools/tk fetches it, pinned by SHA-256)
     - name: wgpu-native
       shell: bash
-      run: ext/gui_toolkit/tools/fetch_wgpu.sh odin
+      run: mkdir -p build && odin run ext/gui_toolkit/tools/tk -out:build/tk -- fetch_wgpu

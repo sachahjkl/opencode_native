@@ -121,7 +121,7 @@ since a program on this computer can then type into a session.
 
 **Linux with Nix**: `nix develop -c ./build.sh` (`flake.nix`: the Odin, wgpu-native and libraries the CI uses).
 
-**Linux**: the same Odin, wgpu-native's static library in its vendor folder (`ext/gui_toolkit/tools/fetch_wgpu.sh`),
+**Linux**: the same Odin, wgpu-native's static library in its vendor folder (`odin run ext/gui_toolkit/tools/tk -- fetch_wgpu`),
 clang, fontconfig's headers and Rust (stable), then `./build.sh`. At run time: Vulkan, libxkbcommon, fontconfig, and
 Wayland or X11; libxcb-cursor for the theme's cursors on X11, an emoji font for color emoji.
 
