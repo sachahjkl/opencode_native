@@ -5,6 +5,8 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-03
+
 ### Added
 
 - `src/bench_test.odin`: the program on its heavy cases in the test's process, no server (a conversation of 150 answers,
@@ -347,7 +349,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.10.0
 [0.9.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.9.0
 [0.8.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.8.2
 [0.8.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.8.1
