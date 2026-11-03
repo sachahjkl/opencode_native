@@ -110,10 +110,12 @@ Prefs :: struct {
 
 prefs_path :: proc() -> string { return pjoin({filepath.dir(settings_path()), "prefs.txt"}) }
 
-prefs_init :: proc(app: ^App) {
+// `file` "": the defaults, nothing read or saved (a test).
+prefs_init :: proc(app: ^App, file: string) {
 	app.cfg_prefs = config.prefs_make()
 	config.register(&app.cfg_prefs, PREF_DEFS[:])
-	config.load_file(&app.cfg_prefs, prefs_path(), .User)
+	app.prefs_file = strings.clone(file)
+	if file != "" { config.load_file(&app.cfg_prefs, file, .User) }
 	config.apply_args(&app.cfg_prefs, os.args[1:])   // --pref name=value
 	prefs_refresh(app)
 }
@@ -162,7 +164,8 @@ prefs_refresh :: proc(app: ^App) {
 }
 
 prefs_save :: proc(app: ^App) {
-	if !config.save_user(&app.cfg_prefs, prefs_path()) { ui.toast(.Bad, "The preferences could not be saved") }
+	if app.prefs_file == "" { return }
+	if !config.save_user(&app.cfg_prefs, app.prefs_file) { ui.toast(.Bad, "The preferences could not be saved") }
 }
 
 // Sets a preference from its text, saves the user's changes, applies them.

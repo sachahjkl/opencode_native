@@ -321,43 +321,28 @@ sessions_list :: proc(app: ^App, em: f32) {
 	}
 	now := now_epoch_ms()
 	ui.spacer(ui.px(em * 0.4))
-	for &gr, gi in groups {
-		gkey := hash.fnv64a(transmute([]u8)gr.dir)
-		folded := app.folded[gkey] or_else false
-		// group header: folder, name, count, "+"
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
-		hdr := ui.build_box({.Clickable, .Hot_Within}, fmt.tprintf("###g%d", gkey))
-		hs := ui.signal(hdr)
-		if hs.clicked { app.folded[gkey] = !folded }
-		if ui.parent(hdr) {
-			ui.spacer(ui.px(em * 0.8))
-			glyph(folded ? ICO_RIGHT : ICO_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
-			// the project's logo, else a folder
-			logo := len(gr.items) > 0 ? project_logo(app, app.sessions[gr.items[0]].project) : nil
-			if !logo_of(app, "###glogo", logo, math.round(em * 1.25)) { glyph(ICO_FOLDER, accent(), math.round(em * ICON_REGULAR)) }
-			ui.spacer(ui.px(em * 0.35))
-			name := gr.dir != "" ? base_name(gr.dir) : "(no folder)"
-			text("n", strings.to_upper(name, context.temp_allocator), hs.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-			ui.spacer(ui.px(em * 0.4))
-			text("c", fmt.tprintf("%d", len(gr.items)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
-			ui.spacer(ui.fill())
-			// "+": always there (built only while the header was hovered, it vanished as soon as the pointer moved onto
-			// it: the header is no longer the box under the pointer), shown while the header is hot (Hot_Within keeps it
-			// hot over its button)
-			plus_col := hdr.hot_t > FADE_VISIBLE ? hex(HEX_WEAK) : Color{0, 0, 0, 0.001}
-			if glyph_button("###gadd", ICO_ADD, math.round(em * 1.5), plus_col).clicked {
-				new_session(app)
-				delete(app.chat.new_dir, app.chat.alloc)
-				app.chat.new_dir = strings.clone(gr.dir, app.chat.alloc)
+	// Only the rows near the view are built (the toolkit's lazy column, as the conversation's): a header or a session
+	// each, the others stand as their height. Hundreds of sessions were built and drawn at every frame.
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+	if ui.column(id = "###rows") {
+		lz := ui.lazy_begin()
+		gap := false   // (between a group's last session and the next group)
+		for &gr in groups {
+			gkey := hash.fnv64a(transmute([]u8)gr.dir)
+			folded := app.folded[gkey] or_else false
+			if ui.lazy_item(lz, fmt.tprintf("###lg%d", gkey)) {
+				if gap { ui.spacer(ui.px(em * 0.5)) }
+				group_header(app, &gr, gkey, folded, em)
 			}
-			ui.spacer(ui.px(em * 0.5))
+			gap = !folded
+			if folded { continue }
+			for i in gr.items {
+				s := &app.sessions[i]
+				if ui.lazy_item(lz, fmt.tprintf("###ls_%s", s.id), always = s.id == app.chat.id) {
+					session_item(app, s, em, now, 0, app.prefs.subagents == "nested" ? children_of(app, s.id, kids) : nil)
+				}
+			}
 		}
-		if folded { continue }
-		for i in gr.items {
-			s := &app.sessions[i]
-			session_item(app, s, em, now, 0, app.prefs.subagents == "nested" ? children_of(app, s.id, kids) : nil)
-		}
-		if gi < len(groups) - 1 { ui.spacer(ui.px(em * 0.5)) }
 	}
 	ui.spacer(ui.px(em))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -367,6 +352,38 @@ sessions_list :: proc(app: ^App, em: f32) {
 	}
 	ui.spacer(ui.px(em))
 	session_menu(app, em)
+}
+
+// A group's header: folder, name, count, "+".
+@(private = "file")
+group_header :: proc(app: ^App, gr: ^Group, gkey: u64, folded: bool, em: f32) {
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
+	hdr := ui.build_box({.Clickable, .Hot_Within}, fmt.tprintf("###g%d", gkey))
+	hs := ui.signal(hdr)
+	if hs.clicked { app.folded[gkey] = !folded }
+	if ui.parent(hdr) {
+		ui.spacer(ui.px(em * 0.8))
+		glyph(folded ? ICO_RIGHT : ICO_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
+		// the project's logo, else a folder
+		logo := len(gr.items) > 0 ? project_logo(app, app.sessions[gr.items[0]].project) : nil
+		if !logo_of(app, "###glogo", logo, math.round(em * 1.25)) { glyph(ICO_FOLDER, accent(), math.round(em * ICON_REGULAR)) }
+		ui.spacer(ui.px(em * 0.35))
+		name := gr.dir != "" ? base_name(gr.dir) : "(no folder)"
+		text("n", strings.to_upper(name, context.temp_allocator), hs.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+		ui.spacer(ui.px(em * 0.4))
+		text("c", fmt.tprintf("%d", len(gr.items)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+		ui.spacer(ui.fill())
+		// "+": always there (built only while the header was hovered, it vanished as soon as the pointer moved onto
+		// it: the header is no longer the box under the pointer), shown while the header is hot (Hot_Within keeps it
+		// hot over its button)
+		plus_col := hdr.hot_t > FADE_VISIBLE ? hex(HEX_WEAK) : Color{0, 0, 0, 0.001}
+		if glyph_button("###gadd", ICO_ADD, math.round(em * 1.5), plus_col).clicked {
+			new_session(app)
+			delete(app.chat.new_dir, app.chat.alloc)
+			app.chat.new_dir = strings.clone(gr.dir, app.chat.alloc)
+		}
+		ui.spacer(ui.px(em * 0.5))
+	}
 }
 
 // A session of the sidebar; `depth` 1: a sub-agent listed under its parent. `kids`: its sub-agents (indices into

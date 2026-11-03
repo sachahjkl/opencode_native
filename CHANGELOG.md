@@ -5,11 +5,20 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- `src/bench_test.odin`: the program on its heavy cases in the test's process, no server (a conversation of 150 answers,
+  400 sessions); `-define:OCC_BENCH=true` times them. docs/performance.md: what was measured.
+
 ### Changed
 
 - **Built with Odin dev-2026-11** (`odin.version`, the CI's archives pinned by SHA-256, `flake.nix`): `core:image`'s pixels are
   a `[dynamic]u8`.
 - gui_toolkit 0.70.0: menus are denser and scroll when taller than the window; threads shaping text share the word cache's lock.
+- **The sidebar builds the sessions it shows** (a lazy column, as the conversation): with 400 sessions a frame took 8.4 ms,
+  now 1.6 ms; typing, scrolling and a streamed answer 10 to 11 ms, now 2.4 to 2.5 ms (docs/performance.md).
+- **A faster start**: the graphics device is made while the rest starts, the fonts load meanwhile (first frame 200 -> 183 ms).
+  `--frames=N` says how long the first frame took.
 
 ## [0.9.0] - 2026-11-01
 

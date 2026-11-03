@@ -103,7 +103,7 @@ TLS is rustls, checked against the system's trust store.
 | `--font-dir=<folder>` | try faces from files, nothing installed (`tools/font_proposals.mjs`) |
 | `--pref name=value` | set a preference for the run (names in Settings, e.g. `appearance.accent=blue`) |
 | `--settings[=n]` | open the settings at start (on page n) |
-| `--frames=N` | N frames of a hidden window, then exit (a check that it runs) |
+| `--frames=N` | N frames of a hidden window, then exit (a check that it runs; it says how long the first frame took) |
 
 Preferences live in `%APPDATA%\opencode-native\prefs.txt` on Windows, `~/.config/opencode-native/prefs.txt` on Linux (only
 what differs from the defaults), the servers in `servers.txt` beside them;
@@ -146,6 +146,7 @@ Both build the Rust library first (`tools/build_native.*`, nothing when it is up
 | `src/style.odin` | the palette, the icons, the machined surfaces |
 | `src/setup.odin`, `src/desktop*.odin`, `src/os_*.odin` | version, Setup dialog, install / uninstall; what each system is asked |
 | `native/occ_native` | the Rust library (C functions): ureq + rustls, image decoding (and the text backend on Linux) |
+| `src/bench_test.odin` | the heavy cases in the test's process (a long conversation, hundreds of sessions); timed with `-define:OCC_BENCH=true` ([docs/performance.md](docs/performance.md)) |
 | `site/` | the GitHub Pages site |
 | `tools/` | the Rust library's build, packaging, the site's changelog; `screenshots.mjs` retakes every picture of the README and the site (over the DevTools protocol; `--linux-build` builds the Linux one in WSL with `flake.nix`); `doc_check` is in the toolkit |
 | `res/`, `assets/` | resources of the exe (icon, version, manifest), the logo, Lucide (`assets/fonts`, ISC) |

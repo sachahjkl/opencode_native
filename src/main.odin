@@ -77,6 +77,7 @@ App :: struct {
 	sub_open:         map[u64]bool,   // sidebar: sessions whose sub-agents are listed under them
 	start_session:    string,
 	cfg_prefs:        config.Prefs,   // the preferences (settings.odin)
+	prefs_file:       string,         // where they are saved ("": nowhere)
 	prefs:            Prefs,          // their plain values
 	facts:            Server_Facts,   // what the server said for the settings pages
 	facts_gen:        u64,            // which reading of them is the current one
@@ -126,6 +127,15 @@ App :: struct {
 	quit:             bool,
 	last_tick:        time.Tick,
 	frames:           int,
+	times:            Frame_Times,   // the last frame's steps
+}
+
+// How long the steps of a frame took (bench_test.odin reads them).
+Frame_Times :: struct {
+	build:   time.Duration,   // every build of the frame (input, layout)
+	draw:    time.Duration,   // the boxes drawn into the draw lists
+	render:  time.Duration,   // the lists submitted and the frame presented
+	builds:  int,
 }
 
 the_app: ^App
@@ -179,7 +189,10 @@ frame :: proc(app: ^App, inner := false) {
 		})
 		build_ui(app)
 		ui.end_build()
+		app.times.builds += 1
 	}
+	app.times = {}
+	t_build := time.tick_now()
 	build(app, size, events, dt)
 	prefs_track_zoom(app)
 	// A part opened or closed in this build: the build drew it in its old state (the click comes after its body). Build
@@ -220,12 +233,17 @@ frame :: proc(app: ^App, inner := false) {
 	app.chat.keep_id = ""
 	if b := app.chat_sb; b != nil { load_older(app, b) }
 	platform.set_cursor(app.win, ui.cursor(&app.ui_state))
+	t_draw := time.tick_now()
+	app.times.build = time.tick_diff(t_build, t_draw)
 	draw.begin_frame(&app.dc, size)
 	render.frame_begin(&app.r, hex(HEX_BG0))
 	ui.draw_tree(&app.ui_state, &app.dc)
 	draw.end_frame(&app.dc)
+	t_render := time.tick_now()
+	app.times.draw = time.tick_diff(t_draw, t_render)
 	render.frame_end(&app.r, !at_once)
 	render.paced_present(&app.pacer)
+	app.times.render = time.tick_since(t_render)
 	free_all(context.temp_allocator)
 
 	nav_apply(app)
@@ -394,7 +412,28 @@ POSTS_PER_BUILD      :: 4000
 CHECK_FRAME_SLEEP_MS :: 50    // --frames=N
 ANIMATION_WAIT_MS    :: 33    // the longest sleep while something pulses
 
+// What the window's interface needs once it has a renderer (and the fonts, fonts_init): the state, the theme, the
+// preferences (read from `prefs_file`; "": the defaults), the queue of what the threads post. A test makes the same on an
+// offscreen window.
+app_init :: proc(app: ^App, prefs_file: string) {
+	draw.init(&app.dc, &app.r, &app.fonts)
+	logo_load(app)
+	theme_setup(&app.theme)
+	ui.init(&app.ui_state, &app.fonts, &app.theme)
+	app.ui_state.icon_font = app.tk_icons
+	ui.set_toast_position(&app.ui_state, .Top_Right)
+	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
+	ui.post_configure(&app.ui_state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
+}
+
+// The fonts, before the renderer: they load while the graphics device is made (render.preload_device).
+fonts_init :: proc(app: ^App) -> bool {
+	font.init(&app.fonts)
+	return load_fonts(app)
+}
+
 main :: proc() {
+	started := time.tick_now()
 	frames := -1   // --frames=N: N frames of the hidden window, then exit (a check that it runs)
 	forced_scale: f32 = 0   // --scale=<factor>
 	start_session := ""   // --session=<id>: the session opened at start (else the latest)
@@ -405,6 +444,8 @@ main :: proc() {
 	}
 	// --install / --uninstall / --status: the desktop integration, without a window
 	if handled, code := desktop_cli(); handled { os.exit(code) }
+	// the graphics device on a thread of its own while the rest starts (the driver's load is the longest step: 160 ms here)
+	render.preload_device()
 	set_app_id()           // (before the first window: the taskbar groups it under the shortcuts)
 	desktop_clean_old()
 
@@ -420,12 +461,12 @@ main :: proc() {
 
 	servers_init(app)
 
-	font.init(&app.fonts)
 	// a composition swap chain whose buffers keep the monitor's size while the window is resized: the window shows their
 	// top-left part 1:1, clipped by its client area, so a frame of the old size is never stretched over the new one (as
 	// Wren's browser.window.fixed_surface). Where DirectComposition is missing it is an ordinary swap chain.
 	app.win = platform.open_window("opencode", {WINDOW_W, WINDOW_H}, transparent = true, integrated_title = true)
 	if app.win == nil { fmt.eprintln("opencode-native: no window"); os.exit(1) }
+	if !fonts_init(app) { fmt.eprintln("opencode-native: no UI font"); os.exit(1) }
 	for a in os.args[1:] {   // --size=<w>x<h>: the window's size in pixels, whichever screen it opens on (tools/screenshots.mjs)
 		if !strings.has_prefix(a, "--size=") { continue }
 		wh := strings.split(a[len("--size="):], "x", context.temp_allocator)
@@ -436,16 +477,8 @@ main :: proc() {
 	}
 	if !render.init_window(&app.r, app.win, app.win.size, transparent = true) { fmt.eprintln("opencode-native: no renderer"); os.exit(1) }
 	if !slice.contains(os.args, "--no-fixed-surface") { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
-	if !load_fonts(app) { fmt.eprintln("opencode-native: no UI font"); os.exit(1) }
-	draw.init(&app.dc, &app.r, &app.fonts)
-	logo_load(app)
-	theme_setup(&app.theme)
-	ui.init(&app.ui_state, &app.fonts, &app.theme)
-	app.ui_state.icon_font = app.tk_icons
-	ui.set_toast_position(&app.ui_state, .Top_Right)
-	prefs_init(app)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
+	app_init(app, prefs_path())
 	if app.servers_in_clear { servers_save(app) }
-	ui.post_configure(&app.ui_state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
 	platform.set_dark_title(app.win, true)
 	app.devtools = devtools.start_from_env(app.win, "opencode")
 	app.win.user = app
@@ -458,8 +491,13 @@ main :: proc() {
 	if app.conn == nil { fmt.eprintln("opencode-native: the HTTP client failed to start"); os.exit(1) }
 
 	if frames >= 0 {
-		for _ in 0 ..< frames { frame(app); time.sleep(CHECK_FRAME_SLEEP_MS * time.Millisecond) }
-		fmt.printfln("opencode-native: %d frames, %d boxes, online=%v, %d sessions, %d messages", frames, app.ui_state.boxes_built, app.online, len(app.sessions), len(app.chat.messages))
+		first: time.Duration   // from the start of main to the end of the first frame
+		for i in 0 ..< frames {
+			frame(app)
+			if i == 0 { first = time.tick_since(started) }
+			time.sleep(CHECK_FRAME_SLEEP_MS * time.Millisecond)
+		}
+		fmt.printfln("opencode-native: %d frames, %d boxes, online=%v, %d sessions, %d messages, first frame %.1f ms", frames, app.ui_state.boxes_built, app.online, len(app.sessions), len(app.chat.messages), time.duration_milliseconds(first))
 		os.exit(0)
 	}
 
@@ -493,4 +531,5 @@ main :: proc() {
 	ui.post_close(&app.ui_state)
 	os.exit(0)
 }
+
 
