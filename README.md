@@ -148,7 +148,7 @@ Both build the Rust library first (`tools/build_native.*`, nothing when it is up
 | `native/occ_native` | the Rust library (C functions): ureq + rustls, image decoding (and the text backend on Linux) |
 | `src/bench_test.odin` | the heavy cases in the test's process (a long conversation, hundreds of sessions); timed with `-define:OCC_BENCH=true` ([docs/performance.md](docs/performance.md)) |
 | `site/` | the GitHub Pages site |
-| `tools/` | the Rust library's build, packaging, the site's changelog; `screenshots.mjs` retakes every picture of the README and the site (over the DevTools protocol; `--linux-build` builds the Linux one in WSL with `flake.nix`); `doc_check` is in the toolkit |
+| `tools/` | the Rust library's build, packaging, the site's changelog and its classic pages; `screenshots.mjs` retakes every picture of the README and the site (over the DevTools protocol; `--linux-build` builds the Linux one in WSL with `flake.nix`); `doc_check` is in the toolkit |
 | `res/`, `assets/` | resources of the exe (icon, version, manifest), the logo, Lucide (`assets/fonts`, ISC) |
 
 ## License
