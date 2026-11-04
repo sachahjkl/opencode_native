@@ -116,7 +116,7 @@ since a program on this computer can then type into a session.
     git clone --recursive https://github.com/sachahjkl/opencode_native
     cd opencode_native
 
-**Windows**: the Odin compiler named in `odin.version` (`dev-2026-11`), MSVC (Visual Studio or its Build Tools:
+**Windows**: the Odin compiler named in `odin.version` (`dev-2026-11a`), MSVC (Visual Studio or its Build Tools:
 `link.exe`, `rc.exe`) and Rust (stable, `x86_64-pc-windows-msvc`), then `build.bat`.
 
 **Linux with Nix**: `nix develop -c ./build.sh` (`flake.nix`: the Odin, wgpu-native and libraries the CI uses).
