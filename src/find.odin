@@ -48,7 +48,7 @@ find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	needle := f.open ? ui.field_string(&f.field) : ""
 	ui.find(needle, sb != nil ? sb.key : 0)
 	if !f.open { return }
-	ms := ui.find_matches()
+	ms := ui.find_all()   // (of the sweep, in the content: what is far from the view is not built)
 	n := ui.find_count()
 	if needle != f.needle {
 		delete(f.needle)
@@ -57,13 +57,14 @@ find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 		f.index = -1
 		return
 	}
+	if ui.find_pending() { return }
 	if n == 0 { f.index = -1; ui.find_set_current(-1); return }
 	// a conversation just opened is still loading and jumping to its bottom: its matches move under the reader
 	if f.index < 0 && (app.chat.loading || ui.now_ms() - app.opened_ms < FIND_SETTLE_MS) { return }
 	if f.index < 0 && sb != nil {
 		// the first match from the top of the view down, like a browser
 		f.index = 0
-		for m in ms { if m.rect.min.y >= sb.rect.min.y { f.index = m.index; break } }
+		for m in ms { if m.rect.min.y >= sb.view_off.y { f.index = m.index; break } }
 		f.reveal = true
 	}
 	f.index = min(f.index, n - 1)
@@ -72,14 +73,13 @@ find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 		f.reveal = false
 		for m in ms {
 			if m.index != f.index { continue }
-			top := sb.rect.min.y
 			h := sb.size.y
-			y0 := m.rect.min.y - top + sb.view_off.y   // in the content
-			y1 := m.rect.max.y - top + sb.view_off.y
+			y0, y1 := m.rect.min.y, m.rect.max.y
 			if y0 < sb.view_off.y + em || y1 > sb.view_off.y + h - em * FIND_BOTTOM_MARGIN_EM {
 				limit := max(0, sb.view_bounds.y - h)
 				sb.view_target.y = clamp(y0 - h * FIND_REVEAL_AT, 0, limit)
 				app.stick_bottom = false
+				app.frames = max(app.frames, FRAMES_AFTER_INPUT)   // (the sweep's answer comes with no input: the glide needs its frames)
 			}
 			break
 		}
@@ -107,8 +107,9 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 				if res.cancelled { find_close(app) }
 			}
 			needle := ui.field_string(&f.field)
-			count := needle == "" ? "" : n == 0 ? "no match" : fmt.tprintf("%d / %d", max(f.index, 0) + 1, n)
-			text("fc", count, n == 0 ? hex(HEX_RED) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)})
+			pending := ui.find_pending()   // (not read yet: nothing to say, "no match" would be a lie)
+			count := needle == "" || pending ? "" : n == 0 ? "no match" : fmt.tprintf("%d / %d", max(f.index, 0) + 1, n)
+			text("fc", count, n == 0 && !pending ? hex(HEX_RED) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)})
 			ui.spacer(ui.px(em * 0.5))
 		}
 		ui.spacer(ui.px(em * 0.3))

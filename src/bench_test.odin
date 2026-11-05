@@ -332,8 +332,26 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	}
 	for len(finding.total) < BENCH_FRAMES { bench_frame(s, &finding) }
 	bench_report(&finding)
-	testing.expect(t, session.find(s, "msg_msg_0_a") != nil, "find builds the first answer too")
+	when OCC_BENCH {
+		sweep: f64   // (the one frame that builds everything)
+		for v in finding.total { sweep = max(sweep, v) }
+		fmt.printfln("find: its sweep %.1f ms", sweep)
+	}
 	testing.expect_value(t, ui.field_string(&app.find.field), BENCH_FIND)
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() }, "the needle swept")
+	session.frames(s, 3)
+	found := ui.find_count()
+	testing.expect(t, found > 1, "the sweep read the whole conversation")
+	testing.expect(t, session.find(s, "msg_msg_0_a") == nil, "after the sweep, only what is near the view is built")
+	// the first match, far from anything built: the view goes there, and it is lit with its index of the sweep
+	app.find.index = found - 1
+	find_step(app, 1)
+	testing.expect_value(t, app.find.index, 0)
+	session.wait_until(s, proc(s: ^session.Session) -> bool {
+		for m in ui.find_matches() { if m.index == 0 { return true } }
+		return false
+	}, "the first match built and lit")
+	testing.expect_value(t, ui.find_count(), found)
 	find_close(app)
 	session.frames(s, 2)
 

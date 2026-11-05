@@ -817,12 +817,12 @@ messages :: proc(app: ^App, em: f32) {
 		if ui.tags("weak") { ui.label("Loading the conversation…###loading") }
 	}
 	// Only the messages near the view are built (the toolkit's lazy column): the others stand as a space of the height they
-	// had when last built. A long conversation, Markdown and all, made every frame slow. Everything is built while finding
-	// (the search reads the text) and while the conversation loads; the last message always (it grows while streaming).
+	// had when last built. A long conversation, Markdown and all, made every frame slow. Everything is built for the sweep of
+	// a find (once for a needle) and while the conversation loads; the last message always (it grows while streaming).
 	// (The item is the if's block, like a row's; the column ends with this block: the space of the last messages skipped
 	// goes before what follows.)
 	{
-		lz := ui.lazy_begin(all = app.find.open || app.chat.loading)
+		lz := ui.lazy_begin(all = ui.find_sweep() || app.chat.loading)
 		for &m, i in c.messages {
 			// (by its id: a page read before it does not change what it is, its height is still known)
 			id := m.id != "" ? fmt.tprintf("###msg_%s", m.id) : fmt.tprintf("###msg_end%d", len(c.messages) - i)

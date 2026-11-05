@@ -345,14 +345,17 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool) {
 	if older {
 		c.loading_older = false
 		c.older = cursor
-		// the view stays on what it shows: at the very top the lazy column does not move it (frame does)
-		if b := app.first_msg; b != nil && !app.stick_bottom && len(c.messages) > 0 {
+		// the view stays on what it shows: at the very top the lazy column does not move it (frame does). Only with the first
+		// message on screen: built for a view that glides toward it (a match, Home), it is far above, and the view stopped there
+		// went to the end. The lazy column keeps that view, its target too.
+		if b, sb := app.first_msg, app.chat_sb; b != nil && sb != nil && !app.stick_bottom && len(c.messages) > 0 && b.rect.max.y > sb.rect.min.y {
 			c.keep_id = c.messages[0].id
 			app.anchor = b
 			app.anchor_y = b.rect.min.y
 		}
 		inject_at(&page, len(page), ..c.messages[:])
 		c.messages = page
+		ui.find_refresh()   // (text a find has not read)
 	} else {
 		kept := -1
 		if len(page) > 0 { for m, i in c.messages { if m.id == page[0].id { kept = i; break } } }

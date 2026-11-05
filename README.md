@@ -5,7 +5,7 @@
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.11.0-fab283" alt="version 0.11.0"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.11.1-fab283" alt="version 0.11.1"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -28,8 +28,12 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 |---|---|
 | ![A conversation: Markdown tables, the answer of an agent](docs/screenshots/conversation.png) | ![Find in the conversation: the matches lit, the current one brighter](docs/screenshots/find.png) |
 | **The conversation**: Markdown, code, tokens per answer | **Find** (Ctrl+F): every match lit, Enter / F3 to the next one |
+| ![The command palette, commands listed](docs/screenshots/palette.png) | ![An edit shown as a diff](docs/screenshots/diff.png) |
+| **The palette** (Ctrl+K): commands, sessions, agents, models, switches | **A diff** for what edits a file: line numbers, what changed in a line |
+| ![The tray under the composer, the todo list](docs/screenshots/activity.png) | ![Settings: updates](docs/screenshots/updates.png) |
+| **What runs in the background** (Down from the composer, Ctrl+J) | **Updates** (Windows): signed, stable or beta |
 | ![The conversation of a sub-agent: where it comes from, the way back](docs/screenshots/subagent-session.png) | ![The model picker, searched as one types](docs/screenshots/picker.png) |
-| **A sub-agent's own conversation**: the breadcrumb, Back | **The model picker**: subsequence search ("son"), the matched letters lit |
+| **A sub-agent's own conversation**: the breadcrumb, Back | **The model picker**: subsequence search ("sonnet"), the matched letters lit |
 | ![Session statistics](docs/screenshots/statistics.png) | ![Settings](docs/screenshots/settings.png) |
 | **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Settings**: the client's preferences (fonts among them) and the server's pages |
 | ![An image in the viewer, zoomed in](docs/screenshots/viewer.png) | ![On Linux](docs/screenshots/linux.png) |
@@ -59,6 +63,15 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
   address, a password), `--url`; switch from the menu. Another computer's server is named in the title bar.
 - **Find in the conversation** (Ctrl+F): every match of the text shown lit, the current one brighter and scrolled into
   view; Enter or F3 for the next, Shift+Enter or Shift+F3 for the previous, Escape to close.
+- **The command palette** (Ctrl+K, Ctrl+P): commands, sessions, agents, models, the server's commands and the switches of the
+  settings in one field, narrowed by `>` `@` `/` `#` `:`. F1 lists the keys.
+- **Tool calls by what they do**: a diff for what edits a file, the lines of a file, matches under their file, a command and its
+  output, a checklist.
+- **What runs in the background**: a tray under the composer (Down, Ctrl+J) with the sub-agents, the shell commands and the whole
+  todo list; Enter opens, Delete stops.
+- **The Preview panel** (Ctrl+Shift+B, Windows): a page beside the conversation, in a dock; agents drive it through the MCP server
+  `preview` the client hosts.
+- **Updates** (Windows): channels `stable` and `beta`, signed manifests, nothing installed without you ([docs/updates.md](docs/updates.md)).
 - **Permission requests** answered in place (once, always, reject).
 - **Statistics of a session** (its token count in the header, Ctrl+I): tokens in, out, reasoning, cache reads and
   writes, cost, cache hits, the context the last step filled against the model's window, time and pace, tool calls by

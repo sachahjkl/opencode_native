@@ -8,7 +8,7 @@ What the program costs on its heavy cases, what changed, and what was measured a
 input, its clock), with no server: 400 sessions in 12 project folders (a fifth of them sub-agents) and a conversation of 150
 turns (a prompt; an answer with its reasoning, four tool calls and Markdown: headings, lists, code, a table, a quote). As a
 test it checks what each case must do (the view at the bottom builds the last answer and not the first, the sidebar builds
-the sessions it shows and the last one once scrolled to it, typing and streaming land, find builds every message). With
+the sessions it shows and the last one once scrolled to it, typing and streaming land, find reads every message and then builds what is near). With
 `-define:OCC_BENCH=true` it runs 300 frames of each case on the GPU and prints the medians of the frame's steps
 (`App.times`: the builds, the drawing into the draw lists, the submission):
 
@@ -21,7 +21,7 @@ the sessions it shows and the last one once scrolled to it, typing and streaming
 | stream | the last answer grows by a delta (a new paragraph every 8) |
 | type | a character typed in the composer |
 | scroll | three notches of the wheel up the conversation |
-| find | the find bar open, its needle typed (every message built) |
+| find | the find bar open, its needle typed |
 | search | the sidebar's search typed |
 
 1600 x 1000, Windows 11, 16 logical cores, a machine busy with other work. A base and a new build are run alternately, 5
@@ -39,38 +39,54 @@ each step comes from `render.set_gpu_profile`.
 
     odin build src -build-mode:test -collection:gt=ext/gui_toolkit -o:speed -debug -define:OCC_BENCH=true -define:OCC_PROFILE=true -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_NAMES=occ.a_long_conversation_builds_what_is_seen -out:build/bench.exe
 
-A case whose frames move the pointer or a panel (`scroll`, `tray`, `menu`) shows about 17 ms as its frame: that is the pace of the
-offscreen window's 60 Hz, a wait. Their cost is build + draw + render.
+An offscreen window has no frame slots: the bench's frames go back to back. Slept through 16 ms between frames, the same work measures
+about twice as long, its caches cold and the clock down: that is the machine, not the frame. On a real screen expect the higher number.
 
-## Where a frame goes (gui_toolkit 0.78.0)
+The sampler is not free: under it `find` read 91 ms and `search` 7 ms where they take 41 and 2.6. Read its shares, not its times, and
+take times with it off.
 
-Medians in milliseconds, 1600 x 1000, RTX 4070 SUPER. The budget at 180 Hz is 5.5 ms.
+## Where a frame goes (gui_toolkit 0.80.0)
 
-| case | build | draw | render | CPU | GPU |
-|---|---|---|---|---|---|
-| idle | 0.71 | 1.04 | 0.05 | 1.8 | 0.18 |
-| stream | 0.78 | 1.26 | 0.05 | 2.1 | 0.16 |
-| type | 0.82 | 1.19 | 0.05 | 2.1 | 0.17 |
-| palette | 1.20 | 1.35 | 0.05 | 2.6 | 0.66 |
-| scroll | 1.37 | 1.33 | 0.09 | 2.8 | 0.68 |
-| tray | 1.57 | 1.50 | 0.10 | 3.2 | 0.18 |
-| menu | 2.26 | 2.39 | 0.13 | 4.8 | 1.56 |
-| search | 3.57 | 3.29 | 0.17 | 7.0 | 0.19 |
-| find | 65.7 | 25.1 | 0.13 | 90.9 | 3.68 |
+CPU per frame (build, draw, submission) in milliseconds, medians of 3 runs before and 4 after, sampler off, 1600 x 1000, RTX 4070
+SUPER. The budget at 180 Hz is 5.5 ms.
 
-The GPU is not what limits a frame, nor is the layout. What a frame costs is text: `ui.draw_box_text` is a third of the samples at
-rest, through `font::glyph` (a fifth: `font::shape` 15 %, the ink box of `dwrite_glyph_box` 11 %) and `draw::glyph_run`. Then the
-temporary allocator (11 %) and `fmt` making box ids (8 %). `_extendhfsf2` (4 %, a software half float) has no unwind data: its
-caller is not known.
+| case | 0.78.0 | 0.80.0 | range after |
+|---|---|---|---|
+| idle | 1.65 | 1.30 | 1.29-1.35 |
+| stream | 2.3 | 1.9 | 1.7-2.0 |
+| type | 2.5 | 2.4 | 2.3-2.6 |
+| scroll | 2.2 | 2.2 | 2.1-2.3 |
+| palette | 2.2 | 2.2 | 1.9-2.5 |
+| tray | 2.1 | 1.7 | 1.4-1.9 |
+| menu | 2.2 | 1.8 | 1.5-2.0 |
+| search | 2.6 | 2.3 | 2.2-2.6 |
+| find | 41 | 2.2 | 1.9-2.6 |
 
-Between runs of the same program, `idle` stays within 1.8-2.0 ms, `stream` and `type` go from 2.3 to 3.2 ms: a difference smaller
-than that is not one. The registry behind `preview_available` and `SystemParametersInfo` behind `animations_on` were asked at every
-frame and are now kept, but this brought nothing measurable: four alternate runs with and without, sampler off, idle 1.87 and
-1.86 ms. An earlier profile showed idle at 3.9 ms: that was the sampler, which allocated with the thread stopped.
+Runs of one program differ by as much as 0.5 ms outside `idle`: a smaller difference is not one, and only `idle`, `stream` and `find`
+moved beyond that. The GPU takes 0.2 to 1 ms and is not what limits a frame, nor is the layout.
 
-Left, by what they would bring: find (every message is built: the one case far over budget); the sidebar's search; text shaped
-again at each draw (the toolkit's: a run keyed by its text and font would take most of `font::shape`). Small names are not to be
-trusted: the linker folds identical procedures, `marshal_struct_fields` in these profiles is not JSON being written.
+What was found and done, by what it brought:
+
+- **Find** built every message at every frame, because the search reads what is built. It reads it once now, when the needle rests
+  (`ui.find_sweep`: 80 to 110 ms, once, 80 ms after the last key), and stays lazy between; the indices are those of the sweep.
+- **Truncated text** was measured rune by rune at every frame, each rune through the shaper and its ink box: `font::glyph` was 27 % of
+  the samples at rest. Where a text is cut is kept now. `ui.draw_box_text` went from 38 to 12 % of a frame.
+- **`render.pace_frame` makes the slot's wait**, which it worked out and dropped, and the app's own wait is gone. Input is not what it
+  limits: `platform.wait_slot` reads it as it comes, and a key or a button ends the wait. It is the output that is chosen
+  (`advanced.frame_rate`: the screen, a ceiling, or uncapped). No gain on a 60 Hz screen, where the swap chain paces. It must come after
+  the swap chain's wait: before, the two add up, 40 frames a second instead of 60 under a pointer at 1 kHz.
+
+Tried and left:
+
+- The registry behind `preview_available` and `SystemParametersInfo` behind `animations_on`, asked at every frame, are kept now, for
+  nothing measurable: four alternate runs with and without, idle 1.87 and 1.86 ms. An earlier profile read 3.9 ms: the sampler then
+  allocated with the thread stopped.
+- A cache of shaped runs: with truncation gone, `font::shape_run` and `font::word_match` are 5 % of a frame at rest, 0.05 ms, less than
+  a run's noise, for memory and another thing to invalidate.
+
+The profile at rest is flat now, nothing over 5 %: `draw::glyph_run`, `ui::build_box`, then the driver. Small names are not to be
+trusted: the linker folds identical procedures, `marshal_struct_fields` in these profiles is not JSON being written. `_extendhfsf2` (a
+software half float) has no unwind data: its caller is not known.
 
 The start: `app_init` and connecting take 4 ms; the wait is the device (about 300 ms on its thread here), and the first run of a new
 program compiles its shaders (`render` 870 ms at that first frame, 5 ms after).

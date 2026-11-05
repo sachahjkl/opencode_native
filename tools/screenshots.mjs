@@ -7,6 +7,7 @@
 //     --only      just these pictures
 //     --exe       the client to run (default build/screenshots(.exe))
 //     --session   the session to show (only ever one made for pictures: they are published)
+//     --work-session  the one that edits a file and keeps a todo list (made for pictures too)
 //     --toolkit   where gui_toolkit is (default ext/gui_toolkit, for tools/cdp.mjs and the build)
 //     --out       write there instead, the site untouched
 //     --font-dir  try these faces (src/main.odin: fonts_from_dir)
@@ -23,6 +24,7 @@ const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const { values: opt } = parseArgs({ options: {
   build: { type: 'boolean' }, only: { type: 'string' }, exe: { type: 'string' },
   session: { type: 'string', default: 'ses_e7633e562ffeJfyNPycNzsVrb1' },
+  'work-session': { type: 'string', default: 'ses_e5584daa0ffe0rZ9lqsYByWGPw' },
   toolkit: { type: 'string', default: join(repo, 'ext', 'gui_toolkit') },
   linux: { type: 'string' }, 'linux-build': { type: 'boolean' },
   out: { type: 'string' }, 'font-dir': { type: 'string' },
@@ -45,7 +47,8 @@ const PORT = 9391
 const SIZE = '1460x920'   // window pixels, whichever screen it opens on
 const COMMON = ['--pref', 'appearance.accent=peach', '--pref', 'appearance.zoom=1', '--scale=1.25', `--size=${SIZE}`, ...(opt['font-dir'] ? [`--font-dir=${resolve(opt['font-dir'])}`] : [])]
 const SESSION = [`--session=${opt.session}`, '--search=Tour']
-const AWAY = ['move', '700', '12']   // the pointer over the title bar: nothing hovered, no scroll bar called up
+const WORK_TITLE = 'Python clock'   // what the sidebar's search leaves of the sessions, and shows once they are read
+const WORK = [`--session=${opt['work-session']}`, `--search=${WORK_TITLE}`]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const cdp = (...cmd) => {
@@ -58,11 +61,10 @@ const must = (...cmd) => {
   return r.out
 }
 
-// The first box whose text holds `text`: where it is, in CSS pixels.
+// The first box whose text holds `text`: where it is, in CSS pixels (null: not built, it is far from the view).
 function top(text) {
   const m = must('find', text).match(/@(-?[\d.]+),(-?[\d.]+)/)
-  if (!m) throw new Error(`not on screen: ${text}`)
-  return Number(m[2])
+  return m ? Number(m[2]) : null
 }
 
 // A press and a release on the n-th box whose text is exactly `text` (`click` matches any text holding it, in any case).
@@ -76,21 +78,41 @@ function clickExact(text, n) {
   must('up', x, y)
 }
 
-// The conversation scrolled until `text` is near `y` (CSS pixels).
+// A place in the window as parts of it, in CSS pixels: how many a window of SIZE holds depends on the screen's scale.
+function at(x, y) {
+  const { width, height } = JSON.parse(must('state'))
+  return [String(Math.round(width * x)), String(Math.round(height * y))]
+}
+
+// The conversation scrolled until `text` is near `y` (as a part of the window's height).
 async function scrollTo(text, y) {
+  const { height } = JSON.parse(must('state'))
+  const [wx, wy] = at(0.65, 0.4)
   for (let i = 0; i < 40; i++) {
-    const d = top(text) - y
-    if (Math.abs(d) < 40) return
-    must('wheel', '700', '400', String(Math.sign(d) * Math.max(1, Math.min(10, Math.round(Math.abs(d) / 120)))))
+    const t = top(text)
+    if (t === null) { must('wheel', wx, wy, '-5'); must('idle'); continue }   // (a lazy column: it is further up, what a conversation opened at its end has above)
+    const d = t - y * height
+    if (Math.abs(d) < height * 0.06) return
+    must('wheel', wx, wy, String(Math.sign(d) * Math.max(1, Math.min(10, Math.round(Math.abs(d) / 120)))))
     must('idle')
   }
   throw new Error(`could not bring into view: ${text}`)
 }
 
+// The composer on a model anybody has, whatever this server's default is (chosen here, nothing is sent: it goes with a prompt).
+function publicModel() {
+  must('click', '--name', 'model')
+  must('idle')
+  must('type', 'deepseek')
+  must('idle')
+  must('key', 'Enter')
+  must('idle')
+}
+
 // What each picture shows: the arguments, then what is done before the picture.
 const SHOTS = [
   { name: 'conversation', args: SESSION },
-  { name: 'subagents', args: SESSION, go: () => scrollTo('Yes, but first launch', 150) },
+  { name: 'subagents', args: SESSION, go: () => scrollTo('Yes, but first launch', 0.2) },
   { name: 'find', args: [...SESSION, '--find=http'], go: () => {   // the last match, in view: the picture shows the current one
     must('key', 'shift+Enter')
     must('idle')
@@ -98,13 +120,28 @@ const SHOTS = [
   { name: 'picker', args: SESSION, go: async () => {
     must('click', '--name', 'model')
     must('idle')
-    must('type', 'son')
+    must('type', 'sonnet')
     must('idle')
   } },
   { name: 'statistics', args: [...SESSION, '--stats'] },
+  // (commands only: `>` keeps the sessions of whoever takes the picture out of it)
+  { name: 'palette', args: SESSION, go: async () => {
+    must('key', 'ctrl+k')
+    must('idle')
+    must('type', '>')
+    must('idle')
+  } },
+  { name: 'diff', args: WORK, wait: WORK_TITLE, go: async () => { publicModel(); await scrollTo('argparse', 0.25) } },
+  { name: 'activity', args: WORK, wait: WORK_TITLE, go: async () => {
+    publicModel()
+    must('key', 'ctrl+j')
+    must('wait', '700')
+    must('idle')
+  } },
+  { name: 'updates', args: [...SESSION, '--settings=3'] },
   { name: 'settings', args: [...SESSION, '--settings=0'] },
   { name: 'subagent-session', args: SESSION, go: async () => {
-    await scrollTo('Summarise src/stats.odin', 300)
+    await scrollTo('Summarise src/stats.odin', 0.4)
     clickExact('Open', 2)
     must('wait-for', 'sub-agent')
     must('idle')
@@ -112,7 +149,7 @@ const SHOTS = [
   // the viewer, zoomed in, on the conversation's picture (taken first, above)
   { name: 'viewer', args: () => [...SESSION, `--image=${join(docs, 'conversation.png')}`], go: async () => {
     must('wait-for', 'conversation.png')
-    must('wheel', '500', '300', '-1')   // (about one pixel of the picture per pixel of the window: sharp)
+    must('wheel', ...at(0.45, 0.45), '-1')   // (about one pixel of the picture per pixel of the window: sharp)
     must('idle')
   } },
   // the Linux build, in WSL, on Windows's server: its port and password from what the service wrote (never printed)
@@ -151,17 +188,17 @@ async function capture(shot) {
       await sleep(100)
     }
     must('wait-for', 'connected', '--timeout', '15000')
-    must('wait-for', 'Tour of picker.odin', '--timeout', '15000')
+    must('wait-for', shot.wait ?? 'Tour of picker.odin', '--timeout', '15000')
     must('idle', '--timeout', '15000')
     if (shot.go) await shot.go()
-    must(...AWAY)
+    must('move', ...at(0.5, 0.02))   // the pointer over the title bar: nothing hovered, no scroll bar called up
     must('wait', '500')   // (what hover lit goes out)
     if (shot.linux) must('wait', '3000')   // (through the relay, the last requests are slower)
     must('idle')
     const out = join(docs, shot.name + '.png')
     must('shot', out)
     const site = join(repo, 'site', 'img', shot.name + '.png')
-    if (!opt.out && (existsSync(site) || shot.name === 'viewer')) copyFileSync(out, site)
+    if (!opt.out && shot.name !== 'conversation') copyFileSync(out, site)   // (the README's alone)
     console.log('saved', shot.name)
   } finally {
     if (shot.linux) cdp('close')

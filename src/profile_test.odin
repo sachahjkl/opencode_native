@@ -172,7 +172,7 @@ profile_begin :: proc() {
 		p.sampler = thread.create_and_start_with_poly_data(p, proc(p: ^Profile) {
 			for !sync.atomic_load(&p.stop) {
 				sample(p)
-				// (a wait of its own: precise_sleep's timer is the app's)
+				// (a wait of its own: precise_sleep's timer belongs to the thread that made it)
 				start := time.tick_now()
 				for time.tick_since(start) < time.Millisecond { win.SwitchToThread() }
 			}

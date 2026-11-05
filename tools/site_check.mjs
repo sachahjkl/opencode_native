@@ -95,7 +95,8 @@ try {
     await page_('Page.navigate', { url: origin + '/' + path })
     for (let i = 0; i < 100 && (await js('document.readyState')) !== 'complete'; i++) await sleep(50)
   }
-  const loaded = () => js(`new Promise((ok) => { const i = document.querySelector('.lightbox img'); const f = () => i.complete && i.naturalWidth ? ok(i.naturalWidth) : setTimeout(f, 30); f() })`)
+  // (0 after a while: a viewer that did not open fails the check, it does not hang it)
+  const loaded = () => js(`new Promise((ok) => { const i = document.querySelector('.lightbox img'); const end = Date.now() + 5000; const f = () => i.complete && i.naturalWidth ? ok(i.naturalWidth) : Date.now() > end ? ok(0) : setTimeout(f, 30); f() })`)
   await page_('Page.enable')
   await view(DESKTOP)
 
@@ -106,7 +107,19 @@ try {
     expect(count > 0 && count === pictures, `${path}: every capture is a link (${count} of ${pictures})`)
 
     // a real click, on the third capture
-    const at = await js(`(() => { const a = document.querySelectorAll('.shot a.frame')[2]; a.scrollIntoView({ block: 'center' }); const r = a.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] })()`)
+    // (where it stays: the lazy pictures above it load as it comes into view, and move it)
+    const at = await js(`new Promise((ok) => {
+      const a = document.querySelectorAll('.shot a.frame')[2]
+      let last = '', still = 0
+      const f = () => {
+        a.scrollIntoView({ block: 'center', behavior: 'instant' })
+        const r = a.getBoundingClientRect(), now = r.x + ',' + r.y
+        still = now === last ? still + 1 : 0
+        last = now
+        still >= 6 ? ok([r.x + r.width / 2, r.y + r.height / 2]) : setTimeout(f, 50)
+      }
+      f()
+    })`)
     for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await page_('Input.dispatchMouseEvent', { type, x: at[0], y: at[1], button: type === 'mouseMoved' ? 'none' : 'left', clickCount: type === 'mouseMoved' ? 0 : 1 })
     await sleep(150)
     expect(await js(`document.querySelector('dialog.lightbox').open`), `${path}: a click opens the viewer`)

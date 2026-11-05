@@ -9,6 +9,7 @@ import "core:math"
 import "core:mem/virtual"
 import "core:os"
 import "core:path/filepath"
+import "core:strconv"
 import "core:strings"
 import "gt:config"
 import "gt:draw"
@@ -92,6 +93,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "update.base_url", description = "Where releases are read from (empty: GitHub). Whatever the place, only what the built-in key signed is installed.", kind = .String, default = {s = ""}},
 	{name = "general.start", description = "What the window opens on: the home page, or the latest session.", kind = .String, default = {s = "home"}, choices = {"home", "last"}},
 	{name = "advanced.fps", description = "The frame rate and what a frame costs, in the status bar.", kind = .Bool, default = {b = false}},
+	{name = "advanced.frame_rate", description = "How many frames go out while something moves: as the screen takes them, at most this many a second, or as fast as they are made (it costs power). What you type and click is read at once whatever this says.", kind = .String, default = {s = "screen"}, choices = {"screen", "30", "60", "120", "240", "uncapped"}},
 }
 
 // The preferences as plain values (read on every frame: no lookups by name there).
@@ -121,6 +123,8 @@ Prefs :: struct {
 	content_zoom: f32,
 	start:        string,
 	show_fps:     bool,
+	max_hz:       f64,    // advanced.frame_rate: a ceiling (0: the screen's)
+	uncapped:     bool,
 	throbber:     string,
 	browser_tools: bool,
 	update_channel: string,
@@ -173,6 +177,9 @@ prefs_refresh :: proc(app: ^App) {
 	s.content_zoom = f32(config.float_of(p, "appearance.content_zoom"))
 	s.start = config.string_of(p, "general.start")
 	s.show_fps = config.bool_of(p, "advanced.fps")
+	rate := config.string_of(p, "advanced.frame_rate")
+	s.uncapped = rate == "uncapped"
+	s.max_hz = strconv.parse_f64(rate) or_else 0
 	s.throbber = config.string_of(p, "appearance.throbber")
 	s.browser_tools = config.bool_of(p, "browser.tools")
 	s.update_channel = config.string_of(p, "update.channel")
@@ -700,6 +707,7 @@ page_advanced :: proc(app: ^App, em: f32) {
 	if setting(app, "browser.tools", em) { pref_switch(app, "browser.tools", em) }
 	section("DIAGNOSTICS", em)
 	if setting(app, "advanced.fps", em) { pref_switch(app, "advanced.fps", em) }
+	if setting(app, "advanced.frame_rate", em) { pref_choice(app, "advanced.frame_rate", {"Screen", "30", "60", "120", "240", "Uncapped"}, em, em * 24) }
 	ui.spacer(ui.px(em * 0.7))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###adv_b") {

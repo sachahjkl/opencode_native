@@ -2,7 +2,6 @@
 // pixels, _MS: in milliseconds, HEX_: sRGB.)
 package occ
 
-import "core:time"
 
 ////////////////////////////////
 // What runs in the background: the tray under the composer
@@ -147,6 +146,5 @@ GO_BOTTOM_W_EM    :: 6.5
 
 OS_SETTINGS_READ_MS :: 2000   // how often the system's animation setting is read
 POINTER_MOVING_MS :: 80                         // since the last move or notch: the pointer is still moving
-POINTER_MIN_WAIT  :: 200 * time.Microsecond     // a wait shorter than this is not made
 FPS_SMOOTH   :: 0.08           // the status bar's rate: how fast it follows
 FPS_RESTED_S :: 0.05           // a longer gap between two frames: the loop rested

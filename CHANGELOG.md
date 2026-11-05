@@ -5,6 +5,26 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-11-05
+
+### Changed
+
+- gui_toolkit 0.80.0.
+- **Find no longer rebuilds the conversation at every frame**: it reads it once when the needle rests, then stays lazy. On 150
+  answers a frame while finding goes from 40 ms to about 2 ms, and typing in the field is no longer held up.
+- A frame at rest costs a fifth less, 1.65 -> 1.3 ms, and everything that shows a truncated title gains as much: where a text is cut
+  is kept, it was measured again at every frame.
+- The site and the README: the palette, a diff, the tray, updates; every picture taken again.
+
+### Added
+
+- `advanced.frame_rate` (Settings > Advanced): how many frames go out while something moves: as the screen takes them, a ceiling, or
+  uncapped. What you type and click is read at once whatever it says.
+
+### Fixed
+
+- A long jump up (a match of Find, Home) no longer ends at the bottom when the first page arrives on the way.
+
 ## [0.11.0] - 2026-11-05
 
 ### Added
@@ -395,7 +415,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.1
 [0.11.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.0
 [0.10.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.10.0
 [0.9.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.9.0
