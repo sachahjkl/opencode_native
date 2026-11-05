@@ -7,7 +7,7 @@
 <p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.12.2-fab283" alt="version 0.12.2"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.12.3-fab283" alt="version 0.12.3"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 

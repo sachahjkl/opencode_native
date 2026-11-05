@@ -5,6 +5,17 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.12.3] - 2026-11-05
+
+### Fixed
+
+- **No more dots under the letters** on a screen at 100 %: round letters left a stray pixel below the line at some sizes and in some faces.
+  Below 150 %, text is now smoothed along its rows only.
+
+### Changed
+
+- The home page says it is an independent project right under its name, where it is seen.
+
 ## [0.12.2] - 2026-11-05
 
 ### Changed
@@ -554,7 +565,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.12.2...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.12.3...HEAD
+[0.12.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.3
 [0.12.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.2
 [0.12.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.1
 [0.12.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.0

@@ -231,6 +231,18 @@ REFRESH_DEBOUNCE_MS  :: 1200
 FACTS_DEBOUNCE_MS    :: 700
 CHILDREN_DEBOUNCE_MS :: 800
 
+// Few pixels to a letter: smoothing across too leaves the little a round letter goes below the line on a row of its own, a dot under it, and
+// the contrast given to light text on dark makes it plain. Smoothed along the row only, it stays in the line. With more pixels the
+// smoothing across is what is better. (The window may go from one screen to another. Off Windows, Slug draws the text: this is not read.)
+text_mode_follow :: proc(app: ^App) {
+	scale := app.scale > 0 ? app.scale : app.win.dpi_scale
+	mode: font.Rendering = scale < TEXT_SMOOTH_SCALE ? .Natural : .Natural_Symmetric
+	if app.fonts.settings.rendering == mode { return }
+	settings := app.fonts.settings
+	settings.rendering = mode
+	font.set_settings(&app.fonts, settings)
+}
+
 frame :: proc(app: ^App, inner := false) {
 	if ui.building() { return }
 	app.frame_no += 1
@@ -252,6 +264,7 @@ frame :: proc(app: ^App, inner := false) {
 	}
 	content_zoom_events(app, events)
 	dialogs_track(app)
+	text_mode_follow(app)
 	render.resize(&app.r, app.win.size)
 	size := draw.Vec2{f32(app.win.size.x), f32(app.win.size.y)}
 	now := time.tick_now()
