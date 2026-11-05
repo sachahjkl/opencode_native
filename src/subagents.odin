@@ -262,6 +262,20 @@ nav_restore :: proc(app: ^App, id: string) {
 	app.stick_bottom = false
 }
 
+// The conversation is built anew where it stands: the view stays on what was being read.
+nav_hold_view :: proc(app: ^App) {
+	cx := &app.cx
+	if app.stick_bottom {
+		app.snap_bottom = true
+		app.chat_target = 0   // (the new box starts at the top: seen against the old target, it would read as the reader going up)
+		return
+	}
+	if cx.view_msg == "" { return }
+	nav_restore_clear(app)
+	cx.restore_msg, cx.restore_dy = strings.clone(cx.view_msg), cx.view_dy
+	cx.restore_still, cx.restore_frames = 0, 0
+}
+
 // The view on the message, the frame placing it as for a part that was toggled. Again until it stays: what the first layouts say of
 // the heights around it is not what the next ones find, and one placing would be left hundreds of pixels off.
 nav_restore_step :: proc(app: ^App, sb, item: ^ui.Box) {

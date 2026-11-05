@@ -4,8 +4,10 @@
 
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
+<p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
+
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.12.1-fab283" alt="version 0.12.1"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.12.2-fab283" alt="version 0.12.2"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -38,6 +40,10 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 | **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Settings**: the client's preferences (fonts among them) and the server's pages |
 | ![An image in the viewer, zoomed in](docs/screenshots/viewer.png) | ![On Linux](docs/screenshots/linux.png) |
 | **The image viewer**: zoom where the pointer is, drag to move | **On Linux** (Wayland, Vulkan): the same program |
+| ![The terminal panel under the conversation](docs/screenshots/terminal.png) | ![@ in the composer, the files of the folder proposed](docs/screenshots/mention.png) |
+| **A terminal** (Ctrl+Shift+T): Ghostty's emulation, the shells of the server | **@** names a file or a sub-agent, as you type |
+| ![The files of the session's folder, one of them read](docs/screenshots/files.png) | ![Settings: the integrations of the server](docs/screenshots/connections.png) |
+| **The files of a session** (Ctrl+P): browse, search, read, mention | **Connections**: every integration of the server, several accounts of each |
 
 ## What it does
 
@@ -177,4 +183,4 @@ Both build the Rust library first (`tools/build_native.*`, nothing when it is up
 ## License
 
 MIT, see [LICENSE](LICENSE). Hanken Grotesk, Newsreader and DM Mono: SIL Open Font License, see `assets/fonts/*-LICENSE.txt`. Lucide's icons: ISC, see [assets/fonts/LUCIDE-LICENSE.txt](assets/fonts/LUCIDE-LICENSE.txt).
-opencode is a project of its own ([opencode.ai](https://opencode.ai)); this client is not affiliated with it.
+opencode is a project of its own ([opencode.ai](https://opencode.ai)). This client is not built by the OpenCode team and is not affiliated with them in any way. Its logo is its own.

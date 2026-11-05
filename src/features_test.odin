@@ -582,3 +582,19 @@ the_options_are_those_of_the_schema :: proc(t: ^testing.T) {
 	testing.expect(t, url_is_here("http://127.0.0.1:4096") && url_is_here("https://localhost") && url_is_here("http://[::1]:4096"), "here")
 	testing.expect(t, !url_is_here("https://box.example:4096") && !url_is_here("http://192.168.1.2:4096"), "elsewhere")
 }
+
+
+// The logo's edge takes the accent, its soft pixels in proportion; what is grey does not move, nor does anything's opacity.
+@(test)
+the_logo_takes_the_accent :: proc(t: ^testing.T) {
+	px := []u8{0xe8, 0x93, 0x5a, 200,   0x80, 0x80, 0x80, 255,   0x12, 0x12, 0x12, 255,   0x75, 0x60, 0x2c, 100}
+	logo_tint_pixels(px, 0x10203040)
+	testing.expect_value(t, px[0], 0x10)   // (all the way: the accent itself)
+	testing.expect_value(t, px[1], 0x20)
+	testing.expect_value(t, px[2], 0x30)
+	testing.expect_value(t, px[3], 200)
+	testing.expect_value(t, px[4], 0x80)   // (grey stays)
+	testing.expect_value(t, px[8], 0x12)
+	testing.expect(t, px[12] < 0x2c, "half of a soft pixel: between its grey and the accent")
+	testing.expect_value(t, px[15], 100)
+}

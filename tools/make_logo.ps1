@@ -1,9 +1,8 @@
-# Draws the client’s logo: opencode’s "O" (a tall square ring, the lower half of its hole filled) machined on a dark
-# tile: vertical gradients, lit top edges, dark lower edges, shadows; the filled half is the peach accent, glowing a little.
-# Small sizes thicken the ring and drop the shadows (detail picked from the size).
+# Draws the client's logo: a bolt of brushed silver on a machined dark tile, with hints of the peach accent: vertical gradients, a lit
+# rim, shadows. Small sizes drop the shadows (detail picked from the size).
 #   powershell -File tools/make_logo.ps1 [-Out assets]
 # Writes logo.png (512), logo_256/64/32/16.png and opencode-native.ico (16/20/24/32/40/48/64/128/256, PNG entries).
-param([string]$Out = '')
+param([string]$Out = '', [int]$Hint = 1)   # (0: silver alone; 1: a peach edge; 2: and a warm tip)
 if (-not $Out) { $Out = Join-Path (Split-Path $PSScriptRoot -Parent) 'assets' }
 New-Item -ItemType Directory -Force $Out | Out-Null
 Add-Type -AssemblyName System.Drawing
@@ -40,51 +39,38 @@ function Draw($size) {
   }
   $g.DrawPath((New-Object Drawing.Pen((Hex 0x000000 230), ([Math]::Max(1.6 * $u, $SS)))), $tile)
 
-  # the mark: opencode’s "O", a tall square ring cut in whole cells, the lower half of its hole filled (here with the
-  # peach accent, lit), the ring itself machined: light face, lit top edge, dark lower edge, a shadow under it
-  $t = if ($detail -eq 0) { 9 } elseif ($detail -eq 1) { 8 } else { 7 }   # ring thickness, grid units
-  $x0 = 15 * $u; $x1 = 49 * $u; $y0 = 10 * $u; $y1 = 54 * $u
-  $hx0 = $x0 + $t * $u; $hx1 = $x1 - $t * $u; $hy0 = $y0 + $t * $u; $hy1 = $y1 - $t * $u
-  $hmid = ($hy0 + $hy1) / 2
-  $outer = New-Object Drawing.RectangleF $x0, $y0, ($x1 - $x0), ($y1 - $y0)
-  $hole = New-Object Drawing.RectangleF $hx0, $hy0, ($hx1 - $hx0), ($hy1 - $hy0)
-  $ring = New-Object Drawing.Drawing2D.GraphicsPath
-  $ring.FillMode = "Alternate"
-  $ring.AddRectangle($outer); $ring.AddRectangle($hole)
-  # shadow under the ring
+  # the mark: a bolt of brushed silver, lit from above, with a warm edge of the peach accent where it would catch the light of the tile
+  $pts = @(@(38, 8), @(17, 36), @(30, 36), @(26, 56), @(47, 27), @(34, 27))
+  $bolt = New-Object Drawing.Drawing2D.GraphicsPath
+  $poly = New-Object 'Drawing.PointF[]' $pts.Count
+  for ($i = 0; $i -lt $pts.Count; $i++) { $poly[$i] = New-Object Drawing.PointF ($pts[$i][0] * $u), ($pts[$i][1] * $u) }
+  $bolt.AddPolygon($poly)
+  # its shadow on the tile, and the peach behind it
   if ($detail -ge 1) {
     foreach ($k in 3, 2, 1) {
-      $sp = New-Object Drawing.Drawing2D.GraphicsPath; $sp.FillMode = "Alternate"
-      $sp.AddRectangle((New-Object Drawing.RectangleF ($x0 - $k * 0.6 * $u), ($y0 + 1.5 * $u), ($x1 - $x0 + $k * 1.2 * $u), ($y1 - $y0 + $k * 0.8 * $u)))
+      $sp = $bolt.Clone()
+      $mt = New-Object Drawing.Drawing2D.Matrix; $mt.Translate(0, ($k * 0.8 * $u)); $sp.Transform($mt)
       $g.FillPath((New-Object Drawing.SolidBrush (Hex 0x000000 (40 + 25 * (3 - $k)))), $sp)
     }
   }
-  # the hole: dark above, the peach block below with its glow
-  $g.FillRectangle((New-Object Drawing.SolidBrush (Hex 0x050505)), $hole)
-  if ($detail -ge 1) {
-    $ish = New-Object Drawing.Drawing2D.LinearGradientBrush((New-Object Drawing.PointF 0, $hy0), (New-Object Drawing.PointF 0, ($hy0 + 4 * $u)), (Hex 0x000000 230), (Hex 0x000000 0))
-    $g.FillRectangle($ish, $hole)
+  if ($Hint -ge 1) {
+    $sp = $bolt.Clone()
+    $d = if ($detail -eq 0) { 2.2 } else { 1.6 }
+    $mt = New-Object Drawing.Drawing2D.Matrix; $mt.Translate((-$d * $u), ($d * $u)); $sp.Transform($mt)
+    $g.FillPath((New-Object Drawing.SolidBrush (Hex 0xe8935a)), $sp)
   }
-  $block = New-Object Drawing.RectangleF $hx0, $hmid, ($hx1 - $hx0), ($hy1 - $hmid)
+  # the face: silver, turning warm at its tip
+  $y0 = 8 * $u; $y1 = 56 * $u
+  $face = New-Object Drawing.Drawing2D.LinearGradientBrush((New-Object Drawing.PointF 0, ($y0 - 1)), (New-Object Drawing.PointF 0, ($y1 + 1)), (Hex 0xffffff), (Hex 0xa9a9a9))
+  $blend = New-Object Drawing.Drawing2D.ColorBlend 4
+  $tip = if ($Hint -ge 2) { Hex 0xfab283 } else { Hex 0x9c9c9c }
+  $blend.Colors = [Drawing.Color[]]@((Hex 0xffffff), (Hex 0xdcdcdc), (Hex 0xb4b4b4), $tip)
+  $blend.Positions = [single[]]@(0, 0.45, 0.72, 1)
+  $face.InterpolationColors = $blend
+  $g.FillPath($face, $bolt)
   if ($detail -ge 1) {
-    foreach ($k in 3, 2, 1) {
-      $gl = New-Object Drawing.RectangleF ($hx0), ($hmid - $k * 1.2 * $u), ($hx1 - $hx0), ($hy1 - $hmid + $k * 1.2 * $u)
-      $g.FillRectangle((New-Object Drawing.SolidBrush (Hex 0xfab283 (14 * (4 - $k)))), $gl)
-    }
-  }
-  $bb = New-Object Drawing.Drawing2D.LinearGradientBrush((New-Object Drawing.PointF 0, $hmid), (New-Object Drawing.PointF 0, $hy1), (Hex 0xffc59e), (Hex 0xd9824e))
-  $g.FillRectangle($bb, $block)
-  if ($detail -ge 2) { $g.FillRectangle((New-Object Drawing.SolidBrush (Hex 0xffffff 110)), $hx0, $hmid, ($hx1 - $hx0), 0.9 * $u) }
-  # the ring: light face
-  $rb = New-Object Drawing.Drawing2D.LinearGradientBrush((New-Object Drawing.PointF 0, $y0), (New-Object Drawing.PointF 0, $y1), (Hex 0xf6f6f6), (Hex 0xa9a9a9))
-  $g.FillPath($rb, $ring)
-  if ($detail -ge 1) {
-    $e = [Math]::Max(0.9 * $u, $SS)
-    $g.FillRectangle((New-Object Drawing.SolidBrush (Hex 0xffffff 220)), $x0, $y0, ($x1 - $x0), $e)                # lit top edge
-    $g.FillRectangle((New-Object Drawing.SolidBrush (Hex 0x000000 90)), $x0, ($y1 - $e), ($x1 - $x0), $e)         # dark lower edge
-    $g.FillRectangle((New-Object Drawing.SolidBrush (Hex 0x000000 120)), $hx0, ($hy1), ($hx1 - $hx0), $e)         # the hole’s lower lip
-    $g.FillRectangle((New-Object Drawing.SolidBrush (Hex 0x000000 160)), $hx0, ($hy0 - $e), ($hx1 - $hx0), $e)    # the hole’s upper cut
-    $g.DrawRectangle((New-Object Drawing.Pen((Hex 0x000000 200), $e)), $x0, $y0, ($x1 - $x0), ($y1 - $y0))
+    $e = [Math]::Max(0.7 * $u, $SS)
+    $g.DrawPath((New-Object Drawing.Pen((Hex 0x000000 170), $e)), $bolt)
   }
   $g.Dispose()
 

@@ -148,6 +148,7 @@ GO_BOTTOM_W_EM    :: 6.5
 Dialog :: enum u8 { Settings, Stats, Help, Changes, Files, Schedules, Artifacts }
 DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Stats = {54, 46}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}, .Schedules = {54, 44}, .Artifacts = {70, 46}}
 DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Stats = {34, 22}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}, .Schedules = {36, 22}, .Artifacts = {44, 22}}
+LOGO_EDGE_CHROMA     :: 142    // red minus blue of the logo's edge in the file (0xe8935a)
 TERM_COLS            :: 80     // a shell before its panel is laid out
 TERM_ROWS            :: 24
 TERM_SCROLLBACK_LINES :: 10000

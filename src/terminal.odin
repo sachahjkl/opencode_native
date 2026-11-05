@@ -233,7 +233,6 @@ term_find :: proc(app: ^App, id: string) -> ^Term {
 terminal_toggle :: proc(app: ^App) {
 	s := &app.cx.terms
 	s.open = !s.open
-	app.snap_bottom = app.stick_bottom
 	if s.open {
 		dock_setup(app)
 		ui.dock_activate(&app.dock, u32(Panel.Terminal))

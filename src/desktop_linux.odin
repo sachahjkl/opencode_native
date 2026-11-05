@@ -79,7 +79,7 @@ install_facts :: proc() -> (f: Install_Facts) {
 @(private = "file")
 entry_text :: proc(exe: string) -> string {
 	return fmt.tprintf(
-		"[Desktop Entry]\nType=Application\nName=%s\nGenericName=opencode client\nComment=A native desktop client for the opencode server\n" +
+		"[Desktop Entry]\nType=Application\nName=%s\nGenericName=opencode client\nComment=A native desktop client for the opencode server. Not affiliated with the OpenCode team.\n" +
 		"Exec=\"%s\" %%U\nIcon=%s\nTerminal=false\nCategories=Development;\nStartupWMClass=%s\n",
 		APP_NAME, exe, APP_ID, APP_ID)
 }

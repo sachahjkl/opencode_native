@@ -111,7 +111,8 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${files[@]}" --clobber
           else
-            gh release create "$TAG" "${files[@]}" "${pre[@]}" --title "opencode native $VERSION" --notes-file NOTES.md
+            printf '\n---\n\nAn independent project: not built by the OpenCode team, and not affiliated with them.\n' >> NOTES.md
+          gh release create "$TAG" "${files[@]}" "${pre[@]}" --title "opencode native $VERSION" --notes-file NOTES.md
           fi
           # the beta channel's fixed address: the program and its signed manifest
           beta=(opencode-native-*-windows-x64.exe update-windows-x64-beta.json update-windows-x64-beta.json.sig)

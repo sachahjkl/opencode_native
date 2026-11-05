@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Regenerates docs/screenshots/*.png, and the copies of them in site/img, over the Chrome DevTools Protocol: the pictures
 // are the frames the client rendered, so the mouse, the keyboard and the windows in front are left alone. It runs with an
-// empty settings folder and reads the demo session of the local opencode server; nothing is sent to that server.
+// empty settings folder and reads the demo session of the local opencode server; nothing is sent to it but the shell of the
+// terminal's picture, closed right after.
 //   node tools/screenshots.mjs [--build] [--only name[,name]] [--exe file] [--session id] [--toolkit folder]
 //     --build     builds build/screenshots(.exe) first
 //     --only      just these pictures
@@ -138,6 +139,45 @@ const SHOTS = [
     must('wait', '700')
     must('idle')
   } },
+  // (in the demo's folder, the shell closed once taken: `after`)
+  { name: 'terminal', args: WORK, wait: WORK_TITLE, go: async () => {
+    must('key', 'ctrl+shift+t')
+    must('wait', '3000')
+    publicModel()
+    must('click', '--name', 'term_box')
+    must('type', 'Get-ChildItem | Select-Object Name, Length; Write-Host "ready" -ForegroundColor Green')
+    must('key', 'Enter')
+    must('wait', '2000')
+  }, after: () => { must('click', '--name', 'term_x0'); must('wait', '800') } },   // (its request is on its way when the client ends)
+  { name: 'mention', args: WORK, wait: WORK_TITLE, go: async () => {
+    publicModel()
+    must('click', '--name', 'composer')
+    must('type', 'What does @cl')
+    must('wait', '900')
+  } },
+  { name: 'files', args: WORK, wait: WORK_TITLE, go: async () => {
+    publicModel()
+    must('key', 'ctrl+p')
+    must('wait', '1000')
+    must('click', '--name', 'flr0')
+    must('wait', '900')
+  } },
+  { name: 'schedules', args: WORK, wait: WORK_TITLE, go: async () => {
+    publicModel()
+    must('key', 'ctrl+k')
+    must('idle')
+    must('type', 'Schedules of this session')
+    must('idle')
+    must('key', 'Enter')
+    must('wait', '900')
+  } },
+  // (searched: what shows is what the server can connect, not who is connected to what)
+  { name: 'connections', args: [...SESSION, '--settings=6'], go: async () => {
+    must('wait', '1500')
+    must('click', '--name', 'int_find')
+    must('type', 'open')
+    must('wait', '600')
+  } },
   { name: 'updates', args: [...SESSION, '--settings=3'], go: () => must('wait-for', 'Up to date', '--timeout', '15000') },   // (it looks at start)
   { name: 'settings', args: [...SESSION, '--settings=0'] },
   { name: 'subagent-session', args: SESSION, go: async () => {
@@ -195,11 +235,21 @@ async function capture(shot) {
     must('wait', '500')   // (what hover lit goes out)
     if (shot.linux) must('wait', '3000')   // (through the relay, the last requests are slower)
     must('idle')
+    // (these are published: a model that is not public never goes out in one)
+    // (what is scrolled out of the window is in the tree, not in the picture)
+    const { height } = JSON.parse(must('state'))
+    for (const secret of ['iceman', 'Contributor']) {
+      for (const m of must('find', secret).matchAll(/@(-?[\d.]+),(-?[\d.]+) ([\d.]+)x([\d.]+)/g)) {
+        const y = Number(m[2]), h = Number(m[4])
+        if (h > 0 && y + h > 0 && y < height) throw new Error(`${shot.name}: "${secret}" would be in the picture, at y=${y}`)
+      }
+    }
     const out = join(docs, shot.name + '.png')
     must('shot', out)
     const site = join(repo, 'site', 'img', shot.name + '.png')
     if (!opt.out && shot.name !== 'conversation') copyFileSync(out, site)   // (the README's alone)
     console.log('saved', shot.name)
+    if (shot.after) shot.after()
   } finally {
     if (shot.linux) cdp('close')
     child.kill()

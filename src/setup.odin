@@ -14,7 +14,7 @@ import "gt:draw"
 import "gt:render"
 import "gt:ui"
 
-APP_VERSION :: "0.12.1"
+APP_VERSION :: "0.12.2"
 
 LOGO_PNG :: #load("../assets/logo_256.png")
 
@@ -76,12 +76,30 @@ desktop_cli :: proc() -> (handled: bool, code: int) {
 ////////////////////////////////
 // The logo, as a texture (the Setup dialog, the empty conversation)
 
-Logo :: struct { tex: render.Texture }
+Logo :: struct {
+	tex:  render.Texture,
+	tint: u32,   // the accent it was painted in
+}
+
+// The edge of the bolt takes the accent. All the rest of the picture is grey, so what has a colour is that edge, its soft pixels included:
+// how much of the peach of the file a pixel holds is how much of the accent it gets. (0xRRGGBBAA)
+logo_tint_pixels :: proc(pixels: []u8, accent: u32) {
+	to := [3]f32{f32(u8(accent >> 24)), f32(u8(accent >> 16)), f32(u8(accent >> 8))}
+	for i := 0; i + 3 < len(pixels); i += 4 {
+		r, g, b := pixels[i], pixels[i + 1], pixels[i + 2]
+		if r <= b { continue }
+		amount := min(f32(r - b) / LOGO_EDGE_CHROMA, 1)
+		grey := f32(min(r, g, b))
+		for c in 0 ..< 3 { pixels[i + c] = u8(grey + (to[c] - grey) * amount) }
+	}
+}
 
 logo_load :: proc(app: ^App) {
 	img, err := png.load_from_bytes(LOGO_PNG, {.alpha_add_if_missing}, context.temp_allocator)
 	if err != nil || img == nil || img.channels != 4 || img.depth != 8 { return }
-	app.logo.tex = render.create_texture_rgba(&app.r, img.width, img.height)
+	if app.logo.tex == 0 { app.logo.tex = render.create_texture_rgba(&app.r, img.width, img.height) }
+	logo_tint_pixels(img.pixels[:], app.prefs.accent_hex)
+	app.logo.tint = app.prefs.accent_hex
 	render.update_texture_rgba(&app.r, app.logo.tex, 0, 0, img.width, img.height, img.pixels[:])
 }
 
@@ -94,6 +112,7 @@ logo_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 
 // The logo in a square of `size` (frame pixels).
 logo_box :: proc(app: ^App, id: string, size: f32) {
+	if app.logo.tex != 0 && app.logo.tint != app.prefs.accent_hex { logo_load(app) }   // (another accent was chosen)
 	ui.next({width = ui.px(size), height = ui.px(size)})
 	b := ui.build_box({}, id)
 	b.custom = logo_draw
@@ -190,6 +209,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.4))
 				text("t", "opencode native", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_DISPLAY), height = ui.px(em * 2)})
 				text("v", fmt.tprintf("version %s  ·  Froment Software", APP_VERSION), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.3)})
+				info_line(app, "###setup_not_theirs", APP_NOT_THEIRS, em, hex(HEX_FAINT))
 				ui.spacer(ui.px(em * 0.7))
 				col := hex(HEX_YELLOW)
 				state := ""

@@ -5,6 +5,18 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-11-05
+
+### Changed
+
+- **A logo of its own**: a silver bolt, its edge in the accent you chose. The name says native everywhere.
+- An independent project, not affiliated with the OpenCode team: said wherever it presents itself.
+
+### Fixed
+
+- **Opening or closing a panel keeps your place** in the conversation.
+- **The bottom of a conversation stays put while a run works**: the throbber's line no longer jumps at each step.
+
 ## [0.12.1] - 2026-11-05
 
 ### Changed
@@ -542,7 +554,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.2
 [0.12.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.1
 [0.12.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.0
 [0.11.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.9

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>opencode native</title>
-<meta name="description" content="A native desktop client for the opencode server, for Windows and Linux: one program, no runtime, machined surfaces.">
+<meta name="description" content="A native desktop client for the opencode server, for Windows and Linux: one program, no runtime, machined surfaces. An independent project, not affiliated with the OpenCode team.">
 <link rel="icon" href="img/logo.png">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -25,7 +25,8 @@
     <img class="mark" src="img/logo.png" alt="opencode native logo" width="112" height="112">
     <h1><span class="dim">open</span>code <em>native</em></h1>
     <p class="lead">A native desktop client for the <a href="https://opencode.ai">opencode</a> server. One program for
-      Windows or Linux, no runtime to install, every session and sub-agent streamed live.</p>
+      Windows or Linux, no runtime to install, every session and sub-agent streamed live.<br>
+      <small>Independent: not built by the OpenCode team, not affiliated with them.</small></p>
     <div class="actions">
       <a class="btn accent" href="https://github.com/sachahjkl/opencode_native/releases/latest">Download the latest release</a>
       <a class="btn" href="https://github.com/sachahjkl/opencode_native">Source on GitHub</a>
@@ -89,32 +90,27 @@
     </article>
     <article class="card">
       <h3>A terminal</h3>
-      <p>The shells of the server in a panel, with Ghostty's emulation: colours, history, the mouse, what programs ask of a terminal. They
-        run where the server runs, and are still there when you come back.</p>
+      <p>The shells of the server in a panel, with Ghostty's emulation. They run where it runs, and wait for you.</p>
     </article>
     <article class="card">
       <h3>Schedules, artifacts, plugins</h3>
-      <p>A prompt that wakes a session later or on a cron, the pages agents published, the plugins of the server and their updates.</p>
+      <p>A prompt that wakes a session later, the pages agents published, the server's plugins.</p>
     </article>
     <article class="card">
       <h3>Connections</h3>
-      <p>Every integration of the server in one page: a key, a login in the browser or what is on the machine. Several accounts of one,
-        the one in use chosen, and its models come with it.</p>
+      <p>Every integration of the server in one page: a key or a login, several accounts of each.</p>
     </article>
     <article class="card">
       <h3>@ names a file</h3>
-      <p>Type @ in the composer: the files of the session and its sub-agents come up as you type. Ctrl+P browses the folder, searches it
-        and reads a file, even when the server is on another machine.</p>
+      <p>Type @ for a file or a sub-agent, as you type. Ctrl+P browses and reads the folder, wherever the server runs.</p>
     </article>
     <article class="card">
       <h3>Go back to a prompt</h3>
-      <p>See which files it would restore, then keep it or cancel. What a session changed, file by file. Move a session to another
-        folder, export it, import it elsewhere.</p>
+      <p>See which files it restores, keep it or cancel. Move a session, export it, import it elsewhere.</p>
     </article>
     <article class="card">
       <h3>When the agent asks</h3>
-      <p>Its questions come over the composer, one at a time, in tabs, then a review before anything is sent. The sidebar lights a
-        session that waits for you, and a sub-agent's question comes up where you are reading.</p>
+      <p>Its questions come one at a time, in tabs, then a review. The sidebar lights a session that waits for you.</p>
     </article>
     <article class="card">
       <h3>Back and Forward</h3>
@@ -142,6 +138,11 @@
   <!-- whats-new -->
 
   <section class="gallery">
+    <figure class="shot"><a class="frame" href="img/terminal.png"><img src="img/terminal.png" alt="The terminal panel under the conversation" loading="lazy"></a><figcaption>A terminal, with Ghostty's emulation</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/mention.png"><img src="img/mention.png" alt="@ in the composer, the files of the folder proposed" loading="lazy"></a><figcaption>@ names a file or a sub-agent</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/files.png"><img src="img/files.png" alt="The files of the session's folder, one of them read" loading="lazy"></a><figcaption>The files of a session (Ctrl+P)</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/connections.png"><img src="img/connections.png" alt="Settings: the integrations of the server" loading="lazy"></a><figcaption>Connections: every integration of the server</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/schedules.png"><img src="img/schedules.png" alt="The schedules of a session, and a new one" loading="lazy"></a><figcaption>Schedules that wake a session</figcaption></figure>
     <figure class="shot"><a class="frame" href="img/palette.png"><img src="img/palette.png" alt="The command palette, commands listed" loading="lazy"></a><figcaption>The command palette</figcaption></figure>
     <figure class="shot"><a class="frame" href="img/diff.png"><img src="img/diff.png" alt="An edit shown as a diff, with line numbers" loading="lazy"></a><figcaption>An edit, as a diff</figcaption></figure>
     <figure class="shot"><a class="frame" href="img/activity.png"><img src="img/activity.png" alt="The tray under the composer: the todo list of the session" loading="lazy"></a><figcaption>What runs in the background</figcaption></figure>
@@ -179,8 +180,7 @@
 
 <footer>
   <p>Built in <a href="https://odin-lang.org">Odin</a> on <a href="https://sachahjkl.github.io/gui_toolkit/">gui_toolkit</a>.
-    MIT licence. opencode is a project of its own (<a href="https://opencode.ai">opencode.ai</a>); this client is not
-    affiliated with it.<br><a href="classic/">Classic version</a></p>
+    MIT licence. Not built by the <a href="https://opencode.ai">OpenCode</a> team, not affiliated with them.<br><a href="classic/">Classic version</a></p>
 </footer>
 <script>
   // the bar's menu on narrow screens: the button opens it, a link or a click elsewhere closes it

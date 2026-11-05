@@ -157,6 +157,8 @@ App_Context :: struct {
 	dialogs_saved:  [Dialog]Vec2,
 	dialogs_read:   bool,
 	no_schedules, no_artifacts: bool,     // the server does not offer them (experimental.odin)
+	chat_height:    f32,                  // of the conversation, at the last frame
+	was_docked:     bool,                 // the conversation was in the dock (preview.odin main_area)
 	show_licence:   bool,                 // Ghostty's, in the settings
 	terms:          Terminals,            // the Terminal panel (terminal.odin)
 	schedules:      Schedules,            // schedules.odin
@@ -298,19 +300,21 @@ frame :: proc(app: ^App, inner := false) {
 	}
 	// The conversation follows its bottom, placed from the last layout's content height: when this layout made it shorter
 	// (a wider window re-wraps every paragraph on fewer lines), the picture would be scrolled past the end, empty, for a
-	// frame. Build it again, placed from this layout (no events: they were the first build's). (Content that grew is
-	// caught up by the scroll's own glide.)
+	// frame. Build it again, placed from this layout (no events: they were the first build's). Content that grew too: a step of a run comes
+	// all at once, and a glide to catch it up would push the bottom out of place and bring it back. The bottom stays, what is above moves.
 	// A conversation's first page just arrived (a session opened): this build placed it from the empty one's bounds, at
 	// its top. Build it again at its bottom, at once: no frame at the top, no glide down.
 	if b := app.chat_sb; b != nil && app.stick_bottom {
 		limit := max(0, b.view_bounds.y - b.size.y)
-		if b.view_off.y > limit + 1 || app.snap_bottom {
+		grew := b.view_bounds.y > app.cx.chat_height + 0.5 && b.view_off.y < limit - 0.5
+		if b.view_off.y > limit + 1 || app.snap_bottom || grew {
 			b.view_anim[1] = {}
 			app.stick_jump = true
 			build(app, size, nil, 0)
 			app.stick_jump = false
 		}
 	}
+	if b := app.chat_sb; b != nil { app.cx.chat_height = b.view_bounds.y }
 	app.snap_bottom = false
 	app.chat.keep_id = ""
 	if b := app.chat_sb; b != nil { load_older(app, b) }
@@ -555,7 +559,7 @@ main :: proc() {
 	// a composition swap chain whose buffers keep the monitor's size while the window is resized: the window shows their
 	// top-left part 1:1, clipped by its client area, so a frame of the old size is never stretched over the new one (as
 	// Wren's browser.window.fixed_surface). Where DirectComposition is missing it is an ordinary swap chain.
-	app.win = platform.open_window("opencode", {WINDOW_W, WINDOW_H}, transparent = true, integrated_title = true)
+	app.win = platform.open_window(APP_NAME, {WINDOW_W, WINDOW_H}, transparent = true, integrated_title = true)
 	if app.win == nil { fmt.eprintln("opencode-native: no window"); os.exit(1) }
 	if !fonts_init(app) { fmt.eprintln("opencode-native: no UI font"); os.exit(1) }
 	for a in os.args[1:] {   // --size=<w>x<h>: the window's size in pixels, whichever screen it opens on (tools/screenshots.mjs)

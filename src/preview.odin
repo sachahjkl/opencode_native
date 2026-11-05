@@ -109,7 +109,7 @@ dock_setup :: proc(app: ^App) {
 		ui.dock_close(d, u32(Panel.Preview))
 	}
 	if app.cx.terms.open {
-		if !ui.dock_has(d, u32(Panel.Terminal)) { ui.dock_add(d, u32(Panel.Terminal), ui.dock_beside(d, u32(Panel.Conversation), .Bottom)) }
+		if !ui.dock_has(d, u32(Panel.Terminal)) { ui.dock_add(d, u32(Panel.Terminal), ui.Dock_Target{place = .Edge_Bottom}) }
 	} else {
 		ui.dock_close(d, u32(Panel.Terminal))
 	}
@@ -126,7 +126,6 @@ preview_toggle :: proc(app: ^App) {
 	p := &app.preview
 	if !preview_available() { ui.toast(.Warn, "The Preview panel needs the WebView2 runtime"); return }
 	p.open = !p.open
-	app.snap_bottom = app.stick_bottom   // (the conversation changes boxes: it stays where it was read)
 	if p.open {
 		dock_setup(app)
 		web_start(app)
@@ -239,7 +238,13 @@ main_area :: proc(app: ^App, em: f32) {
 	p := &app.preview
 	p.shown = false
 	app.cx.docked_w = 0
-	if !p.open && !app.cx.terms.open { conversation(app, em); return }
+	// (in the dock or out of it the conversation is other boxes, and their scroll starts at the top: whatever opened or closed a panel)
+	docked := p.open || app.cx.terms.open
+	if docked != app.cx.was_docked {
+		app.cx.was_docked = docked
+		nav_hold_view(app)
+	}
+	if !docked { conversation(app, em); return }
 	d := &app.dock
 	ui.next({width = ui.fill(), height = ui.fill()})
 	ui.dock_begin(d, "###dock", {title = panel_title, tab = panel_tab, strip_begin = strip_look, closable = panel_closable, on_save = dock_save, user = app, close_buttons = true, tab_height = math.round(em * DOCK_TAB_H_EM)})

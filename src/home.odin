@@ -75,6 +75,8 @@ home :: proc(app: ^App, em: f32) {
 		big := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_WORDMARK * 0.8)}
 		text("l1", "open", hex(HEX_FAINT), big)
 		text("l2", "code", hex(HEX_TEXT), big)
+		ui.spacer(ui.px(em * 0.6))
+		text("l3", "native", accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_WORDMARK * 0.8)})
 		ui.spacer(ui.fill())
 		if !app.online {
 			text("c", fmt.tprintf("Connecting to %s…", server_base(app)), hex(HEX_YELLOW), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
@@ -140,5 +142,7 @@ home :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 1.6))
 		if hint_action("###hk3", "F1  shortcuts", em, app.mono) { command_run(app, command_find("app.help")) }
 	}
+	ui.spacer(ui.px(em * 0.6))
+	info_line(app, "###h_not_theirs", APP_NOT_THEIRS, em, hex(HEX_FAINT))
 	ui.spacer(ui.px(em * 2))
 }

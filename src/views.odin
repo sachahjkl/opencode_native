@@ -207,7 +207,7 @@ title_bar :: proc(app: ^App, em: f32) {
 		nav_button(app, "###nav_back", ICO_BACK, "Back  (Alt+Left)", -1, math.round(h * 0.78))
 		nav_button(app, "###nav_fwd", ICO_FORWARD, "Forward  (Alt+Right)", 1, math.round(h * 0.78))
 		ui.spacer(ui.px(em * 0.4))
-		// the logo and the wordmark ("open" dim, "code" bright, in the mono face) go home, as on any site
+		// the logo and the wordmark ("open" dim, "code" bright, "native" in the accent, in the mono face) go home, as on any site
 		ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .X, cross = .Center, cursor = .Hand})
 		ui.a11y({role = .Button, name = "Home"})
 		home_link := ui.build_box({.Clickable}, "###home_link")
@@ -218,6 +218,8 @@ title_bar :: proc(app: ^App, em: f32) {
 			mono := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_HEADING)}
 			text("w1", "open", hsig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), mono)
 			text("w2", "code", hsig.hovering ? hex(HEX_BRIGHT) : hex(HEX_TEXT), mono)
+			ui.spacer(ui.px(em * 0.45))
+			text("w3", "native", accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_HEADING)})
 		}
 		if hsig.clicked { command_run(app, command_find("nav.home")) }
 		if ui.hovered_for(hsig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Home  (Ctrl+H)") } }

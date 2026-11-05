@@ -6,6 +6,8 @@ import "core:os"
 import "core:path/filepath"
 
 APP_NAME      :: "opencode native"
+// (said wherever this program presents itself: their README asks it of a project with "opencode" in its name, and it is the truth)
+APP_NOT_THEIRS :: "An independent project: not built by the OpenCode team, and not affiliated with them."
 APP_PUBLISHER :: "Froment Software"
 
 Install_State :: enum u8 {

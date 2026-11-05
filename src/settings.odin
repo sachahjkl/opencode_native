@@ -738,6 +738,8 @@ page_updates :: proc(app: ^App, em: f32) {
 page_advanced :: proc(app: ^App, em: f32) {
 	section("PREVIEW", em)
 	if setting(app, "browser.tools", em) { pref_switch(app, "browser.tools", em) }
+	section("ABOUT", em)
+	info_line(app, "###adv_about", fmt.tprintf("%s %s, a client of the OpenCode server. %s", APP_NAME, APP_VERSION, APP_NOT_THEIRS), em)
 	section("SERVER", em)
 	if setting(app, "advanced.experimental", em) { pref_switch(app, "advanced.experimental", em) }
 	section("DIAGNOSTICS", em)
