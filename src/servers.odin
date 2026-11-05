@@ -173,6 +173,7 @@ server_forget :: proc(app: ^App) {
 	clear(&app.nav)
 	nav_clear(app)
 	permissions_clear(app)
+	forms_clear(app)
 	app.sessions = nil
 	app.sessions_loaded = false
 	app.opened_first = false

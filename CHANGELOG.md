@@ -5,6 +5,20 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.11.5] - 2026-11-05
+
+### Added
+
+- **What an agent asks.** The `question` tool and any form of the server: choices, your own words, numbers, switches, several choices,
+  links, fields that depend on others. One question at a time, in tabs, then a review and Send; a single question goes as soon as it
+  is picked. A run that asked used to wait for ever, with nothing on screen.
+- **The sidebar lights a session that waits for you**, on a question or a permission, a sub-agent's too; they are found again at start.
+
+### Changed
+
+- A sub-agent's question comes up in the conversation of its parent.
+- What a session waits for stays known when another one is opened.
+
 ## [0.11.4] - 2026-11-05
 
 ### Added
@@ -453,7 +467,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.4...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.5...HEAD
+[0.11.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.5
 [0.11.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.4
 [0.11.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.3
 [0.11.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.2

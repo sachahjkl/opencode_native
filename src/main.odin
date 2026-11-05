@@ -156,6 +156,7 @@ App_Context :: struct {
 	dialogs:        [Dialog]Vec2,      // the sizes given to the dialogs (logical pixels, {}: what they prefer)
 	dialogs_saved:  [Dialog]Vec2,
 	dialogs_read:   bool,
+	forms:          [dynamic]^Form_Req,   // what agents ask and wait for (forms.odin), of every session
 	nav_hist:       [dynamic]Nav_Place,   // where one has been (subagents.odin nav_visit)
 	nav_at:         int,                  // where one is in it
 	nav_moving:     bool,                 // a step of the history: nothing to add to it

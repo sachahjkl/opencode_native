@@ -153,6 +153,12 @@ SETTINGS_NAV_EM       :: 14   // the list of the pages
 SETTINGS_NAV_ICONS_EM :: 4    // the same with its icons alone
 SETTINGS_NARROW_EM    :: 40   // a dialog narrower than this has them alone
 
+FORM_BODY_H_EM     :: 20     // the most what a form asks takes, then it scrolls
+FORM_BODY_WINDOW   :: 0.45   // and of the height of the window
+FORM_LINE_EM       :: 2.2    // a line of it (form_height: what it would take)
+FORM_FIELD_GAP_EM  :: 0.95
+FORM_OPTION_GAP_EM :: 0.25
+
 NAV_HISTORY_MAX :: 100   // places remembered for Back and Forward
 NAV_RESTORE_NEAR_PX    :: 1     // the view is on its message this near
 NAV_RESTORE_STILL      :: 3     // frames it stays there before it is left alone

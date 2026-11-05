@@ -132,12 +132,11 @@ open_chat :: proc(app: ^App, session_id: string) {
 	}
 	app.chat.busy = app.busy[id] or_else false
 	app.chat.live = make(map[string]Sub_Live, allocator = app.chat.alloc)
-	permissions_clear(app)
 	activity_reset(app)
 	load_messages(app, id)
 	request(app, .Self, "GET", strings.concatenate({"/api/session/", id}, context.temp_allocator), tag = id)
 	load_children(app)
-	request(app, .Permissions, "GET", strings.concatenate({"/api/session/", id, "/permission"}, context.temp_allocator), tag = id)
+	session_waits_load(app, id)
 }
 
 find_session :: proc(app: ^App, id: string) -> ^Session_Info {
@@ -287,7 +286,10 @@ active_load :: proc(app: ^App, v: json.Value) {
 	clear(&app.busy)
 	app.chat.busy = false
 	if obj, ok := jget(v, "data").(json.Object); ok {
-		for id in obj { set_busy(app, id, true) }
+		for id in obj {
+			set_busy(app, id, true)
+			session_waits_load(app, id)
+		}
 	}
 }
 
@@ -628,6 +630,13 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		id := jstr(d, "id")
 		if id == "" { id = jstr(d, "requestID") }
 		permission_remove(app, id)
+	case "form.created":
+		form := jget(d, "form")
+		form_add(app, form)
+		if s := jstr(form, "sessionID"); s != c.id && !is_child(c, s) { ui.toast(.Warn, "A session is asking you something") }
+		if app.prefs.notify_perm && !window_in_front(app) { flash_taskbar(app) }
+	case "form.replied", "form.cancelled":
+		form_remove(app, jstr(d, "id"))
 	}
 	if sid != "" && !mine && is_child(c, sid) {
 		child_event(app, kind, sid, d, ev)

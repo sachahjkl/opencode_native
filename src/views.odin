@@ -122,7 +122,6 @@ new_session :: proc(app: ^App) {
 	app.chat.loaded = true
 	app.stick_bottom = true
 	app.chat.new_dir = strings.clone(dir, app.chat.alloc)
-	permissions_clear(app)
 	activity_reset(app)
 	choice_recall(app)
 	app.cx.focus_composer = true
@@ -466,6 +465,10 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				state_mark("###st", sub_state_color(st), busy, size = em * 0.75)
 				ui.spacer(ui.px(em * 0.3))
 				text("ag", s.agent, hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+				ui.spacer(ui.px(em * 0.35))
+			} else if session_waits(app, s.id) {   // (a run that cannot go on without the person)
+				lamp("###waits", hex(HEX_YELLOW), pulse = true, size = em * 0.85)
+				app.animating = true
 				ui.spacer(ui.px(em * 0.35))
 			} else if busy {
 				lamp("###busy", accent(), pulse = true, size = em * 0.85)
@@ -1313,6 +1316,7 @@ dock :: proc(app: ^App, em: f32, side, col: f32) {
 			for &p in app.permissions {
 				if p.session == app.chat.id { permission_card(app, &p, em) }
 			}
+			forms_dock(app, em)
 			composer(app, em)
 			activity_tray(app, em)
 			ui.spacer(ui.px(em * 1.1))

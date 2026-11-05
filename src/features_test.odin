@@ -3,6 +3,7 @@ package occ
 // What the newer parts decide by themselves, without a window: a diff, the end of a command's output, an address, the links
 // of a text, the history's steps.
 
+import "core:encoding/json"
 import "core:strings"
 import "core:testing"
 import "gt:ui"
@@ -140,4 +141,70 @@ the_history_goes_back_and_forward :: proc(t: ^testing.T) {
 	for i in 0 ..< NAV_HISTORY_MAX + 20 { nav_visit(app, "", i % 2 == 0 ? "x" : "y") }
 	testing.expect_value(t, len(app.cx.nav_hist), NAV_HISTORY_MAX)
 	testing.expect_value(t, app.cx.nav_at, NAV_HISTORY_MAX - 1)
+}
+
+// A form as the server sends it: defaults taken, a field that depends on another, the answer as JSON, and what is missing says where.
+@(test)
+a_form_is_answered :: proc(t: ^testing.T) {
+	app := new(App)
+	defer free(app)
+	defer delete(app.cx.forms)
+	defer forms_clear(app)
+	v, err := json.parse_string(`{"id":"frm_1","sessionID":"s","title":"Deploy","fields":[
+		{"key":"name","type":"string","required":true},
+		{"key":"env","type":"string","options":[{"value":"prod","label":"Production"},{"value":"test","label":"Test"}],"default":"test"},
+		{"key":"why","type":"string","when":[{"key":"env","op":"eq","value":"prod"}]},
+		{"key":"n","type":"integer","minimum":1,"maximum":5},
+		{"key":"fast","type":"boolean","default":true},
+		{"key":"tags","type":"multiselect","options":[{"value":"a","label":"Alpha"},{"value":"b","label":"Beta"}],"default":["b"]}
+	]}`, parse_integers = true, allocator = context.temp_allocator)
+	testing.expect_value(t, err, json.Error.None)
+	form_add(app, v)
+	form_add(app, v)
+	testing.expect_value(t, len(app.cx.forms), 1)
+	f := app.cx.forms[0]
+
+	testing.expect(t, !field_shown(f, &f.fields[2]), "the reason, only for production")
+	_, problem, at := form_answer(f)
+	testing.expect(t, problem != "", "the name is required")
+	testing.expect_value(t, at, 0)
+
+	ui.field_set(&f.fields[0].text, "first")
+	f.fields[1].choice = 0
+	testing.expect(t, field_shown(f, &f.fields[2]), "production: the reason is asked")
+	ui.field_set(&f.fields[3].text, "9")
+	_, problem, at = form_answer(f)
+	testing.expect(t, problem != "", "9 is over the maximum")
+	testing.expect_value(t, at, 2 + 1)   // (its page among those shown: the reason counts now)
+	ui.field_set(&f.fields[3].text, "2.5")
+	_, problem, _ = form_answer(f)
+	testing.expect(t, problem != "", "not a whole number")
+
+	ui.field_set(&f.fields[3].text, "3")
+	body: string
+	body, problem, _ = form_answer(f)
+	testing.expect_value(t, problem, "")
+	testing.expect_value(t, body, `{"answer":{"name":"first","env":"prod","n":3,"fast":true,"tags":["b"]}}`)
+
+	form_remove(app, "frm_1")
+	testing.expect_value(t, len(app.cx.forms), 0)
+}
+
+// A question of the agent must have an answer, even with nothing `required`, and one's own words replace the option.
+@(test)
+a_question_wants_an_answer :: proc(t: ^testing.T) {
+	app := new(App)
+	defer free(app)
+	defer delete(app.cx.forms)
+	defer forms_clear(app)
+	v, _ := json.parse_string(`{"id":"frm_2","sessionID":"s","title":"Questions","metadata":{"kind":"question"},"fields":[
+		{"key":"q0","type":"string","options":[{"value":"Red","label":"Red"}],"custom":true}]}`, parse_integers = true, allocator = context.temp_allocator)
+	form_add(app, v)
+	f := app.cx.forms[0]
+	testing.expect(t, f.question, "a question")
+	_, problem, _ := form_answer(f)
+	testing.expect(t, problem != "", "no answer yet")
+	ui.field_set(&f.fields[0].text, "Teal")
+	body, _, _ := form_answer(f)
+	testing.expect_value(t, body, `{"answer":{"q0":"Teal"}}`)
 }

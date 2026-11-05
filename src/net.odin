@@ -203,6 +203,8 @@ Req_Kind :: enum u8 {
 	Forked,         // POST /api/session/:id/fork: the new session
 	Session_Agent,  // a new session takes the agent chosen last (views.odin session_setup)
 	Session_Model,  // ... and the model
+	Forms,          // GET /api/session/:id/form: what it asks and waits for (forms.odin)
+	Form_Reply,     // POST /api/session/:id/form/:form/reply (the tag: the form)
 	Inbox,          // GET /api/session/:id/inbox: what was sent during a run that was interrupted
 	Inbox_Take,     // DELETE /api/session/:id/inbox/:message: out of it, to go as a prompt (the body: that prompt)
 }
@@ -268,7 +270,7 @@ on_answer :: proc(data: rawptr, word: u64) {
 		return
 	}
 	v, err := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if err != nil && r.kind != .Action && r.kind != .Prompt && r.kind != .Session_Agent && r.kind != .Session_Model && r.kind != .Inbox_Take {
+	if err != nil && r.kind != .Action && r.kind != .Prompt && r.kind != .Session_Agent && r.kind != .Session_Model && r.kind != .Inbox_Take && r.kind != .Form_Reply {
 		ui.toast(.Warn, "Unreadable answer (%s)", r.path)
 		request_failed(app, r)
 		return
@@ -286,7 +288,7 @@ on_answer :: proc(data: rawptr, word: u64) {
 	case .Agents:      agents_load(app, v)
 	case .Models:      models_load(app, v)
 	case .Info:        delete(app.server_version); app.server_version = strings.clone(jstr(v, "version"))
-	case .Permissions: if r.tag == app.chat.id { permissions_load(app, jarr(v, "data")) }
+	case .Permissions: permissions_load(app, jarr(v, "data"))
 	case .Active:      active_load(app, v)
 	case .Self:        if r.tag == app.chat.id && r.gen == app.chat.gen { self_load(app, v) }
 	case .Parent:      if r.tag == app.chat.id && r.gen == app.chat.gen { parent_load(app, v) }
@@ -309,6 +311,8 @@ on_answer :: proc(data: rawptr, word: u64) {
 		if strings.contains(r.body, `"files":`) && r.gen == app.chat.gen && r.tag == app.chat.id { load_messages(app, r.tag) }
 	case .Session_Agent: session_setup(app, r.tag, 1)
 	case .Session_Model: session_setup(app, r.tag, 2)
+	case .Forms:         for it in jarr(v, "data") { form_add(app, it) }
+	case .Form_Reply:    form_remove(app, r.tag)
 	case .Inbox:         inbox_take(app, r.tag, v)
 	case .Inbox_Take:    inbox_send(app, r)
 	case .Shell_List:   if r.gen == app.chat.gen { activity_shells_load(app, v, r.tag) }
@@ -337,6 +341,8 @@ request_failed :: proc(app: ^App, r: ^Request) {
 		if r.gen == app.chat.gen { app.chat.loading = false }
 	case .Older:
 		older_failed(app, r)
+	case .Form_Reply:
+		if f := form_find(app, r.tag); f != nil { f.sending = false }
 	case .Created:
 		if app.pending_prompt != "" {
 			prompt_restore(app, app.pending_prompt)
