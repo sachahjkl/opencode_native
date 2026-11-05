@@ -145,9 +145,15 @@ GO_BOTTOM_W_EM    :: 6.5
 // Pacing, and the status bar's rate
 
 // The dialogs one can resize: what they open at and the least they go to, in em (the window has the last word).
-Dialog :: enum u8 { Settings, Stats, Help, Changes }
-DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Stats = {54, 46}, .Help = {42, 44}, .Changes = {62, 46}}
-DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Stats = {34, 22}, .Help = {30, 20}, .Changes = {34, 20}}
+Dialog :: enum u8 { Settings, Stats, Help, Changes, Files }
+DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Stats = {54, 46}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}}
+DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Stats = {34, 22}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}}
+MENTION_ROWS         :: 7      // what @ proposes at once
+MENTION_DETAIL_CHARS :: 60
+FILES_FOUND_MAX      :: 200    // of a search in the dialog
+FILES_LIST_W_EM      :: 22
+FILE_SNIFF_BYTES     :: 8192   // looked at for a zero byte: not text
+FILE_VIEW_MAX_BYTES  :: 262144 // of a file, shown; the rest is said
 CHANGES_OPEN_FILES :: 6     // the files of a list shown unfolded
 CHANGES_DIFF_LINES :: 400   // of a file, before the rest is counted
 

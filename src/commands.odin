@@ -53,6 +53,7 @@ COMMANDS := [?]Command{
 	{id = "session.fork", title = "Fork the session", group = "Session", icon = ICO_COPY, run = proc(app: ^App) { fork_session(app, app.chat.id, "") }, enabled = has_session},
 	{id = "session.compact", title = "Compact the conversation", group = "Session", icon = ICO_LIST, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/compact", app.chat.id), "{}", app.chat.id) }, enabled = has_session},
 	{id = "session.background", title = "Send running tools to the background", group = "Session", icon = ICO_TERMINAL, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/background", app.chat.id), "", app.chat.id) }, enabled = is_busy},
+	{id = "session.files", title = "Browse the files", group = "Session", icon = ICO_FOLDER, keys = "Ctrl+P", key = .P, mods = {.Ctrl}, run = files_open},
 	{id = "session.changes", title = "What this session changed", group = "Session", icon = ICO_DOC, run = proc(app: ^App) { changes_open(app, app.chat.id) }, enabled = has_session},
 	{id = "session.move", title = "Move the session to a folder", group = "Session", icon = ICO_FOLDER, run = proc(app: ^App) { session_move_pick(app, app.chat.id) }, enabled = has_session},
 	{id = "session.export", title = "Export the session", group = "Session", icon = ICO_DOC, run = proc(app: ^App) { session_export(app, app.chat.id) }, enabled = has_session},
@@ -105,7 +106,7 @@ go_home :: proc(app: ^App) {
 
 // A dialog, a picker or a menu is over the window.
 overlay_open :: proc(app: ^App) -> bool {
-	return app.cx.changes.open || app.settings_open || app.delete_open || app.stats_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.rename.open || len(app.ui_state.menus) > 0
+	return app.cx.changes.open || app.cx.files.open || app.settings_open || app.delete_open || app.stats_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.rename.open || len(app.ui_state.menus) > 0
 }
 
 content_zoom_set :: proc(app: ^App, z: f32) {

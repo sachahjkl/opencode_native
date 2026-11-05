@@ -71,18 +71,31 @@ attach_paste :: proc(app: ^App) -> bool {
 	return false
 }
 
-// What the JSON of a prompt says of them (empty: none), and they are gone from the composer.
-attachments_take :: proc(app: ^App) -> string {
-	if len(app.cx.attachments) == 0 { return "" }
-	b := strings.builder_make(context.temp_allocator)
-	strings.write_string(&b, `,"files":[`)
-	for a, i in app.cx.attachments {
-		if i > 0 { strings.write_byte(&b, ',') }
-		fmt.sbprintf(&b, `{{"uri":%s,"name":%s}}`, jquote(a.uri), jquote(a.name))
+// What the JSON of a prompt says of them and of the files and agents named in `text` (empty: none), and they are gone from the composer.
+attachments_take :: proc(app: ^App, text: string) -> string {
+	files := strings.builder_make(context.temp_allocator)
+	agents := strings.builder_make(context.temp_allocator)
+	for a in app.cx.attachments {
+		if strings.builder_len(files) > 0 { strings.write_byte(&files, ',') }
+		fmt.sbprintf(&files, `{{"uri":%s,"name":%s}}`, jquote(a.uri), jquote(a.name))
 	}
-	strings.write_byte(&b, ']')
+	for &m in app.cx.mentions.chosen {
+		mention, ok := mention_json(&m, text)
+		if !ok { continue }   // (taken out of the text since)
+		list := m.kind == .File ? &files : &agents
+		if strings.builder_len(list^) > 0 { strings.write_byte(list, ',') }
+		if m.kind == .File {
+			fmt.sbprintf(list, `{{"uri":%s,"name":%s,"mention":%s}}`, jquote(m.target), jquote(m.name), mention)
+		} else {
+			fmt.sbprintf(list, `{{"name":%s,"mention":%s}}`, jquote(m.target), mention)
+		}
+	}
 	attachments_clear(app)
-	return strings.to_string(b)
+	mentions_clear(app)
+	out := ""
+	if strings.builder_len(files) > 0 { out = fmt.tprintf(`,"files":[%s]`, strings.to_string(files)) }
+	if strings.builder_len(agents) > 0 { out = fmt.tprintf(`%s,"agents":[%s]`, out, strings.to_string(agents)) }
+	return out
 }
 
 attachments_clear :: proc(app: ^App) {

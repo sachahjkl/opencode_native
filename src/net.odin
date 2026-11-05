@@ -206,6 +206,9 @@ Req_Kind :: enum u8 {
 	Session_Moved,  // POST /api/session/:id/move
 	Session_Export, // GET /api/experimental/session/:id/export (session_tools.odin)
 	Session_Import, // POST /api/experimental/session/import
+	Mention_Files,  // GET /api/fs/list, /api/fs/find: what @ proposes (files.odin)
+	Files_List,     // the same for the dialog
+	File_Read,      // GET /api/fs/read/*
 	Changes_Range,  // GET /api/session/:id/message?type=user: the first prompt, then the last
 	Changes,        // GET /api/session/:id/diff, POST .../revert/stage: the files
 	Revert_Done,    // POST /api/session/:id/revert/commit
@@ -269,6 +272,8 @@ on_answer :: proc(data: rawptr, word: u64) {
 	}
 	if r.status == 401 { app.auth_failed = true; request_failed(app, r); ui.toast(.Bad, "Authentication refused by the server"); return }
 	if r.kind == .Inbox && r.status >= 400 { return }   // (a server without one)
+	if r.kind == .Mention_Files && r.status >= 400 { return }   // (a folder gone: nothing to propose)
+	if r.kind == .File_Read { file_loaded(app, r.tag, r.resp, r.status < 400); return }   // (not JSON)
 	if r.kind == .Session_Import && r.status == 409 { session_import_conflict(app, r.tag); return }
 	if r.kind == .Changes && r.status == 400 && changes_refused(app, r.tag) { return }
 	if r.status >= 400 {
@@ -326,6 +331,9 @@ on_answer :: proc(data: rawptr, word: u64) {
 		app.refresh_due = true
 		if id := jstr(v, "data", "id"); id != "" { open_root(app, id) }
 		ui.toast(.Good, "Session imported")
+	case .Mention_Files: mention_load(app, r.tag, v)
+	case .Files_List:    files_load(app, r.tag, v)
+	case .File_Read:
 	case .Changes_Range: changes_range(app, r.tag, v)
 	case .Changes:       changes_load(app, r.tag, v)
 	case .Revert_Done:   revert_done(app, r.tag)
@@ -362,6 +370,8 @@ request_failed :: proc(app: ^App, r: ^Request) {
 		older_failed(app, r)
 	case .Form_Reply:
 		if f := form_find(app, r.tag); f != nil { f.sending = false }
+	case .File_Read:
+		file_loaded(app, r.tag, "", false)
 	case .Changes, .Changes_Range:
 		changes_failed(app)
 	case .Revert_Done, .Revert_Cancelled:
@@ -412,7 +422,7 @@ load_older :: proc(app: ^App, b: ^ui.Box) {
 }
 
 send_prompt :: proc(app: ^App, id, text: string) {
-	request(app, .Prompt, "POST", fmt.tprintf("/api/session/%s/prompt", id), fmt.tprintf(`{{"text":%s%s}}`, jquote(text), attachments_take(app)), id)
+	request(app, .Prompt, "POST", fmt.tprintf("/api/session/%s/prompt", id), fmt.tprintf(`{{"text":%s%s}}`, jquote(text), attachments_take(app, text)), id)
 }
 
 create_session :: proc(app: ^App, directory: string) {

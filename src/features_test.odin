@@ -282,3 +282,59 @@ a_git_patch_shows_only_its_lines :: proc(t: ^testing.T) {
 	testing.expect_value(t, lines[0].sign, '-')
 	testing.expect_value(t, lines[1].text, "index one")
 }
+
+// `@` names something at the start of a word only, up to the caret.
+@(test)
+the_word_after_an_at_is_a_mention :: proc(t: ^testing.T) {
+	start, q, ok := mention_word("see @src/ma", 11)
+	testing.expect(t, ok, "at the end of a word")
+	testing.expect_value(t, start, 4)
+	testing.expect_value(t, q, "src/ma")
+	_, q, ok = mention_word("@", 1)
+	testing.expect(t, ok && q == "", "alone: the folder's files")
+	_, _, ok = mention_word("me@host.org", 11)
+	testing.expect(t, !ok, "a mail address")
+	_, _, ok = mention_word("@a b", 4)
+	testing.expect(t, !ok, "the word is over")
+	_, q, ok = mention_word("@abc", 2)
+	testing.expect(t, ok && q == "a", "up to the caret")
+}
+
+// The server takes a file by its absolute uri, what a uri cannot hold escaped.
+@(test)
+a_file_goes_as_its_absolute_uri :: proc(t: ^testing.T) {
+	testing.expect_value(t, file_uri(`S:\demo\`, `src\a b.txt`), "file:///S:/demo/src/a%20b.txt")
+	testing.expect_value(t, file_uri("/home/me", "#1.txt"), "file:///home/me/%231.txt")
+}
+
+// A file too long is cut between two characters; a file with a zero byte, or not in UTF-8, is no text.
+@(test)
+what_is_shown_of_a_file :: proc(t: ^testing.T) {
+	s, ok := file_text("plain")
+	testing.expect(t, ok && s == "plain", "text")
+	_, ok = file_text("a\x00b")
+	testing.expect(t, !ok, "a zero byte")
+	_, ok = file_text("caf\xe9")
+	testing.expect(t, !ok, "not UTF-8")
+	long := strings.concatenate({strings.repeat("a", FILE_VIEW_MAX_BYTES - 1, context.temp_allocator), "\u00e9\u00e9"}, context.temp_allocator)
+	s, ok = file_text(long)
+	testing.expect(t, ok, "cut on a character")
+	testing.expect_value(t, len(s), FILE_VIEW_MAX_BYTES - 1)
+}
+
+// A prompt says the files and agents still in its text, where they stand as the server counts; the others are forgotten.
+@(test)
+a_prompt_says_what_it_mentions :: proc(t: ^testing.T) {
+	app := new(App)
+	defer free(app)
+	defer mentions_destroy(app)
+	defer delete(app.cx.attachments)
+	m := &app.cx.mentions
+	append(&m.chosen, Mention{.File, strings.clone("@a.txt"), strings.clone("file:///d/a.txt"), strings.clone("a.txt")})
+	append(&m.chosen, Mention{.File, strings.clone("@gone.txt"), strings.clone("file:///d/gone.txt"), strings.clone("gone.txt")})
+	append(&m.chosen, Mention{.Agent, strings.clone("@explore"), strings.clone("explore"), strings.clone("")})
+	testing.expect_value(t, attachments_take(app, "\u00e9\U0001F600 @a.txt and @explore"),
+		`,"files":[{"uri":"file:///d/a.txt","name":"a.txt","mention":{"start":4,"end":10,"text":"@a.txt"}}],"agents":[{"name":"explore","mention":{"start":15,"end":23,"text":"@explore"}}]`)
+	testing.expect_value(t, len(m.chosen), 0)
+	testing.expect_value(t, attachments_take(app, "nothing"), "")
+}

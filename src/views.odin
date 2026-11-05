@@ -73,13 +73,14 @@ build_ui :: proc(app: ^App) {
 	rename_dialog(app, em)
 	help_dialog(app, em)
 	changes_dialog(app, em)
+	files_dialog(app, em)
 	palette_dialog(app, em)
 	context_menu(app, em)
 	// (over the top of the conversation, under its header: at the bottom they hid the send button, when one wants to try again)
 	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.ui_state.window_size})
 	ui.toasts_build()
 	// (last: what is open and a field that has it took Escape before it gets here)
-	if app.chat.busy && !overlay_open(app) && ui.key_press(.Escape) { interrupt_session(app, app.chat.id) }
+	if app.chat.busy && !overlay_open(app) && !mention_takes_escape(app) && ui.key_press(.Escape) { interrupt_session(app, app.chat.id) }
 }
 
 app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
@@ -1367,6 +1368,7 @@ composer :: proc(app: ^App, em: f32) {
 	keys := app.composer_focused && !app.picker.open
 	// (the tray's keys with the focus nowhere too: a click on one of its rows leaves it there)
 	if app.activity.open && !app.picker.open && (app.composer_focused || ui.focus_key() == 0) { activity_keys(app) }
+	if keys { mention_keys(app) }
 	if keys { history_track(app) }
 	if app.composer_focused && !app.prefs.ctrl_enter {   // (Ctrl+Enter mode: Enter breaks the line, the editor commits on Ctrl+Enter)
 		if ui.key_press(.Return) { submit = true }
@@ -1375,6 +1377,7 @@ composer :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well("###composer_well", radius = 11, base = HEX_COMPOSER_WELL, focus = app.composer_focused ? 1 : 0) {
 		ui.spacer(ui.px(em * 0.45))
+		mention_list(app, em)
 		attachments_row(app, em)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###edrow") {
@@ -1402,6 +1405,7 @@ composer :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_BODY), text_pad = em * 0.5})
 				res := ui.text_edit("###composer", &app.composer, "Ask anything…", wrap = true, auto_height = true, min_lines = 2, max_lines = COMPOSER_MAX_LINES)
 				app.composer_focused = res.focused
+				mention_track(app)
 				if app.cx.focus_composer { ui.set_focus(res.box.key); app.cx.focus_composer = false }
 				ctx_check(app, res.box, .Composer)
 				if res.committed { submit = true }

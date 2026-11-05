@@ -5,6 +5,16 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.11.7] - 2026-11-05
+
+### Added
+
+- **`@` in the composer** names a file of the session's folder, or a sub-agent: the list follows what is typed, Up and Down move in it,
+  Enter or Tab chooses, Escape closes it and leaves the run alone. The file goes with the prompt, read by the server, even on another
+  machine.
+- **Browse the files** (Ctrl+P): the folders of the session, a search, a file to read, its path to copy, Mention in the prompt. A file
+  that is no text says so, a long one shows its beginning and says how much.
+
 ## [0.11.6] - 2026-11-05
 
 ### Added
@@ -484,7 +494,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.6...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.7...HEAD
+[0.11.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.7
 [0.11.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.6
 [0.11.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.5
 [0.11.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.4
