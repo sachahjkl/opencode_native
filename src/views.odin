@@ -526,7 +526,7 @@ session_menu :: proc(app: ^App, em: f32) {
 		if ui.menu_item("Fork").clicked { fork_session(app, app.menu_session, "") }
 		if ui.menu_item("Move to a folder…").clicked { session_move_pick(app, app.menu_session) }
 		if ui.menu_item("What it changed").clicked { changes_open(app, app.menu_session) }
-		if ui.menu_item("Schedules").clicked { schedules_open(app, app.menu_session) }
+		if !app.cx.no_schedules && ui.menu_item("Schedules").clicked { schedules_open(app, app.menu_session) }
 		if ui.menu_item("Export…").clicked { session_export(app, app.menu_session) }
 		if ui.menu_item("Export without the text…").clicked { session_export(app, app.menu_session, redacted = true) }
 		ui.menu_separator()

@@ -532,3 +532,53 @@ a_paste_is_what_the_program_asked_for :: proc(t: ^testing.T) {
 	testing.expect_value(t, term_paste_text(term, "a\nb"), "\x1b[200~a\nb\x1b[201~")
 }
 
+
+// The options go in beside what the file says: its comments, its order, what was set by hand.
+@(test)
+the_experimental_options_go_in_beside_what_is_there :: proc(t: ^testing.T) {
+	keys := []string{"schedules", "artifacts", "todo"}
+	before := "{\n  // mine\n  \"plugins\": [\"a\"],\n  \"experimental\": {\n    // kept\n    \"todo\": true\n  },\n  \"mcp\": {\"x\": {\"experimental\": {\"schedules\": false}}}\n}\n"
+	after := config_with_experimental(before, keys)
+	testing.expect_value(t, after, "{\n  // mine\n  \"plugins\": [\"a\"],\n  \"experimental\": {\n    \"schedules\": true,\n    \"artifacts\": true,\n    // kept\n    \"todo\": true\n  },\n  \"mcp\": {\"x\": {\"experimental\": {\"schedules\": false}}}\n}\n")
+	_, bad := json.parse_string(after, .JSON5, allocator = context.temp_allocator)
+	testing.expect_value(t, bad, json.Error.None)
+	testing.expect_value(t, config_with_experimental(after, keys), "")   // (the second time: nothing)
+}
+
+// What was set by hand stays, a false above all.
+@(test)
+an_option_turned_off_stays_off :: proc(t: ^testing.T) {
+	text := "{\"experimental\": {\"schedules\": false, \"artifacts\": false}}"
+	testing.expect_value(t, config_with_experimental(text, {"schedules", "artifacts"}), "")
+	testing.expect(t, !strings.contains(config_with_experimental(text, {"schedules", "todo"}), "\"schedules\": true"), "not turned on")
+}
+
+// No object yet, an empty one, an empty file; a comment that says the key is no key; what is not an object is left alone.
+@(test)
+the_experimental_options_find_their_place :: proc(t: ^testing.T) {
+	check :: proc(t: ^testing.T, text: string) {
+		out := config_with_experimental(text, {"schedules"})
+		v, bad := json.parse_string(out, .JSON5, allocator = context.temp_allocator)
+		testing.expect_value(t, bad, json.Error.None)
+		on, _ := jget(v, "experimental", "schedules").(json.Boolean)
+		testing.expect(t, bool(on), text)
+	}
+	check(t, "{\n  \"a\": 1\n}\n")
+	check(t, "{}")
+	check(t, "{ \"experimental\": {} }")
+	check(t, "{\n  // \"experimental\": { \"x\": true }\n  \"a\": \"experimental\"\n}")
+	testing.expect_value(t, config_with_experimental("[1]", {"schedules"}), "")
+	testing.expect_value(t, config_with_experimental("{\"experimental\": 1}", {"schedules"}), "")
+}
+
+// The list is the server's: its plain switches, nothing else.
+@(test)
+the_options_are_those_of_the_schema :: proc(t: ^testing.T) {
+	v, _ := json.parse_string(`{"components":{"schemas":{"Config.InfoEncoded":{"properties":{"experimental":{"properties":{
+		"schedules":{"type":"boolean"},"subagent_depth":{"type":"integer"},"image_generate":{"anyOf":[{"type":"boolean"}]}}}}}}}}`, allocator = context.temp_allocator)
+	keys := experimental_keys(v)
+	testing.expect_value(t, len(keys), 1)
+	testing.expect_value(t, keys[0], "schedules")
+	testing.expect(t, url_is_here("http://127.0.0.1:4096") && url_is_here("https://localhost") && url_is_here("http://[::1]:4096"), "here")
+	testing.expect(t, !url_is_here("https://box.example:4096") && !url_is_here("http://192.168.1.2:4096"), "elsewhere")
+}

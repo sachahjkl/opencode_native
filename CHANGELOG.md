@@ -5,6 +5,15 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-11-05
+
+### Changed
+
+- **The server's experimental options are on by default.** At each connection to a server of this computer, the switches its schema
+  offers and its global configuration does not mention are added to that file, comments kept; the server sees them at once. The list is
+  the server's own. What you set there stays, a `false` too. Settings, Advanced turns this off.
+- What a server no longer offers leaves the interface: its command, its entry in the menus.
+
 ## [0.12.0] - 2026-11-05
 
 ### Added
@@ -533,7 +542,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.1
 [0.12.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.0
 [0.11.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.9
 [0.11.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.8

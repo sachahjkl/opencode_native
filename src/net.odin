@@ -85,9 +85,21 @@ discover_server :: proc() -> Server_Config {
 
 // Two addresses of one server: the same port and the same host, the names of this computer being one.
 same_server :: proc(host_a: string, port_a: u16, host_b: string, port_b: u16) -> bool {
-	here :: proc(h: string) -> bool { return h == "localhost" || h == "::1" || h == "[::1]" || strings.has_prefix(h, "127.") }
 	if port_a != port_b { return false }
-	return host_a == host_b || (here(host_a) && here(host_b))
+	return host_a == host_b || (host_is_here(host_a) && host_is_here(host_b))
+}
+
+host_is_here :: proc(h: string) -> bool { return h == "localhost" || h == "::1" || h == "[::1]" || strings.has_prefix(h, "127.") }
+
+// Whether a server's files are this computer's: "http://127.0.0.1:4096", "https://[::1]:4096".
+url_is_here :: proc(url: string) -> bool {
+	_, _, rest := strings.partition(url, "://")
+	if strings.has_prefix(rest, "[") {
+		end := strings.index_byte(rest, ']')
+		return end > 0 && host_is_here(rest[:end + 1])
+	}
+	cut := strings.index_any(rest, ":/")
+	return host_is_here(cut < 0 ? rest : rest[:cut])
 }
 
 ////////////////////////////////
@@ -585,6 +597,7 @@ stream_state :: proc(app: ^App, up: bool) {
 		request(app, .Projects, "GET", "/api/project")
 		browser_start(app)
 		update_startup(app)
+		experimental_check(app)
 	}
 }
 

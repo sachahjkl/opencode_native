@@ -5,7 +5,7 @@
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.12.0-fab283" alt="version 0.12.0"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.12.1-fab283" alt="version 0.12.1"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -78,7 +78,7 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
   The sidebar lights a session that waits for you, a sub-agent's question comes up in its parent.
 - **Permission requests** answered in place (once, always, reject).
 - **A terminal** with Ghostty's emulation (libghostty-vt): the shells of the server in tabs, wherever it runs, kept when the program closes.
-- **Schedules** that wake a session, **artifacts** of a folder, **plugins** of the server.
+- **Schedules** that wake a session, **artifacts** of a folder, **plugins** of the server. The server's experimental options are turned on by default, in its configuration, on this computer.
 - **Connections**: the integrations of the server, connected with a key, a browser login or what is on the machine; several accounts of each.
 - **`@` in the composer** names a file or a sub-agent. **Browse the files** of a session (Ctrl+P), search them, read them, mention one.
 - **Go back to a prompt**, its files restored, after seeing which. What a session or a prompt changed, file by file.

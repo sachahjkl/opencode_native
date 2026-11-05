@@ -92,6 +92,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "update.auto", description = "Look for a new version at start (it is only installed when you say so).", kind = .Bool, default = {b = true}},
 	{name = "update.base_url", description = "Where releases are read from (empty: GitHub). Whatever the place, only what the built-in key signed is installed.", kind = .String, default = {s = ""}},
 	{name = "general.start", description = "What the window opens on: the home page, or the latest session.", kind = .String, default = {s = "home"}, choices = {"home", "last"}},
+	{name = "advanced.experimental", description = "Turn on the experimental options of a server on this computer, in its configuration file. What you set there yourself stays.", kind = .Bool, default = {b = true}},
 	{name = "advanced.fps", description = "The frame rate and what a frame costs, in the status bar.", kind = .Bool, default = {b = false}},
 	{name = "advanced.frame_rate", description = "The most frames a second, when there is something to draw (nothing moving, nothing is drawn): what the screen takes, a number, or no limit. Above the screen's rate it shows the newest of them: not smoother, but quicker to answer, for more power. What you type and click is read at once whatever this says.", kind = .String, default = {s = "screen"}, choices = {"screen", "30", "60", "120", "240", "uncapped"}},
 }
@@ -127,6 +128,7 @@ Prefs :: struct {
 	uncapped:     bool,
 	throbber:     string,
 	browser_tools: bool,
+	experimental: bool,
 	update_channel: string,
 	update_auto:  bool,
 }
@@ -182,6 +184,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.target_hz = strconv.parse_f64(rate) or_else 0
 	s.throbber = config.string_of(p, "appearance.throbber")
 	s.browser_tools = config.bool_of(p, "browser.tools")
+	s.experimental = config.bool_of(p, "advanced.experimental")
 	s.update_channel = config.string_of(p, "update.channel")
 	s.update_auto = config.bool_of(p, "update.auto")
 
@@ -735,6 +738,8 @@ page_updates :: proc(app: ^App, em: f32) {
 page_advanced :: proc(app: ^App, em: f32) {
 	section("PREVIEW", em)
 	if setting(app, "browser.tools", em) { pref_switch(app, "browser.tools", em) }
+	section("SERVER", em)
+	if setting(app, "advanced.experimental", em) { pref_switch(app, "advanced.experimental", em) }
 	section("DIAGNOSTICS", em)
 	if setting(app, "advanced.fps", em) { pref_switch(app, "advanced.fps", em) }
 	if setting(app, "advanced.frame_rate", em) { pref_choice(app, "advanced.frame_rate", {"Screen", "30", "60", "120", "240", "Uncapped"}, em, em * 24) }

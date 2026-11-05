@@ -156,6 +156,7 @@ App_Context :: struct {
 	dialogs:        [Dialog]Vec2,      // the sizes given to the dialogs (logical pixels, {}: what they prefer)
 	dialogs_saved:  [Dialog]Vec2,
 	dialogs_read:   bool,
+	no_schedules, no_artifacts: bool,     // the server does not offer them (experimental.odin)
 	show_licence:   bool,                 // Ghostty's, in the settings
 	terms:          Terminals,            // the Terminal panel (terminal.odin)
 	schedules:      Schedules,            // schedules.odin
