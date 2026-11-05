@@ -5,6 +5,19 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.11.9] - 2026-11-05
+
+### Added
+
+- **Schedules of a session**: a prompt that wakes it once, in a while or at a time, every so often or on a cron. Pause, resume, delete
+  after asking; when the next one is due, how many are left, how the last one went. What the server refuses is said in the dialog.
+- **Artifacts of a folder**: what agents published, its files read here, opened in the browser, deleted after asking. A file of an
+  artifact can only go under its own folder.
+- **Plugins**, a page of the settings: those installed, what they do, why one failed; check for updates, update. The server's own are
+  folded.
+
+Schedules and artifacts are experimental on the server: where its configuration leaves them off, the dialogs say which option turns them on.
+
 ## [0.11.8] - 2026-11-05
 
 ### Added
@@ -505,7 +518,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.8...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.9...HEAD
+[0.11.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.9
 [0.11.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.8
 [0.11.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.7
 [0.11.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.6

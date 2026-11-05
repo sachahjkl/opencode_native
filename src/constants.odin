@@ -145,9 +145,9 @@ GO_BOTTOM_W_EM    :: 6.5
 // Pacing, and the status bar's rate
 
 // The dialogs one can resize: what they open at and the least they go to, in em (the window has the last word).
-Dialog :: enum u8 { Settings, Stats, Help, Changes, Files }
-DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Stats = {54, 46}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}}
-DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Stats = {34, 22}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}}
+Dialog :: enum u8 { Settings, Stats, Help, Changes, Files, Schedules, Artifacts }
+DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Stats = {54, 46}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}, .Schedules = {54, 44}, .Artifacts = {70, 46}}
+DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Stats = {34, 22}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}, .Schedules = {36, 22}, .Artifacts = {44, 22}}
 INTEGRATIONS_ROWS    :: 40     // shown at once: the rest is searched
 CONNECT_POLL_MS      :: 1500   // how often a login under way is asked about
 MENTION_ROWS         :: 7      // what @ proposes at once

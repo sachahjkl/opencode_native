@@ -73,6 +73,8 @@ build_ui :: proc(app: ^App) {
 	rename_dialog(app, em)
 	help_dialog(app, em)
 	integrations_watch(app)
+	schedules_dialog(app, em)
+	artifacts_dialog(app, em)
 	changes_dialog(app, em)
 	files_dialog(app, em)
 	palette_dialog(app, em)
@@ -524,6 +526,7 @@ session_menu :: proc(app: ^App, em: f32) {
 		if ui.menu_item("Fork").clicked { fork_session(app, app.menu_session, "") }
 		if ui.menu_item("Move to a folder…").clicked { session_move_pick(app, app.menu_session) }
 		if ui.menu_item("What it changed").clicked { changes_open(app, app.menu_session) }
+		if ui.menu_item("Schedules").clicked { schedules_open(app, app.menu_session) }
 		if ui.menu_item("Export…").clicked { session_export(app, app.menu_session) }
 		if ui.menu_item("Export without the text…").clicked { session_export(app, app.menu_session, redacted = true) }
 		ui.menu_separator()

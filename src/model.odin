@@ -622,6 +622,10 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		if kind == "session.moved" && mine { request(app, .Self, "GET", strings.concatenate({"/api/session/", sid}, context.temp_allocator), tag = sid) }
 		app.refresh_due = true
 		app.children_due = true
+	case "artifact.updated":
+		artifacts_changed(app)
+	case "plugin.updated":
+		plugins_changed(app)
 	case "integration.updated", "credential.updated", "credential.switched":
 		integrations_changed(app)
 	case "session.revert.staged":

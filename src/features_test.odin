@@ -4,6 +4,7 @@ package occ
 // of a text, the history's steps.
 
 import "core:encoding/json"
+import "core:mem/virtual"
 import "core:strings"
 import "core:testing"
 import "gt:ui"
@@ -426,4 +427,54 @@ a_login_is_followed_until_it_ends :: proc(t: ^testing.T) {
 	connect_failed(app)
 	testing.expect_value(t, n.step, Connect_Step.Fill)
 	n.step = .Choose
+}
+
+// A file of an artifact is named by an agent: it stays under its folder, whatever it says.
+@(test)
+an_artifact_stays_in_its_folder :: proc(t: ^testing.T) {
+	for good in ([]string{"index.html", "css/style.css", "a..b/c.txt", "..hidden"}) { testing.expect(t, artifact_path_safe(good), good) }
+	for bad in ([]string{"", "../evil.txt", "a/../../evil", `a\..\..\evil`, "/etc/passwd", `\\host\share\x`, `C:\Windows\x`, "C:x"}) { testing.expect(t, !artifact_path_safe(bad), bad) }
+}
+
+// What the server takes, and what it does not have to refuse.
+@(test)
+a_schedule_says_what_and_when :: proc(t: ^testing.T) {
+	body, problem := schedule_body("s", " hello ", "", " 2 hours ", .In)
+	testing.expect_value(t, problem, "")
+	testing.expect_value(t, body, `{"sessionID":"s","when":{"in":"2 hours"},"prompt":"hello"}`)
+	body, _ = schedule_body("s", "x", "morning", "0 9 * * 1", .Cron)
+	testing.expect_value(t, body, `{"sessionID":"s","name":"morning","when":{"cron":"0 9 * * 1"},"prompt":"x"}`)
+	_, problem = schedule_body("s", " ", "", "1 day", .Every)
+	testing.expect(t, problem != "", "no prompt")
+	_, problem = schedule_body("s", "x", "", "", .Every)
+	testing.expect(t, problem != "", "no time")
+
+	w, _ := json.parse_string(`{"type":"every","every":"1 day"}`, allocator = context.temp_allocator)
+	testing.expect_value(t, when_text(w), "every 1 day")
+	testing.expect_value(t, due_text(0, 1000), "due now")
+	testing.expect_value(t, due_text(30 * 60000, 0), "in 30 min")
+	testing.expect_value(t, due_text(24 * 3600000, 0), "in 24 h")
+	testing.expect_value(t, due_text(3 * 86400000, 0), "in 3 days")
+}
+
+// Those one chose first, with what they say of themselves.
+@(test)
+the_plugins_one_chose_come_first :: proc(t: ^testing.T) {
+	app := new(App)
+	defer free(app)
+	p := &app.cx.plugins
+	v, _ := json.parse_string(`{"data":[
+		{"id":"opencode.plan","source":{"type":"builtin"},"features":{"server":true},"state":{"status":"active"}},
+		{"id":"mine","source":{"type":"package","target":"mine@1","version":"1.0.0","outdated":true},"features":{"server":true,"gui":true},"state":{"status":"failed","error":"it broke"}}
+	]}`, parse_integers = true, allocator = context.temp_allocator)
+	plugins_load(app, v)
+	defer {
+		virtual.arena_destroy(&p.arena)
+		delete(p.list)
+	}
+	testing.expect_value(t, p.list[0].id, "mine")
+	testing.expect(t, p.list[0].outdated && p.list[0].failed, "what it says of itself")
+	testing.expect_value(t, p.list[0].error, "it broke")
+	testing.expect_value(t, p.list[0].features, "server, gui")
+	testing.expect_value(t, p.list[1].kind, "builtin")
 }

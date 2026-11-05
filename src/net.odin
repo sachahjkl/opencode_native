@@ -206,6 +206,14 @@ Req_Kind :: enum u8 {
 	Session_Moved,  // POST /api/session/:id/move
 	Session_Export, // GET /api/experimental/session/:id/export (session_tools.odin)
 	Session_Import, // POST /api/experimental/session/import
+	Schedules,      // GET /api/experimental/schedule (schedules.odin)
+	Schedule_Made,  // POST
+	Schedule_Done,  // DELETE, POST .../pause, /resume
+	Artifacts,      // GET /api/experimental/artifacts
+	Artifact_Read,  // GET .../:id
+	Artifact_Done,  // DELETE
+	Plugins,        // GET /api/plugin, POST /api/plugin/check
+	Plugin_Update,  // POST /api/plugin/update
 	Integrations,   // GET /api/integration (integrations.odin)
 	Credentials,    // GET /api/credential: only which are active is read
 	Credential_Done, // PATCH, DELETE /api/credential/:id, POST .../activate
@@ -285,6 +293,17 @@ on_answer :: proc(data: rawptr, word: u64) {
 	}
 	if r.status == 401 { app.auth_failed = true; request_failed(app, r); ui.toast(.Bad, "Authentication refused by the server"); return }
 	if r.kind == .Inbox && r.status >= 400 { return }   // (a server without one)
+	if r.status >= 400 && (r.kind == .Schedules || r.kind == .Schedule_Made || r.kind == .Artifacts) {
+		// (the server's words go in the dialog: "set experimental.schedules in config", "Invalid duration")
+		e, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
+		message := jstr(e, "message")
+		#partial switch r.kind {
+		case .Schedules: schedules_refused(app, r.tag, message)
+		case .Artifacts: artifacts_refused(app, message)
+		case: schedule_failed(app, message)
+		}
+		return
+	}
 	if r.kind == .Mention_Files && r.status >= 400 { return }   // (a folder gone: nothing to propose)
 	if r.kind == .File_Read { file_loaded(app, r.tag, r.resp, r.status < 400); return }   // (not JSON)
 	if r.kind == .Session_Import && r.status == 409 { session_import_conflict(app, r.tag); return }
@@ -297,7 +316,7 @@ on_answer :: proc(data: rawptr, word: u64) {
 		return
 	}
 	v, err := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if err != nil && r.kind != .Action && r.kind != .Prompt && r.kind != .Session_Agent && r.kind != .Session_Model && r.kind != .Inbox_Take && r.kind != .Form_Reply && r.kind != .Session_Moved && r.kind != .Revert_Done && r.kind != .Revert_Cancelled && r.kind != .Connected && r.kind != .Credential_Done {
+	if err != nil && r.kind != .Action && r.kind != .Prompt && r.kind != .Session_Agent && r.kind != .Session_Model && r.kind != .Inbox_Take && r.kind != .Form_Reply && r.kind != .Session_Moved && r.kind != .Revert_Done && r.kind != .Revert_Cancelled && r.kind != .Connected && r.kind != .Credential_Done && r.kind != .Schedule_Done && r.kind != .Artifact_Done && r.kind != .Plugin_Update {
 		ui.toast(.Warn, "Unreadable answer (%s)", r.path)
 		request_failed(app, r)
 		return
@@ -344,6 +363,14 @@ on_answer :: proc(data: rawptr, word: u64) {
 		app.refresh_due = true
 		if id := jstr(v, "data", "id"); id != "" { open_root(app, id) }
 		ui.toast(.Good, "Session imported")
+	case .Schedules:     schedules_load(app, r.tag, v)
+	case .Schedule_Made: schedule_made(app)
+	case .Schedule_Done: schedule_changed(app)
+	case .Artifacts:     artifacts_load(app, v)
+	case .Artifact_Read: artifact_loaded(app, r.tag, v)
+	case .Artifact_Done: artifacts_changed(app)
+	case .Plugins:       plugins_load(app, v)
+	case .Plugin_Update: plugins_changed(app)
 	case .Integrations:  integrations_load(app, v)
 	case .Credentials:   credentials_load(app, v)
 	case .Credential_Done: integrations_changed(app)
@@ -389,6 +416,10 @@ request_failed :: proc(app: ^App, r: ^Request) {
 		older_failed(app, r)
 	case .Form_Reply:
 		if f := form_find(app, r.tag); f != nil { f.sending = false }
+	case .Plugins:
+		plugins_failed(app)
+	case .Plugin_Update:
+		plugins_changed(app)
 	case .Connected, .Connect_Begin:
 		connect_failed(app)
 	case .File_Read:

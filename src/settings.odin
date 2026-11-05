@@ -407,7 +407,7 @@ dialogs_track :: proc(app: ^App) {
 ////////////////////////////////
 // The dialog
 
-Settings_Page :: enum u8 { Appearance, Conversation, Behaviour, Updates, Advanced, Server, Connections, Mcp, Usage, Permissions, Catalog }
+Settings_Page :: enum u8 { Appearance, Conversation, Behaviour, Updates, Advanced, Server, Connections, Mcp, Plugins, Usage, Permissions, Catalog }
 
 SETTINGS_PAGES := [Settings_Page]struct { title, icon: string, opencode: bool }{
 	.Appearance   = {"Appearance", ICO_PALETTE, false},
@@ -418,6 +418,7 @@ SETTINGS_PAGES := [Settings_Page]struct { title, icon: string, opencode: bool }{
 	.Server       = {"Server & shell", ICO_TERMINAL, true},
 	.Connections  = {"Connections", ICO_PERSON, true},
 	.Mcp          = {"MCP servers", ICO_PLUG, true},
+	.Plugins      = {"Plugins", ICO_BOLT, true},
 	.Usage        = {"Usage & limits", ICO_GAUGE, true},
 	.Permissions  = {"Permissions", ICO_SHIELD, true},
 	.Catalog      = {"Providers & skills", ICO_LIST, true},
@@ -487,6 +488,7 @@ settings_dialog :: proc(app: ^App, em: f32) {
 						case .Server:       page_server(app, em)
 						case .Connections:  page_connections(app, em)
 						case .Mcp:          page_mcp(app, em)
+						case .Plugins:      page_plugins(app, em)
 						case .Usage:        page_usage(app, em)
 						case .Permissions:  page_permissions(app, em)
 						case .Catalog:      page_catalog(app, em)
