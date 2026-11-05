@@ -113,6 +113,9 @@ global_keys :: proc(app: ^App) {
 }
 
 new_session :: proc(app: ^App) {
+	nav_visit(app, app.chat.id, "")
+	app.cx.view_msg = ""
+	nav_restore_clear(app)
 	dir := ""
 	if s := find_session(app, app.chat.id); s != nil { dir = s.directory } else if len(app.sessions) > 0 { dir = app.sessions[0].directory }
 	chat_reset(&app.chat)
@@ -190,13 +193,30 @@ title_bar :: proc(app: ^App, em: f32) {
 		menu_key := ui.key_from_string(0, "app_menu")
 		if msig.clicked { ui.ctx_menu_open_rect(menu_key, msig.box.rect, msig.box.key) }
 		app_menu(app, menu_key, em)
+		nav_button :: proc(app: ^App, id, icon, tip: string, d: int, size: f32) {
+			can := nav_can(app, d)
+			ui.a11y({role = .Button, name = tip})
+			sig := glyph_button(id, icon, size, can ? Color{} : hex(HEX_FAINT))
+			if sig.clicked { nav_step(app, d) }
+			if can && ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(tip) } }
+		}
+		nav_button(app, "###nav_back", ICO_BACK, "Back  (Alt+Left)", -1, math.round(h * 0.78))
+		nav_button(app, "###nav_fwd", ICO_FORWARD, "Forward  (Alt+Right)", 1, math.round(h * 0.78))
 		ui.spacer(ui.px(em * 0.4))
-		logo_box(app, "###tlogo", math.round(h * 0.6))
-		ui.spacer(ui.px(em * 0.5))
-		// the wordmark: "open" dim, "code" bright, in the mono face
-		mono := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_HEADING)}
-		text("w1", "open", hex(HEX_WEAK), mono)
-		text("w2", "code", hex(HEX_TEXT), mono)
+		// the logo and the wordmark ("open" dim, "code" bright, in the mono face) go home, as on any site
+		ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .X, cross = .Center, cursor = .Hand})
+		ui.a11y({role = .Button, name = "Home"})
+		home_link := ui.build_box({.Clickable}, "###home_link")
+		hsig := ui.signal(home_link)
+		if ui.parent(home_link) {
+			logo_box(app, "###tlogo", math.round(h * 0.6))
+			ui.spacer(ui.px(em * 0.5))
+			mono := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_HEADING)}
+			text("w1", "open", hsig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), mono)
+			text("w2", "code", hsig.hovering ? hex(HEX_BRIGHT) : hex(HEX_TEXT), mono)
+		}
+		if hsig.clicked { command_run(app, command_find("nav.home")) }
+		if ui.hovered_for(hsig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Home  (Ctrl+H)") } }
 		side_line("###tg", b.last, em * 0.9)
 		ui.spacer(ui.px(em * 1.3))
 		if !app.servers[app.server].local {   // another computer's server: its name first
@@ -535,6 +555,7 @@ delete_dialog :: proc(app: ^App, em: f32) {
 					if bevel_button("###confirm", "Delete", ICO_DELETE, .Danger).clicked {
 						delete_session(app, app.delete_id)
 						if app.delete_id == app.chat.id { new_session(app) }
+						nav_forget(app, app.delete_id)
 						app.delete_open = false
 						app.refresh_due = true
 					}
@@ -651,7 +672,8 @@ conversation :: proc(app: ^App, em: f32) {
 			at_bottom := sb.view_target.y >= limit - BOTTOM_SLACK_PX * ui.scale()
 			// (with following off, only the first moments of a conversation just opened follow its bottom)
 			follow := (app.prefs.follow || ui.now_ms() - app.opened_ms < OPENED_FOLLOW_MS) && app.chat.id != ""
-			if app.anchor == nil { app.stick_bottom = at_bottom && follow }   // (a part just toggled: it let go of the bottom)
+			// (a part just toggled: it let go of the bottom. A view going back to where it was has not got there yet)
+			if app.anchor == nil && app.cx.restore_msg == "" { app.stick_bottom = at_bottom && follow }
 			app.chat_target = sb.view_target.y
 		}
 		dock(app, em, side, col)
@@ -825,11 +847,21 @@ messages :: proc(app: ^App, em: f32) {
 	// goes before what follows.)
 	{
 		lz := ui.lazy_begin(all = ui.find_sweep() || app.chat.loading)
+		top_seen := false   // the first message under the top of the view, for Back and Forward (subagents.odin nav_mark)
 		for &m, i in c.messages {
 			// (by its id: a page read before it does not change what it is, its height is still known)
 			id := m.id != "" ? fmt.tprintf("###msg_%s", m.id) : fmt.tprintf("###msg_end%d", len(c.messages) - i)
-			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || (c.keep_id != "" && m.id == c.keep_id)) {
+			restoring := app.cx.restore_msg != "" && m.id == app.cx.restore_msg
+			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || (c.keep_id != "" && m.id == c.keep_id) || restoring) {
 				if i == 0 { app.first_msg = ui.parent_box() }
+				item := ui.parent_box()
+				if sb := lz.scroll; sb != nil {
+					if !top_seen && m.id != "" && item.rect.max.y > sb.rect.min.y {
+						top_seen = true
+						app.cx.view_msg, app.cx.view_dy = m.id, sb.rect.min.y - item.rect.min.y
+					}
+					if restoring && app.anchor == nil && !c.loading && item.rect.max.y != item.rect.min.y { nav_restore_step(app, sb, item) }
+				}
 				message(app, c, &m, i, em)
 				ctx_check(app, ui.parent_box(), .Message, m.id)
 			}

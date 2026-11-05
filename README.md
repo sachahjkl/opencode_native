@@ -5,7 +5,7 @@
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.11.3-fab283" alt="version 0.11.3"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.11.4-fab283" alt="version 0.11.4"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -72,6 +72,8 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 - **The Preview panel** (Ctrl+Shift+B, Windows): a page beside the conversation, in a dock; agents drive it through the MCP server
   `preview` the client hosts.
 - **Updates** (Windows): channels `stable` and `beta`, signed manifests, nothing installed without you ([docs/updates.md](docs/updates.md)).
+- **Back and Forward**, as in a browser: buttons in the title bar, Alt+Left and Alt+Right, the side buttons of the mouse. The view goes
+  back to the very place it was read. The logo goes home.
 - **Permission requests** answered in place (once, always, reject).
 - **Statistics of a session** (its token count in the header, Ctrl+I): tokens in, out, reasoning, cache reads and
   writes, cost, cache hits, the context the last step filled against the model's window, time and pace, tool calls by

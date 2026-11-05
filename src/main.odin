@@ -156,6 +156,14 @@ App_Context :: struct {
 	dialogs:        [Dialog]Vec2,      // the sizes given to the dialogs (logical pixels, {}: what they prefer)
 	dialogs_saved:  [Dialog]Vec2,
 	dialogs_read:   bool,
+	nav_hist:       [dynamic]Nav_Place,   // where one has been (subagents.odin nav_visit)
+	nav_at:         int,                  // where one is in it
+	nav_moving:     bool,                 // a step of the history: nothing to add to it
+	view_msg:       string,               // the message at the top of the view (of the chat's arena) and how far into it
+	view_dy:        f32,
+	restore_msg:    string,               // the message the view goes back to (owned, "": none) and how far into it
+	restore_dy:     f32,
+	restore_still, restore_frames: int,   // frames it stayed there, frames since the view began going there
 	command_due:    ^Command,          // to run after this frame (commands.odin)
 	slash:          [dynamic]Slash,    // the server's commands
 	have_slash:     bool,
@@ -219,7 +227,15 @@ frame :: proc(app: ^App, inner := false) {
 	events := platform.poll_events(app.win, false)
 	render.mark_input(&app.r)
 	if len(events) > 0 { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }
-	for e in events { if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() } }
+	for e in events {
+		if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() }
+		if e.kind == .Scroll || e.kind == .Key_Press { nav_restore_clear(app) }   // (the reader goes elsewhere: the view is theirs)
+		// the side buttons of the mouse, as in a browser
+		if e.kind == .Mouse_Press && !overlay_open(app) {
+			if e.button == .Back { if c := command_find("nav.back"); command_enabled(app, c) { command_run(app, c) } }
+			if e.button == .Forward { nav_step(app, 1) }
+		}
+	}
 	content_zoom_events(app, events)
 	dialogs_track(app)
 	render.resize(&app.r, app.win.size)

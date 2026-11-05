@@ -114,6 +114,8 @@ chat_reset :: proc(c: ^Chat) {
 open_chat :: proc(app: ^App, session_id: string) {
 	if session_id == app.chat.id { return }
 	id := strings.clone(session_id, context.temp_allocator)   // (it may live in the arena chat_reset drops)
+	nav_visit(app, app.chat.id, id)
+	app.cx.view_msg = ""   // (of the arena that goes)
 	chat_reset(&app.chat)
 	app.chat.id = strings.clone(id, app.chat.alloc)
 	app.chat.loading = true
@@ -613,6 +615,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 	case "project.updated", "project.created":
 		request(app, .Projects, "GET", "/api/project")   // (a new logo)
 	case "session.created", "session.renamed", "session.deleted", "session.updated", "session.archived", "session.moved", "session.metadata.updated":
+		if kind == "session.deleted" && sid != "" { nav_forget(app, sid) }
 		app.refresh_due = true
 		app.children_due = true
 	case "permission.asked":

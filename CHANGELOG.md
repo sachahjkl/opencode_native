@@ -5,6 +5,20 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.11.4] - 2026-11-05
+
+### Added
+
+- **Back and Forward**: a history of where one has been, as in a browser: buttons in the title bar, Alt+Left and Alt+Right, the side
+  buttons of the mouse; the sessions and the home page, however they were reached.
+- **The view goes back to where it was read**, to the pixel, reading older pages again if it must; a conversation left at its end
+  comes back at its end.
+- **The logo and the wordmark go home**, as on any site.
+
+### Changed
+
+- gui_toolkit 0.83.0.
+
 ## [0.11.3] - 2026-11-05
 
 ### Changed
@@ -439,7 +453,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.3...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.4...HEAD
+[0.11.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.4
 [0.11.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.3
 [0.11.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.2
 [0.11.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.1

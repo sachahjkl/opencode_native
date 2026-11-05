@@ -153,6 +153,11 @@ SETTINGS_NAV_EM       :: 14   // the list of the pages
 SETTINGS_NAV_ICONS_EM :: 4    // the same with its icons alone
 SETTINGS_NARROW_EM    :: 40   // a dialog narrower than this has them alone
 
+NAV_HISTORY_MAX :: 100   // places remembered for Back and Forward
+NAV_RESTORE_NEAR_PX    :: 1     // the view is on its message this near
+NAV_RESTORE_STILL      :: 3     // frames it stays there before it is left alone
+NAV_RESTORE_FRAMES_MAX :: 60    // however long the heights around it take to settle
+
 OS_SETTINGS_READ_MS :: 2000   // how often the system's animation setting is read
 POINTER_MOVING_MS :: 80                         // since the last move or notch: the pointer is still moving
 FPS_SMOOTH   :: 0.08           // the status bar's rate: how fast it follows

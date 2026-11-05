@@ -124,6 +124,7 @@ ICO_PLUG     :: "\ue37f"   // plug
 ICO_GAUGE    :: "\ue1bf"   // gauge
 ICO_UNDO     :: "\ue2a1"   // undo-2
 ICO_BACK     :: "\ue048"   // arrow-left
+ICO_FORWARD  :: "\ue049"   // arrow-right
 
 // Sizes shared by several files (_EM: in font sizes, _PX: in logical pixels).
 BUTTON_H_EM         :: 2.1

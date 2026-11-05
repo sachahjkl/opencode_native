@@ -21,7 +21,7 @@ Command :: struct {
 
 @(private = "file") has_session :: proc(app: ^App) -> bool { return app.chat.id != "" }
 @(private = "file") is_busy :: proc(app: ^App) -> bool { return app.chat.busy }
-@(private = "file") has_back :: proc(app: ^App) -> bool { return back_target(app) != "" }
+@(private = "file") can_go_back :: proc(app: ^App) -> bool { return nav_can(app, -1) || back_target(app) != "" }
 
 COMMANDS := [?]Command{
 	{id = "app.palette", title = "Command palette", group = "General", icon = ICO_SEARCH, keys = "Ctrl+K", key = .K, mods = {.Ctrl}, run = palette_toggle},
@@ -39,7 +39,8 @@ COMMANDS := [?]Command{
 	{id = "app.quit", title = "Quit", group = "General", icon = ICO_CANCEL, keys = "Alt+F4", run = proc(app: ^App) { app.quit = true }},
 
 	{id = "nav.home", title = "Home", group = "Go to", icon = ICO_CHAT, keys = "Ctrl+H", key = .H, mods = {.Ctrl}, run = go_home},
-	{id = "nav.back", title = "Back to the parent session", group = "Go to", icon = ICO_BACK, keys = "Alt+Left", key = .Left, mods = {.Alt}, run = go_back, enabled = has_back},
+	{id = "nav.back", title = "Back", group = "Go to", icon = ICO_BACK, keys = "Alt+Left", key = .Left, mods = {.Alt}, enabled = can_go_back, run = proc(app: ^App) { if nav_can(app, -1) { nav_step(app, -1) } else { go_back(app) } }},
+	{id = "nav.forward", title = "Forward", group = "Go to", icon = ICO_FORWARD, keys = "Alt+Right", key = .Right, mods = {.Alt}, enabled = proc(app: ^App) -> bool { return nav_can(app, 1) }, run = proc(app: ^App) { nav_step(app, 1) }},
 	{id = "nav.composer", title = "Focus the composer", group = "Go to", icon = ICO_EDIT, keys = "Ctrl+L", key = .L, mods = {.Ctrl}, run = proc(app: ^App) { app.cx.focus_composer = true }},
 
 	{id = "session.new", title = "New session", group = "Session", icon = ICO_ADD, keys = "Ctrl+N", key = .N, mods = {.Ctrl}, run = new_session},

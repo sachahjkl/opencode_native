@@ -150,7 +150,7 @@ duration :: proc(a, b: f64) -> string {
 
 // Navigation is asked for while the interface is built, by boxes that go on reading what they show, and opening a session
 // drops the arena that holds it. So these only note it: nav_apply does it after the frame (frame).
-Nav_Kind :: enum u8 { Root, Drill, Back }
+Nav_Kind :: enum u8 { Root, Drill, Back, History }
 Nav_Step :: struct { kind: Nav_Kind, id: string }   // (id owned)
 
 // Opens a session from the sidebar: no way back but its parent.
@@ -180,11 +180,139 @@ nav_apply :: proc(app: ^App) {
 			}
 		case .Back:
 			nav_back(app)
+		case .History:
+			// (a place already in the history: going there adds nothing to it. The way up a sub-agent's parents stays the parent)
+			app.cx.nav_moving = true
+			for s in app.nav { delete(s) }
+			clear(&app.nav)
+			if st.id == "" { new_session(app) } else { open_chat(app, st.id) }
+			app.cx.nav_moving = false
+			nav_restore(app, st.id)
 		}
 		delete(st.id)
 	}
 	clear(&app.nav_steps)
 	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+}
+
+// A place of the history: a session ("": the home page), and where the reader was in it: the message at the top of the view and how
+// far into it. A message, not an offset: what is not built has a height estimated, and a page read above moves everything.
+Nav_Place :: struct {
+	id, msg: string,   // (owned)
+	dy:      f32,
+	bottom:  bool,     // at the end, following it
+}
+
+@(private = "file")
+nav_place_free :: proc(p: Nav_Place) { delete(p.id); delete(p.msg) }
+
+// Where the reader is, kept in the place they leave.
+@(private = "file")
+nav_mark :: proc(app: ^App) {
+	cx := &app.cx
+	if cx.nav_at >= len(cx.nav_hist) { return }
+	p := &cx.nav_hist[cx.nav_at]
+	if p.id != app.chat.id || p.id == "" { return }
+	delete(p.msg)
+	p.msg, p.dy, p.bottom = strings.clone(cx.view_msg), cx.view_dy, app.stick_bottom
+}
+
+// Where one has been, as in a browser: every session opened and the home page ("") go here, whichever way they were reached (the
+// sidebar, the palette, a sub-agent's card); going somewhere from the middle of it forgets what was ahead. `from` is where the
+// window is, for the first step.
+nav_visit :: proc(app: ^App, from, id: string) {
+	cx := &app.cx
+	if cx.nav_moving { return }
+	nav_mark(app)
+	if len(cx.nav_hist) == 0 { append(&cx.nav_hist, Nav_Place{id = strings.clone(from)}); cx.nav_at = 0 }
+	if cx.nav_hist[cx.nav_at].id == id { return }
+	for len(cx.nav_hist) > cx.nav_at + 1 { nav_place_free(pop(&cx.nav_hist)) }
+	append(&cx.nav_hist, Nav_Place{id = strings.clone(id)})
+	cx.nav_at += 1
+	if len(cx.nav_hist) > NAV_HISTORY_MAX {
+		nav_place_free(cx.nav_hist[0])
+		ordered_remove(&cx.nav_hist, 0)
+		cx.nav_at -= 1
+	}
+}
+
+// Whether there is somewhere `d` steps from here (-1: back, 1: forward).
+nav_can :: proc(app: ^App, d: int) -> bool {
+	i := app.cx.nav_at + d
+	return i >= 0 && i < len(app.cx.nav_hist)
+}
+
+nav_step :: proc(app: ^App, d: int) {
+	if !nav_can(app, d) { return }
+	nav_mark(app)
+	app.cx.nav_at += d
+	append(&app.nav_steps, Nav_Step{.History, strings.clone(app.cx.nav_hist[app.cx.nav_at].id)})
+}
+
+// The view goes back to where it was in the place reached (messages does it, once the message is there and laid out).
+@(private = "file")
+nav_restore :: proc(app: ^App, id: string) {
+	cx := &app.cx
+	nav_restore_clear(app)
+	if cx.nav_at >= len(cx.nav_hist) { return }
+	p := cx.nav_hist[cx.nav_at]
+	if p.id != id || id == "" || p.bottom || p.msg == "" { return }
+	cx.restore_msg, cx.restore_dy = strings.clone(p.msg), p.dy
+	cx.restore_still, cx.restore_frames = 0, 0
+	app.stick_bottom = false
+}
+
+// The view on the message, the frame placing it as for a part that was toggled. Again until it stays: what the first layouts say of
+// the heights around it is not what the next ones find, and one placing would be left hundreds of pixels off.
+nav_restore_step :: proc(app: ^App, sb, item: ^ui.Box) {
+	cx := &app.cx
+	y := sb.rect.min.y - cx.restore_dy
+	app.stick_bottom = false
+	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	cx.restore_frames += 1
+	if abs(item.rect.min.y - y) > NAV_RESTORE_NEAR_PX {
+		app.anchor, app.anchor_y = item, y
+		cx.restore_still = 0
+	} else {
+		cx.restore_still += 1
+	}
+	if cx.restore_still >= NAV_RESTORE_STILL || cx.restore_frames >= NAV_RESTORE_FRAMES_MAX { nav_restore_clear(app) }
+}
+
+nav_restore_clear :: proc(app: ^App) {
+	delete(app.cx.restore_msg)
+	app.cx.restore_msg = ""
+}
+
+// After a page was read: a message that is in none of them (its session changed) gives up, and the view takes the end.
+nav_restore_check :: proc(app: ^App) {
+	c := &app.chat
+	if app.cx.restore_msg == "" || c.older != "" { return }
+	for m in c.messages { if m.id == app.cx.restore_msg { return } }
+	nav_restore_clear(app)
+	app.stick_bottom = true
+	app.snap_bottom = true
+}
+
+// A session that is gone leaves the history, and what it separated does not stand twice in a row.
+nav_forget :: proc(app: ^App, id: string) {
+	cx := &app.cx
+	drop :: proc(cx: ^App_Context, i: int) {
+		nav_place_free(cx.nav_hist[i])
+		ordered_remove(&cx.nav_hist, i)
+		if i <= cx.nav_at && cx.nav_at > 0 { cx.nav_at -= 1 }
+	}
+	gone := strings.clone(id, context.temp_allocator)   // (it may be one of them)
+	for i := len(cx.nav_hist) - 1; i >= 0; i -= 1 { if cx.nav_hist[i].id == gone { drop(cx, i) } }
+	for i := len(cx.nav_hist) - 1; i > 0; i -= 1 { if cx.nav_hist[i].id == cx.nav_hist[i - 1].id { drop(cx, i) } }
+}
+
+nav_clear :: proc(app: ^App) {
+	for p in app.cx.nav_hist { nav_place_free(p) }
+	clear(&app.cx.nav_hist)
+	app.cx.nav_at = 0
+	app.cx.view_msg = ""
+	nav_restore_clear(app)
 }
 
 // The session to go back to: the one drilled down from, else the parent.

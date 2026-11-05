@@ -280,8 +280,9 @@ on_answer :: proc(data: rawptr, word: u64) {
 			first := !app.chat.loaded
 			chat_load(app, v, false)
 			if first && app.stick_bottom { app.snap_bottom = true }   // (shown at its bottom in the very frame it arrives: frame)
+			nav_restore_check(app)
 		}
-	case .Older:       if r.gen == app.chat.gen && r.tag == app.chat.id { chat_load(app, v, true) }
+	case .Older:       if r.gen == app.chat.gen && r.tag == app.chat.id { chat_load(app, v, true); nav_restore_check(app) }
 	case .Agents:      agents_load(app, v)
 	case .Models:      models_load(app, v)
 	case .Info:        delete(app.server_version); app.server_version = strings.clone(jstr(v, "version"))
