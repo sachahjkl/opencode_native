@@ -194,6 +194,15 @@ Req_Kind :: enum u8 {
 	Created,        // POST /api/session: the new session
 	Action,         // a POST whose answer only matters when it fails
 	Prompt,         // POST /api/session/:id/prompt: the same, and its text comes back to the composer
+	// what runs behind the conversation (activity.odin); a server without them says nothing about it
+	Shell_List,     // GET /api/shell: the commands running in a folder
+	Shell_One,      // GET /api/shell/:id: how one ended
+	Shell_Output,   // GET /api/shell/:id/output: what it printed since
+	Peek,           // GET /api/session/:child/message: the end of a sub-agent's work
+	Slash,          // GET /api/command: the server's commands (the palette, "/name" in the composer)
+	Forked,         // POST /api/session/:id/fork: the new session
+	Session_Agent,  // a new session takes the agent chosen last (views.odin session_setup)
+	Session_Model,  // ... and the model
 }
 
 Request :: struct {
@@ -212,6 +221,7 @@ Request :: struct {
 }
 
 request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "") {
+	if app.conn == nil { return }   // (no server yet: nothing to ask)
 	r := new(Request)
 	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = app.conn, facts_gen = app.facts_gen}
 	sync.atomic_add(&app.pending, 1)
@@ -236,6 +246,9 @@ on_answer :: proc(data: rawptr, word: u64) {
 	defer request_free(r)
 	sync.atomic_sub(&app.pending, 1)
 	if r.conn != app.conn { return }   // a server left
+	if r.kind == .Shell_List || r.kind == .Shell_One || r.kind == .Shell_Output || r.kind == .Peek {
+		if !r.ok || r.status >= 400 { activity_request_failed(app, r); return }
+	}
 	if !r.ok {
 		// (this request failed: whether the connection is down is for the event stream to say, stream_state)
 		fmt.eprintfln("request failed: %s %s: %s", r.method, r.path, r.resp)
@@ -252,7 +265,7 @@ on_answer :: proc(data: rawptr, word: u64) {
 		return
 	}
 	v, err := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if err != nil && r.kind != .Action && r.kind != .Prompt {
+	if err != nil && r.kind != .Action && r.kind != .Prompt && r.kind != .Session_Agent && r.kind != .Session_Model {
 		ui.toast(.Warn, "Unreadable answer (%s)", r.path)
 		request_failed(app, r)
 		return
@@ -282,21 +295,38 @@ on_answer :: proc(data: rawptr, word: u64) {
 		if id != "" {
 			refresh_sessions(app)
 			open_chat(app, id)
-			if app.pending_prompt != "" {
-				send_prompt(app, id, app.pending_prompt)
-				delete(app.pending_prompt)
-				app.pending_prompt = ""
-			}
+			session_setup(app, id, 0)
 		} else {
 			request_failed(app, r)
 		}
-	case .Action, .Prompt:
+	case .Action:
+	case .Prompt:
+		// (the stream may say a prompt without its files: what was attached shows as soon as it is stored)
+		if strings.contains(r.body, `"files":`) && r.gen == app.chat.gen && r.tag == app.chat.id { load_messages(app, r.tag) }
+	case .Session_Agent: session_setup(app, r.tag, 1)
+	case .Session_Model: session_setup(app, r.tag, 2)
+	case .Shell_List:   if r.gen == app.chat.gen { activity_shells_load(app, v, r.tag) }
+	case .Shell_One:    activity_shell_load(app, v, r.tag)
+	case .Shell_Output: activity_output_load(app, v, r.tag)
+	case .Peek:         if r.gen == app.chat.gen { activity_peek_load(app, v, r.tag) }
+	case .Slash:
+		list := make([dynamic]Slash, context.temp_allocator)
+		for it in jarr(v, "data") { append(&list, Slash{strings.clone(jstr(it, "name")), strings.clone(jstr(it, "description"))}) }
+		slash_load(app, list[:])
+	case .Forked:
+		if id := jstr(v, "data", "id"); id != "" {
+			refresh_sessions(app)
+			open_root(app, id)
+			ui.toast(.Good, "Forked")
+		}
 	}
 }
 
 // What a request that failed leaves undone, whatever the way it failed.
 request_failed :: proc(app: ^App, r: ^Request) {
 	#partial switch r.kind {
+	case .Session_Agent: session_setup(app, r.tag, 1)   // (the prompt goes all the same, with what the session has)
+	case .Session_Model: session_setup(app, r.tag, 2)
 	case .Messages:
 		if r.gen == app.chat.gen { app.chat.loading = false }
 	case .Older:
@@ -346,7 +376,7 @@ load_older :: proc(app: ^App, b: ^ui.Box) {
 }
 
 send_prompt :: proc(app: ^App, id, text: string) {
-	request(app, .Prompt, "POST", fmt.tprintf("/api/session/%s/prompt", id), fmt.tprintf(`{{"text":%s}}`, jquote(text)), id)
+	request(app, .Prompt, "POST", fmt.tprintf("/api/session/%s/prompt", id), fmt.tprintf(`{{"text":%s%s}}`, jquote(text), attachments_take(app)), id)
 }
 
 create_session :: proc(app: ^App, directory: string) {
@@ -419,6 +449,8 @@ stream_state :: proc(app: ^App, up: bool) {
 		if !app.have_models { request(app, .Models, "GET", "/api/model") }
 		request(app, .Info, "GET", "/api/info")
 		request(app, .Projects, "GET", "/api/project")
+		browser_start(app)
+		update_startup(app)
 	}
 }
 

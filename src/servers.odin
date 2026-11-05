@@ -26,6 +26,7 @@ Server :: struct {
 Conn :: struct {
 	http:   Http,
 	stop:   bool,      // (atomic) the event thread stops at its next event or retry
+	browser_up: bool,  // the thread of the agents' browser tools runs (browser_mcp.odin)
 }
 
 servers_path :: proc() -> string {

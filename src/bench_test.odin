@@ -175,7 +175,7 @@ bench_end :: proc(p: rawptr) {
 }
 
 @(private = "file")
-Bench_Case :: struct { name: string, build, draw, render, total: [dynamic]f64, builds: int }
+Bench_Case :: struct { name: string, build, draw, render, total, gpu: [dynamic]f64, builds, boxes: int }
 
 // One frame of a case, its steps' times kept.
 @(private = "file")
@@ -188,7 +188,9 @@ bench_frame :: proc(s: ^session.Session, c: ^Bench_Case) {
 	append(&c.draw, time.duration_milliseconds(app.times.draw))
 	append(&c.render, time.duration_milliseconds(app.times.render))
 	append(&c.total, total)
+	append(&c.gpu, f64(render.gpu_ms(&app.r)))
 	c.builds += app.times.builds
+	c.boxes = ui.boxes_built(&app.ui_state)
 }
 
 // The `i`th character of `s` (ASCII), round again past its end.
@@ -206,10 +208,13 @@ median :: proc(v: []f64) -> f64 {
 @(private = "file")
 bench_report :: proc(c: ^Bench_Case) {
 	when OCC_BENCH {
-		fmt.printfln("bench %-10s frame %6.3f ms  build %6.3f  draw %6.3f  render %6.3f  (builds/frame %.2f, %d frames)",
-			c.name, median(c.total[:]), median(c.build[:]), median(c.draw[:]), median(c.render[:]), f64(c.builds) / f64(len(c.total)), len(c.total))
+		fmt.printfln("bench %-10s frame %6.3f ms  build %6.3f  draw %6.3f  render %6.3f  gpu %6.3f  boxes %d  (builds/frame %.2f, %d frames)",
+			c.name, median(c.total[:]), median(c.build[:]), median(c.draw[:]), median(c.render[:]), median(c.gpu[:]), c.boxes, f64(c.builds) / f64(len(c.total)), len(c.total))
+		if p, ok := render.gpu_profile(&the_app.r); ok {
+			for st, k in p.steps { if st.count > 0 { fmt.printfln("        gpu %-12v %6.3f ms  x%d  %.1f MB", k, st.ms, st.count, f64(st.bytes) / (1 << 20)) } }
+		}
 	}
-	delete(c.build); delete(c.draw); delete(c.render); delete(c.total)
+	delete(c.build); delete(c.draw); delete(c.render); delete(c.total); delete(c.gpu)
 }
 
 // A conversation of BENCH_TURNS answers: the view at its bottom builds the few messages it shows, scrolled to its top it
@@ -227,8 +232,11 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	testing.expect(t, session.find(s, "msg_msg_0_a") == nil, "the first one is not")
 	bottom_boxes := ui.boxes_built(&app.ui_state)
 
+	when OCC_BENCH { render.set_gpu_profile(&app.r, true) }
 	idle := Bench_Case{name = "idle"}
+	profile_begin()
 	for _ in 0 ..< BENCH_FRAMES { bench_frame(s, &idle) }
+	profile_end("idle")
 	bench_report(&idle)
 
 	// streaming: the last answer grows by a delta a frame
@@ -237,11 +245,13 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	text := &last.parts[len(last.parts) - 1].text
 	grown := len(text)
 	stream := Bench_Case{name = "stream"}
+	profile_begin()
 	for i in 0 ..< BENCH_FRAMES {
 		if i % BENCH_PARAGRAPH_DELTAS == 0 { append(text, "\n\n") }
 		append(text, BENCH_DELTA)
 		bench_frame(s, &stream)
 	}
+	profile_end("stream")
 	bench_report(&stream)
 	testing.expect_value(t, len(text), grown + BENCH_FRAMES * len(BENCH_DELTA) + 2 * ((BENCH_FRAMES + BENCH_PARAGRAPH_DELTAS - 1) / BENCH_PARAGRAPH_DELTAS))
 
@@ -259,14 +269,58 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	mid := session.center(sb)
 	session.move(s, mid)
 	scroll := Bench_Case{name = "scroll"}
+	profile_begin()
 	for _ in 0 ..< BENCH_FRAMES {
 		session.event(s, {kind = .Scroll, pos = mid, delta = {0, -BENCH_WHEEL}})
 		bench_frame(s, &scroll)
 	}
+	profile_end("scroll")
 	bench_report(&scroll)
 	sb = session.get(s, "chat")
 	testing.expect(t, sb.view_target.y < limit, "scrolled up")
 	testing.expect(t, ui.boxes_built(&app.ui_state) < 2 * bottom_boxes, "still only what is seen")
+
+	// the palette, open, its list filtered by what is typed
+	command_run(app, command_find("app.palette"))
+	session.frames(s, 3)
+	pal := Bench_Case{name = "palette"}
+	profile_begin()
+	for i in 0 ..< BENCH_FRAMES {
+		session.event(s, {kind = .Text, text = char_at(BENCH_FIND, i % 3)})
+		if i % 3 == 2 { ui.field_set(&app.palette.field, "") }
+		bench_frame(s, &pal)
+	}
+	profile_end("palette")
+	bench_report(&pal)
+	app.palette.open = false
+	session.frames(s, 2)
+
+	// the tray, opening and closing without end, over the conversation
+	tray := Bench_Case{name = "tray"}
+	profile_begin()
+	for i in 0 ..< BENCH_FRAMES {
+		if i % 24 == 0 { activity_toggle(app) }
+		bench_frame(s, &tray)
+	}
+	profile_end("tray")
+	bench_report(&tray)
+	activity_close(app)
+	session.frames(s, 30)
+
+	// the pointer sweeping the rows of a menu
+	key := ui.key_from_string(0, "app_menu")
+	ui.ctx_menu_open(key, {40, 40})
+	session.frames(s, 3)
+	menu := Bench_Case{name = "menu"}
+	profile_begin()
+	for i in 0 ..< BENCH_FRAMES {
+		session.move(s, {120, 60 + f32(i % 40) * 8})
+		bench_frame(s, &menu)
+	}
+	profile_end("menu")
+	bench_report(&menu)
+	ui.ctx_menu_close()
+	session.frames(s, 2)
 
 	// find: every message built, the needle typed a character a frame
 	find_open(app)

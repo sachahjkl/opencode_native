@@ -33,6 +33,48 @@ Start-up: `opencode-native --frames=1` prints how long the first frame took from
 (`--url=http://127.0.0.1:1`, nothing to connect to; on a desktop of its own: `wrentool desktop`), 15 runs of each build
 alternated.
 
+With `-define:OCC_PROFILE=true` (and `-debug`) the bench also samples its own thread at 1 kHz (`src/profile_test.odin`): for each
+case the functions samples fell in, those on the stack, and the five last frames of the commonest stacks. The GPU's time of
+each step comes from `render.set_gpu_profile`.
+
+    odin build src -build-mode:test -collection:gt=ext/gui_toolkit -o:speed -debug -define:OCC_BENCH=true -define:OCC_PROFILE=true -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_NAMES=occ.a_long_conversation_builds_what_is_seen -out:build/bench.exe
+
+A case whose frames move the pointer or a panel (`scroll`, `tray`, `menu`) shows about 17 ms as its frame: that is the pace of the
+offscreen window's 60 Hz, a wait. Their cost is build + draw + render.
+
+## Where a frame goes (gui_toolkit 0.78.0)
+
+Medians in milliseconds, 1600 x 1000, RTX 4070 SUPER. The budget at 180 Hz is 5.5 ms.
+
+| case | build | draw | render | CPU | GPU |
+|---|---|---|---|---|---|
+| idle | 0.71 | 1.04 | 0.05 | 1.8 | 0.18 |
+| stream | 0.78 | 1.26 | 0.05 | 2.1 | 0.16 |
+| type | 0.82 | 1.19 | 0.05 | 2.1 | 0.17 |
+| palette | 1.20 | 1.35 | 0.05 | 2.6 | 0.66 |
+| scroll | 1.37 | 1.33 | 0.09 | 2.8 | 0.68 |
+| tray | 1.57 | 1.50 | 0.10 | 3.2 | 0.18 |
+| menu | 2.26 | 2.39 | 0.13 | 4.8 | 1.56 |
+| search | 3.57 | 3.29 | 0.17 | 7.0 | 0.19 |
+| find | 65.7 | 25.1 | 0.13 | 90.9 | 3.68 |
+
+The GPU is not what limits a frame, nor is the layout. What a frame costs is text: `ui.draw_box_text` is a third of the samples at
+rest, through `font::glyph` (a fifth: `font::shape` 15 %, the ink box of `dwrite_glyph_box` 11 %) and `draw::glyph_run`. Then the
+temporary allocator (11 %) and `fmt` making box ids (8 %). `_extendhfsf2` (4 %, a software half float) has no unwind data: its
+caller is not known.
+
+Between runs of the same program, `idle` stays within 1.8-2.0 ms, `stream` and `type` go from 2.3 to 3.2 ms: a difference smaller
+than that is not one. The registry behind `preview_available` and `SystemParametersInfo` behind `animations_on` were asked at every
+frame and are now kept, but this brought nothing measurable: four alternate runs with and without, sampler off, idle 1.87 and
+1.86 ms. An earlier profile showed idle at 3.9 ms: that was the sampler, which allocated with the thread stopped.
+
+Left, by what they would bring: find (every message is built: the one case far over budget); the sidebar's search; text shaped
+again at each draw (the toolkit's: a run keyed by its text and font would take most of `font::shape`). Small names are not to be
+trusted: the linker folds identical procedures, `marshal_struct_fields` in these profiles is not JSON being written.
+
+The start: `app_init` and connecting take 4 ms; the wait is the device (about 300 ms on its thread here), and the first run of a new
+program compiles its shaders (`render` 870 ms at that first frame, 5 ms after).
+
 ## What changed
 
 1. **The sidebar is a lazy column** (`sessions_list`, `group_header`): a group's header and each session are items of the

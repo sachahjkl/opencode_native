@@ -175,7 +175,6 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 rect_has :: proc(r: Rect, p: Vec2) -> bool { return p.x >= r.min.x && p.x < r.max.x && p.y >= r.min.y && p.y < r.max.y }
 
 // `s` in runs: the matched ones lit in the accent on a tint, the rest plain; from byte `split` on (a group), faint.
-@(private = "file")
 lit_text :: proc(app: ^App, s: string, split: int, ranges: []ui.Fuzzy_Range, col: Color, em: f32) {
 	fs := math.round(em * FS_LABEL)
 	at := 0

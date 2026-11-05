@@ -45,6 +45,10 @@ Part :: struct {
 	sub_background: bool,
 	started_ms, ended_ms: f64,
 	images:    [dynamic]Image_Ref,   // what a tool handed back as images (screenshots, images read)
+	// what a call changed in files (tool_views.odin): the server's patch, else made from its input
+	patch:       string,
+	patch_tried: bool,
+	added, removed: int,
 }
 
 Msg_Kind :: enum u8 { User, Assistant, Synthetic, Shell, Compaction, Idle, Other }
@@ -127,6 +131,7 @@ open_chat :: proc(app: ^App, session_id: string) {
 	app.chat.busy = app.busy[id] or_else false
 	app.chat.live = make(map[string]Sub_Live, allocator = app.chat.alloc)
 	permissions_clear(app)
+	activity_reset(app)
 	load_messages(app, id)
 	request(app, .Self, "GET", strings.concatenate({"/api/session/", id}, context.temp_allocator), tag = id)
 	load_children(app)
@@ -241,7 +246,7 @@ sessions_load :: proc(app: ^App, v: json.Value) {
 		app.opened_first = true
 		if app.start_session != "" {   // --session=<id>
 			open_root(app, app.start_session)
-		} else {
+		} else if app.prefs.start == "last" {
 			for s in app.sessions { if s.parent == "" { open_chat(app, s.id); break } }
 		}
 	}
@@ -379,16 +384,7 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 	case "user":
 		m.kind = .User
 		m.text = strings.clone(jstr(it, "text"), a)
-		for f in jarr(it, "files") {
-			mime := jstr(f, "mime")
-			if !strings.has_prefix(mime, "image/") { continue }
-			if m.images == nil { m.images = make([dynamic]Image_Ref, a) }
-			if src := jstr(f, "source", "uri"); jstr(f, "data") == "" && strings.has_prefix(src, "data:") {
-				append(&m.images, image_ref(strings.clone(src, a), .Data_Url, strings.clone(mime, a), strings.clone(jstr(f, "name"), a)))
-			} else {
-				append(&m.images, image_ref(strings.clone(jstr(f, "data"), a), .Base64, strings.clone(mime, a), strings.clone(jstr(f, "name"), a)))
-			}
-		}
+		message_images(&m, jarr(it, "files"), a)
 	case "assistant":
 		m.kind = .Assistant
 		m.agent = strings.clone(jstr(it, "agent"), a)
@@ -465,6 +461,20 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 	return m
 }
 
+// The images among the files of a prompt.
+message_images :: proc(m: ^Message, files: json.Array, a: mem.Allocator) {
+	for f in files {
+		mime := jstr(f, "mime")
+		if !strings.has_prefix(mime, "image/") { continue }
+		if m.images == nil { m.images = make([dynamic]Image_Ref, a) }
+		if src := jstr(f, "source", "uri"); jstr(f, "data") == "" && strings.has_prefix(src, "data:") {
+			append(&m.images, image_ref(strings.clone(src, a), .Data_Url, strings.clone(mime, a), strings.clone(jstr(f, "name"), a)))
+		} else {
+			append(&m.images, image_ref(strings.clone(jstr(f, "data"), a), .Base64, strings.clone(mime, a), strings.clone(jstr(f, "name"), a)))
+		}
+	}
+}
+
 error_text :: proc(v: json.Value) -> string {
 	#partial switch x in v {
 	case json.String: return string(x)
@@ -512,6 +522,11 @@ subagent_body :: proc(s: string) -> string {
 // What the server says of a tool call as it runs (a sub-agent's session).
 tool_set_meta :: proc(p: ^Part, meta: json.Value, a: mem.Allocator) {
 	if sid := jstr(meta, "sessionID"); sid != "" && p.sub_session == "" { p.sub_session = strings.clone(sid, a) }
+	if files := jarr(meta, "files"); len(files) > 0 {
+		b := strings.builder_make(context.temp_allocator)
+		for f in files { strings.write_string(&b, jstr(f, "patch")) }
+		if strings.builder_len(b) > 0 { part_patch_set(p, strings.clone(strings.to_string(b), a)) }
+	}
 }
 
 // The input of a tool and the one thing it is about (shown in its header).
@@ -589,6 +604,8 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 			if kind == "session.execution.failed" { ui.toast(.Bad, "The run failed") }
 		}
 		app.refresh_due = true
+	case "shell.created", "shell.exited", "shell.deleted":
+		activity_poke(app)
 	case "project.updated", "project.created":
 		request(app, .Projects, "GET", "/api/project")   // (a new logo)
 	case "session.created", "session.renamed", "session.deleted", "session.updated", "session.archived", "session.moved", "session.metadata.updated":
@@ -617,6 +634,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		item := jget(d, "item")
 		if jstr(item, "type") == "user" && find_message(c, jstr(d, "inboxID")) == nil {
 			append(&c.messages, Message{id = strings.clone(jstr(d, "inboxID"), a), kind = .User, text = strings.clone(jstr(item, "payload", "text"), a), created = jnum(ev, "created"), parts = make([dynamic]Part, a)})
+			message_images(&c.messages[len(c.messages) - 1], jarr(item, "payload", "files"), a)
 			app.stick_bottom = true
 		}
 	case "session.step.started":

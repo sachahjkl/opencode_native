@@ -5,8 +5,11 @@ import "core:c"
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import ctime "core:time"
 
 foreign import libc "system:c"
+
+precise_sleep :: proc(d: ctime.Duration) { ctime.sleep(d) }   // (nanosleep is precise here)
 
 @(private = "file")
 Tm :: struct {   // glibc's struct tm

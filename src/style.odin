@@ -6,6 +6,7 @@ import "core:fmt"
 import "core:math"
 import "core:strings"
 import "gt:draw"
+import "gt:font"
 import "gt:ui"
 
 Color :: draw.Color
@@ -195,6 +196,20 @@ draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius: f32, base: Color, hot, pr
 		draw.rect(dc, {{r.min.x + radius * 0.7, r.max.y}, {r.max.x - radius * 0.7, r.max.y + p}}, {1, 1, 1, 0.06})
 	}
 	draw.rect(dc, r, {0, 0, 0, 0.85}, radius, p)
+}
+
+// Words that say what can be done are also what does it: quiet like a hint, lit under the pointer. True when clicked.
+hint_action :: proc(id, label: string, em: f32, face: font.Font_Id = 0) -> bool {
+	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * 1.4)), axis = .X, cross = .Center, cursor = .Hand})
+	ui.a11y({role = .Button, name = label})
+	b := ui.build_box({.Clickable, .Focusable}, id)
+	sig := ui.signal(b)
+	if ui.parent(b) {
+		m := ui.Style_Mod{font_size = math.round(em * (face != 0 ? FS_CAPTION : FS_SMALL))}
+		if face != 0 { m.font = face }
+		text("t", label, sig.hovering ? hex(HEX_BRIGHT) : hex(HEX_FAINT), m)
+	}
+	return sig.clicked
 }
 
 // A sunken well (fields, code, the composer): darker face, inner shadow from above, a lit lip under the bottom edge;

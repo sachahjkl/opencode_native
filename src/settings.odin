@@ -61,7 +61,8 @@ PREF_DEFS := [?]config.Def{
 	{name = "appearance.prose_font", description = "The face of the answers: the client's own (automatic), the interface's, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.mono_font", description = "The face of code, paths and figures: the client's own (automatic), the system's usual one, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.font_size", description = "Size of the interface's text, in points at 100 % zoom.", kind = .Int, default = {i = 14}, bounded = true, min = FONT_SIZE_MIN, max = FONT_SIZE_MAX},
-	{name = "appearance.zoom", description = "Zoom of the whole window (Ctrl + wheel, Ctrl + / -, Ctrl 0 change it too).", kind = .Float, default = {f = 1}, bounded = true, min = ZOOM_MIN, max = ZOOM_MAX},
+	{name = "appearance.zoom", description = "Zoom of the interface: bars, sidebar, menus (Ctrl + Shift + = / - / 0, Ctrl + wheel outside the conversation).", kind = .Float, default = {f = 1}, bounded = true, min = ZOOM_MIN, max = ZOOM_MAX},
+	{name = "appearance.content_zoom", description = "Zoom of the conversation alone, whatever the interface's (Ctrl + = / - / 0, Ctrl + wheel over it).", kind = .Float, default = {f = 1}, bounded = true, min = CONTENT_ZOOM_MIN, max = CONTENT_ZOOM_MAX},
 	{name = "appearance.density", description = "Compact rows fit more on screen at the same text size.", kind = .String, default = {s = "comfortable"}, choices = {"comfortable", "compact"}},
 	{name = "appearance.rounding", description = "Corner rounding of buttons, fields and menus (0: square).", kind = .Float, default = {f = 1}, bounded = true, min = 0, max = 2},
 	{name = "appearance.animations", description = "Interface animations: the system's setting, always, or never.", kind = .String, default = {s = "system"}, choices = {"system", "on", "off"}},
@@ -80,6 +81,17 @@ PREF_DEFS := [?]config.Def{
 	{name = "sidebar.subagents", description = "Sub-agent sessions: under their parent, in the list with the others, or not shown.", kind = .String, default = {s = "nested"}, choices = {"nested", "flat", "hidden"}},
 	{name = "notify.finished", description = "When a session that is not in front of you ends its run: nothing, a toast, or a toast and the taskbar button flashing.", kind = .String, default = {s = "flash"}, choices = {"off", "toast", "flash"}},
 	{name = "notify.permission", description = "Flash the taskbar button when a session asks for a permission and the window is not in front.", kind = .Bool, default = {b = true}},
+	{name = "appearance.throbber", description = "What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing.", kind = .String, default = {s = "board"}, choices = {"board", "orbit", "scanner", "none"}},
+	{name = "session.agent", description = "The agent a new session starts with: the one chosen last.", kind = .String, default = {s = ""}},
+	{name = "session.model", description = "The model a new session starts with: the one chosen last.", kind = .String, default = {s = ""}},
+	{name = "session.provider", description = "The provider of that model.", kind = .String, default = {s = ""}},
+	{name = "browser.tools", description = "Let the agents drive the Preview panel (open pages, read them, click, run scripts): the browser tools, while this window is open.", kind = .Bool, default = {b = true}},
+	{name = "layout.dock", description = "Where the panels are, as the dock writes it.", kind = .String, default = {s = ""}},
+	{name = "update.channel", description = "Which releases this copy follows: the stable ones, or the betas too.", kind = .String, default = {s = "stable"}, choices = {"stable", "beta"}},
+	{name = "update.auto", description = "Look for a new version at start (it is only installed when you say so).", kind = .Bool, default = {b = true}},
+	{name = "update.base_url", description = "Where releases are read from (empty: GitHub). Whatever the place, only what the built-in key signed is installed.", kind = .String, default = {s = ""}},
+	{name = "general.start", description = "What the window opens on: the home page, or the latest session.", kind = .String, default = {s = "home"}, choices = {"home", "last"}},
+	{name = "advanced.fps", description = "The frame rate and what a frame costs, in the status bar.", kind = .Bool, default = {b = false}},
 }
 
 // The preferences as plain values (read on every frame: no lookups by name there).
@@ -106,7 +118,17 @@ Prefs :: struct {
 	subagents:    string,
 	notify:       string,
 	notify_perm:  bool,
+	content_zoom: f32,
+	start:        string,
+	show_fps:     bool,
+	throbber:     string,
+	browser_tools: bool,
+	update_channel: string,
+	update_auto:  bool,
 }
+
+CONTENT_ZOOM_MIN :: 0.5
+CONTENT_ZOOM_MAX :: 3
 
 prefs_path :: proc() -> string { return pjoin({filepath.dir(settings_path()), "prefs.txt"}) }
 
@@ -148,6 +170,13 @@ prefs_refresh :: proc(app: ^App) {
 	s.subagents = config.string_of(p, "sidebar.subagents")
 	s.notify = config.string_of(p, "notify.finished")
 	s.notify_perm = config.bool_of(p, "notify.permission")
+	s.content_zoom = f32(config.float_of(p, "appearance.content_zoom"))
+	s.start = config.string_of(p, "general.start")
+	s.show_fps = config.bool_of(p, "advanced.fps")
+	s.throbber = config.string_of(p, "appearance.throbber")
+	s.browser_tools = config.bool_of(p, "browser.tools")
+	s.update_channel = config.string_of(p, "update.channel")
+	s.update_auto = config.bool_of(p, "update.auto")
 
 	// the faces, when either preference changed (a family is opened once: the font state keeps it)
 	if wanted := fmt.tprintf("%s\n%s\n%s", config.string_of(p, "appearance.font"), config.string_of(p, "appearance.mono_font"), config.string_of(p, "appearance.prose_font")); wanted != app.fonts_wanted {
@@ -196,7 +225,14 @@ animations_on :: proc(app: ^App) -> bool {
 	case "on":  return true
 	case "off": return false
 	}
-	return platform.os_animations_enabled()
+	// (the system's setting, read now and then: it is asked at every build)
+	@(static) read_ms: f64
+	@(static) enabled: bool
+	if now := ui.now_ms(); read_ms == 0 || now - read_ms > OS_SETTINGS_READ_MS {
+		read_ms = max(now, 1)
+		enabled = platform.os_animations_enabled()
+	}
+	return enabled
 }
 
 ////////////////////////////////
@@ -340,12 +376,14 @@ server_facts_answer :: proc(app: ^App, kind: Req_Kind, v: json.Value) {
 ////////////////////////////////
 // The dialog
 
-Settings_Page :: enum u8 { Appearance, Conversation, Behaviour, Server, Mcp, Usage, Permissions, Catalog }
+Settings_Page :: enum u8 { Appearance, Conversation, Behaviour, Updates, Advanced, Server, Mcp, Usage, Permissions, Catalog }
 
 SETTINGS_PAGES := [Settings_Page]struct { title, icon: string, opencode: bool }{
 	.Appearance   = {"Appearance", ICO_PALETTE, false},
 	.Conversation = {"Conversation", ICO_CHAT, false},
 	.Behaviour    = {"Behaviour", ICO_SLIDERS, false},
+	.Updates      = {"Updates", ICO_REFRESH, false},
+	.Advanced     = {"Advanced", ICO_TOOL, false},
 	.Server       = {"Server & shell", ICO_TERMINAL, true},
 	.Mcp          = {"MCP servers", ICO_PLUG, true},
 	.Usage        = {"Usage & limits", ICO_GAUGE, true},
@@ -367,22 +405,25 @@ settings_dialog :: proc(app: ^App, em: f32) {
 			// the pages
 			ui.next({width = ui.px(em * 14), height = ui.fill(), axis = .Y})
 			if ui.column(id = "###settings_nav") {
-				ui.spacer(ui.px(em * 1.1))
-				nav_heading("CLIENT", em)
-				for page in Settings_Page {
-					info := SETTINGS_PAGES[page]
-					if page == .Server { ui.spacer(ui.px(em * 0.6)); nav_heading("OPENCODE", em) }
-					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-					if ui.row(id = fmt.tprintf("###nv%d", int(page))) {
-						ui.spacer(ui.px(em * 0.7))
-						if bevel_button(fmt.tprintf("###nav%d", int(page)), info.title, info.icon, app.settings_page == page ? .Toggled : .Ghost, ui.fill(), math.round(em * BUTTON_H_EM), left = true).clicked {
-							app.settings_page = page
+				// (the list scrolls: a short window must not push it out of the dialog; the foot stays)
+				ui.next({width = ui.fill(), height = ui.fill()})
+				if ui.scroll_y("###settings_nav_list") {
+					ui.spacer(ui.px(em * 1.1))
+					nav_heading("CLIENT", em)
+					for page in Settings_Page {
+						info := SETTINGS_PAGES[page]
+						if page == .Server { ui.spacer(ui.px(em * 0.6)); nav_heading("OPENCODE", em) }
+						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+						if ui.row(id = fmt.tprintf("###nv%d", int(page))) {
+							ui.spacer(ui.px(em * 0.7))
+							if bevel_button(fmt.tprintf("###nav%d", int(page)), info.title, info.icon, app.settings_page == page ? .Toggled : .Ghost, ui.fill(), math.round(em * BUTTON_H_EM), left = true).clicked {
+								app.settings_page = page
+							}
+							ui.spacer(ui.px(em * 0.9))   // (the scroll bar's place)
 						}
-						ui.spacer(ui.px(em * 0.4))
+						ui.spacer(ui.px(em * 0.2))
 					}
-					ui.spacer(ui.px(em * 0.2))
 				}
-				ui.spacer(ui.fill())
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if ui.row(id = "###nav_foot") {
 					ui.spacer(ui.px(em * 0.9))
@@ -407,6 +448,8 @@ settings_dialog :: proc(app: ^App, em: f32) {
 						case .Appearance:   page_appearance(app, em)
 						case .Conversation: page_conversation(app, em)
 						case .Behaviour:    page_behaviour(app, em)
+						case .Updates:      page_updates(app, em)
+						case .Advanced:     page_advanced(app, em)
 						case .Server:       page_server(app, em)
 						case .Mcp:          page_mcp(app, em)
 						case .Usage:        page_usage(app, em)
@@ -543,6 +586,8 @@ page_appearance :: proc(app: ^App, em: f32) {
 	if setting(app, "appearance.mono_font", em) { font_button(app, "appearance.mono_font", em) }
 	if setting(app, "appearance.font_size", em) { pref_slider(app, "appearance.font_size", FONT_SIZE_MIN, FONT_SIZE_MAX, 1, "%.0f pt", em) }
 	if setting(app, "appearance.zoom", em) { pref_slider(app, "appearance.zoom", ZOOM_MIN, ZOOM_MAX, 0.05, "%.2f×", em) }
+	if setting(app, "appearance.content_zoom", em) { pref_slider(app, "appearance.content_zoom", CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX, 0.05, "%.2f×", em) }
+	if setting(app, "appearance.throbber", em) { pref_choice(app, "appearance.throbber", {"Board", "Orbit", "Scanner", "None"}, em, em * 18) }
 	if setting(app, "appearance.density", em) { pref_choice(app, "appearance.density", {"Comfortable", "Compact"}, em) }
 	if setting(app, "appearance.rounding", em) { pref_slider(app, "appearance.rounding", 0, 2, 0.05, "%.2f", em) }
 	if setting(app, "appearance.animations", em) { pref_choice(app, "appearance.animations", {"System", "On", "Off"}, em) }
@@ -607,8 +652,59 @@ page_behaviour :: proc(app: ^App, em: f32) {
 	if setting(app, "sidebar.subagents", em) { pref_choice(app, "sidebar.subagents", {"Nested", "Flat", "Hidden"}, em) }
 	if setting(app, "notify.finished", em) { pref_choice(app, "notify.finished", {"Off", "Toast", "Flash"}, em) }
 	if setting(app, "notify.permission", em) { pref_switch(app, "notify.permission", em) }
+	if setting(app, "general.start", em) { pref_choice(app, "general.start", {"Home", "Latest session"}, em, em * 14) }
 	ui.spacer(ui.px(em * 0.6))
 	info_line(app, "###hint_setup", "Installation and " + LBL_PIECES + " are in Setup… (title bar menu).", em)
+}
+
+page_updates :: proc(app: ^App, em: f32) {
+	u := &app.updater
+	state := "Up to date, as far as is known"
+	switch u.state {
+	case .Idle:
+		if u.result != "" { state = u.result }
+	case .Checking:    state = "Looking for a new version…"
+	case .Ready:       state = fmt.tprintf("Version %s is available", u.version)
+	case .Downloading: state = fmt.tprintf("Downloading %s…", u.version)
+	case .Installed:   state = fmt.tprintf("Version %s is installed: restart to use it", u.version)
+	}
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+	if well("###upd", radius = 7, base = HEX_FACTS_WELL) {
+		ui.spacer(ui.px(em * 0.4))
+		fact("###u1", "version", APP_VERSION, em)
+		fact("###u2", "channel", app.prefs.update_channel, em)
+		fact("###u3", "state", state, em)
+		ui.spacer(ui.px(em * 0.4))
+	}
+	ui.spacer(ui.px(em * 0.7))
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+	if ui.row(.Center, id = "###upd_b") {
+		if bevel_button("###u_check", "Check now", ICO_REFRESH, .Normal, disabled = u.state == .Checking || u.state == .Downloading).clicked { update_check(app, true) }
+		ui.spacer(ui.px(em * 0.5))
+		if u.state == .Ready {
+			if bevel_button("###u_inst", fmt.tprintf("Install %s", u.version), ICO_CHECK, .Accent).clicked { update_install(app) }
+		}
+		if u.state == .Installed {
+			if bevel_button("###u_rest", "Restart now", ICO_REFRESH, .Accent).clicked { update_restart(app) }
+		}
+	}
+	ui.spacer(ui.px(em * 0.9))
+	if setting(app, "update.channel", em) { pref_choice(app, "update.channel", {"Stable", "Beta"}, em, em * 14) }
+	if setting(app, "update.auto", em) { pref_switch(app, "update.auto", em) }
+	ui.spacer(ui.px(em * 0.6))
+	info_line(app, "###hint_sig", "Only what is signed with the key built into this program is installed: the channel, the version and the file's checksum are all in the signature.", em)
+}
+
+page_advanced :: proc(app: ^App, em: f32) {
+	section("PREVIEW", em)
+	if setting(app, "browser.tools", em) { pref_switch(app, "browser.tools", em) }
+	section("DIAGNOSTICS", em)
+	if setting(app, "advanced.fps", em) { pref_switch(app, "advanced.fps", em) }
+	ui.spacer(ui.px(em * 0.7))
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+	if ui.row(.Center, id = "###adv_b") {
+		if bevel_button("###adv_dir", "Open the settings folder", ICO_FOLDER, .Normal).clicked { _ = platform.open_path(filepath.dir(prefs_path())) }
+	}
 }
 
 // A line of quiet text.

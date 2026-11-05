@@ -257,7 +257,10 @@ link_allowed :: proc(url: string) -> bool {
 }
 
 link_open :: proc(url: string) {
-	if link_allowed(url) { platform.open_url(url) } else { ui.toast(.Warn, "Link not opened: %s", ellipsize(url, TOAST_TITLE_CHARS)) }
+	if link_allowed(url) {
+		// (what an agent serves here is what the panel is for)
+		if strings.contains(url, "://localhost") || strings.contains(url, "://127.0.0.1") { preview_open(the_app, url) } else { platform.open_url(url) }
+	} else { ui.toast(.Warn, "Link not opened: %s", ellipsize(url, TOAST_TITLE_CHARS)) }
 }
 
 // The cells of a table row: `| a | b |` -> {"a", "b"}.

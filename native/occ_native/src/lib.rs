@@ -294,3 +294,142 @@ pub unsafe extern "C" fn occ_sse_free(s: *mut Sse) {
         drop(Box::from_raw(s));
     }
 }
+
+////////////////////////////////
+// The web view of the Preview panel (webview.rs)
+
+#[cfg(windows)]
+mod webview;
+
+#[cfg(windows)]
+mod webview_c {
+    use super::webview::{self, Callback, Web};
+    use std::ffi::c_void;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    unsafe fn text<'a>(p: *const u8, n: usize) -> &'a str {
+        if p.is_null() { return ""; }
+        std::str::from_utf8(std::slice::from_raw_parts(p, n)).unwrap_or("")
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn occ_webview_new(parent: isize, data: *const u8, data_len: usize, cb: Callback, user: *mut c_void) -> *mut Web {
+        catch_unwind(AssertUnwindSafe(|| match webview::create(parent, text(data, data_len), cb, user) {
+            Some(w) => Box::into_raw(w),
+            None => std::ptr::null_mut(),
+        })).unwrap_or(std::ptr::null_mut())
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn occ_webview_place(w: *const Web, x: i32, y: i32, width: i32, height: i32, visible: i32) {
+        if let Some(w) = w.as_ref() { let _ = catch_unwind(AssertUnwindSafe(|| w.place(x, y, width, height, visible != 0))); }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn occ_webview_navigate(w: *const Web, url: *const u8, len: usize) {
+        if let Some(w) = w.as_ref() { let _ = catch_unwind(AssertUnwindSafe(|| w.navigate(text(url, len)))); }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn occ_webview_act(w: *const Web, what: i32) {
+        if let Some(w) = w.as_ref() { let _ = catch_unwind(AssertUnwindSafe(|| w.act(what))); }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn occ_webview_script(w: *const Web, code: *const u8, len: usize, id: u64) {
+        if let Some(w) = w.as_ref() { let _ = catch_unwind(AssertUnwindSafe(|| w.script(text(code, len), id))); }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn occ_webview_capture(w: *const Web, id: u64) {
+        if let Some(w) = w.as_ref() { let _ = catch_unwind(AssertUnwindSafe(|| w.capture(id))); }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn occ_webview_free(w: *mut Web) {
+        if !w.is_null() {
+            let b = Box::from_raw(w);
+            b.close();
+        }
+    }
+}
+
+////////////////////////////////
+// A WebSocket to the server: the client hosts its browser tools on it (client-mcp). One thread reads, others may send.
+
+pub struct Ws {
+    sock: std::sync::Mutex<tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>>>,
+}
+
+fn ws_connect(c: &Client, path: &str) -> Option<Ws> {
+    use tungstenite::client::IntoClientRequest;
+    use tungstenite::stream::MaybeTlsStream;
+    let url = format!("{}{}", c.base.replacen("http", "ws", 1), path);
+    let mut req = url.into_client_request().ok()?;
+    if let Some(a) = &c.auth {
+        req.headers_mut().insert("Authorization", a.parse().ok()?);
+    }
+    let (sock, _) = tungstenite::connect(req).ok()?;
+    // (a read gives way often: a thread that sends takes the same lock)
+    let limit = Some(Duration::from_millis(50));
+    match sock.get_ref() {
+        MaybeTlsStream::Plain(s) => { s.set_read_timeout(limit).ok()?; }
+        MaybeTlsStream::Rustls(s) => { s.get_ref().set_read_timeout(limit).ok()?; }
+        _ => {}
+    }
+    Some(Ws { sock: std::sync::Mutex::new(sock) })
+}
+
+/// `path` on the client's server; null: no connection.
+#[no_mangle]
+pub unsafe extern "C" fn occ_ws_open(c: *const Client, path: *const u8, path_len: usize) -> *mut Ws {
+    let Some(c) = c.as_ref() else { return std::ptr::null_mut() };
+    catch_unwind(AssertUnwindSafe(|| match ws_connect(c, text(path, path_len)) {
+        Some(w) => Box::into_raw(Box::new(w)),
+        None => std::ptr::null_mut(),
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// The next text message: 1 one is in `out`, 0 none for now (ask again), -1 the connection ended.
+#[no_mangle]
+pub unsafe extern "C" fn occ_ws_read(w: *const Ws, out: *mut OccBuf) -> i32 {
+    use std::io::ErrorKind;
+    use tungstenite::{Error, Message};
+    let Some(w) = w.as_ref() else { return -1 };
+    catch_unwind(AssertUnwindSafe(|| {
+        let mut s = match w.sock.lock() { Ok(s) => s, Err(_) => return -1 };
+        match s.read() {
+            Ok(Message::Text(t)) => {
+                *out = OccBuf::from_vec(t.as_bytes().to_vec());
+                1
+            }
+            Ok(Message::Close(_)) => -1,
+            Ok(_) => 0,
+            Err(Error::Io(e)) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => 0,
+            Err(_) => -1,
+        }
+    }))
+    .unwrap_or(-1)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn occ_ws_send(w: *const Ws, data: *const u8, len: usize) -> i32 {
+    use tungstenite::Message;
+    let Some(w) = w.as_ref() else { return -1 };
+    catch_unwind(AssertUnwindSafe(|| {
+        let mut s = match w.sock.lock() { Ok(s) => s, Err(_) => return -1 };
+        if s.send(Message::text(text(data, len).to_string())).is_ok() { 0 } else { -1 }
+    }))
+    .unwrap_or(-1)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn occ_ws_free(w: *mut Ws) {
+    if !w.is_null() {
+        let b = Box::from_raw(w);
+        if let Ok(mut s) = b.sock.lock() {
+            let _ = s.close(None);
+        };
+    }
+}

@@ -5,6 +5,52 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-05
+
+### Added
+
+- **The command palette** (Ctrl+K, Ctrl+P): commands, sessions, agents, models, the server's commands and the switches of the
+  preferences in one field, narrowed by `>` `@` `/` `#` `:`; what was chosen before comes first. One table of commands
+  (`src/commands.odin`) feeds the keyboard, the palette and the shortcuts' dialog (F1). `/name` in the composer runs a command of
+  the server.
+- **The composer's history**: Up and Down go through what was sent, the session's prompts first, then the others'; what was being
+  typed comes back past the newest one or on Escape.
+- **What runs in the background**: Down from the composer (or Ctrl+J) opens a tray under it: the sub-agents and the shell
+  commands of the session's folder, each with the tail of what it prints, and the whole todo list. Enter opens, Delete stops.
+- **Tool calls by what they do**: a diff for what edits a file (the server's patch, else made with `core:diff`), with line numbers
+  and what changed in a line marked, shown even folded; the lines of a file, matches under their file, a command and its
+  output, a checklist; the input of the others as keys and values, never as raw JSON.
+- **The Preview panel** (Ctrl+Shift+B): a web page beside the conversation in a dock whose layout is kept; WebView2 on Windows,
+  its profile apart from the user's browser. `localhost` links open there.
+- **The agents' browser tools**: the client hosts an MCP server, `preview`, on the server's client-mcp socket: open a page, read it,
+  click, fill, run a script, read its console, take a picture. It follows the folder of the session shown (`browser.tools`).
+- **The home page**: where to start, what runs, the latest sessions (`general.start`).
+- **Updates** (Windows): channels `stable` and `beta`, manifests signed with Ed25519, the channel in what is signed; downloaded,
+  checked and put in place from the status bar. See docs/updates.md.
+- **Right clicks**: on a prompt, an answer, a tool call and the composer. Rename and fork a session.
+- **Paste** an image or files in the composer. **A click of the wheel** scrolls by the pointer.
+- **Two zooms**: the conversation's (Ctrl + = - 0, Ctrl and the wheel over it) and the interface's (Ctrl + Shift + = - 0, Ctrl and
+  the wheel elsewhere).
+- A new session starts with the agent and the model chosen last, from one run to the next.
+- `appearance.throbber`: a board that spells what the agent does, dots in orbit, the scanner, or nothing.
+- `advanced.fps`: the frame rate and what a frame costs, in the status bar.
+- **Quote a passage**: select text in an answer, then the chip, the right click or Ctrl+Q: it goes in the composer as a quote.
+- **Latest**: a pill over the composer when the conversation is more than a screen from its end; a click goes back there.
+- A text that names an action does it: the hints under the composer are clickable.
+- Settings: the pages **Updates** (version, channel, check now) and **Advanced** (the agents' browser tools, FPS, the settings'
+  folder).
+
+### Changed
+
+- gui_toolkit 0.78.0.
+- The list of the settings' pages scrolls: it no longer leaves the dialog in a short window.
+- The window opens on the home page; `general.start` = `last` opens the latest session.
+
+### Fixed
+
+- What follows the pointer without a button held (a row lit in a menu) came late on a variable refresh screen that Windows reports
+  at 60 Hz: such frames now run at the screen's top rate (16.7 to 6 ms between two frames on a 180 Hz screen).
+
 ## [0.10.0] - 2026-11-03
 
 ### Added
@@ -349,7 +395,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.0
 [0.10.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.10.0
 [0.9.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.9.0
 [0.8.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.8.2

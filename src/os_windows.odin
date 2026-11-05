@@ -4,6 +4,7 @@ package occ
 import "core:encoding/base64"
 import "core:strings"
 import win "core:sys/windows"
+import "core:time"
 
 foreign import kernel32 "system:Kernel32.lib"
 foreign import user32_flash "system:User32.lib"
@@ -24,6 +25,17 @@ foreign crypt32 {
 @(default_calling_convention = "system", private = "file")
 foreign kernel32 {
 	GetTimeZoneInformation :: proc(tzi: ^win.TIME_ZONE_INFORMATION) -> u32 ---
+}
+
+// A wait to the millisecond and under: Sleep rounds up to the system's tick (15.6 ms), a whole frame three times over.
+precise_sleep :: proc(d: time.Duration) {
+	CREATE_WAITABLE_TIMER_HIGH_RESOLUTION :: 0x2
+	@(static) timer: win.HANDLE
+	if timer == nil { timer = win.CreateWaitableTimerExW(nil, nil, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, win.TIMER_ALL_ACCESS) }
+	if timer == nil { time.sleep(d); return }
+	due := win.LARGE_INTEGER(-(i64(d) / 100))   // relative, in 100 ns units
+	if !win.SetWaitableTimerEx(timer, &due, 0, nil, nil, nil, 0) { return }
+	win.WaitForSingleObject(timer, win.INFINITE)
 }
 
 FLASHWINFO :: struct { cbSize: u32, hwnd: win.HWND, dwFlags: u32, uCount: u32, dwTimeout: u32 }

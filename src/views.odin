@@ -7,6 +7,7 @@ import "core:hash"
 import "core:math"
 import "core:strings"
 import "core:time"
+import "gt:config"
 import "gt:draw"
 import "gt:ui"
 
@@ -49,15 +50,17 @@ build_ui :: proc(app: ^App) {
 		title_bar(app, em)
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.row(id = "###body") {
-			sidebar(app, em)
-			room := ui.parent_box().size.x / ui.scale()
-			ui.next({height = ui.fill()})
-			ui.a11y({name = "Sidebar width"})
-			groove_y: f32
-			if ui.parent(ui.prev_box("###sidebar")) { if g := ui.prev_box("###sg"); g != nil { groove_y = (g.rect.min.y + g.rect.max.y) * 0.5 } }
-			split := ui.splitter("###side_split", .X, &app.sidebar_w, SIDEBAR_W_MIN, SIDEBAR_W_MAX, {default_size = SIDEBAR_W_DEFAULT, total = room, min_other = CONVERSATION_MIN_PX})
-			side_handle(split, groove_y)
-			conversation(app, em)
+			if !app.cx.sidebar_hidden {
+				sidebar(app, em)
+				room := ui.parent_box().size.x / ui.scale()
+				ui.next({height = ui.fill()})
+				ui.a11y({name = "Sidebar width"})
+				groove_y: f32
+				if ui.parent(ui.prev_box("###sidebar")) { if g := ui.prev_box("###sg"); g != nil { groove_y = (g.rect.min.y + g.rect.max.y) * 0.5 } }
+				split := ui.splitter("###side_split", .X, &app.sidebar_w, SIDEBAR_W_MIN, SIDEBAR_W_MAX, {default_size = SIDEBAR_W_DEFAULT, total = room, min_other = CONVERSATION_MIN_PX})
+				side_handle(split, groove_y)
+			}
+			main_area(app, em)
 		}
 		status_bar(app, em)
 	}
@@ -67,14 +70,21 @@ build_ui :: proc(app: ^App) {
 	settings_dialog(app, em)
 	image_viewer(app, em)
 	stats_dialog(app, em)
+	rename_dialog(app, em)
+	help_dialog(app, em)
+	palette_dialog(app, em)
+	context_menu(app, em)
 	// (over the top of the conversation, under its header: at the bottom they hid the send button, when one wants to try again)
 	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.ui_state.window_size})
 	ui.toasts_build()
 }
 
 app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
-	if ui.ctx_menu(key, em * 16) {
-		if ui.menu_item("New session", "Ctrl+N").clicked { new_session(app) }
+	if ui.ctx_menu(key) {   // (as wide as its longest item)
+		if ui.menu_item("Command palette…", "Ctrl+K").clicked { palette_toggle(app) }
+		ui.menu_separator()
+		if ui.menu_item("Home", "Ctrl+H").clicked { command_run(app, command_find("nav.home")) }
+		if ui.menu_item("New session", "Ctrl+N").clicked { command_run(app, command_find("session.new")) }
 		if ui.menu_item("Refresh", "F5").clicked {
 			refresh_sessions(app)
 			if app.chat.id != "" { load_messages(app, app.chat.id) }
@@ -82,6 +92,10 @@ app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 		if ui.menu_item("Settings…", "Ctrl+,").clicked { settings_open(app) }
 		if ui.menu_item("Add a server…").clicked { server_edit_open(app, -1) }
 		if ui.menu_item("Session statistics", "Ctrl+I", enabled = app.chat.id != "").clicked { stats_open(app) }
+		if preview_available() {
+			if ui.menu_item("Preview panel", "Ctrl+Shift+B", app.preview.open).clicked { command_run(app, command_find("view.preview")) }
+		}
+		if ui.menu_item("Keyboard shortcuts", "F1").clicked { app.cx.help_open = true }
 		if ui.menu_item("Sub-agent sessions in the list", "", app.prefs.subagents == "flat").clicked { pref_set(app, "sidebar.subagents", app.prefs.subagents == "flat" ? "nested" : "flat") }
 		ui.menu_separator()
 		if ui.menu_item("Setup…").clicked { setup_open(app) }
@@ -92,16 +106,8 @@ app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 }
 
 global_keys :: proc(app: ^App) {
-	if ui.key_press(.N, {.Ctrl}) { new_session(app) }
 	find_keys(app)
-	if ui.key_press(.Comma, {.Ctrl}) { settings_open(app) }
-	if app.chat.id != "" && ui.key_press(.I, {.Ctrl}) { stats_open(app) }
-	if ui.key_press(.F5) {
-		refresh_sessions(app)
-		if app.chat.id != "" { load_messages(app, app.chat.id) }
-	}
-	if app.chat.busy && ui.key_press(.Escape, {.Ctrl}) { interrupt_session(app, app.chat.id) }
-	if back_target(app) != "" && ui.key_press(.Left, {.Alt}) { go_back(app) }
+	commands_keys(app)
 }
 
 new_session :: proc(app: ^App) {
@@ -112,6 +118,9 @@ new_session :: proc(app: ^App) {
 	app.stick_bottom = true
 	app.chat.new_dir = strings.clone(dir, app.chat.alloc)
 	permissions_clear(app)
+	activity_reset(app)
+	choice_recall(app)
+	app.cx.focus_composer = true
 }
 
 ////////////////////////////////
@@ -201,14 +210,21 @@ title_bar :: proc(app: ^App, em: f32) {
 			if logo_of(app, "###tproj", project_logo(app, s.project), math.round(h * 0.55)) { ui.spacer(ui.px(em * 0.45)) }
 			text("dir", base_name(s.directory), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
 			text("sep", "  /  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
-			text("ttl", ellipsize(s.title, TITLE_BAR_TITLE_CHARS), hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
+			text("ttl", ellipsize(s.title, TITLE_BAR_TITLE_CHARS), hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+		} else {
+			ui.spacer(ui.fill())
 		}
-		ui.spacer(ui.fill())
 		if app.chat.busy {
-			text("busy", "working", accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
-			ui.spacer(ui.px(em * 0.5))
-			scanner("###tscan", accent(), math.round(em * 3), math.round(em * 0.75))
+			ui.spacer(ui.px(em * 0.8))
+			throbber(app, "###tscan", accent(), math.round(em * 3), math.round(em * 0.75), em)
 			ui.spacer(ui.px(em))
+		}
+		if preview_available() {
+			ui.a11y({role = .Button, name = "Preview panel"})
+			psig := glyph_button("###preview_btn", ICO_GLOBE, math.round(h * 0.78), app.preview.open ? accent() : Color{})
+			if psig.clicked { command_run(app, command_find("view.preview")) }
+			if ui.hovered_for(psig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Preview panel  (Ctrl+Shift+B)") } }
+			ui.spacer(ui.px(em * 0.5))
 		}
 		_, _ = ui.window_buttons()
 	}
@@ -476,9 +492,13 @@ session_menu :: proc(app: ^App, em: f32) {
 	key := ui.key_from_string(0, "session_menu")
 	if ui.ctx_menu(key, em * 14) {
 		if ui.menu_item("Open").clicked { open_root(app, app.menu_session) }
+		if ui.menu_item("Rename…", "F2").clicked { rename_open(app, app.menu_session) }
+		if ui.menu_item("Fork").clicked { fork_session(app, app.menu_session, "") }
+		ui.menu_separator()
 		if ui.menu_item("Copy session ID").clicked { clip_set(app.menu_session) }
 		if s := find_session(app, app.menu_session); s != nil {
 			if ui.menu_item("Copy folder path").clicked { clip_set(s.directory) }
+			if ui.menu_item("Show the folder").clicked { reveal_path(s.directory) }
 		}
 		ui.menu_separator()
 		if ui.menu_item("Delete…").clicked {
@@ -579,19 +599,25 @@ conversation :: proc(app: ^App, em: f32) {
 		sc := ui.scale()
 		// this frame's width, from the window (the box's own size is the last frame's: a resize would lag a frame behind):
 		// the window less the sidebar and the splitter
-		avail := f32(app.win.size.x) - app.sidebar_w * sc - math.round(SPLITTER_W_PX * sc)
+		avail := f32(app.win.size.x)
+		if !app.cx.sidebar_hidden { avail -= app.sidebar_w * sc + math.round(SPLITTER_W_PX * sc) }
+		if app.cx.docked_w > 0 { avail = app.cx.docked_w }   // (a panel of the dock: its room)
 		if avail <= 0 { avail = AVAIL_FALLBACK_PX * sc }
 		app.column_w = 0
-		col := max(COLUMN_MIN_W_PX * sc, min(app.prefs.column_w * sc, avail - em * 3))
+		zoom := app.prefs.content_zoom
+		cem := math.round(em * zoom)   // the conversation's own size: its zoom is not the interface's
+		col := max(COLUMN_MIN_W_PX * sc, min(app.prefs.column_w * sc * zoom, avail - em * 3))
 		side := max(em * 1.5, (avail - col) * 0.5)
 		app.column_w = col
-		if app.chat.id != "" || app.chat.loaded {
+		if app.chat.id != "" {
 			chat_header(app, em)
 		}
 		main := ui.parent_box()
+		app.cx.main_rect = main.rect
 		ui.next({width = ui.fill(), height = ui.fill()})
 		sb := ui.prev_box("###chat")
 		find_update(app, sb, em)
+		if app.chat.id == "" { app.stick_bottom = false }   // (the home page is read from its top)
 		if sb != nil {
 			chat_keys(app, sb, em)
 			limit := max(0, sb.view_bounds.y - sb.size.y)
@@ -600,7 +626,8 @@ conversation :: proc(app: ^App, em: f32) {
 			if app.stick_bottom && sb.view_target.y < app.chat_target - 1 && sb.view_target.y < limit - BOTTOM_SLACK_PX * ui.scale() { app.stick_bottom = false }
 			if app.stick_bottom {
 				sb.view_target.y = limit
-				if app.stick_jump { sb.view_off.y = limit }
+				// (the tray that opens under it moves it: a glide of its own on top of that one would lag behind it)
+				if app.stick_jump || app.cx.was_gliding { sb.view_off.y = limit }
 			}
 		}
 		if ui.scroll_y("###chat") {
@@ -609,7 +636,9 @@ conversation :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(side))
 				ui.next({width = ui.px(col), height = ui.children_sum(), axis = .Y})
 				if ui.column(id = "###col") {
-					if app.chat.id == "" && !app.chat.loaded { empty_state(app, em) } else { messages(app, em) }
+					if ui.style({font_size = cem}) {
+						if app.chat.id == "" { home(app, cem) } else { messages(app, cem) }
+					}
 				}
 			}
 		}
@@ -619,13 +648,51 @@ conversation :: proc(app: ^App, em: f32) {
 			limit := max(0, sb.view_bounds.y - sb.size.y)
 			at_bottom := sb.view_target.y >= limit - BOTTOM_SLACK_PX * ui.scale()
 			// (with following off, only the first moments of a conversation just opened follow its bottom)
-			follow := app.prefs.follow || ui.now_ms() - app.opened_ms < OPENED_FOLLOW_MS
+			follow := (app.prefs.follow || ui.now_ms() - app.opened_ms < OPENED_FOLLOW_MS) && app.chat.id != ""
 			if app.anchor == nil { app.stick_bottom = at_bottom && follow }   // (a part just toggled: it let go of the bottom)
 			app.chat_target = sb.view_target.y
 		}
 		dock(app, em, side, col)
 		// the find bar over the conversation's top-right corner, under the header
 		find_bar(app, em, avail - em * 1.4, sb != nil ? sb.rect.min.y - main.rect.min.y + em * 0.6 : em * 4)
+		go_bottom_pill(app, sb, main, avail, em)
+	}
+}
+
+// Far from the end of the conversation: the way back to it, over its bottom. It comes after a screen and a bit: a small scroll
+// up to read something again needs no button.
+go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
+	if sb == nil || app.chat.id == "" { return }
+	far := max(0, sb.view_bounds.y - sb.size.y) - sb.view_off.y > sb.size.y * GO_BOTTOM_SCREENS
+	t := ui.anim(ui.key_from_string(0, "go_bottom"), far ? 1 : 0, GO_BOTTOM_RATE)
+	if t < 0.02 { return }
+	h := math.round(em * BUTTON_COMPACT_H_EM)
+	w := math.round(em * GO_BOTTOM_W_EM)
+	y := sb.rect.max.y - main.rect.min.y - h - em * (0.2 + 0.6 * t)
+	ui.next({fixed_x = math.round((avail - w) * 0.5), fixed_y = math.round(y), width = ui.px(w), height = ui.px(h), axis = .X, cross = .Center, cursor = .Hand})
+	ui.a11y({role = .Button, name = "Go to the latest message"})
+	b := ui.build_box({.Clickable, .Focusable}, "###go_bottom")
+	d := ui.frame_new(f32)
+	d^ = t
+	b.custom_user = d
+	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		a := (^f32)(user)^
+		r := (b.rect.max.y - b.rect.min.y) * 0.5
+		draw.box_shadow(dc, b.rect, radii4(r), 8 * ui.scale(), {0, 0, 0, 0.6 * a})
+		draw.rect(dc, b.rect, with_alpha(hex(b.hot_t > FADE_VISIBLE ? HEX_BG4 : HEX_BG3), a), r)
+		draw.rect(dc, b.rect, with_alpha(hex(HEX_FLOATING_BORDER), a), r, px1())
+	}
+	sig := ui.signal(b)
+	if sig.clicked {
+		app.stick_bottom = true
+		sb.view_target.y = max(0, sb.view_bounds.y - sb.size.y)
+	}
+	if ui.parent(b) {
+		ui.spacer(ui.fill())
+		glyph(ICO_DOWN, with_alpha(hex(HEX_TEXT_SOFT), t), math.round(em * ICON_SMALL))
+		ui.spacer(ui.px(em * 0.3))
+		text("t", "Latest", with_alpha(hex(HEX_TEXT_SOFT), t), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+		ui.spacer(ui.fill())
 	}
 }
 
@@ -695,15 +762,17 @@ chat_header :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.fill())
 		}
 		c := &app.chat
-		if len(c.children) > 0 {
+		if len(c.children) > 0 && !(app.cx.docked_w > 0 && app.cx.docked_w < em * HEADER_FIGURES_MIN_EM && len(active_children(app)) == 0) {
 			subagents_button(app, em)
 			ui.spacer(ui.px(em * 0.6))
 		}
-		if c.tokens_in + c.tokens_out > 0 {
+		// (narrow, as a panel of the dock: the title first, the figures are in the statistics)
+		narrow := app.cx.docked_w > 0 && app.cx.docked_w < em * HEADER_FIGURES_MIN_EM
+		if !narrow && c.tokens_in + c.tokens_out > 0 {
 			if pill_button("###tok", fmt.tprintf("%s in · %s out", kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, ICO_BOLT).clicked { stats_open(app) }
 			ui.spacer(ui.px(em * 0.4))
 		}
-		if c.cost > 0 {
+		if !narrow && c.cost > 0 {
 			if pill_button("###cost", fmt.tprintf("$%.2f", c.cost), hex(HEX_GREEN)).clicked { stats_open(app) }
 			ui.spacer(ui.px(em * 0.4))
 		}
@@ -722,20 +791,6 @@ kfmt :: proc(v: f64) -> string {
 	case v >= 1e3: return fmt.tprintf("%.1fk", v / 1e3)
 	}
 	return fmt.tprintf("%d", int(v))
-}
-
-empty_state :: proc(app: ^App, em: f32) {
-	ui.spacer(ui.px(em * 10))
-	ui.next({width = ui.fill(), height = ui.px(em * 4), axis = .X, cross = .Center})
-	if ui.row(.Center, id = "###logo") {
-		ui.spacer(ui.fill())
-		big := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_WORDMARK)}
-		text("l1", "open", hex(HEX_FAINT), big)
-		text("l2", "code", hex(HEX_TEXT), big)
-		ui.spacer(ui.fill())
-	}
-	ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
-	if ui.tags("weak") { ui.label(app.online ? "Pick a session on the left, or start a new one.###hint" : fmt.tprintf("Connecting to %s…###hint", label_safe(server_base(app)))) }
 }
 
 messages :: proc(app: ^App, em: f32) {
@@ -774,6 +829,7 @@ messages :: proc(app: ^App, em: f32) {
 			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || (c.keep_id != "" && m.id == c.keep_id)) {
 				if i == 0 { app.first_msg = ui.parent_box() }
 				message(app, c, &m, i, em)
+				ctx_check(app, ui.parent_box(), .Message, m.id)
 			}
 		}
 	}
@@ -782,11 +838,9 @@ messages :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###working") {
 			ui.spacer(ui.px(em * 0.4))
-			text("w", "Working", accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_NOTE)})
-			ui.spacer(ui.px(em * 0.7))
-			scanner("###wl", accent(), math.round(em * 7), math.round(em * 0.9))
+			throbber(app, "###wl", accent(), math.round(em * 7), math.round(em * 0.9), em)
 			ui.spacer(ui.fill())
-			if ui.tags("weak") { text("hint", "Ctrl+Esc to stop", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}) }
+			if hint_action("###stop_hint", "Ctrl+Esc to stop", em) { interrupt_session(app, c.id) }
 		}
 	}
 	ui.spacer(ui.px(em * 2))
@@ -969,6 +1023,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 				above := i > 0 ? plain_tool(&m.parts[i - 1]) : cont && prev != nil && len(prev.parts) > 0 && plain_tool(&prev.parts[len(prev.parts) - 1])
 				below := i + 1 < len(m.parts) ? plain_tool(&m.parts[i + 1]) : next != nil && len(next.parts) > 0 && plain_tool(&next.parts[0])
 				tool_part(app, &p, pid, em, above, below)
+				ctx_check(app, ui.prev_box(fmt.tprintf("###tp_%s", pid)), .Tool, m.id, i)
 			}
 		}
 		if app.prefs.usage && !m.streaming && m.tokens_out > 0 && m.finish == "stop" {
@@ -1081,6 +1136,8 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 		hb.custom = head_draw
 		hs := ui.signal(hb)
 		if hs.clicked { part_toggle(app, p.tool_id != "" ? p.tool_id : pid, hb) }
+		edits := tool_kind(p.tool_name) == .Edit
+		if edits { _ = part_patch(p, app.chat.alloc) }
 		if ui.parent(hb) {
 			ui.spacer(ui.px(em * 0.5))
 			failed := p.status == .Error
@@ -1090,24 +1147,30 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 			ui.spacer(ui.px(em * 0.6))
 			text("sj", p.subject, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 			ui.spacer(ui.px(em * 0.4))
+			if edits && p.added + p.removed > 0 {
+				st := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}
+				if p.added > 0 { text("ad", fmt.tprintf("+%d", p.added), hex(HEX_GREEN), st); ui.spacer(ui.px(em * 0.3)) }
+				if p.removed > 0 { text("rm", fmt.tprintf("−%d", p.removed), hex(HEX_RED), st); ui.spacer(ui.px(em * 0.3)) }
+				ui.spacer(ui.px(em * 0.2))
+			}
 			glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY))
 			ui.spacer(ui.px(em * 0.6))
 		}
 		show_error := p.status == .Error && p.output != ""
-		if open || show_error || len(p.images) > 0 {   // (images show even folded: a screenshot is what one looks for)
+		// (what changed in a file shows even folded, as images do: a screenshot, a diff are what one looks for)
+		show_diff := edits && !open && p.status != .Error && p.patch != ""
+		if open || show_error || show_diff || len(p.images) > 0 {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row(id = "###bodyrow") {
 				ui.spacer(ui.px(em * 0.6))
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column() {
-					if open && p.input != "" {
-						section_label("in", "INPUT", em)
-						mono_well("###input", p.input, em, TOOL_INPUT_LINES_MAX)
-						ui.spacer(ui.px(em * 0.5))
-					}
-					if p.output != "" && (open || show_error) {
-						if open { section_label("out", p.status == .Error ? "ERROR" : "OUTPUT", em) }
-						mono_well("###output", p.output, em, open ? app.prefs.tool_lines : TOOL_ERROR_LINES_FOLDED, p.status == .Error ? hex(HEX_ERROR_TEXT) : hex(HEX_TOOL_OUTPUT))
+					if open {
+						tool_body(app, p, em)
+					} else if show_diff {
+						diff_view(app, "###diff", p.patch, em, DIFF_FOLDED_LINES)
+					} else if show_error {
+						mono_well("###output", p.output, em, TOOL_ERROR_LINES_FOLDED, hex(HEX_ERROR_TEXT))
 					}
 					if len(p.images) > 0 {
 						ui.spacer(ui.px(em * 0.5))
@@ -1212,11 +1275,12 @@ dock :: proc(app: ^App, em: f32, side, col: f32) {
 		ui.spacer(ui.px(side))
 		ui.next({width = ui.px(col), height = ui.children_sum(), axis = .Y})
 		if ui.column(id = "###dockcol") {
-			active_strip(app, em)
+			activity_strip(app, em)
 			for &p in app.permissions {
 				if p.session == app.chat.id { permission_card(app, &p, em) }
 			}
 			composer(app, em)
+			activity_tray(app, em)
 			ui.spacer(ui.px(em * 1.1))
 		}
 	}
@@ -1257,6 +1321,10 @@ COMPOSER_BUTTON_W_EM :: 2.6
 composer :: proc(app: ^App, em: f32) {
 	// Enter sends, Shift+Enter breaks the line (the editor itself breaks on Enter and commits on Ctrl+Enter)
 	submit := false
+	keys := app.composer_focused && !app.picker.open
+	// (the tray's keys with the focus nowhere too: a click on one of its rows leaves it there)
+	if app.activity.open && !app.picker.open && (app.composer_focused || ui.focus_key() == 0) { activity_keys(app) }
+	if keys { history_track(app) }
 	if app.composer_focused && !app.prefs.ctrl_enter {   // (Ctrl+Enter mode: Enter breaks the line, the editor commits on Ctrl+Enter)
 		if ui.key_press(.Return) { submit = true }
 		if ui.key_press(.Return, {.Shift}) { area_insert(&app.composer, "\n") }
@@ -1264,14 +1332,38 @@ composer :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well("###composer_well", radius = 11, base = HEX_COMPOSER_WELL, focus = app.composer_focused ? 1 : 0) {
 		ui.spacer(ui.px(em * 0.45))
+		attachments_row(app, em)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###edrow") {
 			ui.spacer(ui.px(em * 0.35))
 			if ui.tags("bare") {
+				// Up and Down go through the history where they have nothing to move (the caret on the first line; going
+				// through it, always); Down on the last line opens the tray of what runs. (Down moves the caret to the end
+				// of the last line first: what tells is that it did not move.)
+				down := false
+				caret0 := app.composer.cursor
+				if keys && ui.key_pressed_peek(.V, {.Ctrl}) && attach_paste(app) { _ = ui.key_press(.V, {.Ctrl}) }
+				if keys && !app.activity.open {
+					browsing := history_browsing(app)
+					if ui.key_pressed_peek(.Up) && (browsing || composer_on_first_line(app)) {
+						_ = ui.key_press(.Up)
+						history_step(app, 1)
+					}
+					if browsing {
+						if ui.key_press(.Down) { history_step(app, -1) }
+						if ui.key_press(.Escape) { history_leave(app, true) }
+					} else {
+						down = ui.key_pressed_peek(.Down)
+					}
+				}
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_BODY), text_pad = em * 0.5})
 				res := ui.text_edit("###composer", &app.composer, "Ask anything…", wrap = true, auto_height = true, min_lines = 2, max_lines = COMPOSER_MAX_LINES)
 				app.composer_focused = res.focused
+				if app.cx.focus_composer { ui.set_focus(res.box.key); app.cx.focus_composer = false }
+				ctx_check(app, res.box, .Composer)
 				if res.committed { submit = true }
+				if down && app.composer.cursor == caret0 { activity_open(app) }
+				if res.changed { activity_close(app) }   // (typing: what is written is what matters now)
 			}
 			ui.spacer(ui.px(em * 0.35))
 		}
@@ -1288,14 +1380,19 @@ composer :: proc(app: ^App, em: f32) {
 			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(&app.picker, "model", msig.box.rect) } }
 			ui.spacer(ui.fill())
 			if app.column_w > em * COMPOSER_HINT_MIN_EM {   // (room for it beside the agent and model buttons)
-				text("hint", app.prefs.ctrl_enter ? "Ctrl+Enter  send   ·   Enter  new line" : "Enter  send   ·   Shift+Enter  new line", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				if history_browsing(app) {
+					text("hint", fmt.tprintf("history %d/%d   ·   ", app.history.at + 1, len(app.history.view)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					if hint_action("###hist_back", "Esc  back to your text", em, app.mono) { history_leave(app, true) }
+				} else {
+					text("hint", app.prefs.ctrl_enter ? "Ctrl+Enter  send   ·   Enter  new line" : "Enter  send   ·   Shift+Enter  new line", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				}
 			}
 			ui.spacer(ui.px(em * 0.8))
 			if app.chat.busy {
 				if bevel_button("###stop2", "", ICO_STOP, .Danger, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM)).clicked { interrupt_session(app, app.chat.id) }
 				ui.spacer(ui.px(em * 0.4))
 			}
-			empty := len(strings.trim_space(ui.area_string(&app.composer))) == 0
+			empty := len(strings.trim_space(ui.area_string(&app.composer))) == 0 && len(app.cx.attachments) == 0
 			if bevel_button("###send", "", ICO_SEND, .Accent, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM), disabled = empty || !app.online).clicked { submit = true }
 			ui.spacer(ui.px(em * 0.55))
 
@@ -1317,6 +1414,7 @@ composer_pickers :: proc(app: ^App, agent: string, em: f32) {
 	if k := picker(app, &app.picker, "agent", "agents", agent_items[:], em); k >= 0 {
 		if app.chat.id != "" { switch_agent(app, app.chat.id, agent_ids[k]) }
 		app.chat.agent = strings.clone(agent_ids[k], app.chat.alloc)
+		choice_remember(app)
 	}
 	model_items := make([dynamic]Pick_Item, len(app.models), context.temp_allocator)
 	for m, i in app.models {
@@ -1327,7 +1425,61 @@ composer_pickers :: proc(app: ^App, agent: string, em: f32) {
 		if app.chat.id != "" { switch_model(app, app.chat.id, m) }
 		app.chat.model = strings.clone(m.id, app.chat.alloc)
 		app.chat.provider = strings.clone(m.provider, app.chat.alloc)
+		choice_remember(app)
 	}
+}
+
+// The agent and the model chosen last: what a new session starts with, from one run of the program to the next.
+choice_remember :: proc(app: ^App) {
+	pref_set(app, "session.agent", app.chat.agent)
+	pref_set(app, "session.model", app.chat.model)
+	pref_set(app, "session.provider", app.chat.provider)
+}
+
+// A session that has not begun shows them.
+choice_recall :: proc(app: ^App) {
+	c := &app.chat
+	c.agent = strings.clone(config.string_of(&app.cfg_prefs, "session.agent"), c.alloc)
+	c.model = strings.clone(config.string_of(&app.cfg_prefs, "session.model"), c.alloc)
+	c.provider = strings.clone(config.string_of(&app.cfg_prefs, "session.provider"), c.alloc)
+}
+
+// The session just made takes them, one after the other, then its first prompt: requests go on threads of their own, and
+// the prompt must not overtake them.
+session_setup :: proc(app: ^App, id: string, step: int) {
+	p := &app.cfg_prefs
+	if step == 0 {
+		if agent := config.string_of(p, "session.agent"); agent != "" {
+			request(app, .Session_Agent, "POST", fmt.tprintf("/api/session/%s/agent", id), fmt.tprintf(`{{"agent":%s}}`, jquote(agent)), id)
+			app.chat.agent = strings.clone(agent, app.chat.alloc)
+			return
+		}
+	}
+	if step <= 1 {
+		if model := config.string_of(p, "session.model"); model != "" {
+			provider := config.string_of(p, "session.provider")
+			request(app, .Session_Model, "POST", fmt.tprintf("/api/session/%s/model", id), fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s}}}}`, jquote(model), jquote(provider)), id)
+			app.chat.model = strings.clone(model, app.chat.alloc)
+			app.chat.provider = strings.clone(provider, app.chat.alloc)
+			return
+		}
+	}
+	if app.cx.prompt_waits {   // (an image alone is a prompt too: its text is empty)
+		app.cx.prompt_waits = false
+		send_prompt(app, id, app.pending_prompt)
+		delete(app.pending_prompt)
+		app.pending_prompt = ""
+	}
+}
+
+// The caret is on the first line the composer shows, wrapped or not (as last drawn).
+composer_on_first_line :: proc(app: ^App) -> bool {
+	a := &app.composer
+	if len(a.buf) == 0 { return true }
+	caret, _, ok := ui.text_edit_caret_rect(a)
+	b := ui.prev_box("###composer")
+	if !ok || b == nil { return false }
+	return a.scroll.y < 1 && caret.min.y - b.rect.min.y < b.text_pad + (caret.max.y - caret.min.y) * 0.75
 }
 
 area_insert :: proc(a: ^ui.Text_Area, s: string) {
@@ -1344,12 +1496,33 @@ prompt_restore :: proc(app: ^App, text: string) {
 	ui.area_set(&app.composer, strings.trim_space(typed) == "" ? text : fmt.tprintf("%s\n%s", text, typed))
 }
 
+// "/name what follows", when the server has a command of that name.
+slash_send :: proc(app: ^App, t: string) -> bool {
+	if !strings.has_prefix(t, "/") { return false }
+	name, rest := t[1:], ""
+	if i := strings.index_any(name, " \n"); i >= 0 { name, rest = name[:i], strings.trim_space(name[i:]) }
+	for s in app.cx.slash {
+		if s.name != name { continue }
+		request(app, .Action, "POST", fmt.tprintf("/api/session/%s/command", app.chat.id), fmt.tprintf(`{{"name":%s,"text":%s}}`, jquote(name), jquote(rest)), app.chat.id)
+		return true
+	}
+	return false
+}
+
 submit_prompt :: proc(app: ^App) {
 	t := strings.trim_space(ui.area_string(&app.composer))
-	if t == "" || !app.online { return }
+	if (t == "" && len(app.cx.attachments) == 0) || !app.online { return }
+	history_leave(app, false)
+	if t != "" { history_add(app, t) }
+	if app.chat.id != "" && slash_send(app, t) {
+		ui.area_set(&app.composer, "")
+		app.stick_bottom = true
+		return
+	}
 	if app.chat.id == "" {
 		delete(app.pending_prompt)
 		app.pending_prompt = strings.clone(t)
+		app.cx.prompt_waits = true
 		create_session(app, app.chat.new_dir)
 	} else {
 		send_prompt(app, app.chat.id, t)
@@ -1404,6 +1577,7 @@ status_bar :: proc(app: ^App, em: f32) {
 			text("v", fmt.tprintf("opencode %s", app.server_version), hex(HEX_FAINT), small)
 		}
 		ui.spacer(ui.fill())
+		update_pill(app, em)
 		pend := int(app.pending)
 		if pend > 0 {
 			text("p", fmt.tprintf("%d request%s", pend, pend > 1 ? "s" : ""), hex(HEX_FAINT), small)
@@ -1416,6 +1590,11 @@ status_bar :: proc(app: ^App, em: f32) {
 		}
 		text("n", fmt.tprintf("%d sessions", len(app.sessions)), hex(HEX_FAINT), small)
 		ui.spacer(ui.px(em * 0.8))
+		if app.prefs.show_fps {
+			fps := app.cx.frame_ms > 0 ? 1000 / app.cx.frame_ms : 0
+			text("fps", fmt.tprintf("%3.0f fps  %.1f ms", fps, app.cx.work_ms), hex(HEX_FAINT), small)
+			ui.spacer(ui.px(em * 0.8))
+		}
 	}
 }
 

@@ -1,0 +1,175 @@
+// Everything the program can be asked to do, in one table: the keyboard, the palette (palette.odin) and the help read it, so
+// that a key shown is a key that works. A command runs after the frame (command_run): it may drop what the boxes of this
+// frame still read.
+package occ
+
+import "core:fmt"
+import "core:math"
+import "core:strings"
+import "gt:platform"
+import "gt:ui"
+
+Command :: struct {
+	id, title, group, icon: string,
+	keys:    string,                // as shown
+	key:     platform.Key,          // .None: no key of its own here (the keys of a widget, or none)
+	mods:    platform.Modifiers,
+	run:     proc(app: ^App),
+	enabled: proc(app: ^App) -> bool,   // nil: always
+	checked: proc(app: ^App) -> bool,   // nil: not a toggle
+}
+
+@(private = "file") has_session :: proc(app: ^App) -> bool { return app.chat.id != "" }
+@(private = "file") is_busy :: proc(app: ^App) -> bool { return app.chat.busy }
+@(private = "file") has_back :: proc(app: ^App) -> bool { return back_target(app) != "" }
+
+COMMANDS := [?]Command{
+	{id = "app.palette", title = "Command palette", group = "General", icon = ICO_SEARCH, keys = "Ctrl+K", key = .K, mods = {.Ctrl}, run = palette_toggle},
+	{id = "app.help", title = "Keyboard shortcuts", group = "General", icon = ICO_LIST, keys = "F1", key = .F1, run = proc(app: ^App) { app.cx.help_open = !app.cx.help_open }},
+	{id = "app.settings", title = "Settings", group = "General", icon = ICO_SLIDERS, keys = "Ctrl+,", key = .Comma, mods = {.Ctrl}, run = settings_open},
+	{id = "app.refresh", title = "Refresh", group = "General", icon = ICO_REFRESH, keys = "F5", key = .F5, run = proc(app: ^App) {
+		refresh_sessions(app)
+		if app.chat.id != "" { load_messages(app, app.chat.id) }
+	}},
+	{id = "app.add_server", title = "Add a server…", group = "General", icon = ICO_PLUG, run = proc(app: ^App) { server_edit_open(app, -1) }},
+	{id = "app.setup", title = "Setup and about", group = "General", icon = ICO_BULB, run = setup_open},
+	{id = "app.update", title = "Check for updates", group = "General", icon = ICO_REFRESH, run = update_check_now},
+	{id = "app.update_install", title = "Install the update", group = "General", icon = ICO_REFRESH, run = update_install, enabled = proc(app: ^App) -> bool { return app.updater.state == .Ready }},
+	{id = "app.update_restart", title = "Restart to update", group = "General", icon = ICO_REFRESH, run = update_restart, enabled = proc(app: ^App) -> bool { return app.updater.state == .Installed }},
+	{id = "app.quit", title = "Quit", group = "General", icon = ICO_CANCEL, keys = "Alt+F4", run = proc(app: ^App) { app.quit = true }},
+
+	{id = "nav.home", title = "Home", group = "Go to", icon = ICO_CHAT, keys = "Ctrl+H", key = .H, mods = {.Ctrl}, run = go_home},
+	{id = "nav.back", title = "Back to the parent session", group = "Go to", icon = ICO_BACK, keys = "Alt+Left", key = .Left, mods = {.Alt}, run = go_back, enabled = has_back},
+	{id = "nav.composer", title = "Focus the composer", group = "Go to", icon = ICO_EDIT, keys = "Ctrl+L", key = .L, mods = {.Ctrl}, run = proc(app: ^App) { app.cx.focus_composer = true }},
+
+	{id = "session.new", title = "New session", group = "Session", icon = ICO_ADD, keys = "Ctrl+N", key = .N, mods = {.Ctrl}, run = new_session},
+	{id = "session.stop", title = "Stop the run", group = "Session", icon = ICO_STOP, keys = "Ctrl+Esc", key = .Escape, mods = {.Ctrl}, run = proc(app: ^App) { interrupt_session(app, app.chat.id) }, enabled = is_busy},
+	{id = "session.activity", title = "What runs in the background", group = "Session", icon = ICO_TERMINAL, keys = "Ctrl+J", key = .J, mods = {.Ctrl}, run = activity_toggle, enabled = has_session},
+	{id = "session.quote", title = "Quote what is selected", group = "Session", icon = ICO_EDIT, keys = "Ctrl+Q", key = .Q, mods = {.Ctrl}, run = quote_selection, enabled = proc(app: ^App) -> bool { return ui.has_selection(&app.ui_state) }},
+	{id = "session.find", title = "Find in the conversation", group = "Session", icon = ICO_SEARCH, keys = "Ctrl+F", run = find_open, enabled = has_session},
+	{id = "session.stats", title = "Session statistics", group = "Session", icon = ICO_GAUGE, keys = "Ctrl+I", key = .I, mods = {.Ctrl}, run = stats_open, enabled = has_session},
+	{id = "session.rename", title = "Rename the session…", group = "Session", icon = ICO_EDIT, keys = "F2", key = .F2, run = proc(app: ^App) { rename_open(app, app.chat.id) }, enabled = has_session},
+	{id = "session.fork", title = "Fork the session", group = "Session", icon = ICO_COPY, run = proc(app: ^App) { fork_session(app, app.chat.id, "") }, enabled = has_session},
+	{id = "session.compact", title = "Compact the conversation", group = "Session", icon = ICO_LIST, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/compact", app.chat.id), "{}", app.chat.id) }, enabled = has_session},
+	{id = "session.background", title = "Send running tools to the background", group = "Session", icon = ICO_TERMINAL, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/background", app.chat.id), "", app.chat.id) }, enabled = is_busy},
+	{id = "session.copy_id", title = "Copy the session ID", group = "Session", icon = ICO_COPY, run = proc(app: ^App) { clip_set(app.chat.id) }, enabled = has_session},
+
+	{id = "view.preview", title = "Show or hide the Preview panel", group = "View", icon = ICO_GLOBE, keys = "Ctrl+Shift+B", key = .B, mods = {.Ctrl, .Shift}, run = preview_toggle, checked = proc(app: ^App) -> bool { return app.preview.open }},
+	{id = "view.sidebar", title = "Show or hide the sidebar", group = "View", icon = ICO_MENU, keys = "Ctrl+B", key = .B, mods = {.Ctrl}, run = proc(app: ^App) { app.cx.sidebar_hidden = !app.cx.sidebar_hidden }, checked = proc(app: ^App) -> bool { return !app.cx.sidebar_hidden }},
+	{id = "view.content_in", title = "Zoom in the conversation", group = "View", icon = ICO_ADD, keys = "Ctrl+=", run = proc(app: ^App) { content_zoom_by(app, ZOOM_FACTOR) }},
+	{id = "view.content_out", title = "Zoom out the conversation", group = "View", icon = ICO_DOWN, keys = "Ctrl+-", run = proc(app: ^App) { content_zoom_by(app, 1 / ZOOM_FACTOR) }},
+	{id = "view.content_reset", title = "Reset the conversation's zoom", group = "View", icon = ICO_UNDO, keys = "Ctrl+0", run = proc(app: ^App) { content_zoom_set(app, 1) }},
+	{id = "view.chrome_in", title = "Zoom in the interface", group = "View", icon = ICO_ADD, keys = "Ctrl+Shift+=", run = proc(app: ^App) { ui.set_zoom(&app.ui_state, ui.zoom(&app.ui_state) * ZOOM_FACTOR) }},
+	{id = "view.chrome_out", title = "Zoom out the interface", group = "View", icon = ICO_DOWN, keys = "Ctrl+Shift+-", run = proc(app: ^App) { ui.set_zoom(&app.ui_state, ui.zoom(&app.ui_state) / ZOOM_FACTOR) }},
+	{id = "view.chrome_reset", title = "Reset the interface's zoom", group = "View", icon = ICO_UNDO, keys = "Ctrl+Shift+0", run = proc(app: ^App) { ui.set_zoom(&app.ui_state, 1) }},
+}
+
+command_enabled :: proc(app: ^App, c: ^Command) -> bool { return c.enabled == nil || c.enabled(app) }
+
+command_find :: proc(id: string) -> ^Command {
+	for &c in COMMANDS { if c.id == id { return &c } }
+	return nil
+}
+
+// Asked for now, done after the frame.
+command_run :: proc(app: ^App, c: ^Command) { app.cx.command_due = c }
+
+commands_apply :: proc(app: ^App) {
+	if c := app.cx.command_due; c != nil {
+		app.cx.command_due = nil
+		c.run(app)
+		app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	}
+}
+
+// The keys of the table, at the start of a build. The palette has its usual other names.
+commands_keys :: proc(app: ^App) {
+	for &c in COMMANDS {
+		if c.key == .None || !command_enabled(app, &c) { continue }
+		if ui.key_pressed_peek(c.key, c.mods) && ui.key_press(c.key, c.mods) { command_run(app, &c) }
+	}
+	if ui.key_press(.P, {.Ctrl}) || ui.key_press(.P, {.Ctrl, .Shift}) { command_run(app, command_find("app.palette")) }
+}
+
+go_home :: proc(app: ^App) {
+	for s in app.nav { delete(s) }
+	clear(&app.nav)
+	new_session(app)
+}
+
+// A dialog, a picker or a menu is over the window.
+overlay_open :: proc(app: ^App) -> bool {
+	return app.settings_open || app.delete_open || app.stats_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.rename.open || len(app.ui_state.menus) > 0
+}
+
+content_zoom_set :: proc(app: ^App, z: f32) {
+	pref_set(app, "appearance.content_zoom", fmt.tprintf("%.3f", clamp(z, CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX)))
+}
+
+content_zoom_by :: proc(app: ^App, factor: f32) { content_zoom_set(app, app.prefs.content_zoom * factor) }
+
+// What the toolkit would make of the window's zoom, where it is the conversation's that is meant: Ctrl and the wheel over
+// the conversation, Ctrl and = - 0 without Shift (with it: the interface, which the toolkit does). Before the build.
+content_zoom_events :: proc(app: ^App, events: []platform.Event) {
+	for &e in events {
+		#partial switch e.kind {
+		case .Scroll:
+			if .Ctrl not_in e.mods || !rect_contains(app.cx.main_rect, e.pos) { continue }
+			z := app.prefs.content_zoom
+			content_zoom_set(app, e.delta.y < 0 ? z * ZOOM_FACTOR : z / ZOOM_FACTOR)
+			e.kind = .None
+		case .Key_Press:
+			if e.mods != {.Ctrl} { continue }
+			#partial switch e.key {
+			case .Equal, .Num_Add:      content_zoom_by(app, ZOOM_FACTOR)
+			case .Minus, .Num_Subtract: content_zoom_by(app, 1 / ZOOM_FACTOR)
+			case .N0:                   content_zoom_set(app, 1)
+			case: continue
+			}
+			e.kind = .None
+		}
+	}
+}
+
+rect_contains :: proc(r: Rect, p: Vec2) -> bool { return p.x >= r.min.x && p.x < r.max.x && p.y >= r.min.y && p.y < r.max.y }
+
+// The keys of the table as a dialog: what can be done, by group.
+help_dialog :: proc(app: ^App, em: f32) {
+	if ui.modal("help", em * 34, &app.cx.help_open, 0.1) {
+		dialog_backdrop()
+		ui.spacer(ui.px(em))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+		if ui.row(id = "###help") {
+			ui.spacer(ui.px(em * 1.2))
+			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+			if ui.column() {
+				text("t", "Keyboard shortcuts", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
+				row :: proc(app: ^App, id, keys, what: string, em: f32) {
+					ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
+					if ui.row(.Center, id = id) {
+						text("w", what, hex(HEX_TEXT_SOFT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+						text("k", keys, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+					}
+				}
+				group := ""
+				for &c, i in COMMANDS {
+					if c.keys == "" { continue }
+					if c.group != group {
+						group = c.group
+						ui.spacer(ui.px(em * 0.4))
+						section_label(fmt.tprintf("g%d", i), strings.to_upper(group, context.temp_allocator), em)
+					}
+					row(app, fmt.tprintf("###h%d", i), c.keys, c.title, em)
+				}
+				ui.spacer(ui.px(em * 0.4))
+				section_label("gc", "COMPOSER", em)
+				row(app, "###hc1", "Up / Down", "Go through what you sent", em)
+				row(app, "###hc2", "Down", "On the last line: what runs in the background", em)
+				row(app, "###hc3", "Ctrl+V", "Paste text, an image or files", em)
+				row(app, "###hc4", "Middle click", "Scroll by the pointer", em)
+				ui.spacer(ui.px(em))
+			}
+			ui.spacer(ui.px(em * 1.2))
+		}
+	}
+}

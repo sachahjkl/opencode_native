@@ -1,8 +1,10 @@
 name: Release
 
-# A version tag vX.Y.Z builds the program for Windows and for Linux and publishes both with the release (made from the
-# CHANGELOG's section of that version when it does not exist yet; its assets replaced when it does), with one
-# SHA256SUMS.txt. The tag must match APP_VERSION (src/setup.odin).
+# A version tag vX.Y.Z (or vX.Y.Z-beta.N: a pre-release) builds the program for Windows and for Linux and publishes both with the
+# release (made from the CHANGELOG's section of that version when it does not exist yet; its assets replaced when it does), with
+# one SHA256SUMS.txt. The tag must match APP_VERSION (src/setup.odin). The Windows program goes with the signed manifests of its
+# channels (docs/updates.md): a beta reaches the beta channel, a release both; the rolling release channel-beta is where that
+# channel reads.
 on:
   push:
     tags: ['v*']
@@ -32,7 +34,7 @@ jobs:
           $tag = '${{ github.ref_name }}'
           $m = Select-String -Path src\setup.odin -Pattern 'APP_VERSION\s*::\s*"([^"]+)"'
           $v = $m.Matches[0].Groups[1].Value
-          if ("v$v" -ne $tag) { throw "tag $tag does not match APP_VERSION $v (src/setup.odin)" }
+          if (($tag -replace '-beta.*$', '') -ne "v$v") { throw "tag $tag does not match APP_VERSION $v (src/setup.odin)" }
           "version=$v" >> $env:GITHUB_OUTPUT
 
       - name: Build (build.bat)
@@ -41,6 +43,17 @@ jobs:
 
       - name: Package
         run: ./tools/package.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - name: Sign the update
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          $v = '${{ steps.version.outputs.version }}'
+          $channels = '${{ github.ref_name }}' -match '-beta' ? @('beta') : @('stable', 'beta')
+          foreach ($c in $channels) {
+            odin run tools/update_tool -- manifest "build/dist/opencode-native-$v-windows-x64.exe" $v $c "build/dist/update-windows-x64-$c.json"
+            if ($LASTEXITCODE) { throw "the $c manifest could not be signed" }
+          }
 
       - uses: actions/upload-artifact@v7
         with:
@@ -92,9 +105,15 @@ jobs:
           rm -f SHA256SUMS.txt
           sha256sum opencode-native-* > SHA256SUMS.txt
           cat SHA256SUMS.txt
-          files=(opencode-native-* SHA256SUMS.txt)
+          files=(opencode-native-* SHA256SUMS.txt update-windows-x64-*)
+          pre=()
+          case "$TAG" in *-beta*) pre=(--prerelease) ;; esac
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${files[@]}" --clobber
           else
-            gh release create "$TAG" "${files[@]}" --title "opencode native $VERSION" --notes-file NOTES.md
+            gh release create "$TAG" "${files[@]}" "${pre[@]}" --title "opencode native $VERSION" --notes-file NOTES.md
           fi
+          # the beta channel's fixed address: the program and its signed manifest
+          beta=(opencode-native-*-windows-x64.exe update-windows-x64-beta.json update-windows-x64-beta.json.sig)
+          gh release view channel-beta >/dev/null 2>&1 || gh release create channel-beta --prerelease --title "Beta channel" --notes "What the beta channel of the updater reads."
+          gh release upload channel-beta "${beta[@]}" --clobber

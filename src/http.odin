@@ -40,6 +40,24 @@ foreign occ_native {
 	occ_sse_next :: proc(s: rawptr, out: ^Occ_Buf) -> i32 ---
 	occ_sse_free :: proc(s: rawptr) ---
 	occ_image_decode :: proc(data: [^]u8, len: uint, base64: i32, max_dim: u32, out_w, out_h: ^u32, out: ^Occ_Buf) -> i32 ---   // (images.odin)
+	occ_ws_open :: proc(c: rawptr, path: [^]u8, path_len: uint) -> rawptr ---   // (browser_mcp.odin)
+	occ_ws_read :: proc(w: rawptr, out: ^Occ_Buf) -> i32 ---
+	occ_ws_send :: proc(w: rawptr, data: [^]u8, n: uint) -> i32 ---
+	occ_ws_free :: proc(w: rawptr) ---
+}
+
+when ODIN_OS == .Windows {
+	Web_Callback :: proc "c" (user: rawptr, kind: i32, id: u64, data: [^]u8, n: uint)
+
+	@(default_calling_convention = "c")
+	foreign occ_native {   // (webview_windows.odin)
+		occ_webview_new :: proc(parent: int, data: [^]u8, data_len: uint, cb: Web_Callback, user: rawptr) -> rawptr ---
+		occ_webview_place :: proc(w: rawptr, x, y, width, height, visible: i32) ---
+		occ_webview_navigate :: proc(w: rawptr, url: [^]u8, n: uint) ---
+		occ_webview_act :: proc(w: rawptr, what: i32) ---
+		occ_webview_script :: proc(w: rawptr, code: [^]u8, n: uint, id: u64) ---
+		occ_webview_capture :: proc(w: rawptr, id: u64) ---
+	}
 }
 
 Http :: struct {

@@ -8,6 +8,7 @@ import "core:fmt"
 import "core:mem/virtual"
 import "core:math"
 import "core:os"
+import "core:path/filepath"
 import "core:slice"
 import "core:strconv"
 import "core:strings"
@@ -37,12 +38,23 @@ App :: struct {
 	fonts_wanted:  string,     // the two font preferences fonts_apply last applied (prefs_refresh compares)
 	font_families: []string,   // the installed families (read when a font picker first opens)
 
+	cx:             App_Context,       // what the window keeps from frame to frame, beside the panels' own state
+
 	// the server
 	servers:        [dynamic]Server,   // (servers.odin) this computer's first
 	server:         int,               // the one connected
 	conn:           ^Conn,             // its connection
 	server_edit:    Server_Edit,
 	picker:         Picker,            // the composer's agent or model picker (picker.odin)
+	history:        History,           // what was sent, Up and Down in the composer (history.odin)
+	activity:       Activity,          // what runs behind the conversation (activity.odin)
+	palette:        Palette,           // Ctrl+K (palette.odin)
+	throbber:       Throbber,          // what says a run goes on (throbber.odin)
+	preview:        Preview,           // the page beside the conversation (preview.odin)
+	browser:        Browser,           // the agents' tools on that page (browser_mcp.odin)
+	updater:        Updater,           // a new version: checked, downloaded, in place (updater.odin)
+	dock:           ui.Dock,           // ... and the panels' layout
+	rename:         Rename,            // a session's title (context_menus.odin)
 	find:           Find,              // find in the conversation (find.odin)
 	scale:          f32,               // --scale=<factor>: the interface's scale whatever the screen says (0: the screen's)
 	servers_in_clear: bool,            // read passwords in clear from an older version's file: saved protected at start
@@ -130,6 +142,32 @@ App :: struct {
 	times:            Frame_Times,   // the last frame's steps
 }
 
+// What the window keeps from one frame to the next that belongs to no panel: what is due, what is open, where things are.
+App_Context :: struct {
+	prompt_waits:   bool,              // a first prompt waits for its session (App.pending_prompt, the attachments)
+	quote_open:     bool,              // the chip at the end of a selection (context_menus.odin)
+	quote_at:       Rect,
+	quote_kept:     string,            // ... what it quotes (owned)
+	quote_serial, quote_done: u64,     // ... which selection, and the last one quoted
+	gliding:        bool,              // a panel's height moves in this build
+	was_gliding:    bool,              // ... it did in the last one
+	docked_w:       f32,               // the conversation's room as a panel of the dock (0: it is not one)
+	help_open:      bool,              // the keyboard's dialog (commands.odin)
+	command_due:    ^Command,          // to run after this frame (commands.odin)
+	slash:          [dynamic]Slash,    // the server's commands
+	have_slash:     bool,
+	attachments:    [dynamic]Attachment,   // what goes with the prompt (attachments.odin)
+	ctx:            Ctx_Target,        // what the menu of a right click is about (context_menus.odin)
+	ctx_taken:      bool,              // a right press of this build found its target
+	focus_composer: bool,              // the composer takes the focus at its next build
+	sidebar_hidden: bool,
+	main_rect:      Rect,              // the conversation's place (Ctrl and the wheel over it zoom it)
+	frame_ms:       f32,               // what the status bar's rate says: between two frames, smoothed
+	work_ms:        f32,               // ... what a frame costs (build, draw, render)
+	pointer_ms:       f64,    // when the pointer or the wheel last moved (pace)
+	frame_tick:       time.Tick,   // when the last frame started (pace)
+}
+
 // How long the steps of a frame took (bench_test.odin reads them).
 Frame_Times :: struct {
 	build:   time.Duration,   // every build of the frame (input, layout)
@@ -147,10 +185,23 @@ clip_set :: proc(text: string) { platform.set_clipboard(the_app.win, text) }
 // most here is the resize step: a frame at a new size is presented at once (no wait for the swap chain, none for the
 // refresh, two frames queued); waiting, the compositor shows the last frame stretched over the new size until one of that
 // size arrives. Input after a rest is answered at once too. `inner`: a frame asked for from a loop of the system (the
-// live resize's WM_PAINT). A splitter or a scroll bar held paces as a drag: one frame per slot.
+// live resize's WM_PAINT). A splitter or a scroll bar held paces as a drag: one frame per slot. So does a pointer or a wheel
+// that moves with no button down: what follows it (a row lit under it, a page that scrolls) is read against the pointer
+// itself, which the system draws at the screen's top rate. On a variable refresh screen that Windows reports at 60 Hz
+// (here 180), as Continuous frames those waited for a 60 Hz refresh: every hover came 2 or 3 of the pointer's frames late.
 pace :: proc(app: ^App, inner: bool) -> (at_once: bool) {
-	return render.pace_frame(&app.pacer, &app.r, app.win, idled = app.idled, dragging = ui.active_key() != 0, inner = inner)
+	moving := ui.now_ms() - app.cx.pointer_ms < POINTER_MOVING_MS || app.cx.gliding   // (a panel that opens: read as closely)
+	// (render.pace_frame works out the wait of the frame's slot and does not make it: a 1 kHz mouse made 430 frames a second)
+	if moving && !inner && !app.idled {
+		if period := time.Duration(app.pacer.cadence.slots.period_ns); period > 0 {
+			if left := period - time.tick_since(app.cx.frame_tick); left > POINTER_MIN_WAIT { precise_sleep(left) }
+		}
+	}
+	app.cx.frame_tick = time.tick_now()
+	return render.pace_frame(&app.pacer, &app.r, app.win, idled = app.idled, dragging = ui.active_key() != 0 || moving, inner = inner)
 }
+
+
 
 FRAMES_AFTER_INPUT :: 3        // still drawn after an event, and at start: what it set off settles
 DT_MIN_S           :: 0.0005
@@ -171,13 +222,18 @@ frame :: proc(app: ^App, inner := false) {
 	events := platform.poll_events(app.win, false)
 	render.mark_input(&app.r)
 	if len(events) > 0 { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }
+	for e in events { if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() } }
+	content_zoom_events(app, events)
 	render.resize(&app.r, app.win.size)
 	size := draw.Vec2{f32(app.win.size.x), f32(app.win.size.y)}
 	now := time.tick_now()
 	dt := clamp(f32(time.duration_seconds(time.tick_diff(app.last_tick, now))), DT_MIN_S, DT_MAX_S)
 	app.last_tick = now
+	if dt < FPS_RESTED_S { app.cx.frame_ms += (dt * 1000 - app.cx.frame_ms) * FPS_SMOOTH }   // (a rest is no frame rate)
 	build :: proc(app: ^App, size: draw.Vec2, events: []platform.Event, dt: f32) {
 		app.animating = false
+		app.cx.was_gliding = app.cx.gliding
+		app.cx.gliding = false
 		app.chat_sb = nil
 		ui.set_scrollbar_autohide(&app.ui_state, app.prefs.autohide_scrollbars)
 		ui.begin_build(&app.ui_state, {
@@ -244,9 +300,14 @@ frame :: proc(app: ^App, inner := false) {
 	render.frame_end(&app.r, !at_once)
 	render.paced_present(&app.pacer)
 	app.times.render = time.tick_since(t_render)
+	work := f32(time.duration_milliseconds(app.times.build + app.times.draw + app.times.render))
+	app.cx.work_ms += (work - app.cx.work_ms) * FPS_SMOOTH
 	free_all(context.temp_allocator)
 
 	nav_apply(app)
+	commands_apply(app)
+	preview_place(app)
+	browser_tick(app)
 	if app.refresh_due && ui.now_ms() - app.refresh_ms > REFRESH_DEBOUNCE_MS {
 		app.refresh_due = false
 		app.refresh_ms = ui.now_ms()
@@ -254,6 +315,7 @@ frame :: proc(app: ^App, inner := false) {
 	}
 	if app.stats_pending && app.chat.loaded && app.chat.have_self { app.stats_pending = false; stats_open(app) }
 	servers_rediscover(app)
+	activity_tick(app)
 	if app.facts_due && ui.now_ms() - app.facts_ms > FACTS_DEBOUNCE_MS {
 		// an action of the settings (connect an MCP server, revoke a permission): read the pages again
 		app.facts_due = false
@@ -410,7 +472,7 @@ WINDOW_H             :: 860
 POSTS_CAPACITY       :: 4096
 POSTS_PER_BUILD      :: 4000
 CHECK_FRAME_SLEEP_MS :: 50    // --frames=N
-ANIMATION_WAIT_MS    :: 33    // the longest sleep while something pulses
+ANIMATION_WAIT_MS    :: 16    // the longest sleep while something pulses (33 made a stutter of what glides)
 
 // What the window's interface needs once it has a renderer (and the fonts, fonts_init): the state, the theme, the
 // preferences (read from `prefs_file`; "": the defaults), the queue of what the threads post. A test makes the same on an
@@ -422,7 +484,10 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	ui.init(&app.ui_state, &app.fonts, &app.theme)
 	app.ui_state.icon_font = app.tk_icons
 	ui.set_toast_position(&app.ui_state, .Top_Right)
+	ui.set_autoscroll_enabled(&app.ui_state, true)   // a click of the wheel scrolls by the pointer, as in the browsers
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
+	history_init(app, prefs_file != "" ? pjoin({filepath.dir(prefs_file), "history.jsonl"}) : "")
+	palette_init(app, prefs_file != "" ? pjoin({filepath.dir(prefs_file), "palette_usage.txt"}) : "")
 	ui.post_configure(&app.ui_state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
 }
 
@@ -508,6 +573,7 @@ main :: proc() {
 		if a == "--add-server" { server_edit_open(app, -1) }
 		if strings.has_prefix(a, "--find=") { find_open(app); ui.field_set(&app.find.field, a[len("--find="):]) }
 		if strings.has_prefix(a, "--image=") { image_view_start(app, a[len("--image="):]) }
+		if strings.has_prefix(a, "--attach=") { attach_path(app, a[len("--attach="):]) }   // (what a paste gives, without the clipboard)
 	}
 	for a in os.args[1:] {   // --settings[=page number]: the settings open at start
 		if a == "--settings" || strings.has_prefix(a, "--settings=") {
