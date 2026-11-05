@@ -144,6 +144,8 @@ App :: struct {
 
 // What the window keeps from one frame to the next that belongs to no panel: what is due, what is open, where things are.
 App_Context :: struct {
+	system_stripes:      font.Subpixel_Text,   // what the system does with text (text_mode_follow)
+	system_stripes_read: bool,
 	prompt_waits:   bool,              // a first prompt waits for its session (App.pending_prompt, the attachments)
 	quote_open:     bool,              // the chip at the end of a selection (context_menus.odin)
 	quote_at:       Rect,
@@ -231,15 +233,23 @@ REFRESH_DEBOUNCE_MS  :: 1200
 FACTS_DEBOUNCE_MS    :: 700
 CHILDREN_DEBOUNCE_MS :: 800
 
-// Few pixels to a letter: smoothing across too leaves the little a round letter goes below the line on a row of its own, a dot under it, and
-// the contrast given to light text on dark makes it plain. Smoothed along the row only, it stays in the line. With more pixels the
-// smoothing across is what is better. (The window may go from one screen to another. Off Windows, Slug draws the text: this is not read.)
+// A coverage per colour stripe sharpens text most at few pixels per letter: that is where it is automatic, if the system smooths
+// that way. (The window may go from one screen to another. Smoothing along the rows alone, DirectWrite's Natural, is not an answer to
+// anything here: without the smoothing across, these faces, which have no hinting, come out hard and stepped.)
 text_mode_follow :: proc(app: ^App) {
 	scale := app.scale > 0 ? app.scale : app.win.dpi_scale
-	mode: font.Rendering = scale < TEXT_SMOOTH_SCALE ? .Natural : .Natural_Symmetric
-	if app.fonts.settings.rendering == mode { return }
+	stripes: font.Subpixel_Text
+	switch config.string_of(&app.cfg_prefs, "appearance.text_smoothing") {
+	case "rgb":  stripes = .Rgb
+	case "bgr":  stripes = .Bgr
+	case "grey": stripes = .Off
+	case:
+		if !app.cx.system_stripes_read { app.cx.system_stripes, app.cx.system_stripes_read = font.system_subpixel_text(), true }
+		if scale < TEXT_SMOOTH_SCALE { stripes = app.cx.system_stripes }
+	}
+	if app.fonts.settings.subpixel_text == stripes { return }
 	settings := app.fonts.settings
-	settings.rendering = mode
+	settings.subpixel_text = stripes
 	font.set_settings(&app.fonts, settings)
 }
 

@@ -54,6 +54,7 @@ HEX_CATALOG_NAME   :: 0xe8e8e8ff
 
 ACCENTS := [?]string{"peach", "blue", "purple", "green", "cyan", "rose"}
 ACCENT_HEX := [?]u32{HEX_PEACH, HEX_BLUE, HEX_PURPLE, HEX_GREEN, HEX_CYAN, HEX_ROSE}
+TEXT_SMOOTHINGS := [?]string{"auto", "rgb", "bgr", "grey"}
 
 PREF_DEFS := [?]config.Def{
 	{name = "appearance.accent", description = "The colour of primary buttons, the selection, links of attention and focus rings.", kind = .String, default = {s = "peach"}, choices = ACCENTS[:]},
@@ -61,6 +62,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "appearance.prose_font", description = "The face of the answers: the client's own (automatic), the interface's, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.mono_font", description = "The face of code, paths and figures: the client's own (automatic), the system's usual one, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.font_size", description = "Size of the interface's text, in points at 100 % zoom.", kind = .Int, default = {i = 14}, bounded = true, min = FONT_SIZE_MIN, max = FONT_SIZE_MAX},
+	{name = "appearance.text_smoothing", description = "Text smoothed per colour stripe of the screen's pixels: sharper at few pixels per letter, with faint colours on its edges. Automatic: as the system says, below 150 %.", kind = .String, default = {s = "auto"}, choices = TEXT_SMOOTHINGS[:]},
 	{name = "appearance.zoom", description = "Zoom of the interface: bars, sidebar, menus (Ctrl + Shift + = / - / 0, Ctrl + wheel outside the conversation).", kind = .Float, default = {f = 1}, bounded = true, min = ZOOM_MIN, max = ZOOM_MAX},
 	{name = "appearance.content_zoom", description = "Zoom of the conversation alone, whatever the interface's (Ctrl + = / - / 0, Ctrl + wheel over it).", kind = .Float, default = {f = 1}, bounded = true, min = CONTENT_ZOOM_MIN, max = CONTENT_ZOOM_MAX},
 	{name = "appearance.density", description = "Compact rows fit more on screen at the same text size.", kind = .String, default = {s = "comfortable"}, choices = {"comfortable", "compact"}},
@@ -625,6 +627,7 @@ page_appearance :: proc(app: ^App, em: f32) {
 	if setting(app, "appearance.prose_font", em) { font_button(app, "appearance.prose_font", em) }
 	if setting(app, "appearance.mono_font", em) { font_button(app, "appearance.mono_font", em) }
 	if setting(app, "appearance.font_size", em) { pref_slider(app, "appearance.font_size", FONT_SIZE_MIN, FONT_SIZE_MAX, 1, "%.0f pt", em) }
+	if setting(app, "appearance.text_smoothing", em) { pref_choice(app, "appearance.text_smoothing", {"Auto", "RGB", "BGR", "Grey"}, em, em * 18) }
 	if setting(app, "appearance.zoom", em) { pref_slider(app, "appearance.zoom", ZOOM_MIN, ZOOM_MAX, 0.05, "%.2f×", em) }
 	if setting(app, "appearance.content_zoom", em) { pref_slider(app, "appearance.content_zoom", CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX, 0.05, "%.2f×", em) }
 	if setting(app, "appearance.throbber", em) { pref_choice(app, "appearance.throbber", {"Board", "Orbit", "Scanner", "None"}, em, em * 18) }

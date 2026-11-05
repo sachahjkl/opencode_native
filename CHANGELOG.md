@@ -5,9 +5,16 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-05
+
 ### Added
 
+- **Sharper text at 100 %**: text is smoothed per colour stripe of the screen's pixels, on Windows and on Linux. Automatic below 150 %, as the system says; Settings, Appearance, Text smoothing chooses RGB, BGR or Grey.
 - **The site says what it is when it is shared**: a card, Open Graph and Twitter tags on every page, an Atom feed of the versions, a sitemap and a manifest (`tools/site_meta.mjs`, at deployment).
+
+### Fixed
+
+- **Text is smooth again below 150 %**: 0.12.3 took away its smoothing across its rows, which left it hard and stepped.
 
 ## [0.12.3] - 2026-11-05
 
@@ -569,7 +576,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.12.3...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.13.0
 [0.12.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.3
 [0.12.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.2
 [0.12.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.1

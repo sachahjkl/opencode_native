@@ -7,7 +7,7 @@
 <p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.12.3-fab283" alt="version 0.12.3"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.13.0-fab283" alt="version 0.13.0"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -48,7 +48,8 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 ## What it does
 
 - **A typeface of its own**, built into the program: Hanken Grotesk for the interface, Newsreader for the answers, DM Mono
-  for code. Settings > Appearance goes back to the system's faces.
+  for code. Settings > Appearance goes back to the system's faces. Below 150 % text is smoothed per colour stripe of the screen's
+  pixels, on Windows and on Linux, as the system says; Text smoothing chooses RGB, BGR or grey.
 - **Sessions** grouped by project folder, with the project's logo; search; running ones lit; sub-agents nested under
   the session that launched them (the active ones counted and shown first).
 - **The conversation, streamed live** from the server's event stream: Markdown (headings, lists, quotes, tables as
