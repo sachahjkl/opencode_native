@@ -148,6 +148,18 @@ GO_BOTTOM_W_EM    :: 6.5
 Dialog :: enum u8 { Settings, Stats, Help, Changes, Files, Schedules, Artifacts }
 DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Stats = {54, 46}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}, .Schedules = {54, 44}, .Artifacts = {70, 46}}
 DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Stats = {34, 22}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}, .Schedules = {36, 22}, .Artifacts = {44, 22}}
+TERM_COLS            :: 80     // a shell before its panel is laid out
+TERM_ROWS            :: 24
+TERM_SCROLLBACK_LINES :: 10000
+TERM_PAD             :: 6      // between the panel and the grid
+TERM_KEY_BYTES       :: 128
+TERM_WHEEL_LINES     :: 3      // what a notch scrolls
+TERM_TAB_CHARS       :: 24
+TERM_READ_MS         :: 5      // what a key may wait for its shell's thread
+TERM_FAINT           :: 0.6
+TERM_CURSOR_ALPHA    :: 0.6
+HEX_TERM_BG          :: 0x0d0d0dff
+HEX_TERM_SELECTION   :: 0x3a4a66ff
 INTEGRATIONS_ROWS    :: 40     // shown at once: the rest is searched
 CONNECT_POLL_MS      :: 1500   // how often a login under way is asked about
 MENTION_ROWS         :: 7      // what @ proposes at once

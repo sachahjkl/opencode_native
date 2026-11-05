@@ -206,6 +206,8 @@ Req_Kind :: enum u8 {
 	Session_Moved,  // POST /api/session/:id/move
 	Session_Export, // GET /api/experimental/session/:id/export (session_tools.odin)
 	Session_Import, // POST /api/experimental/session/import
+	Pty_List,       // GET /api/pty (terminal.odin)
+	Pty_Made,       // POST /api/pty
 	Schedules,      // GET /api/experimental/schedule (schedules.odin)
 	Schedule_Made,  // POST
 	Schedule_Done,  // DELETE, POST .../pause, /resume
@@ -363,6 +365,8 @@ on_answer :: proc(data: rawptr, word: u64) {
 		app.refresh_due = true
 		if id := jstr(v, "data", "id"); id != "" { open_root(app, id) }
 		ui.toast(.Good, "Session imported")
+	case .Pty_List:      terminals_load(app, r.tag, v)
+	case .Pty_Made:      term_made(app, r.tag, v)
 	case .Schedules:     schedules_load(app, r.tag, v)
 	case .Schedule_Made: schedule_made(app)
 	case .Schedule_Done: schedule_changed(app)

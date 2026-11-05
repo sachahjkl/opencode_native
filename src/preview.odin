@@ -12,7 +12,7 @@ import "gt:draw"
 import "gt:platform"
 import "gt:ui"
 
-Panel :: enum u32 { Conversation = 1, Preview }
+Panel :: enum u32 { Conversation = 1, Preview, Terminal }
 
 Preview :: struct {
 	open:     bool,
@@ -70,6 +70,7 @@ panel_title :: proc(user: rawptr, panel: u32) -> string {
 	switch Panel(panel) {
 	case .Conversation: return "Conversation"
 	case .Preview:      return app.preview.title != "" ? ellipsize(app.preview.title, 28) : "Preview"
+	case .Terminal:     return "Terminal"
 	}
 	return ""
 }
@@ -78,13 +79,14 @@ panel_title :: proc(user: rawptr, panel: u32) -> string {
 panel_closable :: proc(user: rawptr, panel: u32) -> bool { return Panel(panel) != .Conversation }
 
 @(private = "file")
-panel_name :: proc(user: rawptr, id: u32) -> string { return Panel(id) == .Preview ? "preview" : "conversation" }
+panel_name :: proc(user: rawptr, id: u32) -> string { return Panel(id) == .Preview ? "preview" : Panel(id) == .Terminal ? "terminal" : "conversation" }
 
 @(private = "file")
 panel_of :: proc(user: rawptr, name: string) -> (u32, bool) {
 	switch name {
 	case "conversation": return u32(Panel.Conversation), true
 	case "preview":      return u32(Panel.Preview), true
+	case "terminal":     return u32(Panel.Terminal), true
 	}
 	return 0, false
 }
@@ -100,7 +102,17 @@ dock_setup :: proc(app: ^App) {
 	ui.dock_init(d)
 	if !ui.dock_parse(d, config.string_of(&app.cfg_prefs, "layout.dock"), panel_of, app) { ui.dock_parse(d, DOCK_DEFAULT, panel_of, app) }
 	if !ui.dock_has(d, u32(Panel.Conversation)) { ui.dock_parse(d, DOCK_DEFAULT, panel_of, app) }
-	if !ui.dock_has(d, u32(Panel.Preview)) { ui.dock_add(d, u32(Panel.Preview), ui.dock_beside(d, u32(Panel.Conversation), .Right)) }
+	// (only what is open has a tab)
+	if app.preview.open {
+		if !ui.dock_has(d, u32(Panel.Preview)) { ui.dock_add(d, u32(Panel.Preview), ui.dock_beside(d, u32(Panel.Conversation), .Right)) }
+	} else {
+		ui.dock_close(d, u32(Panel.Preview))
+	}
+	if app.cx.terms.open {
+		if !ui.dock_has(d, u32(Panel.Terminal)) { ui.dock_add(d, u32(Panel.Terminal), ui.dock_beside(d, u32(Panel.Conversation), .Bottom)) }
+	} else {
+		ui.dock_close(d, u32(Panel.Terminal))
+	}
 }
 
 // (read once: this is asked at every frame, and it is a look in the registry)
@@ -227,7 +239,7 @@ main_area :: proc(app: ^App, em: f32) {
 	p := &app.preview
 	p.shown = false
 	app.cx.docked_w = 0
-	if !p.open { conversation(app, em); return }
+	if !p.open && !app.cx.terms.open { conversation(app, em); return }
 	d := &app.dock
 	ui.next({width = ui.fill(), height = ui.fill()})
 	ui.dock_begin(d, "###dock", {title = panel_title, tab = panel_tab, strip_begin = strip_look, closable = panel_closable, on_save = dock_save, user = app, close_buttons = true, tab_height = math.round(em * DOCK_TAB_H_EM)})
@@ -235,11 +247,17 @@ main_area :: proc(app: ^App, em: f32) {
 		app.cx.docked_w = ui.dock_panel_size(d, u32(Panel.Conversation)).x
 		conversation(app, em)
 	}
-	if ui.dock_panel(d, u32(Panel.Preview)) { preview_panel(app, em) }
+	if p.open {
+		if ui.dock_panel(d, u32(Panel.Preview)) { preview_panel(app, em) }
+	}
+	if app.cx.terms.open {
+		if ui.dock_panel(d, u32(Panel.Terminal)) { terminal_panel(app, em) }
+	}
 	res := ui.dock_end(d)
-	if res.closed == u32(Panel.Preview) {
-		p.open = false
-		ui.dock_add(d, u32(Panel.Preview), ui.dock_beside(d, u32(Panel.Conversation), .Right))   // (where it comes back)
+	if res.closed == u32(Panel.Preview) { p.open = false }
+	if res.closed == u32(Panel.Terminal) {
+		app.cx.terms.open = false
+		app.cx.terms.focused = false
 	}
 }
 

@@ -391,7 +391,7 @@ pub unsafe extern "C" fn occ_ws_open(c: *const Client, path: *const u8, path_len
     .unwrap_or(std::ptr::null_mut())
 }
 
-/// The next text message: 1 one is in `out`, 0 none for now (ask again), -1 the connection ended.
+/// The next message, text or binary: 1 one is in `out`, 0 none for now (ask again), -1 the connection ended.
 #[no_mangle]
 pub unsafe extern "C" fn occ_ws_read(w: *const Ws, out: *mut OccBuf) -> i32 {
     use std::io::ErrorKind;
@@ -402,6 +402,10 @@ pub unsafe extern "C" fn occ_ws_read(w: *const Ws, out: *mut OccBuf) -> i32 {
         match s.read() {
             Ok(Message::Text(t)) => {
                 *out = OccBuf::from_vec(t.as_bytes().to_vec());
+                1
+            }
+            Ok(Message::Binary(b)) => {
+                *out = OccBuf::from_vec(b.to_vec());
                 1
             }
             Ok(Message::Close(_)) => -1,
@@ -422,6 +426,22 @@ pub unsafe extern "C" fn occ_ws_send(w: *const Ws, data: *const u8, len: usize) 
         if s.send(Message::text(text(data, len).to_string())).is_ok() { 0 } else { -1 }
     }))
     .unwrap_or(-1)
+}
+
+/// How long a read waits, in ms: what also bounds the wait of what is to be sent by the thread that reads.
+#[no_mangle]
+pub unsafe extern "C" fn occ_ws_read_timeout(w: *const Ws, ms: u32) {
+    use tungstenite::stream::MaybeTlsStream;
+    let Some(w) = w.as_ref() else { return };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        let Ok(s) = w.sock.lock() else { return };
+        let limit = Some(Duration::from_millis(ms as u64));
+        match s.get_ref() {
+            MaybeTlsStream::Plain(s) => { let _ = s.set_read_timeout(limit); }
+            MaybeTlsStream::Rustls(s) => { let _ = s.get_ref().set_read_timeout(limit); }
+            _ => {}
+        }
+    }));
 }
 
 #[no_mangle]

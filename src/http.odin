@@ -43,6 +43,7 @@ foreign occ_native {
 	occ_ws_open :: proc(c: rawptr, path: [^]u8, path_len: uint) -> rawptr ---   // (browser_mcp.odin)
 	occ_ws_read :: proc(w: rawptr, out: ^Occ_Buf) -> i32 ---
 	occ_ws_send :: proc(w: rawptr, data: [^]u8, n: uint) -> i32 ---
+	occ_ws_read_timeout :: proc(w: rawptr, ms: u32) ---   // (terminal.odin)
 	occ_ws_free :: proc(w: rawptr) ---
 }
 

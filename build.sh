@@ -22,6 +22,7 @@ if [ -z "${OCC_ANY_ODIN:-}" ] && ! "$ODIN" version 2>/dev/null | grep -q "$want"
   exit 1
 fi
 tools/build_native.sh
+tools/build_vt.sh
 mkdir -p "$(dirname "$OUT")"
 # the text backend is the toolkit's native one, inside the Rust library (no DirectWrite here); wgpu-native is a second Rust
 # library: both carry Rust's standard library, whose few unmangled symbols (rust_eh_personality) are the same code

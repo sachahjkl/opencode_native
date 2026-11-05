@@ -38,6 +38,8 @@ if not defined OCC_ANY_ODIN (
 
 :: the Rust library (HTTP, event stream, images): does nothing when it is up to date
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\build_native.ps1 || exit /b 1
+:: libghostty-vt, the emulation of the Terminal panel: does nothing when it is up to date
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\build_vt.ps1 || exit /b 1
 :: the numbers of the version resource, from APP_VERSION
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\make_version_h.ps1 || exit /b 1
 

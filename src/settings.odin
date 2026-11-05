@@ -742,6 +742,14 @@ page_advanced :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###adv_b") {
 		if bevel_button("###adv_dir", "Open the settings folder", ICO_FOLDER, .Normal).clicked { _ = platform.open_path(filepath.dir(prefs_path())) }
+		ui.spacer(ui.px(em * 0.4))
+		if bevel_button("###adv_lic", app.cx.show_licence ? "Hide the terminal's licence" : "The terminal's licence", "", .Ghost).clicked { app.cx.show_licence = !app.cx.show_licence }
+	}
+	if app.cx.show_licence {
+		ui.spacer(ui.px(em * 0.5))
+		info_line(app, "###adv_lic_say", "The terminal's emulation is Ghostty's, through libghostty-vt.", em)
+		ui.spacer(ui.px(em * 0.3))
+		code_block("###adv_lic_text", "text", GHOSTTY_LICENSE, version = 1)
 	}
 }
 

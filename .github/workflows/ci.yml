@@ -34,6 +34,14 @@ jobs:
           path: build/native
           key: native-${{ hashFiles('native/Cargo.toml', 'native/Cargo.lock', 'native/**/Cargo.toml', 'native/**/src/**', 'tools/build_native.ps1') }}
 
+      # (Ghostty and Zig, pinned in the script: nothing to do unless it changes)
+      - uses: actions/cache@v6
+        with:
+          path: |
+            build/vt/ghostty-vt-static.lib
+            build/vt/STAMP
+          key: vt-windows-${{ hashFiles('tools/build_vt.ps1') }}
+
       - name: Build (build.bat)
         shell: cmd
         run: call build.bat
@@ -65,6 +73,13 @@ jobs:
             build/native
             ~/.cargo/registry
           key: native-linux-${{ hashFiles('native/Cargo.toml', 'native/Cargo.lock', 'native/**/Cargo.toml', 'native/**/src/**', 'ext/gui_toolkit/native/text/**', 'tools/build_native.sh') }}
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            build/vt/libghostty-vt.a
+            build/vt/STAMP
+          key: vt-linux-${{ hashFiles('tools/build_vt.sh') }}
 
       - name: Build (build.sh)
         run: ./build.sh

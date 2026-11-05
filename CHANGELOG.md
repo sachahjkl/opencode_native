@@ -5,6 +5,21 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-05
+
+### Added
+
+- **A terminal** (Ctrl+Shift+T), a panel like the others: the shells of the server, wherever it runs, in tabs, in the folder of the session.
+  Emulation is Ghostty's, through libghostty-vt: colours, styles, scrollback, what programs ask of a terminal. The keys go to the shell
+  while it has the focus, Ctrl+K and Escape included; Ctrl+Shift+C and V copy and paste, the wheel goes through the history, the mouse
+  selects, or goes to the program that asks for it. A shell outlives the program and comes back when the panel opens; closing its tab
+  ends it.
+
+### Changed
+
+- The dock shows only the panels that are open.
+- Building needs nothing more: Zig and Ghostty, pinned, are fetched into `build/vt` the first time.
+
 ## [0.11.9] - 2026-11-05
 
 ### Added
@@ -518,7 +533,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.9...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.0
 [0.11.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.9
 [0.11.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.8
 [0.11.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.7

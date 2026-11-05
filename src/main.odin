@@ -156,6 +156,8 @@ App_Context :: struct {
 	dialogs:        [Dialog]Vec2,      // the sizes given to the dialogs (logical pixels, {}: what they prefer)
 	dialogs_saved:  [Dialog]Vec2,
 	dialogs_read:   bool,
+	show_licence:   bool,                 // Ghostty's, in the settings
+	terms:          Terminals,            // the Terminal panel (terminal.odin)
 	schedules:      Schedules,            // schedules.odin
 	artifacts:      Artifacts,
 	plugins:        Plugins,
@@ -235,6 +237,7 @@ frame :: proc(app: ^App, inner := false) {
 	events := platform.poll_events(app.win, false)
 	render.mark_input(&app.r)
 	if len(events) > 0 { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }
+	events = term_events(app, events)
 	for e in events {
 		if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() }
 		if e.kind == .Scroll || e.kind == .Key_Press { nav_restore_clear(app) }   // (the reader goes elsewhere: the view is theirs)
