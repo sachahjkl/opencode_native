@@ -193,7 +193,7 @@ clip_set :: proc(text: string) { platform.set_clipboard(the_app.win, text) }
 // (here 180), as Continuous frames those waited for a 60 Hz refresh: every hover came 2 or 3 of the pointer's frames late.
 pace :: proc(app: ^App, inner: bool) -> (at_once: bool) {
 	moving := ui.now_ms() - app.cx.pointer_ms < POINTER_MOVING_MS || app.cx.gliding   // (a panel that opens: read as closely)
-	app.pacer.choices.max_hz = app.prefs.max_hz
+	app.pacer.choices.target_hz = app.prefs.target_hz
 	app.pacer.cadence.uncapped = app.prefs.uncapped
 	return render.pace_frame(&app.pacer, &app.r, app.win, idled = app.idled, dragging = ui.active_key() != 0 || moving, inner = inner)
 }

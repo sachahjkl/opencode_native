@@ -77,6 +77,8 @@ build_ui :: proc(app: ^App) {
 	// (over the top of the conversation, under its header: at the bottom they hid the send button, when one wants to try again)
 	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.ui_state.window_size})
 	ui.toasts_build()
+	// (last: what is open and a field that has it took Escape before it gets here)
+	if app.chat.busy && !overlay_open(app) && ui.key_press(.Escape) { interrupt_session(app, app.chat.id) }
 }
 
 app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
@@ -840,7 +842,7 @@ messages :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.4))
 			throbber(app, "###wl", accent(), math.round(em * 7), math.round(em * 0.9), em)
 			ui.spacer(ui.fill())
-			if hint_action("###stop_hint", "Ctrl+Esc to stop", em) { interrupt_session(app, c.id) }
+			if hint_action("###stop_hint", "Esc to stop", em) { interrupt_session(app, c.id) }
 		}
 	}
 	ui.spacer(ui.px(em * 2))

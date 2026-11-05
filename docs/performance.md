@@ -45,7 +45,7 @@ about twice as long, its caches cold and the clock down: that is the machine, no
 The sampler is not free: under it `find` read 91 ms and `search` 7 ms where they take 41 and 2.6. Read its shares, not its times, and
 take times with it off.
 
-## Where a frame goes (gui_toolkit 0.80.0)
+## Where a frame goes (gui_toolkit 0.80.0, the same since)
 
 CPU per frame (build, draw, submission) in milliseconds, medians of 3 runs before and 4 after, sampler off, 1600 x 1000, RTX 4070
 SUPER. The budget at 180 Hz is 5.5 ms.
@@ -73,7 +73,7 @@ What was found and done, by what it brought:
   the samples at rest. Where a text is cut is kept now. `ui.draw_box_text` went from 38 to 12 % of a frame.
 - **`render.pace_frame` makes the slot's wait**, which it worked out and dropped, and the app's own wait is gone. Input is not what it
   limits: `platform.wait_slot` reads it as it comes, and a key or a button ends the wait. It is the output that is chosen
-  (`advanced.frame_rate`: the screen, a ceiling, or uncapped). No gain on a 60 Hz screen, where the swap chain paces. It must come after
+  (`advanced.frame_rate`: the screen, a most, above the screen too, or uncapped; frames are made when there is something to draw). No gain on a 60 Hz screen, where the swap chain paces. It must come after
   the swap chain's wait: before, the two add up, 40 frames a second instead of 60 under a pointer at 1 kHz.
 
 Tried and left:

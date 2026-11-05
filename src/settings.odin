@@ -93,7 +93,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "update.base_url", description = "Where releases are read from (empty: GitHub). Whatever the place, only what the built-in key signed is installed.", kind = .String, default = {s = ""}},
 	{name = "general.start", description = "What the window opens on: the home page, or the latest session.", kind = .String, default = {s = "home"}, choices = {"home", "last"}},
 	{name = "advanced.fps", description = "The frame rate and what a frame costs, in the status bar.", kind = .Bool, default = {b = false}},
-	{name = "advanced.frame_rate", description = "How many frames go out while something moves: as the screen takes them, at most this many a second, or as fast as they are made (it costs power). What you type and click is read at once whatever this says.", kind = .String, default = {s = "screen"}, choices = {"screen", "30", "60", "120", "240", "uncapped"}},
+	{name = "advanced.frame_rate", description = "The most frames a second, when there is something to draw (nothing moving, nothing is drawn): what the screen takes, a number, or no limit. Above the screen's rate it shows the newest of them: not smoother, but quicker to answer, for more power. What you type and click is read at once whatever this says.", kind = .String, default = {s = "screen"}, choices = {"screen", "30", "60", "120", "240", "uncapped"}},
 }
 
 // The preferences as plain values (read on every frame: no lookups by name there).
@@ -123,7 +123,7 @@ Prefs :: struct {
 	content_zoom: f32,
 	start:        string,
 	show_fps:     bool,
-	max_hz:       f64,    // advanced.frame_rate: a ceiling (0: the screen's)
+	target_hz:    f64,    // advanced.frame_rate: the most frames a second, above the screen too (0: the screen's)
 	uncapped:     bool,
 	throbber:     string,
 	browser_tools: bool,
@@ -179,7 +179,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.show_fps = config.bool_of(p, "advanced.fps")
 	rate := config.string_of(p, "advanced.frame_rate")
 	s.uncapped = rate == "uncapped"
-	s.max_hz = strconv.parse_f64(rate) or_else 0
+	s.target_hz = strconv.parse_f64(rate) or_else 0
 	s.throbber = config.string_of(p, "appearance.throbber")
 	s.browser_tools = config.bool_of(p, "browser.tools")
 	s.update_channel = config.string_of(p, "update.channel")

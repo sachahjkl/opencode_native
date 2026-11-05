@@ -5,6 +5,21 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.11.3] - 2026-11-05
+
+### Changed
+
+- gui_toolkit 0.82.0.
+- **Esc stops the run** when nothing else takes it (a dialog, the find bar, a menu: they close first). Ctrl+Esc still does.
+- **`advanced.frame_rate` is the most frames a second, above the screen too**: 120 on a 60 Hz screen is up to 120 while something moves,
+  none at rest. The screen shows the newest: not smoother, but quicker to answer. Before, it stayed at the screen's rate.
+- **The click of the wheel scrolls five to ten times faster**, with Wren's curve.
+
+### Fixed
+
+- **What was sent during a run that is interrupted goes next.** It stayed in the server's inbox until the next prompt, and went glued to
+  it: it looked lost. It now starts a run at once, in the order it was sent.
+
 ## [0.11.2] - 2026-11-05
 
 ### Changed
@@ -424,7 +439,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.2...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.3...HEAD
+[0.11.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.3
 [0.11.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.2
 [0.11.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.1
 [0.11.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.0

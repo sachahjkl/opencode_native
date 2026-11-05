@@ -602,6 +602,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 			notify_finished(app, sid, strings.trim_prefix(kind, "session.execution."))
 		}
 		set_busy(app, sid, false)
+		if kind == "session.execution.interrupted" { inbox_resume(app, sid) }
 		if mine {
 			load_messages(app, sid)   // the stored page: the stream only gave the pieces
 			if kind == "session.execution.failed" { ui.toast(.Bad, "The run failed") }

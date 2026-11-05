@@ -169,6 +169,7 @@ help_dialog :: proc(app: ^App, em: f32) {
 				row(app, "###hc2", "Down", "On the last line: what runs in the background", em)
 				row(app, "###hc3", "Ctrl+V", "Paste text, an image or files", em)
 				row(app, "###hc4", "Middle click", "Scroll by the pointer", em)
+				row(app, "###hc5", "Esc", "Stop the run, what was sent during it goes next", em)
 				ui.spacer(ui.px(em))
 			}
 			ui.spacer(ui.px(em * 1.2))

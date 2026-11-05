@@ -203,6 +203,8 @@ Req_Kind :: enum u8 {
 	Forked,         // POST /api/session/:id/fork: the new session
 	Session_Agent,  // a new session takes the agent chosen last (views.odin session_setup)
 	Session_Model,  // ... and the model
+	Inbox,          // GET /api/session/:id/inbox: what was sent during a run that was interrupted
+	Inbox_Take,     // DELETE /api/session/:id/inbox/:message: out of it, to go as a prompt (the body: that prompt)
 }
 
 Request :: struct {
@@ -257,6 +259,7 @@ on_answer :: proc(data: rawptr, word: u64) {
 		return
 	}
 	if r.status == 401 { app.auth_failed = true; request_failed(app, r); ui.toast(.Bad, "Authentication refused by the server"); return }
+	if r.kind == .Inbox && r.status >= 400 { return }   // (a server without one)
 	if r.status >= 400 {
 		v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
 		msg := jstr(v, "message")
@@ -265,7 +268,7 @@ on_answer :: proc(data: rawptr, word: u64) {
 		return
 	}
 	v, err := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if err != nil && r.kind != .Action && r.kind != .Prompt && r.kind != .Session_Agent && r.kind != .Session_Model {
+	if err != nil && r.kind != .Action && r.kind != .Prompt && r.kind != .Session_Agent && r.kind != .Session_Model && r.kind != .Inbox_Take {
 		ui.toast(.Warn, "Unreadable answer (%s)", r.path)
 		request_failed(app, r)
 		return
@@ -305,6 +308,8 @@ on_answer :: proc(data: rawptr, word: u64) {
 		if strings.contains(r.body, `"files":`) && r.gen == app.chat.gen && r.tag == app.chat.id { load_messages(app, r.tag) }
 	case .Session_Agent: session_setup(app, r.tag, 1)
 	case .Session_Model: session_setup(app, r.tag, 2)
+	case .Inbox:         inbox_take(app, r.tag, v)
+	case .Inbox_Take:    inbox_send(app, r)
 	case .Shell_List:   if r.gen == app.chat.gen { activity_shells_load(app, v, r.tag) }
 	case .Shell_One:    activity_shell_load(app, v, r.tag)
 	case .Shell_Output: activity_output_load(app, v, r.tag)
@@ -382,6 +387,38 @@ send_prompt :: proc(app: ^App, id, text: string) {
 create_session :: proc(app: ^App, directory: string) {
 	body := directory != "" ? fmt.tprintf(`{{"location":{{"directory":%s}}}}`, jquote(directory)) : "{}"
 	request(app, .Created, "POST", "/api/session", body)
+}
+
+// A run that is interrupted leaves what was sent during it in the session's inbox, where only the next prompt would pick it up,
+// glued to that prompt: it looks lost. The newest goes as a prompt now, which starts a run: the server puts what is left in the
+// inbox before a prompt, so they keep their order. (It has no way to wake an inbox: out of it, then sent.) If the prompt fails its text comes back to the composer; if the
+// taking fails it stays in the inbox. Nothing is lost.
+inbox_resume :: proc(app: ^App, id: string) {
+	request(app, .Inbox, "GET", fmt.tprintf("/api/session/%s/inbox", id), tag = id)
+}
+
+@(private = "file")
+inbox_take :: proc(app: ^App, id: string, v: json.Value) {
+	newest: json.Value
+	last: f64
+	for item in jarr(v, "data") {
+		if jstr(item, "type") != "user" { continue }
+		if t := jnum(item, "time", "created"); t >= last { last, newest = t, item }
+	}
+	if newest == nil { return }
+	prompt, err := json.marshal(jget(newest, "payload"), allocator = context.temp_allocator)
+	if err != nil { return }
+	request(app, .Inbox_Take, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", id, jstr(newest, "id")), string(prompt), id)
+}
+
+@(private = "file")
+inbox_send :: proc(app: ^App, r: ^Request) {
+	// (what the conversation showed of it: the prompt comes back under its own id)
+	if r.tag == app.chat.id {
+		taken := r.path[strings.last_index_byte(r.path, '/') + 1:]
+		for m, i in app.chat.messages { if m.id == taken { ordered_remove(&app.chat.messages, i); break } }
+	}
+	request(app, .Prompt, "POST", fmt.tprintf("/api/session/%s/prompt", r.tag), r.body, r.tag)
 }
 
 interrupt_session :: proc(app: ^App, id: string) {
