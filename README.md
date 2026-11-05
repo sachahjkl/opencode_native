@@ -5,7 +5,7 @@
 <p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.11.5-fab283" alt="version 0.11.5"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.11.6-fab283" alt="version 0.11.6"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -77,6 +77,8 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 - **What an agent asks**: its questions and any form of the server over the composer, one question at a time, in tabs, then a review.
   The sidebar lights a session that waits for you, a sub-agent's question comes up in its parent.
 - **Permission requests** answered in place (once, always, reject).
+- **Go back to a prompt**, its files restored, after seeing which. What a session or a prompt changed, file by file.
+- **Move a session** to another folder, **export** it to a file and **import** it, with or without its text.
 - **Statistics of a session** (its token count in the header, Ctrl+I): tokens in, out, reasoning, cache reads and
   writes, cost, cache hits, the context the last step filled against the model's window, time and pace, tool calls by
   tool (failures counted), models, its sub-agents, and the whole project's totals from the server.

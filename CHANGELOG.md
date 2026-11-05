@@ -5,6 +5,23 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.11.6] - 2026-11-05
+
+### Added
+
+- **Go back to a prompt**, from its right click. The files it would restore are shown, written back already as the server does it: Go back
+  keeps it so and drops what came after, the prompt returning to the composer; Cancel, Escape or a click outside put the files back. If
+  the program dies in between, the session brings the dialog back when opened. In a folder without snapshots it says only the
+  conversation goes back.
+- **What a session changed**, from its first prompt to its last, and what one prompt changed, each file with its diff.
+- **Move a session to another folder**, from its right click or the palette.
+- **Export a session to a file and import it**, on this machine or another; an export without the text, to share the shape of a session.
+  A session already here is opened rather than refused.
+
+### Fixed
+
+- A diff from git no longer shows its `diff --git` and `index` lines.
+
 ## [0.11.5] - 2026-11-05
 
 ### Added
@@ -467,7 +484,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.5...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.6...HEAD
+[0.11.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.6
 [0.11.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.5
 [0.11.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.4
 [0.11.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.3

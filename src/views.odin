@@ -72,6 +72,7 @@ build_ui :: proc(app: ^App) {
 	stats_dialog(app, em)
 	rename_dialog(app, em)
 	help_dialog(app, em)
+	changes_dialog(app, em)
 	palette_dialog(app, em)
 	context_menu(app, em)
 	// (over the top of the conversation, under its header: at the bottom they hid the send button, when one wants to try again)
@@ -515,10 +516,14 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 
 session_menu :: proc(app: ^App, em: f32) {
 	key := ui.key_from_string(0, "session_menu")
-	if ui.ctx_menu(key, em * 14) {
+	if ui.ctx_menu(key, em * 17) {
 		if ui.menu_item("Open").clicked { open_root(app, app.menu_session) }
 		if ui.menu_item("Rename…", "F2").clicked { rename_open(app, app.menu_session) }
 		if ui.menu_item("Fork").clicked { fork_session(app, app.menu_session, "") }
+		if ui.menu_item("Move to a folder…").clicked { session_move_pick(app, app.menu_session) }
+		if ui.menu_item("What it changed").clicked { changes_open(app, app.menu_session) }
+		if ui.menu_item("Export…").clicked { session_export(app, app.menu_session) }
+		if ui.menu_item("Export without the text…").clicked { session_export(app, app.menu_session, redacted = true) }
 		ui.menu_separator()
 		if ui.menu_item("Copy session ID").clicked { clip_set(app.menu_session) }
 		if s := find_session(app, app.menu_session); s != nil {

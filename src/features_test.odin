@@ -208,3 +208,77 @@ a_question_wants_an_answer :: proc(t: ^testing.T) {
 	body, _, _ := form_answer(f)
 	testing.expect_value(t, body, `{"answer":{"q0":"Teal"}}`)
 }
+
+// What goes in the file is what the import takes, under no "data"; a title makes a file name.
+@(test)
+an_export_is_what_the_import_takes :: proc(t: ^testing.T) {
+	testing.expect_value(t, export_body(`{"data":{"info":{"id":"s"},"messages":[]}}`), `{"info":{"id":"s"},"messages":[]}`)
+	testing.expect_value(t, file_safe(`a/b: "c"?`), `a-b- -c--`)
+}
+
+// A stage writes the files back at once: closed while it is on its way, it must still be known, for the dialog to cancel it.
+@(test)
+a_stage_closed_on_its_way_is_cancelled :: proc(t: ^testing.T) {
+	app := new(App)
+	defer free(app)
+	c := &app.cx.changes
+	v, _ := json.parse_string(`{"data":{"messageID":"m","snapshot":"abc","files":[{"file":"a.txt","patch":"","additions":1,"deletions":2,"status":"modified","more":true}]}}`, parse_integers = true, allocator = context.temp_allocator)
+
+	revert_stage(app, "s", "m", "the prompt")
+	testing.expect(t, c.open && c.loading && !c.staged, "on its way")
+	c.open = false
+	changes_open(app, "other")
+	testing.expect_value(t, c.session, "s")   // (nothing else takes its place meanwhile)
+	changes_load(app, "s", v)
+	testing.expect(t, c.staged && !c.loading, "known as staged, so the next frame cancels it")
+
+	c.open, c.staged = true, false
+	changes_failed(app)
+	revert_stage(app, "s", "m", "the prompt")
+	changes_load(app, "s", v)
+	testing.expect(t, c.staged, "staged")
+	testing.expect_value(t, len(c.files), 1)
+	testing.expect(t, c.files[0].more, "the patch is cut")
+	testing.expect(t, strings.contains(changes_say(c), "written back on disk already"), "it says what is done")
+	revert_gone(app, "s")
+	testing.expect(t, !c.staged && !c.open, "done elsewhere: nothing to cancel")
+	changes_open(app, "s")
+	changes_failed(app)
+	changes_open(app, "s")
+	c.open, c.loading = false, false
+	revert_found(app, "s", jget(v, "data"))
+	testing.expect(t, c.open && c.staged && c.found, "found on opening the session")
+	testing.expect(t, strings.has_prefix(changes_say(c), "This session was left going back."), "it says so")
+	c.staged = false
+	c.open = false
+	revert_found(app, "s", jget(v, "data"))
+	c.staged, c.open = false, false
+	changes_open(app, "s", "m")
+	c.loading = false
+	testing.expect_value(t, changes_say(c), "No change recorded. Only a git folder keeps them.")
+	c.loading, c.open = false, false
+	changes_open(app, "s", "")
+	c.open, c.loading = false, false
+}
+
+// A folder without snapshots: the files do not go back, and the dialog must not say they do.
+@(test)
+a_stage_without_snapshot_says_only_the_conversation_goes_back :: proc(t: ^testing.T) {
+	app := new(App)
+	defer free(app)
+	c := &app.cx.changes
+	v, _ := json.parse_string(`{"data":{"messageID":"m","files":[]}}`, parse_integers = true, allocator = context.temp_allocator)
+	revert_stage(app, "s", "m", "")
+	changes_load(app, "s", v)
+	testing.expect(t, c.no_snapshot, "no snapshot")
+	testing.expect(t, strings.contains(changes_say(c), "keeps no snapshots"), "it says so")
+}
+
+// A patch from git, as a session's diff gives it: only its lines are shown, from the first one.
+@(test)
+a_git_patch_shows_only_its_lines :: proc(t: ^testing.T) {
+	lines := diff_parse("diff --git a/p.txt b/p.txt\nindex 26af6a8..43dd47e 100644\n--- a/p.txt\n+++ b/p.txt\n@@ -1 +1 @@\n-zero\n+index one\n\\ No newline at end of file\n")
+	testing.expect_value(t, len(lines), 2)
+	testing.expect_value(t, lines[0].sign, '-')
+	testing.expect_value(t, lines[1].text, "index one")
+}

@@ -113,6 +113,8 @@ message_menu :: proc(app: ^App, m: ^Message) {
 		}
 		ui.menu_separator()
 		if ui.menu_item("Fork from here", icon = ICO_COPY).clicked { fork_session(app, app.chat.id, m.id) }
+		if ui.menu_item("What this prompt changed", icon = ICO_DOC).clicked { changes_open(app, app.chat.id, m.id) }
+		if ui.menu_item("Go back to here…", icon = ICO_UNDO, enabled = !app.chat.busy).clicked { revert_stage(app, app.chat.id, m.id, m.text) }
 	case .Assistant:
 		t := answer_text(m)
 		if ui.menu_item("Copy the answer", icon = ICO_COPY, enabled = t != "").clicked { copied(t, "Answer") }

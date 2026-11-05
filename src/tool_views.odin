@@ -112,13 +112,22 @@ hunk_start :: proc(h: string, mark: byte) -> int {
 	return n
 }
 
+// What git writes before a file's first hunk (the line "Binary files … differ" says something, and stays).
 @(private = "file")
+git_header :: proc(l: string) -> bool {
+	for p in ([]string{"diff --git ", "index ", "new file mode ", "deleted file mode ", "old mode ", "new mode ", "similarity index ", "rename from ", "rename to "}) {
+		if strings.has_prefix(l, p) { return true }
+	}
+	return false
+}
+
 diff_parse :: proc(patch: string) -> []Diff_Line {
 	out := make([dynamic]Diff_Line, context.temp_allocator)
 	old_no, new_no := 0, 0
 	rest := patch
 	for l in strings.split_lines_iterator(&rest) {
 		switch {
+		case len(out) == 0 && git_header(l):
 		case strings.has_prefix(l, "Index: "), strings.has_prefix(l, "====="), strings.has_prefix(l, "--- "), strings.has_prefix(l, "+++ "), strings.has_prefix(l, "\\ "):
 		case strings.has_prefix(l, "@@"):
 			old_no, new_no = hunk_start(l, '-'), hunk_start(l, '+')

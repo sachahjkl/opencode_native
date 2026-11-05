@@ -145,9 +145,11 @@ GO_BOTTOM_W_EM    :: 6.5
 // Pacing, and the status bar's rate
 
 // The dialogs one can resize: what they open at and the least they go to, in em (the window has the last word).
-Dialog :: enum u8 { Settings, Stats, Help }
-DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Stats = {54, 46}, .Help = {42, 44}}
-DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Stats = {34, 22}, .Help = {30, 20}}
+Dialog :: enum u8 { Settings, Stats, Help, Changes }
+DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Stats = {54, 46}, .Help = {42, 44}, .Changes = {62, 46}}
+DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Stats = {34, 22}, .Help = {30, 20}, .Changes = {34, 20}}
+CHANGES_OPEN_FILES :: 6     // the files of a list shown unfolded
+CHANGES_DIFF_LINES :: 400   // of a file, before the rest is counted
 
 SETTINGS_NAV_EM       :: 14   // the list of the pages
 SETTINGS_NAV_ICONS_EM :: 4    // the same with its icons alone

@@ -202,6 +202,7 @@ self_load :: proc(app: ^App, v: json.Value) {
 	c := &app.chat
 	c.self = session_from_json(jget(v, "data"), c.alloc)
 	c.have_self = true
+	if revert := jget(v, "data", "revert"); revert != nil { revert_found(app, c.id, revert) }
 	if c.self.parent != "" {
 		if p := find_session(app, c.self.parent); p != nil {
 			c.parent_title = strings.clone(p.title, c.alloc)
@@ -618,8 +619,15 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		request(app, .Projects, "GET", "/api/project")   // (a new logo)
 	case "session.created", "session.renamed", "session.deleted", "session.updated", "session.archived", "session.moved", "session.metadata.updated":
 		if kind == "session.deleted" && sid != "" { nav_forget(app, sid) }
+		if kind == "session.moved" && mine { request(app, .Self, "GET", strings.concatenate({"/api/session/", sid}, context.temp_allocator), tag = sid) }
 		app.refresh_due = true
 		app.children_due = true
+	case "session.revert.staged":
+		if mine { request(app, .Self, "GET", strings.concatenate({"/api/session/", sid}, context.temp_allocator), tag = sid) }
+	case "session.revert.committed", "session.revert.cleared":
+		revert_gone(app, sid)
+		if mine && kind == "session.revert.committed" { load_messages(app, sid) }
+		app.refresh_due = true
 	case "permission.asked":
 		req := jget(d, "request")
 		if req == nil { req = d }

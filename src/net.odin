@@ -203,6 +203,13 @@ Req_Kind :: enum u8 {
 	Forked,         // POST /api/session/:id/fork: the new session
 	Session_Agent,  // a new session takes the agent chosen last (views.odin session_setup)
 	Session_Model,  // ... and the model
+	Session_Moved,  // POST /api/session/:id/move
+	Session_Export, // GET /api/experimental/session/:id/export (session_tools.odin)
+	Session_Import, // POST /api/experimental/session/import
+	Changes_Range,  // GET /api/session/:id/message?type=user: the first prompt, then the last
+	Changes,        // GET /api/session/:id/diff, POST .../revert/stage: the files
+	Revert_Done,    // POST /api/session/:id/revert/commit
+	Revert_Cancelled, // DELETE /api/session/:id/revert
 	Forms,          // GET /api/session/:id/form: what it asks and waits for (forms.odin)
 	Form_Reply,     // POST /api/session/:id/form/:form/reply (the tag: the form)
 	Inbox,          // GET /api/session/:id/inbox: what was sent during a run that was interrupted
@@ -262,6 +269,8 @@ on_answer :: proc(data: rawptr, word: u64) {
 	}
 	if r.status == 401 { app.auth_failed = true; request_failed(app, r); ui.toast(.Bad, "Authentication refused by the server"); return }
 	if r.kind == .Inbox && r.status >= 400 { return }   // (a server without one)
+	if r.kind == .Session_Import && r.status == 409 { session_import_conflict(app, r.tag); return }
+	if r.kind == .Changes && r.status == 400 && changes_refused(app, r.tag) { return }
 	if r.status >= 400 {
 		v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
 		msg := jstr(v, "message")
@@ -270,7 +279,7 @@ on_answer :: proc(data: rawptr, word: u64) {
 		return
 	}
 	v, err := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if err != nil && r.kind != .Action && r.kind != .Prompt && r.kind != .Session_Agent && r.kind != .Session_Model && r.kind != .Inbox_Take && r.kind != .Form_Reply {
+	if err != nil && r.kind != .Action && r.kind != .Prompt && r.kind != .Session_Agent && r.kind != .Session_Model && r.kind != .Inbox_Take && r.kind != .Form_Reply && r.kind != .Session_Moved && r.kind != .Revert_Done && r.kind != .Revert_Cancelled {
 		ui.toast(.Warn, "Unreadable answer (%s)", r.path)
 		request_failed(app, r)
 		return
@@ -311,6 +320,16 @@ on_answer :: proc(data: rawptr, word: u64) {
 		if strings.contains(r.body, `"files":`) && r.gen == app.chat.gen && r.tag == app.chat.id { load_messages(app, r.tag) }
 	case .Session_Agent: session_setup(app, r.tag, 1)
 	case .Session_Model: session_setup(app, r.tag, 2)
+	case .Session_Moved: ui.toast(.Good, "Session moved"); app.refresh_due = true
+	case .Session_Export: session_export_save(app, r.tag, r.resp)
+	case .Session_Import:
+		app.refresh_due = true
+		if id := jstr(v, "data", "id"); id != "" { open_root(app, id) }
+		ui.toast(.Good, "Session imported")
+	case .Changes_Range: changes_range(app, r.tag, v)
+	case .Changes:       changes_load(app, r.tag, v)
+	case .Revert_Done:   revert_done(app, r.tag)
+	case .Revert_Cancelled:
 	case .Forms:         for it in jarr(v, "data") { form_add(app, it) }
 	case .Form_Reply:    form_remove(app, r.tag)
 	case .Inbox:         inbox_take(app, r.tag, v)
@@ -343,6 +362,11 @@ request_failed :: proc(app: ^App, r: ^Request) {
 		older_failed(app, r)
 	case .Form_Reply:
 		if f := form_find(app, r.tag); f != nil { f.sending = false }
+	case .Changes, .Changes_Range:
+		changes_failed(app)
+	case .Revert_Done, .Revert_Cancelled:
+		// (still staged, the files written back: the dialog comes back rather than leaving it unsaid)
+		if r.tag == app.chat.id { request(app, .Self, "GET", strings.concatenate({"/api/session/", r.tag}, context.temp_allocator), tag = r.tag) }
 	case .Created:
 		if app.pending_prompt != "" {
 			prompt_restore(app, app.pending_prompt)
