@@ -66,12 +66,16 @@ json_number :: proc(v: json.Value, key: string) -> Maybe(f64) {
 form_add :: proc(app: ^App, v: json.Value) {
 	id := jstr(v, "id")
 	if id == "" || form_find(app, id) != nil { return }
+	append(&app.cx.forms, form_new(id, jstr(v, "sessionID"), jstr(v, "title"), jstr(v, "metadata", "kind") == "question", jarr(v, "fields")))
+	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+}
+
+// Fields as the server describes them, a form's or what a way of connecting asks.
+form_new :: proc(id, session, title: string, question: bool, list: json.Array) -> ^Form_Req {
 	f := new(Form_Req)
 	_ = virtual.arena_init_growing(&f.arena)
 	a := virtual.arena_allocator(&f.arena)
-	f.id, f.session, f.title = strings.clone(id, a), strings.clone(jstr(v, "sessionID"), a), strings.clone(jstr(v, "title"), a)
-	f.question = jstr(v, "metadata", "kind") == "question"
-	list := jarr(v, "fields")
+	f.id, f.session, f.title, f.question = strings.clone(id, a), strings.clone(session, a), strings.clone(title, a), question
 	f.fields = make([]Form_Field, len(list), a)
 	for it, i in list {
 		fd := &f.fields[i]
@@ -101,8 +105,13 @@ form_add :: proc(app: ^App, v: json.Value) {
 			if !known { ui.field_set(&fd.text, s) }
 		}
 	}
-	append(&app.cx.forms, f)
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	return f
+}
+
+form_free :: proc(f: ^Form_Req) {
+	for &fd in f.fields { ui.field_destroy(&fd.text) }
+	virtual.arena_destroy(&f.arena)
+	free(f)
 }
 
 form_find :: proc(app: ^App, id: string) -> ^Form_Req {
@@ -114,9 +123,7 @@ form_remove :: proc(app: ^App, id: string) {
 	for f, i in app.cx.forms {
 		if f.id != id { continue }
 		ordered_remove(&app.cx.forms, i)
-		for &fd in f.fields { ui.field_destroy(&fd.text) }
-		virtual.arena_destroy(&f.arena)
-		free(f)
+		form_free(f)
 		return
 	}
 }
@@ -415,7 +422,6 @@ option_label :: proc(o: Form_Option) -> string {
 	return o.description != "" && o.description != o.label ? fmt.tprintf("%s  -  %s", o.label, o.description) : o.label
 }
 
-@(private = "file")
 form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 	h := math.round(em * BUTTON_H_EM)
 	switch fd.kind {

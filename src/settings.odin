@@ -407,7 +407,7 @@ dialogs_track :: proc(app: ^App) {
 ////////////////////////////////
 // The dialog
 
-Settings_Page :: enum u8 { Appearance, Conversation, Behaviour, Updates, Advanced, Server, Mcp, Usage, Permissions, Catalog }
+Settings_Page :: enum u8 { Appearance, Conversation, Behaviour, Updates, Advanced, Server, Connections, Mcp, Usage, Permissions, Catalog }
 
 SETTINGS_PAGES := [Settings_Page]struct { title, icon: string, opencode: bool }{
 	.Appearance   = {"Appearance", ICO_PALETTE, false},
@@ -416,6 +416,7 @@ SETTINGS_PAGES := [Settings_Page]struct { title, icon: string, opencode: bool }{
 	.Updates      = {"Updates", ICO_REFRESH, false},
 	.Advanced     = {"Advanced", ICO_TOOL, false},
 	.Server       = {"Server & shell", ICO_TERMINAL, true},
+	.Connections  = {"Connections", ICO_PERSON, true},
 	.Mcp          = {"MCP servers", ICO_PLUG, true},
 	.Usage        = {"Usage & limits", ICO_GAUGE, true},
 	.Permissions  = {"Permissions", ICO_SHIELD, true},
@@ -484,6 +485,7 @@ settings_dialog :: proc(app: ^App, em: f32) {
 						case .Updates:      page_updates(app, em)
 						case .Advanced:     page_advanced(app, em)
 						case .Server:       page_server(app, em)
+						case .Connections:  page_connections(app, em)
 						case .Mcp:          page_mcp(app, em)
 						case .Usage:        page_usage(app, em)
 						case .Permissions:  page_permissions(app, em)
@@ -753,13 +755,11 @@ fact :: proc(id, k, v: string, em: f32, col := Color{}) {
 	kv_row(id, k, v, em, {h = 1.5, key_w = 8.5, key_fs = FS_SMALL, val_fs = FS_SMALL, pad_l = 0.8, pad_r = 0.6, val = HEX_FACT_VALUE}, col)
 }
 
-@(private = "file")
 section :: proc(s: string, em: f32) {
 	ui.spacer(ui.px(em * 0.6))
 	section_label(fmt.tprintf("sec_%s", s), s, em)
 }
 
-@(private = "file")
 loading :: proc(app: ^App, em: f32) -> bool {
 	if int(app.pending) > 0 {
 		info_line(app, "###ld", "Asking the server…", em)

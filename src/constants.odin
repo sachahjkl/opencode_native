@@ -148,6 +148,8 @@ GO_BOTTOM_W_EM    :: 6.5
 Dialog :: enum u8 { Settings, Stats, Help, Changes, Files }
 DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Stats = {54, 46}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}}
 DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Stats = {34, 22}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}}
+INTEGRATIONS_ROWS    :: 40     // shown at once: the rest is searched
+CONNECT_POLL_MS      :: 1500   // how often a login under way is asked about
 MENTION_ROWS         :: 7      // what @ proposes at once
 MENTION_DETAIL_CHARS :: 60
 FILES_FOUND_MAX      :: 200    // of a search in the dialog

@@ -156,6 +156,7 @@ App_Context :: struct {
 	dialogs:        [Dialog]Vec2,      // the sizes given to the dialogs (logical pixels, {}: what they prefer)
 	dialogs_saved:  [Dialog]Vec2,
 	dialogs_read:   bool,
+	integrations:   Integrations,         // the Connections page (integrations.odin)
 	mentions:       Mentions,             // @ in the composer (files.odin)
 	files:          Files,                // the dialog of the folder's files
 	changes:        Changes,              // what a session changed, or would undo (session_tools.odin)

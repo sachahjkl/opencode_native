@@ -206,6 +206,12 @@ Req_Kind :: enum u8 {
 	Session_Moved,  // POST /api/session/:id/move
 	Session_Export, // GET /api/experimental/session/:id/export (session_tools.odin)
 	Session_Import, // POST /api/experimental/session/import
+	Integrations,   // GET /api/integration (integrations.odin)
+	Credentials,    // GET /api/credential: only which are active is read
+	Credential_Done, // PATCH, DELETE /api/credential/:id, POST .../activate
+	Connected,      // POST .../connect/key, /external, /oauth/:id/complete
+	Connect_Begin,  // POST .../connect/oauth, /command
+	Connect_Status, // GET .../connect/oauth/:id, /command/:id
 	Mention_Files,  // GET /api/fs/list, /api/fs/find: what @ proposes (files.odin)
 	Files_List,     // the same for the dialog
 	File_Read,      // GET /api/fs/read/*
@@ -232,18 +238,25 @@ Request :: struct {
 	status: int,
 	resp:   string,
 	ok:     bool,
+	delay:  int,      // ms to sleep first, in its thread
 }
 
-request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "") {
+request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "", delay := 0) {
 	if app.conn == nil { return }   // (no server yet: nothing to ask)
 	r := new(Request)
-	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = app.conn, facts_gen = app.facts_gen}
+	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = app.conn, facts_gen = app.facts_gen, delay = delay}
 	sync.atomic_add(&app.pending, 1)
 	thread.create_and_start_with_poly_data(r, proc(r: ^Request) {
 		app := the_app
+		if r.delay > 0 { time.sleep(time.Duration(r.delay) * time.Millisecond) }
 		r.status, r.resp, r.ok = http_request(&r.conn.http, r.method, r.path, r.body)
 		if !ui.post(&app.ui_state, on_answer, r) { request_free(r) }
 	}, self_cleanup = true)
+}
+
+// A GET in a while: what is being waited for costs a sleeping thread, no frame.
+request_later :: proc(app: ^App, kind: Req_Kind, path: string, ms: int, tag: string) {
+	request(app, kind, "GET", path, tag = tag, delay = ms)
 }
 
 request_free :: proc(r: ^Request) {
@@ -284,7 +297,7 @@ on_answer :: proc(data: rawptr, word: u64) {
 		return
 	}
 	v, err := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if err != nil && r.kind != .Action && r.kind != .Prompt && r.kind != .Session_Agent && r.kind != .Session_Model && r.kind != .Inbox_Take && r.kind != .Form_Reply && r.kind != .Session_Moved && r.kind != .Revert_Done && r.kind != .Revert_Cancelled {
+	if err != nil && r.kind != .Action && r.kind != .Prompt && r.kind != .Session_Agent && r.kind != .Session_Model && r.kind != .Inbox_Take && r.kind != .Form_Reply && r.kind != .Session_Moved && r.kind != .Revert_Done && r.kind != .Revert_Cancelled && r.kind != .Connected && r.kind != .Credential_Done {
 		ui.toast(.Warn, "Unreadable answer (%s)", r.path)
 		request_failed(app, r)
 		return
@@ -331,6 +344,12 @@ on_answer :: proc(data: rawptr, word: u64) {
 		app.refresh_due = true
 		if id := jstr(v, "data", "id"); id != "" { open_root(app, id) }
 		ui.toast(.Good, "Session imported")
+	case .Integrations:  integrations_load(app, v)
+	case .Credentials:   credentials_load(app, v)
+	case .Credential_Done: integrations_changed(app)
+	case .Connected:     connect_done(app)
+	case .Connect_Begin: connect_begun(app, r.tag, v)
+	case .Connect_Status: connect_status(app, r.tag, v)
 	case .Mention_Files: mention_load(app, r.tag, v)
 	case .Files_List:    files_load(app, r.tag, v)
 	case .File_Read:
@@ -370,6 +389,8 @@ request_failed :: proc(app: ^App, r: ^Request) {
 		older_failed(app, r)
 	case .Form_Reply:
 		if f := form_find(app, r.tag); f != nil { f.sending = false }
+	case .Connected, .Connect_Begin:
+		connect_failed(app)
 	case .File_Read:
 		file_loaded(app, r.tag, "", false)
 	case .Changes, .Changes_Range:

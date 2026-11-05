@@ -72,6 +72,7 @@ build_ui :: proc(app: ^App) {
 	stats_dialog(app, em)
 	rename_dialog(app, em)
 	help_dialog(app, em)
+	integrations_watch(app)
 	changes_dialog(app, em)
 	files_dialog(app, em)
 	palette_dialog(app, em)

@@ -5,6 +5,17 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.11.8] - 2026-11-05
+
+### Added
+
+- **Connections**, a page of the settings and a command of the palette: the 238 integrations of the server, those connected first, found
+  by name. Connect one with a key, a login in the browser, what is on the machine or a command, with the questions of each way: a login
+  shows its instructions and its code, follows itself without drawing a frame, and ends with the settings. Several accounts of one
+  integration: choose the one in use, rename, remove after asking. A connection that must sign in again says so. What is connected
+  brings its models.
+- A key goes from its masked field to the server and is forgotten; of the credentials, only which is active is read.
+
 ## [0.11.7] - 2026-11-05
 
 ### Added
@@ -494,7 +505,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.7...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.8...HEAD
+[0.11.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.8
 [0.11.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.7
 [0.11.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.6
 [0.11.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.5

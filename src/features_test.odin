@@ -338,3 +338,92 @@ a_prompt_says_what_it_mentions :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(m.chosen), 0)
 	testing.expect_value(t, attachments_take(app, "nothing"), "")
 }
+
+// Those connected come first; the list does not change under what is being filled in, it comes after.
+@(test)
+the_integrations_connected_come_first :: proc(t: ^testing.T) {
+	app := new(App)
+	defer free(app)
+	n := &app.cx.integrations
+	v, _ := json.parse_string(`{"data":[
+		{"id":"a","name":"A","methods":[{"type":"key"},{"type":"env","names":["A_KEY"]},{"type":"unknown"}],"connections":[]},
+		{"id":"b","name":"B","methods":[{"type":"oauth","id":"web","label":"Sign in","form":[{"key":"host","type":"string","required":true}]}],
+		 "connections":[{"type":"credential","id":"c1","label":"work","method":"oauth","status":{"status":"needs_auth","message":"again"}},{"type":"env","name":"B_KEY"}]}
+	]}`, parse_integers = true, allocator = context.temp_allocator)
+	integrations_load(app, v)
+	defer {
+		n.step = .Choose
+		integrations_load(app, json.Object{})
+		delete(n.list)
+	}
+	testing.expect_value(t, len(n.list), 2)
+	testing.expect_value(t, n.list[0].id, "b")
+	testing.expect(t, n.list[0].connections[0].needs_auth, "it must sign in again")
+	testing.expect(t, !n.list[0].connections[1].credential, "from the environment")
+	testing.expect_value(t, n.list[0].connections[1].label, "B_KEY")
+	testing.expect_value(t, len(n.list[1].methods), 2)   // (a kind it does not know is left out)
+	testing.expect_value(t, n.list[1].methods[1].names[0], "A_KEY")
+
+	c, _ := json.parse_string(`{"data":[{"id":"c1","integrationID":"b","label":"work","active":true,"value":{"type":"key","key":"SECRET"}}]}`, parse_integers = true, allocator = context.temp_allocator)
+	credentials_load(app, c)
+	testing.expect(t, n.list[0].connections[0].active, "in use")
+
+	n.step = .Fill
+	integrations_load(app, v)
+	testing.expect(t, n.dirty, "for later")
+	testing.expect_value(t, len(n.list), 2)
+	n.dirty = false
+}
+
+// What a way of connecting asks goes as its answer; what is missing stops it.
+@(test)
+what_a_method_asks_goes_with_it :: proc(t: ^testing.T) {
+	v, _ := json.parse_string(`[{"key":"host","type":"string","required":true,"title":"Host"}]`, parse_integers = true, allocator = context.temp_allocator)
+	list, _ := v.(json.Array)
+	f := form_new("", "", "", false, list)
+	defer form_free(f)
+	_, problem := connect_extra(f, "")
+	testing.expect(t, problem != "", "the host is required")
+	ui.field_set(&f.fields[0].text, "a.example")
+	extra, none := connect_extra(f, " work ")
+	testing.expect_value(t, none, "")
+	testing.expect_value(t, extra, `"answer":{"host":"a.example"},"label":"work"`)
+	bare, _ := connect_extra(nil, "")
+	testing.expect_value(t, bare, `"answer":{}`)
+}
+
+// A login: its details are kept, an answer for another attempt says nothing, and what ends it says why.
+@(test)
+a_login_is_followed_until_it_ends :: proc(t: ^testing.T) {
+	app := new(App)
+	defer free(app)
+	n := &app.cx.integrations
+	json_of :: proc(s: string) -> json.Value {
+		v, _ := json.parse_string(s, parse_integers = true, allocator = context.temp_allocator)
+		return v
+	}
+	n.step = .Sending
+	connect_begun(app, "oauth", json_of(`{"data":{"attemptID":"a1","url":"","instructions":"Enter the code ABCD","mode":"auto"}}`))
+	testing.expect_value(t, n.step, Connect_Step.Waiting)
+	testing.expect_value(t, n.instructions, "Enter the code ABCD")
+	testing.expect(t, !n.by_code, "it ends by itself")
+	connect_status(app, "oauth old", json_of(`{"data":{"status":"failed","message":"no"}}`))
+	testing.expect_value(t, n.step, Connect_Step.Waiting)
+	connect_status(app, "oauth a1", json_of(`{"data":{"status":"pending"}}`))
+	testing.expect_value(t, n.step, Connect_Step.Waiting)
+	connect_status(app, "oauth a1", json_of(`{"data":{"status":"failed","message":"refused"}}`))
+	testing.expect_value(t, n.step, Connect_Step.Choose)
+	testing.expect_value(t, n.failed, "refused")
+	testing.expect_value(t, n.attempt, "")
+
+	n.step = .Sending
+	connect_begun(app, "oauth", json_of(`{"data":{"attemptID":"a2","url":"","instructions":"","mode":"code"}}`))
+	testing.expect(t, n.by_code, "a code to paste")
+	connect_status(app, "oauth a2", json_of(`{"data":{"status":"expired"}}`))
+	testing.expect(t, strings.contains(n.failed, "expired"), "it says so")
+
+	n.step = .Sending
+	connect_failed(app)
+	testing.expect_value(t, n.step, Connect_Step.Fill)
+	n.step = .Choose
+}
