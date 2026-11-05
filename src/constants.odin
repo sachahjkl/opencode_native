@@ -144,6 +144,15 @@ GO_BOTTOM_W_EM    :: 6.5
 ////////////////////////////////
 // Pacing, and the status bar's rate
 
+// The dialogs one can resize: what they open at and the least they go to, in em (the window has the last word).
+Dialog :: enum u8 { Settings, Stats, Help }
+DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Stats = {54, 46}, .Help = {42, 44}}
+DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Stats = {34, 22}, .Help = {30, 20}}
+
+SETTINGS_NAV_EM       :: 14   // the list of the pages
+SETTINGS_NAV_ICONS_EM :: 4    // the same with its icons alone
+SETTINGS_NARROW_EM    :: 40   // a dialog narrower than this has them alone
+
 OS_SETTINGS_READ_MS :: 2000   // how often the system's animation setting is read
 POINTER_MOVING_MS :: 80                         // since the last move or notch: the pointer is still moving
 FPS_SMOOTH   :: 0.08           // the status bar's rate: how fast it follows

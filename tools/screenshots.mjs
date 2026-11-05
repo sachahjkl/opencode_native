@@ -138,7 +138,7 @@ const SHOTS = [
     must('wait', '700')
     must('idle')
   } },
-  { name: 'updates', args: [...SESSION, '--settings=3'] },
+  { name: 'updates', args: [...SESSION, '--settings=3'], go: () => must('wait-for', 'Up to date', '--timeout', '15000') },   // (it looks at start)
   { name: 'settings', args: [...SESSION, '--settings=0'] },
   { name: 'subagent-session', args: SESSION, go: async () => {
     await scrollTo('Summarise src/stats.odin', 0.4)

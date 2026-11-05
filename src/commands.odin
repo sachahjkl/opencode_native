@@ -135,8 +135,10 @@ rect_contains :: proc(r: Rect, p: Vec2) -> bool { return p.x >= r.min.x && p.x <
 
 // The keys of the table as a dialog: what can be done, by group.
 help_dialog :: proc(app: ^App, em: f32) {
-	if ui.modal("help", em * 34, &app.cx.help_open, 0.1) {
+	if ui.modal_sized("help", DIALOG_PREFERRED_EM[.Help] * em, &app.cx.dialogs[.Help], &app.cx.help_open, DIALOG_MIN_EM[.Help] * em) {
 		dialog_backdrop()
+		ui.next({width = ui.fill(), height = ui.fill()})
+		if ui.scroll_y("###help_scroll") {
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###help") {
@@ -170,6 +172,7 @@ help_dialog :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em))
 			}
 			ui.spacer(ui.px(em * 1.2))
+		}
 		}
 	}
 }

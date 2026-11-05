@@ -153,6 +153,9 @@ App_Context :: struct {
 	was_gliding:    bool,              // ... it did in the last one
 	docked_w:       f32,               // the conversation's room as a panel of the dock (0: it is not one)
 	help_open:      bool,              // the keyboard's dialog (commands.odin)
+	dialogs:        [Dialog]Vec2,      // the sizes given to the dialogs (logical pixels, {}: what they prefer)
+	dialogs_saved:  [Dialog]Vec2,
+	dialogs_read:   bool,
 	command_due:    ^Command,          // to run after this frame (commands.odin)
 	slash:          [dynamic]Slash,    // the server's commands
 	have_slash:     bool,
@@ -218,6 +221,7 @@ frame :: proc(app: ^App, inner := false) {
 	if len(events) > 0 { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }
 	for e in events { if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() } }
 	content_zoom_events(app, events)
+	dialogs_track(app)
 	render.resize(&app.r, app.win.size)
 	size := draw.Vec2{f32(app.win.size.x), f32(app.win.size.y)}
 	now := time.tick_now()

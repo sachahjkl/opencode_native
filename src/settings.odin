@@ -38,7 +38,6 @@ COMPACT_DENSITY     :: 0.8
 ZOOM_EPSILON        :: 0.001
 SLIDER_EPSILON      :: 1e-4
 TOAST_TITLE_CHARS   :: 60
-SETTINGS_DIALOG_TOP :: 0.08   // of the window's height
 SETTINGS_ROW_H_EM   :: 2.2
 USAGE_WARN_PERCENT  :: 80
 BUDGET_WARN_SHARE   :: 0.8
@@ -88,6 +87,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "session.provider", description = "The provider of that model.", kind = .String, default = {s = ""}},
 	{name = "browser.tools", description = "Let the agents drive the Preview panel (open pages, read them, click, run scripts): the browser tools, while this window is open.", kind = .Bool, default = {b = true}},
 	{name = "layout.dock", description = "Where the panels are, as the dock writes it.", kind = .String, default = {s = ""}},
+	{name = "layout.dialogs", description = "The sizes the dialogs were given (settings, statistics, shortcuts), in logical pixels.", kind = .String, default = {s = ""}},
 	{name = "update.channel", description = "Which releases this copy follows: the stable ones, or the betas too.", kind = .String, default = {s = "stable"}, choices = {"stable", "beta"}},
 	{name = "update.auto", description = "Look for a new version at start (it is only installed when you say so).", kind = .Bool, default = {b = true}},
 	{name = "update.base_url", description = "Where releases are read from (empty: GitHub). Whatever the place, only what the built-in key signed is installed.", kind = .String, default = {s = ""}},
@@ -381,6 +381,30 @@ server_facts_answer :: proc(app: ^App, kind: Req_Kind, v: json.Value) {
 }
 
 ////////////////////////////////
+// The sizes of the dialogs
+
+// What layout.dialogs says, once, then what the person changed, written when the pointer lets go.
+dialogs_track :: proc(app: ^App) {
+	cx := &app.cx
+	if !cx.dialogs_read {
+		cx.dialogs_read = true
+		rest := config.string_of(&app.cfg_prefs, "layout.dialogs")
+		for d in Dialog {
+			field, _ := strings.split_iterator(&rest, " ")
+			wh := strings.split(field, "x", context.temp_allocator)
+			if len(wh) != 2 { continue }
+			cx.dialogs[d] = {f32(strconv.parse_f64(wh[0]) or_else 0), f32(strconv.parse_f64(wh[1]) or_else 0)}
+		}
+		cx.dialogs_saved = cx.dialogs
+	}
+	if cx.dialogs == cx.dialogs_saved || ui.active_key() != 0 { return }
+	cx.dialogs_saved = cx.dialogs
+	b := strings.builder_make(context.temp_allocator)
+	for d in Dialog { fmt.sbprintf(&b, "%.0fx%.0f ", cx.dialogs[d].x, cx.dialogs[d].y) }
+	pref_set(app, "layout.dialogs", strings.trim_space(strings.to_string(b)))
+}
+
+////////////////////////////////
 // The dialog
 
 Settings_Page :: enum u8 { Appearance, Conversation, Behaviour, Updates, Advanced, Server, Mcp, Usage, Permissions, Catalog }
@@ -404,26 +428,26 @@ settings_open :: proc(app: ^App) {
 }
 
 settings_dialog :: proc(app: ^App, em: f32) {
-	if ui.modal("settings", em * 52, &app.settings_open, SETTINGS_DIALOG_TOP) {
+	if ui.modal_sized("settings", DIALOG_PREFERRED_EM[.Settings] * em, &app.cx.dialogs[.Settings], &app.settings_open, DIALOG_MIN_EM[.Settings] * em) {
 		dialog_backdrop()
-		h := math.round(min(em * 36, app.ui_state.window_size.y * 0.8))
-		ui.next({width = ui.fill(), height = ui.px(h), axis = .X})
+		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 		if ui.row(id = "###settings_body") {
-			// the pages
-			ui.next({width = ui.px(em * 14), height = ui.fill(), axis = .Y})
+			// the pages (their icons alone in a narrow dialog: the page needs the room more)
+			narrow := ui.parent_box().size.x < em * SETTINGS_NARROW_EM
+			ui.next({width = ui.px(em * (narrow ? SETTINGS_NAV_ICONS_EM : SETTINGS_NAV_EM)), height = ui.fill(), axis = .Y})
 			if ui.column(id = "###settings_nav") {
 				// (the list scrolls: a short window must not push it out of the dialog; the foot stays)
 				ui.next({width = ui.fill(), height = ui.fill()})
 				if ui.scroll_y("###settings_nav_list") {
 					ui.spacer(ui.px(em * 1.1))
-					nav_heading("CLIENT", em)
+					if !narrow { nav_heading("CLIENT", em) }
 					for page in Settings_Page {
 						info := SETTINGS_PAGES[page]
-						if page == .Server { ui.spacer(ui.px(em * 0.6)); nav_heading("OPENCODE", em) }
+						if page == .Server { ui.spacer(ui.px(em * 0.6)); if !narrow { nav_heading("OPENCODE", em) } }
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 						if ui.row(id = fmt.tprintf("###nv%d", int(page))) {
 							ui.spacer(ui.px(em * 0.7))
-							if bevel_button(fmt.tprintf("###nav%d", int(page)), info.title, info.icon, app.settings_page == page ? .Toggled : .Ghost, ui.fill(), math.round(em * BUTTON_H_EM), left = true).clicked {
+							if bevel_button(fmt.tprintf("###nav%d", int(page)), narrow ? "" : info.title, info.icon, app.settings_page == page ? .Toggled : .Ghost, ui.fill(), math.round(em * BUTTON_H_EM), left = true).clicked {
 								app.settings_page = page
 							}
 							ui.spacer(ui.px(em * 0.9))   // (the scroll bar's place)
@@ -431,12 +455,14 @@ settings_dialog :: proc(app: ^App, em: f32) {
 						ui.spacer(ui.px(em * 0.2))
 					}
 				}
-				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-				if ui.row(id = "###nav_foot") {
+				if !narrow {
+					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+					if ui.row(id = "###nav_foot") {
+						ui.spacer(ui.px(em * 0.9))
+						text("f", fmt.tprintf("prefs: %s", filepath.base(prefs_path())), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.4)})
+					}
 					ui.spacer(ui.px(em * 0.9))
-					text("f", fmt.tprintf("prefs: %s", filepath.base(prefs_path())), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.4)})
 				}
-				ui.spacer(ui.px(em * 0.9))
 			}
 			groove("###settings_div")
 			// the page

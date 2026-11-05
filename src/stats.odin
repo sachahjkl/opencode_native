@@ -121,7 +121,6 @@ local_stats :: proc(app: ^App) -> (l: Local) {
 ////////////////////////////////
 // The dialog
 
-STATS_DIALOG_TOP    :: 0.06    // of the window's height
 CONTEXT_FULL_SHARE  :: 0.85    // of the model's window
 CONTEXT_WARN_SHARE  :: 0.6
 TOOLS_SHOWN         :: 14
@@ -208,10 +207,9 @@ stats_dialog :: proc(app: ^App, em: f32) {
 	if !app.stats_open { return }
 	c := &app.chat
 	s := c.have_self ? &c.self : find_session(app, c.id)
-	if ui.modal("stats", em * 46, &app.stats_open, STATS_DIALOG_TOP) {
+	if ui.modal_sized("stats", DIALOG_PREFERRED_EM[.Stats] * em, &app.cx.dialogs[.Stats], &app.stats_open, DIALOG_MIN_EM[.Stats] * em) {
 		dialog_backdrop()
-		h := math.round(min(em * 38, app.ui_state.window_size.y * 0.84))
-		ui.next({width = ui.fill(), height = ui.px(h)})
+		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###stats_scroll") {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row() {

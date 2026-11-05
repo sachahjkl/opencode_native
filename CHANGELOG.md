@@ -5,6 +5,15 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-11-05
+
+### Changed
+
+- gui_toolkit 0.81.0.
+- **The dialogs fit the window**: Settings, Statistics and Keyboard shortcuts open larger, centered, and never leave the window. Drag
+  an edge or a corner to resize them, double click it to go back; the size is kept from one run to the next (`layout.dialogs`).
+- In a narrow Settings dialog the list of pages shows its icons alone. Keyboard shortcuts scrolls.
+
 ## [0.11.1] - 2026-11-05
 
 ### Changed
@@ -415,7 +424,8 @@ project follows [semantic versioning](https://semver.org).
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.11.2...HEAD
+[0.11.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.2
 [0.11.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.1
 [0.11.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.11.0
 [0.10.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.10.0
