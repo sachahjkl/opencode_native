@@ -5,6 +5,10 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **The site says what it is when it is shared**: a card, Open Graph and Twitter tags on every page, an Atom feed of the versions, a sitemap and a manifest (`tools/site_meta.mjs`, at deployment).
+
 ## [0.12.3] - 2026-11-05
 
 ### Fixed
