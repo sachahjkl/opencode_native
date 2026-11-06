@@ -67,6 +67,7 @@ COMMANDS := [?]Command{
 	{id = "session.import", title = "Import a session", group = "Session", icon = ICO_DOC, run = session_import_pick},
 	{id = "session.copy_id", title = "Copy the session ID", group = "Session", icon = ICO_COPY, run = proc(app: ^App) { clip_set(app.chat.id) }, enabled = has_session},
 
+	{id = "view.terminal_window", title = "Open the terminal in a window", group = "View", icon = ICO_WINDOW, run = terminal_detach_current, enabled = terminal_can_detach},
 	{id = "view.preview", title = "Show or hide the Preview panel", group = "View", icon = ICO_GLOBE, keys = "Ctrl+Shift+B", key = .B, mods = {.Ctrl, .Shift}, run = preview_toggle, checked = proc(app: ^App) -> bool { return app.preview.open }},
 	{id = "view.sidebar", title = "Show or hide the sidebar", group = "View", icon = ICO_MENU, keys = "Ctrl+B", key = .B, mods = {.Ctrl}, run = proc(app: ^App) { app.cx.sidebar_hidden = !app.cx.sidebar_hidden }, checked = proc(app: ^App) -> bool { return !app.cx.sidebar_hidden }},
 	{id = "view.sidebar_mode", title = "Switch the sidebar's mode (inbox, projects)", group = "View", icon = ICO_LIST, run = sidebar_mode_next},

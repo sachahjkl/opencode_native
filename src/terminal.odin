@@ -68,6 +68,7 @@ Term :: struct {
 	size_flying: bool,         // one at a time: the size that goes next is the last one
 	fitted: bool,              // its grid was laid out: until then its size says nothing (a shell found again under another tab has its own)
 	shown:  bool,              // its panel was built in this build
+	detached: bool,            // in a window of its own (detached.odin): no tab, and no part in the main window's input
 	box:    ui.Key,
 	rect:   draw.Rect,         // the grid, as last laid out
 	lines:  [dynamic]string,   // the text of the rows shown, for a copy (owned)
@@ -85,6 +86,7 @@ Term_Press :: enum u8 { None, Select, Program }
 Term_Focus_Ask :: struct { on: bool, panel: u32, from: ui.Key }
 
 Terminals :: struct {
+	only:    ^Term,            // while a window of its own is built: the one shell input may reach
 	open:    bool,             // the shells have their tabs (hidden: they run on, out of the dock)
 	read:    Remote,           // the list of the server's shells
 	made:    Remote,           // a new shell on its way
@@ -148,6 +150,7 @@ rgb_of :: proc(x: u32) -> Vt_Rgb { return {u8(x >> 24), u8(x >> 16), u8(x >> 8)}
 color_of :: proc(c: Vt_Rgb) -> Color { return hex(u32(c.r) << 24 | u32(c.g) << 16 | u32(c.b) << 8 | 0xff) }
 
 term_free :: proc(t: ^Term) {
+	if t.detached { detached_forget(the_app, t) }
 	if t.conn != nil { sync.atomic_store(&t.conn.stop, true) }
 	if t.vt != nil {
 		ghostty_mouse_event_free(t.mouse_ev)
@@ -412,7 +415,7 @@ terminals_dock :: proc(app: ^App) {
 term_dock :: proc(app: ^App, t: ^Term) {
 	s := &app.cx.terms
 	d := &app.dock
-	if ui.dock_has(d, t.panel) { return }
+	if t.detached || ui.dock_has(d, t.panel) { return }
 	beside := u32(Panel.Terminal)
 	if !ui.dock_has(d, beside) { beside = s.last_panel }
 	if beside == 0 || !ui.dock_has(d, beside) {
@@ -760,8 +763,9 @@ term_selection_drop :: proc(t: ^Term) { t.selecting, t.has_selection = false, fa
 // The shell whose grid is under `p`: shown, and no floating panel over it.
 term_at :: proc(app: ^App, p: [2]f32) -> ^Term {
 	d := &app.dock
+	if t := app.cx.terms.only; t != nil { return draw.rect_contains(t.rect, p) ? t : nil }
 	for t in app.cx.terms.list {
-		if !t.shown || !draw.rect_contains(t.rect, p) { continue }
+		if !t.shown || t.detached || !draw.rect_contains(t.rect, p) { continue }
 		leaf := ui.dock_leaf_at(d, p - d.origin)
 		if leaf == ui.DOCK_NONE || leaf == ui.dock_leaf_of(d, t.panel) { return t }
 	}
@@ -872,7 +876,7 @@ term_key_event :: proc(app: ^App, t: ^Term, e: platform.Event) -> (take: bool) {
 term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 	s := &app.cx.terms
 	if !s.open || len(s.list) == 0 { return events }
-	if overlay_open(app) {
+	if s.only == nil && overlay_open(app) {
 		term_press_end(s)
 		return events
 	}
@@ -958,7 +962,7 @@ term_paste :: proc(app: ^App, t: ^Term) {
 
 // Before the panels of a build: what was shown is shown again only if it is built.
 terminals_begin :: proc(app: ^App) {
-	for t in app.cx.terms.list { t.shown = false }
+	for t in app.cx.terms.list { if !t.detached { t.shown = false } }
 }
 
 // After them: who has the keyboard now, from what was really built. A shell hidden, under another tab, in a folded stack has neither the keys
@@ -968,12 +972,12 @@ terminals_settle :: proc(app: ^App) {
 	s.focused = nil
 	focus := ui.focus_key()
 	for t in s.list {
-		if t.shown && focus != 0 && t.box == focus {
+		if t.shown && !t.detached && focus != 0 && t.box == focus {
 			s.focused = t
 			s.last_panel = t.panel
 		}
 	}
-	if t := s.pressed; t != nil && (!t.shown || overlay_open(app) || ui.active_key() != t.box) { term_press_end(s) }
+	if t := s.pressed; t != nil && !t.detached && (!t.shown || overlay_open(app) || ui.active_key() != t.box) { term_press_end(s) }
 }
 
 // What says a shell is not there, and what can be done about it.
@@ -1041,6 +1045,13 @@ terminal_strip_end :: proc(app: ^App, d: ^ui.Dock, leaf: i32, em: f32) {
 		if t := term_of_panel(app, p); t != nil && any == nil { any = t }
 	}
 	if any == nil && !stand_in { return }
+	if any != nil {
+		ui.a11y({role = .Button, name = "Open this terminal in a window"})
+		if glyph_button("###term_win", ICO_WINDOW, math.round(em * TERM_NEW_EM)).clicked {
+			shown := s.focused != nil && !s.focused.detached ? s.focused : any
+			terminal_detach(app, shown)
+		}
+	}
 	ui.a11y({role = .Button, name = "New terminal"})
 	if glyph_button("###term_new", ICO_ADD, math.round(em * TERM_NEW_EM)).clicked {
 		if any != nil { s.last_panel = any.panel }   // (in this stack, whichever had the keyboard)

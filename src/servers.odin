@@ -255,6 +255,7 @@ server_forget :: proc(app: ^App) {
 // The window closes. Every connection's threads are told; none is waited for (one may be blocked in a read: the process ends with it).
 threads_stop :: proc(app: ^App) {
 	for c in app.cx.conns { sync.atomic_store(&c.stop, true) }
+	detached_stop(app)
 	terminals_stop(app)
 	browser_stop(app)
 }

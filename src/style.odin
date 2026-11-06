@@ -106,6 +106,7 @@ ICO_EDIT     :: "\ue1f9"   // pencil
 ICO_DOC      :: "\ue0c0"   // file
 ICO_TERMINAL :: "\ue20a"   // square-terminal
 ICO_GLOBE    :: "\ue0e8"   // globe
+ICO_WINDOW   :: "\ue426"   // app-window
 ICO_BULB     :: "\ue1c2"   // lightbulb
 ICO_CANCEL   :: "\ue1b2"   // x
 ICO_CHECK    :: "\ue06c"   // check

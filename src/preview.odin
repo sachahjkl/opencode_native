@@ -440,6 +440,7 @@ main_area :: proc(app: ^App, em: f32) {
 	}
 	if s.open {
 		for t in s.list {
+			if t.detached { continue }
 			if ui.dock_panel(d, t.panel) { terminal_panel(app, em, t) }
 		}
 		if ui.dock_panel(d, u32(Panel.Terminal)) { terminal_waiting(app, em) }

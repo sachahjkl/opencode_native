@@ -177,6 +177,7 @@ App_Context :: struct {
 	schedules:      Schedules,            // schedules.odin
 	artifacts:      Artifacts,
 	diff_full:      Diff_Full,            // diff_full.odin
+	detached:       [dynamic]^Detached,   // detached.odin
 	plugins:        Plugins,
 	integrations:   Integrations,         // the Connections page (integrations.odin)
 	mentions:       Mentions,             // @ in the composer (files.odin)
@@ -389,6 +390,8 @@ frame :: proc(app: ^App, inner := false) {
 	servers_rediscover(app)
 	activity_tick(app)
 	deferred_tick(app)
+	detached_frames(app)
+	free_all(context.temp_allocator)
 }
 
 // A conversation just opened, its first page on its way: an empty page shown for the instant that takes is a blink, from what was there to

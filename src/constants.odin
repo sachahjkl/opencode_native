@@ -251,6 +251,9 @@ FILES_LIST_W_EM      :: 22
 FILE_SNIFF_BYTES     :: 8192   // looked at for a zero byte: not text
 FILE_VIEW_MAX_BYTES  :: 262144 // of a file, shown; the rest is said
 CHANGES_OPEN_FILES :: 6     // the files of a list shown unfolded
+DETACHED_W         :: 900   // a shell's own window, when it opens
+DETACHED_H         :: 560
+DETACHED_DT_S      :: 0.016 // of a frame there: a grid has no animation that a step would show
 DIFF_ROWS_MARGIN   :: 30    // of a diff's full view, built beyond each edge of the view
 CHANGES_DIFF_LINES :: 400   // of a file, before the rest is counted
 
