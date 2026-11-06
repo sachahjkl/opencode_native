@@ -22,6 +22,8 @@ NEVER_LIMIT     :: 100 * time.Millisecond
 START_POLL      :: 2 * time.Millisecond    // (a start is measured: this must not be what it measures)
 POLL            :: 50 * time.Millisecond   // (what is looked at here, not in the window: a counter, the server's list)
 TURN_MESSAGES   :: 3
+BROWSER_TURN_LIMIT :: 150 * time.Second
+TOOLS_OFFERED   :: 3 * time.Second
 
 Live :: struct {
 	exe, session, dir: string,
@@ -366,6 +368,58 @@ scenario_prompt :: proc(l: ^Live) {
 	close_app(l, &app)
 }
 
+// A real agent, its session left while it works: the page it opens is its session's, and not the one shown. (Asked for by name: it costs a
+// real turn of a model, and a turn with tools takes its time.)
+@(private = "file")
+scenario_browser :: proc(l: ^Live) {
+	fmt.println("=== an agent's page, in its own session")
+	before, listed := api_list(l, "session")
+	if !listed { expect(l, false, "the server lists its sessions"); return }
+	app, started := launch(l, "browser", fmt.tprintf("--session=%s", l.session), "--pref", "browser.tools=true", "--search=Python clock")
+	if !started { expect(l, false, "the program answers"); return }
+	dt := &app.dt
+	expect(l, dt_wait_for(dt, "connected", STEP_LIMIT), "connected")
+	time.sleep(TOOLS_OFFERED)   // (the socket that offers the tools opens on a thread of its own: nothing says it did)
+	dt_key(dt, "ctrl+n")
+	expect(l, dt_wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
+	public_model(dt)
+	dt_click_name(dt, "composer")
+	dt_type(dt, "Call the browser tool tabs_open with the url https://example.com. Then call tabs_list. Then reply with the single word: done")
+	dt_key(dt, "Enter")
+
+	fresh: []string
+	begun := time.now()
+	for time.since(begun) < TURN_LIMIT && len(fresh) == 0 {
+		now, _ := api_list(l, "session")
+		fresh = new_ids(before, now)
+		time.sleep(POLL)
+	}
+	expect(l, len(fresh) == 1, "the prompt made a session")
+	if len(fresh) != 1 { close_app(l, &app); return }
+	// away, at once: what the agent does now, it does in a session that is not shown
+	dt_key(dt, "alt+ArrowLeft")
+	expect(l, dt_wait_for(dt, "UTC flag", STEP_LIMIT), "another session is shown")
+
+	body := ""
+	done := false
+	for time.since(begun) < BROWSER_TURN_LIMIT && !done {
+		status, text, got := http_at(l.server, "GET", fmt.tprintf("/api/session/%s/message?%s", fresh[0], location(l)), l.auth)
+		if got && status == 200 { body = text; done = strings.contains(body, "done") && strings.contains(body, "tabs_list") }
+		time.sleep(POLL * 4)
+	}
+	expect(l, strings.contains(body, "tabs_open"), "the agent had the tool")
+	expect(l, strings.contains(body, "example.com"), "it opened the page")
+	expect(l, done, "it finished its turn")
+	expect(l, !dt_has(dt, "Example Domain"), "the session shown has not its page")
+	expect(l, !dt_wait_name(dt, "pv_url", NEVER_LIMIT), "nor a browser")
+
+	dt_key(dt, "alt+ArrowRight")
+	expect(l, dt_wait_name(dt, "pv_url", STEP_LIMIT), "back in its session: its browser")
+	expect(l, dt_wait_for(dt, "Example Domain", STEP_LIMIT), "with its page")
+	dt_shot(dt, LIVE_DIR + "/browser_back.png")
+	close_app(l, &app)
+}
+
 clean_now :: proc(l: ^Live) -> int {
 	text := read_text(SNAPSHOT)
 	if text == "" && !os.exists(SNAPSHOT) { fmt.println("clean: no snapshot, nothing touched"); return 0 }
@@ -420,7 +474,7 @@ run_live :: proc(args: []string) -> int {
 			return EXIT_USAGE
 		}
 	}
-	if only != "" && only != "link" && only != "password" && only != "prompt" && only != "diff" { fmt.eprintfln("live: no scenario %s", only); return EXIT_USAGE }
+	if only != "" && only != "link" && only != "password" && only != "prompt" && only != "diff" && only != "browser" { fmt.eprintfln("live: no scenario %s", only); return EXIT_USAGE }
 	if !os.exists(l.exe) { fmt.eprintfln("live: no %s: occtools check builds it", l.exe); return 1 }
 	if !make_folder(LIVE_DIR) { return 1 }
 	if !snapshot_take(&l) { return 1 }
@@ -430,6 +484,7 @@ run_live :: proc(args: []string) -> int {
 	if only == "" || only == "password" { scenario_password(&l) }
 	if only == "" || only == "prompt" { scenario_prompt(&l) }
 	if only == "" || only == "diff" { scenario_diff(&l) }
+	if only == "browser" { scenario_browser(&l) }
 	cleaned := clean_now(&l)
 	fmt.printfln("live: %d failed, in %d s", l.failed, int(time.duration_seconds(time.since(begun))))
 	return l.failed > 0 || cleaned != 0 ? 1 : 0
