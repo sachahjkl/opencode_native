@@ -228,6 +228,9 @@ TERM_KEY_BYTES       :: 128
 TERM_WHEEL_LINES     :: 3      // what a notch scrolls
 TERM_TAB_CHARS       :: 24
 TERM_READ_MS         :: 5      // what a key may wait for its shell's thread
+TERM_SIZE_QUIET_MS   :: 150.0  // a shell is told its size once the grid has rested this long: each size it takes, it paints again
+TERM_PAINT_QUIET_MS  :: 60.0   // told, it has painted once nothing came for this long
+TERM_PAINT_MOST_MS   :: 400.0  // and at the latest: a shell that says nothing is shown as it is
 TERM_PANEL_BASE      :: 1000   // a shell's id in the dock is this and up: Panel's values stay under it
 TERM_OUT_MAX         :: 1 << 20   // bytes waiting for a socket on its way: past that, what is typed is dropped
 TERM_RETRIES         :: 8      // a lost socket is opened again this many times, then on a click or when the server answers again

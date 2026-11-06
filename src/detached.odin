@@ -12,7 +12,8 @@ import "gt:ui"
 // closing the window gives it its tab back.
 //
 // Being resized it is as stable as the main window, by the same two means. Its surface is a composition swap chain whose buffers keep
-// the monitor's size, shown 1:1 and clipped by the window: nothing is ever stretched. And it draws from inside the system's loop, which
+// the monitor's size, shown 1:1 and clipped by the window: nothing is ever stretched. (Below its child windows: the page moved into it
+// would be behind it.) And it draws from inside the system's loop, which
 // holds the thread for as long as the border is held: without on_frame no frame comes until the release.
 
 Detached :: struct {
@@ -40,7 +41,7 @@ panel_detach :: proc(app: ^App, panel: u32) {
 	d.panel = panel
 	d.app = app
 	d.win = platform.open_window(panel_title(app, panel), {DETACHED_W, DETACHED_H}, transparent = true)
-	if !render.surface_init(&app.r, &d.surface, platform.native_surface_handles(d.win), d.win.size, transparent = true, fixed_size = platform.monitor_size(d.win)) {
+	if !render.surface_init(&app.r, &d.surface, platform.native_surface_handles(d.win), d.win.size, transparent = true, fixed_size = platform.monitor_size(d.win), under_children = panel == u32(Panel.Preview)) {
 		platform.destroy_window(d.win)
 		free(d)
 		ui.toast(.Bad, "No window: the renderer refused it")

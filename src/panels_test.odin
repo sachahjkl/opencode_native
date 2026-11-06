@@ -474,6 +474,24 @@ a_socket_given_up_on_comes_back_with_the_server :: proc(t: ^testing.T) {
 }
 
 @(test)
+a_size_goes_once_the_grid_has_rested :: proc(t: ^testing.T) {
+	testing.expect(t, term_size_rested(1000, 1000, false), "the first at once")
+	testing.expect(t, !term_size_rested(1000 + TERM_SIZE_QUIET_MS - 1, 1000, true), "not while it moves")
+	testing.expect(t, term_size_rested(1000 + TERM_SIZE_QUIET_MS, 1000, true), "then it goes")
+}
+
+@(test)
+the_picture_waits_for_what_a_shell_paints :: proc(t: ^testing.T) {
+	testing.expect(t, !term_painting(5000, 0, 0, 0), "nothing awaited")
+	testing.expect(t, term_painting(5000, 0, 0, 4990), "its size is on its way")
+	testing.expect(t, !term_painting(5000 + TERM_PAINT_MOST_MS, 0, 0, 5000), "an answer that never comes holds nothing for good")
+	testing.expect(t, term_painting(5010, 5000, 0, 0), "told, it paints")
+	testing.expect(t, term_painting(5100, 5000, 5090, 0), "it goes on writing")
+	testing.expect(t, !term_painting(5000 + TERM_PAINT_QUIET_MS, 5000, 0, 0), "a shell with nothing to paint")
+	testing.expect(t, !term_painting(5000 + TERM_PAINT_MOST_MS, 5000, 5000 + TERM_PAINT_MOST_MS - 1, 0), "one that never stops writing holds nothing for good")
+}
+
+@(test)
 only_the_last_size_goes_one_at_a_time :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
@@ -486,6 +504,9 @@ only_the_last_size_goes_one_at_a_time :: proc(t: ^testing.T) {
 	first := bench_take(t, .Pty_Size)
 	testing.expect(t, strings.contains(first.body, `"cols":100`), "the first")
 	bench_answer(app, first, 200, "")
+	testing.expect_value(t, bench_count(.Pty_Size), 0)   // (the grid has only just moved: the shell would paint for nothing)
+	s.grid_ms = 0   // (it has rested)
+	term_size_send(app, s)
 	last := bench_take(t, .Pty_Size)
 	testing.expect(t, strings.contains(last.body, `"cols":120`) && strings.contains(last.body, `"rows":40`), "then the last, none between")
 	bench_answer(app, last, 200, "")

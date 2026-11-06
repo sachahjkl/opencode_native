@@ -413,9 +413,10 @@ deferred_tick :: proc(app: ^App) {
 	if deferred_take(&cx.children_read) { load_children(app) }
 	if deferred_take(&cx.context_due) && app.stats_open { context_ask(app) }
 	if deferred_take(&cx.restore_limit) { nav_restore_clear(app) }
+	terms_size_tick(app)
 	if deferred_take(&cx.side_hold.wake) { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }   // (the build sees the pointer has rested)
 	soonest := 0
-	for ms in ([?]int{deferred_in_ms(&cx.refresh_read), deferred_in_ms(&cx.facts_read), deferred_in_ms(&cx.children_read), deferred_in_ms(&cx.context_due), deferred_in_ms(&cx.restore_limit), deferred_in_ms(&cx.side_hold.wake), activity_in_ms(app), rediscover_in_ms(app), browser_in_ms(app)}) {
+	for ms in ([?]int{deferred_in_ms(&cx.refresh_read), deferred_in_ms(&cx.facts_read), deferred_in_ms(&cx.children_read), deferred_in_ms(&cx.context_due), deferred_in_ms(&cx.restore_limit), deferred_in_ms(&cx.terms.size_wake), deferred_in_ms(&cx.side_hold.wake), activity_in_ms(app), rediscover_in_ms(app), browser_in_ms(app)}) {
 		if ms > 0 { soonest = soonest == 0 ? ms : min(soonest, ms) }
 	}
 	if soonest > 0 { ui.wake_within(&app.ui_state, soonest) }

@@ -66,6 +66,11 @@ Term :: struct {
 	cols, rows: u16,
 	size_sent, size_asked: [2]u16,   // what the server was last told, what is on its way
 	size_flying: bool,         // one at a time: the size that goes next is the last one
+	grid_ms:  f64,             // when the grid last changed
+	told_ms:  f64,             // when the shell took a size: what it paints then comes in pieces (0: nothing is awaited)
+	fed_ms:   f64,             // when it last wrote
+	asked_ms: f64,             // when the size on its way left (0: none is)
+	drawn:    bool,            // its state was read once: there is a picture to keep
 	fitted: bool,              // its grid was laid out: until then its size says nothing (a shell found again under another tab has its own)
 	shown:  bool,              // its panel was built in this build
 	detached: bool,            // in a window of its own (detached.odin): no tab, and no part in the main window's input
@@ -93,6 +98,7 @@ Terminals :: struct {
 	make_after: bool,          // one was asked for while the list was read: what it says comes first
 	list:    [dynamic]^Term,
 	gone:    [dynamic]^Term,   // closed in this frame: what was built for them is still to be drawn (terminals_reap)
+	size_wake: Deferred,       // a size to send, a picture to show: a frame then, the window may be at rest
 	next_panel: u32,
 	last_panel: u32,           // the last shell that had the keyboard: a new one goes beside it
 	replaces:   u32,           // a shell restarted: the new one takes its tab
@@ -323,6 +329,7 @@ term_news :: proc(data: rawptr, word: u64) {
 	t := term_of_conn(app, d.conn)
 	if t == nil { return }   // (a shell closed, a server left)
 	if d.is_link { term_link_set(app, t, d.link, d.given_up) } else { term_feed(t, d.text) }
+	if t.told_ms != 0 { deferred_ask(&app.cx.terms.size_wake, TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS) }
 	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
 }
 
@@ -342,6 +349,7 @@ term_link_set :: proc(app: ^App, t: ^Term, link: Term_Link, given_up := false) {
 term_feed :: proc(t: ^Term, s: string) {
 	if t.vt == nil || len(s) == 0 { return }
 	if term_at_bottom(t) { term_selection_drop(t) }   // (the rows move under it; scrolled up, the view stays where it is)
+	t.fed_ms = ui.now_ms()
 	ghostty_terminal_vt_write(t.vt, raw_data(s), len(s))
 }
 
@@ -1060,8 +1068,9 @@ term_label :: proc(t: ^Term) -> string {
 	return ellipsize(fmt.tprintf("%s%s", name, tail), TERM_TAB_CHARS)
 }
 
-// The grid follows the panel at once. The shell is told the last size, one request at a time: a window being dragged would otherwise send one
-// for each step, on as many threads, in no order, and the last to arrive would be any of them.
+// The grid follows the panel at once. The shell is told the last size, one request at a time, once the grid has rested. A window being
+// dragged would otherwise send one for each step, on as many threads, in no order, and the last to arrive would be any of them; and a
+// shell paints its whole screen again for each size it takes, in pieces, which the grid would show: its text a few rows off, for a frame.
 @(private = "file")
 term_fit :: proc(app: ^App, t: ^Term, r: draw.Rect) {
 	s := &app.cx.terms
@@ -1077,15 +1086,30 @@ term_resize :: proc(app: ^App, t: ^Term, cols, rows: u16, cell_w, cell_h: u32) {
 		t.cols, t.rows = cols, rows
 		ghostty_terminal_resize(t.vt, cols, rows, cell_w, cell_h)
 		term_selection_drop(t)
+		t.grid_ms = ui.now_ms()
+		deferred_ask(&app.cx.terms.size_wake, TERM_SIZE_QUIET_MS, TERM_SIZE_QUIET_MS)
 	}
 	term_size_send(app, t)
+}
+
+// Has the grid rested? (The first size goes at once: a shell starts at the size it will have.)
+term_size_rested :: proc(now, grid_ms: f64, told_once: bool) -> bool {
+	return !told_once || now - grid_ms >= TERM_SIZE_QUIET_MS
+}
+
+// Is what the shell paints after a new size still coming? The picture before it stays until then: never one of its pieces.
+term_painting :: proc(now, told_ms, fed_ms, asked_ms: f64) -> bool {
+	if asked_ms != 0 && now - asked_ms < TERM_PAINT_MOST_MS { return true }   // (an answer that never comes holds nothing for long)
+	if told_ms == 0 || now - told_ms >= TERM_PAINT_MOST_MS { return false }
+	return now - max(told_ms, fed_ms) < TERM_PAINT_QUIET_MS
 }
 
 // (Only to a shell attached: one that ended has no size to take; what happened meanwhile goes when it is attached, term_link_set.)
 term_size_send :: proc(app: ^App, t: ^Term) {
 	size := [2]u16{t.cols, t.rows}
 	if t.link != .Attached || !t.fitted || t.size_flying || size == t.size_sent { return }
-	t.size_flying, t.size_asked = true, size
+	if !term_size_rested(ui.now_ms(), t.grid_ms, t.size_sent != {}) { return }
+	t.size_flying, t.size_asked, t.asked_ms = true, size, ui.now_ms()
 	request(app, .Pty_Size, "PUT", term_path(t), fmt.tprintf(`{{"size":{{"rows":%d,"cols":%d}}}}`, t.rows, t.cols), t.id, conn = t.server)
 }
 
@@ -1094,7 +1118,26 @@ term_size_answered :: proc(app: ^App, id: string) {
 	t := term_find(app, id)
 	if t == nil { return }
 	t.size_flying, t.size_sent = false, t.size_asked
+	t.told_ms, t.asked_ms = ui.now_ms(), 0
+	deferred_ask(&app.cx.terms.size_wake, TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS)
 	term_size_send(app, t)
+}
+
+// What comes due after a size: the shell is told, or its picture shown. (A frame, where the window may be at rest.)
+terms_size_tick :: proc(app: ^App) {
+	s := &app.cx.terms
+	if !deferred_take(&s.size_wake) { return }
+	now := ui.now_ms()
+	for t in s.list {
+		term_size_send(app, t)
+		if t.told_ms == 0 { continue }
+		if term_painting(now, t.told_ms, t.fed_ms, t.asked_ms) {
+			deferred_ask(&s.size_wake, TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS)
+		} else {
+			t.told_ms = 0
+		}
+	}
+	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
 }
 
 @(private = "file")
@@ -1120,7 +1163,11 @@ term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	t := (^Term)(user)
 	if t.vt == nil { return }
 	draw.rect(dc, b.rect, hex(HEX_TERM_BG))
-	if ghostty_render_state_update(t.state, t.vt) != VT_OK { return }
+	// (the state read last holds the picture from before the shell's new size)
+	if !term_painting(ui.now_ms(), t.told_ms, t.fed_ms, t.asked_ms) || !t.drawn {
+		if ghostty_render_state_update(t.state, t.vt) != VT_OK { return }
+		t.drawn = true
+	}
 	colors := Vt_Colors{size = size_of(Vt_Colors)}
 	if ghostty_render_state_colors_get(t.state, &colors) != VT_OK { return }
 	if ghostty_render_state_get(t.state, VT_STATE_ROW_ITERATOR, &t.rows_it) != VT_OK { return }
