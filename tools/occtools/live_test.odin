@@ -107,7 +107,7 @@ a_frame_is_held_until_the_next_one :: proc(t: ^testing.T) {
 // The list says every session of the server: clean removes from it, so another folder's must not be in what it sees.
 @(test)
 a_session_of_another_folder_is_not_ours :: proc(t: ^testing.T) {
-	list := `{"data":[{"id":"a","location":{"directory":"S:\\\\demo"}},{"id":"b","location":{"directory":"S:\\\\work"}},{"id":"c"}]}`
+	list := `{"data":[{"id":"a","location":{"directory":"S:\\demo"}},{"id":"b","location":{"directory":"S:\\work"}},{"id":"c"}]}`
 	mine := ids_in(list, "S:\\demo")
 	testing.expect_value(t, len(mine), 1)
 	testing.expect_value(t, mine[0], "a")
