@@ -437,7 +437,11 @@ card_head :: proc(app: ^App, v: ^Sub_View, part_id: string, open, running: bool,
 @(private = "file")
 card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: bool, end: f64, em: f32) {
 	compact := !running && !open
-	ui.spacer(ui.px(em * (compact ? 0.2 : 0.45)))
+	// (one line unless a second has something to say: how long is on the first, whatever the state)
+	meta := compact ? "" : card_meta(v, running)
+	preview := !compact && !open && v.result != ""
+	tight := meta == "" && !preview
+	ui.spacer(ui.px(em * (tight ? 0.2 : 0.45)))
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###l1") {
 		ui.spacer(ui.px(em * CARD_PAD_EM))
@@ -447,13 +451,9 @@ card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: b
 		ui.spacer(ui.px(em * 0.6))
 		text("ds", desc, running ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 		ui.spacer(ui.px(em * 0.5))
-		if compact {
-			// (over and folded: the state where it needs words, how long)
-			what := card_meta_compact(v, end)
-			if what != "" {
-				text("du", what, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-				ui.spacer(ui.px(em * 0.5))
-			}
+		if what := card_when(v, end); what != "" {
+			text("du", what, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			ui.spacer(ui.px(em * 0.5))
 		}
 		if v.id != "" {
 			if bevel_button("###open", "Open", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true).clicked { drill_down(app, v.id) }
@@ -462,29 +462,28 @@ card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: b
 		glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
 		ui.spacer(ui.px(em * 0.5))
 	}
-	if !compact {
+	if meta != "" {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.3)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###l2") {
 			ui.spacer(ui.px(em * CARD_INDENT_EM))
-			text("mt", card_meta(v, running, end), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+			text("mt", meta, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			ui.spacer(ui.px(em * 0.8))
 		}
-		// folded while it runs: what it has said so far
-		if !open && v.result != "" {
-			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
-			if ui.row(.Center, id = "###l3") {
-				ui.spacer(ui.px(em * CARD_INDENT_EM))
-				text("rs", preview_text(v.result), hex(HEX_CARD_RESULT_LINE), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
-				ui.spacer(ui.px(em * 0.8))
-			}
+	}
+	// folded while it runs: what it has said so far
+	if preview {
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###l3") {
+			ui.spacer(ui.px(em * CARD_INDENT_EM))
+			text("rs", preview_text(v.result), hex(HEX_CARD_RESULT_LINE), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
+			ui.spacer(ui.px(em * 0.8))
 		}
 	}
-	ui.spacer(ui.px(em * (compact ? 0.2 : 0.5)))
+	ui.spacer(ui.px(em * (tight ? 0.2 : 0.5)))
 }
 
-// What a card folded and over keeps on its line.
-@(private = "file")
-card_meta_compact :: proc(v: ^Sub_View, end: f64) -> string {
+// What a card keeps on its first line, at its right: the state where it needs words (the mark says the others), how long.
+card_when :: proc(v: ^Sub_View, end: f64) -> string {
 	d := duration(v.started, end)
 	if v.state != .Failed && v.state != .Cancelled { return d }
 	return d != "" ? fmt.tprintf("%s · %s", sub_state_label(v.state), d) : sub_state_label(v.state)
@@ -531,13 +530,10 @@ card_body :: proc(app: ^App, v: ^Sub_View, pid: string, running: bool, em: f32) 
 	}
 }
 
-// The quiet line of a card: what it does now, a state that needs saying in words (the mark says the others), how long,
-// the model, tool calls, tokens, cost.
-card_meta :: proc(v: ^Sub_View, running: bool, end: f64) -> string {
+// The quiet line of a card, when it has something to say: what it does now, the model, tool calls, tokens, cost.
+card_meta :: proc(v: ^Sub_View, running: bool) -> string {
 	parts := make([dynamic]string, context.temp_allocator)
 	if running && v.has_live && v.live.activity != "" { append(&parts, v.live.activity) }
-	if v.state == .Failed || v.state == .Cancelled { append(&parts, sub_state_label(v.state)) }
-	if d := duration(v.started, end); d != "" { append(&parts, d) }
 	if v.background { append(&parts, "background") }
 	if v.model != "" { append(&parts, short_model(v.model)) }
 	if v.live.tools > 0 { append(&parts, fmt.tprintf("%d tools", v.live.tools)) }

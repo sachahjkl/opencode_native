@@ -5,6 +5,30 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-06
+
+### Added
+
+- **Queue a message for the end of the turn**: while a turn runs, Enter queues and Ctrl+Enter sends now (Conversation, While running swaps them). What waits stacks above the composer, in order, images included: edit it, send it now, remove it.
+- **An inbox in the sidebar, by default**: what waits for you, what finished and you have not seen, what runs, the rest. Projects keeps the grouping by project.
+- **Statistics are a panel**, a tab beside the browser (Ctrl+I, or the token count), with what fills the context: unfold a part, read it.
+- **The model picker groups models by provider**: headers that fold, to look through them by hand; typing still goes through them all.
+
+### Changed
+
+- The big figures of the statistics are plain, and colour only says something.
+- Schedules fit what they hold: nothing is cut, and a new one is two rows.
+- The line of a run takes one line, and a sub-agent's card too when it has nothing more to say.
+
+### Fixed
+
+- **Pending messages all show**, with an image or not, and read as pending until they are delivered.
+- **Fork from here keeps the answer clicked**, and is on tool calls too.
+- **A click on the update notification does what it says**: it installs, and once installed it restarts.
+- **Opening a session no longer blinks**: what was on the screen stays until the conversation is there, which then comes at once. "Loading" only shows when the server takes its time.
+- **The corners of a floating panel are round**: its content covered them.
+- The status bar says requests in flight once they last, not for the instant of each one.
+
 ## [0.14.0] - 2026-11-06
 
 ### Changed
@@ -601,7 +625,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.15.0
 [0.14.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.14.0
 [0.13.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.13.0
 [0.12.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.3

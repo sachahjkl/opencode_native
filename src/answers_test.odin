@@ -10,6 +10,7 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:strings"
 import "core:testing"
+import "gt:draw"
 import "gt:config"
 import "gt:ui"
 
@@ -933,4 +934,22 @@ the_stream_coming_back_renews_the_shells_sockets :: proc(t: ^testing.T) {
 	here.renew = false
 	stream_up(app)
 	testing.expect(t, !here.renew, "still up: nothing happened")
+}
+
+// A session opened: what was on the screen stays until its first page, for a moment; never for a window with nothing to keep.
+@(test)
+what_was_shown_stays_while_a_first_page_comes :: proc(t: ^testing.T) {
+	app := bench_new()
+	size := draw.Vec2{800, 600}
+	app.chat.id, app.chat.loading, app.chat.loaded = "s", true, false
+	app.opened_ms = ui.now_ms()
+	testing.expect_value(t, frame_held_ms(app, size), 0)   // (nothing shown yet)
+	app.cx.shown_size = size
+	testing.expect(t, frame_held_ms(app, size) > 0, "held")
+	testing.expect_value(t, frame_held_ms(app, {801, 600}), 0)   // (resized: the picture would not fit)
+	app.opened_ms = ui.now_ms() - OPEN_HOLD_MS - 1
+	testing.expect_value(t, frame_held_ms(app, size), 0)   // (a slow server: Loading says so)
+	app.opened_ms = ui.now_ms()
+	app.chat.loading, app.chat.loaded = false, true
+	testing.expect_value(t, frame_held_ms(app, size), 0)   // (it came: shown at once)
 }

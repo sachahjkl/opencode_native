@@ -125,7 +125,12 @@ const SHOTS = [
     must('type', 'sonnet')
     must('idle')
   } },
-  { name: 'statistics', args: [...SESSION, '--stats'] },
+  // (the panel, by its key: the session is loaded by then)
+  { name: 'statistics', args: SESSION, go: async () => {
+    must('key', 'ctrl+i')
+    must('wait', '900')
+    must('idle')
+  } },
   // (commands only: `>` keeps the sessions of whoever takes the picture out of it)
   { name: 'palette', args: SESSION, go: async () => {
     must('key', 'ctrl+k')

@@ -45,9 +45,36 @@ answer_text :: proc(m: ^Message) -> string {
 	return strings.to_string(b)
 }
 
-fork_session :: proc(app: ^App, id, before: string) {
+// A new session with the history of `id` before the message `before` ("": all of it). `prompt`: what the composer takes back in it.
+fork_session :: proc(app: ^App, id, before: string, prompt := "") {
+	delete(app.cx.fork_prompt)
+	app.cx.fork_prompt = strings.clone(prompt)
 	body := before != "" ? fmt.tprintf(`{{"before":%s}}`, jquote(before)) : "{}"
 	request(app, .Forked, "POST", fmt.tprintf("/api/session/%s/fork", id), body, id)
+}
+
+// The message a fork from `m` stops before, "" for all there is: the server copies what comes before a message, `m` not included. A
+// message read stays, so what stops it is the next one. An answer still being written has no end to keep: it stays out, with what it
+// said so far. A prompt stays out too: going on from it means sending it again, or something else (fork_from).
+fork_before :: proc(c: ^Chat, m: ^Message) -> string {
+	if m.kind == .User || m.streaming { return m.id }
+	past := false
+	for &x in c.messages {
+		if past && x.id != "" { return x.id }
+		if x.id == m.id { past = true }
+	}
+	return ""
+}
+
+// "Fork from here", on the session shown, a sub-agent's as any other: the server makes a session of its own of it, parent of nothing.
+@(private = "file")
+fork_from :: proc(app: ^App, m: ^Message) {
+	fork_session(app, app.chat.id, fork_before(&app.chat, m), m.kind == .User ? m.text : "")
+}
+
+@(private = "file")
+fork_item :: proc(app: ^App, m: ^Message) {
+	if ui.menu_item(m.streaming ? "Fork before this answer" : "Fork from here", icon = ICO_COPY).clicked { fork_from(app, m) }
 }
 
 @(private = "file")
@@ -112,7 +139,7 @@ message_menu :: proc(app: ^App, m: ^Message) {
 			app.cx.focus_composer = true
 		}
 		ui.menu_separator()
-		if ui.menu_item("Fork from here", icon = ICO_COPY).clicked { fork_session(app, app.chat.id, m.id) }
+		fork_item(app, m)
 		if ui.menu_item("What this prompt changed", icon = ICO_DOC).clicked { changes_open(app, app.chat.id, m.id) }
 		if ui.menu_item("Go back to here…", icon = ICO_UNDO, enabled = !app.chat.busy).clicked { revert_stage(app, app.chat.id, m.id, m.text) }
 	case .Assistant:
@@ -122,14 +149,19 @@ message_menu :: proc(app: ^App, m: ^Message) {
 			if ui.menu_item("Open the link", icon = ICO_GLOBE).clicked { preview_open(app, url) }
 		}
 		ui.menu_separator()
-		if ui.menu_item("Fork from here", icon = ICO_COPY).clicked { fork_session(app, app.chat.id, m.id) }
-	case .Synthetic, .Shell, .Compaction, .Idle, .Other:
+		fork_item(app, m)
+	case .Synthetic, .Shell:
+		if ui.menu_item("Copy", icon = ICO_COPY, enabled = m.text != "").clicked { copied(m.text, "Text") }
+		ui.menu_separator()
+		fork_item(app, m)
+	case .Compaction, .Idle, .Other:
 		if ui.menu_item("Copy", icon = ICO_COPY, enabled = m.text != "").clicked { copied(m.text, "Text") }
 	}
 }
 
+// (`m` holds the call: most of an answer at work is its tool calls, and a press on one comes here.)
 @(private = "file")
-tool_menu :: proc(app: ^App, p: ^Part) {
+tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
 	if ui.menu_item("Copy the output", icon = ICO_COPY, enabled = p.output != "").clicked { copied(p.output, "Output") }
 	if p.patch != "" { if ui.menu_item("Copy the diff", icon = ICO_COPY).clicked { copied(p.patch, "Diff") } }
 	if c := input_field(p, "command"); c != "" {
@@ -146,6 +178,8 @@ tool_menu :: proc(app: ^App, p: ^Part) {
 		ui.menu_separator()
 		if ui.menu_item("Open the link", icon = ICO_GLOBE).clicked { preview_open(app, url) }
 	}
+	ui.menu_separator()
+	fork_item(app, m)
 }
 
 // At the end of the build, for what a right press noted.
@@ -159,7 +193,7 @@ context_menu :: proc(app: ^App, em: f32) {
 		case .Message:
 			if m := find_msg(app, app.cx.ctx.msg); m != nil { message_menu(app, m) }
 		case .Tool:
-			if m := find_msg(app, app.cx.ctx.msg); m != nil && app.cx.ctx.part < len(m.parts) { tool_menu(app, &m.parts[app.cx.ctx.part]) }
+			if m := find_msg(app, app.cx.ctx.msg); m != nil && app.cx.ctx.part < len(m.parts) { tool_menu(app, m, &m.parts[app.cx.ctx.part]) }
 		}
 	}
 }

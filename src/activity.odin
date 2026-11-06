@@ -732,7 +732,6 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 
 // A flat surface with a fine edge, inside its own box: while it opens a clip cuts its bottom, and a well's shadows and lip,
 // which go past the box, were cut with it and left the corners ragged.
-@(private = "file")
 tray_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	r := TRAY_RADIUS * ui.scale()
 	draw.rect(dc, b.rect, hex(HEX_ACT_WELL), r)

@@ -4,6 +4,44 @@ package occ
 
 
 ////////////////////////////////
+// What waits in the inbox: the list over the composer (queue.odin)
+
+QUEUE_ROWS_SHOWN   :: 5     // rows before the list scrolls: the composer stays where it is
+QUEUE_ROW_H_EM     :: 1.7
+QUEUE_HEAD_H_EM    :: 1.5
+QUEUE_MARK_W_EM    :: 1.4   // its number
+QUEUE_GLYPH_EM     :: 1.4   // an action, where words have no room
+QUEUE_WORDS_MIN_EM :: 26    // the column this wide: the actions are words, the send button says what it does
+QUEUE_LINE_CHARS   :: 200   // of a message, on its row (the row cuts the rest)
+QUEUE_NAME_CHARS   :: 60    // ... for a screen reader
+QUEUE_GONE_MAX     :: 64    // items remembered as gone (a late list must not bring them back)
+
+////////////////////////////////
+// The statistics panel (stats.odin)
+
+CONTEXT_DEBOUNCE_MS :: 400    // a step ended: its context is read a little after, once
+CTX_BYTES_PER_TOKEN :: 4      // the server gives text, not sizes: this is what a size is estimated from
+CTX_IMAGE_TOKENS    :: 1200   // ... and an image, whose size says nothing of what it costs
+CTX_BAR_PARTS       :: 6      // parts of the bar, the largest; the others are one
+CTX_ITEMS_SHOWN     :: 12     // of a part, unfolded
+CTX_OPEN_LINES      :: 40     // of an item, opened
+CTX_ITEM_CHARS      :: 90     // of its name
+CTX_SHADE_FIRST     :: 0.95   // the bar: the accent, fainter from part to part
+CTX_SHADE_STEP      :: 0.14
+CTX_SHADE_LAST      :: 0.2
+STATS_WIDE_EM       :: 34     // the panel this wide: rankings have their columns
+STATS_METER_EM      :: 22     // ... this wide, a smaller bar
+STATS_METER_W_EM    :: 4
+STATS_STACK_EM      :: 18     // ... under this, a value goes under its key, and a part of the context loses its share
+STATS_KEY_SHARE     :: 0.38   // of the panel, at most: a key, beside its value
+STATS_NARROW_PAD_EM :: 0.7
+STATS_KEY_W_EM      :: 11
+FIGURE_W_EM         :: 6.2    // a column of the figures: they line up when they wrap
+FIGURE_H_EM         :: 2.1
+FIGURE_CAPTION_EM   :: 1.2
+FS_FIGURE           :: 1.7    // a figure, in font sizes
+
+////////////////////////////////
 // What runs in the background: the tray under the composer
 
 ACT_POLL_MS        :: 1200    // while something runs and one looks at it
@@ -90,6 +128,34 @@ DIFF_FOLDED_LINES   :: 16     // of a diff shown with its call folded
 GUTTER_EM           :: 2.7
 
 ////////////////////////////////
+// The sidebar (sidebar.odin)
+
+SIDEBAR_HOLD_MS  :: 3000   // the pointer still over the list this long: it is not about to click, the rows may move
+SIDE_MODES_H_EM  :: 1.9    // the switch of the modes, in its own smaller size
+SIDE_INBOX_ROW_EM :: 2.9   // a row that also says its project
+SIDE_PROJECT_CHARS :: 40   // of that word
+
+////////////////////////////////
+// The dialogs of schedules and artifacts (schedules.odin)
+
+SCHEDULES_W_EM         :: 42     // as wide as the form's one row needs
+SCHEDULES_TOP          :: 0.2    // of the window: where it starts, it grows down
+SCHEDULES_FIRST_H_EM   :: 3      // what it holds before it was ever measured
+SCHEDULES_HEAD_EM      :: 4.2    // its title and its gaps, which the window keeps
+SCHEDULES_ROW_H_EM     :: 2.8    // one that is planned
+SCHEDULES_MODES_W_EM   :: 17     // In, Every, At, Cron
+SCHEDULES_ONE_ROW_EM   :: 33     // the room for the modes, the value and Plan it side by side
+SCHEDULES_WORDS_MIN_EM :: 30     // ... for Delete to say it in words
+ARTIFACTS_LIST_SHARE   :: 0.36   // of the dialog, at most: the list
+ARTIFACTS_WORDS_MIN_EM :: 26     // the right side this wide: its buttons have their words
+
+////////////////////////////////
+// The end of the conversation
+
+CHAT_FOOT_EM     :: 2      // what it keeps under the last message, run or no run
+WORKING_LINE_EM  :: 1.4    // ... of which the line of a run
+
+////////////////////////////////
 // The throbber
 
 THROBBER_STEP_MS    :: 70     // a step of the board
@@ -144,12 +210,16 @@ GO_BOTTOM_W_EM    :: 6.5
 ////////////////////////////////
 // Pacing, and the status bar's rate
 
-// The dialogs one can resize: what they open at and the least they go to, in em (the window has the last word).
-Dialog :: enum u8 { Settings, Stats, Help, Changes, Files, Schedules, Artifacts }
-DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Stats = {54, 46}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}, .Schedules = {54, 44}, .Artifacts = {70, 46}}
-DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Stats = {34, 22}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}, .Schedules = {36, 22}, .Artifacts = {44, 22}}
+// The dialogs one can resize: what they open at and the least they go to, in em (the window has the last word). (Schedules is as tall
+// as what it holds, and no longer one of them: its place stays, layout.dialogs is read by position.)
+Dialog :: enum u8 { Settings, Help, Changes, Files, Schedules, Artifacts }
+DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}, .Schedules = {54, 44}, .Artifacts = {70, 46}}
+DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}, .Schedules = {36, 22}, .Artifacts = {44, 22}}
+DIALOGS_SAVED_WITH_STATS :: 7   // sizes in a layout.dialogs written when Statistics was a dialog, the second of them
 LOGO_EDGE_CHROMA     :: 142    // red minus blue of the logo's edge in the file (0xe8935a)
 TEXT_SMOOTH_SCALE    :: 1.5    // below this scale, text is smoothed per colour stripe when the system does (main.odin text_mode_follow)
+OPEN_HOLD_MS         :: 200    // a conversation's first page may take this long before "Loading" is shown instead of what was there
+PENDING_SHOW_MS      :: 500    // requests in flight are said in the status bar once they last: most end before anyone could read it
 TERM_COLS            :: 80     // a shell before its panel is laid out
 TERM_ROWS            :: 24
 TERM_SCROLLBACK_LINES :: 10000

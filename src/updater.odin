@@ -173,7 +173,7 @@ update_installed :: proc(app: ^App, j: ^Update_Job) {
 	}
 	version := strings.clone(d.offer.manifest.version)
 	update_go(u, Update_Installed{version})
-	ui.toast(.Good, "%s is installed: restart to use it", version)
+	ui.toast_action(.Good, proc(user: rawptr) { update_restart((^App)(user)) }, app, "%s is installed: click to restart", version)
 }
 
 @(private = "file")
@@ -204,7 +204,7 @@ update_checked :: proc(app: ^App, j: ^Update_Job) {
 		o^ = {j.found, strings.clone(j.path), strings.clone(j.channel)}
 		update_result(u, fmt.tprintf("Version %s is available", o.manifest.version))
 		update_go(u, Update_Ready{o})
-		ui.toast(.Good, "opencode native %s is available", o.manifest.version)
+		ui.toast_action(.Good, proc(user: rawptr) { update_install((^App)(user)) }, app, "opencode native %s is available: click to install", o.manifest.version)
 	}
 }
 
@@ -239,7 +239,7 @@ update_check :: proc(app: ^App, asked: bool) {
 	case Update_Downloading:
 		return
 	case Update_Installed:
-		if asked { ui.toast(.Good, "%s is installed: restart to use it", v.version) }
+		if asked { ui.toast_action(.Good, proc(user: rawptr) { update_restart((^App)(user)) }, app, "%s is installed: click to restart", v.version) }
 		return
 	case Update_Ready:
 		update_go(u, Update_Checking{asked, v.offer})

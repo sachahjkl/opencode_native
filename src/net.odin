@@ -254,6 +254,12 @@ Req_Kind :: enum u8 {
 	Form_Dismiss,   // DELETE /api/session/:id/form/:form (the tag: the form)
 	Inbox,          // GET /api/session/:id/inbox: what was sent during a run that was interrupted
 	Inbox_Take,     // DELETE /api/session/:id/inbox/:message: out of it, to go as a prompt (the body: that prompt)
+	Queue_List,     // GET /api/session/:id/inbox: what waits, for the list over the composer (queue.odin)
+	Queue_Steer,    // PATCH .../inbox/:message: a queued one goes now (the tag: the item)
+	Queue_Cancel,   // DELETE .../inbox/:message: it does not go (the tag: the item)
+	Queue_Replace,  // DELETE .../inbox/:message: it gives way to its edited text, an Outgoing (the tag: the item)
+	Context,        // GET /api/session/:id/context: what the model has in front of it (stats.odin)
+	Session_Viewed, // POST /api/session/:id/view: the end of its last run was seen (sidebar.odin)
 }
 
 Request :: struct {
@@ -321,12 +327,12 @@ answer_is_json :: proc(k: Req_Kind) -> bool {
 	     .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands, .Projects, .Stats, .Created,
 	     .Shell_List, .Shell_One, .Shell_Output, .Peek, .Slash, .Forked, .Session_Export, .Session_Import,
 	     .Pty_List, .Pty_Made, .Schedules, .Schedule_Made, .Artifacts, .Artifact_Read, .Plugins, .Plugins_Check, .Integrations, .Credentials,
-	     .Connect_Begin, .Connect_Status, .Mention_Files, .Files_List, .Changes_Range, .Changes, .Revert_Staged, .Forms, .Inbox:
+	     .Connect_Begin, .Connect_Status, .Mention_Files, .Files_List, .Changes_Range, .Changes, .Revert_Staged, .Forms, .Inbox, .Queue_List, .Context:
 		return true
 	// (only that they went through matters, or the answer is not JSON at all)
 	case .Action, .Pty_Size, .Prompt, .Session_Agent, .Session_Model, .Session_Choice, .Inbox_Take, .Form_Reply, .Form_Dismiss, .Permission_Reply,
 	     .Session_Moved, .Revert_Done, .Revert_Cancelled, .Connected, .Credential_Done, .Schedule_Done, .Artifact_Done, .Plugin_Update, .File_Read,
-	     .Shell_Set, .Mcp_Done, .Saved_Done:
+	     .Shell_Set, .Mcp_Done, .Saved_Done, .Queue_Steer, .Queue_Cancel, .Queue_Replace, .Session_Viewed:
 		return false
 	}
 	return true
@@ -367,6 +373,7 @@ answer :: proc(app: ^App, r: ^Request) {
 		// prompt on its way still has to say whether it got there.
 		if x := r.remote; x != nil && x.ticket == r.ticket { remote_reset(x) }
 		if r.kind == .Prompt { outgoing_answered(app, r, r.ok && r.status < 400) }
+		if r.kind == .Queue_Replace { outgoing_answered(app, r, false) }   // (taken out or not, that server is left: what was written comes back)
 		answer_left(app, r)
 		return
 	}
@@ -429,6 +436,7 @@ answer :: proc(app: ^App, r: ^Request) {
 	case .Prompt:
 		// (the stream may say a prompt without its files: what was attached shows as soon as it is stored)
 		if strings.contains(r.body, `"files":`) && r.gen == app.chat.gen && r.tag == app.chat.id { load_messages(app, r.tag) }
+		queue_prompt_answered(app, r.tag, v)
 		outgoing_answered(app, r, true)
 	case .Session_Agent: outgoing_setup(app, r.out, .Model)
 	case .Session_Model: outgoing_setup(app, r.out, .Sending)
@@ -472,6 +480,10 @@ answer :: proc(app: ^App, r: ^Request) {
 		form_remove(app, r.tag)
 	case .Inbox:         inbox_take(app, r.tag, v)
 	case .Inbox_Take:    inbox_send(app, r)
+	case .Queue_List:    queue_load(app, r.tag, v, r.asked_at)
+	case .Queue_Steer, .Queue_Cancel: queue_answered(app, r)
+	case .Queue_Replace: queue_replaced(app, r)
+	case .Context:       if r.tag == app.chat.id && r.gen == app.chat.gen { context_load(app, r.tag, v) }
 	case .Shell_List:   if r.gen == app.chat.gen { activity_shells_load(app, v, r.tag) }
 	case .Shell_One:    if r.gen == app.chat.gen { activity_shell_load(app, v, r.tag) }
 	case .Shell_Output: if r.gen == app.chat.gen { activity_output_load(app, v, r.tag) }
@@ -480,10 +492,15 @@ answer :: proc(app: ^App, r: ^Request) {
 		list := make([dynamic]Slash, context.temp_allocator)
 		for it in jarr(v, "data") { append(&list, Slash{strings.clone(jstr(it, "name")), strings.clone(jstr(it, "description"))}) }
 		slash_load(app, list[:])
+	case .Session_Viewed:   // (session.viewed says it, to every client)
 	case .Forked:
 		if id := jstr(v, "data", "id"); id != "" {
 			refresh_sessions(app)
-			if r.gen == app.chat.gen { open_root(app, id) }
+			if r.gen == app.chat.gen {
+				open_root(app, id)
+				prompt_restore(app, app.cx.fork_prompt)
+				if app.cx.fork_prompt != "" { app.cx.focus_composer = true }
+			}
 			ui.toast(.Good, "Forked")
 		}
 	}
@@ -568,15 +585,24 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 		return true
 	case .Inbox:
 		return refused   // (a server without one: nothing to say)
+	case .Queue_List:
+		return true      // (the list says it, with its Try again; a server without one says nothing)
+	case .Queue_Steer, .Queue_Cancel:
+		return queue_failed(app, r)
+	case .Queue_Replace:
+		queue_replace_failed(app, r)
+		return true      // (Outgoing says it)
 	case .Mention_Files:
 		mention_failed(app)   // (what was proposed is not what is typed any more)
 		return refused        // (a server without one, a folder gone: nothing to say)
 	// (a dialog's reading: read_shown says it where it would have been, in the server's words: "set experimental.schedules in config")
-	case .Schedules, .Artifacts, .Artifact_Read, .Plugins, .Integrations, .Credentials, .Files_List, .File_Read, .Stats, .Changes_Range,
+	case .Schedules, .Artifacts, .Artifact_Read, .Plugins, .Integrations, .Credentials, .Files_List, .File_Read, .Stats, .Context, .Changes_Range,
 	     .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands:
 		return true
 	case .Schedule_Made:
 		return app.cx.schedules.open   // ("Invalid duration": under the form, with what was typed)
+	case .Session_Viewed:
+		return true   // (nothing to say: the next list shows it as it stands)
 	case .Session_Import:
 		if r.status == 409 { session_import_conflict(app, r.tag); return true }
 	// nothing waits on them here: the toast says it, what they would have changed stays
@@ -618,6 +644,7 @@ chat_read :: proc(app: ^App) {
 	if !c.have_self { request(app, .Self, "GET", strings.concatenate({"/api/session/", id}, context.temp_allocator), tag = id) }
 	load_children(app)
 	session_waits_load(app, id)
+	queue_read(app)
 }
 
 // How near, in screens: the page is there before the reader, unless they scroll fast (then messages() shows it coming).
@@ -636,10 +663,11 @@ load_older :: proc(app: ^App, b: ^ui.Box) {
 }
 
 
-// A run that is interrupted leaves what was sent during it in the session's inbox, where only the next prompt would pick it up,
+// A run that is interrupted leaves what was steered into it in the session's inbox, where only the next prompt would pick it up,
 // glued to that prompt: it looks lost. The newest goes as a prompt now, which starts a run: the server puts what is left in the
 // inbox before a prompt, so they keep their order. (It has no way to wake an inbox: out of it, then sent.) If the prompt fails its text comes back to the composer; if the
-// taking fails it stays in the inbox. Nothing is lost.
+// taking fails it stays in the inbox. Nothing is lost. What was queued is left where it is: the reader stopped the run, and queued it
+// for after that run, not for a new one started without a word. It stays parked in the list (queue.odin), Send now at hand.
 inbox_resume :: proc(app: ^App, id: string) {
 	request(app, .Inbox, "GET", fmt.tprintf("/api/session/%s/inbox", id), tag = id)
 }
@@ -649,21 +677,20 @@ inbox_take :: proc(app: ^App, id: string, v: json.Value) {
 	newest: json.Value
 	last: f64
 	for item in jarr(v, "data") {
-		if jstr(item, "type") != "user" { continue }
+		if jstr(item, "type") != "user" || delivery_of(jstr(item, "delivery")) == .Queue { continue }
 		if t := jnum(item, "time", "created"); t >= last { last, newest = t, item }
 	}
 	if newest == nil { return }
-	prompt, err := json.marshal(jget(newest, "payload"), allocator = context.temp_allocator)
-	if err != nil { return }
-	request(app, .Inbox_Take, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", id, jstr(newest, "id")), string(prompt), id)
+	request(app, .Inbox_Take, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", id, jstr(newest, "id")), prompt_of_payload(jget(newest, "payload")), id)
 }
 
 @(private = "file")
 inbox_send :: proc(app: ^App, r: ^Request) {
-	// (what the conversation showed of it: the prompt comes back under its own id)
+	// (what shows of it goes: the prompt comes back under its own id)
 	if r.tag == app.chat.id {
 		taken := r.path[strings.last_index_byte(r.path, '/') + 1:]
-		for m, i in app.chat.messages { if m.id == taken { ordered_remove(&app.chat.messages, i); break } }
+		if queue_shown_as_sent(app, taken) { chat_drop(&app.chat, taken) }
+		queue_gone(app, taken, false, app.cx.stream_seq)
 	}
 	outgoing_inbox(app, r.tag, r.body)
 }
@@ -770,7 +797,10 @@ dialogs_reread :: proc(app: ^App) {
 	if cx.schedules.open && remote_failed(&cx.schedules.read) { schedules_ask(app) }
 	if cx.artifacts.open && remote_failed(&cx.artifacts.read) { artifacts_ask(app) }
 	if cx.files.open && remote_failed(&cx.files.read) { files_list(app) }
-	if app.stats_open && remote_failed(&cx.stats_read) { stats_ask(app) }
+	if app.stats_open {
+		if remote_failed(&cx.stats_read) { stats_ask(app) }
+		context_ask(app)   // (what a step added was missed)
+	}
 	changes_reread(app)
 	terminals_reread(app)
 }

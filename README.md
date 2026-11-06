@@ -7,7 +7,7 @@
 <p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.14.0-fab283" alt="version 0.14.0"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.15.0-fab283" alt="version 0.15.0"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -70,6 +70,7 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
   address, a password), `--url`; switch from the menu. Another computer's server is named in the title bar.
 - **Find in the conversation** (Ctrl+F): every match of the text shown lit, the current one brighter and scrolled into
   view; Enter or F3 for the next, Shift+Enter or Shift+F3 for the previous, Escape to close.
+- **An inbox in the sidebar**: what waits for you first, then what finished and you have not seen, what runs, the rest. The grouping by project is one click away.
 - **The command palette** (Ctrl+K, Ctrl+Shift+P): commands, sessions, agents, models, the server's commands and the switches of the
   settings in one field, narrowed by `>` `@` `/` `#` `:`. F1 lists the keys.
 - **Tool calls by what they do**: a diff for what edits a file, the lines of a file, matches under their file, a command and its
@@ -87,6 +88,7 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 - **A terminal** with Ghostty's emulation (libghostty-vt): each shell of the server a tab of the dock, wherever it runs, kept when the program closes.
 - **Schedules** that wake a session, **artifacts** of a folder, **plugins** of the server. The server's experimental options are turned on by default, in its configuration, on this computer.
 - **Connections**: the integrations of the server, connected with a key, a browser login or what is on the machine; several accounts of each.
+- **Messages wait in view**: while a turn runs, Enter queues a message for its end and Ctrl+Enter sends it now. What waits is listed above the composer, in order: edit it, send it now, remove it.
 - **`@` in the composer** names a file or a sub-agent. **Browse the files** of a session (Ctrl+P), search them, read them, mention one.
 - **Go back to a prompt**, its files restored, after seeing which. What a session or a prompt changed, file by file.
 - **Move a session** to another folder, **export** it to a file and **import** it, with or without its text.
@@ -120,7 +122,6 @@ TLS is rustls, checked against the system's trust store.
 | `--server=<name>` | a saved server at start |
 | `--session=<id>` | open that session at start |
 | `--search=<text>` | the sidebar's search, filled at start |
-| `--stats` | open the session's statistics once it is loaded |
 | `--install [--desktop]` | install this copy for the user (Windows: `%LOCALAPPDATA%\Programs\opencode-native`, Start menu, Settings > Apps; Linux: `~/.local/share/opencode-native`, the applications menu) |
 | `--uninstall [--quiet]` | remove it |
 | `--status` | exit code 0 installed, 2 needs repair, 1 not installed |

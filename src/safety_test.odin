@@ -55,11 +55,22 @@ previews_read_as_text :: proc(t: ^testing.T) {
 @(test)
 the_card_says_its_state_once :: proc(t: ^testing.T) {
 	v := Sub_View{state = .Running, started = 1000, model = "anthropic/m1"}
-	testing.expect_value(t, card_meta(&v, true, 61000), "1m 00s · m1")
+	testing.expect_value(t, card_when(&v, 61000), "1m 00s")
+	testing.expect_value(t, card_meta(&v, true), "m1")
 	v.state = .Failed
-	testing.expect_value(t, card_meta(&v, false, 61000), "failed · 1m 00s · m1")
+	testing.expect_value(t, card_when(&v, 61000), "failed · 1m 00s")
+	testing.expect_value(t, card_meta(&v, false), "m1")
 	v.state = .Done
-	testing.expect_value(t, card_meta(&v, false, 61000), "1m 00s · m1")
+	testing.expect_value(t, card_when(&v, 61000), "1m 00s")
+}
+
+@(test)
+a_card_with_nothing_more_than_its_time_has_no_second_line :: proc(t: ^testing.T) {
+	v := Sub_View{state = .Running, started = 1000}
+	testing.expect_value(t, card_meta(&v, true), "")
+	v.live, v.has_live = {activity = "shell: odin test"}, true
+	testing.expect_value(t, card_meta(&v, true), "shell: odin test")
+	testing.expect_value(t, card_meta(&v, false), "")   // (what it was doing is over with it)
 }
 
 @(test)

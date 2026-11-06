@@ -224,9 +224,13 @@ server_forget :: proc(app: ^App) {
 	forms_clear(app)
 	busy_forget(app)
 	slash_forget(app)
+	queue_forget(app)
 	outgoing_forget(app)
-	app.cx.refresh_read, app.cx.facts_read, app.cx.children_read = {}, {}, {}
+	app.cx.refresh_read, app.cx.facts_read, app.cx.children_read, app.cx.context_due = {}, {}, {}, {}
 	app.picker.open = false
+	sidebar_hold_end(app)
+	delete(app.cx.fork_prompt)
+	app.cx.fork_prompt = ""
 	app.sessions = nil
 	app.sessions_loaded = false
 	app.opened_first = false

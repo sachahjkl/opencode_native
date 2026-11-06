@@ -166,16 +166,21 @@ forms_clear :: proc(app: ^App) {
 	for len(app.cx.forms) > 0 { form_remove(app, app.cx.forms[0].id) }
 }
 
-// What the session asks of the person and waits for, itself or a sub-agent of it.
-session_waits :: proc(app: ^App, id: string) -> bool {
-	mine :: proc(app: ^App, sid, id: string) -> bool {
-		if sid == id { return true }
-		s := find_session(app, sid)
-		return s != nil && s.parent == id
+// The sessions that ask something of the person and wait for it, themselves or through a sub-agent. (Once for a whole list: asked of each
+// session it went through all the sessions for each thing that waits.)
+sessions_waiting :: proc(app: ^App) -> map[string]bool {
+	set := make(map[string]bool, allocator = context.temp_allocator)
+	note :: proc(app: ^App, set: ^map[string]bool, sid: string) {
+		set[sid] = true
+		if s := find_session(app, sid); s != nil && s.parent != "" { set[s.parent] = true }
 	}
-	for f in app.cx.forms { if mine(app, f.session, id) { return true } }
-	for p in app.permissions { if mine(app, p.session, id) { return true } }
-	return false
+	for f in app.cx.forms { note(app, &set, f.session) }
+	for p in app.permissions { note(app, &set, p.session) }
+	return set
+}
+
+session_waits :: proc(app: ^App, id: string) -> bool {
+	return id in sessions_waiting(app)
 }
 
 // The forms and the permissions a session waits on (those asked before the stream connected: only a session at work can wait).

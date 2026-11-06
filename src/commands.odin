@@ -49,7 +49,7 @@ COMMANDS := [?]Command{
 	{id = "session.activity", title = "What runs in the background", group = "Session", icon = ICO_TERMINAL, keys = "Ctrl+J", key = .J, mods = {.Ctrl}, run = activity_toggle, enabled = has_session},
 	{id = "session.quote", title = "Quote what is selected", group = "Session", icon = ICO_EDIT, keys = "Ctrl+Q", key = .Q, mods = {.Ctrl}, run = quote_selection, enabled = proc(app: ^App) -> bool { return ui.has_selection(&app.ui_state) }},
 	{id = "session.find", title = "Find in the conversation", group = "Session", icon = ICO_SEARCH, keys = "Ctrl+F", run = find_open, enabled = has_session},
-	{id = "session.stats", title = "Session statistics", group = "Session", icon = ICO_GAUGE, keys = "Ctrl+I", key = .I, mods = {.Ctrl}, run = stats_open, enabled = has_session},
+	{id = "session.stats", title = "Show or hide the Statistics panel", group = "Session", icon = ICO_GAUGE, keys = "Ctrl+I", key = .I, mods = {.Ctrl}, run = stats_toggle, enabled = has_session, checked = proc(app: ^App) -> bool { return app.stats_open }},
 	{id = "session.rename", title = "Rename the session…", group = "Session", icon = ICO_EDIT, keys = "F2", key = .F2, run = proc(app: ^App) { rename_open(app, app.chat.id) }, enabled = has_session},
 	{id = "session.fork", title = "Fork the session", group = "Session", icon = ICO_COPY, run = proc(app: ^App) { fork_session(app, app.chat.id, "") }, enabled = has_session},
 	{id = "session.compact", title = "Compact the conversation", group = "Session", icon = ICO_LIST, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/compact", app.chat.id), "{}", app.chat.id) }, enabled = has_session},
@@ -69,6 +69,7 @@ COMMANDS := [?]Command{
 
 	{id = "view.preview", title = "Show or hide the Preview panel", group = "View", icon = ICO_GLOBE, keys = "Ctrl+Shift+B", key = .B, mods = {.Ctrl, .Shift}, run = preview_toggle, checked = proc(app: ^App) -> bool { return app.preview.open }},
 	{id = "view.sidebar", title = "Show or hide the sidebar", group = "View", icon = ICO_MENU, keys = "Ctrl+B", key = .B, mods = {.Ctrl}, run = proc(app: ^App) { app.cx.sidebar_hidden = !app.cx.sidebar_hidden }, checked = proc(app: ^App) -> bool { return !app.cx.sidebar_hidden }},
+	{id = "view.sidebar_mode", title = "Switch the sidebar's mode (inbox, projects)", group = "View", icon = ICO_LIST, run = sidebar_mode_next},
 	{id = "view.content_in", title = "Zoom in the conversation", group = "View", icon = ICO_ADD, keys = "Ctrl+=", run = proc(app: ^App) { content_zoom_by(app, ZOOM_FACTOR) }},
 	{id = "view.content_out", title = "Zoom out the conversation", group = "View", icon = ICO_DOWN, keys = "Ctrl+-", run = proc(app: ^App) { content_zoom_by(app, 1 / ZOOM_FACTOR) }},
 	{id = "view.content_reset", title = "Reset the conversation's zoom", group = "View", icon = ICO_UNDO, keys = "Ctrl+0", run = proc(app: ^App) { content_zoom_set(app, 1) }},
@@ -111,7 +112,7 @@ commands_keys :: proc(app: ^App) {
 
 // A dialog, a picker or a menu is over the window: the one list of them. What reads the keyboard behind them asks here.
 overlay_open :: proc(app: ^App) -> bool {
-	return changes_shown(&app.cx.changes) || app.cx.files.open || app.cx.schedules.open || app.cx.artifacts.open || app.settings_open || app.delete_open || app.stats_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.rename.open || len(app.ui_state.menus) > 0
+	return changes_shown(&app.cx.changes) || app.cx.files.open || app.cx.schedules.open || app.cx.artifacts.open || app.settings_open || app.delete_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.rename.open || len(app.ui_state.menus) > 0
 }
 
 content_zoom_set :: proc(app: ^App, z: f32) {

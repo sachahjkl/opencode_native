@@ -39,11 +39,12 @@ Schedule :: struct {
 
 When_Mode :: enum u8 { In, Every, At, Cron }
 
-WHEN_MODES := [When_Mode]struct { label, key, hint: string }{
-	.In    = {"Once, in", "in", "2 hours"},
-	.Every = {"Every", "every", "1 day"},
-	.At    = {"Once, at", "at", "2026-12-31T09:00:00"},
-	.Cron  = {"Cron", "cron", "0 9 * * 1"},
+// (`unit`: stays in the field beside what is typed; `hint`: an example, until something is.)
+WHEN_MODES := [When_Mode]struct { label, key, hint, unit: string }{
+	.In    = {"In", "in", "2 hours", "from now"},
+	.Every = {"Every", "every", "1 day", "repeats"},
+	.At    = {"At", "at", "2026-12-31T09:00:00", "once"},
+	.Cron  = {"Cron", "cron", "0 9 * * 1", "repeats"},
 }
 
 Schedules :: struct {
@@ -57,7 +58,8 @@ Schedules :: struct {
 	arena:    virtual.Arena,
 	has_arena: bool,
 	mode:     When_Mode,
-	prompt, name, value: ui.Text_Field,
+	prompt, value: ui.Text_Field,
+	fresh:    bool,     // just opened: the prompt takes the focus
 }
 
 @(private = "file")
@@ -75,7 +77,7 @@ schedules_clear :: proc(s: ^Schedules) {
 
 @(private = "file")
 schedule_form_clear :: proc(s: ^Schedules) {
-	ui.field_set(&s.prompt, ""); ui.field_set(&s.name, ""); ui.field_set(&s.value, "")
+	ui.field_set(&s.prompt, ""); ui.field_set(&s.value, "")
 	set_text(&s.problem, "")
 }
 
@@ -92,7 +94,7 @@ schedules_open :: proc(app: ^App, id: string) {
 	set_text(&s.problem, ""); set_text(&s.removing, "")
 	schedules_clear(s)
 	remote_reset(&s.read)
-	s.open = true
+	s.open, s.fresh = true, true
 	schedules_ask(app)
 }
 
@@ -154,7 +156,7 @@ schedule_made :: proc(app: ^App) {
 schedule_submit :: proc(app: ^App) {
 	s := &app.cx.schedules
 	if s.making.state == .Loading { return }
-	body, problem := schedule_body(s.session, ui.field_string(&s.prompt), ui.field_string(&s.name), ui.field_string(&s.value), s.mode)
+	body, problem := schedule_body(s.session, ui.field_string(&s.prompt), "", ui.field_string(&s.value), s.mode)
 	set_text(&s.problem, problem)
 	if problem != "" { return }
 	remote_begin(&s.making)
@@ -184,25 +186,37 @@ due_text :: proc(due, now: f64) -> string {
 	return fmt.tprintf("in %d days", (m + 720) / 1440)
 }
 
+// A field in its well. `label` and `unit` stay on either side of what is typed: a hint goes with the focus, and an empty box says nothing.
 @(private = "file")
-field_line :: proc(id: string, f: ^ui.Text_Field, hint: string, em: f32) -> ui.Edit_Result {
+field_line :: proc(id: string, f: ^ui.Text_Field, hint: string, em: f32, label := "", unit := "") -> ui.Edit_Result {
 	res: ui.Edit_Result
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
-	if well(fmt.tprintf("%s_w", id), .X, radius = 6) {
-		ui.spacer(ui.px(em * 0.5))
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
+	if well(fmt.tprintf("%s_w", id), .X, radius = 7) {
+		if label != "" {
+			ui.spacer(ui.px(em * 0.6))
+			text("l", label, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+		}
 		if ui.tags("bare") {
-			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
+			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * (label != "" ? 0.35 : 0.5)})
 			res = ui.line_edit(id, f, hint)
 		}
-		ui.spacer(ui.px(em * 0.5))
+		if unit != "" {
+			text("u", unit, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)})
+			ui.spacer(ui.px(em * 0.6))
+		}
 	}
 	return res
 }
 
+// As tall as what it holds, as far as the window goes: past that what is planned scrolls, under the form, and nothing is cut at any
+// size. (A small thing: no sizes to choose. Its place in layout.dialogs stays: they are read by position.)
 schedules_dialog :: proc(app: ^App, em: f32) {
 	s := &app.cx.schedules
 	if !s.open { return }
-	if ui.modal_sized("schedules", DIALOG_PREFERRED_EM[.Schedules] * em, &app.cx.dialogs[.Schedules], &s.open, DIALOG_MIN_EM[.Schedules] * em) {
+	win := app.ui_state.window_size
+	margin := em * ui.MODAL_MARGIN_EM
+	w := min(math.round(em * SCHEDULES_W_EM), win.x - 2 * margin)
+	if ui.modal("schedules", w, &s.open, SCHEDULES_TOP) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em * 0.9))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -212,43 +226,73 @@ schedules_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 3))
 		}
 		ui.spacer(ui.px(em * 0.4))
-		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
-		if ui.row(id = "###sc_body") {
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-			ui.next({width = ui.fill(), height = ui.fill()})
-			if ui.scroll_y("###sc_list") {
-				if read_shown(app, "###sc_read", &s.read, em, schedules_ask) {
-					if len(s.list) == 0 { info_line(app, "###sc_none", "Nothing is planned: a prompt below will wake this session.", em) }
-					now := f64(now_epoch_ms())
-					for &it, i in s.list { schedule_row(app, &it, i, now, em) }
-					ui.spacer(ui.px(em * 0.7))
-					schedule_form(app, em)
+		// (what it held at the last build: this one is not laid out yet. The title and the gaps are what the window keeps.)
+		held := em * SCHEDULES_FIRST_H_EM
+		if b := ui.prev_box("###sc_body"); b != nil && b.view_bounds.y > 0 { held = b.view_bounds.y }
+		room := win.y - 2 * margin - em * SCHEDULES_HEAD_EM
+		ui.next({width = ui.fill(), height = ui.px(max(min(held, room), em * FIELD_H_EM))})
+		if ui.scroll_y("###sc_body") {
+			// (the margins inside what scrolls: on its edge a field's rim and glow were cut)
+			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+			if ui.row(id = "###sc_lane") {
+				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+				if ui.column(id = "###sc_col") {
+					if read_shown(app, "###sc_read", &s.read, em, schedules_ask) {
+						schedule_form(app, w - 2 * em * DIALOG_MARGIN_EM, em)
+						ui.spacer(ui.px(em * 0.8))
+						if len(s.list) == 0 {
+							info_line(app, "###sc_none", "Nothing is planned yet.", em)
+						} else {
+							section_label("sc_list", fmt.tprintf("PLANNED (%d)", len(s.list)), em)
+						}
+						now := f64(now_epoch_ms())
+						for &it, i in s.list { schedule_row(app, &it, i, now, w, em) }
+					}
 				}
+				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			}
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 		}
 		ui.spacer(ui.px(em * 0.9))
 		dialog_close(&s.open)
 	}
 }
 
+// What a schedule does next, at the end of its row.
 @(private = "file")
-schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, em: f32) {
+schedule_next :: proc(it: ^Schedule, now: f64) -> string {
+	switch it.status {
+	case .Paused: return "paused"
+	case .Done:   return "done"
+	case .Active: if it.next > 0 { return due_text(it.next, now) }
+	case .Unknown:
+	}
+	return ""
+}
+
+// When it wakes, how many are left, what it did so far.
+schedule_detail :: proc(it: ^Schedule) -> string {
+	detail := it.when_text
+	if it.remaining > 0 { detail = fmt.tprintf("%s · %d left", detail, it.remaining) }
+	if it.runs > 0 { detail = fmt.tprintf("%s · ran %d%s", detail, it.runs, it.outcome != "" ? fmt.tprintf(" (%s)", it.outcome) : "") }
+	return detail
+}
+
+@(private = "file")
+schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, w, em: f32) {
 	s := &app.cx.schedules
 	small := math.round(em * BUTTON_SMALL_H_EM)
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+	words := w >= em * SCHEDULES_WORDS_MIN_EM   // (narrow: the name needs the room more)
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * SCHEDULES_ROW_H_EM)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###scr%d", i)) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column() {
-			text("n", first_line(it.name != "" ? it.name : it.prompt), hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
-			detail := it.when_text
-			if it.status == .Paused { detail = fmt.tprintf("%s, paused", detail) }
-			if it.status == .Done { detail = fmt.tprintf("%s, done", detail) }
-			if it.status == .Active && it.next > 0 { detail = fmt.tprintf("%s, %s", detail, due_text(it.next, now)) }
-			if it.remaining > 0 { detail = fmt.tprintf("%s, %d left", detail, it.remaining) }
-			if it.runs > 0 { detail = fmt.tprintf("%s, ran %d (%s)", detail, it.runs, it.outcome) }
-			text("d", detail, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.4)}, ui.fill())
+			text("n", first_line(it.name != "" ? it.name : it.prompt), hex(it.status == .Done ? HEX_WEAK : HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.4)}, ui.fill())
+			text("d", schedule_detail(it), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.15)}, ui.fill())
 		}
+		ui.spacer(ui.px(em * 0.5))
+		text("x", schedule_next(it, now), hex(it.status == .Active ? HEX_TEXT_SOFT : HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+		ui.spacer(ui.px(em * 0.6))
 		if it.id == s.removing {
 			if bevel_button("###sc_yes", "Delete", ICO_DELETE, .Danger, height = small).clicked {
 				request(app, .Schedule_Done, "DELETE", fmt.tprintf("/api/experimental/schedule/%s", url_escape(it.id)))
@@ -264,40 +308,49 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, em: f32) {
 				}
 				ui.spacer(ui.px(em * 0.3))
 			}
-			if bevel_button("###sc_del", "Delete", ICO_DELETE, .Ghost, height = small).clicked { set_text(&s.removing, it.id) }
+			ui.a11y({role = .Button, name = "Delete"})
+			if bevel_button("###sc_del", words ? "Delete" : "", ICO_DELETE, .Ghost, height = small).clicked { set_text(&s.removing, it.id) }
 		}
 	}
-	ui.spacer(ui.px(em * 0.35))
 }
 
+// What to ask, then when, on one row, the mode beside its value and Plan it at the end. `w`: the room, this frame's. Too narrow for
+// that, the modes take a row of their own.
 @(private = "file")
-schedule_form :: proc(app: ^App, em: f32) {
+schedule_form :: proc(app: ^App, w, em: f32) {
 	s := &app.cx.schedules
-	section("A NEW ONE", em)
 	go := false
-	if field_line("###sc_prompt", &s.prompt, "What to ask the session", em).committed { go = true }
-	ui.spacer(ui.px(em * 0.35))
+	res := field_line("###sc_prompt", &s.prompt, "what the session does when it wakes", em, label = "Ask")
+	if s.fresh { ui.set_focus(res.box.key); s.fresh = false }
+	if res.committed { go = true }
+	ui.spacer(ui.px(em * 0.5))
+	one_row := w >= em * SCHEDULES_ONE_ROW_EM
+	modes :: proc(s: ^Schedules, width: ui.Size, em: f32) {
+		labels: [len(When_Mode)]string
+		for m in When_Mode { labels[m] = WHEN_MODES[m].label }
+		sel := int(s.mode)
+		ui.next({width = width, height = ui.px(math.round(em * FIELD_H_EM))})
+		if ui.segmented("###sc_mode", labels[:], &sel) { s.mode = When_Mode(sel) }
+	}
+	if !one_row {
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###sc_modes") { modes(s, ui.fill(), em) }
+		ui.spacer(ui.px(em * 0.5))
+	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-	if ui.row(.Center, id = "###sc_modes") {
-		for m in When_Mode {
-			if bevel_button(fmt.tprintf("###sc_m%d", int(m)), WHEN_MODES[m].label, "", s.mode == m ? .Toggled : .Normal, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { s.mode = m }
-			ui.spacer(ui.px(em * 0.3))
+	if ui.row(.Center, id = "###sc_when") {
+		if one_row {
+			modes(s, ui.px(math.round(em * SCHEDULES_MODES_W_EM)), em)
+			ui.spacer(ui.px(em * 0.5))
 		}
-	}
-	ui.spacer(ui.px(em * 0.35))
-	if field_line("###sc_value", &s.value, WHEN_MODES[s.mode].hint, em).committed { go = true }
-	ui.spacer(ui.px(em * 0.35))
-	if field_line("###sc_name", &s.name, "A name for it (optional)", em).committed { go = true }
-	ui.spacer(ui.px(em * 0.4))
-	if s.problem != "" || remote_failed(&s.making) {
-		info_line(app, "###sc_failed", s.problem != "" ? s.problem : s.making.message, em, hex(HEX_RED))
-		ui.spacer(ui.px(em * 0.3))
-	}
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-	if ui.row(.Center, id = "###sc_foot") {
-		ui.spacer(ui.fill())
+		if field_line("###sc_value", &s.value, WHEN_MODES[s.mode].hint, em, unit = WHEN_MODES[s.mode].unit).committed { go = true }
+		ui.spacer(ui.px(em * 0.5))
 		making := s.making.state == .Loading
-		if bevel_button("###sc_go", making ? "Planning…" : "Plan it", ICO_CHECK, .Accent, disabled = making).clicked { go = true }
+		if bevel_button("###sc_go", making ? "Planning…" : "Plan it", ICO_CHECK, .Accent, height = math.round(em * FIELD_H_EM), disabled = making).clicked { go = true }
+	}
+	if s.problem != "" || remote_failed(&s.making) {
+		ui.spacer(ui.px(em * 0.4))
+		info_line(app, "###sc_failed", s.problem != "" ? s.problem : s.making.message, em, hex(HEX_RED))
 	}
 	if go { schedule_submit(app) }
 }
@@ -481,7 +534,8 @@ artifacts_dialog :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 		if ui.row(id = "###ar_body") {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-			ui.next({width = ui.px(math.round(em * FILES_LIST_W_EM)), height = ui.fill()})
+			// (a share of the room: at its full width in a small dialog, it left the right side less than its buttons take)
+			ui.next({width = ui.px(math.round(min(em * FILES_LIST_W_EM, ui.parent_box().size.x * ARTIFACTS_LIST_SHARE))), height = ui.fill()})
 			if ui.scroll_y("###ar_list") {
 				if read_shown(app, "###ar_read", &a.read, em, artifacts_ask) {
 					if len(a.list) == 0 { info_line(app, "###ar_none", "No artifact here: an agent publishes them.", em) }
@@ -514,6 +568,7 @@ artifact_right :: proc(app: ^App, em: f32) {
 	for &x in a.list { if x.id == a.shown { it = &x } }
 	if it == nil { return }
 	small := math.round(em * BUTTON_COMPACT_H_EM)
+	words := ui.parent_box().size.x >= em * ARTIFACTS_WORDS_MIN_EM   // (narrow: the buttons by their glyphs, or the last is cut)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###ar_bar") {
 		text("p", it.provider, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)}, ui.fill())
@@ -529,20 +584,22 @@ artifact_right :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.3))
 			if bevel_button("###ar_no", "Keep", "", .Normal, height = small).clicked { set_text(&a.removing, "") }
 		} else {
-			if bevel_button("###ar_open", "Open in the browser", ICO_GLOBE, .Accent, height = small, disabled = !artifact_can_open(a, it)).clicked { artifact_view(a, it) }
+			ui.a11y({role = .Button, name = "Open in the browser"})
+			if bevel_button("###ar_open", words ? "Open in the browser" : "", ICO_GLOBE, .Accent, height = small, disabled = !artifact_can_open(a, it)).clicked { artifact_view(a, it) }
 			ui.spacer(ui.px(em * 0.3))
-			if bevel_button("###ar_del", "Delete", ICO_DELETE, .Ghost, height = small).clicked { set_text(&a.removing, it.id) }
+			ui.a11y({role = .Button, name = "Delete"})
+			if bevel_button("###ar_del", words ? "Delete" : "", ICO_DELETE, .Ghost, height = small).clicked { set_text(&a.removing, it.id) }
 		}
 	}
 	ui.spacer(ui.px(em * 0.4))
 	if !read_shown(app, "###ar_file", &a.file_read, em, artifact_read) { return }
 	if len(a.files) == 0 { info_line(app, "###ar_empty", "No text in this artifact.", em); return }
 	if len(a.files) > 1 {
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-		if ui.row(.Center, id = "###ar_files") {
+		// (they wrap: on one row the last ones went past the edge)
+		ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.3, em * 0.3}})
+		if ui.flow({em * 0.3, em * 0.3}, "###ar_files") {
 			for f, i in a.files {
 				if bevel_button(fmt.tprintf("###arf%d", i), label_safe(f.path), "", a.file == i ? .Toggled : .Normal, height = small).clicked { a.file = i; a.version += 1 }
-				ui.spacer(ui.px(em * 0.3))
 			}
 		}
 		ui.spacer(ui.px(em * 0.4))

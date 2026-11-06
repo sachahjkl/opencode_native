@@ -1,11 +1,13 @@
 // A picker: a list in a popover over the button that opened it, filtered as one types (subsequence matching, the matched
 // characters lit), driven by the keyboard (Up / Down / Page Up / Page Down / Enter / Escape) or the pointer. The model
-// and the agent of the composer use it.
+// and the agent of the composer use it. Items of groups (a model's provider) are under a header that folds while nothing is
+// typed, to look through them by hand (Left and Right fold and unfold); typing goes through them all, by how well they match.
 package occ
 
 import "core:fmt"
 import "core:math"
 import "core:slice"
+import "core:strings"
 import "gt:draw"
 import "gt:ui"
 
@@ -22,7 +24,8 @@ Picker :: struct {
 	id:     string,
 	anchor: Rect,
 	field:  ui.Text_Field,
-	sel:    int,       // in the filtered list
+	sel:    int,       // in the rows shown
+	unfolded: map[string]bool,   // the groups open (keys owned); the current item's opens with the picker
 	reveal: bool,      // bring the selected row into view (the keyboard moved it, it was opened, the search changed)
 	fresh:  bool,      // opened in this frame: focus the field, select the current item
 	mouse:  Vec2,
@@ -38,8 +41,49 @@ picker_open :: proc(p: ^Picker, id: string, anchor: Rect) {
 	ui.field_set(&p.field, "")
 }
 
-@(private = "file")
 Hit :: struct { index, score: int, ranges: []ui.Fuzzy_Range }
+
+// A row of the list: an item (`hit` in the hits), or the header of `group` (`hit` -1).
+Pick_Row :: struct {
+	hit:   int,
+	group: string,
+	count: int,   // a header: its items
+}
+
+picker_unfolded :: proc(p: ^Picker, group: string) -> bool { return group in p.unfolded }
+
+picker_fold :: proc(p: ^Picker, group: string, open: bool) {
+	if open == picker_unfolded(p, group) { return }
+	if open {
+		p.unfolded[strings.clone(group)] = true
+	} else {
+		key, _ := delete_key(&p.unfolded, group)
+		delete(key)
+	}
+}
+
+// What the list shows. With nothing typed, the items of groups go under their header, in the order they come (a group's items are
+// together); else, or with no groups, the hits as they are.
+picker_rows :: proc(p: ^Picker, items: []Pick_Item, hits: []Hit, typed: bool) -> []Pick_Row {
+	rows := make([dynamic]Pick_Row, 0, len(hits), context.temp_allocator)
+	grouped := false
+	if !typed { for h in hits { if items[h.index].group != "" { grouped = true; break } } }
+	if !grouped {
+		for _, k in hits { append(&rows, Pick_Row{hit = k}) }
+		return rows[:]
+	}
+	header := -1
+	for h, k in hits {
+		g := items[h.index].group
+		if header < 0 || rows[header].group != g {
+			append(&rows, Pick_Row{hit = -1, group = g})
+			header = len(rows) - 1
+		}
+		rows[header].count += 1
+		if picker_unfolded(p, g) { append(&rows, Pick_Row{hit = k, group = g}) }
+	}
+	return rows[:]
+}
 
 // Builds the picker `id` while it is open; returns the index in `items` of the one chosen in this frame (-1: none).
 picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_Item, em: f32, align_right := false) -> (chosen: int) {
@@ -53,13 +97,31 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 		if ok { append(&hits, Hit{i, score, ranges}) }
 	}
 	if needle != "" { slice.stable_sort_by(hits[:], proc(a, b: Hit) -> bool { return a.score > b.score }) }
-	n := len(hits)
+	if p.fresh { for h in hits { if it := items[h.index]; it.current && it.group != "" { picker_fold(p, it.group, true) } } }
+	typed := needle != ""
+	rows := picker_rows(p, items, hits[:], typed)
+	n := len(rows)
 	if p.fresh {
-		for h, k in hits { if items[h.index].current { p.sel = k } }
+		for r, k in rows { if r.hit >= 0 && items[hits[r.hit].index].current { p.sel = k } }
 		p.reveal = true
 	}
 	// the keyboard
 	if n > 0 {
+		if !typed {   // (nothing typed: these keys have no text to move in)
+			at := rows[clamp(p.sel, 0, n - 1)]
+			if at.group != "" && ui.key_press(.Right) && !picker_unfolded(p, at.group) {
+				picker_fold(p, at.group, true)
+				rows = picker_rows(p, items, hits[:], typed)
+				n = len(rows)
+			}
+			if at.group != "" && ui.key_press(.Left) && picker_unfolded(p, at.group) {
+				picker_fold(p, at.group, false)
+				rows = picker_rows(p, items, hits[:], typed)
+				n = len(rows)
+				for r, k in rows { if r.hit < 0 && r.group == at.group { p.sel = k } }
+				p.reveal = true
+			}
+		}
 		if ui.key_press(.Down) { p.sel = (p.sel + 1) % n; p.reveal = true }
 		if ui.key_press(.Up) { p.sel = (p.sel + n - 1) % n; p.reveal = true }
 		if ui.key_press(.Page_Down) { p.sel = min(p.sel + PICK_ROWS, n - 1); p.reveal = true }
@@ -87,10 +149,10 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 					res := ui.line_edit("###pf", &p.field, fmt.tprintf("Search %s", title))
 					if p.fresh { ui.set_focus(res.box.key) }
 					if res.changed { p.sel = 0; p.reveal = true }
-					if res.committed && n > 0 { chosen = hits[p.sel].index }
+					if res.committed && n > 0 { chosen = picker_take(p, items, hits[:], rows, p.sel) }
 					if res.cancelled { p.open = false }
 				}
-				text("pn", fmt.tprintf("%d", n), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				text("pn", fmt.tprintf("%d", len(hits)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.6))
 			}
 			ui.spacer(ui.px(em * 0.5))
@@ -113,10 +175,9 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 				if ui.tags("weak") { ui.label("Nothing matches###none") }
 			}
 			for k in 0 ..< n {
-				h := hits[k]
-				it := items[h.index]
+				row := rows[k]
 				ui.next({width = ui.fill(), height = ui.px(row_h), axis = .X, cross = .Center})
-				rb := ui.build_box({.Clickable}, fmt.tprintf("###pr%d", h.index))
+				rb := ui.build_box({.Clickable}, row.hit < 0 ? fmt.tprintf("###pg_%s", row.group) : fmt.tprintf("###pr%d", hits[row.hit].index))
 				sel := k == p.sel
 				rd := ui.frame_new(bool)
 				rd^ = sel
@@ -130,9 +191,23 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 				rb.custom_user = rd
 				rs := ui.signal(rb)
 				if rs.hovering && moved { p.sel = k }
-				if rs.clicked { chosen = h.index }
+				if rs.clicked { chosen = picker_take(p, items, hits[:], rows, k) }
+				if row.hit < 0 {
+					if ui.parent(rb) {
+						ui.spacer(ui.px(em * 0.6))
+						glyph(picker_unfolded(p, row.group) ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_SMALL))
+						ui.spacer(ui.px(em * 0.35))
+						text("g", row.group, sel ? hex(HEX_BRIGHT) : hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
+						ui.spacer(ui.fill())
+						text("n", fmt.tprintf("%d", row.count), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+						ui.spacer(ui.px(em * 0.75))
+					}
+					continue
+				}
+				h := hits[row.hit]
+				it := items[h.index]
 				if ui.parent(rb) {
-					ui.spacer(ui.px(em * 0.75))
+					ui.spacer(ui.px(em * (row.group != "" ? 1.9 : 0.75)))
 					if it.color.a > 0 {
 						ui.next({width = ui.px(math.round(em * 0.5)), height = ui.px(math.round(em * 0.9))})
 						cb := ui.build_box({}, "###c")
@@ -146,7 +221,8 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 						cb.custom_user = cd
 						ui.spacer(ui.px(em * 0.3))
 					}
-					hay := it.group != "" ? fmt.tprintf("%s  %s", it.label, it.group) : it.label
+					// (under its header the group is said already)
+					hay := it.group != "" && row.group == "" ? fmt.tprintf("%s  %s", it.label, it.group) : it.label
 					lit_text(app, hay, len(it.label), h.ranges, sel || it.current ? hex(HEX_BRIGHT) : hex(HEX_TEXT), em)
 					ui.spacer(ui.fill())
 					if it.detail != "" {
@@ -160,7 +236,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 		}
 		ui.spacer(ui.px(em * 0.4))
 	}
-	if n > 0 && p.open && !p.fresh && ui.key_press(.Return) && chosen < 0 { chosen = hits[p.sel].index }
+	if n > 0 && p.open && !p.fresh && ui.key_press(.Return) && chosen < 0 { chosen = picker_take(p, items, hits[:], rows, p.sel) }
 	// a press outside closes it (the button that opened it toggles it: its own click closes it)
 	if !p.fresh && ui.mouse_pressed(.Left) {
 		if r, ok := ui.popover_rect(fmt.tprintf("###pick_%s", id)); ok && !rect_has(r, mouse) && !rect_has(p.anchor, mouse) { p.open = false }
@@ -169,6 +245,15 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 	if chosen >= 0 { p.open = false }
 	p.fresh = false
 	return
+}
+
+// Row `k` taken: an item is chosen; a header folds or unfolds, and nothing is.
+picker_take :: proc(p: ^Picker, items: []Pick_Item, hits: []Hit, rows: []Pick_Row, k: int) -> int {
+	if k < 0 || k >= len(rows) { return -1 }
+	r := rows[k]
+	if r.hit >= 0 { return hits[r.hit].index }
+	picker_fold(p, r.group, !picker_unfolded(p, r.group))
+	return -1
 }
 
 @(private = "file")

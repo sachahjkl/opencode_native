@@ -68,7 +68,6 @@ build_ui :: proc(app: ^App) {
 	server_dialog(app, em)
 	settings_dialog(app, em)
 	image_viewer(app, em)
-	stats_dialog(app, em)
 	rename_dialog(app, em)
 	help_dialog(app, em)
 	integrations_watch(app)
@@ -97,7 +96,7 @@ app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 		}
 		if ui.menu_item("Settings…", "Ctrl+,").clicked { settings_open(app) }
 		if ui.menu_item("Add a server…").clicked { server_edit_open(app, -1) }
-		if ui.menu_item("Session statistics", "Ctrl+I", enabled = app.chat.id != "").clicked { stats_open(app) }
+		if ui.menu_item("Statistics panel", "Ctrl+I", app.stats_open, enabled = app.chat.id != "").clicked { stats_toggle(app) }
 		if preview_available() {
 			if ui.menu_item("Preview panel", "Ctrl+Shift+B", app.preview.open).clicked { command_run(app, command_find("view.preview")) }
 		}
@@ -291,9 +290,6 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	}
 }
 
-@(private = "file")
-Group :: struct { dir: string, items: [dynamic]int }
-
 sidebar :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.px(app.sidebar_w * ui.scale()), height = ui.fill(), axis = .Y, bg = hex(HEX_BG1), radius = 0})   // (square: its rounded corner notched the bar's edge)
 	if ui.column(flags = {.Draw_Background}, id = "###sidebar") {
@@ -324,6 +320,13 @@ sidebar :: proc(app: ^App, em: f32) {
 			}
 			pad_row(em)
 		}
+		ui.spacer(ui.px(em * 0.45))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+		if ui.row(id = "###side_modes") {
+			pad_row(em)
+			sidebar_mode_switch(app, em)
+			pad_row(em)
+		}
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.px(GROOVE_BOX_PX)})
 		groove("###sg")
@@ -344,8 +347,6 @@ sessions_list :: proc(app: ^App, em: f32) {
 		return
 	}
 	q := strings.to_lower(ui.field_string(&app.search), context.temp_allocator)
-	groups := make([dynamic]Group, context.temp_allocator)
-	index := make(map[string]int, allocator = context.temp_allocator)
 	// the sub-agents of each session (among those loaded), listed under it unless the list is flat
 	kids := make(map[string][dynamic]int, allocator = context.temp_allocator)
 	for s, i in app.sessions {
@@ -354,17 +355,9 @@ sessions_list :: proc(app: ^App, em: f32) {
 		append(&list, i)
 		kids[s.parent] = list
 	}
-	for s, i in app.sessions {
-		if s.parent != "" && app.prefs.subagents != "flat" { continue }
-		if q != "" && !strings.contains(strings.to_lower(s.title, context.temp_allocator), q) && !strings.contains(strings.to_lower(s.directory, context.temp_allocator), q) { continue }
-		gi, ok := index[s.directory]
-		if !ok {
-			gi = len(groups)
-			index[s.directory] = gi
-			append(&groups, Group{dir = s.directory, items = make([dynamic]int, context.temp_allocator)})
-		}
-		append(&groups[gi].items, i)
-	}
+	mode := app.prefs.sidebar_mode
+	of := hash.fnv64a(transmute([]u8)fmt.tprintf("%v %s %s", mode, app.prefs.subagents, q))
+	sections := sidebar_held(app, sidebar_rows(app, q), sidebar_hold_wanted(app, ui.parent_box()), of)
 	now := now_epoch_ms()
 	ui.spacer(ui.px(em * 0.4))
 	// Only the rows near the view are built (the toolkit's lazy column, as the conversation's): a header or a session
@@ -372,20 +365,19 @@ sessions_list :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.column(id = "###rows") {
 		lz := ui.lazy_begin()
-		gap := false   // (between a group's last session and the next group)
-		for &gr in groups {
-			gkey := hash.fnv64a(transmute([]u8)gr.dir)
-			folded := app.folded[gkey] or_else false
-			if ui.lazy_item(lz, fmt.tprintf("###lg%d", gkey)) {
+		gap := false   // (between a section's last session and the next section)
+		for &sec in sections {
+			folded := app.folded[sec.key] or_else false
+			if ui.lazy_item(lz, fmt.tprintf("###lg%d", sec.key)) {
 				if gap { ui.spacer(ui.px(em * 0.5)) }
-				group_header(app, &gr, gkey, folded, em)
+				if sec.title != "" { inbox_header(app, &sec, folded, em) } else { group_header(app, &sec, folded, em) }
 			}
 			gap = !folded
 			if folded { continue }
-			for i in gr.items {
+			for i in sec.items {
 				s := &app.sessions[i]
 				if ui.lazy_item(lz, fmt.tprintf("###ls_%s", s.id), always = s.id == app.chat.id) {
-					session_item(app, s, em, now, 0, app.prefs.subagents == "nested" ? children_of(app, s.id, kids) : nil)
+					session_item(app, s, em, now, 0, app.prefs.subagents == "nested" ? children_of(app, s.id, kids) : nil, project = mode == .Inbox)
 				}
 			}
 		}
@@ -402,7 +394,8 @@ sessions_list :: proc(app: ^App, em: f32) {
 
 // A group's header: folder, name, count, "+".
 @(private = "file")
-group_header :: proc(app: ^App, gr: ^Group, gkey: u64, folded: bool, em: f32) {
+group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
+	gkey := gr.key
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
 	hdr := ui.build_box({.Clickable, .Hot_Within}, fmt.tprintf("###g%d", gkey))
 	hs := ui.signal(hdr)
@@ -433,11 +426,11 @@ group_header :: proc(app: ^App, gr: ^Group, gkey: u64, folded: bool, em: f32) {
 }
 
 // A session of the sidebar; `depth` 1: a sub-agent listed under its parent. `kids`: its sub-agents (indices into
-// app.sessions), listed under it when its toggle is open.
-session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0, kids: []int = nil) {
+// app.sessions), listed under it when its toggle is open. `project`: its folder under its title, when the list does not say it.
+session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0, kids: []int = nil, project := false) {
 	selected := s.id == app.chat.id
 	sub_list := false
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * (depth > 0 ? 2.0 : 2.3))), axis = .X, cross = .Center})
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * (project ? SIDE_INBOX_ROW_EM : depth > 0 ? 2.0 : 2.3))), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###r_%s", s.id)) {
 		ui.spacer(ui.px(em * (0.5 + 1.1 * f32(depth))))
 		ui.next({width = ui.fill(), height = ui.pct(1), axis = .X, cross = .Center})
@@ -478,13 +471,31 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				lamp("###busy", accent(), pulse = true, size = em * 0.85)
 				app.animating = true
 				ui.spacer(ui.px(em * 0.35))
+			} else if session_unseen(app, s) {   // (over and not seen: how it ended, unlit)
+				st, _ := state_of_word(s.outcome)
+				pip("###unseen", sub_state_color(st), em * 1.15)
+				ui.spacer(ui.px(em * 0.35))
 			}
 			title := s.title != "" ? s.title : "Untitled"
 			// a sub-agent: lit while it runs, dimmed once it is done
 			tcol := hex(HEX_TEXT_SOFT)
 			if depth > 0 { tcol = busy ? hex(HEX_TEXT) : hex(HEX_SUB_OFF_TITLE) }
 			if selected { tcol = hex(HEX_BRIGHT) }
-			text("t", title, tcol, ui.Style_Mod{font_size = math.round(em * (depth > 0 ? FS_NOTE : FS_LABEL))}, ui.fill())
+			title_style := ui.Style_Mod{font_size = math.round(em * (depth > 0 ? FS_NOTE : FS_LABEL))}
+			if project {
+				ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
+				if ui.column(id = "###words") {
+					ui.spacer(ui.fill())
+					title_style.height = ui.px(math.round(em * 1.3))
+					text("t", title, tcol, title_style, ui.fill())
+					where_ := s.directory != "" ? base_name(s.directory) : "(no folder)"
+					if session_unseen(app, s) && s.outcome != "succeeded" && s.outcome != "" { where_ = fmt.tprintf("%s · %s", where_, s.outcome) }
+					text("p", ellipsize(where_, SIDE_PROJECT_CHARS), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(math.round(em * 1.1))}, ui.fill())
+					ui.spacer(ui.fill())
+				}
+			} else {
+				text("t", title, tcol, title_style, ui.fill())
+			}
 			ui.spacer(ui.px(em * 0.4))
 			if len(kids) > 0 {
 				running := 0
@@ -806,11 +817,11 @@ chat_header :: proc(app: ^App, em: f32) {
 		// (narrow, as a panel of the dock: the title first, the figures are in the statistics)
 		narrow := app.cx.docked_w > 0 && app.cx.docked_w < em * HEADER_FIGURES_MIN_EM
 		if !narrow && c.tokens_in + c.tokens_out > 0 {
-			if pill_button("###tok", fmt.tprintf("%s in · %s out", kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, ICO_BOLT).clicked { stats_open(app) }
+			if pill_button("###tok", fmt.tprintf("%s in · %s out", kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, ICO_BOLT).clicked { stats_toggle(app) }
 			ui.spacer(ui.px(em * 0.4))
 		}
 		if !narrow && c.cost > 0 {
-			if pill_button("###cost", fmt.tprintf("$%.2f", c.cost), hex(HEX_GREEN)).clicked { stats_open(app) }
+			if pill_button("###cost", fmt.tprintf("$%.2f", c.cost), hex(HEX_GREEN)).clicked { stats_toggle(app) }
 			ui.spacer(ui.px(em * 0.4))
 		}
 		if c.busy {
@@ -882,17 +893,21 @@ messages :: proc(app: ^App, em: f32) {
 			}
 		}
 	}
+	// The line of a run stands in the room the end of the conversation keeps anyway: the height is the same with it and without it, so
+	// the bottom does not move when a run starts or ends. (It came on top of that room, and took four lines for one word.)
+	foot := math.round(em * CHAT_FOOT_EM)
 	if c.busy {
-		ui.spacer(ui.px(em * 0.6))
-		ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
+		line := math.round(em * WORKING_LINE_EM)
+		ui.next({width = ui.fill(), height = ui.px(line), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###working") {
 			ui.spacer(ui.px(em * 0.4))
 			throbber(app, "###wl", accent(), math.round(em * 7), math.round(em * 0.9), em)
 			ui.spacer(ui.fill())
 			if hint_action("###stop_hint", "Esc to stop", em) { interrupt_session(app, c.id) }
 		}
+		foot -= line
 	}
-	ui.spacer(ui.px(em * 2))
+	ui.spacer(ui.px(foot))
 }
 
 // The first page was not read: why, and the way to try again.
@@ -1346,6 +1361,7 @@ dock :: proc(app: ^App, em: f32, side, col: f32) {
 				if p.session == app.chat.id { permission_card(app, &p, em) }
 			}
 			forms_dock(app, em)
+			queue_list(app, em)
 			composer(app, em)
 			activity_tray(app, em)
 			ui.spacer(ui.px(em * 1.1))
@@ -1386,20 +1402,25 @@ COMPOSER_HINT_MIN_EM :: 44
 COMPOSER_BUTTON_W_EM :: 2.6
 
 composer :: proc(app: ^App, em: f32) {
-	// Enter sends, Shift+Enter breaks the line (the editor itself breaks on Enter and commits on Ctrl+Enter)
-	submit := false
+	// Enter sends, Shift+Enter breaks the line (the editor itself breaks on Enter and commits on Ctrl+Enter). While a turn runs
+	// one way queues and the other sends now: Enter and Ctrl+Enter, or in Ctrl+Enter mode Ctrl+Enter and Ctrl+Shift+Enter.
+	submit, other := false, false
 	keys := app.composer_focused && !app.picker.open
 	// (the tray's keys with the focus nowhere too: a click on one of its rows leaves it there)
 	if app.activity.open && !app.picker.open && (app.composer_focused || ui.focus_key() == 0) { activity_keys(app) }
 	if keys { mention_keys(app) }
 	if keys { history_track(app) }
+	// (wherever the focus is: this Escape must not stop the run)
+	if queue_editing(app) && !overlay_open(app) && !history_browsing(app) && !mention_takes_escape(app) && ui.key_press(.Escape) { queue_edit_end(app, .Cancel) }
 	if app.composer_focused && !app.prefs.ctrl_enter {   // (Ctrl+Enter mode: Enter breaks the line, the editor commits on Ctrl+Enter)
 		if ui.key_press(.Return) { submit = true }
 		if ui.key_press(.Return, {.Shift}) { area_insert(&app.composer, "\n") }
 	}
+	if app.composer_focused && app.prefs.ctrl_enter && ui.key_press(.Return, {.Ctrl, .Shift}) { submit, other = true, true }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well("###composer_well", radius = 11, base = HEX_COMPOSER_WELL, focus = app.composer_focused ? 1 : 0) {
 		ui.spacer(ui.px(em * 0.45))
+		queue_edit_banner(app, em)
 		mention_list(app, em)
 		attachments_row(app, em)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -1431,7 +1452,7 @@ composer :: proc(app: ^App, em: f32) {
 				mention_track(app)
 				if app.cx.focus_composer { ui.set_focus(res.box.key); app.cx.focus_composer = false }
 				ctx_check(app, res.box, .Composer)
-				if res.committed { submit = true }
+				if res.committed { submit, other = true, !app.prefs.ctrl_enter }
 				if down && app.composer.cursor == caret0 { activity_open(app) }
 				if res.changed { activity_close(app) }   // (typing: what is written is what matters now)
 			}
@@ -1458,6 +1479,14 @@ composer :: proc(app: ^App, em: f32) {
 				} else if history_browsing(app) {
 					text("hint", fmt.tprintf("history %d/%d   ·   ", app.history.at + 1, len(app.history.view)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 					if hint_action("###hist_back", "Esc  back to your text", em, app.mono) { history_leave(app, true) }
+				} else if queue_editing(app) {
+					if hint_action("###h_save", app.prefs.ctrl_enter ? "Ctrl+Enter  save" : "Enter  save", em, app.mono) { submit = true }
+				} else if as := composer_send_as(app); as != .Idle {
+					// (each says what it does, and does it)
+					first, second := as == .Queue ? "queue" : "send now", as == .Queue ? "send now" : "queue"
+					if hint_action("###h_first", fmt.tprintf("%s  %s", app.prefs.ctrl_enter ? "Ctrl+Enter" : "Enter", first), em, app.mono) { submit = true }
+					text("h_dot", "   ·   ", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					if hint_action("###h_second", fmt.tprintf("%s  %s", app.prefs.ctrl_enter ? "Ctrl+Shift+Enter" : "Ctrl+Enter", second), em, app.mono) { submit, other = true, true }
 				} else {
 					text("hint", app.prefs.ctrl_enter ? "Ctrl+Enter  send   ·   Enter  new line" : "Enter  send   ·   Shift+Enter  new line", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}
@@ -1468,13 +1497,26 @@ composer :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.4))
 			}
 			empty := len(strings.trim_space(ui.area_string(&app.composer))) == 0 && len(app.cx.attachments) == 0
-			if bevel_button("###send", "", ICO_SEND, .Accent, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM), disabled = empty || !online(app) || held).clicked { submit = true }
+			// (what it does, while that is not what it usually does)
+			send_label, send_icon := "", ICO_SEND
+			if queue_editing(app) {
+				send_label, send_icon = "Save", ICO_CHECK
+			} else {
+				switch composer_send_as(app) {
+				case .Idle:
+				case .Queue: send_label, send_icon = "Queue", ICO_LIST
+				case .Steer: send_label = "Send now"
+				}
+			}
+			if app.column_w <= em * QUEUE_WORDS_MIN_EM { send_label = "" }   // (narrow, its glyph says it: the toolbar has no room)
+			send_w: Maybe(ui.Size) = send_label == "" ? ui.px(math.round(em * COMPOSER_BUTTON_W_EM)) : nil
+			if bevel_button("###send", send_label, send_icon, .Accent, send_w, math.round(em * BUTTON_H_EM), disabled = empty || !online(app) || held).clicked { submit = true }
 			ui.spacer(ui.px(em * 0.55))
 
 			composer_pickers(app, agent, em)
 		}
 	}
-	if submit { submit_prompt(app) }
+	if submit { submit_prompt(app, other) }
 }
 
 composer_pickers :: proc(app: ^App, agent: string, em: f32) {
@@ -1547,27 +1589,31 @@ prompt_restore :: proc(app: ^App, text: string) {
 }
 
 // "/name what follows", when the server has a command of that name.
-slash_send :: proc(app: ^App, t: string) -> bool {
+slash_send :: proc(app: ^App, t: string, fields := "") -> bool {
 	if !strings.has_prefix(t, "/") { return false }
 	name, rest := t[1:], ""
 	if i := strings.index_any(name, " \n"); i >= 0 { name, rest = name[:i], strings.trim_space(name[i:]) }
 	for s in app.cx.slash {
 		if s.name != name { continue }
-		outgoing_command(app, t, name, rest)
+		outgoing_command(app, t, name, rest, fields)
 		return true
 	}
 	return false
 }
 
-// Enter, or Send. While the session it would go to is starting it stays in the composer: nothing is lost, the button says it.
-submit_prompt :: proc(app: ^App) {
+// Enter, or Send. While the session it would go to is starting it stays in the composer: nothing is lost, the button says it. While a
+// turn runs `other` is the way that is not Enter's (composer_send_as); what is being edited goes back where it was, whichever.
+submit_prompt :: proc(app: ^App, other := false) {
 	t := strings.clone(strings.trim_space(ui.area_string(&app.composer)), context.temp_allocator)
 	if (t == "" && len(app.cx.attachments) == 0) || !online(app) || composer_held(app) { return }
 	history_leave(app, false)
 	if t != "" { history_add(app, t) }
-	if app.chat.id == "" || !slash_send(app, t) { outgoing_composer(app, t, app.chat.new_dir) }
+	if queue_editing(app) { queue_edit_commit(app, t); return }
+	as := composer_send_as(app, other)
+	fields := send_as_fields(as)
+	if app.chat.id == "" || !slash_send(app, t, fields) { outgoing_composer(app, t, app.chat.new_dir, fields) }
 	ui.area_set(&app.composer, "")
-	view_to_bottom(app)
+	if as == .Idle { view_to_bottom(app) }   // (what waits shows over the composer: the conversation stays where it is)
 }
 
 ////////////////////////////////
@@ -1625,7 +1671,8 @@ status_bar :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.fill())
 		update_pill(app, em)
 		pend := int(app.pending)
-		if pend > 0 {
+		if pend == 0 { app.cx.pending_since = 0 } else if app.cx.pending_since == 0 { app.cx.pending_since = ui.now_ms() }
+		if pend > 0 && ui.now_ms() - app.cx.pending_since >= PENDING_SHOW_MS {
 			text("p", fmt.tprintf("%d request%s", pend, pend > 1 ? "s" : ""), hex(HEX_FAINT), small)
 			ui.spacer(ui.px(em * 0.8))
 		}

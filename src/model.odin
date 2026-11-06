@@ -13,6 +13,7 @@ import "gt:ui"
 Session_Info :: struct {
 	id, title, parent, directory, agent, model, provider, outcome, project: string,
 	created, updated, idle: f64,
+	viewed:          f64,   // the last end of a run someone looked at (idle later than this: not seen, sidebar.odin)
 	cost:            f64,
 	tokens_in, tokens_out, reasoning, cache_read, cache_write: f64,
 }
@@ -124,6 +125,7 @@ chat_reset :: proc(c: ^Chat) {
 chat_home :: proc(app: ^App) {
 	chat_reset(&app.chat)
 	app.chat.loaded = true
+	queue_switch(app)
 }
 
 // What the conversation's place shows. (Failed: the first page was not read, and only a retry brings it.)
@@ -164,14 +166,15 @@ open_chat :: proc(app: ^App, session_id: string) {
 	app.chat_target = 0
 	app.first_msg = nil
 	app.stick_bottom = true
+	app.chat.busy = app.busy[id] or_else false
 	if s := find_session(app, id); s != nil {
 		app.chat.model = strings.clone(s.model, app.chat.alloc)
 		app.chat.provider = strings.clone(s.provider, app.chat.alloc)
 		app.chat.agent = strings.clone(s.agent, app.chat.alloc)
 		app.chat.cost = s.cost
 		app.chat.tokens_in, app.chat.tokens_out, app.chat.cache_read = s.tokens_in, s.tokens_out, s.cache_read
+		if !app.chat.busy { session_seen(app, s) }
 	}
-	app.chat.busy = app.busy[id] or_else false
 	app.chat.live = make(map[string]Sub_Live, allocator = app.chat.alloc)
 	activity_reset(app)
 	find_chat_changed(app)
@@ -194,7 +197,7 @@ session_from_json :: proc(it: json.Value, a: mem.Allocator) -> Session_Info {
 		agent = strings.clone(jstr(it, "agent"), a), model = strings.clone(jstr(it, "model", "id"), a),
 		provider = strings.clone(jstr(it, "model", "providerID"), a), outcome = strings.clone(jstr(it, "outcome"), a),
 		project = strings.clone(jstr(it, "projectID"), a),
-		created = jnum(it, "time", "created"), updated = jnum(it, "time", "updated"), idle = jnum(it, "time", "idle"),
+		created = jnum(it, "time", "created"), updated = jnum(it, "time", "updated"), idle = jnum(it, "time", "idle"), viewed = jnum(it, "time", "viewed"),
 		cost = jnum(it, "cost"), tokens_in = jnum(it, "tokens", "input"), tokens_out = jnum(it, "tokens", "output"),
 		reasoning = jnum(it, "tokens", "reasoning"), cache_read = jnum(it, "tokens", "cache", "read"), cache_write = jnum(it, "tokens", "cache", "write"),
 	}
@@ -284,6 +287,7 @@ sessions_load :: proc(app: ^App, v: json.Value) {
 	for it in jarr(v, "data") { append(&app.sessions, session_from_json(it, a)) }
 	slice.sort_by(app.sessions[:], proc(x, y: Session_Info) -> bool { return x.updated > y.updated })
 	app.sessions_loaded = true
+	sessions_seen_shown(app)
 	if app.cx.reopen.id != "" {
 		// this computer's server came back elsewhere: its list says whether it is the same one
 		p := app.cx.reopen
@@ -351,6 +355,7 @@ active_load :: proc(app: ^App, v: json.Value, asked_at := max(u64)) {
 	over := make([dynamic]string, context.temp_allocator)
 	for id in app.busy { if id not_in obj && !newer(cx, id, asked_at) { append(&over, strings.clone(id, context.temp_allocator)) } }
 	for id in over { set_busy(app, id, false) }
+	if len(over) > 0 { sessions_seen_shown(app) }   // (an end the stream missed, in the session on screen: seen all the same)
 	for id in obj {
 		if !newer(cx, id, asked_at) { set_busy(app, id, true) }
 		session_waits_load(app, id)
@@ -467,6 +472,7 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(u64)) {
 	items := jarr(v, "data")
 	#reverse for it in items {
 		id := jstr(it, "id")
+		if queue_holds(app, id) { continue }   // (it waits: it has not been sent)
 		old := id != "" ? find_message(c, id) : nil
 		if older && old != nil { continue }
 		// (what is final stays as it is: cloned at each reading, images and all, it would pile up in the arena)
@@ -734,6 +740,38 @@ find_message :: proc(c: ^Chat, id: string) -> ^Message {
 	return nil
 }
 
+// Out of the conversation: it has not been sent, or it no longer will be.
+chat_drop :: proc(c: ^Chat, id: string) {
+	for m, i in c.messages {
+		if m.id == id { ordered_remove(&c.messages, i); return }
+	}
+}
+
+// The conversation shows it as sent already, from the stream: it left the composer while nothing ran.
+queue_shown_as_sent :: proc(app: ^App, id: string) -> bool {
+	m := find_message(&app.chat, id)
+	return m != nil && !m.from_page
+}
+
+// A message as the stream says it, before the stored page.
+@(private = "file")
+user_message_add :: proc(c: ^Chat, id, text: string, files: json.Array, created: f64) {
+	a := c.alloc
+	append(&c.messages, Message{id = strings.clone(id, a), kind = .User, text = strings.clone(text, a), created = created, parts = make([dynamic]Part, a), touched = c.seq})
+	message_images(&c.messages[len(c.messages) - 1], files, a)
+}
+
+// It is delivered: here it takes its place in the conversation, once, after what the model has said so far.
+@(private = "file")
+queue_delivered :: proc(app: ^App, id: string, created: f64) {
+	c := &app.chat
+	if it := queue_find(app, id); it != nil && find_message(c, id) == nil {
+		v, _ := json.parse_string(it.payload, parse_integers = true, allocator = context.temp_allocator)
+		user_message_add(c, id, it.text, jarr(v, "files"), created)
+	}
+	queue_gone(app, id, true, c.seq)
+}
+
 // The message an event of the stream is about: every part of it that the stream changes goes through here.
 @(private = "file")
 assistant :: proc(c: ^Chat, id: string) -> ^Message {
@@ -773,15 +811,21 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		busy_event(app, sid, true)
 	case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted", "session.idle":
 		if app.busy[sid] or_else false {
-			notify_finished(app, sid, strings.trim_prefix(kind, "session.execution."))
+			word := strings.trim_prefix(kind, "session.execution.")
+			notify_finished(app, sid, word)
+			session_ended(app, sid, word == "failed" ? "failed" : word == "interrupted" ? "interrupted" : "succeeded")
 		}
 		busy_event(app, sid, false)
 		if kind == "session.execution.interrupted" { inbox_resume(app, sid) }
 		if mine {
 			load_messages(app, sid)   // the stored page: the stream only gave the pieces
+			stats_context_soon(app)
 			if kind == "session.execution.failed" { ui.toast(.Bad, "The run failed") }
 		}
 		refresh_soon(app)
+	case "session.viewed":
+		session_viewed(app, sid, jnum(d, "idle"))
+		refresh_soon(app)   // (what is seen is the server's to say: its list has the last word)
 	case "shell.created", "shell.exited", "shell.deleted":
 		activity_poke(app)
 	case "project.updated", "project.created":
@@ -840,11 +884,23 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 	switch kind {
 	case "session.inbox.enqueued":
 		item := jget(d, "item")
-		if jstr(item, "type") == "user" && find_message(c, jstr(d, "inboxID")) == nil {
-			append(&c.messages, Message{id = strings.clone(jstr(d, "inboxID"), a), kind = .User, text = strings.clone(jstr(item, "payload", "text"), a), created = jnum(ev, "created"), parts = make([dynamic]Part, a), touched = c.seq})
-			message_images(&c.messages[len(c.messages) - 1], jarr(item, "payload", "files"), a)
-			// (the bottom is followed if it was: this does not fetch a reader who went up. Sending it did, submit_prompt)
+		id := jstr(d, "inboxID")
+		if jstr(item, "type") == "user" {
+			if !c.busy && delivery_of(jstr(item, "delivery")) == .Steer {
+				// (nothing runs: it does not wait, it goes. The bottom is followed if it was: this does not fetch a reader who went up. Sending it did, submit_prompt)
+				if find_message(c, id) == nil { user_message_add(c, id, jstr(item, "payload", "text"), jarr(item, "payload", "files"), jnum(ev, "created")) }
+			} else {
+				queue_add(app, id, item, c.seq)
+			}
 		}
+	case "session.inbox.delivered":
+		queue_delivered(app, jstr(d, "inboxID"), jnum(ev, "created"))
+	case "session.inbox.cancelled":
+		id := jstr(d, "inboxID")
+		if queue_shown_as_sent(app, id) { chat_drop(c, id) }
+		queue_gone(app, id, false, c.seq)
+	case "session.inbox.delivery.changed":
+		queue_delivery_changed(app, jstr(d, "inboxID"), delivery_of(jstr(d, "delivery")), c.seq)
 	case "session.step.started":
 		m := assistant(c, mid)
 		m.agent = strings.clone(jstr(d, "agent"), a)
@@ -907,6 +963,9 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		m.tokens_out = jnum(d, "tokens", "output")
 		m.reasoning = jnum(d, "tokens", "reasoning")
 		m.cache_read = jnum(d, "tokens", "cache", "read")
+		stats_context_soon(app)
+	case "session.compaction.ended":
+		stats_context_soon(app)
 	case "session.usage.updated":
 		c.cost = jnum(d, "cost")
 		c.tokens_in = jnum(d, "tokens", "input")

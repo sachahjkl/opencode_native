@@ -19,6 +19,7 @@ Out_Stage :: enum u8 {
 	Creating,   // POST /api/session on its way
 	Agent,      // the new session takes the agent ...
 	Model,      // ... and the model
+	Taking,     // the pending message it replaces leaves the inbox first (queue.odin)
 	Sending,    // the prompt's own POST on its way
 	Returned,   // it failed: waits for the composer of its session
 }
@@ -31,6 +32,7 @@ Outgoing :: struct {
 	files:    [dynamic]Attachment,
 	mentions: [dynamic]Mention,
 	path, body: string,            // what goes when it is not a prompt of the composer: a command, one out of the inbox (owned, "": built)
+	fields:   string,              // more for the prompt's JSON: how it is delivered (not owned: a literal)
 }
 
 // Starting a session from the composer shown: nothing more goes from it until that is done.
@@ -81,12 +83,12 @@ outgoing_takes_composer :: proc(app: ^App, o: ^Outgoing) {
 outgoing_send :: proc(app: ^App, o: ^Outgoing) {
 	o.stage = .Sending
 	path := o.path != "" ? o.path : fmt.tprintf("/api/session/%s/prompt", o.session)
-	body := o.body != "" ? o.body : fmt.tprintf(`{{"text":%s%s}}`, jquote(o.text), prompt_fields(o.files[:], o.mentions[:], o.text))
+	body := o.body != "" ? o.body : fmt.tprintf(`{{"text":%s%s%s}}`, jquote(o.text), prompt_fields(o.files[:], o.mentions[:], o.text), o.fields)
 	request(app, .Prompt, "POST", path, body, o.session, out = o.id)
 }
 
-// The composer's prompt, to the session shown, or to a new one in `directory` from the home page.
-outgoing_composer :: proc(app: ^App, text, directory: string) {
+// The composer's prompt, to the session shown, or to a new one in `directory` from the home page. (`fields`: send_as_fields)
+outgoing_composer :: proc(app: ^App, text, directory: string, fields := "") {
 	if app.chat.id == "" {
 		o := outgoing_new(app, .Creating, "", text)
 		outgoing_takes_composer(app, o)
@@ -95,15 +97,34 @@ outgoing_composer :: proc(app: ^App, text, directory: string) {
 		return
 	}
 	o := outgoing_new(app, .Sending, app.chat.id, text)
+	o.fields = fields
 	outgoing_takes_composer(app, o)
 	outgoing_send(app, o)
 }
 
+// The composer's prompt in the place of pending message `item`: that one leaves the inbox first (queue_replaced).
+outgoing_replace :: proc(app: ^App, text, item, fields: string) {
+	o := outgoing_new(app, .Taking, app.chat.id, text)
+	o.fields = fields
+	outgoing_takes_composer(app, o)
+	request(app, .Queue_Replace, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", o.session, item), tag = item, out = o.id)
+}
+
+// `go`: it is out, the prompt goes. Otherwise it had just been delivered: what was written comes back.
+outgoing_replaced :: proc(app: ^App, out: u64, go: bool) {
+	o := outgoing_find(app, out)
+	if o == nil { return }
+	if go { outgoing_send(app, o); return }
+	o.stage = .Returned
+	outgoing_return(app)
+	ui.toast(.Warn, "That message was delivered meanwhile: what you wrote is in the composer")
+}
+
 // "/name what follows": its text comes back if it fails, what is attached stays in the composer (a command does not take it).
-outgoing_command :: proc(app: ^App, text, name, rest: string) {
+outgoing_command :: proc(app: ^App, text, name, rest: string, fields := "") {
 	o := outgoing_new(app, .Sending, app.chat.id, text)
 	o.path = fmt.aprintf("/api/session/%s/command", app.chat.id)
-	o.body = fmt.aprintf(`{{"name":%s,"text":%s}}`, jquote(name), jquote(rest))
+	o.body = fmt.aprintf(`{{"name":%s,"text":%s%s}}`, jquote(name), jquote(rest), fields)
 	outgoing_send(app, o)
 }
 
@@ -112,16 +133,21 @@ outgoing_inbox :: proc(app: ^App, session, body: string) {
 	v, _ := json.parse_string(body, parse_integers = true, allocator = context.temp_allocator)
 	o := outgoing_new(app, .Sending, session, jstr(v, "text"))
 	o.body = strings.clone(body)
+	prompt_parts(v, &o.files, &o.mentions)
+	outgoing_send(app, o)
+}
+
+// What goes with a prompt's JSON, as the composer holds it.
+prompt_parts :: proc(v: json.Value, files: ^[dynamic]Attachment, mentions: ^[dynamic]Mention) {
 	for f in jarr(v, "files") {
 		uri, name := jstr(f, "uri"), jstr(f, "name")
 		if mention := jget(f, "mention"); mention != nil {
-			append(&o.mentions, Mention{.File, strings.clone(jstr(mention, "text")), strings.clone(uri), strings.clone(name)})
+			append(mentions, Mention{.File, strings.clone(jstr(mention, "text")), strings.clone(uri), strings.clone(name)})
 		} else {
-			append(&o.files, attachment_of(uri, name))
+			append(files, attachment_of(uri, name))
 		}
 	}
-	for g in jarr(v, "agents") { append(&o.mentions, Mention{.Agent, strings.clone(jstr(g, "mention", "text")), strings.clone(jstr(g, "name")), strings.clone("")}) }
-	outgoing_send(app, o)
+	for g in jarr(v, "agents") { append(mentions, Mention{.Agent, strings.clone(jstr(g, "mention", "text")), strings.clone(jstr(g, "name")), strings.clone("")}) }
 }
 
 // The session is made. Whoever went elsewhere meanwhile stays there: the prompt goes on without them.

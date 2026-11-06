@@ -104,9 +104,8 @@ App :: struct {
 	stick_jump:       bool,    // the second build of a frame: the bottom is reached at once, no glide
 	snap_bottom:      bool,           // the conversation's first page arrived: shown at its bottom in that frame (frame)
 	chat_target:      f32,     // the conversation's scroll target at the end of the last build (a drag before this one moved it)
-	stats_open:       bool,           // the statistics of the session shown (stats.odin)
+	stats_open:       bool,           // the Statistics panel of the session shown (stats.odin)
 	proj_stats:       Project_Stats,
-	stats_pending:    bool,           // --stats (tests): open them once the session is loaded
 	images:           map[u64]Image_Entry,   // decoded images, by key (images.odin)
 	frame_no:         u64,
 	view_open:        bool,                  // the image viewer
@@ -133,6 +132,8 @@ App :: struct {
 
 // What the window keeps from one frame to the next that belongs to no panel: what is due, what is open, where things are.
 App_Context :: struct {
+	shown_size:          draw.Vec2,            // the size of the last frame shown (frame_held_ms)
+	pending_since:       f64,                  // when requests went from none to some (the status bar)
 	system_stripes:      font.Subpixel_Text,   // what the system does with text (text_mode_follow)
 	system_stripes_read: bool,
 	conns:          [dynamic]^Conn,    // every connection made: their threads stop at close (servers.odin threads_stop)
@@ -143,6 +144,11 @@ App_Context :: struct {
 	waits_gone:     [dynamic]string,   // permissions and forms answered, the last WAITS_GONE_MAX (owned)
 	chat_read:      Remote,            // the newest page of the conversation shown
 	stats_read:     Remote,            // the project's totals (stats.odin)
+	stats_context:  Stats_Context,     // what fills the context of the session shown
+	context_read:   Remote,            // ... its reading
+	context_due:    Deferred,          // ... read again, a step having ended
+	stats_w:        f32,               // the panel's width, at this build
+	queue:          Queue,             // what waits in the inbox of the session shown (queue.odin)
 	refresh_read:   Deferred,          // the sessions read again
 	facts_read:     Deferred,          // the settings' pages
 	children_read:  Deferred,          // the sub-agents of the session shown
@@ -187,7 +193,9 @@ App_Context :: struct {
 	ctx:            Ctx_Target,        // what the menu of a right click is about (context_menus.odin)
 	ctx_taken:      bool,              // a right press of this build found its target
 	focus_composer: bool,              // the composer takes the focus at its next build
+	fork_prompt:    string,            // the prompt a fork left out, for the composer of the new session (owned)
 	sidebar_hidden: bool,
+	side_hold:      Side_Hold,         // the order of the sidebar, under the pointer (sidebar.odin)
 	main_rect:      Rect,              // the conversation's place (Ctrl and the wheel over it zoom it)
 	frame_ms:       f32,               // what the status bar's rate says: between two frames, smoothed
 	work_ms:        f32,               // ... what a frame costs (build, draw, render)
@@ -348,15 +356,20 @@ frame :: proc(app: ^App, inner := false) {
 	platform.set_cursor(app.win, ui.cursor(&app.ui_state))
 	t_draw := time.tick_now()
 	app.times.build = time.tick_diff(t_build, t_draw)
-	draw.begin_frame(&app.dc, size)
-	render.frame_begin(&app.r, hex(HEX_BG0))
-	ui.draw_tree(&app.ui_state, &app.dc)
-	draw.end_frame(&app.dc)
-	t_render := time.tick_now()
-	app.times.draw = time.tick_diff(t_draw, t_render)
-	render.frame_end(&app.r, !at_once)
-	render.paced_present(&app.pacer)
-	app.times.render = time.tick_since(t_render)
+	if left := frame_held_ms(app, size); left > 0 {
+		ui.wake_within(&app.ui_state, left)
+	} else {
+		draw.begin_frame(&app.dc, size)
+		render.frame_begin(&app.r, hex(HEX_BG0))
+		ui.draw_tree(&app.ui_state, &app.dc)
+		draw.end_frame(&app.dc)
+		t_render := time.tick_now()
+		app.times.draw = time.tick_diff(t_draw, t_render)
+		render.frame_end(&app.r, !at_once)
+		render.paced_present(&app.pacer)
+		app.times.render = time.tick_since(t_render)
+		app.cx.shown_size = size
+	}
 	work := f32(time.duration_milliseconds(app.times.build + app.times.draw + app.times.render))
 	app.cx.work_ms += (work - app.cx.work_ms) * FPS_SMOOTH
 	free_all(context.temp_allocator)
@@ -367,10 +380,18 @@ frame :: proc(app: ^App, inner := false) {
 	commands_apply(app)
 	preview_place(app)
 	browser_tick(app)
-	if app.stats_pending && app.chat.loaded && app.chat.have_self { app.stats_pending = false; stats_open(app) }
 	servers_rediscover(app)
 	activity_tick(app)
 	deferred_tick(app)
+}
+
+// A conversation just opened, its first page on its way: an empty page shown for the instant that takes is a blink, from what was there to
+// nothing to the conversation. What was there stays on the screen meanwhile, and the page comes the moment it is read: it waits for
+// nothing. Only what is shown is held: input is read and built as ever. How long more, in ms (0: show the frame). A server that takes
+// longer gets its "Loading"; a window with nothing on it yet, or of another size, has no picture to keep.
+frame_held_ms :: proc(app: ^App, size: draw.Vec2) -> int {
+	if chat_view(app) != .Loading || app.cx.shown_size != size { return 0 }
+	return max(int(OPEN_HOLD_MS - (ui.now_ms() - app.opened_ms)), 0)
 }
 
 // What was put off: done if it is time, and a wake for the rest. A window at rest wakes only while something is due: the window
@@ -381,9 +402,11 @@ deferred_tick :: proc(app: ^App) {
 	// (an action of the settings: connect an MCP server, revoke a permission)
 	if deferred_take(&cx.facts_read) && app.settings_open { server_facts_load(app) }
 	if deferred_take(&cx.children_read) { load_children(app) }
+	if deferred_take(&cx.context_due) && app.stats_open { context_ask(app) }
 	if deferred_take(&cx.restore_limit) { nav_restore_clear(app) }
+	if deferred_take(&cx.side_hold.wake) { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }   // (the build sees the pointer has rested)
 	soonest := 0
-	for ms in ([?]int{deferred_in_ms(&cx.refresh_read), deferred_in_ms(&cx.facts_read), deferred_in_ms(&cx.children_read), deferred_in_ms(&cx.restore_limit), activity_in_ms(app), rediscover_in_ms(app), browser_in_ms(app)}) {
+	for ms in ([?]int{deferred_in_ms(&cx.refresh_read), deferred_in_ms(&cx.facts_read), deferred_in_ms(&cx.children_read), deferred_in_ms(&cx.context_due), deferred_in_ms(&cx.restore_limit), deferred_in_ms(&cx.side_hold.wake), activity_in_ms(app), rediscover_in_ms(app), browser_in_ms(app)}) {
 		if ms > 0 { soonest = soonest == 0 ? ms : min(soonest, ms) }
 	}
 	if soonest > 0 { ui.wake_within(&app.ui_state, soonest) }
@@ -580,7 +603,6 @@ main :: proc() {
 	app.start_session = start_session
 	app.scale = forced_scale
 	app.seek_subagent = slice.contains(os.args, "--seek-subagent")
-	app.stats_pending = slice.contains(os.args, "--stats")
 	app.stick_bottom = true
 	chat_home(app)
 

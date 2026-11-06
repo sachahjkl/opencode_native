@@ -1,5 +1,6 @@
 // The Preview panel: a web page beside the conversation, in a dock (the panels can be moved, stacked, floated and folded by
 // their tabs; their layout is a preference). What an agent builds shows here, and the agents can drive it (browser_mcp.odin).
+// The Statistics panel (stats.odin) shares its place: one stack, a tab each, never a second panel at the side.
 // While the panel is closed there is no dock at all: a lone tab strip would only take room. The page is a child window of
 // the system's, over everything the toolkit draws in its place: it steps aside while a dialog or a menu is open.
 package occ
@@ -13,7 +14,7 @@ import "gt:platform"
 import "gt:ui"
 
 // (Panel.Terminal: while there is no shell. The shells are panels too, from TERM_PANEL_BASE.)
-Panel :: enum u32 { Conversation = 1, Preview, Terminal }
+Panel :: enum u32 { Conversation = 1, Preview, Terminal, Stats }
 
 // Who wants a panel: what an agent opens does not move the keyboard.
 Asked_By :: enum u8 { User, Agent }
@@ -102,6 +103,7 @@ panel_title :: proc(user: rawptr, panel: u32) -> string {
 	case .Conversation: return "Conversation"
 	case .Preview:      return app.preview.title != "" ? ellipsize(app.preview.title, 28) : "Preview"
 	case .Terminal:     return "Terminal"
+	case .Stats:        return "Statistics"
 	}
 	return ""
 }
@@ -119,6 +121,7 @@ panel_name :: proc(user: rawptr, id: u32) -> string {
 	case .Conversation: return "conversation"
 	case .Preview:      return "preview"
 	case .Terminal:     return "terminal"
+	case .Stats:        return "statistics"
 	}
 	return ""
 }
@@ -132,6 +135,7 @@ panel_of :: proc(user: rawptr, name: string) -> (u32, bool) {
 	case "conversation": return u32(Panel.Conversation), true
 	case "preview":      return u32(Panel.Preview), true
 	case "terminal":     return u32(Panel.Terminal), true
+	case "statistics":   return u32(Panel.Stats), true
 	}
 	return 0, false
 }
@@ -147,12 +151,16 @@ dock_setup :: proc(app: ^App) {
 	ui.dock_init(d)
 	if !ui.dock_parse(d, config.string_of(&app.cfg_prefs, "layout.dock"), panel_of, app) { ui.dock_parse(d, DOCK_DEFAULT, panel_of, app) }
 	if !ui.dock_has(d, u32(Panel.Conversation)) { ui.dock_parse(d, DOCK_DEFAULT, panel_of, app) }
-	// (only what is open has a tab)
-	if app.preview.open {
-		if !ui.dock_has(d, u32(Panel.Preview)) { ui.dock_add(d, u32(Panel.Preview), ui.dock_beside(d, u32(Panel.Conversation), .Right)) }
-	} else {
-		ui.dock_close(d, u32(Panel.Preview))
+	// The Preview and the Statistics share a stack: each goes where the other stands, or stood in the layout (it is closed after),
+	// and takes its width; else beside the conversation.
+	beside :: proc(d: ^ui.Dock, other: Panel) -> ui.Dock_Target {
+		return ui.dock_has(d, u32(other)) ? ui.dock_with(d, u32(other)) : ui.dock_beside(d, u32(Panel.Conversation), .Right)
 	}
+	if app.preview.open && !ui.dock_has(d, u32(Panel.Preview)) { ui.dock_add(d, u32(Panel.Preview), beside(d, .Stats)) }
+	if app.stats_open && !ui.dock_has(d, u32(Panel.Stats)) { ui.dock_add(d, u32(Panel.Stats), beside(d, .Preview)) }
+	// (only what is open has a tab)
+	if !app.preview.open { ui.dock_close(d, u32(Panel.Preview)) }
+	if !app.stats_open { ui.dock_close(d, u32(Panel.Stats)) }
 	terminals_dock(app)
 }
 
@@ -162,6 +170,9 @@ panel_close :: proc(app: ^App, panel: u32) {
 	switch {
 	case panel == u32(Panel.Preview):
 		app.preview.open = false
+		ui.dock_close(&app.dock, panel)
+	case panel == u32(Panel.Stats):
+		app.stats_open = false
 		ui.dock_close(&app.dock, panel)
 	case panel == u32(Panel.Terminal):
 		terminals_hide(app)
@@ -405,7 +416,7 @@ main_area :: proc(app: ^App, em: f32) {
 	defer terminals_settle(app)
 	app.cx.docked_w = 0
 	// (in the dock or out of it the conversation is other boxes, and their scroll starts at the top: whatever opened or closed a panel)
-	docked := p.open || s.open
+	docked := p.open || s.open || app.stats_open
 	if docked != app.cx.was_docked {
 		app.cx.was_docked = docked
 		nav_hold_view(app)
@@ -420,6 +431,12 @@ main_area :: proc(app: ^App, em: f32) {
 	}
 	if p.open {
 		if ui.dock_panel(d, u32(Panel.Preview)) { preview_panel(app, em) }
+	}
+	if app.stats_open {
+		if ui.dock_panel(d, u32(Panel.Stats)) {
+			app.cx.stats_w = ui.dock_panel_size(d, u32(Panel.Stats)).x
+			stats_panel(app, em)
+		}
 	}
 	if s.open {
 		for t in s.list {

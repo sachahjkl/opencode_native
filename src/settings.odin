@@ -79,9 +79,11 @@ PREF_DEFS := [?]config.Def{
 	{name = "conversation.page_size", description = "Messages read at a time (scrolling up reads the next page by itself).", kind = .Int, default = {i = 80}, bounded = true, min = PAGE_SIZE_MIN, max = PAGE_SIZE_MAX},
 	{name = "conversation.follow", description = "Follow new messages to the bottom while you are there.", kind = .Bool, default = {b = true}},
 	{name = "conversation.usage", description = "Tokens and cost under each answer.", kind = .Bool, default = {b = true}},
+	{name = "conversation.while_running", description = "What Enter does while a turn runs: queue the message for the end of the turn, or send it into the turn. Ctrl+Enter does the other.", kind = .String, default = {s = "queue"}, choices = {"queue", "steer"}},
 	{name = "conversation.clock", description = "Times of messages in 24-hour or 12-hour form.", kind = .String, default = {s = "24h"}, choices = {"24h", "12h"}},
 	{name = "composer.send", description = "The key that sends: Enter (Shift+Enter breaks the line) or Ctrl+Enter (Enter breaks the line).", kind = .String, default = {s = "enter"}, choices = {"enter", "ctrl+enter"}},
 	{name = "sidebar.subagents", description = "Sub-agent sessions: under their parent, in the list with the others, or not shown.", kind = .String, default = {s = "nested"}, choices = {"nested", "flat", "hidden"}},
+	{name = "sidebar.mode", description = "What the sidebar shows: what needs you first across projects (what waits for you, what finished and you have not seen, what runs, the rest), or sessions by project.", kind = .String, default = {s = "inbox"}, choices = {"inbox", "projects"}},
 	{name = "notify.finished", description = "When a session that is not in front of you ends its run: nothing, a toast, or a toast and the taskbar button flashing.", kind = .String, default = {s = "flash"}, choices = {"off", "toast", "flash"}},
 	{name = "notify.permission", description = "Flash the taskbar button when a session asks for a permission and the window is not in front.", kind = .Bool, default = {b = true}},
 	{name = "appearance.throbber", description = "What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing.", kind = .String, default = {s = "board"}, choices = {"board", "orbit", "scanner", "none"}},
@@ -121,7 +123,9 @@ Prefs :: struct {
 	usage:        bool,
 	clock24:      bool,
 	ctrl_enter:   bool,
+	steer_first:  bool,   // while a turn runs, Enter sends into it (conversation.while_running)
 	subagents:    string,
+	sidebar_mode: Sidebar_Mode,
 	notify:       string,
 	notify_perm:  bool,
 	content_zoom: f32,
@@ -176,7 +180,9 @@ prefs_refresh :: proc(app: ^App) {
 	s.usage = config.bool_of(p, "conversation.usage")
 	s.clock24 = config.string_of(p, "conversation.clock") == "24h"
 	s.ctrl_enter = config.string_of(p, "composer.send") == "ctrl+enter"
+	s.steer_first = config.string_of(p, "conversation.while_running") == "steer"
 	s.subagents = config.string_of(p, "sidebar.subagents")
+	s.sidebar_mode = sidebar_mode_of(config.string_of(p, "sidebar.mode"))
 	s.notify = config.string_of(p, "notify.finished")
 	s.notify_perm = config.bool_of(p, "notify.permission")
 	s.content_zoom = f32(config.float_of(p, "appearance.content_zoom"))
@@ -470,6 +476,12 @@ dialogs_track :: proc(app: ^App) {
 	if !cx.dialogs_read {
 		cx.dialogs_read = true
 		rest := config.string_of(&app.cfg_prefs, "layout.dialogs")
+		// (by position: the size of a dialog that went must not fall on the next one)
+		if len(strings.fields(rest, context.temp_allocator)) == DIALOGS_SAVED_WITH_STATS {
+			first, _ := strings.split_iterator(&rest, " ")
+			_, _ = strings.split_iterator(&rest, " ")
+			rest = fmt.tprintf("%s %s", first, rest)
+		}
 		for d in Dialog {
 			field, _ := strings.split_iterator(&rest, " ")
 			wh := strings.split(field, "x", context.temp_allocator)
@@ -763,11 +775,13 @@ page_conversation :: proc(app: ^App, em: f32) {
 	if setting(app, "conversation.page_size", em) { pref_slider(app, "conversation.page_size", PAGE_SIZE_MIN, PAGE_SIZE_MAX, 10, "%.0f", em) }
 	if setting(app, "conversation.follow", em) { pref_switch(app, "conversation.follow", em) }
 	if setting(app, "conversation.usage", em) { pref_switch(app, "conversation.usage", em) }
+	if setting(app, "conversation.while_running", em) { pref_choice(app, "conversation.while_running", {"Queue", "Send now"}, em) }
 	if setting(app, "conversation.clock", em) { pref_choice(app, "conversation.clock", {"24 h", "12 h"}, em) }
 }
 
 page_behaviour :: proc(app: ^App, em: f32) {
 	if setting(app, "composer.send", em) { pref_choice(app, "composer.send", {"Enter", "Ctrl+Enter"}, em, em * 14) }
+	if setting(app, "sidebar.mode", em) { pref_choice(app, "sidebar.mode", {SIDEBAR_MODES[.Inbox].label, SIDEBAR_MODES[.Projects].label}, em, em * 14) }
 	if setting(app, "sidebar.subagents", em) { pref_choice(app, "sidebar.subagents", {"Nested", "Flat", "Hidden"}, em) }
 	if setting(app, "notify.finished", em) { pref_choice(app, "notify.finished", {"Off", "Toast", "Flash"}, em) }
 	if setting(app, "notify.permission", em) { pref_switch(app, "notify.permission", em) }
