@@ -7,7 +7,7 @@ project follows [semantic versioning](https://semver.org).
 
 ### Added
 
-- A shell in a window of its own, for a large screen or a second one: the button beside "New terminal", or "Open the terminal in a window" in the palette. Same program, same renderer, no second start: closing the window gives the shell its tab back.
+- A panel in a window of its own, for a large screen or a second one: a shell, the Preview, the Statistics. The window button on the panel's strip, or "Open this panel in a window" in the palette. Same program, same renderer, no second start: closing the window gives the panel its tab back.
 
 ## [0.16.0] - 2026-11-06
 

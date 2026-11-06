@@ -225,6 +225,16 @@ impl Web {
         }
     }
 
+    /// Into another window of the program: a panel in a window of its own, and back.
+    pub fn parent(&self, hwnd: isize) {
+        let i = self.inner.borrow();
+        if let Some(c) = &i.controller {
+            unsafe {
+                let _ = c.SetParentWindow(HWND(hwnd as *mut c_void));
+            }
+        }
+    }
+
     pub fn navigate(&self, url: &str) {
         let mut i = self.inner.borrow_mut();
         if let Some(v) = &i.view {

@@ -329,6 +329,13 @@ mod webview_c {
     }
 
     #[no_mangle]
+    pub unsafe extern "C" fn occ_webview_parent(w: *const Web, hwnd: isize) {
+        if !w.is_null() {
+            (*w).parent(hwnd);
+        }
+    }
+
+    #[no_mangle]
     pub unsafe extern "C" fn occ_webview_place(w: *const Web, x: i32, y: i32, width: i32, height: i32, visible: i32) {
         if let Some(w) = w.as_ref() { let _ = catch_unwind(AssertUnwindSafe(|| w.place(x, y, width, height, visible != 0))); }
     }

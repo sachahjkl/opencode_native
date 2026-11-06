@@ -94,7 +94,15 @@ strip_look :: proc(user: rawptr, d: ^ui.Dock, leaf: i32) {
 }
 
 @(private = "file")
-strip_end :: proc(user: rawptr, d: ^ui.Dock, leaf: i32) { terminal_strip_end((^App)(user), d, leaf, ui.font_size()) }
+strip_end :: proc(user: rawptr, d: ^ui.Dock, leaf: i32) {
+	app := (^App)(user)
+	em := ui.font_size()
+	if p := panel_in_front(app, leaf); p != 0 {
+		ui.a11y({role = .Button, name = "Open in a window"})
+		if glyph_button("###panel_win", ICO_WINDOW, math.round(em * TERM_NEW_EM)).clicked { panel_detach(app, p) }
+	}
+	terminal_strip_end(app, d, leaf, em)
+}
 
 panel_title :: proc(user: rawptr, panel: u32) -> string {
 	app := (^App)(user)
@@ -156,11 +164,13 @@ dock_setup :: proc(app: ^App) {
 	beside :: proc(d: ^ui.Dock, other: Panel) -> ui.Dock_Target {
 		return ui.dock_has(d, u32(other)) ? ui.dock_with(d, u32(other)) : ui.dock_beside(d, u32(Panel.Conversation), .Right)
 	}
-	if app.preview.open && !ui.dock_has(d, u32(Panel.Preview)) { ui.dock_add(d, u32(Panel.Preview), beside(d, .Stats)) }
-	if app.stats_open && !ui.dock_has(d, u32(Panel.Stats)) { ui.dock_add(d, u32(Panel.Stats), beside(d, .Preview)) }
-	// (only what is open has a tab)
-	if !app.preview.open { ui.dock_close(d, u32(Panel.Preview)) }
-	if !app.stats_open { ui.dock_close(d, u32(Panel.Stats)) }
+	preview := app.preview.open && !panel_detached(app, u32(Panel.Preview))
+	stats := app.stats_open && !panel_detached(app, u32(Panel.Stats))
+	if preview && !ui.dock_has(d, u32(Panel.Preview)) { ui.dock_add(d, u32(Panel.Preview), beside(d, .Stats)) }
+	if stats && !ui.dock_has(d, u32(Panel.Stats)) { ui.dock_add(d, u32(Panel.Stats), beside(d, .Preview)) }
+	// (only what is open, and not in a window of its own, has a tab)
+	if !preview { ui.dock_close(d, u32(Panel.Preview)) }
+	if !stats { ui.dock_close(d, u32(Panel.Stats)) }
 	terminals_dock(app)
 }
 
@@ -371,7 +381,6 @@ preview_bar :: proc(app: ^App, em: f32) {
 	edge_line("###pv_edge")
 }
 
-@(private = "file")
 preview_panel :: proc(app: ^App, em: f32) {
 	p := &app.preview
 	p.shown = true
@@ -429,10 +438,10 @@ main_area :: proc(app: ^App, em: f32) {
 		app.cx.docked_w = ui.dock_panel_size(d, u32(Panel.Conversation)).x
 		conversation(app, em)
 	}
-	if p.open {
+	if p.open && !panel_detached(app, u32(Panel.Preview)) {
 		if ui.dock_panel(d, u32(Panel.Preview)) { preview_panel(app, em) }
 	}
-	if app.stats_open {
+	if app.stats_open && !panel_detached(app, u32(Panel.Stats)) {
 		if ui.dock_panel(d, u32(Panel.Stats)) {
 			app.cx.stats_w = ui.dock_panel_size(d, u32(Panel.Stats)).x
 			stats_panel(app, em)
@@ -454,9 +463,8 @@ main_area :: proc(app: ^App, em: f32) {
 }
 
 // After the frame: the page where its panel was laid out, or out of the way of what the toolkit shows over it.
-preview_place :: proc(app: ^App) {
+preview_place :: proc(app: ^App, over: bool) {
 	p := &app.preview
-	over := overlay_open(app) || ui.active_key() != 0 && app.dock.held
 	show := p.open && p.shown && !over
 	r := p.body
 	x, y := int(math.round(r.min.x)), int(math.round(r.min.y))

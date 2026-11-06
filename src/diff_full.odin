@@ -117,26 +117,21 @@ diff_cell_line :: proc(app: ^App, l: Diff_Line, numbers: Diff_Numbers, col, mark
 		out, _ := strings.replace_all(s, "\t", TOOL_TAB, context.temp_allocator)
 		return out
 	}
-	st := ui.Style_Mod{font = app.mono, font_size = fs, height = ui.px(h), text_pad = 0, flags = {.Selectable}}
+	base := ui.Rich_Style{font = app.mono, color = col}
+	runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
 	if l.hi > l.lo {
-		if l.lo > 0 { diff_text("a", open(l.text[:l.lo]), col, st, ui.text_size(0)) }
-		m := st
-		m.bg, m.radius = mark, 2 * ui.scale()
-		diff_text("b", open(l.text[l.lo:l.hi]), hex(HEX_BRIGHT), m, ui.text_size(0))
-		diff_text("c", open(l.text[l.hi:]), col, st, ui.fill())
+		if l.lo > 0 { append(&runs, ui.Rich_Run{text = open(l.text[:l.lo]), style = base}) }
+		strong := base
+		strong.color, strong.background = hex(HEX_BRIGHT), mark
+		append(&runs, ui.Rich_Run{text = open(l.text[l.lo:l.hi]), style = strong})
+		if l.hi < len(l.text) { append(&runs, ui.Rich_Run{text = open(l.text[l.hi:]), style = base}) }
 	} else {
-		diff_text("t", open(l.text), col, st, ui.fill())
+		append(&runs, ui.Rich_Run{text = l.text != "" ? open(l.text) : " ", style = base})
 	}
-}
-
-@(private = "file")
-diff_text :: proc(id, s: string, color: Color, style: ui.Style_Mod, width: ui.Size) {
-	m := style
-	m.width, m.fg = width, color
-	ui.next(m)
-	flags: ui.Box_Flags = {.Draw_Text}
-	if style.bg != nil { flags += {.Draw_Background} }
-	ui.build_box(flags, fmt.tprintf("%s###%s", label_safe(s), id))
+	// A paragraph, and one that takes its press: in a dialog a press is the body's otherwise, and a selection only starts on the
+	// text's own, while a plain label that takes it counts as a button. One line: the two sides face; a copy has the whole of it.
+	ui.next({width = ui.fill(), font_size = fs, flags = {.Selectable, .Clickable}})
+	ui.rich_paragraph("###t", runs[:], 1)
 }
 
 @(private = "file")

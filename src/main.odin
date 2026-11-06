@@ -385,7 +385,7 @@ frame :: proc(app: ^App, inner := false) {
 	web_events_drain(app)   // (the one place: what the page said during the frame, a modal dialog's message loop included)
 	nav_apply(app)
 	commands_apply(app)
-	preview_place(app)
+	if !panel_detached(app, u32(Panel.Preview)) { preview_place(app, overlay_open(app) || ui.active_key() != 0 && app.dock.held) }
 	browser_tick(app)
 	servers_rediscover(app)
 	activity_tick(app)

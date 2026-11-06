@@ -6,6 +6,7 @@ import "base:runtime"
 import "core:path/filepath"
 import "core:strings"
 import win "core:sys/windows"
+import "gt:platform"
 import "gt:render"
 
 Web_Act :: enum i32 { Back, Forward, Reload, Stop, Focus }
@@ -78,6 +79,11 @@ web_close :: proc(app: ^App) {
 	if web != nil { occ_webview_free(web) }
 	web = nil
 	web_state_set(&app.preview, nil)
+}
+
+// The page goes into this window: the panel's, as long as it has one of its own.
+web_parent :: proc(w: ^platform.Window) {
+	if web != nil { occ_webview_parent(web, int(uintptr(rawptr(w.hwnd)))) }
 }
 
 web_navigate :: proc(app: ^App, url: string) {

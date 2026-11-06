@@ -53,7 +53,8 @@ when ODIN_OS == .Windows {
 	@(default_calling_convention = "c")
 	foreign occ_native {   // (webview_windows.odin)
 		occ_webview_new :: proc(parent: int, data: [^]u8, data_len: uint, cb: Web_Callback, user: rawptr) -> rawptr ---
-		occ_webview_place :: proc(w: rawptr, x, y, width, height, visible: i32) ---
+		occ_webview_parent :: proc(w: rawptr, hwnd: int) ---
+	occ_webview_place :: proc(w: rawptr, x, y, width, height, visible: i32) ---
 		occ_webview_navigate :: proc(w: rawptr, url: [^]u8, n: uint) ---
 		occ_webview_act :: proc(w: rawptr, what: i32) ---
 		occ_webview_script :: proc(w: rawptr, code: [^]u8, n: uint, id: u64) ---

@@ -150,7 +150,7 @@ rgb_of :: proc(x: u32) -> Vt_Rgb { return {u8(x >> 24), u8(x >> 16), u8(x >> 8)}
 color_of :: proc(c: Vt_Rgb) -> Color { return hex(u32(c.r) << 24 | u32(c.g) << 16 | u32(c.b) << 8 | 0xff) }
 
 term_free :: proc(t: ^Term) {
-	if t.detached { detached_forget(the_app, t) }
+	if t.detached { detached_forget(the_app, t.panel) }
 	if t.conn != nil { sync.atomic_store(&t.conn.stop, true) }
 	if t.vt != nil {
 		ghostty_mouse_event_free(t.mouse_ev)
@@ -1045,13 +1045,6 @@ terminal_strip_end :: proc(app: ^App, d: ^ui.Dock, leaf: i32, em: f32) {
 		if t := term_of_panel(app, p); t != nil && any == nil { any = t }
 	}
 	if any == nil && !stand_in { return }
-	if any != nil {
-		ui.a11y({role = .Button, name = "Open this terminal in a window"})
-		if glyph_button("###term_win", ICO_WINDOW, math.round(em * TERM_NEW_EM)).clicked {
-			shown := s.focused != nil && !s.focused.detached ? s.focused : any
-			terminal_detach(app, shown)
-		}
-	}
 	ui.a11y({role = .Button, name = "New terminal"})
 	if glyph_button("###term_new", ICO_ADD, math.round(em * TERM_NEW_EM)).clicked {
 		if any != nil { s.last_panel = any.panel }   // (in this stack, whichever had the keyboard)
