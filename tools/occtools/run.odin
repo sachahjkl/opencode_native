@@ -9,6 +9,9 @@ Run :: struct {
 	env: []string,   // nil: this process's
 }
 
+// Process_State.success only says it did not crash, and on Windows it is always true: what says a command failed is its code.
+succeeded :: proc(state: os.Process_State) -> bool { return state.exited && state.exit_code == 0 }
+
 // A command, its output going where ours goes. Did it succeed?
 run_in :: proc(how: Run, cmd: ..string) -> bool {
 	fmt.printfln("> %s", strings.join(cmd, " ", context.temp_allocator))
@@ -16,7 +19,7 @@ run_in :: proc(how: Run, cmd: ..string) -> bool {
 	if err != nil { fmt.eprintfln("%s: %v", cmd[0], err); return false }
 	state, wait_err := os.process_wait(p)
 	if wait_err != nil { fmt.eprintfln("%s: %v", cmd[0], wait_err) }
-	return wait_err == nil && state.success
+	return wait_err == nil && succeeded(state)
 }
 
 run :: proc(cmd: ..string) -> bool { return run_in({}, ..cmd) }
@@ -25,8 +28,8 @@ run :: proc(cmd: ..string) -> bool { return run_in({}, ..cmd) }
 capture :: proc(cmd: ..string) -> (out: string, ok: bool) {
 	state, stdout, stderr, err := os.process_exec({command = cmd}, context.temp_allocator)
 	if err != nil { return "", false }
-	if !state.success && len(stderr) > 0 { fmt.eprint(string(stderr)) }
-	return string(stdout), state.success
+	if !succeeded(state) && len(stderr) > 0 { fmt.eprint(string(stderr)) }
+	return string(stdout), succeeded(state)
 }
 
 // This process's environment, without `name` and with `extra` ("NAME=value").

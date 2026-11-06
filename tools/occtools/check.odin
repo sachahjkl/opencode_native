@@ -23,7 +23,7 @@ run_check :: proc(args: []string) -> int {
 
 	before, had := os.modification_time_by_path(out)
 	how := Run{env = env_with("GT", fmt.tprintf("OUT=%s", out))}
-	built := run_in(how, "cmd", "/c", "build.bat") when ODIN_OS == .Windows else run_in(how, "bash", "build.sh")
+	built := run_in(how, "cmd", "/c", ".\\build.bat") when ODIN_OS == .Windows else run_in(how, "bash", "build.sh")
 	if !built { return 1 }
 	after, err := os.modification_time_by_path(out)
 	if err != nil { fmt.eprintfln("check: no %s after the build", out); return 1 }
