@@ -179,12 +179,18 @@ DOCK_TAB_H_EM  :: 2.1
 TOOLTIP_DELAY_S :: 0.5   // over a button of the title bar
 HEADER_FIGURES_MIN_EM :: 40   // a conversation narrower than this keeps its title, not its figures
 PREVIEW_PLACE_MS :: 40   // the page follows a move at this pace at most
+PREVIEW_VIEWS_MOST :: 8  // web views alive at once, every session's tabs together (preview_views.odin preview_trim)
+PREVIEW_TAB_TITLE_MOST :: 24   // of a tab's title in the panel's strip
+PREVIEW_PARKED_W :: 1280 // what a page made out of sight is laid out at, until there is a panel to measure
+PREVIEW_PARKED_H :: 800
+PREVIEW_PARENTS_MOST :: 32   // sub-agents of sub-agents followed up to their session
+PREVIEW_NOTHING :: "Nothing to show yet. Type an address above, or let an agent open one."
 
 ////////////////////////////////
 // The agents' browser tools
 
 BROWSER_NAME        :: "preview"   // ("browser" is Desktop's: the server hides the tools of its names under it)
-BROWSER_TAB         :: "tab_00000000-0000-4000-8000-000000000001"   // the panel's one page
+BROWSER_SESSION_META :: "ai.opencode/sessionID"   // in a call's _meta: the session whose agent called
 BROWSER_RETRY_S     :: 5     // between two attempts at the socket
 BROWSER_READ_MS     :: 20    // what an answer may wait for the socket's thread
 BROWSER_CALL_S      :: 30    // a call the page does not answer ends after this

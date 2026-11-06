@@ -669,10 +669,10 @@ what_an_agent_opens_leaves_the_keyboard_where_it_is :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	preview_show(app, .Agent)
-	testing.expect(t, !app.preview.focus_address, "the address bar stays out of it")
+	testing.expect(t, !preview_front(&app.preview).focus_address, "the address bar stays out of it")
 	panel_close(app, u32(Panel.Preview))
 	preview_show(app)
-	testing.expect(t, app.preview.focus_address, "what the user opens takes it")
+	testing.expect(t, preview_front(&app.preview).focus_address, "what the user opens takes it")
 }
 
 ////////////////////////////////
@@ -684,16 +684,18 @@ what_the_view_says_waits_for_its_point_of_the_frame :: proc(t: ^testing.T) {
 	app := bench_new()
 	// (in the middle of a build: what was made in the frame's memory stays, and nothing moves)
 	kept := fmt.tprintf("frame %d", 12)
-	web_event_add(app, .Title, 0, transmute([]u8)string("A title"))
-	web_event_add(app, .Ready, 0, nil)
+	web_said(app, .Title, 0, transmute([]u8)string("A title"))
+	web_said(app, .Ready, 0, nil)
 	testing.expect_value(t, kept, "frame 12")
-	testing.expect_value(t, app.preview.title, "")
-	testing.expect(t, app.preview.web == nil, "not yet")
+	tab := preview_front(&app.preview)
+	testing.expect_value(t, tab.title, "")
+	_, early := tab.web.(Web_Ready)
+	testing.expect(t, !early, "not yet")
 	web_events_drain(app)
-	testing.expect_value(t, app.preview.title, "A title")
-	_, ready := app.preview.web.(Web_Ready)
+	testing.expect_value(t, tab.title, "A title")
+	_, ready := tab.web.(Web_Ready)
 	testing.expect(t, ready, "now")
-	testing.expect_value(t, len(app.preview.events), 0)
+	testing.expect_value(t, len(tab.view.events), 0)
 }
 
 @(test)
@@ -701,27 +703,27 @@ what_the_view_says_owns_its_words :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	b := [4]u8{'a', 'b', 'c', 'd'}
-	web_event_add(app, .Title, 0, b[:])
+	web_said(app, .Title, 0, b[:])
 	b[0] = 'z'
 	web_events_drain(app)
-	testing.expect_value(t, app.preview.title, "abcd")
+	testing.expect_value(t, preview_front(&app.preview).title, "abcd")
 }
 
 @(test)
 overlapping_navigations_each_count :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	p := &app.preview
-	web_event_add(app, .Nav_Start, 1, nil)
-	web_event_add(app, .Nav_Start, 2, nil)
-	web_event_add(app, .Nav_Start, 2, nil)   // (redirected)
+	web_said(app, .Nav_Start, 1, nil)
+	p := preview_front(&app.preview)
+	web_said(app, .Nav_Start, 2, nil)
+	web_said(app, .Nav_Start, 2, nil)   // (redirected)
 	web_events_drain(app)
 	done := [1]u8{0}
-	web_event_add(app, .Loaded, 1, done[:])
+	web_said(app, .Loaded, 1, done[:])
 	web_events_drain(app)
 	testing.expect(t, preview_loading(p), "the second still loads")
 	done[0] = 1
-	web_event_add(app, .Loaded, 2, done[:])
+	web_said(app, .Loaded, 2, done[:])
 	web_events_drain(app)
 	testing.expect(t, !preview_loading(p), "over")
 }
@@ -730,13 +732,14 @@ overlapping_navigations_each_count :: proc(t: ^testing.T) {
 a_failed_view_says_why_and_can_start_again :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	web_event_add(app, .Failed, 0, transmute([]u8)string("no runtime"))
+	web_said(app, .Failed, 0, transmute([]u8)string("no runtime"))
 	web_events_drain(app)
-	f, failed := app.preview.web.(Web_Failed)
+	tab := preview_front(&app.preview)
+	f, failed := tab.web.(Web_Failed)
 	testing.expect(t, failed, "failed")
 	testing.expect_value(t, f.why, "no runtime")
-	web_start(app)
-	_, still := app.preview.web.(Web_Failed)
+	web_start(app, tab)
+	_, still := tab.web.(Web_Failed)
 	testing.expect(t, !still, "a failure holds for that attempt")
 }
 
@@ -745,21 +748,20 @@ a_server_left_takes_the_page_with_it :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	preview_show(app)
-	app.preview.web = Web_Ready{}
-	preview_set_url(app, "http://a.local/secret")
-	preview_set_title(app, "Of server A")
-	web_event_add(app, .Title, 0, transmute([]u8)string("late"))
-	append(&app.preview.navs, 3)
+	tab := preview_front(&app.preview)
+	tab.web = Web_Ready{}
+	preview_set_url(app, tab, "http://a.local/secret")
+	preview_set_title(tab, "Of server A")
+	web_said(app, .Title, 0, transmute([]u8)string("late"))
+	append(&tab.navs, 3)
 	server_forget(app)
 	p := &app.preview
 	testing.expect(t, !p.open, "closed")
 	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Preview)), "no tab")
-	testing.expect_value(t, p.url, "")
-	testing.expect_value(t, p.title, "")
-	testing.expect(t, p.web == nil, "the view went")
+	testing.expect_value(t, len(p.tabs), 0)
+	testing.expect_value(t, len(app.cx.web_views), 0)
 	web_events_drain(app)
-	testing.expect_value(t, p.title, "")
-	testing.expect(t, !preview_loading(p), "nothing loads")
+	testing.expect_value(t, len(p.tabs), 0)
 }
 
 ////////////////////////////////
@@ -773,7 +775,9 @@ bench_link :: proc(app: ^App) -> ^Browser_Link {
 	app.conn.browser = l
 	app.preview.open = true
 	dock_setup(app)
-	app.preview.web = Web_Ready{}
+	tab := preview_front_made(app, &app.preview)
+	web_start(app, tab)
+	web_state_set(tab, Web_Ready{})
 	return l
 }
 
@@ -798,18 +802,18 @@ a_load_answers_only_for_its_navigation :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	l := bench_link(app)
-	web_event_add(app, .Nav_Start, 5, nil)   // (what the page was doing on its own)
+	web_said(app, .Nav_Start, 5, nil)   // (what the page was doing on its own)
 	web_events_drain(app)
 	call(app, l, 1, "navigate")
-	web_event_add(app, .Nav_Start, 6, nil)   // (the call's)
+	web_said(app, .Nav_Start, 6, nil)   // (the call's)
 	web_events_drain(app)
 	done := [1]u8{0}
-	web_event_add(app, .Loaded, 5, done[:])
+	web_said(app, .Loaded, 5, done[:])
 	web_events_drain(app)
 	testing.expect_value(t, sent(l), "")
 	testing.expect_value(t, len(app.browser.calls), 1)
 	done[0] = 1
-	web_event_add(app, .Loaded, 6, done[:])
+	web_said(app, .Loaded, 6, done[:])
 	web_events_drain(app)
 	testing.expect(t, strings.contains(sent(l), `"id":1`), "its own one")
 	testing.expect_value(t, len(app.browser.calls), 0)
@@ -822,11 +826,11 @@ two_loads_have_a_navigation_each :: proc(t: ^testing.T) {
 	l := bench_link(app)
 	call(app, l, 1, "navigate")
 	call(app, l, 2, "reload")
-	web_event_add(app, .Nav_Start, 7, nil)
-	web_event_add(app, .Nav_Start, 8, nil)
+	web_said(app, .Nav_Start, 7, nil)
+	web_said(app, .Nav_Start, 8, nil)
 	web_events_drain(app)
 	done := [1]u8{1}
-	web_event_add(app, .Loaded, 8, done[:])
+	web_said(app, .Loaded, 8, done[:])
 	web_events_drain(app)
 	answer := sent(l)
 	testing.expect(t, strings.contains(answer, `"id":2`) && !strings.contains(answer, `"id":1`), "the second, alone")
@@ -863,7 +867,7 @@ an_answer_goes_on_the_socket_of_its_call :: proc(t: ^testing.T) {
 	testing.expect_value(t, c.to.socket, u64(1))
 	w := c.wait.(Wait_Script)
 	sync.atomic_store(&l.socket, 2)   // (the folder moved: another socket)
-	browser_script_done(app, w.id, `"result"`)
+	browser_script_done(app, c.view, w.id, `"result"`)
 	testing.expect_value(t, sent(l), "")   // (the agent of that one did not ask)
 }
 
@@ -957,7 +961,7 @@ a_view_that_fails_answers_what_waits_and_says_why :: proc(t: ^testing.T) {
 	app := bench_new()
 	l := bench_link(app)
 	call(app, l, 1, "navigate")
-	web_event_add(app, .Failed, 0, transmute([]u8)string("no runtime"))
+	web_said(app, .Failed, 0, transmute([]u8)string("no runtime"))
 	web_events_drain(app)
 	testing.expect(t, strings.contains(sent(l), "no runtime"), "the call that waited")
 	testing.expect_value(t, len(app.browser.calls), 0)

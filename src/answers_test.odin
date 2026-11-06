@@ -28,6 +28,7 @@ bench_new :: proc() -> ^App {
 	bench_clock = 1000
 	clear(&bench_sent)
 	app.conn = new(Conn)
+	app.cx.web_host = bench_web_host()
 	app.link = .Online
 	app.stick_bottom = true
 	app.prefs.page_size = 50

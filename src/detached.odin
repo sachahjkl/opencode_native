@@ -20,16 +20,27 @@ Detached :: struct {
 	app:     ^App,
 	panel:   u32,
 	win:     ^platform.Window,
+	closing: bool,   // its panel was closed: a Preview's window outlives a session with no browser, not this
 	state:   ui.State,
 	surface: render.Surface,
 	shown:   [2]int,   // the size of the last frame
 }
 
-panel_detached :: proc(app: ^App, panel: u32) -> bool {
+panel_detached :: proc(app: ^App, panel: u32) -> bool { return detached_window(app, panel) != nil }
+
+// The panel's window, if it has one.
+detached_window :: proc(app: ^App, panel: u32) -> ^platform.Window {
 	for d in app.cx.detached {
-		if d.panel == panel { return true }
+		if d.panel == panel { return d.win }
 	}
-	return false
+	return nil
+}
+
+// The panel was closed, by whatever way: its window goes at the next frame.
+detached_closing :: proc(app: ^App, panel: u32) {
+	for d in app.cx.detached {
+		if d.panel == panel { d.closing = true }
+	}
 }
 
 @(private = "file")
@@ -51,9 +62,9 @@ panel_detach :: proc(app: ^App, panel: u32) {
 	ui.set_zoom(&d.state, app.prefs.zoom)
 	ui.use(&app.ui_state)
 	if t := term_of_panel(app, panel); t != nil { t.detached = true }
-	if panel == u32(Panel.Preview) { web_parent(d.win) }
 	ui.dock_close(&app.dock, panel)
 	append(&app.cx.detached, d)
+	if panel == u32(Panel.Preview) { preview_move(app, d.win) }
 	d.win.user = d
 	d.win.on_frame = detached_paint
 	platform.show_window(d.win)
@@ -65,10 +76,7 @@ detached_end :: proc(app: ^App, i: int) {
 	d := app.cx.detached[i]
 	ordered_remove(&app.cx.detached, i)
 	if t := term_of_panel(app, d.panel); t != nil { t.detached = false }
-	if d.panel == u32(Panel.Preview) {
-		web_parent(app.win)
-		app.preview.placed = {}   // (its place was in the other window)
-	}
+	if d.panel == u32(Panel.Preview) { preview_move(app, app.win) }
 	render.surface_destroy(&app.r, &d.surface)
 	ui.destroy(&d.state)
 	ui.use(&app.ui_state)
@@ -164,7 +172,7 @@ detached_frames :: proc(app: ^App) {
 	for i := len(app.cx.detached) - 1; i >= 0; i -= 1 {
 		if i >= len(app.cx.detached) { continue }   // (a frame of the system's loop, inside this one, closed one)
 		d := app.cx.detached[i]
-		gone := d.panel == u32(Panel.Stats) && !app.stats_open || d.panel == u32(Panel.Preview) && !app.preview.open
+		gone := d.panel == u32(Panel.Stats) && !app.stats_open || d.closing
 		if platform.is_closed(d.win) || gone {
 			detached_end(app, i)
 			dock_setup(app)
