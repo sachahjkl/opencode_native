@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-06
+
+### Added
+
+- A diff in a window of its own, the whole of it: stacked, or old and new side by side, the choice kept. "Full view" and "… N more lines" under a diff open it, as does each file of "What this session changed"; Copy takes the diff. Twenty thousand lines scroll as lightly as twenty.
+- `tools/occtools`, the project's machinery in one program: `check`, `live` (the real program on the real server, failures made to happen, no delay waited out), `clean`, `measure`, `film`, `ship`.
+
 ## [0.15.1] - 2026-11-06
 
 ### Changed
@@ -631,7 +638,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.16.0
 [0.15.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.15.1
 [0.15.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.15.0
 [0.14.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.14.0

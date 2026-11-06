@@ -71,7 +71,7 @@ PREPARE_LIMIT :: 90 * time.Second
 KEY_GAP       :: 55 * time.Millisecond
 // What must never be read in a film. The sidebar is held to the demo by --search; the home page lists the real sessions and
 // folders whatever the search says, so its own words refuse a take, as does what is only there when a run went wrong.
-SECRETS := []string{"iceman", "Contributor", "START IN", "Other folder", "The run failed", "Untitled"}
+SECRETS :: [?]string{"iceman", "Contributor", "START IN", "Other folder", "The run failed", "Untitled"}
 
 Scene :: struct {
 	name, search, session: string,
@@ -92,7 +92,8 @@ hold :: proc(s: ^Shot, how_long: time.Duration) {
 		r, _ := dt_call(s.dt, "Toolkit.state")
 		o, _ := r.(json.Object)
 		height := json_num(o["height"])
-		for secret in SECRETS {
+		secrets := SECRETS
+		for secret in secrets {
 			for b in dt_find(s.dt, secret) {
 				if b.h > 0 && b.y + b.h > 0 && b.y < height { s.leak = secret }
 			}
@@ -257,7 +258,7 @@ play_queue :: proc(s: ^Shot) {
 	press(s, "ctrl+Escape", 800 * time.Millisecond)
 }
 
-SCENES := []Scene{
+SCENES :: [?]Scene{
 	{"read", "Tour", TOUR_SESSION, play_read, nil},
 	{"palette", "Tour", TOUR_SESSION, play_palette, nil},
 	{"model", "Tour", TOUR_SESSION, play_model, nil},
@@ -334,7 +335,8 @@ run_film :: proc(args: []string) -> int {
 	if what == "prepare" { return prepare(&l) ? 0 : 1 }
 	if !snapshot_take(&l) { return 1 }
 	failed, found := 0, false
-	for scene in SCENES {
+	scenes := SCENES
+	for scene in scenes {
 		if what != "all" && what != scene.name { continue }
 		found = true
 		if !shoot(&l, scene) { failed += 1 }

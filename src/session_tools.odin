@@ -455,6 +455,12 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 								text("s", f.status, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)})
 								ui.spacer(ui.px(em * 0.6))
 							}
+							if f.patch != "" {
+								ui.next({width = ui.text_size(0), height = ui.px(em * 1.4), font_size = math.round(em * FS_CAPTION), fg = hex(HEX_FAINT), cursor = .Hand, text_pad = 0})
+								full := ui.build_box({.Clickable, .Draw_Text}, "Full view###ff")
+								if ui.signal(full).clicked { diff_full_open(app, f.file, f.patch); f.open = !f.open }   // (the head's click is undone: this one was not for it)
+								ui.spacer(ui.px(em * 0.8))
+							}
 							text("a", fmt.tprintf("+%d", f.additions), hex(HEX_GREEN), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 							ui.spacer(ui.px(em * 0.4))
 							text("d", fmt.tprintf("-%d", f.deletions), hex(HEX_RED), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})

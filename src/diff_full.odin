@@ -2,6 +2,8 @@ package occ
 
 import "core:fmt"
 import "core:math"
+import "core:os"
+import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 import "gt:ui"
@@ -11,8 +13,7 @@ import "gt:ui"
 
 Diff_Layout :: enum u8 { Stacked, Split }
 
-DIFF_LAYOUT_NAMES := [Diff_Layout]string{.Stacked = "stacked", .Split = "split"}
-DIFF_LAYOUT_LABELS := [Diff_Layout]string{.Stacked = "Stacked", .Split = "Split"}
+diff_layout_name :: proc(l: Diff_Layout) -> string { return l == .Split ? "split" : "stacked" }
 
 // The two sides of a line, by index in the lines; -1: nothing on that side. A line that is the same, or the mark between two
 // hunks, is on both.
@@ -26,7 +27,7 @@ Diff_Full :: struct {
 	added, removed: int,
 }
 
-diff_layout_of :: proc(s: string) -> Diff_Layout { return s == DIFF_LAYOUT_NAMES[.Split] ? .Split : .Stacked }
+diff_layout_of :: proc(s: string) -> Diff_Layout { return s == diff_layout_name(.Split) ? .Split : .Stacked }
 
 // In a block of lines removed then added, the k-th of each are the same line changed, as diff_mark has them: side by side.
 diff_split_rows :: proc(lines: []Diff_Line, allocator := context.allocator) -> []Split_Row {
@@ -63,6 +64,12 @@ diff_full_open :: proc(app: ^App, title, patch: string) {
 		if l.sign == '-' { d.removed += 1 }
 	}
 	d.open = true
+}
+
+diff_full_open_file :: proc(app: ^App, path: string) {
+	data, err := os.read_entire_file(path, context.temp_allocator)
+	if err != nil { ui.toast(.Bad, "Cannot read %s", path); return }
+	diff_full_open(app, filepath.base(path), string(data))
 }
 
 diff_full_close :: proc(d: ^Diff_Full) {
@@ -110,20 +117,31 @@ diff_cell_line :: proc(app: ^App, l: Diff_Line, numbers: Diff_Numbers, col, mark
 		out, _ := strings.replace_all(s, "\t", TOOL_TAB, context.temp_allocator)
 		return out
 	}
-	st := ui.Style_Mod{font = app.mono, font_size = fs, flags = {.Selectable}}
+	st := ui.Style_Mod{font = app.mono, font_size = fs, height = ui.px(h), text_pad = 0, flags = {.Selectable}}
 	if l.hi > l.lo {
-		if l.lo > 0 { text("a", open(l.text[:l.lo]), col, st) }
-		ui.next({width = ui.text_size(0), height = ui.px(h), font = app.mono, font_size = fs, bg = mark, fg = hex(HEX_BRIGHT), radius = 2 * ui.scale(), text_pad = 0, flags = {.Selectable}})
-		ui.build_box({.Draw_Text, .Draw_Background}, fmt.tprintf("%s###b", label_safe(open(l.text[l.lo:l.hi]))))
-		text("c", open(l.text[l.hi:]), col, st, ui.fill())
+		if l.lo > 0 { diff_text("a", open(l.text[:l.lo]), col, st, ui.text_size(0)) }
+		m := st
+		m.bg, m.radius = mark, 2 * ui.scale()
+		diff_text("b", open(l.text[l.lo:l.hi]), hex(HEX_BRIGHT), m, ui.text_size(0))
+		diff_text("c", open(l.text[l.hi:]), col, st, ui.fill())
 	} else {
-		text("t", open(l.text), col, st, ui.fill())
+		diff_text("t", open(l.text), col, st, ui.fill())
 	}
 }
 
 @(private = "file")
+diff_text :: proc(id, s: string, color: Color, style: ui.Style_Mod, width: ui.Size) {
+	m := style
+	m.width, m.fg = width, color
+	ui.next(m)
+	flags: ui.Box_Flags = {.Draw_Text}
+	if style.bg != nil { flags += {.Draw_Background} }
+	ui.build_box(flags, fmt.tprintf("%s###%s", label_safe(s), id))
+}
+
+@(private = "file")
 diff_gap :: proc(id: string, em: f32) {
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.1)), axis = .X, cross = .Center})
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.3)), axis = .X, cross = .Center})   // (the height of every row: diff_window)
 	if ui.row(.Center, id = id) {
 		ui.spacer(ui.px(em * 0.6))
 		text("h", "⋯", hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
@@ -131,9 +149,9 @@ diff_gap :: proc(id: string, em: f32) {
 }
 
 @(private = "file")
-diff_split_row :: proc(app: ^App, d: ^Diff_Full, r: Split_Row, em: f32) {
+diff_split_row :: proc(app: ^App, d: ^Diff_Full, r: Split_Row, i: int, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.3)), axis = .X})
-	if ui.row(id = "###r") {
+	if ui.row(id = fmt.tprintf("###r%d", i)) {
 		diff_cell(app, "###a", r.left >= 0 ? d.lines[r.left] : nil, .Old, em)
 		ui.next({width = ui.px(max(1, ui.scale())), height = ui.px(math.round(em * 1.3)), bg = hex(HEX_FAINT)})
 		ui.build_box({.Draw_Background}, "###bar")
@@ -141,27 +159,34 @@ diff_split_row :: proc(app: ^App, d: ^Diff_Full, r: Split_Row, em: f32) {
 	}
 }
 
+// The rows to build for a view: every row has one height, so what shows is a sum, whatever the length of the diff. Both where
+// the view is and where it goes, and a margin beyond.
+diff_window :: proc(offset, target, view_h, row_h: f32, count: int) -> (first, last: int) {
+	if row_h <= 0 { return 0, 0 }
+	top := min(offset, target)
+	bottom := max(offset, target) + view_h
+	first = clamp(int(top / row_h) - DIFF_ROWS_MARGIN, 0, count)
+	last = clamp(int(bottom / row_h) + 1 + DIFF_ROWS_MARGIN, first, count)
+	return
+}
+
 @(private = "file")
-diff_full_rows :: proc(app: ^App, d: ^Diff_Full, layout: Diff_Layout, em: f32) {
-	lz := ui.lazy_begin()
-	switch layout {
-	case .Stacked:
-		for l, i in d.lines {
-			if ui.lazy_item(lz, fmt.tprintf("###dk%d", i)) {
-				if l.sign == '@' { diff_gap("###g", em) } else { diff_cell(app, "###c", l, .Both, em) }
-			}
-		}
-	case .Split:
-		for r, i in d.rows {
-			if ui.lazy_item(lz, fmt.tprintf("###dp%d", i)) {
-				if r.left >= 0 && d.lines[r.left].sign == '@' {
-					diff_gap("###g", em)
-				} else {
-					diff_split_row(app, d, r, em)
-				}
-			}
+diff_full_rows :: proc(app: ^App, d: ^Diff_Full, layout: Diff_Layout, view: ^ui.Box, em: f32) {
+	h := math.round(em * 1.3)
+	count := layout == .Stacked ? len(d.lines) : len(d.rows)
+	first, last := diff_window(view.view_off.y, view.view_target.y, view.size.y, h, count)
+	ui.spacer(ui.px(f32(first) * h))
+	for i in first ..< last {
+		switch layout {
+		case .Stacked:
+			l := d.lines[i]
+			if l.sign == '@' { diff_gap(fmt.tprintf("###g%d", i), em) } else { diff_cell(app, fmt.tprintf("###c%d", i), l, .Both, em) }
+		case .Split:
+			r := d.rows[i]
+			if r.left >= 0 && d.lines[r.left].sign == '@' { diff_gap(fmt.tprintf("###g%d", i), em) } else { diff_split_row(app, d, r, i, em) }
 		}
 	}
+	ui.spacer(ui.px(f32(count - last) * h))
 }
 
 diff_full_dialog :: proc(app: ^App, em: f32) {
@@ -179,18 +204,22 @@ diff_full_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.5))
 			text("d", fmt.tprintf("-%d", d.removed), hex(HEX_RED), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
 			ui.spacer(ui.px(em))
+			if bevel_button("###df_copy", "Copy", "", .Normal).clicked {
+				clip_set(d.patch)
+				ui.toast(.Good, "Diff copied")
+			}
+			ui.spacer(ui.px(em * 0.6))
 			sel := int(app.prefs.diff_layout)
-			labels := []string{DIFF_LAYOUT_LABELS[.Stacked], DIFF_LAYOUT_LABELS[.Split]}
+			labels := []string{"Stacked", "Split"}
 			ui.next({width = ui.px(em * 12), height = ui.px(em * 2)})
-			if ui.segmented("###df_mode", labels, &sel) { pref_set(app, "conversation.diff_layout", DIFF_LAYOUT_NAMES[Diff_Layout(sel)]) }
+			if ui.segmented("###df_mode", labels, &sel) { pref_set(app, "conversation.diff_layout", diff_layout_name(Diff_Layout(sel))) }
 			ui.spacer(ui.px(em * 3.2))   // (the dialog's close button is there)
 		}
 		ui.spacer(ui.px(em * 0.6))
-		ui.next({width = ui.fill(), height = ui.fill()})
-		if ui.scroll_y("###df_list") {
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-			if ui.column(id = "###df_rows") { diff_full_rows(app, d, app.prefs.diff_layout, em) }
-		}
+		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
+		view := ui.build_box({.Clip, .View_Scroll_Y, .View_Clamp_Y, .Allow_Overflow_Y}, "###df_list")
+		_ = ui.signal(view)
+		if ui.parent(view) { diff_full_rows(app, d, app.prefs.diff_layout, view, em) }
 		ui.spacer(ui.px(em * 0.6))
 		dialog_close(&open)
 	}

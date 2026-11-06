@@ -663,6 +663,7 @@ main :: proc() {
 		if strings.has_prefix(a, "--find=") { find_open(app); ui.field_set(&app.find.field, a[len("--find="):]) }
 		if strings.has_prefix(a, "--image=") { image_view_start(app, a[len("--image="):]) }
 		if strings.has_prefix(a, "--attach=") { attach_path(app, a[len("--attach="):]) }   // (what a paste gives, without the clipboard)
+		if strings.has_prefix(a, "--diff=") { diff_full_open_file(app, a[len("--diff="):]) }   // (a patch in the full view)
 		if strings.has_prefix(a, "--slow-motion=") { if n, ok := strconv.parse_f64(a[len("--slow-motion="):]); ok { film_slow_start(app, n) } }
 	}
 	for a in os.args[1:] {   // --settings[=page number]: the settings open at start

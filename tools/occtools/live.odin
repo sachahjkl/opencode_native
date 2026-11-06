@@ -249,6 +249,79 @@ scenario_link :: proc(l: ^Live) {
 	close_app(l, &app)
 }
 
+DIFF_ROWS      :: 20000
+DIFF_FRAME_MAX :: 16.0   // ms of a frame's build: a 60 Hz budget, whatever the length of the diff
+
+// The text of a big patch: a changed line every third one.
+big_patch :: proc(rows: int) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	fmt.sbprintf(&b, "@@ -1,%d +1,%d @@\n", rows, rows)
+	for i in 0 ..< rows {
+		if i % 3 == 0 {
+			fmt.sbprintf(&b, "-old line number %d of the file\n+new line number %d of the file\n", i, i)
+		} else {
+			fmt.sbprintf(&b, " the same line %d\n", i)
+		}
+	}
+	return strings.to_string(b)
+}
+
+@(private = "file")
+frame_p95 :: proc(dt: ^Dt) -> f64 {
+	r, ok := dt_call(dt, "Toolkit.metrics", `{"reset":true}`)
+	if !ok { return -1 }
+	o, _ := r.(json.Object)
+	t, _ := o["totalMs"].(json.Object)
+	return json_num(t["p95"])
+}
+
+// Scrolled, turned, a text dragged over, closed: a diff no one would read, so that one that is read is nothing.
+@(private = "file")
+scenario_diff :: proc(l: ^Live) {
+	fmt.println("=== a diff of", DIFF_ROWS, "lines")
+	path := LIVE_DIR + "/big.patch"
+	if os.write_entire_file(path, transmute([]byte)big_patch(DIFF_ROWS)) != nil { expect(l, false, "the patch is written"); return }
+	app, started := launch(l, "diff", fmt.tprintf("--diff=%s", path))
+	if !started { expect(l, false, "the program answers"); return }
+	defer close_app(l, &app)
+	dt := &app.dt
+	begun := time.now()
+	expect(l, dt_wait_for(dt, "big.patch", STEP_LIMIT), "the view opens")
+	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	fmt.printfln("        open and at rest, from the start: %d ms", int(time.duration_milliseconds(time.since(app.started))))
+	_ = begun
+	r, _ := dt_call(dt, "Toolkit.state")
+	o, _ := r.(json.Object)
+	w, h := json_num(o["width"]), json_num(o["height"])
+	frame_p95(dt)
+	for _ in 0 ..< 40 {
+		dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseWheel","x":%d,"y":%d,"deltaX":0,"deltaY":1500}}`, int(w / 2), int(h / 2)))
+		time.sleep(POLL / 2)
+	}
+	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	stacked := frame_p95(dt)
+	expect(l, stacked >= 0 && stacked < DIFF_FRAME_MAX, fmt.tprintf("stacked, scrolled: 95 %% of the frames under %.1f ms", stacked))
+	dt_call(dt, "Toolkit.click", `{"text":"Split","index":0,"count":1,"button":"left"}`)
+	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	frame_p95(dt)
+	for _ in 0 ..< 40 {
+		dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseWheel","x":%d,"y":%d,"deltaX":0,"deltaY":-1500}}`, int(w / 2), int(h / 2)))
+		time.sleep(POLL / 2)
+	}
+	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	split := frame_p95(dt)
+	expect(l, split >= 0 && split < DIFF_FRAME_MAX, fmt.tprintf("split, scrolled: 95 %% of the frames under %.1f ms", split))
+	y := int(h * 0.5)
+	dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseMoved","x":%d,"y":%d}}`, int(w * 0.62), y))
+	dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mousePressed","x":%d,"y":%d,"button":"left","buttons":1,"clickCount":1}}`, int(w * 0.62), y))
+	dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseMoved","x":%d,"y":%d,"buttons":1}}`, int(w * 0.8), y + int(h * 0.15)))
+	dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseReleased","x":%d,"y":%d,"button":"left","buttons":0,"clickCount":1}}`, int(w * 0.8), y + int(h * 0.15)))
+	dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
+	dt_shot(dt, LIVE_DIR + "/diff_selected.png")
+	dt_key(dt, "Escape")
+	expect(l, dt_wait_for(dt, "big.patch", STEP_LIMIT, gone = true), "Escape closes it")
+}
+
 @(private = "file")
 scenario_password :: proc(l: ^Live) {
 	fmt.println("=== a wrong password")
@@ -346,7 +419,7 @@ run_live :: proc(args: []string) -> int {
 			return EXIT_USAGE
 		}
 	}
-	if only != "" && only != "link" && only != "password" && only != "prompt" { fmt.eprintfln("live: no scenario %s", only); return EXIT_USAGE }
+	if only != "" && only != "link" && only != "password" && only != "prompt" && only != "diff" { fmt.eprintfln("live: no scenario %s", only); return EXIT_USAGE }
 	if !os.exists(l.exe) { fmt.eprintfln("live: no %s: occtools check builds it", l.exe); return 1 }
 	if os.make_directory_all(LIVE_DIR) != nil { return 1 }
 	if !snapshot_take(&l) { return 1 }
@@ -355,6 +428,7 @@ run_live :: proc(args: []string) -> int {
 	if only == "" || only == "link" { scenario_link(&l) }
 	if only == "" || only == "password" { scenario_password(&l) }
 	if only == "" || only == "prompt" { scenario_prompt(&l) }
+	if only == "" || only == "diff" { scenario_diff(&l) }
 	cleaned := clean_now(&l)
 	fmt.printfln("live: %d failed, in %d s", l.failed, int(time.duration_seconds(time.since(begun))))
 	return l.failed > 0 || cleaned != 0 ? 1 : 0

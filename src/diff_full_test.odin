@@ -38,6 +38,29 @@ every_line_is_in_the_rows_once_on_its_side :: proc(t: ^testing.T) {
 }
 
 @(test)
+what_is_built_is_what_shows_and_a_margin :: proc(t: ^testing.T) {
+	first, last := diff_window(0, 0, 200, 20, 20000)
+	testing.expect_value(t, first, 0)
+	testing.expect_value(t, last, 11 + DIFF_ROWS_MARGIN)
+	first, last = diff_window(10000, 10000, 200, 20, 20000)
+	testing.expect_value(t, first, 500 - DIFF_ROWS_MARGIN)
+	testing.expect_value(t, last, 511 + DIFF_ROWS_MARGIN)
+	first, last = diff_window(399900, 399900, 200, 20, 20000)
+	testing.expect_value(t, last, 20000)
+	first, last = diff_window(0, 0, 200, 20, 3)
+	testing.expect_value(t, last, 3)
+	first, last = diff_window(0, 0, 200, 0, 3)
+	testing.expect_value(t, last, 0)
+}
+
+@(test)
+where_the_view_goes_is_built_too :: proc(t: ^testing.T) {
+	first, last := diff_window(0, 4000, 200, 20, 20000)
+	testing.expect_value(t, first, 0)
+	testing.expect_value(t, last, 211 + DIFF_ROWS_MARGIN)
+}
+
+@(test)
 the_layout_is_read_from_its_name :: proc(t: ^testing.T) {
 	testing.expect_value(t, diff_layout_of("split"), Diff_Layout.Split)
 	testing.expect_value(t, diff_layout_of("stacked"), Diff_Layout.Stacked)
