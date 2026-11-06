@@ -240,13 +240,8 @@ install_facts :: proc() -> (f: Install_Facts) {
 	f.version, _ = reg_get(UNINSTALL_KEY, "DisplayVersion")
 	f.start_lnk = same_path(shortcut_target(start_lnk_path()), f.exe)
 	f.desk_lnk = same_path(shortcut_target(desk_lnk_path()), f.exe)
-	installed := os.exists(f.exe)
-	switch {
-	case !installed:                  f.state = .Not_Installed
-	case !same_path(f.running, f.exe): f.state = .Other_Copy
-	case !f.start_lnk || !f.record:   f.state = .Repair
-	case:                             f.state = .This_Copy
-	}
+	f.exe_there = os.exists(f.exe)
+	f.state = install_state_of(f.exe_there, same_path(f.running, f.exe), f.start_lnk, f.record, f.version)
 	return
 }
 
@@ -330,16 +325,21 @@ desktop_uninstall :: proc() -> (ok: bool, deferred: bool, msg: string) {
 	return true, deferred, ""
 }
 
-// A hidden batch file that deletes the program once this process has let go of it (it tries again every second, for a
-// minute at most), then the folder when it is empty, then itself. Its console is hidden, not absent (CREATE_NO_WINDOW):
-// the commands it runs need one.
+// The batch of schedule_removal: it waits for the process, however long the window stays open (a limit would leave the file behind for good),
+// and then tries to delete it for a minute: what still holds the file by then (an antivirus reading it) lets go soon after a process ends.
+removal_script :: proc(exe, dir: string, pid: u32) -> string {
+	return fmt.tprintf(
+		"@echo off\r\n:wait\r\ntasklist /fi \"PID eq %d\" /fo csv /nh 2>nul | find \"%d\" >nul\r\nif errorlevel 1 goto gone\r\nping -n 2 127.0.0.1 >nul\r\ngoto wait\r\n:gone\r\nset n=0\r\n:retry\r\ndel /f /q \"%s\" 2>nul\r\nif not exist \"%s\" goto done\r\nset /a n+=1\r\nif %%n%% geq 60 goto done\r\nping -n 2 127.0.0.1 >nul\r\ngoto retry\r\n:done\r\ndel /f /q \"%s.old\" 2>nul\r\nrmdir \"%s\" 2>nul\r\n(goto) 2>nul & del \"%%~f0\"\r\n",
+		pid, pid, exe, exe, exe, dir)   // (the PID is looked for, not a mark of the row: what tasklist says of none is in the system's language)
+}
+
+// A hidden batch file that deletes the program once this process has ended, then the folder when it is empty, then itself. Its console is
+// hidden, not absent (CREATE_NO_WINDOW): the commands it runs need one.
 @(private = "file")
 schedule_removal :: proc(exe, dir: string) -> bool {
 	pid := win.GetCurrentProcessId()
 	bat := pjoin({os.get_env("TEMP", context.temp_allocator), fmt.tprintf("opencode-native-uninstall-%d.cmd", pid)})
-	script := fmt.tprintf(
-		"@echo off\r\nset n=0\r\n:retry\r\ndel /f /q \"%s\" 2>nul\r\nif not exist \"%s\" goto done\r\nset /a n+=1\r\nif %%n%% geq 60 goto done\r\nping -n 2 127.0.0.1 >nul\r\ngoto retry\r\n:done\r\ndel /f /q \"%s.old\" 2>nul\r\nrmdir \"%s\" 2>nul\r\n(goto) 2>nul & del \"%%~f0\"\r\n",
-		exe, exe, exe, dir)
+	script := removal_script(exe, dir, u32(pid))
 	if os.write_entire_file(bat, transmute([]u8)script) != nil { return false }
 	cmd := fmt.tprintf(`cmd.exe /d /c "%s"`, bat)
 	wcmd := win.utf8_to_utf16(cmd, context.temp_allocator)

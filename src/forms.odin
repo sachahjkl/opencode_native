@@ -26,6 +26,11 @@ Form_Field :: struct {
 	choice: int,             // the option chosen (-1: none)
 	picks:  []bool,          // multiselect: the options ticked
 	on:     bool,
+	// what it starts with (form_reset)
+	start_text:   string,
+	start_choice: int,
+	start_picks:  []bool,
+	start_on:     bool,
 }
 
 Form_Req :: struct {
@@ -33,7 +38,8 @@ Form_Req :: struct {
 	question: bool,
 	fields:   []Form_Field,
 	arena:    virtual.Arena,
-	sending:  bool,
+	sending:  bool,  // its answer or its dismissal is on its way: one at a time
+	born:     u64,   // the stream's clock when it came (a list asked before that does not know it: forms_replace)
 	page:     int,   // several questions: the one shown, among those shown; past the last, the review
 }
 
@@ -65,9 +71,24 @@ json_number :: proc(v: json.Value, key: string) -> Maybe(f64) {
 
 form_add :: proc(app: ^App, v: json.Value) {
 	id := jstr(v, "id")
-	if id == "" || form_find(app, id) != nil { return }
-	append(&app.cx.forms, form_new(id, jstr(v, "sessionID"), jstr(v, "title"), jstr(v, "metadata", "kind") == "question", jarr(v, "fields")))
+	if id == "" || form_find(app, id) != nil || waits_were_answered(app, id) { return }
+	f := form_new(id, jstr(v, "sessionID"), jstr(v, "title"), jstr(v, "metadata", "kind") == "question", jarr(v, "fields"))
+	f.born = app.cx.stream_seq
+	append(&app.cx.forms, f)
 	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+}
+
+// What the server says a session asks: as permissions_replace. A form that stays keeps what the person has filled in.
+forms_replace :: proc(app: ^App, session: string, list: json.Array, asked_at: u64) {
+	forms := &app.cx.forms
+	for i := len(forms) - 1; i >= 0; i -= 1 {
+		f := forms[i]
+		if f.session != session || f.sending || f.born > asked_at { continue }
+		listed := false
+		for it in list { if jstr(it, "id") == f.id { listed = true; break } }
+		if !listed { form_remove(app, f.id) }
+	}
+	for it in list { form_add(app, it) }
 }
 
 // Fields as the server describes them, a form's or what a way of connecting asks.
@@ -104,8 +125,21 @@ form_new :: proc(id, session, title: string, question: bool, list: json.Array) -
 			for o, k in fd.options { if o.value == s { fd.choice, known = k, true } }
 			if !known { ui.field_set(&fd.text, s) }
 		}
+		fd.start_text, fd.start_choice, fd.start_on = strings.clone(ui.field_string(&fd.text), a), fd.choice, fd.on
+		fd.start_picks = make([]bool, len(opts), a)
+		copy(fd.start_picks, fd.picks)
 	}
 	return f
+}
+
+// As it came: what was answered goes. (What a way of connecting asks outlives one attempt.)
+form_reset :: proc(f: ^Form_Req) {
+	for &fd in f.fields {
+		ui.field_set(&fd.text, fd.start_text)
+		fd.choice, fd.on = fd.start_choice, fd.start_on
+		copy(fd.picks, fd.start_picks)
+	}
+	f.page = 0
 }
 
 form_free :: proc(f: ^Form_Req) {
@@ -245,10 +279,10 @@ form_send :: proc(app: ^App, f: ^Form_Req) {
 	request(app, .Form_Reply, "POST", fmt.tprintf("/api/session/%s/form/%s/reply", f.session, f.id), body, f.id)
 }
 
-@(private = "file")
 form_dismiss :: proc(app: ^App, f: ^Form_Req) {
-	request(app, .Action, "DELETE", fmt.tprintf("/api/session/%s/form/%s", f.session, f.id), "", f.session)
-	form_remove(app, f.id)
+	if f.sending { return }   // (an answer on its way: the server is told one thing)
+	f.sending = true
+	request(app, .Form_Dismiss, "DELETE", fmt.tprintf("/api/session/%s/form/%s", f.session, f.id), "", f.id)
 }
 
 // How tall a question would be, in em: too much of it and it scrolls, or what is around it would be crushed.
@@ -315,7 +349,7 @@ form_card :: proc(app: ^App, f: ^Form_Req, others: int, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###foot") {
 			ui.spacer(ui.px(em))
-			if bevel_button("###form_dismiss", "Dismiss", "", .Ghost).clicked { dismiss = true }
+			if bevel_button("###form_dismiss", "Dismiss", "", .Ghost, disabled = f.sending).clicked { dismiss = true }
 			ui.spacer(ui.fill())
 			if wizard && f.page > 0 {
 				if bevel_button("###form_prev", "Back", ICO_BACK, .Normal).clicked { f.page -= 1 }

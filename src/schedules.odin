@@ -17,8 +17,21 @@ import "gt:ui"
 ////////////////////////////////
 // Schedules
 
+Schedule_Status :: enum u8 { Unknown, Active, Paused, Done }   // (Unknown: a word of a newer server: it is neither paused nor resumed from here)
+
+@(private = "file")
+schedule_status :: proc(word: string) -> Schedule_Status {
+	switch word {
+	case "active": return .Active
+	case "paused": return .Paused
+	case "done":   return .Done
+	}
+	return .Unknown
+}
+
 Schedule :: struct {
-	id, name, prompt, when_text, status, outcome: string,
+	id, name, prompt, when_text, outcome: string,
+	status:    Schedule_Status,
 	next:      f64,
 	remaining: int,
 	runs:      int,
@@ -35,10 +48,10 @@ WHEN_MODES := [When_Mode]struct { label, key, hint: string }{
 
 Schedules :: struct {
 	open:     bool,
-	loading:  bool,
 	session:  string,   // (owned)
-	refused:  string,   // why there are none: the server's words (owned)
-	failed:   string,   // why the last one was not made (owned)
+	read:     Remote,   // the list
+	making:   Remote,   // a new one on its way: the form sends nothing else until it is answered, and says why it failed
+	problem:  string,   // what the form lacks (owned)
 	removing: string,   // the one asked about (owned)
 	list:     [dynamic]Schedule,
 	arena:    virtual.Arena,
@@ -53,18 +66,51 @@ set_text :: proc(s: ^string, value: string) {
 	s^ = strings.clone(value)
 }
 
-schedules_open :: proc(app: ^App, id: string) {
-	s := &app.cx.schedules
-	set_text(&s.session, id)
-	set_text(&s.refused, ""); set_text(&s.failed, ""); set_text(&s.removing, "")
-	s.open, s.loading = true, true
-	schedules_ask(app)
+@(private = "file")
+schedules_clear :: proc(s: ^Schedules) {
+	if s.has_arena { virtual.arena_destroy(&s.arena) }
+	s.has_arena = false
+	clear(&s.list)
 }
 
 @(private = "file")
+schedule_form_clear :: proc(s: ^Schedules) {
+	ui.field_set(&s.prompt, ""); ui.field_set(&s.name, ""); ui.field_set(&s.value, "")
+	set_text(&s.problem, "")
+}
+
+// What was typed was for one session: it stays for that one alone. What the list said is read again: nothing of it shows until then.
+schedules_open :: proc(app: ^App, id: string) {
+	s := &app.cx.schedules
+	if id != s.session {
+		schedule_form_clear(s)
+		remote_reset(&s.making)
+	} else if s.making.state != .Loading {
+		remote_reset(&s.making)
+	}
+	set_text(&s.session, id)
+	set_text(&s.problem, ""); set_text(&s.removing, "")
+	schedules_clear(s)
+	remote_reset(&s.read)
+	s.open = true
+	schedules_ask(app)
+}
+
 schedules_ask :: proc(app: ^App) {
 	s := &app.cx.schedules
-	request(app, .Schedules, "GET", fmt.tprintf("/api/experimental/schedule?sessionID=%s", url_escape(s.session)), tag = s.session)
+	remote_begin(&s.read)
+	request(app, .Schedules, "GET", fmt.tprintf("/api/experimental/schedule?sessionID=%s", url_escape(s.session)), remote = &s.read)
+}
+
+schedules_forget :: proc(app: ^App) {
+	s := &app.cx.schedules
+	s.open = false
+	set_text(&s.session, ""); set_text(&s.removing, "")
+	schedule_form_clear(s)
+	schedules_clear(s)
+	remote_reset(&s.read)
+	remote_reset(&s.making)
+	app.cx.no_schedules = false   // (what the next server offers is for it to say: experimental_check)
 }
 
 // How the server's description reads.
@@ -78,35 +124,19 @@ when_text :: proc(w: json.Value) -> string {
 	return ""
 }
 
-schedules_load :: proc(app: ^App, id: string, v: json.Value) {
+schedules_load :: proc(app: ^App, v: json.Value) {
 	s := &app.cx.schedules
-	if id != s.session { return }
-	s.loading = false
-	set_text(&s.refused, "")
-	if s.has_arena { virtual.arena_destroy(&s.arena) }
+	schedules_clear(s)
 	_ = virtual.arena_init_growing(&s.arena)
 	s.has_arena = true
 	a := virtual.arena_allocator(&s.arena)
-	clear(&s.list)
 	for it in jarr(v, "data") {
 		append(&s.list, Schedule{
 			id = strings.clone(jstr(it, "id"), a), name = strings.clone(jstr(it, "name"), a), prompt = strings.clone(jstr(it, "action", "prompt"), a),
-			when_text = strings.clone(when_text(jget(it, "when")), a), status = strings.clone(jstr(it, "status"), a), outcome = strings.clone(jstr(it, "lastOutcome"), a),
+			when_text = strings.clone(when_text(jget(it, "when")), a), status = schedule_status(jstr(it, "status")), outcome = strings.clone(jstr(it, "lastOutcome"), a),
 			next = jnum(it, "nextDueAt"), remaining = int(jnum(it, "remainingRuns")), runs = int(jnum(it, "runCount")),
 		})
 	}
-}
-
-// The list was refused: the option is off.
-schedules_refused :: proc(app: ^App, id, message: string) {
-	s := &app.cx.schedules
-	if id != s.session { return }
-	s.loading = false
-	set_text(&s.refused, message)
-}
-
-schedule_failed :: proc(app: ^App, message: string) {
-	set_text(&app.cx.schedules.failed, message)
 }
 
 schedule_changed :: proc(app: ^App) {
@@ -114,11 +144,21 @@ schedule_changed :: proc(app: ^App) {
 	if s.open { schedules_ask(app) }
 }
 
+// (Of the session the form is for: a later one of another session has reset `making`, and this answer was dropped.)
 schedule_made :: proc(app: ^App) {
-	s := &app.cx.schedules
-	ui.field_set(&s.prompt, ""); ui.field_set(&s.name, ""); ui.field_set(&s.value, "")
-	set_text(&s.failed, "")
+	schedule_form_clear(&app.cx.schedules)
 	schedule_changed(app)
+}
+
+// What the form sends, once: a second Enter finds the first on its way.
+schedule_submit :: proc(app: ^App) {
+	s := &app.cx.schedules
+	if s.making.state == .Loading { return }
+	body, problem := schedule_body(s.session, ui.field_string(&s.prompt), ui.field_string(&s.name), ui.field_string(&s.value), s.mode)
+	set_text(&s.problem, problem)
+	if problem != "" { return }
+	remote_begin(&s.making)
+	request(app, .Schedule_Made, "POST", "/api/experimental/schedule", body, remote = &s.making)
 }
 
 // The body of a schedule; what is missing, if something is.
@@ -177,10 +217,7 @@ schedules_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.scroll_y("###sc_list") {
-				switch {
-				case s.loading:       info_line(app, "###sc_load", "Reading…", em)
-				case s.refused != "": info_line(app, "###sc_off", s.refused, em, hex(HEX_YELLOW))
-				case:
+				if read_shown(app, "###sc_read", &s.read, em, schedules_ask) {
 					if len(s.list) == 0 { info_line(app, "###sc_none", "Nothing is planned: a prompt below will wake this session.", em) }
 					now := f64(now_epoch_ms())
 					for &it, i in s.list { schedule_row(app, &it, i, now, em) }
@@ -205,9 +242,9 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, em: f32) {
 		if ui.column() {
 			text("n", first_line(it.name != "" ? it.name : it.prompt), hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 			detail := it.when_text
-			if it.status == "paused" { detail = fmt.tprintf("%s, paused", detail) }
-			if it.status == "done" { detail = fmt.tprintf("%s, done", detail) }
-			if it.status == "active" && it.next > 0 { detail = fmt.tprintf("%s, %s", detail, due_text(it.next, now)) }
+			if it.status == .Paused { detail = fmt.tprintf("%s, paused", detail) }
+			if it.status == .Done { detail = fmt.tprintf("%s, done", detail) }
+			if it.status == .Active && it.next > 0 { detail = fmt.tprintf("%s, %s", detail, due_text(it.next, now)) }
 			if it.remaining > 0 { detail = fmt.tprintf("%s, %d left", detail, it.remaining) }
 			if it.runs > 0 { detail = fmt.tprintf("%s, ran %d (%s)", detail, it.runs, it.outcome) }
 			text("d", detail, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.4)}, ui.fill())
@@ -220,8 +257,8 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, em: f32) {
 			ui.spacer(ui.px(em * 0.3))
 			if bevel_button("###sc_no", "Keep", "", .Normal, height = small).clicked { set_text(&s.removing, "") }
 		} else {
-			if it.status != "done" {
-				pause := it.status == "active"
+			if it.status == .Active || it.status == .Paused {
+				pause := it.status == .Active
 				if bevel_button("###sc_pause", pause ? "Pause" : "Resume", "", .Normal, height = small).clicked {
 					request(app, .Schedule_Done, "POST", fmt.tprintf("/api/experimental/schedule/%s/%s", url_escape(it.id), pause ? "pause" : "resume"), "{}")
 				}
@@ -252,20 +289,17 @@ schedule_form :: proc(app: ^App, em: f32) {
 	ui.spacer(ui.px(em * 0.35))
 	if field_line("###sc_name", &s.name, "A name for it (optional)", em).committed { go = true }
 	ui.spacer(ui.px(em * 0.4))
-	if s.failed != "" {
-		info_line(app, "###sc_failed", s.failed, em, hex(HEX_RED))
+	if s.problem != "" || remote_failed(&s.making) {
+		info_line(app, "###sc_failed", s.problem != "" ? s.problem : s.making.message, em, hex(HEX_RED))
 		ui.spacer(ui.px(em * 0.3))
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###sc_foot") {
 		ui.spacer(ui.fill())
-		if bevel_button("###sc_go", "Plan it", ICO_CHECK, .Accent).clicked { go = true }
+		making := s.making.state == .Loading
+		if bevel_button("###sc_go", making ? "Planning…" : "Plan it", ICO_CHECK, .Accent, disabled = making).clicked { go = true }
 	}
-	if go {
-		body, problem := schedule_body(s.session, ui.field_string(&s.prompt), ui.field_string(&s.name), ui.field_string(&s.value), s.mode)
-		if problem != "" { set_text(&s.failed, problem); return }
-		request(app, .Schedule_Made, "POST", "/api/experimental/schedule", body)
-	}
+	if go { schedule_submit(app) }
 }
 
 ////////////////////////////////
@@ -276,9 +310,9 @@ Artifact_File :: struct { path, content: string }
 
 Artifacts :: struct {
 	open:     bool,
-	loading:  bool,
 	dir:      string,   // the folder (owned)
-	refused:  string,   // (owned)
+	read:     Remote,   // the list
+	file_read: Remote,  // the files of `shown`: they are its own, or there are none
 	removing: string,   // (owned)
 	shown:    string,   // the artifact read (owned)
 	list:     [dynamic]Artifact,
@@ -296,27 +330,43 @@ artifact_location :: proc(a: ^Artifacts) -> string {
 	return a.dir != "" ? fmt.tprintf("location[directory]=%s", url_escape(a.dir)) : ""
 }
 
+@(private = "file")
+artifacts_clear :: proc(a: ^Artifacts) {
+	if a.has_arena { virtual.arena_destroy(&a.arena) }
+	a.has_arena = false
+	clear(&a.list)
+	set_text(&a.removing, ""); set_text(&a.shown, "")
+	artifact_files_clear(a)
+	remote_reset(&a.read)
+	remote_reset(&a.file_read)
+}
+
 artifacts_open :: proc(app: ^App) {
 	a := &app.cx.artifacts
+	artifacts_clear(a)
 	d := chat_dir(app)
 	set_text(&a.dir, d != "" ? d : app.chat.new_dir)
-	set_text(&a.refused, ""); set_text(&a.removing, ""); set_text(&a.shown, "")
-	artifact_files_clear(a)
-	a.open, a.loading = true, true
+	a.open = true
 	artifacts_ask(app)
 }
 
-@(private = "file")
 artifacts_ask :: proc(app: ^App) {
 	a := &app.cx.artifacts
 	q := artifact_location(a)
-	request(app, .Artifacts, "GET", fmt.tprintf("/api/experimental/artifacts%s%s", q != "" ? "?" : "", q))
+	remote_begin(&a.read)
+	request(app, .Artifacts, "GET", fmt.tprintf("/api/experimental/artifacts%s%s", q != "" ? "?" : "", q), remote = &a.read)
+}
+
+artifacts_forget :: proc(app: ^App) {
+	a := &app.cx.artifacts
+	a.open = false
+	artifacts_clear(a)
+	set_text(&a.dir, "")
+	app.cx.no_artifacts = false   // (what the next server offers is for it to say: experimental_check)
 }
 
 artifacts_load :: proc(app: ^App, v: json.Value) {
 	a := &app.cx.artifacts
-	a.loading = false
-	set_text(&a.refused, "")
 	if a.has_arena { virtual.arena_destroy(&a.arena) }
 	_ = virtual.arena_init_growing(&a.arena)
 	a.has_arena = true
@@ -327,10 +377,22 @@ artifacts_load :: proc(app: ^App, v: json.Value) {
 	}
 }
 
-artifacts_refused :: proc(app: ^App, message: string) {
+// A row chosen: what was on the right goes with it, so that the head and the files never say two artifacts.
+artifact_show :: proc(app: ^App, id: string) {
 	a := &app.cx.artifacts
-	a.loading = false
-	set_text(&a.refused, message)
+	set_text(&a.shown, id)
+	set_text(&a.removing, "")
+	artifact_files_clear(a)
+	remote_reset(&a.file_read)
+	artifact_read(app)
+}
+
+@(private = "file")
+artifact_read :: proc(app: ^App) {
+	a := &app.cx.artifacts
+	q := artifact_location(a)
+	remote_begin(&a.file_read)
+	request(app, .Artifact_Read, "GET", fmt.tprintf("/api/experimental/artifacts/%s%s%s", url_escape(a.shown), q != "" ? "?" : "", q), remote = &a.file_read)
 }
 
 artifacts_changed :: proc(app: ^App) {
@@ -355,9 +417,8 @@ artifact_path_safe :: proc(p: string) -> bool {
 }
 
 // (`entry` first: it is what the artifact is.)
-artifact_loaded :: proc(app: ^App, id: string, v: json.Value) {
+artifact_loaded :: proc(app: ^App, v: json.Value) {
 	a := &app.cx.artifacts
-	if id != a.shown { return }
 	artifact_files_clear(a)
 	_ = virtual.arena_init_growing(&a.files_arena)
 	a.has_files = true
@@ -376,11 +437,19 @@ artifact_loaded :: proc(app: ^App, id: string, v: json.Value) {
 	a.version += 1
 }
 
+@(private = "file")
+artifact_online :: proc(it: ^Artifact) -> bool { return strings.has_prefix(it.url, "http://") || strings.has_prefix(it.url, "https://") }
+
+// Whether Open in the browser has something to open: an address, or this artifact's own files.
+artifact_can_open :: proc(a: ^Artifacts, it: ^Artifact) -> bool {
+	return artifact_online(it) || (it.id == a.shown && a.file_read.state == .Ready && len(a.files) > 0)
+}
+
 // What the server serves itself asks its password, which has no place in an address: the files go in a folder of ours, and that opens.
 @(private = "file")
 artifact_view :: proc(a: ^Artifacts, it: ^Artifact) {
-	if strings.has_prefix(it.url, "http://") || strings.has_prefix(it.url, "https://") { _ = platform.open_url(it.url); return }
-	if it.id != a.shown || len(a.files) == 0 { return }
+	if artifact_online(it) { _ = platform.open_url(it.url); return }
+	if !artifact_can_open(a, it) { return }
 	context.allocator = context.temp_allocator
 	temp, no_temp := os.temp_directory(context.temp_allocator)
 	if no_temp != nil { ui.toast(.Bad, "No temporary folder"); return }
@@ -414,20 +483,12 @@ artifacts_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			ui.next({width = ui.px(math.round(em * FILES_LIST_W_EM)), height = ui.fill()})
 			if ui.scroll_y("###ar_list") {
-				switch {
-				case a.loading:       info_line(app, "###ar_load", "Reading…", em)
-				case a.refused != "": info_line(app, "###ar_off", a.refused, em, hex(HEX_YELLOW))
-				case len(a.list) == 0: info_line(app, "###ar_none", "No artifact here: an agent publishes them.", em)
-				case:
+				if read_shown(app, "###ar_read", &a.read, em, artifacts_ask) {
+					if len(a.list) == 0 { info_line(app, "###ar_none", "No artifact here: an agent publishes them.", em) }
 					for &it, i in a.list {
 						ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), axis = .X, cross = .Center, cursor = .Hand})
 						row := ui.build_box({.Clickable}, fmt.tprintf("###arr%d", i))
-						if ui.signal(row).clicked {
-							set_text(&a.shown, it.id)
-							set_text(&a.removing, "")
-							q := artifact_location(a)
-							request(app, .Artifact_Read, "GET", fmt.tprintf("/api/experimental/artifacts/%s%s%s", url_escape(it.id), q != "" ? "?" : "", q), tag = it.id)
-						}
+						if ui.signal(row).clicked { artifact_show(app, it.id) }
 						if ui.parent(row) {
 							glyph(ICO_DOC, hex(it.id == a.shown ? HEX_BRIGHT : HEX_FAINT), math.round(em * ICON_SMALL), em * 1.1)
 							ui.spacer(ui.px(em * 0.3))
@@ -462,18 +523,20 @@ artifact_right :: proc(app: ^App, em: f32) {
 				request(app, .Artifact_Done, "DELETE", fmt.tprintf("/api/experimental/artifacts/%s%s%s", url_escape(it.id), q != "" ? "?" : "", q))
 				set_text(&a.removing, ""); set_text(&a.shown, "")
 				artifact_files_clear(a)
+				remote_reset(&a.file_read)
 				return
 			}
 			ui.spacer(ui.px(em * 0.3))
 			if bevel_button("###ar_no", "Keep", "", .Normal, height = small).clicked { set_text(&a.removing, "") }
 		} else {
-			if bevel_button("###ar_open", "Open in the browser", ICO_GLOBE, .Accent, height = small).clicked { artifact_view(a, it) }
+			if bevel_button("###ar_open", "Open in the browser", ICO_GLOBE, .Accent, height = small, disabled = !artifact_can_open(a, it)).clicked { artifact_view(a, it) }
 			ui.spacer(ui.px(em * 0.3))
 			if bevel_button("###ar_del", "Delete", ICO_DELETE, .Ghost, height = small).clicked { set_text(&a.removing, it.id) }
 		}
 	}
 	ui.spacer(ui.px(em * 0.4))
-	if len(a.files) == 0 { return }
+	if !read_shown(app, "###ar_file", &a.file_read, em, artifact_read) { return }
+	if len(a.files) == 0 { info_line(app, "###ar_empty", "No text in this artifact.", em); return }
 	if len(a.files) > 1 {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###ar_files") {
@@ -501,15 +564,27 @@ Plugin :: struct {
 }
 
 Plugins :: struct {
-	asked, loaded, builtin, checking: bool,
+	read:     Remote,   // the list
+	check:    Remote,   // Check for updates, on its way
+	builtin:  bool,
 	list:     [dynamic]Plugin,
 	arena:    virtual.Arena,
 	has_arena: bool,
 }
 
 plugins_ask :: proc(app: ^App) {
-	app.cx.plugins.asked = true
-	request(app, .Plugins, "GET", "/api/plugin")
+	p := &app.cx.plugins
+	remote_begin(&p.read)
+	request(app, .Plugins, "GET", "/api/plugin", remote = &p.read)
+}
+
+plugins_forget :: proc(app: ^App) {
+	p := &app.cx.plugins
+	if p.has_arena { virtual.arena_destroy(&p.arena) }
+	p.has_arena = false
+	clear(&p.list)
+	remote_reset(&p.read)
+	remote_reset(&p.check)
 }
 
 @(private = "file")
@@ -521,7 +596,6 @@ json_on :: proc(v: json.Value, key: string) -> bool {
 // Those one chose first: what is built in is the server's own.
 plugins_load :: proc(app: ^App, v: json.Value) {
 	p := &app.cx.plugins
-	p.checking = false
 	if p.has_arena { virtual.arena_destroy(&p.arena) }
 	_ = virtual.arena_init_growing(&p.arena)
 	p.has_arena = true
@@ -548,19 +622,23 @@ plugins_load :: proc(app: ^App, v: json.Value) {
 			})
 		}
 	}
-	p.loaded = true
 }
 
+// The check says the list as it stands now: a reading on its way, asked before it, would say the older one.
+plugins_checked :: proc(app: ^App, v: json.Value) {
+	plugins_load(app, v)
+	if app.cx.plugins.read.state == .Loading { plugins_ask(app) }
+}
+
+// Read again if it was read at all.
 plugins_changed :: proc(app: ^App) {
-	if app.cx.plugins.asked { plugins_ask(app) }
+	if app.cx.plugins.read.state != .Idle { plugins_ask(app) }
 }
-
-plugins_failed :: proc(app: ^App) { app.cx.plugins.checking = false }
 
 page_plugins :: proc(app: ^App, em: f32) {
 	p := &app.cx.plugins
-	if !p.asked { plugins_ask(app) }
-	if !p.loaded && loading(app, em) { return }
+	if p.read.state == .Idle { plugins_ask(app) }
+	if !read_shown(app, "###pl_read", &p.read, em, plugins_ask) { return }
 	built := 0
 	for it in p.list { if it.kind == "builtin" { built += 1 } }
 	section(fmt.tprintf("INSTALLED (%d)", len(p.list) - built), em)
@@ -573,9 +651,10 @@ page_plugins :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###pl_bar") {
 		small := math.round(em * BUTTON_COMPACT_H_EM)
-		if bevel_button("###pl_check", p.checking ? "Checking…" : "Check for updates", ICO_REFRESH, .Normal, height = small, disabled = p.checking).clicked {
-			p.checking = true
-			request(app, .Plugins, "POST", "/api/plugin/check", "{}")
+		checking := p.check.state == .Loading
+		if bevel_button("###pl_check", checking ? "Checking…" : "Check for updates", ICO_REFRESH, .Normal, height = small, disabled = checking).clicked {
+			remote_begin(&p.check)
+			request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", remote = &p.check)
 		}
 		ui.spacer(ui.px(em * 0.4))
 		if bevel_button("###pl_built", fmt.tprintf("%s the %d built in", p.builtin ? "Hide" : "Show", built), "", .Ghost, height = small).clicked { p.builtin = !p.builtin }

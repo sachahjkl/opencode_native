@@ -90,16 +90,26 @@ image_decoded :: proc(data: rawptr, word: u64) {
 	e, ok := &app.images[job.key]
 	if !ok { return }
 	if !job.ok || job.w == 0 || job.h == 0 {
-		e.state = .Failed
-		e.error = strings.clone(string(job.out.ptr[:job.out.len]))
+		image_failed(e, string(job.out.ptr[:job.out.len]))
 		return
 	}
 	e.tex = render.create_texture_rgba(&app.r, int(job.w), int(job.h))
-	if e.tex == 0 { e.state = .Failed; return }
+	if e.tex == 0 { image_failed(e, "no room for its texture"); return }
 	render.update_texture_rgba(&app.r, e.tex, 0, 0, int(job.w), int(job.h), job.out.ptr[:job.out.len])
 	e.w, e.h = int(job.w), int(job.h)
 	e.state = .Ready
 	images_trim(app)
+}
+
+image_failed :: proc(e: ^Image_Entry, why: string) {
+	e.state = .Failed
+	delete(e.error)
+	e.error = strings.clone(why)
+}
+
+// What a picture that cannot be shown says of itself.
+image_failed_words :: proc(e: ^Image_Entry) -> string {
+	return e.error != "" ? fmt.tprintf("image unreadable: %s", e.error) : "image unreadable"
 }
 
 // Keeps at most MAX_TEXTURES textures: the ones shown longest ago go (they are decoded again when shown).
@@ -179,7 +189,7 @@ image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) ->
 		if ui.parent(b) {
 			em := ui.font_size()
 			ui.next({width = ui.fill(), height = ui.fill(), fg = hex(HEX_IMAGE_FAILED_TEXT), font_size = math.round(em * FS_SMALL), text_align = .Center})
-			ui.build_box({.Draw_Text}, "image unreadable###f")
+			ui.build_box({.Draw_Text}, fmt.tprintf("%s###f", label_safe(image_failed_words(e))))
 		}
 	}
 	return sig
@@ -217,6 +227,23 @@ image_view_start :: proc(app: ^App, path: string) {
 	data, err := os.read_entire_file(path, context.allocator)
 	if err != nil { ui.toast(.Bad, fmt.tprintf("Cannot read %s", path)); return }
 	app.view_start = image_ref(string(data), .Bytes, "image", strings.clone(filepath.base(path)))
+}
+
+// What --image= waits for: open once decoded, said and given up on when it cannot be. (An empty file has nothing to decode: nothing would
+// ever come, and the wait would draw frames for good.)
+image_view_wait :: proc(app: ^App) {
+	if app.view_start.key == 0 { return }
+	s := image_get(app, app.view_start)
+	if s != nil && s.state == .Pending {
+		app.animating = true
+		return
+	}
+	if s != nil && s.state == .Ready {
+		image_view_open(app, app.view_start)
+	} else {
+		ui.toast(.Bad, "%s: %s", app.view_start.name, s != nil ? image_failed_words(s) : "image unreadable: the file is empty")
+	}
+	app.view_start.key = 0
 }
 
 image_view_open :: proc(app: ^App, ref: Image_Ref) {
@@ -267,12 +294,7 @@ view_zoom_to :: proc(app: ^App, zoom, max_zoom: f32, at: [2]f32) {
 }
 
 image_viewer :: proc(app: ^App, em: f32) {
-	if app.view_start.key != 0 {
-		if s := image_get(app, app.view_start); s != nil && s.state != .Pending {
-			if s.state == .Ready { image_view_open(app, app.view_start) }
-			app.view_start.key = 0
-		} else { app.animating = true }
-	}
+	image_view_wait(app)
 	if !app.view_open { return }
 	e, ok := &app.images[app.view_key]
 	if !ok || e.state != .Ready { app.view_open = false; return }

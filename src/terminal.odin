@@ -2,10 +2,16 @@
 // (vt.odin): the bytes of a PTY go in, the grid comes out, and the keys go through its encoders, so that what programs ask of a terminal
 // is answered as Ghostty answers it.
 //
+// A shell is a tab of the dock (preview.odin): moved, stacked, split and closed like any panel. Its panel id is its own, from
+// TERM_PANEL_BASE; the saved layout names it by the server's id, and a name no shell answers to is dropped there. Panel.Terminal is
+// what stands in the dock while there is no shell yet: the reading of the list, a failure and its Try again.
+//
 // A thread per shell owns its WebSocket: it reads, posts what comes, and sends what waits in the shell's outbox between two reads. The
-// interface only ever puts bytes in that box: it never waits for the network, whatever the shell does. The keys of a focused terminal are taken out of the frame's events
+// interface only ever puts bytes in that box: it never waits for the network, whatever the shell does. The keys of the focused shell are taken out of the frame's events
 // before the interface sees them (term_events): Ctrl+K belongs to the shell there, and Escape does not stop a run. Ctrl+Shift+C and V
-// copy and paste. A shell outlives the program: it is found again when the panel opens, its output replayed by the server.
+// copy and paste. A shell outlives the program and a lost socket: it is found again when the panel opens, its output replayed by the
+// server, and a socket that drops is opened again where it stopped. A shell lives on one server: Term.server is the connection everything
+// about it goes by, and leaving that server leaves its shells running there (terminals_forget).
 package occ
 
 import "base:runtime"
@@ -15,6 +21,7 @@ import "core:math"
 import "core:strings"
 import "core:sync"
 import "core:thread"
+import "core:time"
 import "core:unicode/utf8"
 import "gt:draw"
 import "gt:font"
@@ -24,16 +31,29 @@ import "gt:ui"
 // In the program, which is one file: the licence asks to go with the code.
 GHOSTTY_LICENSE :: #load("../assets/GHOSTTY-LICENSE.txt", string)
 
+// Where a shell's socket stands. Only its thread moves it, by term_news.
+Term_Link :: enum u8 {
+	Connecting,   // the first socket is on its way: what is typed waits in the outbox
+	Attached,
+	Lost,         // the socket went and the shell may run on: its thread tries again (Term.given_up: it stopped trying)
+	Closed,       // the server says the shell is over
+}
+
 // What a shell's thread shares with the interface. (Never freed: a thread may still look at it after the shell is gone, and it is small.)
 Term_Conn :: struct {
-	stop: bool,
-	lock: sync.Mutex,
-	out:  [dynamic]u8,   // what goes to the shell
+	stop:   bool,
+	renew:  bool,          // (atomic) the socket may be dead without knowing it: opened again, from the cursor
+	lock:   sync.Mutex,
+	out:    [dynamic]u8,   // what goes to the shell
+	cursor: i64,           // how far its output was read, as the server counts: where the next socket starts (the thread's while it runs)
 }
 
 Term :: struct {
 	id, title, dir: string,   // (owned)
-	ended:  bool,
+	server: ^Conn,            // the server it lives on: what is asked about it goes there
+	panel:  u32,              // its tab in the dock
+	link:   Term_Link,
+	given_up: bool,           // Lost, and its thread is over: a click, or the server coming back, starts another
 	vt:     Vt_Terminal,
 	state:  Vt_State,
 	rows_it: Vt_Rows,
@@ -44,21 +64,43 @@ Term :: struct {
 	mouse_ev:  Vt_Mouse_Event,
 	conn:   ^Term_Conn,
 	cols, rows: u16,
+	size_sent, size_asked: [2]u16,   // what the server was last told, what is on its way
+	size_flying: bool,         // one at a time: the size that goes next is the last one
+	fitted: bool,              // its grid was laid out: until then its size says nothing (a shell found again under another tab has its own)
+	shown:  bool,              // its panel was built in this build
+	box:    ui.Key,
+	rect:   draw.Rect,         // the grid, as last laid out
 	lines:  [dynamic]string,   // the text of the rows shown, for a copy (owned)
 	selecting: bool,           // the left button is held on the grid
 	has_selection: bool,
-	sel_from, sel_to: [2]int,  // column, row
+	sel_from, sel_to: [2]int,  // column, row, in the view: what moves the view drops them (term_selection_drop)
 }
 
+// What the left button (or another, for a program) holds on a grid. Its release comes wherever the pointer is: a program that was told
+// of the press is told of that too.
+Term_Press :: enum u8 { None, Select, Program }
+
+// The user asked for a shell to have the keyboard. It takes it when it is there, unless the focus went elsewhere meanwhile: an answer
+// does not move the keyboard by itself. (`panel` 0: the next shell, the one on its way.)
+Term_Focus_Ask :: struct { on: bool, panel: u32, from: ui.Key }
+
 Terminals :: struct {
-	open:    bool,
-	asked:   bool,             // the shells of the server were looked for
+	open:    bool,             // the shells have their tabs (hidden: they run on, out of the dock)
+	read:    Remote,           // the list of the server's shells
+	made:    Remote,           // a new shell on its way
+	make_after: bool,          // one was asked for while the list was read: what it says comes first
 	list:    [dynamic]^Term,
-	active:  int,
-	box:     ui.Key,
-	rect:    draw.Rect,        // the grid, as last laid out
-	focused: bool,
-	want_focus: bool,
+	gone:    [dynamic]^Term,   // closed in this frame: what was built for them is still to be drawn (terminals_reap)
+	next_panel: u32,
+	last_panel: u32,           // the last shell that had the keyboard: a new one goes beside it
+	replaces:   u32,           // a shell restarted: the new one takes its tab
+	close_due:  u32,           // a tab to close once the dock is built
+	focused: ^Term,            // has the keyboard, in the last build (shown, and its grid has the focus)
+	ask:     Term_Focus_Ask,
+	press:   Term_Press,
+	pressed: ^Term,
+	press_button: platform.Mouse_Button,
+	press_pos:    [2]f32,
 	font_size, cell_w, cell_h, ascent: f32,
 }
 
@@ -139,10 +181,11 @@ term_title_changed :: proc "c" (vt: Vt_Terminal, user: rawptr) {
 	t.title = strings.clone(string(s.ptr[:s.len]))
 }
 
+// (Nothing reads the outbox of a shell without a socket: keys typed then are dropped, and they would run later, unseen.)
 term_send :: proc(t: ^Term, s: string) {
-	if t.conn == nil || len(s) == 0 { return }
+	if t.conn == nil || len(s) == 0 || t.link >= .Lost { return }
 	sync.lock(&t.conn.lock)
-	append(&t.conn.out, s)
+	if len(t.conn.out) + len(s) <= TERM_OUT_MAX { append(&t.conn.out, s) }
 	sync.unlock(&t.conn.lock)
 }
 
@@ -162,64 +205,141 @@ term_flush :: proc(ws: rawptr, c: ^Term_Conn) {
 // The shell's thread
 
 @(private = "file")
-Term_Thread :: struct { app: ^App, conn: ^Term_Conn, http: ^Http, id, path: string }
+Term_Thread :: struct { app: ^App, conn: ^Term_Conn, http: ^Http, id, path, list_path: string }
+
+// What a shell's thread says: output, or where its socket stands.
+@(private = "file")
+Term_News :: struct { conn: ^Term_Conn, text: string, is_link: bool, link: Term_Link, given_up: bool }
+
+// A frame of the socket: the output it holds moves the cursor. The server counts what a JavaScript string counts, 16-bit units, whatever
+// the bytes on the wire; a frame with a zero first says where it stands and is not output.
+term_frame :: proc(c: ^Term_Conn, frame: string) -> (output: bool) {
+	if len(frame) == 0 { return false }
+	if frame[0] == 0 {
+		v, err := json.parse_string(frame[1:], parse_integers = true, allocator = context.temp_allocator)
+		if err == nil && jget(v, "cursor") != nil { c.cursor = i64(jnum(v, "cursor")) }
+		return false
+	}
+	for b in transmute([]u8)frame {
+		if b & 0xC0 != 0x80 { c.cursor += 1 }   // (a character)
+		if b >= 0xF0 { c.cursor += 1 }          // (... beyond 16 bits: two units)
+	}
+	return true
+}
+
+// How long before the `tries`-th attempt.
+term_backoff_ms :: proc(tries: int) -> int { return min(TERM_RETRY_MS << uint(clamp(tries - 1, 0, 16)), TERM_RETRY_MOST_MS) }
+
+// Whether the server's list of shells has this one running.
+term_listed :: proc(list: string, id: string) -> bool {
+	v, err := json.parse_string(list, parse_integers = true, allocator = context.temp_allocator)
+	if err != nil { return true }   // (nothing can be said from that: tried again)
+	for it in jarr(v, "data") { if jstr(it, "id") == id { return jstr(it, "status") == "running" } }
+	return false
+}
 
 @(private = "file")
-Term_Data :: struct { id, text: string, ended: bool }
+term_post :: proc(job: ^Term_Thread, news: Term_News) {
+	d := new(Term_News)
+	d^ = news
+	d.conn = job.conn
+	if !ui.post(&job.app.ui_state, term_news, d) { delete(d.text); free(d) }
+}
 
+// Reads until the socket goes.
 @(private = "file")
-term_connect :: proc(app: ^App, t: ^Term) {
-	t.conn = new(Term_Conn)
-	job := new(Term_Thread)
-	job^ = {app, t.conn, &app.conn.http, strings.clone(t.id), strings.clone(term_path(t, "/connect"))}
-	thread.create_and_start_with_poly_data(job, proc(job: ^Term_Thread) {
-		app := job.app
-		post :: proc(app: ^App, id, text: string, ended: bool) {
-			d := new(Term_Data)
-			d^ = {strings.clone(id), text, ended}
-			if !ui.post(&app.ui_state, term_answer, d) { delete(d.id); delete(d.text); free(d) }
-		}
-		path := fmt.aprintf("%s%scursor=0", job.path, strings.contains(job.path, "?") ? "&" : "?")
+term_read :: proc(job: ^Term_Thread, ws: rawptr) {
+	for !sync.atomic_load(&job.conn.stop) && !sync.atomic_load(&job.conn.renew) {
+		term_flush(ws, job.conn)
+		out: Occ_Buf
+		r := occ_ws_read(ws, &out)
+		if r < 0 { return }
+		if r == 0 { continue }   // (the read waited, a little: this is what sends come between)
+		text := string(out.ptr[:out.len])
+		if term_frame(job.conn, text) { term_post(job, {text = strings.clone(text)}) }
+		occ_buf_free(out)
+	}
+}
+
+// A socket that ends says nothing of why: the list of the server does. A shell that exited is over, at once; a server that does not answer
+// may come back, so the socket is tried again, TERM_RETRIES times, each wait longer, from where the output stopped.
+@(private = "file")
+term_thread :: proc(job: ^Term_Thread) {
+	c := job.conn
+	tries := 0
+	for !sync.atomic_load(&c.stop) {
+		path := fmt.aprintf("%s%scursor=%d", job.path, strings.contains(job.path, "?") ? "&" : "?", c.cursor)
 		ws := occ_ws_open(job.http.client, raw_data(path), len(path))
 		delete(path)
 		if ws != nil {
+			began := time.tick_now()
 			occ_ws_read_timeout(ws, TERM_READ_MS)
-			for !sync.atomic_load(&job.conn.stop) {
-				term_flush(ws, job.conn)
-				out: Occ_Buf
-				r := occ_ws_read(ws, &out)
-				if r < 0 { break }
-				if r == 0 { continue }   // (the read waited, a little: this is what sends come between)
-				text := string(out.ptr[:out.len])
-				if len(text) > 0 && text[0] != 0 { post(app, job.id, strings.clone(text), false) }   // (a zero first: where the server is, not output)
-				occ_buf_free(out)
-			}
+			term_post(job, {is_link = true, link = .Attached})
+			term_read(job, ws)
 			occ_ws_free(ws)
+			if time.duration_milliseconds(time.tick_since(began)) >= TERM_STABLE_MS { tries = 0 }
 		}
-		if !sync.atomic_load(&job.conn.stop) { post(app, job.id, "", true) }
-		delete(job.id); delete(job.path)
-		free(job)
-	}, self_cleanup = true)
+		if sync.atomic_load(&c.stop) { break }
+		if sync.atomic_exchange(&c.renew, false) { continue }   // (asked for: nothing happened to the shell)
+		status, body, reached := http_request(job.http, "GET", job.list_path)
+		gone := reached && status == 200 && !term_listed(body, job.id)
+		delete(body)
+		free_all(context.temp_allocator)
+		if gone { term_post(job, {is_link = true, link = .Closed}); break }
+		tries += 1
+		if tries > TERM_RETRIES { term_post(job, {is_link = true, link = .Lost, given_up = true}); break }
+		term_post(job, {is_link = true, link = .Lost})
+		for left := term_backoff_ms(tries); left > 0 && !sync.atomic_load(&c.stop); left -= TERM_RETRY_STEP_MS { time.sleep(TERM_RETRY_STEP_MS * time.Millisecond) }
+	}
+	delete(job.id); delete(job.path); delete(job.list_path)
+	free(job)
+}
+
+// The event stream came back after a loss. A socket reads nothing on a link that died in silence and cannot tell it from a quiet shell, and
+// what is typed goes nowhere: the stream, which has a limit on silence, is what knows. From the cursor, opening a healthy one again repeats
+// nothing.
+terminals_renew :: proc(app: ^App) {
+	for t in app.cx.terms.list { if t.server == app.conn && t.conn != nil { sync.atomic_store(&t.conn.renew, true) } }
+}
+
+@(private = "file")
+term_connect :: proc(app: ^App, t: ^Term) {
+	if t.conn == nil { t.conn = new(Term_Conn) }
+	when ODIN_TEST { return }   // (no socket: the test says what its thread would)
+	job := new(Term_Thread)
+	job^ = {app, t.conn, &t.server.http, strings.clone(t.id), strings.clone(term_path(t, "/connect")), strings.clone(term_list_path(t.dir))}
+	thread.create_and_start_with_poly_data(job, term_thread, self_cleanup = true)
 }
 
 // On the interface's thread.
 @(private = "file")
-term_answer :: proc(data: rawptr, word: u64) {
+term_news :: proc(data: rawptr, word: u64) {
 	app := the_app
-	d := (^Term_Data)(data)
-	defer { delete(d.id); delete(d.text); free(d) }
-	t := term_find(app, d.id)
-	if t == nil { return }
-	if d.ended {
-		t.ended = true
-	} else {
-		term_feed(t, d.text)
-	}
+	d := (^Term_News)(data)
+	defer { delete(d.text); free(d) }
+	t := term_of_conn(app, d.conn)
+	if t == nil { return }   // (a shell closed, a server left)
+	if d.is_link { term_link_set(app, t, d.link, d.given_up) } else { term_feed(t, d.text) }
 	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
 }
 
+term_link_set :: proc(app: ^App, t: ^Term, link: Term_Link, given_up := false) {
+	t.link, t.given_up = link, given_up
+	if link >= .Lost && t.conn != nil {
+		sync.lock(&t.conn.lock)
+		clear(&t.conn.out)
+		sync.unlock(&t.conn.lock)
+	}
+	if link == .Attached {
+		t.size_sent = {}   // (a shell found again, a server back: it is told, once)
+		term_size_send(app, t)
+	}
+}
+
 term_feed :: proc(t: ^Term, s: string) {
-	if t.vt != nil && len(s) > 0 { ghostty_terminal_vt_write(t.vt, raw_data(s), len(s)) }
+	if t.vt == nil || len(s) == 0 { return }
+	if term_at_bottom(t) { term_selection_drop(t) }   // (the rows move under it; scrolled up, the view stays where it is)
+	ghostty_terminal_vt_write(t.vt, raw_data(s), len(s))
 }
 
 term_find :: proc(app: ^App, id: string) -> ^Term {
@@ -227,64 +347,313 @@ term_find :: proc(app: ^App, id: string) -> ^Term {
 	return nil
 }
 
+@(private = "file")
+term_of_conn :: proc(app: ^App, c: ^Term_Conn) -> ^Term {
+	for t in app.cx.terms.list { if t.conn == c { return t } }
+	return nil
+}
+
+term_of_panel :: proc(app: ^App, panel: u32) -> ^Term {
+	if panel < TERM_PANEL_BASE { return nil }
+	for t in app.cx.terms.list { if t.panel == panel { return t } }
+	return nil
+}
+
 ////////////////////////////////
 // The shells of the server
 
+@(private = "file")
+term_list_path :: proc(dir: string) -> string {
+	q := term_location(dir)
+	return fmt.tprintf("/api/pty%s%s", q != "" ? "?" : "", q)
+}
+
+// The server's shells are read: a new reading, when the panel opens, on Try again, when the server answers again.
+terminals_ask :: proc(app: ^App) {
+	s := &app.cx.terms
+	dir := chat_dir(app)
+	remote_begin(&s.read)
+	request(app, .Pty_List, "GET", term_list_path(dir), tag = dir, remote = &s.read)
+}
+
+// The next shell built, or `panel`'s, takes the keyboard. Only the user asks.
+term_focus_ask :: proc(app: ^App, panel: u32 = 0) {
+	app.cx.terms.ask = {on = true, panel = panel, from = ui.focus_key()}
+}
+
+// (a build of `t` asks: the request ends here, whichever way. A shell on its way is not the one already shown.)
+term_takes_focus :: proc(s: ^Terminals, t: ^Term, focus: ui.Key) -> bool {
+	a := &s.ask
+	if !a.on || a.panel != t.panel { return false }
+	a.on = false
+	return focus == a.from
+}
+
+// Every shell has its tab, and nothing else does: Panel.Terminal while there is no shell to show.
+terminals_dock :: proc(app: ^App) {
+	s := &app.cx.terms
+	d := &app.dock
+	stand_in := u32(Panel.Terminal)
+	if !s.open {
+		for t in s.list { ui.dock_close(d, t.panel) }
+		ui.dock_close(d, stand_in)
+		return
+	}
+	if len(s.list) == 0 {
+		if !ui.dock_has(d, stand_in) { ui.dock_add(d, stand_in, ui.Dock_Target{place = .Edge_Bottom}) }
+		return
+	}
+	for t in s.list { term_dock(app, t) }
+	ui.dock_close(d, stand_in)
+}
+
+// A shell with no tab goes where the shells are: in the stand-in's place, beside the last one used, else along the bottom edge.
+@(private = "file")
+term_dock :: proc(app: ^App, t: ^Term) {
+	s := &app.cx.terms
+	d := &app.dock
+	if ui.dock_has(d, t.panel) { return }
+	beside := u32(Panel.Terminal)
+	if !ui.dock_has(d, beside) { beside = s.last_panel }
+	if beside == 0 || !ui.dock_has(d, beside) {
+		beside = 0
+		for o in s.list { if o != t && ui.dock_has(d, o.panel) { beside = o.panel } }
+	}
+	ui.dock_add(d, t.panel, beside != 0 ? ui.dock_with(d, beside) : ui.Dock_Target{place = .Edge_Bottom})
+}
+
+// Whether one of the shells can be seen.
+@(private = "file")
+terminals_seen :: proc(app: ^App) -> bool {
+	for t in app.cx.terms.list { if ui.dock_shown(&app.dock, t.panel) { return true } }
+	return ui.dock_shown(&app.dock, u32(Panel.Terminal))
+}
+
+// Shown, hidden: the shells run on either way. (Open, but under another tab: it comes up. What the key is for is to see them.)
 terminal_toggle :: proc(app: ^App) {
 	s := &app.cx.terms
-	s.open = !s.open
-	if s.open {
-		dock_setup(app)
-		ui.dock_activate(&app.dock, u32(Panel.Terminal))
-		s.want_focus = true
-		if !s.asked {
-			s.asked = true
-			q := term_location(chat_dir(app))
-			request(app, .Pty_List, "GET", fmt.tprintf("/api/pty%s%s", q != "" ? "?" : "", q), tag = chat_dir(app))
-		}
-	} else {
-		s.focused = false
-		ui.dock_close(&app.dock, u32(Panel.Terminal))
+	switch {
+	case !s.open:
+		terminals_show(app)
+	case !terminals_seen(app):
+		panel := s.last_panel != 0 && term_of_panel(app, s.last_panel) != nil ? s.last_panel : len(s.list) > 0 ? s.list[0].panel : u32(Panel.Terminal)
+		ui.dock_activate(&app.dock, panel)
+		term_focus_ask(app, panel >= TERM_PANEL_BASE ? panel : 0)
+	case:
+		panel_close(app, u32(Panel.Terminal))
 	}
 	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
 }
 
+// (the palette) Another shell, the panel opened for it if need be.
+terminal_new :: proc(app: ^App) {
+	if !app.cx.terms.open { terminals_show(app) }
+	if len(app.cx.terms.list) > 0 { term_create(app) }
+}
+
 @(private = "file")
-term_add :: proc(app: ^App, it: json.Value, dir: string) {
+terminals_show :: proc(app: ^App) {
+	s := &app.cx.terms
+	s.open = true
+	dock_setup(app)
+	panel := len(s.list) > 0 ? s.list[0].panel : 0
+	if term_of_panel(app, s.last_panel) != nil { panel = s.last_panel }
+	term_focus_ask(app, panel)
+	if panel != 0 { ui.dock_activate(&app.dock, panel) }
+	switch {
+	case s.read.state == .Loading:
+	case !remote_shows(&s.read):  terminals_ask(app)
+	case len(s.list) == 0:        term_create(app)
+	}
+}
+
+// Out of the dock, every tab: the shells stay, their threads read on, and the keyboard goes back to the conversation.
+terminals_hide :: proc(app: ^App) {
+	s := &app.cx.terms
+	had_keys := s.focused != nil
+	term_press_end(s)
+	s.open = false
+	s.focused = nil
+	s.ask = {}
+	s.make_after = false
+	terminals_dock(app)
+	if had_keys { app.cx.focus_composer = true }
+}
+
+// (a shell the list and this client both know is left as it is: the reading only adds)
+@(private = "file")
+term_add :: proc(app: ^App, it: json.Value, dir: string) -> ^Term {
 	s := &app.cx.terms
 	id := jstr(it, "id")
-	if id == "" || term_find(app, id) != nil { return }
+	if id == "" || term_find(app, id) != nil { return nil }
 	t := term_new(id, jstr(it, "title"), dir)
+	t.server = app.conn
+	t.panel = TERM_PANEL_BASE + s.next_panel
+	s.next_panel += 1
 	append(&s.list, t)
-	s.active = len(s.list) - 1
 	term_connect(app, t)
+	return t
 }
 
-// What was left running comes back; else a first shell.
+// What was left running comes back, in the places the layout keeps for it; else a first shell, if the panel still waits for one.
 terminals_load :: proc(app: ^App, dir: string, v: json.Value) {
-	for it in jarr(v, "data") { if jstr(it, "status") == "running" { term_add(app, it, dir) } }
-	if len(app.cx.terms.list) == 0 { term_create(app) }
+	s := &app.cx.terms
+	added := false
+	for it in jarr(v, "data") { if jstr(it, "status") == "running" && term_add(app, it, dir) != nil { added = true } }
+	if s.open {
+		if added { dock_setup(app) }
+		if len(s.list) == 0 || s.make_after {
+			term_make(app, dir, term_next_title(s))
+		} else if s.ask.on && s.ask.panel == 0 {
+			s.ask.panel = s.list[len(s.list) - 1].panel   // (what was asked for is what was found)
+			ui.dock_activate(&app.dock, s.ask.panel)
+		}
+	}
+	s.make_after = false
 }
 
+@(private = "file")
+term_next_title :: proc(s: ^Terminals) -> string { return fmt.tprintf("Terminal %d", len(s.list) + 1) }
+
+// A new shell, asked for by the user. While the list is read, its answer decides: one shell is enough to answer both.
 term_create :: proc(app: ^App) {
-	dir := chat_dir(app)
-	q := term_location(dir)
-	request(app, .Pty_Made, "POST", fmt.tprintf("/api/pty%s%s", q != "" ? "?" : "", q), fmt.tprintf(`{{"title":"Terminal %d"}}`, len(app.cx.terms.list) + 1), dir)
+	s := &app.cx.terms
+	term_focus_ask(app)
+	if s.read.state == .Ready {
+		term_make(app, chat_dir(app), term_next_title(s))
+		return
+	}
+	s.make_after = true
+	if s.read.state != .Loading { terminals_ask(app) }
+}
+
+// (one at a time)
+@(private = "file")
+term_make :: proc(app: ^App, dir, title: string) {
+	s := &app.cx.terms
+	if s.made.state == .Loading { return }
+	remote_begin(&s.made)
+	request(app, .Pty_Made, "POST", term_list_path(dir), fmt.tprintf(`{{"title":%s}}`, jquote(title)), dir, remote = &s.made)
 }
 
 term_made :: proc(app: ^App, dir: string, v: json.Value) {
-	term_add(app, jget(v, "data"), dir)
-	app.cx.terms.want_focus = true
+	s := &app.cx.terms
+	t := term_add(app, jget(v, "data"), dir)
+	if t == nil {
+		remote_settle(&s.made, .Failed, "Unreadable answer")
+		s.replaces = 0
+		return
+	}
+	if s.ask.on && s.ask.panel == 0 { s.ask.panel = t.panel }
+	replaced := term_of_panel(app, s.replaces)
+	s.replaces = 0
+	if !s.open { if replaced != nil { term_forget_one(app, replaced) }; return }
+	d := &app.dock
+	if replaced != nil {
+		// (its place in its strip, its stack, its split: what was restarted is the same tab to the reader)
+		at := 0
+		leaf := ui.dock_leaf_of(d, replaced.panel)
+		for p, k in ui.dock_tabs(d, leaf) { if p == replaced.panel { at = k } }
+		if leaf != ui.DOCK_NONE { ui.dock_add(d, t.panel, ui.Dock_Target{place = .Tab, node = leaf, index = at}) }
+		term_forget_one(app, replaced)
+	}
+	term_dock(app, t)
+	ui.dock_close(d, u32(Panel.Terminal))
+	ui.dock_activate(d, t.panel)
 }
 
-@(private = "file")
-term_close :: proc(app: ^App, i: int) {
+// What failed for a new shell: told in the panel while there is no other, by a toast else.
+term_made_failed :: proc(app: ^App) -> (told: bool) {
 	s := &app.cx.terms
-	t := s.list[i]
-	request(app, .Action, "DELETE", term_path(t))
-	ordered_remove(&s.list, i)
-	term_free(t)
-	s.active = clamp(s.active, 0, max(len(s.list) - 1, 0))
+	s.replaces = 0
+	return s.open && len(s.list) == 0
+}
+
+// A shell made on a server left, with nobody to use it: it does not stay there.
+term_made_left :: proc(app: ^App, r: ^Request, v: json.Value) {
+	id := jstr(v, "data", "id")
+	if id == "" { return }
+	q := term_location(r.tag)
+	request(app, .Action, "DELETE", fmt.tprintf("/api/pty/%s%s%s", url_escape(id), q != "" ? "?" : "", q), conn = r.conn)
+}
+
+// Out of the client, and of the dock. It is freed after the frame (terminals_reap): this build's box may still draw it.
+@(private = "file")
+term_forget_one :: proc(app: ^App, t: ^Term) {
+	s := &app.cx.terms
+	if s.pressed == t { term_press_end(s) }
+	if s.focused == t { s.focused = nil }
+	ui.dock_close(&app.dock, t.panel)
+	for o, i in s.list { if o == t { ordered_remove(&s.list, i); break } }
+	if t.conn != nil { sync.atomic_store(&t.conn.stop, true) }
+	append(&s.gone, t)
+}
+
+// A tab closed: the shell is closed on its server (unless it is over already). The last one closes the area.
+term_close :: proc(app: ^App, t: ^Term) {
+	s := &app.cx.terms
+	had_keys := s.focused == t
+	if t.link != .Closed { request(app, .Action, "DELETE", term_path(t), conn = t.server) }
+	term_forget_one(app, t)
+	if len(s.list) == 0 {
+		s.open = false
+		s.ask = {}
+		if had_keys { app.cx.focus_composer = true }
+	} else if had_keys {
+		for o in s.list { if ui.dock_shown(&app.dock, o.panel) { term_focus_ask(app, o.panel); break } }
+	}
+}
+
+// A shell that ended begins again, in the same tab, the same folder.
+term_restart :: proc(app: ^App, t: ^Term) {
+	s := &app.cx.terms
+	if s.made.state == .Loading { return }
+	s.replaces = t.panel
+	term_focus_ask(app)
+	term_make(app, t.dir, t.title)
+}
+
+// A socket given up on is tried again.
+term_reconnect :: proc(app: ^App, t: ^Term) {
+	if t.link != .Lost || !t.given_up { return }
+	t.link, t.given_up = .Connecting, false
+	term_connect(app, t)
+}
+
+// The server answers again: what was not read is, and the sockets given up on are tried again.
+terminals_reread :: proc(app: ^App) {
+	s := &app.cx.terms
+	if s.open && remote_failed(&s.read) { terminals_ask(app) }
+	for t in s.list { term_reconnect(app, t) }
+}
+
+// The server is left. Its shells run on there and this client lets go of them: nothing is asked of it, nothing of theirs stays here, the
+// panel closes (the next server's list is read when it opens: no shell is made on a server for having been open on another).
+terminals_forget :: proc(app: ^App) {
+	s := &app.cx.terms
+	term_press_end(s)
+	for len(s.list) > 0 { term_forget_one(app, s.list[len(s.list) - 1]) }
+	ui.dock_close(&app.dock, u32(Panel.Terminal))
+	app.dock.drag = {}   // (a tab held: it would come back when dropped)
+	s.open = false
+	s.focused = nil
+	s.ask = {}
+	s.make_after = false
+	s.last_panel, s.replaces, s.close_due = 0, 0, 0
+	remote_reset(&s.read)
+	remote_reset(&s.made)
+}
+
+// After the frame: what was closed in it has been drawn.
+terminals_reap :: proc(app: ^App) {
+	s := &app.cx.terms
+	for t in s.gone { term_free(t) }
+	clear(&s.gone)
+}
+
+// The window closes: the shells' threads go with it. (Nothing to close on the server: they outlive the program.)
+terminals_stop :: proc(app: ^App) {
+	for t in app.cx.terms.list { if t.conn != nil { sync.atomic_store(&t.conn.stop, true) } }
 }
 
 ////////////////////////////////
@@ -372,17 +741,65 @@ term_tracks_mouse :: proc(t: ^Term) -> bool {
 }
 
 @(private = "file")
-term_cell_at :: proc(s: ^Terminals, p: [2]f32) -> [2]int {
-	x := int((p.x - s.rect.min.x - TERM_PAD) / max(s.cell_w, 1))
-	y := int((p.y - s.rect.min.y - TERM_PAD) / max(s.cell_h, 1))
+term_cell_at :: proc(t: ^Term, s: ^Terminals, p: [2]f32) -> [2]int {
+	x := int((p.x - t.rect.min.x - TERM_PAD) / max(s.cell_w, 1))
+	y := int((p.y - t.rect.min.y - TERM_PAD) / max(s.cell_h, 1))
 	return {max(x, 0), max(y, 0)}
 }
 
 @(private = "file")
-term_mouse :: proc(t: ^Term, s: ^Terminals, action, button: i32, pos: [2]f32, mods: platform.Modifiers, held: bool) {
+term_at_bottom :: proc(t: ^Term) -> bool {
+	bar: Vt_Scrollbar
+	if t.vt == nil || ghostty_terminal_get(t.vt, VT_DATA_SCROLLBAR, &bar) != VT_OK { return true }
+	return bar.offset + bar.len >= bar.total
+}
+
+// What was selected are cells of the view: when the view moves they hold other text, and a copy would read that.
+term_selection_drop :: proc(t: ^Term) { t.selecting, t.has_selection = false, false }
+
+// The shell whose grid is under `p`: shown, and no floating panel over it.
+term_at :: proc(app: ^App, p: [2]f32) -> ^Term {
+	d := &app.dock
+	for t in app.cx.terms.list {
+		if !t.shown || !draw.rect_contains(t.rect, p) { continue }
+		leaf := ui.dock_leaf_at(d, p - d.origin)
+		if leaf == ui.DOCK_NONE || leaf == ui.dock_leaf_of(d, t.panel) { return t }
+	}
+	return nil
+}
+
+// What the button held on a grid stops, wherever it was let go or whatever took it away: the selection is what it is by now, and a
+// program told of a press is told of its release.
+term_press_end :: proc(s: ^Terminals) {
+	t := s.pressed
+	press := s.press
+	s.press, s.pressed = .None, nil
+	if t == nil { return }
+	switch press {
+	case .None:
+	case .Select:
+		if t.selecting {
+			t.selecting = false
+			t.has_selection = t.sel_from != t.sel_to
+		}
+	case .Program:
+		term_mouse(t, s, VT_MOUSE_RELEASE, mouse_button_of(s.press_button), s.press_pos, {}, false)
+	}
+}
+
+// (a position outside the grid is not one an encoder can say: the nearest in it)
+@(private = "file")
+term_inside :: proc(t: ^Term, p: [2]f32) -> [2]f32 {
+	return {clamp(p.x, t.rect.min.x, t.rect.max.x - 1), clamp(p.y, t.rect.min.y, t.rect.max.y - 1)}
+}
+
+@(private = "file")
+term_mouse :: proc(t: ^Term, s: ^Terminals, action, button: i32, at: [2]f32, mods: platform.Modifiers, held: bool) {
+	if t.vt == nil { return }
+	pos := term_inside(t, at)
 	ghostty_mouse_encoder_setopt_from_terminal(t.mouse_enc, t.vt)
 	size := Vt_Mouse_Size{
-		size = size_of(Vt_Mouse_Size), screen_width = u32(s.rect.max.x - s.rect.min.x), screen_height = u32(s.rect.max.y - s.rect.min.y),
+		size = size_of(Vt_Mouse_Size), screen_width = u32(t.rect.max.x - t.rect.min.x), screen_height = u32(t.rect.max.y - t.rect.min.y),
 		cell_width = u32(s.cell_w), cell_height = u32(s.cell_h),
 		padding_top = u32(TERM_PAD), padding_bottom = u32(TERM_PAD), padding_right = u32(TERM_PAD), padding_left = u32(TERM_PAD),
 	}
@@ -392,7 +809,7 @@ term_mouse :: proc(t: ^Term, s: ^Terminals, action, button: i32, pos: [2]f32, mo
 	ghostty_mouse_event_set_action(t.mouse_ev, action)
 	if button != 0 { ghostty_mouse_event_set_button(t.mouse_ev, button) } else { ghostty_mouse_event_clear_button(t.mouse_ev) }
 	ghostty_mouse_event_set_mods(t.mouse_ev, mods_of(mods))
-	ghostty_mouse_event_set_position(t.mouse_ev, {pos.x - s.rect.min.x, pos.y - s.rect.min.y})
+	ghostty_mouse_event_set_position(t.mouse_ev, {pos.x - t.rect.min.x, pos.y - t.rect.min.y})
 	buf: [TERM_KEY_BYTES]u8
 	n: uint
 	if ghostty_mouse_encoder_encode(t.mouse_enc, t.mouse_ev, &buf[0], len(buf), &n) == VT_OK && n > 0 { term_send(t, string(buf[:n])) }
@@ -424,50 +841,63 @@ term_selection_text :: proc(t: ^Term) -> string {
 	return strings.to_string(out)
 }
 
-// Before the interface sees them: what goes to the shell is taken out. Returns what is left.
+// A key for the shell with the keyboard. False: it is the program's (the key that hides the shells must work from inside them).
+@(private = "file")
+term_key_event :: proc(app: ^App, t: ^Term, e: platform.Event) -> (take: bool) {
+	if e.key == .T && e.mods == {.Ctrl, .Shift} { return false }
+	switch {
+	case e.key == .C && e.mods == {.Ctrl, .Shift}:
+		if t.has_selection { clip_set(term_selection_text(t)) }
+	case e.key == .V && e.mods == {.Ctrl, .Shift}:
+		term_paste(app, t)
+	case e.key == .Page_Up && e.mods == {.Shift}:
+		ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = -i64(t.rows)})
+		term_selection_drop(t)
+	case e.key == .Page_Down && e.mods == {.Shift}:
+		ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = i64(t.rows)})
+		term_selection_drop(t)
+	case e.key == .Shift || e.key == .Ctrl || e.key == .Alt:
+	case:
+		if s := term_encode_key(t, e.key, e.mods, e.repeat); s != "" {
+			term_send(t, s)
+			ghostty_terminal_scroll_viewport(t.vt, {tag = .Bottom})
+			term_selection_drop(t)
+		}
+	}
+	return true
+}
+
+// Before the interface sees them: what goes to a shell is taken out. Returns what is left. The keys go to the shell that has the keyboard,
+// the pointer to the one it is over: both are shown, as the last build says, or there is none.
 term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 	s := &app.cx.terms
-	if !s.open || len(s.list) == 0 || overlay_open(app) { return events }
-	t := s.list[clamp(s.active, 0, len(s.list) - 1)]
-	if t.vt == nil { return events }
+	if !s.open || len(s.list) == 0 { return events }
+	if overlay_open(app) {
+		term_press_end(s)
+		return events
+	}
 	kept := 0
 	for e in events {
-		inside := draw.rect_contains(s.rect, e.pos)
 		take := false
+		keys := s.focused
+		if keys != nil && keys.vt == nil { keys = nil }
 		#partial switch e.kind {
 		case .Key_Press:
-			if !s.focused { break }
-			take = true
-			switch {
-			case e.key == .C && e.mods == {.Ctrl, .Shift}:
-				if t.has_selection { clip_set(term_selection_text(t)) }
-			case e.key == .V && e.mods == {.Ctrl, .Shift}:
-				term_paste(app, t)
-			case e.key == .Page_Up && e.mods == {.Shift}:
-				ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = -i64(t.rows)})
-			case e.key == .Page_Down && e.mods == {.Shift}:
-				ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = i64(t.rows)})
-			case e.key == .Shift || e.key == .Ctrl || e.key == .Alt:
-			case:
-				if s := term_encode_key(t, e.key, e.mods, e.repeat); s != "" {
-					term_send(t, s)
-					ghostty_terminal_scroll_viewport(t.vt, {tag = .Bottom})
-					t.has_selection = false
-				}
-			}
+			if keys != nil { take = term_key_event(app, keys, e) }
 		case .Key_Release:
-			take = s.focused
+			take = keys != nil
 		case .Text:
-			if !s.focused { break }
+			if keys == nil { break }
 			take = true
 			if e.text >= ' ' && e.text != 127 {
 				b, n := utf8.encode_rune(e.text)
-				term_send(t, string(b[:n]))
-				ghostty_terminal_scroll_viewport(t.vt, {tag = .Bottom})
-				t.has_selection = false
+				term_send(keys, string(b[:n]))
+				ghostty_terminal_scroll_viewport(keys.vt, {tag = .Bottom})
+				term_selection_drop(keys)
 			}
 		case .Scroll:
-			if !inside { break }
+			t := term_at(app, e.pos)
+			if t == nil || t.vt == nil { break }
 			take = true
 			if term_tracks_mouse(t) {
 				button: i32 = e.delta.y > 0 ? VT_MOUSE_FIVE : VT_MOUSE_FOUR
@@ -475,28 +905,38 @@ term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 				term_mouse(t, s, VT_MOUSE_RELEASE, button, e.pos, e.mods, false)
 			} else {
 				ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = i64(math.round(e.delta.y * TERM_WHEEL_LINES))})
+				term_selection_drop(t)
 			}
 		case .Mouse_Press:
-			if !inside { break }
+			t := term_at(app, e.pos)
+			if t == nil || t.vt == nil { break }
 			if term_tracks_mouse(t) && .Shift not_in e.mods {
 				term_mouse(t, s, VT_MOUSE_PRESS, mouse_button_of(e.button), e.pos, e.mods, true)
-			} else if e.button == .Left {
+				if s.press == .None { s.press, s.pressed, s.press_button, s.press_pos = .Program, t, e.button, e.pos }
+			} else if e.button == .Left && s.press == .None {
+				s.press, s.pressed, s.press_button, s.press_pos = .Select, t, e.button, e.pos
 				t.selecting, t.has_selection = true, false
-				t.sel_from = term_cell_at(s, e.pos)
+				t.sel_from = term_cell_at(t, s, e.pos)
 				t.sel_to = t.sel_from
 			}
 		case .Mouse_Release:
-			if t.selecting {
-				t.selecting = false
-				t.has_selection = t.sel_from != t.sel_to
-			} else if inside && term_tracks_mouse(t) {
+			if s.press != .None && e.button == s.press_button {
+				s.press_pos = e.pos
+				term_press_end(s)
+			} else if t := term_at(app, e.pos); t != nil && t.vt != nil && term_tracks_mouse(t) {
 				term_mouse(t, s, VT_MOUSE_RELEASE, mouse_button_of(e.button), e.pos, e.mods, false)
 			}
 		case .Mouse_Move:
-			if t.selecting {
-				t.sel_to = term_cell_at(s, e.pos)
-			} else if inside && term_tracks_mouse(t) {
-				term_mouse(t, s, VT_MOUSE_MOTION, 0, e.pos, e.mods, e.buttons != {})
+			switch s.press {
+			case .Select:
+				if s.pressed.selecting { s.pressed.sel_to = term_cell_at(s.pressed, s, e.pos) }
+			case .Program:
+				s.press_pos = e.pos
+				term_mouse(s.pressed, s, VT_MOUSE_MOTION, 0, e.pos, e.mods, true)
+			case .None:
+				if t := term_at(app, e.pos); t != nil && t.vt != nil && term_tracks_mouse(t) {
+					term_mouse(t, s, VT_MOUSE_MOTION, 0, e.pos, e.mods, e.buttons != {})
+				}
 			}
 		}
 		if !take {
@@ -516,67 +956,141 @@ term_paste :: proc(app: ^App, t: ^Term) {
 ////////////////////////////////
 // The panel
 
-terminal_panel :: proc(app: ^App, em: f32) {
+// Before the panels of a build: what was shown is shown again only if it is built.
+terminals_begin :: proc(app: ^App) {
+	for t in app.cx.terms.list { t.shown = false }
+}
+
+// After them: who has the keyboard now, from what was really built. A shell hidden, under another tab, in a folded stack has neither the keys
+// nor the pointer. A button held on a grid that is gone, or that lost the press to something else (a menu, another box), is let go.
+terminals_settle :: proc(app: ^App) {
 	s := &app.cx.terms
-	strip := math.round(em * BUTTON_COMPACT_H_EM)
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-	if ui.row(.Center, id = "###term_tabs") {
-		ui.spacer(ui.px(em * 0.4))
-		for t, i in s.list {
-			if bevel_button(fmt.tprintf("###term_t%d", i), label_safe(term_label(t)), "", i == s.active ? .Toggled : .Ghost, height = strip).clicked {
-				s.active, s.want_focus = i, true
-			}
-			if i == s.active {
-				if glyph_button(fmt.tprintf("###term_x%d", i), ICO_CANCEL, strip).clicked {
-					term_close(app, i)
-					s.want_focus = true
-					break
-				}
-			}
-			ui.spacer(ui.px(em * 0.2))
+	s.focused = nil
+	focus := ui.focus_key()
+	for t in s.list {
+		if t.shown && focus != 0 && t.box == focus {
+			s.focused = t
+			s.last_panel = t.panel
 		}
-		if bevel_button("###term_new", "", ICO_ADD, .Ghost, height = strip).clicked { term_create(app) }
 	}
+	if t := s.pressed; t != nil && (!t.shown || overlay_open(app) || ui.active_key() != t.box) { term_press_end(s) }
+}
+
+// What says a shell is not there, and what can be done about it.
+@(private = "file")
+term_banner :: proc(app: ^App, t: ^Term, em: f32) {
+	s := &app.cx.terms
+	if t.link < .Lost { return }
+	words := t.link == .Closed ? "This shell ended." : t.given_up ? "The connection to this shell was lost." : "The connection to this shell was lost: trying again…"
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * TERM_BANNER_H_EM)), axis = .X, cross = .Center})
+	if ui.row(.Center, id = "###term_banner") {
+		ui.spacer(ui.px(em * 0.6))
+		text("w", words, hex(t.link == .Closed ? HEX_WEAK : HEX_YELLOW), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
+		h := math.round(em * BUTTON_COMPACT_H_EM)
+		if t.link == .Closed {
+			if bevel_button("###term_restart", "Restart", ICO_REFRESH, .Normal, height = h, disabled = s.made.state == .Loading).clicked { term_restart(app, t) }
+		} else if t.given_up {
+			if bevel_button("###term_again", "Reconnect", ICO_REFRESH, .Normal, height = h).clicked { term_reconnect(app, t) }
+		}
+		ui.spacer(ui.px(em * 0.3))
+		if bevel_button("###term_close", "Close", ICO_CANCEL, .Ghost, height = h).clicked { s.close_due = t.panel }
+		ui.spacer(ui.px(em * 0.6))
+	}
+}
+
+// A shell, in its panel.
+terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
+	s := &app.cx.terms
+	term_banner(app, t, em)
 	ui.next({width = ui.fill(), height = ui.fill(), cursor = .Text})
 	b := ui.build_box({.Clickable, .Focusable, .Clip}, "###term_box")
-	s.box = b.key
 	sig := ui.signal(b)
-	if sig.pressed || s.want_focus {
-		ui.set_focus(b.key)
-		s.want_focus = false
-	}
-	s.focused = ui.focus_key() == b.key
-	s.rect = b.rect
+	if sig.pressed || term_takes_focus(s, t, ui.focus_key()) { ui.set_focus(b.key) }
+	t.box, t.rect, t.shown = b.key, b.rect, true
 	s.font_size = math.round(em * FS_NOTE)
 	s.cell_w = math.ceil(font.text_width(&app.fonts, app.mono, s.font_size, "M"))
 	m := font.metrics(&app.fonts, app.mono, s.font_size)
 	s.cell_h = math.ceil(m.line_height)
 	s.ascent = m.ascent
-	if len(s.list) == 0 { return }
-	t := s.list[clamp(s.active, 0, len(s.list) - 1)]
 	term_fit(app, t, b.rect)
 	b.custom, b.custom_user = term_draw, t
 }
 
+// What stands in the dock while there is no shell: the reading of the list or of the new shell, and how it ended.
+terminal_waiting :: proc(app: ^App, em: f32) {
+	s := &app.cx.terms
+	ui.spacer(ui.px(em * 0.8))
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+	if ui.row(id = "###term_wait") {
+		ui.spacer(ui.px(em))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+		if ui.column() {
+			if read_shown(app, "###term_read", &s.read, em, terminals_ask) { read_shown(app, "###term_made", &s.made, em, term_create) }
+		}
+		ui.spacer(ui.px(em))
+	}
+}
+
+// The end of a strip that holds a shell: the way to another. (Panel.Terminal's too: the list on its way answers for it.)
+terminal_strip_end :: proc(app: ^App, d: ^ui.Dock, leaf: i32, em: f32) {
+	s := &app.cx.terms
+	any: ^Term
+	stand_in := false
+	for p in ui.dock_tabs(d, leaf) {
+		if p == u32(Panel.Terminal) { stand_in = true }
+		if t := term_of_panel(app, p); t != nil && any == nil { any = t }
+	}
+	if any == nil && !stand_in { return }
+	ui.a11y({role = .Button, name = "New terminal"})
+	if glyph_button("###term_new", ICO_ADD, math.round(em * TERM_NEW_EM)).clicked {
+		if any != nil { s.last_panel = any.panel }   // (in this stack, whichever had the keyboard)
+		term_create(app)
+	}
+}
+
 // A shell names itself by the path of its program: the program is enough.
-@(private = "file")
 term_label :: proc(t: ^Term) -> string {
 	name := base_name(t.title)
 	name = strings.trim_suffix(strings.trim_suffix(name, ".exe"), ".EXE")
-	return ellipsize(t.ended ? fmt.tprintf("%s (ended)", name) : name, TERM_TAB_CHARS)
+	tail := t.link == .Closed ? " (ended)" : t.link == .Lost ? " (lost)" : ""
+	return ellipsize(fmt.tprintf("%s%s", name, tail), TERM_TAB_CHARS)
 }
 
-// The grid follows the panel, and the shell the grid.
+// The grid follows the panel at once. The shell is told the last size, one request at a time: a window being dragged would otherwise send one
+// for each step, on as many threads, in no order, and the last to arrive would be any of them.
 @(private = "file")
 term_fit :: proc(app: ^App, t: ^Term, r: draw.Rect) {
 	s := &app.cx.terms
-	if t.vt == nil || s.cell_w <= 0 { return }
+	if t.vt == nil || s.cell_w <= 0 || r.max.x - r.min.x < 1 { return }
 	cols := u16(clamp((r.max.x - r.min.x - 2 * TERM_PAD) / s.cell_w, 2, 1000))
 	rows := u16(clamp((r.max.y - r.min.y - 2 * TERM_PAD) / s.cell_h, 2, 1000))
-	if r.max.x - r.min.x < 1 || (cols == t.cols && rows == t.rows) { return }
-	t.cols, t.rows = cols, rows
-	ghostty_terminal_resize(t.vt, cols, rows, u32(s.cell_w), u32(s.cell_h))
-	request(app, .Action, "PUT", term_path(t), fmt.tprintf(`{{"size":{{"rows":%d,"cols":%d}}}}`, rows, cols))
+	term_resize(app, t, cols, rows, u32(s.cell_w), u32(s.cell_h))
+}
+
+term_resize :: proc(app: ^App, t: ^Term, cols, rows: u16, cell_w, cell_h: u32) {
+	t.fitted = true
+	if cols != t.cols || rows != t.rows {
+		t.cols, t.rows = cols, rows
+		ghostty_terminal_resize(t.vt, cols, rows, cell_w, cell_h)
+		term_selection_drop(t)
+	}
+	term_size_send(app, t)
+}
+
+// (Only to a shell attached: one that ended has no size to take; what happened meanwhile goes when it is attached, term_link_set.)
+term_size_send :: proc(app: ^App, t: ^Term) {
+	size := [2]u16{t.cols, t.rows}
+	if t.link != .Attached || !t.fitted || t.size_flying || size == t.size_sent { return }
+	t.size_flying, t.size_asked = true, size
+	request(app, .Pty_Size, "PUT", term_path(t), fmt.tprintf(`{{"size":{{"rows":%d,"cols":%d}}}}`, t.rows, t.cols), t.id, conn = t.server)
+}
+
+// Refused, it is not asked again for the same size: the frames would ask for ever.
+term_size_answered :: proc(app: ^App, id: string) {
+	t := term_find(app, id)
+	if t == nil { return }
+	t.size_flying, t.size_sent = false, t.size_asked
+	term_size_send(app, t)
 }
 
 @(private = "file")
@@ -691,7 +1205,7 @@ term_draw_cursor :: proc(t: ^Term, s: ^Terminals, dc: ^draw.Context, origin: [2]
 	left, top := origin.x + f32(cx) * s.cell_w, origin.y + f32(cy) * s.cell_h
 	r := draw.Rect{{left, top}, {left + s.cell_w, top + s.cell_h}}
 	switch {
-	case !s.focused:
+	case s.focused != t:
 		t1 := px1()
 		draw.rect(dc, {r.min, {r.max.x, r.min.y + t1}}, color)
 		draw.rect(dc, {{r.min.x, r.max.y - t1}, r.max}, color)

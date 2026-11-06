@@ -26,7 +26,7 @@ Server :: struct {
 Conn :: struct {
 	http:   Http,
 	stop:   bool,      // (atomic) the event thread stops at its next event or retry
-	browser_up: bool,  // the thread of the agents' browser tools runs (browser_mcp.odin)
+	browser: ^Browser_Link,   // the agents' browser tools on this connection, while they are wanted (browser_mcp.odin)
 }
 
 servers_path :: proc() -> string {
@@ -86,7 +86,7 @@ REDISCOVER_MS :: 2500
 // While this computer's server does not answer, look again every few seconds where it runs: the service may have
 // started since, or restarted on another port. A new address reconnects at once.
 servers_rediscover :: proc(app: ^App) {
-	if app.online || app.server < 0 || app.server >= len(app.servers) || !app.servers[app.server].local { return }
+	if !rediscovering(app) { return }
 	now := ui.now_ms()
 	if now - app.rediscover_ms < REDISCOVER_MS { return }
 	app.rediscover_ms = now
@@ -97,18 +97,45 @@ servers_rediscover :: proc(app: ^App) {
 	if url == s.url && cfg.password == s.password { delete(url); return }
 	delete(s.url); delete(s.password)
 	s.url, s.password = url, strings.clone(cfg.password)
+	reopen_keep(app)
 	server_connect(app, app.server)
 }
 
+@(private = "file")
+rediscovering :: proc(app: ^App) -> bool {
+	return !online(app) && app.server >= 0 && app.server < len(app.servers) && app.servers[app.server].local
+}
+
+// When the next look is due (deferred_tick). 0: not looking.
+rediscover_in_ms :: proc(app: ^App) -> int {
+	if !rediscovering(app) { return 0 }
+	return max(int(app.rediscover_ms + REDISCOVER_MS - ui.now_ms()) + 1, 1)
+}
+
+// The same service, come back on another port, has the same sessions: nothing else says it is the same one. So what was shown
+// is noted here, and sessions_load opens it again if the server's list has it.
+@(private = "file")
+reopen_keep :: proc(app: ^App) {
+	cx := &app.cx
+	reopen_clear(app)
+	if app.chat.id == "" { return }
+	cx.reopen = {id = strings.clone(app.chat.id), msg = strings.clone(cx.view_msg), dy = cx.view_dy, bottom = app.stick_bottom}
+}
+
+reopen_clear :: proc(app: ^App) {
+	delete(app.cx.reopen.id); delete(app.cx.reopen.msg)
+	app.cx.reopen = {}
+}
+
 // Written beside it, then moved over it, readable by the user only: a failure leaves the file as it was, no password lost.
-servers_save :: proc(app: ^App) {
+servers_save :: proc(app: ^App) -> (saved: bool) {
 	b := strings.builder_make(context.temp_allocator)
 	for s in app.servers {
 		if s.local || s.argv { continue }
 		field := s.stored
 		if s.password != "" {
 			f, ok := password_seal(s.name, s.password)
-			if !ok { ui.toast(.Bad, "The password of %s could not be protected: the list of servers was not saved", label_safe(s.name)); return }
+			if !ok { ui.toast(.Bad, "The password of %s could not be protected: the list of servers was not saved", label_safe(s.name)); return false }
 			field = f
 		}
 		fmt.sbprintf(&b, "%s\t%s\t%s\n", s.name, s.url, field)
@@ -122,9 +149,21 @@ servers_save :: proc(app: ^App) {
 	if err != nil {
 		_ = os.remove(tmp)
 		ui.toast(.Bad, "The list of servers could not be saved")
-		return
+		return false
 	}
 	app.servers_in_clear = false
+	return true
+}
+
+// A password that could not be opened at start (a locked keyring) may open now: asked again when it is needed, the keyring unlocked meanwhile
+// needs no restart. (`stored` stays until then.)
+server_password_retry :: proc(s: ^Server) {
+	if s.password != "" || s.stored == "" { return }
+	p, sealed, ok := password_open(s.name, s.stored)
+	if !sealed || !ok { return }
+	s.password = strings.clone(p)
+	delete(s.stored)
+	s.stored = ""
 }
 
 // "host:port" or "https://host" as typed: a full address ("http://" when no scheme is said, no trailing slash).
@@ -141,9 +180,10 @@ server_base :: proc(app: ^App) -> string { return app.conn != nil ? app.conn.htt
 server_name :: proc(app: ^App) -> string { return app.server >= 0 && app.server < len(app.servers) ? app.servers[app.server].name : "" }
 
 // Connects to server `i`: the last connection's thread is told to stop, everything read from it is dropped, and the new
-// one's event stream loads everything when it connects (stream_state).
+// one's event stream loads everything when it connects (stream_up).
 server_connect :: proc(app: ^App, i: int) {
 	if i < 0 || i >= len(app.servers) { return }
+	server_password_retry(&app.servers[i])
 	s := app.servers[i]
 	c := new(Conn)
 	if !http_init(&c.http, s.url, "opencode", s.password) {
@@ -156,38 +196,63 @@ server_connect :: proc(app: ^App, i: int) {
 		server_forget(app)
 	}
 	app.conn = c
+	append(&app.cx.conns, c)
 	app.server = i
 	if !s.argv { settings_set("server", s.name) }
 	thread.create_and_start_with_data(c, events_thread, self_cleanup = true)
 }
 
-// What was read from the server left: sessions, the conversation, agents, models, projects, the settings' facts.
-@(private = "file")
+// What was read from the server left. Each feature has its *_forget (or reset), called from here: what it holds, and every flag
+// that says something is on its way, since the answer will be dropped (answer) and could not lower it. A Remote is reset there too.
+// `app.conn` is still that server: what must be undone there can be asked of it (changes_forget, integrations_forget).
 server_forget :: proc(app: ^App) {
-	app.online = false
-	app.auth_failed = false
+	app.link = .Connecting
 	delete(app.server_version)
 	app.server_version = ""
-	chat_reset(&app.chat)
+	app.cx.view_msg = ""   // (of the arena that goes)
+	chat_home(app)
+	remote_reset(&app.cx.chat_read)
 	for id in app.nav { delete(id) }
 	clear(&app.nav)
+	for st in app.nav_steps { delete(st.id) }
+	clear(&app.nav_steps)
 	nav_clear(app)
+	activity_forget(app)
+	find_forget(app)
+	waits_forget(app)
 	permissions_clear(app)
 	forms_clear(app)
+	busy_forget(app)
+	slash_forget(app)
+	outgoing_forget(app)
+	app.cx.refresh_read, app.cx.facts_read, app.cx.children_read = {}, {}, {}
+	app.picker.open = false
 	app.sessions = nil
 	app.sessions_loaded = false
 	app.opened_first = false
 	app.start_session = ""
-	for k in app.busy { delete(k) }
-	clear(&app.busy)
-	for a in app.agents { delete(a.id); delete(a.name); delete(a.description); delete(a.mode) }
-	clear(&app.agents)
-	for m in app.models { delete(m.id); delete(m.provider); delete(m.name); delete(m.family) }
-	clear(&app.models)
-	app.have_agents, app.have_models = false, false
+	agents_clear(app)
+	models_clear(app)
 	app.projects = nil
-	server_facts_reset(app)
-	app.stats_open = false
+	server_facts_forget(app)
+	stats_forget(app)
+	changes_forget(app)
+	integrations_forget(app)
+	plugins_forget(app)
+	schedules_forget(app)
+	artifacts_forget(app)
+	files_forget(app)
+	mentions_forget(app)
+	terminals_forget(app)
+	browser_forget(app)
+	preview_forget(app)
+}
+
+// The window closes. Every connection's threads are told; none is waited for (one may be blocked in a read: the process ends with it).
+threads_stop :: proc(app: ^App) {
+	for c in app.cx.conns { sync.atomic_store(&c.stop, true) }
+	terminals_stop(app)
+	browser_stop(app)
 }
 
 ////////////////////////////////
@@ -310,23 +375,34 @@ server_dialog :: proc(app: ^App, em: f32) {
 		if save && valid {
 			s := Server{name = strings.clone(name), url = strings.clone(server_normalize(url)), password = strings.clone(ui.field_string(&e.password))}
 			i := e.index
+			forget := ""   // (after the save: what was under the old name goes once it is safe under the new one)
 			if i >= 0 {
 				old := app.servers[i]
-				if s.password == "" { s.stored = strings.clone(old.stored) }   // (left empty: one that could not be opened stays)
-				if s.password == "" && s.stored == "" || s.name != old.name { password_forget(old.name) }
+				stored, drop := server_password_moves(old, s)
+				s.stored = strings.clone(stored)
+				if drop { forget = strings.clone(old.name, context.temp_allocator) }
 				delete(old.name); delete(old.url); delete(old.password); delete(old.stored)
 				app.servers[i] = s
 			} else {
 				append(&app.servers, s)
 				i = len(app.servers) - 1
 			}
-			servers_save(app)
+			if servers_save(app) && forget != "" { password_forget(forget) }
 			e.open = false
 			server_connect(app, i)
 		}
 		ui.spacer(ui.px(em * 1.2))
 		dialog_close(&e.open)
 	}
+}
+
+// A server edited: what its file field keeps, and whether what the old name held in the keyring can go. A password left empty that could not
+// be opened (a locked keyring) stays where it is, and the field says under which name: it is the only copy, and renaming must not lose it. A
+// password typed goes under the new name; only then is the old one's dropped.
+server_password_moves :: proc(old, new: Server) -> (stored: string, drop_old: bool) {
+	if new.password != "" { return "", new.name != old.name }
+	if old.stored == "" { return "", true }   // (no password any more)
+	return new.name != old.name ? password_field_of(old.name, old.stored) : old.stored, false
 }
 
 @(private = "file")

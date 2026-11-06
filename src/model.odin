@@ -7,6 +7,7 @@ import "core:mem"
 import "core:mem/virtual"
 import "core:slice"
 import "core:strings"
+import "gt:config"
 import "gt:ui"
 
 Session_Info :: struct {
@@ -26,7 +27,7 @@ Sub_Live :: struct {
 	last_ms:   f64,       // when it last did something (epoch ms)
 }
 
-Tool_Status :: enum u8 { Pending, Running, Done, Error }
+Tool_Status :: enum u8 { Pending, Running, Done, Error, Unknown }   // (Unknown: a word this client does not know)
 Part_Kind :: enum u8 { Text, Reasoning, Tool }
 
 Part :: struct {
@@ -68,6 +69,7 @@ Message :: struct {
 	sub_child, sub_state, sub_agent, sub_desc: string,
 	images:    [dynamic]Image_Ref,   // attached to a user's prompt
 	from_page: bool,                 // read from a page (what the stream builds is only pieces)
+	touched:   u64,                  // the stream's clock when it last changed it (a page asked before that is older: chat_load)
 }
 
 // The open conversation. Everything in it lives in its arena, dropped when another conversation opens. A page read again
@@ -88,7 +90,9 @@ Chat :: struct {
 	busy:      bool,
 	cost:      f64,
 	tokens_in, tokens_out, cache_read: f64,
-	model, provider, agent: string,
+	model, provider, agent: string,        // what it used last, as read and as streamed
+	chose_agent, chose_model, chose_provider: string,   // what the reader picked for it: goes before that (shown_agent, shown_model)
+	seq:       u64,                        // the stream's clock at the event being applied (Message.touched)
 	// the session itself (GET /api/session/:id), its parent, its sub-agents
 	self:         Session_Info,
 	have_self:    bool,
@@ -100,7 +104,12 @@ Chat :: struct {
 
 Agent_Info :: struct { id, name, description, mode: string }
 Model_Info :: struct { id, provider, name, family: string, ctx_len: f64 }
-Permission :: struct { id, session, action, message: string, resources: []string }
+Permission :: struct {
+	id, session, action, message: string,
+	resources: []string,
+	replying:  bool,   // the answer is on its way
+	born:      u64,    // the stream's clock when it came (a list asked before that does not know it: permissions_replace)
+}
 
 chat_reset :: proc(c: ^Chat) {
 	if c.alloc.procedure != nil { virtual.arena_destroy(&c.arena); virtual.arena_destroy(&c.children_arena) }
@@ -109,6 +118,38 @@ chat_reset :: proc(c: ^Chat) {
 	c.gen = gen + 1
 	_ = virtual.arena_init_growing(&c.arena)
 	c.alloc = virtual.arena_allocator(&c.arena)
+}
+
+// The home page, whichever way one gets there: nothing to load.
+chat_home :: proc(app: ^App) {
+	chat_reset(&app.chat)
+	app.chat.loaded = true
+}
+
+// What the conversation's place shows. (Failed: the first page was not read, and only a retry brings it.)
+Chat_View :: enum u8 { Home, Loading, Failed, Shown }
+
+chat_view :: proc(app: ^App) -> Chat_View {
+	c := &app.chat
+	if c.id == "" { return .Home }
+	if c.loaded { return .Shown }
+	return c.loading ? .Loading : .Failed
+}
+
+// What the composer shows and what a new session takes: the reader's choice, what the session used, on the home page what was
+// chosen last.
+shown_agent :: proc(app: ^App) -> string {
+	c := &app.chat
+	if c.chose_agent != "" { return c.chose_agent }
+	if c.id == "" { return config.string_of(&app.cfg_prefs, "session.agent") }
+	return c.agent
+}
+
+shown_model :: proc(app: ^App) -> (model, provider: string) {
+	c := &app.chat
+	if c.chose_model != "" { return c.chose_model, c.chose_provider }
+	if c.id == "" { return config.string_of(&app.cfg_prefs, "session.model"), config.string_of(&app.cfg_prefs, "session.provider") }
+	return c.model, c.provider
 }
 
 open_chat :: proc(app: ^App, session_id: string) {
@@ -133,10 +174,9 @@ open_chat :: proc(app: ^App, session_id: string) {
 	app.chat.busy = app.busy[id] or_else false
 	app.chat.live = make(map[string]Sub_Live, allocator = app.chat.alloc)
 	activity_reset(app)
-	load_messages(app, id)
-	request(app, .Self, "GET", strings.concatenate({"/api/session/", id}, context.temp_allocator), tag = id)
-	load_children(app)
-	session_waits_load(app, id)
+	find_chat_changed(app)
+	chat_read(app)
+	outgoing_return(app)
 }
 
 find_session :: proc(app: ^App, id: string) -> ^Session_Info {
@@ -198,11 +238,11 @@ chat_project :: proc(app: ^App) -> string {
 }
 
 // The session shown, as the server describes it (its parent, its outcome, its totals).
-self_load :: proc(app: ^App, v: json.Value) {
+self_load :: proc(app: ^App, v: json.Value, asked_at: u64) {
 	c := &app.chat
 	c.self = session_from_json(jget(v, "data"), c.alloc)
 	c.have_self = true
-	if revert := jget(v, "data", "revert"); revert != nil { revert_found(app, c.id, revert) }
+	if revert := jget(v, "data", "revert"); revert != nil { revert_found(app, c.id, revert, asked_at) }
 	if c.self.parent != "" {
 		if p := find_session(app, c.self.parent); p != nil {
 			c.parent_title = strings.clone(p.title, c.alloc)
@@ -244,6 +284,16 @@ sessions_load :: proc(app: ^App, v: json.Value) {
 	for it in jarr(v, "data") { append(&app.sessions, session_from_json(it, a)) }
 	slice.sort_by(app.sessions[:], proc(x, y: Session_Info) -> bool { return x.updated > y.updated })
 	app.sessions_loaded = true
+	if app.cx.reopen.id != "" {
+		// this computer's server came back elsewhere: its list says whether it is the same one
+		p := app.cx.reopen
+		if app.chat.id == "" && find_session(app, p.id) != nil {
+			app.opened_first = true
+			open_chat(app, p.id)
+			if !p.bottom && p.msg != "" { nav_restore_begin(app, p.msg, p.dy); app.stick_bottom = false }
+		}
+		reopen_clear(app)
+	}
 	if app.chat.id == "" && len(app.sessions) > 0 && !app.opened_first {
 		app.opened_first = true
 		if app.start_session != "" {   // --session=<id>
@@ -254,8 +304,19 @@ sessions_load :: proc(app: ^App, v: json.Value) {
 	}
 }
 
+agents_clear :: proc(app: ^App) {
+	for a in app.agents { delete(a.id); delete(a.name); delete(a.description); delete(a.mode) }
+	clear(&app.agents)
+}
+
+models_clear :: proc(app: ^App) {
+	for m in app.models { delete(m.id); delete(m.provider); delete(m.name); delete(m.family) }
+	clear(&app.models)
+}
+
+// (read again at each reconnection and each change of what is connected: an answer replaces the list)
 agents_load :: proc(app: ^App, v: json.Value) {
-	app.have_agents = true
+	agents_clear(app)
 	for it in jarr(v, "data") {
 		if jbool(it, "hidden") { continue }
 		append(&app.agents, Agent_Info{
@@ -266,7 +327,7 @@ agents_load :: proc(app: ^App, v: json.Value) {
 }
 
 models_load :: proc(app: ^App, v: json.Value) {
-	app.have_models = true
+	models_clear(app)
 	for it in jarr(v, "data") {
 		if jstr(it, "type") != "" && jstr(it, "type") != "chat" { continue }
 		if _, has := jget(it, "enabled").(json.Boolean); has && !jbool(it, "enabled") { continue }
@@ -281,17 +342,41 @@ models_load :: proc(app: ^App, v: json.Value) {
 	})
 }
 
-// The sessions running now (the stream only tells about runs that start after it connected).
-active_load :: proc(app: ^App, v: json.Value) {
+// The sessions running now (the stream only tells about runs that start after it connected). What the stream said since this
+// list was asked for is newer than it: a run that started is not stopped by it, one that ended does not start again.
+active_load :: proc(app: ^App, v: json.Value, asked_at := max(u64)) {
+	cx := &app.cx
+	obj, _ := jget(v, "data").(json.Object)
+	newer :: proc(cx: ^App_Context, id: string, asked_at: u64) -> bool { return asked_at != max(u64) && (cx.busy_seq[id] or_else 0) > asked_at }
+	over := make([dynamic]string, context.temp_allocator)
+	for id in app.busy { if id not_in obj && !newer(cx, id, asked_at) { append(&over, strings.clone(id, context.temp_allocator)) } }
+	for id in over { set_busy(app, id, false) }
+	for id in obj {
+		if !newer(cx, id, asked_at) { set_busy(app, id, true) }
+		session_waits_load(app, id)
+	}
+	// (one that does not run waits for nobody: what shows for it is reconciled too)
+	for id in waits_sessions(app) { if id not_in obj { session_waits_load(app, id) } }
+	// what this list is newer than has nothing more to say
+	old := make([dynamic]string, context.temp_allocator)
+	for id, at in cx.busy_seq { if at <= asked_at { append(&old, id) } }
+	for id in old { key, _ := delete_key(&cx.busy_seq, id); delete(key) }
+}
+
+busy_forget :: proc(app: ^App) {
 	for k in app.busy { delete(k) }
 	clear(&app.busy)
-	app.chat.busy = false
-	if obj, ok := jget(v, "data").(json.Object); ok {
-		for id in obj {
-			set_busy(app, id, true)
-			session_waits_load(app, id)
-		}
-	}
+	for k in app.cx.busy_seq { delete(k) }
+	clear(&app.cx.busy_seq)
+}
+
+// The stream says a session started or ended.
+@(private = "file")
+busy_event :: proc(app: ^App, id: string, busy: bool) {
+	if id == "" { return }
+	cx := &app.cx
+	if id not_in cx.busy_seq { cx.busy_seq[strings.clone(id)] = cx.stream_seq } else { cx.busy_seq[id] = cx.stream_seq }
+	set_busy(app, id, busy)
 }
 
 permissions_clear :: proc(app: ^App) {
@@ -307,19 +392,61 @@ permission_free :: proc(p: Permission) {
 
 permission_add :: proc(app: ^App, v: json.Value) {
 	id := jstr(v, "id")
-	if id == "" { return }
+	if id == "" || waits_were_answered(app, id) { return }
 	for p in app.permissions { if p.id == id { return } }
 	res := jarr(v, "resources")
 	list := make([]string, len(res))
 	for r, i in res { if s, ok := r.(json.String); ok { list[i] = strings.clone(string(s)) } }
 	append(&app.permissions, Permission{
 		id = strings.clone(id), session = strings.clone(jstr(v, "sessionID")), action = strings.clone(jstr(v, "action")),
-		message = strings.clone(jstr(v, "message")), resources = list,
+		message = strings.clone(jstr(v, "message")), resources = list, born = app.cx.stream_seq,
 	})
 }
 
-permissions_load :: proc(app: ^App, list: json.Array) {
+// What the server says a session waits for: it replaces what is shown for that session, so that a card whose event was missed
+// goes. Not a card that came since this list was asked for, and not one being answered: those are newer than the list.
+permissions_replace :: proc(app: ^App, session: string, list: json.Array, asked_at: u64) {
+	for i := len(app.permissions) - 1; i >= 0; i -= 1 {
+		p := app.permissions[i]
+		if p.session != session || p.replying || p.born > asked_at { continue }
+		listed := false
+		for it in list { if jstr(it, "id") == p.id { listed = true; break } }
+		if !listed { permission_free(p); ordered_remove(&app.permissions, i) }
+	}
 	for it in list { permission_add(app, it) }
+}
+
+// A permission or a form answered, here or elsewhere: a list read before that still has it.
+waits_gone :: proc(app: ^App, id: string) {
+	cx := &app.cx
+	if waits_were_answered(app, id) { return }
+	if len(cx.waits_gone) >= WAITS_GONE_MAX {
+		delete(cx.waits_gone[0])
+		ordered_remove(&cx.waits_gone, 0)
+	}
+	append(&cx.waits_gone, strings.clone(id))
+}
+
+waits_were_answered :: proc(app: ^App, id: string) -> bool {
+	for g in app.cx.waits_gone { if g == id { return true } }
+	return false
+}
+
+waits_forget :: proc(app: ^App) {
+	for g in app.cx.waits_gone { delete(g) }
+	clear(&app.cx.waits_gone)
+}
+
+// The sessions something shows a wait for.
+waits_sessions :: proc(app: ^App) -> []string {
+	out := make([dynamic]string, context.temp_allocator)
+	add :: proc(out: ^[dynamic]string, id: string) {
+		for s in out { if s == id { return } }
+		append(out, strings.clone(id, context.temp_allocator))
+	}
+	for p in app.permissions { add(&out, p.session) }
+	for f in app.cx.forms { add(&out, f.session) }
+	return out[:]
 }
 
 permission_remove :: proc(app: ^App, id: string) {
@@ -330,7 +457,8 @@ permission_remove :: proc(app: ^App, id: string) {
 
 // A page of messages (newest first in the answer). `older`: it goes before the ones already shown; without it, it replaces
 // the newest ones (and what the stream had added to them), and the pages read before them stay.
-chat_load :: proc(app: ^App, v: json.Value, older: bool) {
+// `asked_at`: when the page was asked for (Request.asked_at). What the stream said since is newer than it and stays.
+chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(u64)) {
 	c := &app.chat
 	a := c.alloc
 	c.loading = false
@@ -343,6 +471,7 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool) {
 		if older && old != nil { continue }
 		// (what is final stays as it is: cloned at each reading, images and all, it would pile up in the arena)
 		m := old != nil && message_final(old, it) ? old^ : message_from_json(it, a)
+		if old != nil && old.touched > asked_at { message_keep_newer(&m, old) }
 		if m.kind == .Idle && len(page) > 0 && page[len(page) - 1].kind == .Idle { continue }
 		append(&page, m)
 	}
@@ -352,16 +481,24 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool) {
 		c.older = cursor
 		// the view stays on what it shows: at the very top the lazy column does not move it (frame does). Only with the first
 		// message on screen: built for a view that glides toward it (a match, Home), it is far above, and the view stopped there
-		// went to the end. The lazy column keeps that view, its target too.
-		if b, sb := app.first_msg, app.chat_sb; b != nil && sb != nil && !app.stick_bottom && len(c.messages) > 0 && b.rect.max.y > sb.rect.min.y {
+		// went to the end. The lazy column keeps that view, its target too. (A view on its way to a message of an older page stays
+		// at the top instead: that is what reads the pages up to it.)
+		if b, sb := app.first_msg, app.chat_sb; b != nil && sb != nil && !app.stick_bottom && app.cx.restore_msg == "" && len(c.messages) > 0 && b.rect.max.y > sb.rect.min.y {
 			c.keep_id = c.messages[0].id
 			app.anchor = b
 			app.anchor_y = b.rect.min.y
 		}
 		inject_at(&page, len(page), ..c.messages[:])
 		c.messages = page
-		ui.find_refresh()   // (text a find has not read)
+		find_page_added(app)   // (text a find has not read)
 	} else {
+		// (what the stream began after this page was asked for is not in it)
+		for m in c.messages {
+			if m.touched <= asked_at { continue }
+			there := false
+			for p in page { if p.id == m.id { there = true; break } }
+			if !there { append(&page, m) }
+		}
 		kept := -1
 		if len(page) > 0 { for m, i in c.messages { if m.id == page[0].id { kept = i; break } } }
 		if kept > 0 { inject_at(&page, 0, ..c.messages[:kept]) } else { c.older = cursor }
@@ -372,6 +509,33 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool) {
 			c.model, c.provider, c.agent = m.model, m.provider, m.agent
 		}
 	}
+}
+
+// `m` was read from a page, `old` was streamed into since it was asked for: each part keeps the further along of the two (the
+// page may also know more: a stream joined in the middle of a run).
+@(private = "file")
+message_keep_newer :: proc(m, old: ^Message) {
+	rank :: proc(s: Tool_Status) -> int {
+		switch s {
+		case .Unknown, .Pending: return 0
+		case .Running:           return 1
+		case .Done, .Error:      return 2
+		}
+		return 0
+	}
+	for &op in old.parts {
+		np: ^Part
+		for &p in m.parts { if p.kind == op.kind && (op.kind == .Tool ? p.tool_id == op.tool_id : p.ordinal == op.ordinal) { np = &p; break } }
+		if np == nil {
+			append(&m.parts, op)
+		} else if op.kind == .Tool {
+			if rank(op.status) > rank(np.status) { np^ = op }
+		} else if len(op.text) > len(np.text) || (op.done && len(op.text) == len(np.text)) {
+			np.text, np.done = op.text, op.done
+		}
+	}
+	m.touched = old.touched
+	m.streaming = m.streaming && old.streaming
 }
 
 // `m`, read from a page, is what the server says of `it` now: only an assistant's message changes, until it is completed.
@@ -416,16 +580,17 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 			}
 			part.ordinal = ord[part.kind]
 			ord[part.kind] += 1
-			part.done = true
+			part.done = true   // (the last one of a message that runs is not: after this loop)
 			if part.kind == .Tool {
 				part.tool_id = strings.clone(jstr(p, "id"), a)
 				part.tool_name = strings.clone(jstr(p, "name"), a)
 				st := jget(p, "state")
 				switch jstr(st, "status") {
-				case "streaming": part.status = .Pending
+				case "streaming", "pending": part.status = .Pending
 				case "running":   part.status = .Running
 				case "completed": part.status = .Done
 				case "error":     part.status = .Error
+				case:             part.status = .Unknown   // (it says nothing of a run: it must not animate)
 				}
 				tool_set_input(&part, jget(st, "input"), a)
 				tool_set_meta(&part, jget(st, "metadata"), a)
@@ -444,6 +609,7 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 			}
 			append(&m.parts, part)
 		}
+		if n := len(m.parts); m.streaming && n > 0 && m.parts[n - 1].kind != .Tool { m.parts[n - 1].done = false }
 	case "synthetic":
 		m.kind = .Synthetic
 		m.text = strings.clone(jstr(it, "text"), a)
@@ -568,10 +734,11 @@ find_message :: proc(c: ^Chat, id: string) -> ^Message {
 	return nil
 }
 
+// The message an event of the stream is about: every part of it that the stream changes goes through here.
 @(private = "file")
 assistant :: proc(c: ^Chat, id: string) -> ^Message {
-	if m := find_message(c, id); m != nil { return m }
-	append(&c.messages, Message{id = strings.clone(id, c.alloc), kind = .Assistant, streaming = true, parts = make([dynamic]Part, c.alloc)})
+	if m := find_message(c, id); m != nil { m.touched = c.seq; return m }
+	append(&c.messages, Message{id = strings.clone(id, c.alloc), kind = .Assistant, streaming = true, parts = make([dynamic]Part, c.alloc), touched = c.seq})
 	return &c.messages[len(c.messages) - 1]
 }
 
@@ -598,30 +765,39 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 	c := &app.chat
 	mine := sid != "" && sid == c.id
 	a := c.alloc
+	app.cx.stream_seq += 1
+	c.seq = app.cx.stream_seq
 
 	switch kind {
 	case "session.execution.started":
-		set_busy(app, sid, true)
+		busy_event(app, sid, true)
 	case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted", "session.idle":
 		if app.busy[sid] or_else false {
 			notify_finished(app, sid, strings.trim_prefix(kind, "session.execution."))
 		}
-		set_busy(app, sid, false)
+		busy_event(app, sid, false)
 		if kind == "session.execution.interrupted" { inbox_resume(app, sid) }
 		if mine {
 			load_messages(app, sid)   // the stored page: the stream only gave the pieces
 			if kind == "session.execution.failed" { ui.toast(.Bad, "The run failed") }
 		}
-		app.refresh_due = true
+		refresh_soon(app)
 	case "shell.created", "shell.exited", "shell.deleted":
 		activity_poke(app)
 	case "project.updated", "project.created":
 		request(app, .Projects, "GET", "/api/project")   // (a new logo)
 	case "session.created", "session.renamed", "session.deleted", "session.updated", "session.archived", "session.moved", "session.metadata.updated":
-		if kind == "session.deleted" && sid != "" { nav_forget(app, sid) }
+		if kind == "session.deleted" && sid != "" {
+			nav_forget(app, sid)
+			outgoing_session_gone(app, sid)
+			if mine {   // (elsewhere: what is shown no longer is)
+				ui.toast(.Warn, "This session was deleted")
+				append(&app.nav_steps, Nav_Step{kind = .Gone})
+			}
+		}
 		if kind == "session.moved" && mine { request(app, .Self, "GET", strings.concatenate({"/api/session/", sid}, context.temp_allocator), tag = sid) }
-		app.refresh_due = true
-		app.children_due = true
+		refresh_soon(app)
+		children_soon(app)
 	case "artifact.updated":
 		artifacts_changed(app)
 	case "plugin.updated":
@@ -633,7 +809,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 	case "session.revert.committed", "session.revert.cleared":
 		revert_gone(app, sid)
 		if mine && kind == "session.revert.committed" { load_messages(app, sid) }
-		app.refresh_due = true
+		refresh_soon(app)
 	case "permission.asked":
 		req := jget(d, "request")
 		if req == nil { req = d }
@@ -643,6 +819,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 	case "permission.replied":
 		id := jstr(d, "id")
 		if id == "" { id = jstr(d, "requestID") }
+		waits_gone(app, id)
 		permission_remove(app, id)
 	case "form.created":
 		form := jget(d, "form")
@@ -650,6 +827,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		if s := jstr(form, "sessionID"); s != c.id && !is_child(c, s) { ui.toast(.Warn, "A session is asking you something") }
 		if app.prefs.notify_perm && !window_in_front(app) { flash_taskbar(app) }
 	case "form.replied", "form.cancelled":
+		waits_gone(app, jstr(d, "id"))
 		form_remove(app, jstr(d, "id"))
 	}
 	if sid != "" && !mine && is_child(c, sid) {
@@ -663,9 +841,9 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 	case "session.inbox.enqueued":
 		item := jget(d, "item")
 		if jstr(item, "type") == "user" && find_message(c, jstr(d, "inboxID")) == nil {
-			append(&c.messages, Message{id = strings.clone(jstr(d, "inboxID"), a), kind = .User, text = strings.clone(jstr(item, "payload", "text"), a), created = jnum(ev, "created"), parts = make([dynamic]Part, a)})
+			append(&c.messages, Message{id = strings.clone(jstr(d, "inboxID"), a), kind = .User, text = strings.clone(jstr(item, "payload", "text"), a), created = jnum(ev, "created"), parts = make([dynamic]Part, a), touched = c.seq})
 			message_images(&c.messages[len(c.messages) - 1], jarr(item, "payload", "files"), a)
-			app.stick_bottom = true
+			// (the bottom is followed if it was: this does not fetch a reader who went up. Sending it did, submit_prompt)
 		}
 	case "session.step.started":
 		m := assistant(c, mid)
@@ -705,7 +883,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 	case "session.tool.progress":
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
 		tool_set_meta(p, jget(d, "metadata"), a)
-		if p.sub_session != "" { app.children_due = true }
+		if p.sub_session != "" { children_soon(app) }
 	case "session.tool.success":
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
 		p.status = .Done
@@ -714,7 +892,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		content_images(p, jarr(d, "content"), a)
 		p.ended_ms = jnum(ev, "created")
 		tool_set_meta(p, jget(d, "metadata"), a)
-		if p.sub_session != "" { app.children_due = true }
+		if p.sub_session != "" { children_soon(app) }
 	case "session.tool.failed":
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
 		p.status = .Error
@@ -777,7 +955,7 @@ child_event :: proc(app: ^App, kind, sid: string, d, ev: json.Value) {
 		live.tokens_out = jnum(d, "tokens", "output")
 	case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted", "session.idle":
 		live.activity = ""
-		app.children_due = true
+		children_soon(app)
 	case:
 		return
 	}

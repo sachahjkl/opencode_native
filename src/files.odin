@@ -5,7 +5,6 @@ package occ
 
 import "core:encoding/json"
 import "core:fmt"
-import "core:hash"
 import "core:math"
 import "core:mem/virtual"
 import "core:path/filepath"
@@ -83,10 +82,12 @@ Mention :: struct {
 Mentions :: struct {
 	open:      bool,
 	start:     int,      // the `@`, in bytes of the composer
-	dismissed: int,      // Escape at this `@`: it stays closed there (-1: none)
+	dismissed: Maybe(int),   // Escape at this `@`: it stays closed there
 	query:     string,   // what comes after it (owned)
 	sel:       int,
 	list:      ui.Key,   // its box
+	read:      Remote,   // what is proposed for `query`
+	folder:    string,   // the folder that was asked about: what is proposed is of no other (owned)
 	dir:       string,   // the folder the server answered for (owned)
 	hits:      [dynamic]Mention_Hit,
 	arena:     virtual.Arena,
@@ -113,14 +114,34 @@ mention_word :: proc(text: string, cursor: int) -> (start: int, query: string, o
 @(private = "file")
 mention_ask :: proc(app: ^App) {
 	m := &app.cx.mentions
-	q := files_location(files_dir(app))
+	folder := files_dir(app)
+	if folder != m.folder {
+		mention_hits_clear(m)
+		delete(m.folder)
+		m.folder = strings.clone(folder)
+	}
+	q := files_location(folder)
 	amp := q != "" ? "&" : ""
+	remote_begin(&m.read)
 	if m.query == "" {
-		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/list?%s", q), tag = m.query)   // (the search wants a word)
+		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/list?%s", q), remote = &m.read)   // (the search wants a word)
 	} else {
-		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&type=file&limit=%d", q, amp, url_escape(m.query), MENTION_ROWS), tag = m.query)
+		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&type=file&limit=%d", q, amp, url_escape(m.query), MENTION_ROWS), remote = &m.read)
 	}
 }
+
+@(private = "file")
+mention_hits_clear :: proc(m: ^Mentions) {
+	if m.has_arena { virtual.arena_destroy(&m.arena) }
+	m.has_arena = false
+	clear(&m.hits)
+	delete(m.dir)
+	m.dir = ""
+	m.sel = 0
+}
+
+// What was asked was not answered: what was proposed for the word before is not for this one.
+mention_failed :: proc(app: ^App) { mention_hits_clear(&app.cx.mentions) }
 
 // After the editor: what the caret stands on now.
 mention_track :: proc(app: ^App) {
@@ -128,16 +149,16 @@ mention_track :: proc(app: ^App) {
 	a := &app.composer
 	start, query, ok := mention_word(ui.area_string(a), a.cursor)
 	if !ok || a.cursor != a.mark {
-		m.open, m.dismissed = false, -1
+		m.open, m.dismissed = false, nil
 		return
 	}
 	if !app.composer_focused {
 		if !ui.hot_within(m.list) { m.open = false }   // (a press on a row of the list leaves the editor: it is the click that chooses)
 		return
 	}
-	if start == m.dismissed { return }
-	if m.open && m.start == start && m.query == query { return }
-	if !m.open || m.start != start { m.sel = 0 }
+	if at, dismissed := m.dismissed.?; dismissed && at == start { return }
+	// (the session changed under it: the same word asks about another folder)
+	if m.open && m.start == start && m.query == query && m.folder == files_dir(app) { return }
 	m.open, m.start = true, start
 	delete(m.query)
 	m.query = strings.clone(query)
@@ -146,19 +167,19 @@ mention_track :: proc(app: ^App) {
 }
 
 // The answer of the list or the search, if it is still what is looked for; sub-agents that match come first.
-mention_load :: proc(app: ^App, query: string, v: json.Value) {
+mention_load :: proc(app: ^App, v: json.Value) {
 	m := &app.cx.mentions
-	if !m.open || query != m.query { return }
-	if m.has_arena { virtual.arena_destroy(&m.arena) }
+	if !m.open { return }
+	sel := m.sel
+	mention_hits_clear(m)
+	m.sel = sel
 	_ = virtual.arena_init_growing(&m.arena)
 	m.has_arena = true
 	a := virtual.arena_allocator(&m.arena)
-	clear(&m.hits)
-	delete(m.dir)
 	m.dir = strings.clone(jstr(v, "location", "directory"))
 	for ag in app.agents {
 		if ag.mode != "subagent" { continue }
-		if _, _, match := ui.fuzzy_score(query, ag.id); !match { continue }
+		if _, _, match := ui.fuzzy_score(m.query, ag.id); !match { continue }
 		append(&m.hits, Mention_Hit{.Agent, strings.clone(ag.id, a), strings.clone(ag.description, a)})
 	}
 	for it in jarr(v, "data") {
@@ -170,8 +191,11 @@ mention_load :: proc(app: ^App, query: string, v: json.Value) {
 	m.sel = clamp(m.sel, 0, max(len(m.hits) - 1, 0))
 }
 
-@(private = "file")
-mention_shown :: proc(m: ^Mentions) -> bool { return m.open && len(m.hits) > 0 }
+// (Of another folder than the one the session shown is in, nothing can be chosen, whatever the next frame finds.)
+mention_shown :: proc(app: ^App) -> bool {
+	m := &app.cx.mentions
+	return m.open && len(m.hits) > 0 && m.folder == files_dir(app)
+}
 
 // In place of what was typed, or at the caret: `@name `, remembered for the prompt.
 @(private = "file")
@@ -200,7 +224,7 @@ mention_choose :: proc(app: ^App, k: int) {
 // Before the editor and before Enter sends: the list has the keys it needs.
 mention_keys :: proc(app: ^App) {
 	m := &app.cx.mentions
-	if !mention_shown(m) { return }
+	if !mention_shown(app) { return }
 	n := len(m.hits)
 	if ui.key_press(.Down) { m.sel = (m.sel + 1) % n }
 	if ui.key_press(.Up) { m.sel = (m.sel + n - 1) % n }
@@ -209,7 +233,7 @@ mention_keys :: proc(app: ^App) {
 }
 
 // Escape belongs to the list while it is there, not to the run.
-mention_takes_escape :: proc(app: ^App) -> bool { return mention_shown(&app.cx.mentions) && app.composer_focused }
+mention_takes_escape :: proc(app: ^App) -> bool { return mention_shown(app) && app.composer_focused }
 
 @(private = "file")
 Mention_Row_Draw :: struct { selected: bool }
@@ -217,7 +241,7 @@ Mention_Row_Draw :: struct { selected: bool }
 // Over the text of the composer, in its well.
 mention_list :: proc(app: ^App, em: f32) {
 	m := &app.cx.mentions
-	if !mention_shown(m) { return }
+	if !mention_shown(app) { return }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.column(id = "###mention_list") {
 		m.list = ui.parent_box().key
@@ -275,9 +299,21 @@ mentions_clear :: proc(app: ^App) {
 mentions_destroy :: proc(app: ^App) {
 	m := &app.cx.mentions
 	mentions_clear(app)
-	delete(m.chosen); delete(m.hits); delete(m.query); delete(m.dir)
+	delete(m.chosen); delete(m.hits); delete(m.query); delete(m.dir); delete(m.folder); delete(m.read.message)
 	if m.has_arena { virtual.arena_destroy(&m.arena) }
 	m^ = {}
+}
+
+// What the server proposed, and what was chosen of it: a file's uri on the server left says nothing on the next one, and must not go with a
+// prompt there. The words stay in the composer, which is the reader's and goes through server_forget whole: they go as plain text.
+mentions_forget :: proc(app: ^App) {
+	m := &app.cx.mentions
+	mentions_clear(app)
+	mention_hits_clear(m)
+	m.open, m.dismissed = false, nil
+	delete(m.folder); delete(m.query)
+	m.folder, m.query = "", ""
+	remote_reset(&m.read)
 }
 
 ////////////////////////////////
@@ -288,63 +324,86 @@ File_Row :: struct {
 	directory:  bool,
 }
 
-File_State :: enum u8 { None, Loading, Text, Binary, Failed }
-
 Files :: struct {
 	open, fresh: bool,
 	dir:     string,               // the session's folder (owned)
 	at:      string,               // the folder shown, from it, "": itself (owned)
 	field:   ui.Text_Field,
-	searching: bool,
+	searching: bool,               // what is read is a search
 	sel:     int,                  // the row the keyboard is on
+	read:    Remote,               // the rows
 	rows:    [dynamic]File_Row,
 	arena:   virtual.Arena,
 	has_arena: bool,
-	asked:   string,               // what the rows answer (owned)
-	file:    string,               // the file shown (owned)
-	state:   File_State,
+	file:    string,               // the file shown (owned, "": none)
+	file_read: Remote,             // it
+	binary:  bool,                 // it is not text
 	content: string,               // (owned)
 	size:    int,
-	version: u64,
+	version: u64,                  // one more at each reading: its text may have changed whatever its length
 }
 
 @(private = "file")
+files_rows_clear :: proc(f: ^Files) {
+	if f.has_arena { virtual.arena_destroy(&f.arena) }
+	f.has_arena = false
+	clear(&f.rows)
+	f.sel = 0
+}
+
+// The rows go with the folder they were of. (A search typed further keeps them, until what it finds.)
+@(private = "file")
+files_elsewhere :: proc(f: ^Files) {
+	files_rows_clear(f)
+	remote_reset(&f.read)
+}
+
 files_list :: proc(app: ^App) {
 	f := &app.cx.files
-	delete(f.asked)
 	word := strings.trim_space(ui.field_string(&f.field))
 	f.searching = word != ""
 	q := files_location(f.dir)
 	amp := q != "" ? "&" : ""
+	remote_begin(&f.read)
 	if f.searching {
-		f.asked = strings.clone(fmt.tprintf("?%s", word))
-		request(app, .Files_List, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&limit=%d", q, amp, url_escape(word), FILES_FOUND_MAX), tag = f.asked)
+		request(app, .Files_List, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&limit=%d", q, amp, url_escape(word), FILES_FOUND_MAX), remote = &f.read)
 	} else {
-		f.asked = strings.clone(f.at)
 		path := f.at != "" ? fmt.tprintf("%spath=%s", amp, url_escape(f.at)) : ""
-		request(app, .Files_List, "GET", fmt.tprintf("/api/fs/list?%s%s", q, path), tag = f.asked)
+		request(app, .Files_List, "GET", fmt.tprintf("/api/fs/list?%s%s", q, path), remote = &f.read)
 	}
+}
+
+@(private = "file")
+files_clear :: proc(f: ^Files) {
+	delete(f.dir); delete(f.at); delete(f.file); delete(f.content)
+	f.dir, f.at, f.file, f.content = "", "", "", ""
+	f.binary, f.size = false, 0
+	remote_reset(&f.file_read)
+	files_elsewhere(f)
+	ui.field_set(&f.field, "")
 }
 
 files_open :: proc(app: ^App) {
 	f := &app.cx.files
-	delete(f.dir); delete(f.at); delete(f.file); delete(f.content)
-	f.dir, f.at, f.file, f.content = strings.clone(files_dir(app)), "", "", ""
-	f.open, f.fresh, f.state = true, true, .None
-	ui.field_set(&f.field, "")
+	files_clear(f)
+	f.dir = strings.clone(files_dir(app))
+	f.open, f.fresh = true, true
 	files_list(app)
 }
 
-// Folders first, each kind by name; a search keeps the server's ranking.
-files_load :: proc(app: ^App, asked: string, v: json.Value) {
+files_forget :: proc(app: ^App) {
 	f := &app.cx.files
-	if !f.open || asked != f.asked { return }
-	if f.has_arena { virtual.arena_destroy(&f.arena) }
+	f.open = false
+	files_clear(f)
+}
+
+// Folders first, each kind by name; a search keeps the server's ranking.
+files_load :: proc(app: ^App, v: json.Value) {
+	f := &app.cx.files
+	files_rows_clear(f)
 	_ = virtual.arena_init_growing(&f.arena)
 	f.has_arena = true
 	a := virtual.arena_allocator(&f.arena)
-	clear(&f.rows)
-	f.sel = 0
 	for pass in 0 ..< 2 {
 		for it in jarr(v, "data") {
 			directory := jstr(it, "type") == "directory"
@@ -355,13 +414,24 @@ files_load :: proc(app: ^App, asked: string, v: json.Value) {
 	}
 }
 
-@(private = "file")
 file_show :: proc(app: ^App, path: string) {
 	f := &app.cx.files
-	delete(f.file); delete(f.content)
-	f.file, f.content, f.state, f.size = strings.clone(path), "", .Loading, 0
+	name := strings.clone(path)
+	delete(f.file)
+	f.file = name
+	file_read(app)
+}
+
+// (Also Try again.)
+@(private = "file")
+file_read :: proc(app: ^App) {
+	f := &app.cx.files
+	delete(f.content)
+	f.content, f.binary, f.size = "", false, 0
+	remote_reset(&f.file_read)
+	remote_begin(&f.file_read)
 	q := files_location(f.dir)
-	request(app, .File_Read, "GET", fmt.tprintf("/api/fs/read/%s%s%s", path_escape(path), q != "" ? "?" : "", q), tag = path)
+	request(app, .File_Read, "GET", fmt.tprintf("/api/fs/read/%s%s%s", path_escape(f.file), q != "" ? "?" : "", q), remote = &f.file_read)
 }
 
 // What is shown of `raw`: its beginning when it is long, nothing when it is no text.
@@ -373,17 +443,15 @@ file_text :: proc(raw: string) -> (shown: string, is_text: bool) {
 	return shown, utf8.valid_string(shown)
 }
 
-file_loaded :: proc(app: ^App, path, raw: string, ok: bool) {
+file_loaded :: proc(app: ^App, raw: string) {
 	f := &app.cx.files
-	if path != f.file { return }
-	if !ok { f.state = .Failed; return }
 	f.size = len(raw)
 	shown, is_text := file_text(raw)
-	if !is_text { f.state = .Binary; return }
+	f.binary = !is_text
+	if !is_text { return }
 	delete(f.content)
 	f.content = strings.clone(shown)
-	f.version = u64(hash.fnv32a(transmute([]u8)path)) << 32 | u64(len(shown))
-	f.state = .Text
+	f.version += 1
 }
 
 @(private = "file")
@@ -393,6 +461,7 @@ files_up :: proc(app: ^App) {
 	up := strings.clone(i >= 0 ? f.at[:i] : "")
 	delete(f.at)
 	f.at = up
+	files_elsewhere(f)
 	files_list(app)
 }
 
@@ -430,9 +499,11 @@ files_dialog :: proc(app: ^App, em: f32) {
 file_pick :: proc(app: ^App, r: File_Row) -> bool {
 	f := &app.cx.files
 	if !r.directory { file_show(app, r.path); return true }
+	path := strings.clone(r.path)   // (of the arena that goes)
 	delete(f.at)
-	f.at = strings.clone(r.path)
+	f.at = path
 	ui.field_set(&f.field, "")
+	files_elsewhere(f)
 	files_list(app)
 	return false
 }
@@ -440,7 +511,8 @@ file_pick :: proc(app: ^App, r: File_Row) -> bool {
 @(private = "file")
 files_left :: proc(app: ^App, em: f32) {
 	f := &app.cx.files
-	if n := len(f.rows); n > 0 {
+	shows := remote_shows(&f.read)
+	if n := len(f.rows); n > 0 && shows {
 		if ui.key_press(.Down) { f.sel = (f.sel + 1) % n }
 		if ui.key_press(.Up) { f.sel = (f.sel + n - 1) % n }
 	}
@@ -454,7 +526,7 @@ files_left :: proc(app: ^App, em: f32) {
 			if f.fresh { ui.set_focus(res.box.key) }
 			if res.changed { files_list(app) }
 			if res.cancelled { f.open = false }
-			if res.committed && f.sel < len(f.rows) && !file_pick(app, f.rows[f.sel]) { return }
+			if res.committed && shows && f.sel < len(f.rows) && !file_pick(app, f.rows[f.sel]) { return }
 		}
 	}
 	ui.spacer(ui.px(em * 0.4))
@@ -463,6 +535,7 @@ files_left :: proc(app: ^App, em: f32) {
 		if f.at != "" && !f.searching {
 			if file_row(app, "###fl_up", "..", ICO_FOLDER, false, em) { files_up(app); return }
 		}
+		if !read_shown(app, "###fl_read", &f.read, em, files_list) { return }
 		if len(f.rows) == 0 { info_line(app, "###fl_none", f.searching ? "Nothing matches." : "This folder is empty.", em) }
 		for r, i in f.rows {
 			if !file_row(app, fmt.tprintf("###flr%d", i), r.name, r.directory ? ICO_FOLDER : ICO_DOC, i == f.sel, em) { continue }
@@ -489,7 +562,7 @@ file_row :: proc(app: ^App, id, name, icon: string, selected: bool, em: f32) -> 
 @(private = "file")
 files_right :: proc(app: ^App, em: f32) {
 	f := &app.cx.files
-	if f.state == .None {
+	if f.file == "" {
 		info_line(app, "###fl_hint", "Pick a file to read it.", em)
 		return
 	}
@@ -509,16 +582,14 @@ files_right :: proc(app: ^App, em: f32) {
 		}
 	}
 	ui.spacer(ui.px(em * 0.5))
-	switch f.state {
-	case .None:
-	case .Loading: info_line(app, "###fl_load", "Reading…", em)
-	case .Failed:  info_line(app, "###fl_bad", "This file could not be read.", em)
-	case .Binary:  info_line(app, "###fl_bin", fmt.tprintf("Not text: %d bytes. It can still go with a prompt.", f.size), em)
-	case .Text:
-		if f.size > len(f.content) { info_line(app, "###fl_cut", fmt.tprintf("The first %d of %d bytes.", len(f.content), f.size), em) }
-		ui.next({width = ui.fill(), height = ui.fill()})
-		if ui.scroll_y("###fl_view") {
-			code_block("###fl_code", strings.trim_prefix(filepath.ext(f.file), "."), f.content, version = f.version)
-		}
+	if !read_shown(app, "###fl_file", &f.file_read, em, file_read) { return }
+	if f.binary {
+		info_line(app, "###fl_bin", fmt.tprintf("Not text: %d bytes. It can still go with a prompt.", f.size), em)
+		return
+	}
+	if f.size > len(f.content) { info_line(app, "###fl_cut", fmt.tprintf("The first %d of %d bytes.", len(f.content), f.size), em) }
+	ui.next({width = ui.fill(), height = ui.fill()})
+	if ui.scroll_y("###fl_view") {
+		code_block("###fl_code", strings.trim_prefix(filepath.ext(f.file), "."), f.content, version = f.version)
 	}
 }

@@ -5,6 +5,31 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-06
+
+### Changed
+
+- **Each shell is a tab of the dock**: one row of tabs, named after the program. Drag, split or float a shell like any panel; **+** at the end of the strip, or Ctrl+Shift+T to show and hide them all without ending any.
+- **Shortcuts no longer act behind a dialog**: F1 and Ctrl+K included. Ctrl+P browses the files, Ctrl+Shift+P opens the palette.
+- **What the server could not give says so where it is read**, with Try again: conversations, dialogs and settings no longer stay on "Reading…" or show an empty list that is not.
+- Reads that follow an event wait for things to go quiet: a list may land about a second later, and always lands.
+
+### Fixed
+
+- **A prompt is not lost any more**: a failed one comes back whole, with its images and mentions, to the session it was for. A double Enter makes one session.
+- **Keys no longer reach a hidden shell**, and Enter no longer runs what was typed for the composer.
+- **Everything follows a change of server**: shells, Connections, Plugins, dialogs, a revert in progress. Nothing acts on one server with what came from the other.
+- **Going back to a prompt says what really happened**, whatever the order of the answers, and a stage is never left without its dialog.
+- **Shells come back after a network drop**, where their output stopped, and so does a connection that died in silence: it no longer shows as connected.
+- **A wrong password says so**, instead of connecting forever.
+- **Scrolling to the top no longer reads the whole history**, and Latest and Send win over a view coming back.
+- **No more cards that stay** after a question was answered elsewhere, and answered ones do not come back.
+- **The model list has no doubles**: each change of a connection added all of it again.
+- **The model chosen stays shown**, and a remembered choice shows from the start.
+- A login that fails to be followed offers Try again; cancelling one ends it on the server. A schedule is made once, however many clicks.
+- Diffs keep lines that start with `--` or `++`. Back goes nowhere it should not. Find keeps its match when older messages arrive.
+- Preview: a view that failed can be tried again, and agents are told why. Checking for updates works again after one was found, and after changing channel. Uninstalling the running copy says it will go, and it does.
+
 ## [0.13.0] - 2026-11-05
 
 ### Added
@@ -576,7 +601,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.14.0
 [0.13.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.13.0
 [0.12.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.3
 [0.12.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.12.2

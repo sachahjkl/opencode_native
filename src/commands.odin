@@ -17,6 +17,7 @@ Command :: struct {
 	run:     proc(app: ^App),
 	enabled: proc(app: ^App) -> bool,   // nil: always
 	checked: proc(app: ^App) -> bool,   // nil: not a toggle
+	over:    proc(app: ^App) -> bool,   // its key with a dialog over the window (overlay_open): when it still works; nil: never
 }
 
 @(private = "file") has_session :: proc(app: ^App) -> bool { return app.chat.id != "" }
@@ -24,8 +25,8 @@ Command :: struct {
 @(private = "file") can_go_back :: proc(app: ^App) -> bool { return nav_can(app, -1) || back_target(app) != "" }
 
 COMMANDS := [?]Command{
-	{id = "app.palette", title = "Command palette", group = "General", icon = ICO_SEARCH, keys = "Ctrl+K", key = .K, mods = {.Ctrl}, run = palette_toggle},
-	{id = "app.help", title = "Keyboard shortcuts", group = "General", icon = ICO_LIST, keys = "F1", key = .F1, run = proc(app: ^App) { app.cx.help_open = !app.cx.help_open }},
+	{id = "app.palette", title = "Command palette", group = "General", icon = ICO_SEARCH, keys = "Ctrl+K, Ctrl+Shift+P", key = .K, mods = {.Ctrl}, run = palette_toggle, over = proc(app: ^App) -> bool { return app.palette.open }},
+	{id = "app.help", title = "Keyboard shortcuts", group = "General", icon = ICO_LIST, keys = "F1", key = .F1, run = proc(app: ^App) { app.cx.help_open = !app.cx.help_open }, over = proc(app: ^App) -> bool { return app.cx.help_open }},
 	{id = "app.settings", title = "Settings", group = "General", icon = ICO_SLIDERS, keys = "Ctrl+,", key = .Comma, mods = {.Ctrl}, run = settings_open},
 	{id = "app.refresh", title = "Refresh", group = "General", icon = ICO_REFRESH, keys = "F5", key = .F5, run = proc(app: ^App) {
 		refresh_sessions(app)
@@ -34,11 +35,11 @@ COMMANDS := [?]Command{
 	{id = "app.add_server", title = "Add a server…", group = "General", icon = ICO_PLUG, run = proc(app: ^App) { server_edit_open(app, -1) }},
 	{id = "app.setup", title = "Setup and about", group = "General", icon = ICO_BULB, run = setup_open},
 	{id = "app.update", title = "Check for updates", group = "General", icon = ICO_REFRESH, run = update_check_now},
-	{id = "app.update_install", title = "Install the update", group = "General", icon = ICO_REFRESH, run = update_install, enabled = proc(app: ^App) -> bool { return app.updater.state == .Ready }},
-	{id = "app.update_restart", title = "Restart to update", group = "General", icon = ICO_REFRESH, run = update_restart, enabled = proc(app: ^App) -> bool { return app.updater.state == .Installed }},
+	{id = "app.update_install", title = "Install the update", group = "General", icon = ICO_REFRESH, run = update_install, enabled = proc(app: ^App) -> bool { return update_is_ready(&app.updater) }},
+	{id = "app.update_restart", title = "Restart to update", group = "General", icon = ICO_REFRESH, run = update_restart, enabled = proc(app: ^App) -> bool { return update_is_installed(&app.updater) }},
 	{id = "app.quit", title = "Quit", group = "General", icon = ICO_CANCEL, keys = "Alt+F4", run = proc(app: ^App) { app.quit = true }},
 
-	{id = "nav.home", title = "Home", group = "Go to", icon = ICO_CHAT, keys = "Ctrl+H", key = .H, mods = {.Ctrl}, run = go_home},
+	{id = "nav.home", title = "Home", group = "Go to", icon = ICO_CHAT, keys = "Ctrl+H", key = .H, mods = {.Ctrl}, run = new_session},
 	{id = "nav.back", title = "Back", group = "Go to", icon = ICO_BACK, keys = "Alt+Left", key = .Left, mods = {.Alt}, enabled = can_go_back, run = proc(app: ^App) { if nav_can(app, -1) { nav_step(app, -1) } else { go_back(app) } }},
 	{id = "nav.forward", title = "Forward", group = "Go to", icon = ICO_FORWARD, keys = "Alt+Right", key = .Right, mods = {.Alt}, enabled = proc(app: ^App) -> bool { return nav_can(app, 1) }, run = proc(app: ^App) { nav_step(app, 1) }},
 	{id = "nav.composer", title = "Focus the composer", group = "Go to", icon = ICO_EDIT, keys = "Ctrl+L", key = .L, mods = {.Ctrl}, run = proc(app: ^App) { app.cx.focus_composer = true }},
@@ -55,6 +56,7 @@ COMMANDS := [?]Command{
 	{id = "session.background", title = "Send running tools to the background", group = "Session", icon = ICO_TERMINAL, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/background", app.chat.id), "", app.chat.id) }, enabled = is_busy},
 	{id = "app.connections", title = "Connect an account", group = "General", icon = ICO_PERSON, run = proc(app: ^App) { app.settings_page = .Connections; settings_open(app) }},
 	{id = "view.terminal", title = "Terminal", group = "View", icon = ICO_TERMINAL, keys = "Ctrl+Shift+T", key = .T, mods = {.Ctrl, .Shift}, run = terminal_toggle},
+	{id = "view.terminal_new", title = "New terminal", group = "View", icon = ICO_TERMINAL, run = terminal_new},
 	{id = "session.schedules", title = "Schedules of this session", group = "Session", icon = ICO_HISTORY, run = proc(app: ^App) { schedules_open(app, app.chat.id) }, enabled = proc(app: ^App) -> bool { return app.chat.id != "" && !app.cx.no_schedules }},
 	{id = "session.artifacts", title = "Artifacts of this folder", group = "Session", icon = ICO_DOC, run = artifacts_open, enabled = proc(app: ^App) -> bool { return !app.cx.no_artifacts }},
 	{id = "session.files", title = "Browse the files", group = "Session", icon = ICO_FOLDER, keys = "Ctrl+P", key = .P, mods = {.Ctrl}, run = files_open},
@@ -82,35 +84,34 @@ command_find :: proc(id: string) -> ^Command {
 	return nil
 }
 
-// Asked for now, done after the frame.
-command_run :: proc(app: ^App, c: ^Command) { app.cx.command_due = c }
+// Asked for now, done after the frame, in the order asked.
+command_run :: proc(app: ^App, c: ^Command) { append(&app.cx.commands_due, c) }
 
 commands_apply :: proc(app: ^App) {
-	if c := app.cx.command_due; c != nil {
-		app.cx.command_due = nil
-		c.run(app)
-		app.frames = max(app.frames, FRAMES_AFTER_INPUT)
-	}
+	if len(app.cx.commands_due) == 0 { return }
+	for i := 0; i < len(app.cx.commands_due); i += 1 { app.cx.commands_due[i].run(app) }
+	clear(&app.cx.commands_due)
+	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
 }
 
-// The keys of the table, at the start of a build. The palette has its usual other names.
+// Whether its key does something now: what is open over the window has the keyboard, unless the command is meant to work there.
+command_keyed :: proc(app: ^App, c: ^Command) -> bool {
+	if !command_enabled(app, c) { return false }
+	return !overlay_open(app) || (c.over != nil && c.over(app))
+}
+
+// The keys of the table, at the start of a build. The palette has its other name.
 commands_keys :: proc(app: ^App) {
 	for &c in COMMANDS {
-		if c.key == .None || !command_enabled(app, &c) { continue }
+		if c.key == .None || !command_keyed(app, &c) { continue }
 		if ui.key_pressed_peek(c.key, c.mods) && ui.key_press(c.key, c.mods) { command_run(app, &c) }
 	}
-	if ui.key_press(.P, {.Ctrl}) || ui.key_press(.P, {.Ctrl, .Shift}) { command_run(app, command_find("app.palette")) }
+	if c := command_find("app.palette"); command_keyed(app, c) && ui.key_press(.P, {.Ctrl, .Shift}) { command_run(app, c) }
 }
 
-go_home :: proc(app: ^App) {
-	for s in app.nav { delete(s) }
-	clear(&app.nav)
-	new_session(app)
-}
-
-// A dialog, a picker or a menu is over the window.
+// A dialog, a picker or a menu is over the window: the one list of them. What reads the keyboard behind them asks here.
 overlay_open :: proc(app: ^App) -> bool {
-	return app.cx.changes.open || app.cx.files.open || app.cx.schedules.open || app.cx.artifacts.open || app.settings_open || app.delete_open || app.stats_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.rename.open || len(app.ui_state.menus) > 0
+	return changes_shown(&app.cx.changes) || app.cx.files.open || app.cx.schedules.open || app.cx.artifacts.open || app.settings_open || app.delete_open || app.stats_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.rename.open || len(app.ui_state.menus) > 0
 }
 
 content_zoom_set :: proc(app: ^App, z: f32) {

@@ -186,6 +186,16 @@ quote_selection :: proc(app: ^App) {
 	quote_text(app, ui.selected_text(&app.ui_state, context.temp_allocator), true)
 }
 
+// The chip of selection `serial`: a new one goes where the pointer ended it (true). One that comes back, a dialog that hid it closed,
+// stays where it was: the pointer is wherever that dialog left it.
+quote_place :: proc(cx: ^App_Context, serial: u64, pointer: Vec2) -> (new_selection: bool) {
+	cx.quote_open = true
+	if serial == cx.quote_serial { return false }
+	cx.quote_serial = serial
+	cx.quote_at = {pointer, pointer + 1}
+	return true
+}
+
 // Where a selection ends: what can be done with it, at hand. The press on it may take the selection away: the text was kept.
 quote_chip :: proc(app: ^App, em: f32) {
 	s := &app.ui_state
@@ -197,13 +207,9 @@ quote_chip :: proc(app: ^App, em: f32) {
 		if !ui.has_selection(s) || overlay_open(app) || ui.active_key() != 0 { cx.quote_open = false; return }
 		serial := ui.selection_serial(s)
 		if serial == cx.quote_done { return }
-		if serial != cx.quote_serial || !cx.quote_open {
-			cx.quote_serial = serial
-			cx.quote_open = true
+		if quote_place(cx, serial, ui.mouse_pos()) {
 			delete(cx.quote_kept)
 			cx.quote_kept = ui.selected_text(s)
-			p := ui.mouse_pos()
-			cx.quote_at = {p, p + 1}
 		}
 	}
 	if !cx.quote_open { return }
@@ -287,5 +293,5 @@ rename_commit :: proc(app: ^App) {
 	r.open = false
 	if t == "" { return }
 	rename_session(app, r.id, t)
-	app.refresh_due = true
+	refresh_soon(app)
 }

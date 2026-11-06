@@ -4,6 +4,7 @@
 package occ
 
 import "core:strings"
+import "core:time"
 import "gt:dbus"
 
 @(private = "file") SECRET_BUS        :: "org.freedesktop.secrets"
@@ -16,6 +17,7 @@ import "gt:dbus"
 @(private = "file") IN_SERVICE_MARK   :: "secret-service:v1"   // the field of a password kept in the service
 @(private = "file") DICT_ENTRY_ALIGN  :: 8
 @(private = "file") ATTR_APP          :: "opencode-native"
+@(private = "file") SECRET_ASK_S      :: 5   // how long what the service answered holds
 
 // A connection and a session with the service (no encryption on the wire: the bus is local to the user).
 @(private = "file")
@@ -121,34 +123,48 @@ secret_delete :: proc(name: string) {
 	}
 }
 
-// Whether there is a service to speak to (asked once).
+// Whether there is a service to speak to. (Asked by the dialog at each frame: not at each one, and not once for good, a service may start.)
 secret_available :: proc() -> bool {
+	@(static) asked: time.Tick
 	@(static) known, available: bool
-	if !known {
+	if !known || time.duration_seconds(time.tick_since(asked)) >= SECRET_ASK_S {
+		available = false
 		if conn, _, ok := secret_open(); ok { dbus.conn_close(conn); available = true }
-		known = true
+		known, asked = true, time.tick_now()
 	}
 	return available
 }
 
-@(private = "file") in_clear: bool   // a password had to stay in the file
+@(private = "file") in_clear: map[string]bool   // the servers whose password had to stay in the file, at their last save (keys owned)
 
-// See os_windows.odin. Without a usable service the field is the password: the file is only the user's.
+// See os_windows.odin. Without a usable service the field is the password: the file is only the user's. What is said of a server is what its
+// last save found: a keyring unlocked since, and the next save moves the password there.
 password_seal :: proc(name, password: string) -> (field: string, ok: bool) {
-	if secret_store(name, password) { return IN_SERVICE_MARK, true }
-	in_clear = true
+	stored := secret_store(name, password)
+	if key, _ := delete_key(&in_clear, name); key != "" { delete(key) }
+	if stored { return IN_SERVICE_MARK, true }
+	in_clear[strings.clone(name)] = true
 	return password, true
 }
 
+// (A field may name the item it stands for: a server renamed while its keyring was locked keeps the item it had.)
 password_open :: proc(name, field: string) -> (password: string, sealed, ok: bool) {
-	if field != IN_SERVICE_MARK { return "", false, false }
-	password, ok = secret_fetch(name)
+	if !strings.has_prefix(field, IN_SERVICE_MARK) { return "", false, false }
+	key := name
+	if len(field) > len(IN_SERVICE_MARK) && field[len(IN_SERVICE_MARK)] == ':' { key = field[len(IN_SERVICE_MARK) + 1:] }
+	password, ok = secret_fetch(key)
 	return password, true, ok
+}
+
+// The field of a password that stays under `name`, whatever the server is called next.
+password_field_of :: proc(name, field: string) -> string {
+	if field != IN_SERVICE_MARK { return field }
+	return strings.concatenate({IN_SERVICE_MARK, ":", name}, context.temp_allocator)
 }
 
 password_forget :: proc(name: string) { secret_delete(name) }
 
 password_note :: proc() -> string {
-	if secret_available() && !in_clear { return "" }
+	if secret_available() && len(in_clear) == 0 { return "" }
 	return "No usable Secret Service (none here, or its keyring is locked): the password stays in clear in servers.txt, which only you can read (mode 0600)."
 }

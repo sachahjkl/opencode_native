@@ -58,6 +58,8 @@ when ODIN_OS == .Windows {
 		occ_webview_act :: proc(w: rawptr, what: i32) ---
 		occ_webview_script :: proc(w: rawptr, code: [^]u8, n: uint, id: u64) ---
 		occ_webview_capture :: proc(w: rawptr, id: u64) ---
+		occ_webview_can :: proc(w: rawptr, what: i32) -> i32 ---
+		occ_webview_free :: proc(w: rawptr) ---
 	}
 }
 

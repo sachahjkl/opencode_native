@@ -12,19 +12,65 @@ import "gt:config"
 import "gt:ui"
 import update "update"
 
-Update_State :: enum u8 { Idle, Checking, Ready, Downloading, Installed }
+// A version on offer: signed, and of the channel and the folder it was found in, whatever the preference says since. (owned)
+Update_Offer :: struct {
+	manifest: update.Manifest,
+	path:     string,
+	channel:  string,
+}
+
+// What each state holds is what it needs. (nil: nothing going on.) Only update_go moves it, and frees what the next state does not keep.
+Update_Checking    :: struct { asked: bool, offer: ^Update_Offer }   // `asked`: what it finds is said, even "nothing"; `offer`: what stands if it fails
+Update_Ready       :: struct { offer: ^Update_Offer }
+Update_Downloading :: struct { offer: ^Update_Offer }
+Update_Installed   :: struct { version: string }   // (owned)
+Update_State       :: union { Update_Checking, Update_Ready, Update_Downloading, Update_Installed }
 
 Updater :: struct {
 	state:    Update_State,
-	version:  string,          // what is on offer (owned)
-	manifest: update.Manifest, // ... signed (owned)
-	base:     string,          // where it came from (owned)
 	checked:  bool,            // the check of the start was made
-	asked:    bool,            // the user asked: what the check finds is said, even "nothing"
 	result:   string,          // what the last check found, for the settings' page (owned)
+	channel:  string,          // the channel of the preference, last seen (owned)
 }
 
 @(private = "file")
+update_offer_of :: proc(s: Update_State) -> ^Update_Offer {
+	switch v in s {
+	case Update_Checking:    return v.offer
+	case Update_Ready:       return v.offer
+	case Update_Downloading: return v.offer
+	case Update_Installed:
+	}
+	return nil
+}
+
+update_go :: proc(u: ^Updater, next: Update_State) {
+	if o := update_offer_of(u.state); o != nil && o != update_offer_of(next) {
+		update.manifest_destroy(&o.manifest)
+		delete(o.path); delete(o.channel)
+		free(o)
+	}
+	if i, is := u.state.(Update_Installed); is { delete(i.version) }
+	u.state = next
+}
+
+@(private = "file")
+update_result :: proc(u: ^Updater, s: string) {
+	delete(u.result)
+	u.result = strings.clone(s)
+}
+
+update_is_ready :: proc(u: ^Updater) -> bool { _, is := u.state.(Update_Ready); return is }
+update_is_installed :: proc(u: ^Updater) -> bool { _, is := u.state.(Update_Installed); return is }
+update_is_downloading :: proc(u: ^Updater) -> bool { _, is := u.state.(Update_Downloading); return is }
+
+// The version on offer, or being put in place ("": none).
+update_version :: proc(u: ^Updater) -> string {
+	if i, is := u.state.(Update_Installed); is { return i.version }
+	if o := update_offer_of(u.state); o != nil { return o.manifest.version }
+	return ""
+}
+
 Update_Job :: struct {
 	base, path:      string,    // (owned)
 	channel:         string,    // (owned)
@@ -104,50 +150,76 @@ install_job :: proc(j: ^Update_Job) {
 }
 
 @(private = "file")
-on_update :: proc(data: rawptr, word: u64) {
-	app := the_app
-	j := (^Update_Job)(data)
-	u := &app.updater
+on_update :: proc(data: rawptr, word: u64) { update_answered(the_app, (^Update_Job)(data)) }
+
+update_answered :: proc(app: ^App, j: ^Update_Job) {
 	defer {
 		delete(j.base); delete(j.path); delete(j.channel); delete(j.exe); delete(j.err)
 		free(j)
 	}
-	asked := u.asked
-	u.asked = false
 	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
-	if j.install {
-		if j.err != "" {
-			u.state = .Ready
-			ui.toast(.Bad, "Update: %s", j.err)
-			return
-		}
-		u.state = .Installed
-		ui.toast(.Good, "%s is installed: restart to use it", u.version)
-		return
-	}
-	u.state = .Idle
-	delete(u.result)
-	u.result = strings.clone(j.err != "" ? j.err : "Up to date")
-	switch {
-	case j.err != "":
-		if asked { ui.toast(.Bad, "Update: %s", j.err) }
-	case j.nothing_new:
-		if asked { ui.toast(.Good, "opencode native %s is the latest", APP_VERSION) }
-	case:
-		update.manifest_destroy(&u.manifest)
-		u.manifest = j.found
-		delete(u.version)
-		u.version = strings.clone(j.found.version)
-		u.state = .Ready
-		ui.toast(.Good, "opencode native %s is available", u.version)
-	}
+	if j.install { update_installed(app, j) } else { update_checked(app, j) }
 }
 
 @(private = "file")
+update_installed :: proc(app: ^App, j: ^Update_Job) {
+	u := &app.updater
+	d, is := u.state.(Update_Downloading)
+	if !is { return }
+	if j.err != "" {
+		update_go(u, Update_Ready{d.offer})
+		ui.toast(.Bad, "Update: %s", j.err)
+		return
+	}
+	version := strings.clone(d.offer.manifest.version)
+	update_go(u, Update_Installed{version})
+	ui.toast(.Good, "%s is installed: restart to use it", version)
+}
+
+@(private = "file")
+update_checked :: proc(app: ^App, j: ^Update_Job) {
+	u := &app.updater
+	c, is := u.state.(Update_Checking)
+	if !is {   // (nothing waits for it)
+		if j.err == "" && !j.nothing_new { update.manifest_destroy(&j.found) }
+		return
+	}
+	if j.channel != app.prefs.update_channel {   // (the channel changed under it: the question is another one)
+		if j.err == "" && !j.nothing_new { update.manifest_destroy(&j.found) }
+		update_job_start(app, new(Update_Job))
+		return
+	}
+	switch {
+	case j.err != "":
+		update_result(u, j.err)
+		if c.asked { ui.toast(.Bad, "Update: %s", j.err) }
+		// (a check that failed says nothing against what was on offer)
+		if c.offer != nil { update_go(u, Update_Ready{c.offer}) } else { update_go(u, nil) }
+	case j.nothing_new:
+		update_result(u, "Up to date")
+		if c.asked { ui.toast(.Good, "opencode native %s is the latest", APP_VERSION) }
+		update_go(u, nil)
+	case:
+		o := new(Update_Offer)
+		o^ = {j.found, strings.clone(j.path), strings.clone(j.channel)}
+		update_result(u, fmt.tprintf("Version %s is available", o.manifest.version))
+		update_go(u, Update_Ready{o})
+		ui.toast(.Good, "opencode native %s is available", o.manifest.version)
+	}
+}
+
+// The check's folder is the channel's; an install's is that of its offer.
+@(private = "file")
 update_job_start :: proc(app: ^App, j: ^Update_Job) {
 	j.base = strings.clone(update_base(app))
-	j.channel = strings.clone(app.prefs.update_channel)
-	j.path = strings.clone(channel_dir(app.prefs.update_channel))
+	if !j.install {
+		j.channel = strings.clone(app.prefs.update_channel)
+		j.path = strings.clone(channel_dir(app.prefs.update_channel))
+	}
+	when ODIN_TEST {   // (kept for the test to answer)
+		bench_update_job = j
+		return
+	}
 	thread.create_and_start_with_poly_data(j, proc(j: ^Update_Job) {
 		if j.install { install_job(j) } else { check_job(j) }
 		_ = ui.post(&the_app.ui_state, on_update, j)
@@ -155,24 +227,53 @@ update_job_start :: proc(app: ^App, j: ^Update_Job) {
 	}, self_cleanup = true)
 }
 
-// Asked by the user (the palette, the Setup) or at start.
+// Asked by the user (the palette, the settings) or at start. What is on offer does not stop a check: it may be asked again; a check
+// running takes the asking over, and says what it finds.
 update_check :: proc(app: ^App, asked: bool) {
 	u := &app.updater
 	if ODIN_OS != .Windows { if asked { ui.toast(.Warn, "Updates install by hand on this system") }; return }
-	if u.state != .Idle { return }
-	u.state = .Checking
-	u.asked = asked
+	switch &v in u.state {
+	case Update_Checking:
+		v.asked = v.asked || asked
+		return
+	case Update_Downloading:
+		return
+	case Update_Installed:
+		if asked { ui.toast(.Good, "%s is installed: restart to use it", v.version) }
+		return
+	case Update_Ready:
+		update_go(u, Update_Checking{asked, v.offer})
+	case nil:
+		update_go(u, Update_Checking{asked, nil})
+	}
 	update_job_start(app, new(Update_Job))
 }
 
 update_check_now :: proc(app: ^App) { update_check(app, true) }
 
+// The channel changed: what is on offer was the other one's, and nothing of it goes on. (A download under way ends: it was asked for.)
+update_channel_follow :: proc(app: ^App) {
+	u := &app.updater
+	if u.channel == app.prefs.update_channel { return }
+	first := u.channel == ""
+	delete(u.channel)
+	u.channel = strings.clone(app.prefs.update_channel)
+	if first { return }
+	update_result(u, "")
+	#partial switch v in u.state {
+	case Update_Ready:    update_go(u, nil)
+	case Update_Checking: update_go(u, Update_Checking{v.asked, nil})
+	}
+}
+
 update_install :: proc(app: ^App) {
 	u := &app.updater
-	if u.state != .Ready { return }
-	u.state = .Downloading
+	r, is := u.state.(Update_Ready)
+	if !is { return }
+	update_go(u, Update_Downloading{r.offer})
 	j := new(Update_Job)
-	j.install, j.manifest = true, u.manifest
+	j.install, j.manifest = true, r.offer.manifest
+	j.path, j.channel = strings.clone(r.offer.path), strings.clone(r.offer.channel)
 	j.exe = strings.clone(running_exe())
 	update_job_start(app, j)
 }
@@ -184,7 +285,7 @@ update_restart :: proc(app: ^App) {
 	app.quit = true
 }
 
-// Once online, once: what an earlier update left, and whether there is another.
+// At the start of the program, whatever the server does: what an earlier update left, and whether there is another.
 update_startup :: proc(app: ^App) {
 	u := &app.updater
 	if u.checked { return }
@@ -197,17 +298,15 @@ update_startup :: proc(app: ^App) {
 update_pill :: proc(app: ^App, em: f32) {
 	u := &app.updater
 	label := ""
-	#partial switch u.state {
-	case .Ready:       label = fmt.tprintf("Update to %s", u.version)
-	case .Downloading: label = "Downloading the update…"
-	case .Installed:   label = "Restart to update"
-	case:              return
+	switch _ in u.state {
+	case Update_Ready:       label = fmt.tprintf("Update to %s", update_version(u))
+	case Update_Downloading: label = "Downloading the update…"
+	case Update_Installed:   label = "Restart to update"
+	case Update_Checking:    return
+	case nil:                return
 	}
 	if pill_button("###update", label, accent(), ICO_REFRESH).clicked {
-		#partial switch u.state {
-		case .Ready:     update_install(app)
-		case .Installed: update_restart(app)
-		}
+		if update_is_ready(u) { update_install(app) } else if update_is_installed(u) { update_restart(app) }
 	}
 	ui.spacer(ui.px(em * 0.6))
 }

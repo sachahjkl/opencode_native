@@ -195,17 +195,21 @@ Req_Kind :: enum u8 {
 	Models,
 	Info,
 	Permissions,    // GET /api/session/:id/permission
+	Permission_Reply, // POST /api/session/:id/permission/:id/reply (the tag: the permission)
 	Active,         // GET /api/session/active: the sessions running now
 	Self,           // GET /api/session/:id: the session shown
 	Parent,         // GET /api/session/:parent: the title of the session shown's parent
 	Children,       // GET /api/session?parentID=: the sub-agents of the session shown
 	// the settings' pages (settings.odin server_facts_answer)
 	Cfg, Shells, Mcp, Saved, Usage, Providers, Skills, Commands,
+	Shell_Set,      // PATCH /api/experimental/config (the tag: the shell it replaces)
+	Mcp_Done,       // POST /api/experimental/mcp/:name/connect, /disconnect (the tag: its name)
+	Saved_Done,     // DELETE /api/permission/saved/:id
 	Projects,       // GET /api/project: the projects and their logos
 	Stats,          // GET /api/experimental/session/stats: the project's totals (stats.odin)
 	Created,        // POST /api/session: the new session
 	Action,         // a POST whose answer only matters when it fails
-	Prompt,         // POST /api/session/:id/prompt: the same, and its text comes back to the composer
+	Prompt,         // POST /api/session/:id/prompt, /command: an Outgoing (outgoing.odin), what failed comes back to the composer
 	// what runs behind the conversation (activity.odin); a server without them says nothing about it
 	Shell_List,     // GET /api/shell: the commands running in a folder
 	Shell_One,      // GET /api/shell/:id: how one ended
@@ -213,20 +217,23 @@ Req_Kind :: enum u8 {
 	Peek,           // GET /api/session/:child/message: the end of a sub-agent's work
 	Slash,          // GET /api/command: the server's commands (the palette, "/name" in the composer)
 	Forked,         // POST /api/session/:id/fork: the new session
-	Session_Agent,  // a new session takes the agent chosen last (views.odin session_setup)
+	Session_Agent,  // a new session takes the agent chosen last (outgoing.odin outgoing_setup)
 	Session_Model,  // ... and the model
+	Session_Choice, // POST /api/session/:id/agent, /model: what the reader picked
 	Session_Moved,  // POST /api/session/:id/move
 	Session_Export, // GET /api/experimental/session/:id/export (session_tools.odin)
 	Session_Import, // POST /api/experimental/session/import
 	Pty_List,       // GET /api/pty (terminal.odin)
 	Pty_Made,       // POST /api/pty
+	Pty_Size,       // PUT /api/pty/:id, one at a time (the tag: the shell)
 	Schedules,      // GET /api/experimental/schedule (schedules.odin)
 	Schedule_Made,  // POST
 	Schedule_Done,  // DELETE, POST .../pause, /resume
 	Artifacts,      // GET /api/experimental/artifacts
 	Artifact_Read,  // GET .../:id
 	Artifact_Done,  // DELETE
-	Plugins,        // GET /api/plugin, POST /api/plugin/check
+	Plugins,        // GET /api/plugin
+	Plugins_Check,  // POST /api/plugin/check: the same list, looked up again
 	Plugin_Update,  // POST /api/plugin/update
 	Integrations,   // GET /api/integration (integrations.odin)
 	Credentials,    // GET /api/credential: only which are active is read
@@ -238,11 +245,13 @@ Req_Kind :: enum u8 {
 	Files_List,     // the same for the dialog
 	File_Read,      // GET /api/fs/read/*
 	Changes_Range,  // GET /api/session/:id/message?type=user: the first prompt, then the last
-	Changes,        // GET /api/session/:id/diff, POST .../revert/stage: the files
+	Changes,        // GET /api/session/:id/diff: the files
+	Revert_Staged,  // POST /api/session/:id/revert/stage: the files, written back by then
 	Revert_Done,    // POST /api/session/:id/revert/commit
 	Revert_Cancelled, // DELETE /api/session/:id/revert
 	Forms,          // GET /api/session/:id/form: what it asks and waits for (forms.odin)
 	Form_Reply,     // POST /api/session/:id/form/:form/reply (the tag: the form)
+	Form_Dismiss,   // DELETE /api/session/:id/form/:form (the tag: the form)
 	Inbox,          // GET /api/session/:id/inbox: what was sent during a run that was interrupted
 	Inbox_Take,     // DELETE /api/session/:id/inbox/:message: out of it, to go as a prompt (the body: that prompt)
 }
@@ -255,7 +264,10 @@ Request :: struct {
 	tag:    string,    // the session it is about
 	gen:    u64,       // the chat generation it was made for (answers for a chat since left are dropped)
 	conn:   ^Conn,     // the connection it goes by (answers from a server since left are dropped)
-	facts_gen: u64,    // the reading of the settings' pages it belongs to (answers of an earlier one are dropped)
+	remote: ^Remote,   // the reading it is (nil: none), and which one: answer settles it
+	ticket: u64,
+	out:    u64,       // the prompt on its way it carries (outgoing.odin, 0: none)
+	asked_at: u64,     // App_Context.stream_seq when it left: what the stream said after that is newer than its answer
 	// the answer
 	status: int,
 	resp:   string,
@@ -263,11 +275,21 @@ Request :: struct {
 	delay:  int,      // ms to sleep first, in its thread
 }
 
-request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "", delay := 0) {
-	if app.conn == nil { return }   // (no server yet: nothing to ask)
+// (`conn`: a server left, for what must be undone there: answer_left.)
+request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "", delay := 0, remote: ^Remote = nil, out: u64 = 0, conn: ^Conn = nil) {
+	to := conn != nil ? conn : app.conn
+	if to == nil {   // (no server yet: nothing to ask)
+		if remote != nil { remote_settle(remote, .Failed, "Not connected") }
+		return
+	}
 	r := new(Request)
-	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = app.conn, facts_gen = app.facts_gen, delay = delay}
+	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = to, delay = delay, remote = remote, out = out, asked_at = app.cx.stream_seq}
+	if remote != nil { r.ticket = remote.ticket }
 	sync.atomic_add(&app.pending, 1)
+	when ODIN_TEST {   // (answers_test.odin: kept for the test to answer, in the order it wants)
+		bench_sent_add(r)
+		return
+	}
 	thread.create_and_start_with_poly_data(r, proc(r: ^Request) {
 		app := the_app
 		if r.delay > 0 { time.sleep(time.Duration(r.delay) * time.Millisecond) }
@@ -277,8 +299,8 @@ request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag
 }
 
 // A GET in a while: what is being waited for costs a sleeping thread, no frame.
-request_later :: proc(app: ^App, kind: Req_Kind, path: string, ms: int, tag: string) {
-	request(app, kind, "GET", path, tag = tag, delay = ms)
+request_later :: proc(app: ^App, kind: Req_Kind, path: string, ms: int, tag: string, remote: ^Remote = nil) {
+	request(app, kind, "GET", path, tag = tag, delay = ms, remote = remote)
 }
 
 request_free :: proc(r: ^Request) {
@@ -289,124 +311,170 @@ request_free :: proc(r: ^Request) {
 ERROR_EXCERPT_BYTES :: 80   // of an error's body, in its toast
 
 // On the interface's thread.
-on_answer :: proc(data: rawptr, word: u64) {
-	app := the_app
-	r := (^Request)(data)
+on_answer :: proc(data: rawptr, word: u64) { answer(the_app, (^Request)(data)) }
+
+// Whether an answer of this kind is read as JSON: one that cannot be read is then a failure.
+@(private = "file")
+answer_is_json :: proc(k: Req_Kind) -> bool {
+	switch k {
+	case .Sessions, .Messages, .Older, .Agents, .Models, .Info, .Permissions, .Active, .Self, .Parent, .Children,
+	     .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands, .Projects, .Stats, .Created,
+	     .Shell_List, .Shell_One, .Shell_Output, .Peek, .Slash, .Forked, .Session_Export, .Session_Import,
+	     .Pty_List, .Pty_Made, .Schedules, .Schedule_Made, .Artifacts, .Artifact_Read, .Plugins, .Plugins_Check, .Integrations, .Credentials,
+	     .Connect_Begin, .Connect_Status, .Mention_Files, .Files_List, .Changes_Range, .Changes, .Revert_Staged, .Forms, .Inbox:
+		return true
+	// (only that they went through matters, or the answer is not JSON at all)
+	case .Action, .Pty_Size, .Prompt, .Session_Agent, .Session_Model, .Session_Choice, .Inbox_Take, .Form_Reply, .Form_Dismiss, .Permission_Reply,
+	     .Session_Moved, .Revert_Done, .Revert_Cancelled, .Connected, .Credential_Done, .Schedule_Done, .Artifact_Done, .Plugin_Update, .File_Read,
+	     .Shell_Set, .Mcp_Done, .Saved_Done:
+		return false
+	}
+	return true
+}
+
+// What the server said when it refused (its `message`, else the start of the body).
+@(private = "file")
+refusal_text :: proc(r: ^Request) -> string {
+	v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
+	if msg := jstr(v, "message"); msg != "" { return msg }
+	if r.resp != "" { return r.resp[:min(len(r.resp), ERROR_EXCERPT_BYTES)] }
+	return fmt.tprintf("status %d", r.status)
+}
+
+// What was begun on a server and nobody waits for any more: nothing here will end it, so it is undone there, on the server it went
+// to. (A stage has written the files back; a login or a command goes on running.)
+@(private = "file")
+answer_left :: proc(app: ^App, r: ^Request) {
+	if !r.ok || r.status >= 400 { return }
+	#partial switch r.kind {
+	case .Revert_Staged:
+		request(app, .Action, "DELETE", fmt.tprintf("/api/session/%s/revert", r.tag), tag = r.tag, conn = r.conn)
+	case .Connect_Begin:
+		v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
+		if id := jstr(v, "data", "attemptID"); id != "" { request(app, .Action, "DELETE", fmt.tprintf("%s/%s", r.path, url_escape(id)), conn = r.conn) }
+	case .Pty_Made:
+		v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
+		term_made_left(app, r, v)
+	}
+}
+
+// Everything an answer can be, in one place. A Remote is settled here, before any handler.
+answer :: proc(app: ^App, r: ^Request) {
 	defer request_free(r)
 	sync.atomic_sub(&app.pending, 1)
-	if r.conn != app.conn { return }   // a server left
-	if r.kind == .Shell_List || r.kind == .Shell_One || r.kind == .Shell_Output || r.kind == .Peek {
-		if !r.ok || r.status >= 400 { activity_request_failed(app, r); return }
+	if r.conn != app.conn {
+		// a server left: server_forget cleaned up what depends on it. A reading it forgot does not stay Loading, and a
+		// prompt on its way still has to say whether it got there.
+		if x := r.remote; x != nil && x.ticket == r.ticket { remote_reset(x) }
+		if r.kind == .Prompt { outgoing_answered(app, r, r.ok && r.status < 400) }
+		answer_left(app, r)
+		return
+	}
+	if r.remote != nil && r.remote.ticket != r.ticket {   // a reading given up
+		answer_left(app, r)
+		return
 	}
 	if !r.ok {
-		// (this request failed: whether the connection is down is for the event stream to say, stream_state)
+		// (this request failed: whether the connection is down is for the event stream to say, stream_up)
 		fmt.eprintfln("request failed: %s %s: %s", r.method, r.path, r.resp)
-		request_failed(app, r)
-		ui.toast(.Bad, "Server unreachable (%s)", r.path)
+		answer_failed(app, r, .Transport, "Server unreachable")
 		return
 	}
-	if r.status == 401 { app.auth_failed = true; request_failed(app, r); ui.toast(.Bad, "Authentication refused by the server"); return }
-	if r.kind == .Inbox && r.status >= 400 { return }   // (a server without one)
-	if r.status >= 400 && (r.kind == .Schedules || r.kind == .Schedule_Made || r.kind == .Artifacts) {
-		// (the server's words go in the dialog: "set experimental.schedules in config", "Invalid duration")
-		e, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-		message := jstr(e, "message")
-		#partial switch r.kind {
-		case .Schedules: schedules_refused(app, r.tag, message)
-		case .Artifacts: artifacts_refused(app, message)
-		case: schedule_failed(app, message)
-		}
-		return
-	}
-	if r.kind == .Mention_Files && r.status >= 400 { return }   // (a folder gone: nothing to propose)
-	if r.kind == .File_Read { file_loaded(app, r.tag, r.resp, r.status < 400); return }   // (not JSON)
-	if r.kind == .Session_Import && r.status == 409 { session_import_conflict(app, r.tag); return }
-	if r.kind == .Changes && r.status == 400 && changes_refused(app, r.tag) { return }
-	if r.status >= 400 {
-		v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-		msg := jstr(v, "message")
-		ui.toast(.Bad, "%s %s: %d %s", r.method, r.path, r.status, msg if msg != "" else r.resp[:min(len(r.resp), ERROR_EXCERPT_BYTES)])
-		request_failed(app, r)
-		return
-	}
+	if r.status == 401 { answer_failed(app, r, .Auth, "Authentication refused by the server"); return }
+	if r.status >= 400 { answer_failed(app, r, .Refused, refusal_text(r)); return }
 	v, err := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if err != nil && r.kind != .Action && r.kind != .Prompt && r.kind != .Session_Agent && r.kind != .Session_Model && r.kind != .Inbox_Take && r.kind != .Form_Reply && r.kind != .Session_Moved && r.kind != .Revert_Done && r.kind != .Revert_Cancelled && r.kind != .Connected && r.kind != .Credential_Done && r.kind != .Schedule_Done && r.kind != .Artifact_Done && r.kind != .Plugin_Update {
-		ui.toast(.Warn, "Unreadable answer (%s)", r.path)
-		request_failed(app, r)
-		return
-	}
+	if err != nil && answer_is_json(r.kind) { answer_failed(app, r, .Unreadable, "Unreadable answer"); return }
+	if r.remote != nil { remote_settle(r.remote, .Ready, "") }
 	switch r.kind {
 	case .Sessions:    sessions_load(app, v)
 	case .Messages:
 		if r.gen == app.chat.gen && r.tag == app.chat.id {
 			first := !app.chat.loaded
-			chat_load(app, v, false)
+			chat_load(app, v, false, r.asked_at)
 			if first && app.stick_bottom { app.snap_bottom = true }   // (shown at its bottom in the very frame it arrives: frame)
 			nav_restore_check(app)
 		}
-	case .Older:       if r.gen == app.chat.gen && r.tag == app.chat.id { chat_load(app, v, true); nav_restore_check(app) }
+	case .Older:
+		if r.gen == app.chat.gen && r.tag == app.chat.id {
+			chat_load(app, v, true)
+			nav_restore_page(app)
+			nav_restore_check(app)
+		}
 	case .Agents:      agents_load(app, v)
 	case .Models:      models_load(app, v)
 	case .Info:        delete(app.server_version); app.server_version = strings.clone(jstr(v, "version"))
-	case .Permissions: permissions_load(app, jarr(v, "data"))
-	case .Active:      active_load(app, v)
-	case .Self:        if r.tag == app.chat.id && r.gen == app.chat.gen { self_load(app, v) }
+	case .Permissions: permissions_replace(app, r.tag, jarr(v, "data"), r.asked_at)
+	case .Permission_Reply:
+		waits_gone(app, r.tag)
+		permission_remove(app, r.tag)
+	case .Active:      active_load(app, v, r.asked_at)
+	case .Self:        if r.tag == app.chat.id && r.gen == app.chat.gen { self_load(app, v, r.asked_at) }
 	case .Parent:      if r.tag == app.chat.id && r.gen == app.chat.gen { parent_load(app, v) }
 	case .Children:    if r.tag == app.chat.id && r.gen == app.chat.gen { children_load(app, v) }
-	case .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands: if r.facts_gen == app.facts_gen { server_facts_answer(app, r.kind, v) }
+	case .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands: server_facts_answer(app, r.kind, v)
+	case .Shell_Set:
+		ui.toast(.Good, "Shell set")
+		facts_soon(app)   // (a reading that crossed it said the one before)
+	case .Mcp_Done:    mcp_done(app, r.tag)
+	case .Saved_Done:  saved_revoke_done(app, r.tag)
 	case .Projects:    projects_load(app, v)
 	case .Stats:       stats_load(app, v)
 	case .Created:
-		id := jstr(v, "data", "id")
-		if id != "" {
-			refresh_sessions(app)
-			open_chat(app, id)
-			session_setup(app, id, 0)
+		if id := jstr(v, "data", "id"); id != "" {
+			outgoing_created(app, r, id)
 		} else {
-			request_failed(app, r)
+			answer_failed(app, r, .Unreadable, "Unreadable answer")
 		}
 	case .Action:
 	case .Prompt:
 		// (the stream may say a prompt without its files: what was attached shows as soon as it is stored)
 		if strings.contains(r.body, `"files":`) && r.gen == app.chat.gen && r.tag == app.chat.id { load_messages(app, r.tag) }
-	case .Session_Agent: session_setup(app, r.tag, 1)
-	case .Session_Model: session_setup(app, r.tag, 2)
-	case .Session_Moved: ui.toast(.Good, "Session moved"); app.refresh_due = true
+		outgoing_answered(app, r, true)
+	case .Session_Agent: outgoing_setup(app, r.out, .Model)
+	case .Session_Model: outgoing_setup(app, r.out, .Sending)
+	case .Session_Choice:
+	case .Session_Moved: ui.toast(.Good, "Session moved"); refresh_soon(app)
 	case .Session_Export: session_export_save(app, r.tag, r.resp)
 	case .Session_Import:
-		app.refresh_due = true
-		if id := jstr(v, "data", "id"); id != "" { open_root(app, id) }
+		refresh_soon(app)
+		// (the reader who went elsewhere meanwhile stays there: it is in the sidebar)
+		if id := jstr(v, "data", "id"); id != "" && r.gen == app.chat.gen { open_root(app, id) }
 		ui.toast(.Good, "Session imported")
 	case .Pty_List:      terminals_load(app, r.tag, v)
 	case .Pty_Made:      term_made(app, r.tag, v)
-	case .Schedules:     schedules_load(app, r.tag, v)
+	case .Pty_Size:      term_size_answered(app, r.tag)
+	case .Schedules:     schedules_load(app, v)
 	case .Schedule_Made: schedule_made(app)
 	case .Schedule_Done: schedule_changed(app)
 	case .Artifacts:     artifacts_load(app, v)
-	case .Artifact_Read: artifact_loaded(app, r.tag, v)
+	case .Artifact_Read: artifact_loaded(app, v)
 	case .Artifact_Done: artifacts_changed(app)
 	case .Plugins:       plugins_load(app, v)
+	case .Plugins_Check: plugins_checked(app, v)
 	case .Plugin_Update: plugins_changed(app)
 	case .Integrations:  integrations_load(app, v)
 	case .Credentials:   credentials_load(app, v)
 	case .Credential_Done: integrations_changed(app)
 	case .Connected:     connect_done(app)
-	case .Connect_Begin: connect_begun(app, r.tag, v)
-	case .Connect_Status: connect_status(app, r.tag, v)
-	case .Mention_Files: mention_load(app, r.tag, v)
-	case .Files_List:    files_load(app, r.tag, v)
-	case .File_Read:
-	case .Changes_Range: changes_range(app, r.tag, v)
-	case .Changes:       changes_load(app, r.tag, v)
-	case .Revert_Done:   revert_done(app, r.tag)
-	case .Revert_Cancelled:
-	case .Forms:         for it in jarr(v, "data") { form_add(app, it) }
-	case .Form_Reply:    form_remove(app, r.tag)
+	case .Connect_Begin: connect_begun(app, v)
+	case .Connect_Status: connect_status(app, v)
+	case .Mention_Files: mention_load(app, v)
+	case .Files_List:    files_load(app, v)
+	case .File_Read:     file_loaded(app, r.resp)
+	case .Changes_Range: changes_range(app, v)
+	case .Changes:       changes_load(app, v)
+	case .Revert_Staged: revert_staged(app, v)
+	case .Revert_Done:   revert_done(app)
+	case .Revert_Cancelled: revert_cancelled(app)
+	case .Forms:         forms_replace(app, r.tag, jarr(v, "data"), r.asked_at)
+	case .Form_Reply, .Form_Dismiss:
+		waits_gone(app, r.tag)
+		form_remove(app, r.tag)
 	case .Inbox:         inbox_take(app, r.tag, v)
 	case .Inbox_Take:    inbox_send(app, r)
 	case .Shell_List:   if r.gen == app.chat.gen { activity_shells_load(app, v, r.tag) }
-	case .Shell_One:    activity_shell_load(app, v, r.tag)
-	case .Shell_Output: activity_output_load(app, v, r.tag)
+	case .Shell_One:    if r.gen == app.chat.gen { activity_shell_load(app, v, r.tag) }
+	case .Shell_Output: if r.gen == app.chat.gen { activity_output_load(app, v, r.tag) }
 	case .Peek:         if r.gen == app.chat.gen { activity_peek_load(app, v, r.tag) }
 	case .Slash:
 		list := make([dynamic]Slash, context.temp_allocator)
@@ -415,45 +483,108 @@ on_answer :: proc(data: rawptr, word: u64) {
 	case .Forked:
 		if id := jstr(v, "data", "id"); id != "" {
 			refresh_sessions(app)
-			open_root(app, id)
+			if r.gen == app.chat.gen { open_root(app, id) }
 			ui.toast(.Good, "Forked")
 		}
 	}
 }
 
-// What a request that failed leaves undone, whatever the way it failed.
-request_failed :: proc(app: ^App, r: ^Request) {
-	#partial switch r.kind {
-	case .Session_Agent: session_setup(app, r.tag, 1)   // (the prompt goes all the same, with what the session has)
-	case .Session_Model: session_setup(app, r.tag, 2)
+// How a request failed.
+Failure :: enum u8 {
+	Transport,    // the server was not reached
+	Auth,         // 401
+	Refused,      // another status from 400 on: `message` is the server's
+	Unreadable,   // a success that says nothing that can be read
+}
+
+// Every failure comes here: its Remote, what it leaves undone, what the reader is told.
+answer_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) {
+	if r.remote != nil { remote_settle(r.remote, f == .Refused ? .Refused : .Failed, message) }
+	if f == .Auth { conn_auth_refused(app) }
+	if request_failed(app, r, f, message) { return }
+	switch f {
+	case .Transport:  ui.toast(.Bad, "Server unreachable (%s)", r.path)
+	case .Auth:       ui.toast(.Bad, "Authentication refused by the server")
+	case .Refused:    ui.toast(.Bad, "%s %s: %d %s", r.method, r.path, r.status, message)
+	case .Unreadable: ui.toast(.Warn, "Unreadable answer (%s)", r.path)
+	}
+}
+
+// What a request that failed leaves undone, whatever the way it failed. Every kind is here: a new one does not compile until it
+// says. `told`: the failure is shown where it belongs, or is not one (a server without that page): no toast.
+@(private = "file")
+request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	refused := f == .Refused
+	switch r.kind {
+	case .Session_Agent: outgoing_setup(app, r.out, .Model)     // (the prompt goes all the same, with what the session has)
+	case .Session_Model: outgoing_setup(app, r.out, .Sending)
+	case .Session_Choice:
+		// (the session did not take it: what is shown goes back to what it uses)
+		if r.gen == app.chat.gen && r.tag == app.chat.id {
+			if strings.has_suffix(r.path, "/agent") { app.chat.chose_agent = "" } else { app.chat.chose_model, app.chat.chose_provider = "", "" }
+		}
+	case .Created, .Prompt:
+		outgoing_answered(app, r, false)
 	case .Messages:
-		if r.gen == app.chat.gen { app.chat.loading = false }
+		if r.gen == app.chat.gen {
+			app.chat.loading = false
+			nav_restore_clear(app)   // (what it would go back to will not come)
+		}
 	case .Older:
 		older_failed(app, r)
-	case .Form_Reply:
-		if f := form_find(app, r.tag); f != nil { f.sending = false }
-	case .Plugins:
-		plugins_failed(app)
+	case .Form_Reply, .Form_Dismiss:
+		if fr := form_find(app, r.tag); fr != nil { fr.sending = false }
+	case .Permission_Reply:
+		for &p in app.permissions { if p.id == r.tag { p.replying = false } }
 	case .Plugin_Update:
 		plugins_changed(app)
 	case .Connected, .Connect_Begin:
-		connect_failed(app)
-	case .File_Read:
-		file_loaded(app, r.tag, "", false)
-	case .Changes, .Changes_Range:
-		changes_failed(app)
-	case .Revert_Done, .Revert_Cancelled:
-		// (still staged, the files written back: the dialog comes back rather than leaving it unsaid)
-		if r.tag == app.chat.id { request(app, .Self, "GET", strings.concatenate({"/api/session/", r.tag}, context.temp_allocator), tag = r.tag) }
-	case .Created:
-		if app.pending_prompt != "" {
-			prompt_restore(app, app.pending_prompt)
-			delete(app.pending_prompt)
-			app.pending_prompt = ""
-		}
-	case .Prompt:
-		if v, err := json.parse_string(r.body, allocator = context.temp_allocator); err == nil { prompt_restore(app, jstr(v, "text")) }
+		connect_failed(app, message)
+		return true
+	case .Connect_Status:
+		connect_poll_failed(app)
+		return true
+	case .Changes:
+		if r.status == 400 { changes_refused(app) }
+		return true
+	case .Revert_Staged, .Revert_Done, .Revert_Cancelled:
+		revert_failed(app, r.tag)
+	case .Shell_Set:
+		shell_failed(app, r.tag)
+	case .Mcp_Done:
+		mcp_done(app, r.tag)
+	case .Saved_Done:
+		saved_revoke_done(app, r.tag)
+	case .Pty_List:
+		return app.cx.terms.open   // (the panel says it, with its Try again)
+	case .Pty_Made:
+		return term_made_failed(app)
+	case .Pty_Size:
+		term_size_answered(app, r.tag)   // (the grid has its size; a server that refuses it says nothing worth a toast at each step of a drag)
+		return true
+	case .Shell_List, .Shell_One, .Shell_Output, .Peek:
+		// (what runs behind the conversation: a server without it says nothing about it)
+		activity_request_failed(app, r)
+		return true
+	case .Inbox:
+		return refused   // (a server without one: nothing to say)
+	case .Mention_Files:
+		mention_failed(app)   // (what was proposed is not what is typed any more)
+		return refused        // (a server without one, a folder gone: nothing to say)
+	// (a dialog's reading: read_shown says it where it would have been, in the server's words: "set experimental.schedules in config")
+	case .Schedules, .Artifacts, .Artifact_Read, .Plugins, .Integrations, .Credentials, .Files_List, .File_Read, .Stats, .Changes_Range,
+	     .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands:
+		return true
+	case .Schedule_Made:
+		return app.cx.schedules.open   // ("Invalid duration": under the form, with what was typed)
+	case .Session_Import:
+		if r.status == 409 { session_import_conflict(app, r.tag); return true }
+	// nothing waits on them here: the toast says it, what they would have changed stays
+	case .Sessions, .Agents, .Models, .Info, .Permissions, .Active, .Self, .Parent, .Children, .Projects,
+	     .Action, .Slash, .Forked, .Session_Moved, .Session_Export,
+	     .Schedule_Done, .Artifact_Done, .Credential_Done, .Plugins_Check, .Forms, .Inbox_Take:
 	}
+	return false
 }
 
 // The page before the first message was not read: said where it would have been.
@@ -461,6 +592,7 @@ older_failed :: proc(app: ^App, r: ^Request) {
 	if r.gen != app.chat.gen || r.tag != app.chat.id { return }
 	app.chat.loading_older = false
 	app.chat.older_failed = ui.now_ms()
+	nav_restore_clear(app)   // (the place it would go back to is on that page: the view is the reader's again)
 }
 
 SESSIONS_LIMIT :: "200"   // most sessions read at a time (text of the query)
@@ -470,8 +602,22 @@ refresh_sessions :: proc(app: ^App) {
 	request(app, .Active, "GET", "/api/session/active")
 }
 
+// A new reading replaces the one on its way: what it brings is the newer one.
 load_messages :: proc(app: ^App, id: string) {
-	request(app, .Messages, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&order=desc", id, app.prefs.page_size), tag = id)
+	if !app.chat.loaded { app.chat.loading = true }
+	remote_begin(&app.cx.chat_read)
+	request(app, .Messages, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&order=desc", id, app.prefs.page_size), tag = id, remote = &app.cx.chat_read)
+}
+
+// Everything the session shown needs from the server: when it opens, on Try again, when the stream comes back.
+chat_read :: proc(app: ^App) {
+	c := &app.chat
+	if c.id == "" { return }
+	id := strings.clone(c.id, context.temp_allocator)
+	load_messages(app, id)
+	if !c.have_self { request(app, .Self, "GET", strings.concatenate({"/api/session/", id}, context.temp_allocator), tag = id) }
+	load_children(app)
+	session_waits_load(app, id)
 }
 
 // How near, in screens: the page is there before the reader, unless they scroll fast (then messages() shows it coming).
@@ -489,14 +635,6 @@ load_older :: proc(app: ^App, b: ^ui.Box) {
 	request(app, .Older, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", app.chat.id, app.prefs.page_size, url_escape(app.chat.older)), tag = app.chat.id)
 }
 
-send_prompt :: proc(app: ^App, id, text: string) {
-	request(app, .Prompt, "POST", fmt.tprintf("/api/session/%s/prompt", id), fmt.tprintf(`{{"text":%s%s}}`, jquote(text), attachments_take(app, text)), id)
-}
-
-create_session :: proc(app: ^App, directory: string) {
-	body := directory != "" ? fmt.tprintf(`{{"location":{{"directory":%s}}}}`, jquote(directory)) : "{}"
-	request(app, .Created, "POST", "/api/session", body)
-}
 
 // A run that is interrupted leaves what was sent during it in the session's inbox, where only the next prompt would pick it up,
 // glued to that prompt: it looks lost. The newest goes as a prompt now, which starts a run: the server puts what is left in the
@@ -527,24 +665,27 @@ inbox_send :: proc(app: ^App, r: ^Request) {
 		taken := r.path[strings.last_index_byte(r.path, '/') + 1:]
 		for m, i in app.chat.messages { if m.id == taken { ordered_remove(&app.chat.messages, i); break } }
 	}
-	request(app, .Prompt, "POST", fmt.tprintf("/api/session/%s/prompt", r.tag), r.body, r.tag)
+	outgoing_inbox(app, r.tag, r.body)
 }
 
 interrupt_session :: proc(app: ^App, id: string) {
 	request(app, .Action, "POST", fmt.tprintf("/api/session/%s/interrupt", id), "", id)
 }
 
-reply_permission :: proc(app: ^App, session, id, decision: string) {
-	request(app, .Action, "POST", fmt.tprintf("/api/session/%s/permission/%s/reply", session, id), fmt.tprintf(`{{"decision":%s}}`, jquote(decision)), session)
+// One answer to it: the second click of a double click finds it on its way.
+reply_permission :: proc(app: ^App, p: ^Permission, decision: string) {
+	if p.replying { return }
+	p.replying = true
+	request(app, .Permission_Reply, "POST", fmt.tprintf("/api/session/%s/permission/%s/reply", p.session, p.id), fmt.tprintf(`{{"decision":%s}}`, jquote(decision)), p.id)
 }
 
 switch_model :: proc(app: ^App, session: string, m: Model_Info) {
-	request(app, .Action, "POST", fmt.tprintf("/api/session/%s/model", session),
+	request(app, .Session_Choice, "POST", fmt.tprintf("/api/session/%s/model", session),
 		fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s}}}}`, jquote(m.id), jquote(m.provider)), session)
 }
 
 switch_agent :: proc(app: ^App, session, agent: string) {
-	request(app, .Action, "POST", fmt.tprintf("/api/session/%s/agent", session), fmt.tprintf(`{{"agent":%s}}`, jquote(agent)), session)
+	request(app, .Session_Choice, "POST", fmt.tprintf("/api/session/%s/agent", session), fmt.tprintf(`{{"agent":%s}}`, jquote(agent)), session)
 }
 
 rename_session :: proc(app: ^App, session, title: string) {
@@ -571,10 +712,10 @@ events_thread :: proc(data: rawptr) {
 			if !ui.post(&the_app.ui_state, on_event, e, EVENT_WORD) { delete(e.text); free(e); return false }
 			return true
 		}, c, proc(user: rawptr) {
-			ui.post(&the_app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_state(the_app, true) } }, user)
+			ui.post(&the_app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_up(the_app) } }, user)
 		})
 		if sync.atomic_load(&c.stop) { break }
-		ui.post(&app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_state(the_app, false) } }, c, u64(st))
+		ui.post(&app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_down(the_app, int(word)) } }, c, u64(st))
 		time.sleep(STREAM_RETRY_S * time.Second)
 	}
 }
@@ -584,22 +725,73 @@ Event_Msg :: struct { conn: ^Conn, text: string }
 
 EVENT_WORD :: u64(0x4556454e54)   // a post's word for an Event_Msg (on_drop frees it)
 
-// The stream (re)connected or dropped: on a reconnection everything is read again (events were missed meanwhile).
-stream_state :: proc(app: ^App, up: bool) {
-	was := app.online
-	app.online = up
-	if up && !was {
-		refresh_sessions(app)
-		if app.chat.id != "" { load_messages(app, app.chat.id) }
-		if !app.have_agents { request(app, .Agents, "GET", "/api/agent") }
-		if !app.have_models { request(app, .Models, "GET", "/api/model") }
-		request(app, .Info, "GET", "/api/info")
-		request(app, .Projects, "GET", "/api/project")
-		browser_start(app)
-		update_startup(app)
+// Where the link to the server stands, as the event stream says it: stream_up and stream_down write it, server_forget starts it
+// again.
+Conn_State :: enum u8 {
+	Connecting,     // a server just chosen: no word from its stream yet
+	Online,
+	Retrying,       // it dropped, or does not answer: tried again every STREAM_RETRY_S
+	Auth_Refused,   // it says 401: tried again too, a password corrected elsewhere clears it
+}
+
+online :: proc(app: ^App) -> bool { return app.link == .Online }
+
+// The stream connected: on a reconnection everything is read again (events were missed meanwhile), by answers that replace.
+stream_up :: proc(app: ^App) {
+	was := app.link
+	app.link = .Online
+	if was == .Online { return }
+	if was == .Retrying {
+		terminals_renew(app)
+		browser_renew(app)
+	}
+	refresh_sessions(app)
+	chat_read(app)
+	for id in waits_sessions(app) { if id != app.chat.id { session_waits_load(app, id) } }
+	request(app, .Agents, "GET", "/api/agent")
+	request(app, .Models, "GET", "/api/model")
+	request(app, .Slash, "GET", "/api/command")
+	request(app, .Info, "GET", "/api/info")
+	request(app, .Projects, "GET", "/api/project")
+	dialogs_reread(app)
+	when !ODIN_TEST {   // (threads and files of their own: not what the answers' bench looks at)
 		experimental_check(app)
 	}
 }
+
+// The server answers again, or for the first time: what a dialog has on screen and could not read is tried again, and the pages of the
+// settings, whose events were missed, are read again. Nothing that was not open is asked for.
+@(private = "file")
+dialogs_reread :: proc(app: ^App) {
+	cx := &app.cx
+	if app.settings_open { server_facts_load(app) }
+	integrations_reread(app)
+	plugins_changed(app)
+	if cx.schedules.open && remote_failed(&cx.schedules.read) { schedules_ask(app) }
+	if cx.artifacts.open && remote_failed(&cx.artifacts.read) { artifacts_ask(app) }
+	if cx.files.open && remote_failed(&cx.files.read) { files_list(app) }
+	if app.stats_open && remote_failed(&cx.stats_read) { stats_ask(app) }
+	changes_reread(app)
+	terminals_reread(app)
+}
+
+// The stream ended, or could not start: `status` is what its response said (0: no response; 200: it was up, and it dropped or
+// stayed silent past the limit of native/occ_native).
+stream_down :: proc(app: ^App, status: int) {
+	app.link = status == 401 ? .Auth_Refused : .Retrying
+}
+
+// A request says 401. While the stream is up that is this request's business: only a link that is not up is refused.
+conn_auth_refused :: proc(app: ^App) {
+	if app.link != .Online { app.link = .Auth_Refused }
+}
+
+// A session changed: the list is read again once things are quiet.
+refresh_soon :: proc(app: ^App) { deferred_ask(&app.cx.refresh_read, REFRESH_DEBOUNCE_MS, REFRESH_DEBOUNCE_MS * DEFERRED_MOST) }
+
+children_soon :: proc(app: ^App) { deferred_ask(&app.cx.children_read, CHILDREN_DEBOUNCE_MS, CHILDREN_DEBOUNCE_MS * DEFERRED_MOST) }
+
+facts_soon :: proc(app: ^App) { deferred_ask(&app.cx.facts_read, FACTS_DEBOUNCE_MS, FACTS_DEBOUNCE_MS * DEFERRED_MOST) }
 
 on_event :: proc(data: rawptr, word: u64) {
 	app := the_app
@@ -611,8 +803,10 @@ on_event :: proc(data: rawptr, word: u64) {
 	apply_event(app, v)
 }
 
+// What the queue will never run. It blocks when full and is closed only at the end, with no worker joined and no ui.destroy: a Request or a
+// shell's output left there then goes with the process, and a post refused after the close is freed by whoever posted it. An event is the
+// one message this has to know, for a queue that does get destroyed (a test's).
 on_drop :: proc(data: rawptr, word: u64) {
-	// an event (a Request is never dropped: the queue closes after the workers; the stream's states carry their Conn)
 	if word == EVENT_WORD { e := (^Event_Msg)(data); delete(e.text); free(e) }
 }
 

@@ -20,11 +20,11 @@ const EV_READY: i32 = 1; // the view exists: it can be shown and navigated
 const EV_FAILED: i32 = 2; // it could not be made (data: why)
 const EV_SOURCE: i32 = 3; // the address changed (data: it)
 const EV_TITLE: i32 = 4; // the title changed (data: it)
-const EV_LOADED: i32 = 5; // a navigation ended (id: 1 when it succeeded)
+const EV_LOADED: i32 = 5; // a navigation ended (id: which; data: one byte, 1 when it succeeded)
 const EV_SCRIPT: i32 = 6; // a script's result, JSON (id: the caller's)
 const EV_CAPTURE: i32 = 7; // a picture, PNG (id: the caller's)
 const EV_KEY: i32 = 8; // a key with Ctrl or a function key, while the page has the focus (id: virtual key)
-const EV_NAV_START: i32 = 9; // a navigation began
+const EV_NAV_START: i32 = 9; // a navigation began (id: which; a redirection keeps it)
 
 struct Inner {
     controller: Option<ICoreWebView2Controller>,
@@ -32,6 +32,7 @@ struct Inner {
     bounds: RECT,
     visible: bool,
     pending: Option<String>, // an address asked for before the view was there
+    closed: bool,            // closed before it came: when it does, it is closed at once and nobody is told
 }
 
 pub struct Web {
@@ -89,8 +90,12 @@ fn hook(view: &ICoreWebView2, controller: &ICoreWebView2Controller, sink: Sink) 
             &mut token,
         )?;
         view.add_NavigationStarting(
-            &NavigationStartingEventHandler::create(Box::new(move |_, _| {
-                sink.send(EV_NAV_START, 0, &[]);
+            &NavigationStartingEventHandler::create(Box::new(move |_, args| {
+                let mut id = 0u64;
+                if let Some(a) = args {
+                    let _ = a.NavigationId(&mut id);
+                }
+                sink.send(EV_NAV_START, id, &[]);
                 Ok(())
             })),
             &mut token,
@@ -98,10 +103,12 @@ fn hook(view: &ICoreWebView2, controller: &ICoreWebView2Controller, sink: Sink) 
         view.add_NavigationCompleted(
             &NavigationCompletedEventHandler::create(Box::new(move |_, args| {
                 let mut ok = windows::core::BOOL(0);
+                let mut id = 0u64;
                 if let Some(a) = args {
                     let _ = a.IsSuccess(&mut ok);
+                    let _ = a.NavigationId(&mut id);
                 }
-                sink.send(EV_LOADED, ok.as_bool() as u64, &[]);
+                sink.send(EV_LOADED, id, &[ok.as_bool() as u8]);
                 Ok(())
             })),
             &mut token,
@@ -126,6 +133,9 @@ fn hook(view: &ICoreWebView2, controller: &ICoreWebView2Controller, sink: Sink) 
 }
 
 fn made(inner: &Rc<RefCell<Inner>>, controller: ICoreWebView2Controller, sink: Sink) -> windows::core::Result<()> {
+    if inner.borrow().closed {
+        return unsafe { controller.Close() };
+    }
     let view = unsafe { controller.CoreWebView2()? };
     hook(&view, &controller, sink)?;
     let (bounds, visible, pending) = {
@@ -152,12 +162,15 @@ pub fn create(parent: isize, data: &str, cb: Callback, user: *mut c_void) -> Opt
     unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
-    let inner = Rc::new(RefCell::new(Inner { controller: None, view: None, bounds: RECT::default(), visible: false, pending: None }));
+    let inner = Rc::new(RefCell::new(Inner { controller: None, view: None, bounds: RECT::default(), visible: false, pending: None, closed: false }));
     let sink = Sink { cb, user };
     let held = inner.clone();
     let hwnd = HWND(parent as *mut c_void);
     let folder = HSTRING::from(data);
     let handler = CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(move |result, env| {
+        if held.borrow().closed {
+            return Ok(());
+        }
         let env = match (result, env) {
             (Ok(()), Some(env)) => env,
             (r, _) => {
@@ -167,13 +180,15 @@ pub fn create(parent: isize, data: &str, cb: Callback, user: *mut c_void) -> Opt
         };
         let inner = held.clone();
         let made_handler = CreateCoreWebView2ControllerCompletedHandler::create(Box::new(move |result, controller| {
+            let closed = inner.borrow().closed;
             match (result, controller) {
                 (Ok(()), Some(c)) => {
                     if let Err(e) = made(&inner, c, sink) {
                         sink.send(EV_FAILED, 0, format!("{e:?}").as_bytes());
                     }
                 }
-                (r, _) => sink.send(EV_FAILED, 0, format!("{:?}", r.err()).as_bytes()),
+                (r, _) if !closed => sink.send(EV_FAILED, 0, format!("{:?}", r.err()).as_bytes()),
+                _ => {}
             }
             Ok(())
         }));
@@ -237,6 +252,20 @@ impl Web {
         }
     }
 
+    /// 0 back, 1 forward
+    pub fn can(&self, what: i32) -> bool {
+        let i = self.inner.borrow();
+        let Some(v) = &i.view else { return false };
+        let mut yes = windows::core::BOOL(0);
+        let asked = unsafe {
+            match what {
+                0 => v.CanGoBack(&mut yes),
+                _ => v.CanGoForward(&mut yes),
+            }
+        };
+        asked.is_ok() && yes.as_bool()
+    }
+
     pub fn script(&self, code: &str, id: u64) {
         let sink = self.sink();
         let i = self.inner.borrow();
@@ -296,6 +325,7 @@ impl Web {
 
     pub fn close(&self) {
         let mut i = self.inner.borrow_mut();
+        i.closed = true;
         if let Some(c) = i.controller.take() {
             unsafe {
                 let _ = c.Close();

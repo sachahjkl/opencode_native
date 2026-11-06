@@ -14,6 +14,7 @@ Find :: struct {
 	index:  int,            // the current occurrence (-1: none yet)
 	needle: string,         // the needle of the last frame (a new one picks the first match from the view's top)
 	reveal: bool,           // scroll the current match into view
+	from_end: int,          // a page came in front of the current match: how far it is from the last one (0: not counted so)
 }
 
 find_open :: proc(app: ^App) {
@@ -24,8 +25,31 @@ find_open :: proc(app: ^App) {
 
 find_close :: proc(app: ^App) {
 	app.find.open = false
+	app.find.from_end = 0
 	ui.find("", 0)
 	ui.find_set_current(-1)
+}
+
+// Another conversation: its matches are not this one's. The home page has none, the bar goes.
+find_chat_changed :: proc(app: ^App) {
+	f := &app.find
+	if !f.open { return }
+	if app.chat.id == "" { find_close(app); return }
+	f.index, f.reveal, f.from_end = -1, false, 0
+	ui.find_set_current(-1)
+	ui.find_refresh()
+}
+
+find_forget :: proc(app: ^App) {
+	if app.find.open { find_close(app) }
+	app.find.index = -1
+}
+
+// An older page came, in front of everything: the current match stays the one it is, so its number grows by what the page has.
+find_page_added :: proc(app: ^App) {
+	f := &app.find
+	if f.open && f.index >= 0 && f.from_end == 0 { f.from_end = ui.find_count() - f.index }
+	ui.find_refresh()
 }
 
 // The step to another match (+1 next, -1 previous), wrapping around.
@@ -34,6 +58,7 @@ find_step :: proc(app: ^App, d: int) {
 	n := ui.find_count()
 	if n == 0 { return }
 	f.index = f.index < 0 ? (d > 0 ? 0 : n - 1) : (f.index + d + n) % n
+	f.from_end = 0
 	f.reveal = true
 }
 
@@ -55,10 +80,12 @@ find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 		f.needle = fmt.aprintf("%s", needle)
 		// (the matches are the last layout's, still of the previous needle: choose on the next frame)
 		f.index = -1
+		f.from_end = 0
 		return
 	}
 	if ui.find_pending() { return }
 	if n == 0 { f.index = -1; ui.find_set_current(-1); return }
+	if f.from_end > 0 { f.index = max(n - f.from_end, 0) }
 	// a conversation just opened is still loading and jumping to its bottom: its matches move under the reader
 	if f.index < 0 && (app.chat.loading || ui.now_ms() - app.opened_ms < FIND_SETTLE_MS) { return }
 	if f.index < 0 && sb != nil {
@@ -122,7 +149,7 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 
 // The keys that work anywhere in the window.
 find_keys :: proc(app: ^App) {
-	if app.chat.id == "" { return }
+	if app.chat.id == "" || overlay_open(app) { return }
 	if ui.key_press(.F, {.Ctrl}) { find_open(app) }
 	if app.find.open {
 		if ui.key_press(.F3) { find_step(app, 1) }

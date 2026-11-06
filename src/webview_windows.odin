@@ -10,20 +10,13 @@ import "gt:render"
 
 Web_Act :: enum i32 { Back, Forward, Reload, Stop, Focus }
 
-@(private = "file") EV_READY     :: 1
-@(private = "file") EV_FAILED    :: 2
-@(private = "file") EV_SOURCE    :: 3
-@(private = "file") EV_TITLE     :: 4
-@(private = "file") EV_LOADED    :: 5
-@(private = "file") EV_SCRIPT    :: 6
-@(private = "file") EV_CAPTURE   :: 7
-@(private = "file") EV_KEY       :: 8
-@(private = "file") EV_NAV_START :: 9
-
 @(private = "file") VK_CONTROL :: 0x11
 
 @(private = "file")
 web: rawptr
+
+@(private = "file")
+composed_below: bool   // composition_below_children ran
 
 web_available :: proc() -> bool {
 	key := win.utf8_to_wstring(`SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}`)
@@ -33,38 +26,13 @@ web_available :: proc() -> bool {
 	return false
 }
 
+// This may run inside a build (a modal dialog pumps the window's messages): it only keeps what it is told, and touches nothing else, the
+// temporary memory of the frame above all. (preview.odin web_events_drain)
 @(private = "file")
 on_web :: proc "c" (user: rawptr, kind: i32, id: u64, data: [^]u8, n: uint) {
 	context = runtime.default_context()
-	app := (^App)(user)
-	p := &app.preview
-	s := string(data[:n])
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
-	switch kind {
-	case EV_READY:
-		p.ready = true
-		if p.asked != "" {
-			web_navigate(app, p.asked)
-			delete(p.asked)
-			p.asked = ""
-		}
-	case EV_FAILED:
-		delete(p.failed)
-		p.failed = strings.clone(s)
-	case EV_SOURCE:    preview_set_url(app, s)
-	case EV_TITLE:     preview_set_title(app, s)
-	case EV_NAV_START: p.loading = true
-	case EV_LOADED:
-		p.loading = false
-		browser_page_loaded(app, id != 0)
-	case EV_SCRIPT:    browser_script_done(app, id, s)
-	case EV_CAPTURE:   browser_capture_done(app, id, data[:n])
-	case EV_KEY:
-		// (the page has the keyboard: what the program answers to must still reach it)
-		if win.GetKeyState(VK_CONTROL) < 0 && id == u64('K') { command_run(app, command_find("app.palette")) }
-		if id == u64(win.VK_F1) { command_run(app, command_find("app.help")) }
-	}
-	free_all(context.temp_allocator)
+	k := Web_Event_Kind(kind)
+	web_event_add((^App)(user), k, id, data[:n], k == .Key && win.GetKeyState(VK_CONTROL) < 0)
 }
 
 // The window's picture is a composition, on top of its child windows: the page would load, unseen, under it. Its target is
@@ -83,13 +51,33 @@ composition_below_children :: proc(app: ^App) {
 	}
 }
 
-// The view exists, or is on its way.
+// The view exists, or is on its way. One that failed is made anew: a failure holds for this attempt, not for ever.
 web_start :: proc(app: ^App) {
-	if web != nil { return }
-	composition_below_children(app)
+	p := &app.preview
+	switch _ in p.web {
+	case Web_Creating, Web_Ready: return
+	case Web_Failed:              web_close(app)
+	case nil:
+	}
+	if app.win == nil { return }   // (no window: nothing to put it in)
+	if !composed_below {
+		composed_below = true
+		composition_below_children(app)
+	}
 	folder := pjoin({filepath.dir(prefs_path()), "webview"})
 	web = occ_webview_new(int(uintptr(rawptr(app.win.hwnd))), raw_data(folder), len(folder), on_web, app)
-	if web == nil { app.preview.failed = strings.clone("the WebView2 runtime did not start") }
+	if web == nil {
+		web_state_set(p, Web_Failed{strings.clone("the WebView2 runtime did not start")})
+	} else {
+		web_state_set(p, Web_Creating{})
+	}
+}
+
+// The view is destroyed, and what it would still say is dropped with it. (A view on its way closes itself when it comes: native.)
+web_close :: proc(app: ^App) {
+	if web != nil { occ_webview_free(web) }
+	web = nil
+	web_state_set(&app.preview, nil)
 }
 
 web_navigate :: proc(app: ^App, url: string) {
@@ -98,6 +86,9 @@ web_navigate :: proc(app: ^App, url: string) {
 }
 
 web_act :: proc(app: ^App, what: Web_Act) { occ_webview_act(web, i32(what)) }
+
+// Whether the page has a place to go Back or Forward to.
+web_can :: proc(what: Web_Act) -> bool { return occ_webview_can(web, i32(what)) != 0 }
 
 web_script :: proc(code: string, id: u64) { occ_webview_script(web, raw_data(code), len(code), id) }
 

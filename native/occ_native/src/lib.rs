@@ -22,7 +22,7 @@ pub struct Client {
     base: String,
     auth: Option<String>,
     agent: Agent,  // requests: bounded in time
-    stream: Agent, // event streams: no limit on the body
+    stream: Agent, // event streams: no limit on the body, a limit on silence
 }
 
 pub struct Sse {
@@ -62,13 +62,20 @@ unsafe fn bytes<'a>(p: *const u8, n: usize) -> &'a [u8] {
     std::slice::from_raw_parts(p, n)
 }
 
-fn agent(body_limit: Option<Duration>) -> Agent {
+/// An event stream silent this long is taken for dead: a machine that slept, a network that went away without a word leave the
+/// socket open, and only the server's heartbeats tell it from a quiet server. Several of them may be missed. (Any bytes count,
+/// heartbeats are comments or events.)
+const STREAM_IDLE: Duration = Duration::from_secs(95);
+
+/// `per_read`: the longest wait for bytes, in the middle of a body too.
+fn agent(body_limit: Option<Duration>, per_read: Option<Duration>) -> Agent {
     let tls = ureq::tls::TlsConfig::builder().root_certs(ureq::tls::RootCerts::PlatformVerifier).build();
     Agent::config_builder()
         .http_status_as_error(false)
         .timeout_connect(Some(Duration::from_secs(5)))
         .timeout_recv_response(Some(Duration::from_secs(60)))
         .timeout_recv_body(body_limit)
+        .timeout_per_read(per_read)
         .tls_config(tls)
         .user_agent("opencode-native/0.1")
         .build()
@@ -89,8 +96,8 @@ pub unsafe extern "C" fn occ_client_new(base: *const u8, base_len: usize, user: 
         Box::into_raw(Box::new(Client {
             base: text(base, base_len).trim_end_matches('/').to_string(),
             auth,
-            agent: agent(Some(Duration::from_secs(120))),
-            stream: agent(None),
+            agent: agent(Some(Duration::from_secs(120)), None),
+            stream: agent(None, Some(STREAM_IDLE)),
         }))
     })
     .unwrap_or(std::ptr::null_mut())
@@ -191,7 +198,8 @@ pub unsafe extern "C" fn occ_sse_open(c: *const Client, path: *const u8, path_le
 }
 
 /// The data of the next event (its `data:` lines joined by "\n"). Returns 1 with an event, 0 at the end of the stream,
-/// -1 on an error. Blocks until an event comes; comments (heartbeats) are skipped.
+/// -1 on an error, silence past STREAM_IDLE among them. Blocks until an event comes; comments (heartbeats) are skipped, and count
+/// as life.
 #[no_mangle]
 pub unsafe extern "C" fn occ_sse_next(s: *mut Sse, out: *mut OccBuf) -> i32 {
     *out = OccBuf::empty();
@@ -345,6 +353,15 @@ mod webview_c {
         if let Some(w) = w.as_ref() { let _ = catch_unwind(AssertUnwindSafe(|| w.capture(id))); }
     }
 
+    /// 0 back, 1 forward: whether the page has a place to go. (No view: none.)
+    #[no_mangle]
+    pub unsafe extern "C" fn occ_webview_can(w: *const Web, what: i32) -> i32 {
+        match w.as_ref() {
+            Some(w) => catch_unwind(AssertUnwindSafe(|| w.can(what))).unwrap_or(false) as i32,
+            None => 0,
+        }
+    }
+
     #[no_mangle]
     pub unsafe extern "C" fn occ_webview_free(w: *mut Web) {
         if !w.is_null() {
@@ -451,5 +468,74 @@ pub unsafe extern "C" fn occ_ws_free(w: *mut Ws) {
         if let Ok(mut s) = b.sock.lock() {
             let _ = s.close(None);
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use std::net::TcpListener;
+    use std::time::Instant;
+
+    // A server that says one thing, a heartbeat later another, then nothing and keeps the socket open.
+    #[test]
+    fn a_silent_stream_ends() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            let mut head = [0u8; 2048];
+            let _ = s.read(&mut head);
+            s.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\ndata: one\n\n").unwrap();
+            std::thread::sleep(Duration::from_millis(250));
+            s.write_all(b": beat\n\n").unwrap();
+            std::thread::sleep(Duration::from_millis(250));
+            s.write_all(b"data: two\n\n").unwrap();
+            std::thread::sleep(Duration::from_secs(3));
+        });
+        let idle = Duration::from_millis(400);
+        let c = Client { base: format!("http://127.0.0.1:{}", port), auth: None, agent: agent(None, None), stream: agent(None, Some(idle)) };
+        unsafe {
+            let path = "/api/event";
+            let mut status = 0;
+            let s = occ_sse_open(&c, path.as_ptr(), path.len(), &mut status);
+            assert_eq!(status, 200);
+            assert!(!s.is_null());
+            let next = |s| {
+                let mut out = OccBuf::empty();
+                let got = occ_sse_next(s, &mut out);
+                occ_buf_free(out);
+                got
+            };
+            assert_eq!(next(s), 1);
+            // (a heartbeat in the middle keeps it alive: 500 ms between the two events, more than the limit)
+            assert_eq!(next(s), 1, "the heartbeat counted as life");
+            let silent = Instant::now();
+            assert_eq!(next(s), -1, "silence ends it");
+            assert!(silent.elapsed() < Duration::from_secs(2), "at its limit, not when the socket closes");
+            occ_sse_free(s);
+        }
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn a_refused_stream_says_its_status() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            let mut head = [0u8; 2048];
+            let _ = s.read(&mut head);
+            s.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n").unwrap();
+        });
+        let c = Client { base: format!("http://127.0.0.1:{}", port), auth: None, agent: agent(None, None), stream: agent(None, None) };
+        unsafe {
+            let path = "/api/event";
+            let mut status = 0;
+            assert!(occ_sse_open(&c, path.as_ptr(), path.len(), &mut status).is_null());
+            assert_eq!(status, 401);
+        }
+        server.join().unwrap();
     }
 }

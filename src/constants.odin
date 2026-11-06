@@ -120,7 +120,7 @@ PREVIEW_PLACE_MS :: 40   // the page follows a move at this pace at most
 BROWSER_NAME        :: "preview"   // ("browser" is Desktop's: the server hides the tools of its names under it)
 BROWSER_TAB         :: "tab_00000000-0000-4000-8000-000000000001"   // the panel's one page
 BROWSER_RETRY_S     :: 5     // between two attempts at the socket
-BROWSER_POLL_MS     :: 10    // a read that found nothing, before the next
+BROWSER_READ_MS     :: 20    // what an answer may wait for the socket's thread
 BROWSER_CALL_S      :: 30    // a call the page does not answer ends after this
 BROWSER_PROTOCOL    :: "2025-06-18"
 BROWSER_DIR_WAIT_MS :: 100   // while the folder of the session shown is not known
@@ -158,12 +158,22 @@ TERM_KEY_BYTES       :: 128
 TERM_WHEEL_LINES     :: 3      // what a notch scrolls
 TERM_TAB_CHARS       :: 24
 TERM_READ_MS         :: 5      // what a key may wait for its shell's thread
+TERM_PANEL_BASE      :: 1000   // a shell's id in the dock is this and up: Panel's values stay under it
+TERM_OUT_MAX         :: 1 << 20   // bytes waiting for a socket on its way: past that, what is typed is dropped
+TERM_RETRIES         :: 8      // a lost socket is opened again this many times, then on a click or when the server answers again
+TERM_RETRY_MS        :: 500    // before the first of them; each wait doubles
+TERM_RETRY_MOST_MS   :: 8000   // ... up to this
+TERM_RETRY_STEP_MS   :: 100    // how soon a wait hears it is over
+TERM_STABLE_MS       :: 5000   // a socket that stayed this long counts as a success: the attempts start over
+TERM_BANNER_H_EM     :: 2.4    // what says a shell ended
+TERM_NEW_EM          :: 1.7    // the + of a strip, as high as the dock's own buttons
 TERM_FAINT           :: 0.6
 TERM_CURSOR_ALPHA    :: 0.6
 HEX_TERM_BG          :: 0x0d0d0dff
 HEX_TERM_SELECTION   :: 0x3a4a66ff
 INTEGRATIONS_ROWS    :: 40     // shown at once: the rest is searched
 CONNECT_POLL_MS      :: 1500   // how often a login under way is asked about
+CONNECT_POLL_MISSES  :: 5      // readings of it that fail in a row before they stop and the dialog says so
 MENTION_ROWS         :: 7      // what @ proposes at once
 MENTION_DETAIL_CHARS :: 60
 FILES_FOUND_MAX      :: 200    // of a search in the dialog
@@ -187,6 +197,9 @@ NAV_HISTORY_MAX :: 100   // places remembered for Back and Forward
 NAV_RESTORE_NEAR_PX    :: 1     // the view is on its message this near
 NAV_RESTORE_STILL      :: 3     // frames it stays there before it is left alone
 NAV_RESTORE_FRAMES_MAX :: 60    // however long the heights around it take to settle
+NAV_RESTORE_WAIT_MS    :: 4000  // without a page or a placing for this long, the view is the reader's again
+DEFERRED_MOST          :: 5     // a read asked again and again still comes after this many of its waits
+WAITS_GONE_MAX         :: 128   // permissions and forms remembered as answered (a late list must not bring them back)
 
 OS_SETTINGS_READ_MS :: 2000   // how often the system's animation setting is read
 POINTER_MOVING_MS :: 80                         // since the last move or notch: the pointer is still moving

@@ -77,7 +77,6 @@ sub_state_color :: proc(s: Sub_State) -> Color {
 	return {}
 }
 
-@(private = "file")
 state_of_word :: proc(w: string) -> (Sub_State, bool) {
 	switch w {
 	case "completed", "succeeded":            return .Done, true
@@ -110,6 +109,7 @@ sub_view :: proc(app: ^App, child: string, p: ^Part = nil) -> (v: Sub_View) {
 		case .Done:
 			// a foreground call ends with the sub-agent: its output is the result; a background one only launched it
 			if !p.sub_background { v.state = .Done; v.result = p.output; v.ended = p.ended_ms }
+		case .Unknown:
 		}
 	}
 	if child == "" { return }
@@ -150,7 +150,7 @@ duration :: proc(a, b: f64) -> string {
 
 // Navigation is asked for while the interface is built, by boxes that go on reading what they show, and opening a session
 // drops the arena that holds it. So these only note it: nav_apply does it after the frame (frame).
-Nav_Kind :: enum u8 { Root, Drill, Back, History }
+Nav_Kind :: enum u8 { Root, Drill, Back, History, Gone }   // (Gone: the session shown was deleted elsewhere)
 Nav_Step :: struct { kind: Nav_Kind, id: string }   // (id owned)
 
 // Opens a session from the sidebar: no way back but its parent.
@@ -188,6 +188,10 @@ nav_apply :: proc(app: ^App) {
 			if st.id == "" { new_session(app) } else { open_chat(app, st.id) }
 			app.cx.nav_moving = false
 			nav_restore(app, st.id)
+		case .Gone:
+			app.cx.nav_moving = true   // (it left the history: nav_forget)
+			new_session(app)
+			app.cx.nav_moving = false
 		}
 		delete(st.id)
 	}
@@ -257,9 +261,38 @@ nav_restore :: proc(app: ^App, id: string) {
 	if cx.nav_at >= len(cx.nav_hist) { return }
 	p := cx.nav_hist[cx.nav_at]
 	if p.id != id || id == "" || p.bottom || p.msg == "" { return }
-	cx.restore_msg, cx.restore_dy = strings.clone(p.msg), p.dy
-	cx.restore_still, cx.restore_frames = 0, 0
+	nav_restore_begin(app, p.msg, p.dy)
 	app.stick_bottom = false
+}
+
+// Its limit runs on the clock: the message may never be built (restore_frames only counts once it is), and until the view has
+// arrived the bottom is not followed.
+nav_restore_begin :: proc(app: ^App, msg: string, dy: f32) {
+	cx := &app.cx
+	nav_restore_clear(app)
+	cx.restore_msg, cx.restore_dy = strings.clone(msg), dy
+	cx.restore_still, cx.restore_frames = 0, 0
+	deferred_ask(&cx.restore_limit, NAV_RESTORE_WAIT_MS)
+}
+
+// A page came: the way to the message goes on, a whole wait from now. (A long history takes many pages: the limit is on a view that
+// no longer gets anywhere. Asked again as it stands, a Deferred would keep its first bound.)
+nav_restore_page :: proc(app: ^App) {
+	if app.cx.restore_msg == "" { return }
+	app.cx.restore_limit = {}
+	deferred_ask(&app.cx.restore_limit, NAV_RESTORE_WAIT_MS)
+}
+
+// What the reader asks for wins over a view going back: Latest, a prompt sent.
+view_to_bottom :: proc(app: ^App) {
+	nav_restore_clear(app)
+	app.stick_bottom = true
+}
+
+// The conversation's scroll bar is held.
+scrollbar_held :: proc(app: ^App, sb: ^ui.Box) -> bool {
+	owner, held := app.ui_state.sb_owner[ui.active_key()]
+	return held && owner == sb.key
 }
 
 // The conversation is built anew where it stands: the view stays on what was being read.
@@ -271,9 +304,7 @@ nav_hold_view :: proc(app: ^App) {
 		return
 	}
 	if cx.view_msg == "" { return }
-	nav_restore_clear(app)
-	cx.restore_msg, cx.restore_dy = strings.clone(cx.view_msg), cx.view_dy
-	cx.restore_still, cx.restore_frames = 0, 0
+	nav_restore_begin(app, cx.view_msg, cx.view_dy)
 }
 
 // The view on the message, the frame placing it as for a part that was toggled. Again until it stays: what the first layouts say of
@@ -296,6 +327,7 @@ nav_restore_step :: proc(app: ^App, sb, item: ^ui.Box) {
 nav_restore_clear :: proc(app: ^App) {
 	delete(app.cx.restore_msg)
 	app.cx.restore_msg = ""
+	app.cx.restore_limit = {}
 }
 
 // After a page was read: a message that is in none of them (its session changed) gives up, and the view takes the end.
@@ -319,6 +351,9 @@ nav_forget :: proc(app: ^App, id: string) {
 	gone := strings.clone(id, context.temp_allocator)   // (it may be one of them)
 	for i := len(cx.nav_hist) - 1; i >= 0; i -= 1 { if cx.nav_hist[i].id == gone { drop(cx, i) } }
 	for i := len(cx.nav_hist) - 1; i > 0; i -= 1 { if cx.nav_hist[i].id == cx.nav_hist[i - 1].id { drop(cx, i) } }
+	for i := len(app.nav) - 1; i >= 0; i -= 1 {
+		if app.nav[i] == gone { delete(app.nav[i]); ordered_remove(&app.nav, i) }
+	}
 }
 
 nav_clear :: proc(app: ^App) {

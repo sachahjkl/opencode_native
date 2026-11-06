@@ -6,6 +6,7 @@ package occ
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
+import "core:mem"
 import "core:mem/virtual"
 import "core:os"
 import "core:path/filepath"
@@ -189,6 +190,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.experimental = config.bool_of(p, "advanced.experimental")
 	s.update_channel = config.string_of(p, "update.channel")
 	s.update_auto = config.bool_of(p, "update.auto")
+	update_channel_follow(app)
 
 	// the faces, when either preference changed (a family is opened once: the font state keeps it)
 	if wanted := fmt.tprintf("%s\n%s\n%s", config.string_of(p, "appearance.font"), config.string_of(p, "appearance.mono_font"), config.string_of(p, "appearance.prose_font")); wanted != app.fonts_wanted {
@@ -272,7 +274,13 @@ notify_finished :: proc(app: ^App, sid, outcome: string) {
 ////////////////////////////////
 // What the server says (read when the settings open)
 
-Mcp_Server :: struct { name, status, error: string }
+Mcp_Status :: enum u8 { Other, Connected, Failed }   // (Other: the server's word says the rest: disabled, needs_auth...)
+Mcp_Server :: struct {
+	name, error: string,
+	status: Mcp_Status,
+	word:   string,   // as the server says it
+}
+Mcp_Going :: struct { name: string, connecting: bool }   // (name owned)
 Shell_Info :: struct { name, path: string, ok: bool }
 Saved_Perm :: struct { id, action, resource, effect, project: string }
 Config_File :: struct { path: string, keys: []string }
@@ -280,13 +288,30 @@ Limit :: struct { name: string, percent: f64, limited: bool, resets: f64 }
 Budget :: struct { scope: string, limit, spent: f64, resets: f64 }
 Named :: struct { name, detail: string }
 
+// What the pages read, each on its own: one that fails says so alone, and an answer replaces only what it is about. (Its Remote and its
+// arena are here, and they stay: a ticket that went back to 0 would match an old answer.)
+Fact :: enum u8 { Cfg, Shells, Mcp, Saved, Usage, Providers, Skills, Commands }
+
+FACT_READS := [Fact]struct { kind: Req_Kind, path: string }{
+	.Cfg       = {.Cfg, "/api/config"},
+	.Shells    = {.Shells, "/api/config/shell"},
+	.Mcp       = {.Mcp, "/api/mcp"},
+	.Saved     = {.Saved, "/api/permission/saved"},
+	.Usage     = {.Usage, "/api/experimental/usage/limits"},
+	.Providers = {.Providers, "/api/provider"},
+	.Skills    = {.Skills, "/api/skill"},
+	.Commands  = {.Commands, "/api/command"},
+}
+
 Server_Facts :: struct {
-	arena:     virtual.Arena,
-	ready:     bool,
+	reads:     [Fact]Remote,
+	arenas:    [Fact]virtual.Arena,
 	shells:    [dynamic]Shell_Info,
 	shell:     string,              // the one set in the configuration ("" : the server's choice)
 	mcp:       [dynamic]Mcp_Server,
+	going:     [dynamic]Mcp_Going,  // connecting or disconnecting, from the click to the server's answer, whatever is read meanwhile
 	saved:     [dynamic]Saved_Perm,
+	revoking:  [dynamic]string,     // the ids being revoked, until the server answers, whatever is read meanwhile (owned)
 	files:     [dynamic]Config_File,
 	limits:    [dynamic]Limit,
 	budgets:   [dynamic]Budget,
@@ -297,42 +322,53 @@ Server_Facts :: struct {
 	commands:  [dynamic]Named,
 }
 
-server_facts_reset :: proc(app: ^App) {
-	f := &app.facts
-	app.facts_gen += 1
-	virtual.arena_destroy(&f.arena)
-	f^ = {}
-	_ = virtual.arena_init_growing(&f.arena)
-	a := virtual.arena_allocator(&f.arena)
-	f.shells = make([dynamic]Shell_Info, a)
-	f.mcp = make([dynamic]Mcp_Server, a)
-	f.saved = make([dynamic]Saved_Perm, a)
-	f.files = make([dynamic]Config_File, a)
-	f.limits = make([dynamic]Limit, a)
-	f.budgets = make([dynamic]Budget, a)
-	f.providers = make([dynamic]Named, a)
-	f.skills = make([dynamic]Named, a)
-	f.commands = make([dynamic]Named, a)
+// What a page holds is emptied and its arena started over.
+@(private = "file")
+fact_clear :: proc(f: ^Server_Facts, k: Fact) -> (a: mem.Allocator) {
+	virtual.arena_destroy(&f.arenas[k])
+	f.arenas[k] = {}
+	_ = virtual.arena_init_growing(&f.arenas[k])
+	a = virtual.arena_allocator(&f.arenas[k])
+	switch k {
+	case .Cfg:       f.files = make([dynamic]Config_File, a); f.shell = ""
+	case .Shells:    f.shells = make([dynamic]Shell_Info, a)
+	case .Mcp:       f.mcp = make([dynamic]Mcp_Server, a)
+	case .Saved:     f.saved = make([dynamic]Saved_Perm, a)
+	case .Usage:     f.limits = make([dynamic]Limit, a); f.budgets = make([dynamic]Budget, a); f.usage_url = ""; f.workspace = ""
+	case .Providers: f.providers = make([dynamic]Named, a)
+	case .Skills:    f.skills = make([dynamic]Named, a)
+	case .Commands:  f.commands = make([dynamic]Named, a)
+	}
+	return
 }
 
+server_facts_forget :: proc(app: ^App) {
+	f := &app.facts
+	for k in Fact {
+		_ = fact_clear(f, k)
+		remote_reset(&f.reads[k])
+	}
+	for g in f.going { delete(g.name) }
+	clear(&f.going)
+	for r in f.revoking { delete(r) }
+	clear(&f.revoking)
+}
+
+// Every page, again. What each shows stays until its answer: a read after an action does not blank what is looked at.
 server_facts_load :: proc(app: ^App) {
-	server_facts_reset(app)
-	app.facts.ready = true
-	request(app, .Cfg, "GET", "/api/config")
-	request(app, .Shells, "GET", "/api/config/shell")
-	request(app, .Mcp, "GET", "/api/mcp")
-	request(app, .Saved, "GET", "/api/permission/saved")
-	request(app, .Usage, "GET", "/api/experimental/usage/limits")
-	request(app, .Providers, "GET", "/api/provider")
-	request(app, .Skills, "GET", "/api/skill")
-	request(app, .Commands, "GET", "/api/command")
+	f := &app.facts
+	for k in Fact {
+		remote_begin(&f.reads[k])
+		request(app, FACT_READS[k].kind, "GET", FACT_READS[k].path, remote = &f.reads[k])
+	}
 }
 
 // An answer of one of those requests (net.odin on_answer).
 server_facts_answer :: proc(app: ^App, kind: Req_Kind, v: json.Value) {
 	f := &app.facts
-	if !f.ready { return }
-	a := virtual.arena_allocator(&f.arena)
+	fact := Fact.Cfg
+	for k in Fact { if FACT_READS[k].kind == kind { fact = k } }
+	a := fact_clear(f, fact)
 	data := jget(v, "data")
 	list := jarr(v, "data")
 	if data == nil { if arr, ok := v.(json.Array); ok { list = arr } }
@@ -354,7 +390,8 @@ server_facts_answer :: proc(app: ^App, kind: Req_Kind, v: json.Value) {
 		for it in list {
 			st := jstr(it, "status", "status")
 			if st == "" { st = jstr(it, "status") }
-			append(&f.mcp, Mcp_Server{strings.clone(jstr(it, "name"), a), strings.clone(st, a), strings.clone(jstr(it, "status", "error"), a)})
+			status := st == "connected" ? Mcp_Status.Connected : st == "failed" ? Mcp_Status.Failed : Mcp_Status.Other
+			append(&f.mcp, Mcp_Server{name = strings.clone(jstr(it, "name"), a), status = status, word = strings.clone(st, a), error = strings.clone(jstr(it, "status", "error"), a)})
 		}
 	case .Saved:
 		for it in list {
@@ -383,6 +420,45 @@ server_facts_answer :: proc(app: ^App, kind: Req_Kind, v: json.Value) {
 	case .Commands:
 		for it in list { append(&f.commands, Named{strings.clone(jstr(it, "name"), a), strings.clone(first_line(jstr(it, "description")), a)}) }
 	}
+}
+
+// Where a server stands on its way to connecting or disconnecting (nil: it is not).
+mcp_going :: proc(f: ^Server_Facts, name: string) -> ^Mcp_Going {
+	for &g in f.going { if g.name == name { return &g } }
+	return nil
+}
+
+// One at a time: what it becomes is read once the server has answered, not while it works on it.
+mcp_switch :: proc(app: ^App, name: string, connect: bool) {
+	f := &app.facts
+	if mcp_going(f, name) != nil { return }
+	append(&f.going, Mcp_Going{strings.clone(name), connect})
+	request(app, .Mcp_Done, "POST", fmt.tprintf("/api/experimental/mcp/%s/%s", url_escape(name), connect ? "connect" : "disconnect"), tag = name)
+}
+
+// However it ended: what the server says now is what shows.
+mcp_done :: proc(app: ^App, name: string) {
+	f := &app.facts
+	for g, i in f.going {
+		if g.name != name { continue }
+		delete(g.name)
+		ordered_remove(&f.going, i)
+		break
+	}
+	facts_soon(app)
+}
+
+// Shown as set at once; `was` comes back if the server says no, and what it says then is read.
+shell_set :: proc(app: ^App, s: Shell_Info) {
+	f := &app.facts
+	request(app, .Shell_Set, "PATCH", "/api/experimental/config", fmt.tprintf(`{{"shell":%s}}`, jquote(s.path)), tag = f.shell)
+	f.shell = strings.clone(s.path, virtual.arena_allocator(&f.arenas[.Cfg]))
+}
+
+shell_failed :: proc(app: ^App, was: string) {
+	f := &app.facts
+	f.shell = strings.clone(was, virtual.arena_allocator(&f.arenas[.Cfg]))
+	facts_soon(app)
 }
 
 ////////////////////////////////
@@ -703,13 +779,13 @@ page_behaviour :: proc(app: ^App, em: f32) {
 page_updates :: proc(app: ^App, em: f32) {
 	u := &app.updater
 	state := "Up to date, as far as is known"
-	switch u.state {
-	case .Idle:
+	switch _ in u.state {
+	case nil:
 		if u.result != "" { state = u.result }
-	case .Checking:    state = "Looking for a new version…"
-	case .Ready:       state = fmt.tprintf("Version %s is available", u.version)
-	case .Downloading: state = fmt.tprintf("Downloading %s…", u.version)
-	case .Installed:   state = fmt.tprintf("Version %s is installed: restart to use it", u.version)
+	case Update_Checking:    state = "Looking for a new version…"
+	case Update_Ready:       state = fmt.tprintf("Version %s is available", update_version(u))
+	case Update_Downloading: state = fmt.tprintf("Downloading %s…", update_version(u))
+	case Update_Installed:   state = fmt.tprintf("Version %s is installed: restart to use it", update_version(u))
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well("###upd", radius = 7, base = HEX_FACTS_WELL) {
@@ -722,12 +798,12 @@ page_updates :: proc(app: ^App, em: f32) {
 	ui.spacer(ui.px(em * 0.7))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###upd_b") {
-		if bevel_button("###u_check", "Check now", ICO_REFRESH, .Normal, disabled = u.state == .Checking || u.state == .Downloading).clicked { update_check(app, true) }
+		if bevel_button("###u_check", "Check now", ICO_REFRESH, .Normal, disabled = update_is_downloading(u)).clicked { update_check(app, true) }
 		ui.spacer(ui.px(em * 0.5))
-		if u.state == .Ready {
-			if bevel_button("###u_inst", fmt.tprintf("Install %s", u.version), ICO_CHECK, .Accent).clicked { update_install(app) }
+		if update_is_ready(u) {
+			if bevel_button("###u_inst", fmt.tprintf("Install %s", update_version(u)), ICO_CHECK, .Accent).clicked { update_install(app) }
 		}
-		if u.state == .Installed {
+		if update_is_installed(u) {
 			if bevel_button("###u_rest", "Restart now", ICO_REFRESH, .Accent).clicked { update_restart(app) }
 		}
 	}
@@ -780,14 +856,6 @@ section :: proc(s: string, em: f32) {
 	section_label(fmt.tprintf("sec_%s", s), s, em)
 }
 
-loading :: proc(app: ^App, em: f32) -> bool {
-	if int(app.pending) > 0 {
-		info_line(app, "###ld", "Asking the server…", em)
-		return true
-	}
-	return false
-}
-
 // A path the server names as a configuration file is opened by the system: only an absolute path on this computer (no
 // share, no scheme) to a file of a kind that opens in an editor, not one that runs.
 config_file_shaped :: proc(path: string) -> bool {
@@ -807,7 +875,7 @@ page_server :: proc(app: ^App, em: f32) {
 	if well("###srv", radius = 7, base = HEX_FACTS_WELL) {
 		ui.spacer(ui.px(em * 0.4))
 		fact("###s1", "address", server_base(app), em)
-		fact("###s2", "status", app.online ? "connected" : "not connected", em, app.online ? hex(HEX_GREEN) : hex(HEX_YELLOW))
+		fact("###s2", "status", online(app) ? "connected" : "not connected", em, online(app) ? hex(HEX_GREEN) : hex(HEX_YELLOW))
 		fact("###s3", "version", app.server_version != "" ? app.server_version : "?", em)
 		fact("###s0", "name", server_name(app), em)
 		fact("###s4", "auth", app.servers[app.server].password == "" ? "none" : app.servers[app.server].local ? "Basic (password from service.json)" : "Basic", em)
@@ -818,25 +886,22 @@ page_server :: proc(app: ^App, em: f32) {
 	section("SHELL", em)
 	info_line(app, "###shh", "The shell the agents run their commands in (written to the configuration's \"shell\").", em)
 	ui.spacer(ui.px(em * 0.4))
-	if len(f.shells) == 0 && loading(app, em) { return }
-	sel := -1
-	for s, i in f.shells { if f.shell != "" && same_path(s.path, f.shell) { sel = i } }
-	for s, i in f.shells {
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
-		if ui.row(.Center, id = fmt.tprintf("###sh%d", i)) {
-			if bevel_button(fmt.tprintf("###shb%d", i), s.name, ICO_TERMINAL, sel == i ? .Accent : .Normal, ui.px(em * 9), math.round(em * BUTTON_COMPACT_H_EM), disabled = !s.ok).clicked {
-				body := fmt.tprintf(`{{"shell":%s}}`, jquote(s.path))
-				request(app, .Action, "PATCH", "/api/experimental/config", body)
-				app.facts.shell = strings.clone(s.path, virtual.arena_allocator(&app.facts.arena))
-				ui.toast(.Good, "Shell: %s", s.name)
+	if read_shown(app, "###sh_read", &f.reads[.Shells], em, server_facts_load) {
+		sel := -1
+		for s, i in f.shells { if f.shell != "" && same_path(s.path, f.shell) { sel = i } }
+		for s, i in f.shells {
+			ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
+			if ui.row(.Center, id = fmt.tprintf("###sh%d", i)) {
+				if bevel_button(fmt.tprintf("###shb%d", i), s.name, ICO_TERMINAL, sel == i ? .Accent : .Normal, ui.px(em * 9), math.round(em * BUTTON_COMPACT_H_EM), disabled = !s.ok).clicked { shell_set(app, s) }
+				ui.spacer(ui.px(em * 0.7))
+				text("p", s.path, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			}
-			ui.spacer(ui.px(em * 0.7))
-			text("p", s.path, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+			ui.spacer(ui.px(em * 0.25))
 		}
-		ui.spacer(ui.px(em * 0.25))
+		if sel < 0 { info_line(app, "###shd", "None set: the server picks one.", em, hex(HEX_FAINT)) }
 	}
-	if sel < 0 { info_line(app, "###shd", "None set: the server picks one.", em, hex(HEX_FAINT)) }
 	section("CONFIGURATION FILES", em)
+	if !read_shown(app, "###cf_read", &f.reads[.Cfg], em, server_facts_load) { return }
 	for c, i in f.files {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = fmt.tprintf("###cf%d", i)) {
@@ -861,13 +926,16 @@ page_mcp :: proc(app: ^App, em: f32) {
 	f := &app.facts
 	info_line(app, "###mh", "Model Context Protocol servers give the agents more tools. Connecting or disconnecting one applies to the server now.", em)
 	ui.spacer(ui.px(em * 0.6))
+	if !read_shown(app, "###mcp_read", &f.reads[.Mcp], em, server_facts_load) { return }
 	if len(f.mcp) == 0 {
-		if !loading(app, em) { info_line(app, "###none", "No MCP server is configured.", em, hex(HEX_FAINT)) }
+		info_line(app, "###none", "No MCP server is configured.", em, hex(HEX_FAINT))
 		return
 	}
 	for &m, i in f.mcp {
-		connected := m.status == "connected"
-		col := connected ? hex(HEX_GREEN) : m.status == "failed" || m.error != "" ? hex(HEX_RED) : hex(HEX_FAINT)
+		connected := m.status == .Connected
+		going := mcp_going(f, m.name)
+		col := connected ? hex(HEX_GREEN) : m.status == .Failed || m.error != "" ? hex(HEX_RED) : hex(HEX_FAINT)
+		word := going != nil ? (going.connecting ? "connecting…" : "disconnecting…") : m.word != "" ? m.word : "?"
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if plate(fmt.tprintf("###mcp%d", i), top = HEX_MCP_TOP, bottom = HEX_MCP_BOTTOM, radius = 8, shadow = 4) {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
@@ -877,18 +945,13 @@ page_mcp :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.5))
 				text("n", m.name, hex(HEX_MCP_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL)})
 				ui.spacer(ui.px(em * 0.6))
-				text("s", m.status != "" ? m.status : "?", col, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
-				if connected {
-					if bevel_button("###dc", "Disconnect", "", .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked {
-						request(app, .Action, "POST", fmt.tprintf("/api/experimental/mcp/%s/disconnect", url_escape(m.name)))
-						m.status = "disconnecting…"
-						app.facts_due = true
-					}
-				} else {
-					if bevel_button("###co", "Connect", "", .Accent, height = math.round(em * BUTTON_SMALL_H_EM)).clicked {
-						request(app, .Action, "POST", fmt.tprintf("/api/experimental/mcp/%s/connect", url_escape(m.name)))
-						m.status = "connecting…"
-						app.facts_due = true
+				text("s", word, col, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
+				// (what goes on says itself: no button says the opposite meanwhile)
+				if going == nil {
+					if connected {
+						if bevel_button("###dc", "Disconnect", "", .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, false) }
+					} else {
+						if bevel_button("###co", "Connect", "", .Accent, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, true) }
 					}
 				}
 				ui.spacer(ui.px(em * 0.8))
@@ -909,8 +972,9 @@ page_mcp :: proc(app: ^App, em: f32) {
 
 page_usage :: proc(app: ^App, em: f32) {
 	f := &app.facts
+	if !read_shown(app, "###use_read", &f.reads[.Usage], em, server_facts_load) { return }
 	if len(f.limits) == 0 && len(f.budgets) == 0 {
-		if !loading(app, em) { info_line(app, "###none", "The server reports no usage limit (a provider of your own, or no OpenCode workspace).", em, hex(HEX_FAINT)) }
+		info_line(app, "###none", "The server reports no usage limit (a provider of your own, or no OpenCode workspace).", em, hex(HEX_FAINT))
 		return
 	}
 	if f.workspace != "" {
@@ -951,25 +1015,47 @@ page_usage :: proc(app: ^App, em: f32) {
 	}
 }
 
+saved_revoking :: proc(f: ^Server_Facts, id: string) -> bool {
+	for r in f.revoking { if r == id { return true } }
+	return false
+}
+
+// One DELETE: the second click of a double click finds it on its way. (Read again once it is gone: net.odin.)
+saved_revoke :: proc(app: ^App, id: string) {
+	f := &app.facts
+	if saved_revoking(f, id) { return }
+	append(&f.revoking, strings.clone(id))
+	request(app, .Saved_Done, "DELETE", fmt.tprintf("/api/permission/saved/%s", id), tag = id)
+}
+
+// It went, or not: the button is back, and the list says which.
+saved_revoke_done :: proc(app: ^App, id: string) {
+	f := &app.facts
+	for r, i in f.revoking {
+		if r != id { continue }
+		delete(r)
+		ordered_remove(&f.revoking, i)
+		break
+	}
+	facts_soon(app)
+}
+
 page_permissions :: proc(app: ^App, em: f32) {
 	f := &app.facts
 	info_line(app, "###ph", "Answers given with “Always”: the server applies them without asking again. Revoke one to be asked next time.", em)
 	ui.spacer(ui.px(em * 0.6))
-	if len(f.saved) == 0 {
-		if !loading(app, em) { info_line(app, "###none", "No saved permission.", em, hex(HEX_FAINT)) }
-	}
-	for &s, i in f.saved {
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
-		if ui.row(.Center, id = fmt.tprintf("###sp%d", i)) {
-			col := s.effect == "deny" ? hex(HEX_RED) : s.effect == "allow" ? hex(HEX_GREEN) : hex(HEX_YELLOW)
-			pill("###e", s.effect != "" ? s.effect : "?", col)
-			ui.spacer(ui.px(em * 0.5))
-			text("a", s.action, hex(HEX_SETTING_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
-			ui.spacer(ui.px(em * 0.5))
-			text("r", s.resource, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
-			if bevel_button("###rv", "Revoke", ICO_DELETE, .Danger, height = math.round(em * BUTTON_SMALL_H_EM)).clicked {
-				request(app, .Action, "DELETE", fmt.tprintf("/api/permission/saved/%s", s.id))
-				app.facts_due = true
+	if read_shown(app, "###sp_read", &f.reads[.Saved], em, server_facts_load) {
+		if len(f.saved) == 0 { info_line(app, "###none", "No saved permission.", em, hex(HEX_FAINT)) }
+		for &s, i in f.saved {
+			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
+			if ui.row(.Center, id = fmt.tprintf("###sp%d", i)) {
+				col := s.effect == "deny" ? hex(HEX_RED) : s.effect == "allow" ? hex(HEX_GREEN) : hex(HEX_YELLOW)
+				pill("###e", s.effect != "" ? s.effect : "?", col)
+				ui.spacer(ui.px(em * 0.5))
+				text("a", s.action, hex(HEX_SETTING_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
+				ui.spacer(ui.px(em * 0.5))
+				text("r", s.resource, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
+				if bevel_button("###rv", "Revoke", ICO_DELETE, .Danger, height = math.round(em * BUTTON_SMALL_H_EM), disabled = saved_revoking(f, s.id)).clicked { saved_revoke(app, s.id) }
 			}
 		}
 	}
@@ -982,8 +1068,9 @@ page_permissions :: proc(app: ^App, em: f32) {
 
 page_catalog :: proc(app: ^App, em: f32) {
 	f := &app.facts
-	list :: proc(app: ^App, title: string, items: []Named, em: f32) {
+	list :: proc(app: ^App, title: string, items: []Named, em: f32, read: ^Remote = nil) {
 		section(fmt.tprintf("%s (%d)", title, len(items)), em)
+		if read != nil && !read_shown(app, fmt.tprintf("###%s_read", title), read, em, server_facts_load) { return }
 		for it, i in items {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row(id = fmt.tprintf("###%s%d", title, i)) {
@@ -994,14 +1081,13 @@ page_catalog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.25))
 		}
 	}
-	if len(f.providers) + len(f.skills) + len(f.commands) == 0 && loading(app, em) { return }
-	list(app, "PROVIDERS", f.providers[:], em)
+	list(app, "PROVIDERS", f.providers[:], em, &f.reads[.Providers])
 	models := make([]Named, len(app.models), context.temp_allocator)
 	for m, i in app.models { models[i] = {m.name != "" ? m.name : m.id, fmt.tprintf("%s · %s context", m.provider, kfmt(m.ctx_len))} }
 	list(app, "MODELS", models, em)
 	agents := make([]Named, len(app.agents), context.temp_allocator)
 	for a, i in app.agents { agents[i] = {a.name != "" ? a.name : a.id, fmt.tprintf("%s · %s", a.mode, first_line(a.description))} }
 	list(app, "AGENTS", agents, em)
-	list(app, "SKILLS", f.skills[:], em)
-	list(app, "COMMANDS", f.commands[:], em)
+	list(app, "SKILLS", f.skills[:], em, &f.reads[.Skills])
+	list(app, "COMMANDS", f.commands[:], em, &f.reads[.Commands])
 }

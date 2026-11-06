@@ -11,8 +11,11 @@ import "core:strings"
 import "gt:draw"
 import "gt:ui"
 
+Job_Status :: enum u8 { Exited, Running, Killed, Timeout }
+
 Shell_Job :: struct {
-	id, command, cwd, status: string,   // (owned)
+	id, command, cwd: string,           // (owned)
+	status:        Job_Status,
 	exit:          int,
 	has_exit:      bool,
 	started, ended: f64,
@@ -71,13 +74,22 @@ activity_reset :: proc(app: ^App) {
 
 @(private = "file")
 job_free :: proc(j: ^Shell_Job) {
-	delete(j.id); delete(j.command); delete(j.cwd); delete(j.status); delete(j.tail)
+	delete(j.id); delete(j.command); delete(j.cwd); delete(j.tail)
 }
 
 @(private = "file")
 todos_clear :: proc(a: ^Activity) {
 	for t in a.todos { delete(t.content); delete(t.status) }
 	clear(&a.todos)
+}
+
+// The server left: what was read of it goes, and what was on its way cannot lower its flag any more.
+activity_forget :: proc(app: ^App) {
+	a := &app.activity
+	activity_reset(app)
+	delete(a.opened); delete(a.dir)
+	a.opened, a.dir = "", ""
+	a.open = false
 }
 
 activity_open :: proc(app: ^App) {
@@ -105,16 +117,31 @@ location_query :: proc(dir: string) -> string {
 	return dir != "" ? fmt.tprintf("location[directory]=%s", url_escape(dir)) : ""
 }
 
+// Whether what runs is to be read again at its pace. (A session whose folder is not known yet waits: read without one, the list
+// would be of the server's default folder.)
+@(private = "file")
+activity_polls :: proc(app: ^App) -> bool {
+	a := &app.activity
+	if app.chat.id == "" || !online(app) || app.conn == nil { return false }
+	if chat_dir(app) == "" && !app.chat.have_self { return false }
+	for &j in a.jobs { if j.status == .Running { return true } }
+	return a.poll_ms == 0 || a.open
+}
+
 // After each frame: what runs is read again, often while one looks at it.
 activity_tick :: proc(app: ^App) {
 	a := &app.activity
-	if app.chat.id == "" || !app.online || app.conn == nil { return }
-	running := false
-	for &j in a.jobs { if j.status == "running" { running = true } }
-	if a.poll_ms != 0 && !running && !a.open { return }
+	if !activity_polls(app) { return }
 	if d := ui.now_ms() - a.poll_ms; a.poll_ms != 0 && d < (a.open ? ACT_POLL_MS : ACT_IDLE_POLL_MS) { return }
 	a.poll_ms = ui.now_ms()
 	activity_read(app)
+}
+
+// When the next reading is due (deferred_tick). 0: none.
+activity_in_ms :: proc(app: ^App) -> int {
+	a := &app.activity
+	if !activity_polls(app) { return 0 }
+	return max(int(a.poll_ms + (a.open ? ACT_POLL_MS : ACT_IDLE_POLL_MS) - ui.now_ms()) + 1, 1)
 }
 
 // A command started or ended, says the stream.
@@ -130,7 +157,7 @@ activity_read :: proc(app: ^App) {
 		a.listing = true
 		request(app, .Shell_List, "GET", q != "" ? fmt.tprintf("/api/shell?%s", q) : "/api/shell", tag = dir)
 	}
-	for &j in a.jobs { if j.status == "running" { job_read(app, &j) } }
+	for &j in a.jobs { if j.status == .Running { job_read(app, &j) } }
 	if !a.open { return }
 	for &s in app.chat.children {
 		busy := app.busy[s.id] or_else false
@@ -167,8 +194,12 @@ job_find :: proc(a: ^Activity, id: string) -> ^Shell_Job {
 
 @(private = "file")
 job_fill :: proc(j: ^Shell_Job, it: json.Value) {
-	delete(j.status)
-	j.status = strings.clone(jstr(it, "status"))
+	switch jstr(it, "status") {
+	case "running": j.status = .Running
+	case "killed":  j.status = .Killed
+	case "timeout": j.status = .Timeout
+	case:           j.status = .Exited
+	}
 	j.started = jnum(it, "time", "started")
 	j.ended = jnum(it, "time", "completed")
 	if _, has := jget(it, "exit").(json.Null); !has && jget(it, "exit") != nil {
@@ -196,12 +227,12 @@ activity_shells_load :: proc(app: ^App, v: json.Value, dir: string) {
 	}
 	q := location_query(a.dir)
 	for &j in a.jobs {
-		if j.seen || j.status != "running" { continue }
+		if j.seen || j.status != .Running { continue }
 		request(app, .Shell_One, "GET", fmt.tprintf("/api/shell/%s%s%s", j.id, q != "" ? "?" : "", q), tag = j.id)
 	}
 	for len(a.jobs) > ACT_JOBS_MAX {
 		at := 0
-		for &j, i in a.jobs { if j.status != "running" { at = i; break } }
+		for &j, i in a.jobs { if j.status != .Running { at = i; break } }
 		job_free(&a.jobs[at])
 		ordered_remove(&a.jobs, at)
 	}
@@ -236,8 +267,8 @@ activity_request_failed :: proc(app: ^App, r: ^Request) {
 	case .Shell_Output:
 		if j := job_find(a, r.tag); j != nil { j.reading = false }
 	case .Shell_One:
-		// (the server no longer knows it: it is over, however it ended)
-		if j := job_find(a, r.tag); j != nil { delete(j.status); j.status = strings.clone("exited") }
+		// (the server no longer knows it: it is over, however it ended. Not reached says nothing: the next list asks again)
+		if j := job_find(a, r.tag); j != nil && r.status == 404 { j.status = .Exited }
 	case .Peek:
 		if p, ok := &a.peeks[r.tag]; ok { p.reading = false }
 	}
@@ -345,10 +376,22 @@ tail_lines :: proc(s: string, n: int) -> []string {
 @(private = "file")
 job_state :: proc(j: ^Shell_Job) -> Sub_State {
 	switch j.status {
-	case "running":         return .Running
-	case "killed", "timeout": return .Cancelled
+	case .Running:         return .Running
+	case .Killed, .Timeout: return .Cancelled
+	case .Exited:
 	}
 	return j.has_exit && j.exit != 0 ? .Failed : .Done
+}
+
+@(private = "file")
+job_word :: proc(j: ^Shell_Job) -> string {
+	switch j.status {
+	case .Running: return "running"
+	case .Killed:  return "killed"
+	case .Timeout: return "timeout"
+	case .Exited:
+	}
+	return "exited"
 }
 
 // A running call of a shell tool whose command is not in the list of the server's commands.
@@ -383,12 +426,12 @@ activity_rows :: proc(app: ^App) -> []Act_Row {
 	}
 	for &s in app.chat.children { if app.busy[s.id] or_else false { agent(app, &rows, &s) } }
 	#reverse for &j in a.jobs {
-		if j.status == "running" { append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = base_name(j.cwd), preview = string(j.tail[:]), state = .Running, started = j.started}) }
+		if j.status == .Running { append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = base_name(j.cwd), preview = string(j.tail[:]), state = .Running, started = j.started}) }
 	}
 	tool_rows(app, &rows)
 	#reverse for &j in a.jobs {
-		if j.status == "running" { continue }
-		what := j.has_exit ? fmt.tprintf("exit %d", j.exit) : j.status
+		if j.status == .Running { continue }
+		what := j.has_exit ? fmt.tprintf("exit %d", j.exit) : job_word(&j)
 		append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = what, preview = string(j.tail[:]), state = job_state(&j), started = j.started, ended = j.ended})
 	}
 	shown := 0
@@ -405,7 +448,7 @@ activity_rows :: proc(app: ^App) -> []Act_Row {
 @(private = "file")
 activity_counts :: proc(app: ^App) -> (agents, shells: int) {
 	agents = len(active_children(app))
-	for &j in app.activity.jobs { if j.status == "running" { shells += 1 } }
+	for &j in app.activity.jobs { if j.status == .Running { shells += 1 } }
 	return
 }
 

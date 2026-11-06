@@ -149,7 +149,7 @@ const SHOTS = [
     must('type', 'Get-ChildItem | Select-Object Name, Length; Write-Host "ready" -ForegroundColor Green')
     must('key', 'Enter')
     must('wait', '2000')
-  }, after: () => { must('click', '--name', 'term_x0'); must('wait', '800') } },   // (its request is on its way when the client ends)
+  }, after: () => { must('click', '--name', 'dock_close'); must('wait', '800') } },   // (the shell's tab, the only one that closes here; its request is on its way when the client ends)
   { name: 'mention', args: WORK, wait: WORK_TITLE, go: async () => {
     publicModel()
     must('click', '--name', 'composer')

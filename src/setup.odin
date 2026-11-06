@@ -14,7 +14,7 @@ import "gt:draw"
 import "gt:render"
 import "gt:ui"
 
-APP_VERSION :: "0.13.0"
+APP_VERSION :: "0.14.0"
 
 LOGO_PNG :: #load("../assets/logo_256.png")
 
@@ -122,13 +122,16 @@ logo_box :: proc(app: ^App, id: string, size: f32) {
 ////////////////////////////////
 // The Setup dialog
 
+// The result of the last action: its words and how it went are one thing.
+Setup_Note :: struct { text: string, good: bool }   // (text owned, "": none)
+
 Setup_UI :: struct {
 	open:      bool,
 	facts:     Install_Facts,
 	desktop:   bool,
-	message:   string,   // the result of the last action (owned)
-	good:      bool,
+	note:      Setup_Note,
 	installed: string,   // an install just made: the copy to start (owned)
+	removal_scheduled: bool,   // this copy was uninstalled while it runs: nothing is left to do but close
 }
 
 setup_open :: proc(app: ^App) {
@@ -144,14 +147,29 @@ setup_refresh :: proc(app: ^App) {
 	f.running = strings.clone(f.running)
 	f.version = strings.clone(f.version)
 	delete(app.setup.facts.dir); delete(app.setup.facts.exe); delete(app.setup.facts.running); delete(app.setup.facts.version)
+	if app.setup.removal_scheduled { f.state = .Removal_Scheduled }   // (the file is still there: what the disk says would offer a Repair)
 	app.setup.facts = f
 }
 
 @(private = "file")
 set_message :: proc(app: ^App, good: bool, msg: string) {
-	delete(app.setup.message)
-	app.setup.message = strings.clone(msg)
-	app.setup.good = good
+	delete(app.setup.note.text)
+	app.setup.note = {strings.clone(msg), good}
+}
+
+// How an uninstall ended. The copy just installed is gone with it: nothing to open any more, and Install is on offer again.
+setup_uninstalled :: proc(app: ^App, ok, deferred: bool, msg: string) {
+	st := &app.setup
+	if !ok {
+		set_message(app, false, msg)
+		setup_refresh(app)
+		return
+	}
+	delete(st.installed)
+	st.installed = ""
+	st.removal_scheduled = deferred
+	set_message(app, true, deferred ? "Removed. The program is deleted when this window closes." : "Removed.")
+	setup_refresh(app)
 }
 
 // "0.5.6" before "0.6.0", number by number (a version that does not read as one is not older: nothing to offer).
@@ -216,8 +234,9 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				switch f.state {
 				case .Not_Installed: state = "Not installed: this copy runs on its own."
 				case .This_Copy:     state = "Installed: this is the installed copy."; col = hex(HEX_GREEN)
-				case .Repair:        state = "Installed, but a shortcut or the Settings entry is missing."; col = hex(HEX_RED)
+				case .Repair:        state = f.exe_there ? "Installed, but a shortcut or the Settings entry is missing." : "The installed program is missing: what is left of it can be repaired or removed."; col = hex(HEX_RED)
 				case .Other_Copy:    state = fmt.tprintf("A copy is installed (%s): this one runs on its own.", f.version != "" ? f.version : "?")
+				case .Removal_Scheduled: state = "Uninstalled: the program is deleted when this window closes."
 				}
 				upgrade := setup_is_upgrade(f.state, f.version)
 				if upgrade { state = fmt.tprintf("An older copy is installed (%s): upgrade it to %s?", f.version, APP_VERSION); col = accent() }
@@ -254,14 +273,14 @@ setup_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 1.3))
 			if ui.tags("weak") { ui.checkbox("###desk", "Shortcut on the Desktop", &st.desktop) }
 		}
-		if st.message != "" {
+		if st.note.text != "" {
 			ui.spacer(ui.px(em * 0.5))
 			ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 			if ui.row(.Center) {
 				ui.spacer(ui.px(em * SETUP_MARGIN_EM))
-				glyph(st.good ? ICO_CHECK : ICO_WARN, st.good ? hex(HEX_GREEN) : hex(HEX_RED), math.round(em * ICON_REGULAR))
+				glyph(st.note.good ? ICO_CHECK : ICO_WARN, st.note.good ? hex(HEX_GREEN) : hex(HEX_RED), math.round(em * ICON_REGULAR))
 				ui.spacer(ui.px(em * 0.3))
-				text("m", st.message, st.good ? hex(HEX_GREEN) : hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
+				text("m", st.note.text, st.note.good ? hex(HEX_GREEN) : hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 			}
 		}
 		ui.spacer(ui.px(em * 1.1))
@@ -271,16 +290,16 @@ setup_dialog :: proc(app: ^App, em: f32) {
 			if f.state == .This_Copy || f.state == .Repair || f.state == .Other_Copy {
 				if bevel_button("###uninstall", "Uninstall", ICO_DELETE, .Danger).clicked {
 					ok, deferred, msg := desktop_uninstall()
-					if ok {
-						set_message(app, true, deferred ? "Removed. The program is deleted when this window closes." : "Removed.")
-					} else { set_message(app, false, msg) }
-					setup_refresh(app)
+					setup_uninstalled(app, ok, deferred, msg)
 				}
 			}
 			ui.spacer(ui.fill())
 			// just installed: what is left to do is to start that copy (four buttons overflowed the dialog)
 			just_installed := st.installed != "" && f.state != .This_Copy
-			if just_installed {
+			if f.state == .Removal_Scheduled {
+				if bevel_button("###close", "Close", "", .Normal).clicked { st.open = false }
+				ui.spacer(ui.px(em * 0.5))
+			} else if just_installed {
 				if bevel_button("###close", "Close", "", .Normal).clicked { st.open = false }
 				ui.spacer(ui.px(em * 0.5))
 				if bevel_button("###launch", "Open installed copy", ICO_RIGHT, .Accent).clicked {
@@ -299,9 +318,9 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				if bevel_button("###close", "Close", "", .Normal).clicked { st.open = false }
 				ui.spacer(ui.px(em * 0.5))
 			}
-			if !just_installed {
+			if !just_installed && f.state != .Removal_Scheduled {
 				label := "Install"
-				switch f.state {
+				#partial switch f.state {
 				case .Not_Installed: label = "Install"
 				case .Other_Copy:    label = setup_is_upgrade(f.state, f.version) ? fmt.tprintf("Upgrade to %s", APP_VERSION) : "Replace installed copy"
 				case .Repair:        label = "Repair"
@@ -329,6 +348,6 @@ setup_dialog :: proc(app: ^App, em: f32) {
 	// closed without an answer: not again for this version (an upgrade declined too, whatever was said about an earlier one)
 	if was_open && !st.open {
 		c := settings_get("setup")
-		if setup_is_upgrade(st.facts.state, st.facts.version) || (c != "standalone" && c != "installed") { settings_set("setup", fmt.tprintf("dismissed:%s", APP_VERSION)) }
+		if st.facts.state != .Removal_Scheduled && (setup_is_upgrade(st.facts.state, st.facts.version) || (c != "standalone" && c != "installed")) { settings_set("setup", fmt.tprintf("dismissed:%s", APP_VERSION)) }
 	}
 }

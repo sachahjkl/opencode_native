@@ -83,10 +83,8 @@ part_patch :: proc(p: ^Part, a := context.allocator) -> string {
 part_patch_set :: proc(p: ^Part, patch: string) {
 	p.patch = patch
 	p.added, p.removed = 0, 0
-	rest := patch
-	for l in strings.split_lines_iterator(&rest) {
-		if strings.has_prefix(l, "+++") || strings.has_prefix(l, "---") { continue }
-		if strings.has_prefix(l, "+") { p.added += 1 } else if strings.has_prefix(l, "-") { p.removed += 1 }
+	for l in diff_parse(patch) {
+		if l.sign == '+' { p.added += 1 } else if l.sign == '-' { p.removed += 1 }
 	}
 }
 
@@ -112,36 +110,80 @@ hunk_start :: proc(h: string, mark: byte) -> int {
 	return n
 }
 
-// What git writes before a file's first hunk (the line "Binary files … differ" says something, and stays).
+// The count after `mark`'s number in a hunk's header: "-12,3". (None said: one line.)
 @(private = "file")
-git_header :: proc(l: string) -> bool {
-	for p in ([]string{"diff --git ", "index ", "new file mode ", "deleted file mode ", "old mode ", "new mode ", "similarity index ", "rename from ", "rename to "}) {
+hunk_count :: proc(h: string, mark: byte) -> int {
+	i := strings.index_byte(h, mark)
+	if i < 0 { return 0 }
+	end := i + 1
+	for end < len(h) && h[end] >= '0' && h[end] <= '9' { end += 1 }
+	if end >= len(h) || h[end] != ',' { return 1 }
+	stop := end + 1
+	for stop < len(h) && h[stop] >= '0' && h[stop] <= '9' { stop += 1 }
+	n, _ := strconv.parse_int(h[end + 1:stop])
+	return n
+}
+
+// What comes before a file's first hunk. (The line "Binary files … differ" says something, and stays.)
+@(private = "file")
+file_header :: proc(l: string) -> bool {
+	for p in ([]string{"diff --git ", "index ", "new file mode ", "deleted file mode ", "old mode ", "new mode ", "similarity index ", "rename from ", "rename to ", "Index: ", "====="}) {
 		if strings.has_prefix(l, p) { return true }
 	}
 	return false
 }
 
+// A line of a hunk begins with a sign, and only the counts of its header say where it ends: "--- x" there is the line "-- x" removed. Out
+// of a hunk, "--- x" is a file's header. What diff_lines writes has neither headers nor hunks: it is all lines, whatever they look like.
+Diff_Mode :: enum u8 { Header, Hunk }
+
 diff_parse :: proc(patch: string) -> []Diff_Line {
 	out := make([dynamic]Diff_Line, context.temp_allocator)
 	old_no, new_no := 0, 0
+	old_left, new_left := 0, 0
+	mode := Diff_Mode.Header
+	// (a line of diff_lines always has its sign first: a header or a hunk's start can only be the real thing)
+	headers := false
+	scan := patch
+	for l in strings.split_lines_iterator(&scan) {
+		if strings.has_prefix(l, "@@") || file_header(l) { headers = true; break }
+	}
+	line :: proc(out: ^[dynamic]Diff_Line, l: string, old_no, new_no: ^int) {
+		switch {
+		case strings.has_prefix(l, "+"):
+			append(out, Diff_Line{sign = '+', text = l[1:], new_no = new_no^})
+			if new_no^ > 0 { new_no^ += 1 }
+		case strings.has_prefix(l, "-"):
+			append(out, Diff_Line{sign = '-', text = l[1:], old_no = old_no^})
+			if old_no^ > 0 { old_no^ += 1 }
+		case:
+			append(out, Diff_Line{sign = ' ', text = strings.trim_prefix(l, " "), old_no = old_no^, new_no = new_no^})
+			if old_no^ > 0 { old_no^ += 1 }
+			if new_no^ > 0 { new_no^ += 1 }
+		}
+	}
 	rest := patch
 	for l in strings.split_lines_iterator(&rest) {
-		switch {
-		case len(out) == 0 && git_header(l):
-		case strings.has_prefix(l, "Index: "), strings.has_prefix(l, "====="), strings.has_prefix(l, "--- "), strings.has_prefix(l, "+++ "), strings.has_prefix(l, "\\ "):
-		case strings.has_prefix(l, "@@"):
-			old_no, new_no = hunk_start(l, '-'), hunk_start(l, '+')
-			if len(out) > 0 { append(&out, Diff_Line{sign = '@'}) }
-		case strings.has_prefix(l, "+"):
-			append(&out, Diff_Line{sign = '+', text = l[1:], new_no = new_no})
-			if new_no > 0 { new_no += 1 }
-		case strings.has_prefix(l, "-"):
-			append(&out, Diff_Line{sign = '-', text = l[1:], old_no = old_no})
-			if old_no > 0 { old_no += 1 }
-		case:
-			append(&out, Diff_Line{sign = ' ', text = strings.trim_prefix(l, " "), old_no = old_no, new_no = new_no})
-			if old_no > 0 { old_no += 1 }
-			if new_no > 0 { new_no += 1 }
+		if strings.has_prefix(l, "\\ ") { continue }
+		switch mode {
+		case .Hunk:
+			line(&out, l, &old_no, &new_no)
+			if !strings.has_prefix(l, "+") { old_left -= 1 }
+			if !strings.has_prefix(l, "-") { new_left -= 1 }
+			if old_left <= 0 && new_left <= 0 { mode = .Header }
+		case .Header:
+			switch {
+			case strings.has_prefix(l, "@@"):
+				old_no, new_no = hunk_start(l, '-'), hunk_start(l, '+')
+				old_left, new_left = hunk_count(l, '-'), hunk_count(l, '+')
+				if len(out) > 0 { append(&out, Diff_Line{sign = '@'}) }
+				if old_left > 0 || new_left > 0 { mode = .Hunk }
+			case !headers:
+				line(&out, l, &old_no, &new_no)
+			case file_header(l), strings.has_prefix(l, "--- "), strings.has_prefix(l, "+++ "):
+			case:
+				line(&out, l, &old_no, &new_no)
+			}
 		}
 	}
 	return out[:]

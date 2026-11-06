@@ -36,22 +36,34 @@ Integration :: struct {
 	connections: []Connection,
 }
 
-Connect_Step :: enum u8 { Choose, Fill, Sending, Waiting }
+// Connecting, from the ways offered to what the server says. (`method`: the way, in the integration shown.)
+Connect_Choose  :: struct {}
+Connect_Fill    :: struct { method: int }
+Connect_Sending :: struct { method: int, kind: string }   // Integrations.sending is on its way; kind: "oauth", "command", "": it ends there
+// A login or a command under way on the server.
+Connect_Waiting :: struct {
+	attempt, url, instructions: string,   // (owned)
+	kind:    string,                      // "oauth", "command"
+	by_code: bool,                        // the login ends with a code to paste
+	misses:  int,                         // readings of its status that failed in a row
+}
+Connect_Finishing :: struct { wait: Connect_Waiting }   // the code is on its way: back to `wait` if it is refused
+
+Connect_Step :: union #no_nil { Connect_Choose, Connect_Fill, Connect_Sending, Connect_Waiting, Connect_Finishing }
 
 Integrations :: struct {
-	asked, loaded: bool,
+	read:     Remote,            // the list
+	active:   Remote,            // which account is in use
 	list:     [dynamic]Integration,
 	arena:    virtual.Arena,
 	has_arena: bool,
 	dirty:    bool,              // changed on the server while something was being filled in
 	search:   ui.Text_Field,
 	shown:    string,            // the integration open (owned, "": the list)
-	method:   int,               // the way being filled in
 	step:     Connect_Step,
+	sending:  Remote,            // what Sending and Finishing wait for: its ticket ties the answer to this attempt
+	poll:     Remote,            // the status of a login under way
 	key, label, code: ui.Text_Field,
-	attempt:  string,            // a login or a command under way (owned)
-	url, instructions: string,   // (owned)
-	by_code:  bool,              // the login ends with a code to paste
 	failed:   string,            // why it did not work (owned)
 	renaming: string,            // the connection whose label is edited (owned)
 	rename:   ui.Text_Field,
@@ -59,8 +71,15 @@ Integrations :: struct {
 }
 
 integrations_ask :: proc(app: ^App) {
-	app.cx.integrations.asked = true
-	request(app, .Integrations, "GET", "/api/integration")
+	n := &app.cx.integrations
+	remote_begin(&n.read)
+	request(app, .Integrations, "GET", "/api/integration", remote = &n.read)
+}
+
+@(private = "file")
+connect_idle :: proc(n: ^Integrations) -> bool {
+	_, idle := n.step.(Connect_Choose)
+	return idle
 }
 
 @(private = "file")
@@ -86,7 +105,7 @@ method_kind :: proc(s: string) -> (kind: Method_Kind, ok: bool) {
 // Those connected first, each kind by the server's order. (What is being filled in stays: the list comes again when it is over.)
 integrations_load :: proc(app: ^App, v: json.Value) {
 	n := &app.cx.integrations
-	if n.step != .Choose { n.dirty = true; return }
+	if !connect_idle(n) { n.dirty = true; return }
 	integrations_free(n)
 	_ = virtual.arena_init_growing(&n.arena)
 	n.has_arena = true
@@ -120,8 +139,8 @@ integrations_load :: proc(app: ^App, v: json.Value) {
 			append(&n.list, one)
 		}
 	}
-	n.loaded = true
-	request(app, .Credentials, "GET", "/api/credential")
+	remote_begin(&n.active)
+	request(app, .Credentials, "GET", "/api/credential", remote = &n.active)
 }
 
 // Which account of each integration is in use: the only thing read from this list.
@@ -137,7 +156,28 @@ credentials_load :: proc(app: ^App, v: json.Value) {
 // Something changed on the server: a login, another client. The models come with what is connected.
 integrations_changed :: proc(app: ^App) {
 	request(app, .Models, "GET", "/api/model")
-	if app.cx.integrations.asked { integrations_ask(app) }
+	integrations_reread(app)
+}
+
+// Read again if it was read at all, once nothing is being filled in: a list that could not be read would hide that.
+integrations_reread :: proc(app: ^App) {
+	n := &app.cx.integrations
+	if n.read.state == .Idle { return }
+	if !connect_idle(n) { n.dirty = true; return }
+	integrations_ask(app)
+}
+
+// (`app.conn` is still the server left: a login under way there is told it is over.)
+integrations_forget :: proc(app: ^App) {
+	n := &app.cx.integrations
+	n.dirty = false
+	connect_cancel(app)
+	integrations_free(n)
+	set_text(&n.shown, ""); set_text(&n.failed, ""); set_text(&n.renaming, ""); set_text(&n.removing, "")
+	ui.field_set(&n.search, "")
+	ui.field_set(&n.rename, "")
+	remote_reset(&n.read)
+	remote_reset(&n.active)
 }
 
 @(private = "file")
@@ -152,15 +192,27 @@ set_text :: proc(s: ^string, value: string) {
 	s^ = strings.clone(value)
 }
 
-// Back to the ways of connecting; what was typed is gone, a key first of all.
+@(private = "file")
+waiting_free :: proc(w: Connect_Waiting) { delete(w.attempt); delete(w.url); delete(w.instructions) }
+
+// Back to the ways of connecting; what was typed is gone, a key first of all, and what a way asks with it. An answer on its way no longer
+// counts.
 @(private = "file")
 connect_reset :: proc(app: ^App) {
 	n := &app.cx.integrations
 	ui.field_set(&n.key, "")
 	ui.field_set(&n.code, "")
 	ui.field_set(&n.label, "")
-	set_text(&n.attempt, ""); set_text(&n.url, ""); set_text(&n.instructions, "")
-	n.step, n.method, n.by_code = .Choose, -1, false
+	if it := integration_find(n, n.shown); it != nil {
+		for m in it.methods { if m.form != nil { form_reset(m.form) } }
+	}
+	#partial switch s in n.step {
+	case Connect_Waiting:   waiting_free(s)
+	case Connect_Finishing: waiting_free(s.wait)
+	}
+	n.step = Connect_Choose{}
+	remote_reset(&n.sending)
+	remote_reset(&n.poll)
 	if n.dirty { n.dirty = false; integrations_ask(app) }
 }
 
@@ -189,69 +241,100 @@ connect_extra :: proc(form: ^Form_Req, label: string) -> (extra, problem: string
 	return trimmed != "" ? fmt.tprintf(`%s,"label":%s`, answer, jquote(trimmed)) : answer, ""
 }
 
-@(private = "file")
-connect_send :: proc(app: ^App, it: ^Integration, m: ^Int_Method) {
+// (`method`: `m`'s place in the integration.)
+connect_send :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int) {
 	n := &app.cx.integrations
 	extra, problem := connect_extra(m.form, ui.field_string(&n.label))
 	if problem != "" { set_text(&n.failed, problem); return }
+	key := strings.trim_space(ui.field_string(&n.key))
+	if m.kind == .Key && key == "" { set_text(&n.failed, "The key is empty"); return }
 	set_text(&n.failed, "")
 	base := fmt.tprintf("/api/integration/%s/connect", url_escape(it.id))
+	kind := ""
+	remote_begin(&n.sending)
 	switch m.kind {
 	case .Key:
-		key := strings.trim_space(ui.field_string(&n.key))
-		if key == "" { set_text(&n.failed, "The key is empty"); return }
-		request(app, .Connected, "POST", fmt.tprintf("%s/key", base), fmt.tprintf(`{{"key":%s,%s}}`, jquote(key), extra))
+		request(app, .Connected, "POST", fmt.tprintf("%s/key", base), fmt.tprintf(`{{"key":%s,%s}}`, jquote(key), extra), remote = &n.sending)
 		ui.field_set(&n.key, "")
 	case .External:
-		request(app, .Connected, "POST", fmt.tprintf("%s/external", base), fmt.tprintf(`{{"methodID":%s,%s}}`, jquote(m.id), extra))
+		request(app, .Connected, "POST", fmt.tprintf("%s/external", base), fmt.tprintf(`{{"methodID":%s,%s}}`, jquote(m.id), extra), remote = &n.sending)
 	case .Oauth:
-		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/oauth", base), fmt.tprintf(`{{"methodID":%s,%s}}`, jquote(m.id), extra), "oauth")
+		kind = "oauth"
+		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/oauth", base), fmt.tprintf(`{{"methodID":%s,%s}}`, jquote(m.id), extra), remote = &n.sending)
 	case .Command:
+		kind = "command"
 		trimmed := strings.trim_space(ui.field_string(&n.label))
 		label := trimmed != "" ? fmt.tprintf(`,"label":%s`, jquote(trimmed)) : ""
-		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/command", base), fmt.tprintf(`{{"methodID":%s%s}}`, jquote(m.id), label), "command")
+		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/command", base), fmt.tprintf(`{{"methodID":%s%s}}`, jquote(m.id), label), remote = &n.sending)
 	case .Env:
+		remote_reset(&n.sending)
 		return
 	}
-	n.step = .Sending
+	n.step = Connect_Sending{method = method, kind = kind}
 }
 
 @(private = "file")
-attempt_path :: proc(n: ^Integrations, kind: string) -> string {
-	return fmt.tprintf("/api/integration/%s/connect/%s/%s", url_escape(n.shown), kind, url_escape(n.attempt))
+attempt_path :: proc(n: ^Integrations, w: Connect_Waiting) -> string {
+	return fmt.tprintf("/api/integration/%s/connect/%s/%s", url_escape(n.shown), w.kind, url_escape(w.attempt))
 }
 
-// A login or a command began: the browser opens on the click that asked for it, and its status is asked from time to time, by a thread
-// that sleeps: nothing is drawn meanwhile.
-connect_begun :: proc(app: ^App, kind: string, v: json.Value) {
+// Its status in a while, by a thread that sleeps: nothing is drawn meanwhile.
+@(private = "file")
+connect_poll :: proc(app: ^App) {
 	n := &app.cx.integrations
-	if n.step != .Sending { return }
-	set_text(&n.attempt, jstr(v, "data", "attemptID"))
-	set_text(&n.url, jstr(v, "data", "url"))
-	set_text(&n.instructions, jstr(v, "data", "instructions"))
-	n.by_code = jstr(v, "data", "mode") == "code"
-	n.step = .Waiting
-	if n.url != "" { _ = platform.open_url(n.url) }
-	if !n.by_code { request_later(app, .Connect_Status, attempt_path(n, kind), CONNECT_POLL_MS, fmt.tprintf("%s %s", kind, n.attempt)) }
+	w, waiting := n.step.(Connect_Waiting)
+	if !waiting { return }
+	remote_begin(&n.poll)
+	request_later(app, .Connect_Status, attempt_path(n, w), CONNECT_POLL_MS, "", remote = &n.poll)
 }
 
-// (`tag`: the kind and the attempt: an answer for one cancelled since says nothing.)
-connect_status :: proc(app: ^App, tag: string, v: json.Value) {
+// Try again, once the readings have stopped.
+connect_poll_again :: proc(app: ^App) {
+	if w, waiting := &app.cx.integrations.step.(Connect_Waiting); waiting { w.misses = 0 }
+	connect_poll(app)
+}
+
+// A login or a command began: the browser opens on the click that asked for it. (A begin for an attempt given up does not come here:
+// answer_left ends it on the server.)
+connect_begun :: proc(app: ^App, v: json.Value) {
 	n := &app.cx.integrations
-	kind, _, attempt := strings.partition(tag, " ")
-	if n.step != .Waiting || attempt != n.attempt { return }
+	s, sending := n.step.(Connect_Sending)
+	if !sending { return }
+	attempt := jstr(v, "data", "attemptID")
+	if attempt == "" { connect_failed(app, "The server did not say how to go on"); return }
+	w := Connect_Waiting{attempt = strings.clone(attempt), url = strings.clone(jstr(v, "data", "url")), instructions = strings.clone(jstr(v, "data", "instructions")), kind = s.kind, by_code = jstr(v, "data", "mode") == "code"}
+	n.step = w
+	if w.url != "" { _ = platform.open_url(w.url) }
+	if !w.by_code { connect_poll(app) }
+}
+
+connect_status :: proc(app: ^App, v: json.Value) {
+	n := &app.cx.integrations
+	w, waiting := &n.step.(Connect_Waiting)
+	if !waiting { return }
+	w.misses = 0
 	switch jstr(v, "data", "status") {
 	case "complete": connect_done(app)
 	case "failed":
-		set_text(&n.failed, jstr(v, "data", "message"))
+		msg := jstr(v, "data", "message")
+		set_text(&n.failed, msg != "" ? msg : "It did not work")
 		connect_reset(app)
 	case "expired":
 		set_text(&n.failed, "It took too long: the attempt expired")
 		connect_reset(app)
 	case:
-		if msg := jstr(v, "data", "message"); msg != "" { set_text(&n.instructions, msg) }
-		request_later(app, .Connect_Status, attempt_path(n, kind), CONNECT_POLL_MS, tag)
+		if msg := jstr(v, "data", "message"); msg != "" { set_text(&w.instructions, msg) }
+		connect_poll(app)
 	}
+}
+
+// A reading that did not come through says nothing of the login: asked again, a few times. After that the readings stop, and connect_wait
+// says so, with Try again beside its Cancel.
+connect_poll_failed :: proc(app: ^App) {
+	w, waiting := &app.cx.integrations.step.(Connect_Waiting)
+	if !waiting { return }
+	w.misses += 1
+	if w.misses < CONNECT_POLL_MISSES { connect_poll(app) }
 }
 
 connect_done :: proc(app: ^App) {
@@ -263,27 +346,43 @@ connect_done :: proc(app: ^App) {
 	integrations_changed(app)
 }
 
-connect_failed :: proc(app: ^App) {
+// What was sent came back with a refusal, or not at all: one step back, and why. (An answer for an attempt given up has no ticket here.)
+connect_failed :: proc(app: ^App, message: string) {
 	n := &app.cx.integrations
-	if n.step == .Sending { n.step = .Fill }
+	set_text(&n.failed, message)
+	#partial switch s in n.step {
+	case Connect_Sending:   n.step = Connect_Fill{s.method}
+	case Connect_Finishing: n.step = s.wait
+	}
 }
 
-@(private = "file")
+// Whatever it had got to. An attempt whose id is known is ended here, one on its way when its id comes: answer_left.
 connect_cancel :: proc(app: ^App) {
 	n := &app.cx.integrations
-	if n.attempt != "" {
-		it := integration_find(n, n.shown)
-		kind := "oauth"
-		if it != nil && n.method >= 0 && n.method < len(it.methods) && it.methods[n.method].kind == .Command { kind = "command" }
-		request(app, .Action, "DELETE", attempt_path(n, kind))
+	#partial switch s in n.step {
+	case Connect_Waiting:   request(app, .Action, "DELETE", attempt_path(n, s))
+	case Connect_Finishing: request(app, .Action, "DELETE", attempt_path(n, s.wait))
 	}
 	connect_reset(app)
+}
+
+// The code of a login that ends with one.
+connect_finish :: proc(app: ^App) {
+	n := &app.cx.integrations
+	w, waiting := n.step.(Connect_Waiting)
+	if !waiting { return }
+	code := strings.trim_space(ui.field_string(&n.code))
+	if code == "" { set_text(&n.failed, "The code is empty"); return }
+	set_text(&n.failed, "")
+	n.step = Connect_Finishing{wait = w}
+	remote_begin(&n.sending)
+	request(app, .Connected, "POST", fmt.tprintf("%s/complete", attempt_path(n, w)), fmt.tprintf(`{{"code":%s}}`, jquote(code)), remote = &n.sending)
 }
 
 // A login left open when the settings close would wait for nothing.
 integrations_watch :: proc(app: ^App) {
 	n := &app.cx.integrations
-	if !app.settings_open && n.step != .Choose { connect_cancel(app) }
+	if !app.settings_open && !connect_idle(n) { connect_cancel(app) }
 }
 
 @(private = "file")
@@ -303,8 +402,13 @@ line :: proc(id: string, f: ^ui.Text_Field, hint: string, em: f32, secret := fal
 
 page_connections :: proc(app: ^App, em: f32) {
 	n := &app.cx.integrations
-	if !n.asked { n.method = -1; integrations_ask(app) }
-	if !n.loaded && loading(app, em) { return }
+	if n.read.state == .Idle { integrations_ask(app) }
+	// (what is being filled in stays whatever a reading does: the list is not what it needs)
+	if connect_idle(n) && !read_shown(app, "###int_read", &n.read, em, integrations_ask) { return }
+	if remote_failed(&n.active) {
+		read_shown(app, "###int_active", &n.active, em, integrations_ask)   // (which is in use is not known: no row can say)
+		ui.spacer(ui.px(em * 0.4))
+	}
 	if n.failed != "" {
 		info_line(app, "###int_failed", n.failed, em, hex(HEX_RED))
 		ui.spacer(ui.px(em * 0.4))
@@ -340,7 +444,6 @@ integration_row :: proc(app: ^App, it: ^Integration, k: int, em: f32) {
 	if ui.signal(row).clicked {
 		set_text(&n.shown, it.id)
 		set_text(&n.failed, "")
-		n.step, n.method = .Choose, -1
 	}
 	if ui.parent(row) {
 		connected := len(it.connections) > 0
@@ -368,23 +471,26 @@ integration_page :: proc(app: ^App, it: ^Integration, em: f32) {
 	section(strings.to_upper(it.name, context.temp_allocator), em)
 	for &c, i in it.connections { connection_row(app, &c, i, em) }
 	if len(it.connections) > 0 { ui.spacer(ui.px(em * 0.6)) }
-	switch n.step {
-	case .Choose:
+	fill :: proc(app: ^App, it: ^Integration, method: int, em: f32) {
+		if method < len(it.methods) { connect_fill(app, it, &it.methods[method], method, em) }
+	}
+	switch s in n.step {
+	case Connect_Choose:
 		for &m, i in it.methods {
 			if m.kind == .Env {
 				info_line(app, fmt.tprintf("###int_env%d", i), fmt.tprintf("Or set %s where the server runs.", strings.join(m.names, " or ", context.temp_allocator)), em)
 				continue
 			}
 			if bevel_button(fmt.tprintf("###int_m%d", i), label_safe(method_title(&m)), ICO_ADD, .Normal, ui.fill(), math.round(em * BUTTON_H_EM), left = true).clicked {
-				n.method, n.step = i, .Fill
+				n.step = Connect_Fill{i}
 				set_text(&n.failed, "")
 			}
 			ui.spacer(ui.px(em * 0.25))
 		}
-	case .Fill, .Sending:
-		if n.method >= 0 && n.method < len(it.methods) { connect_fill(app, it, &it.methods[n.method], em) }
-	case .Waiting:
-		connect_wait(app, it, em)
+	case Connect_Fill:    fill(app, it, s.method, em)
+	case Connect_Sending: fill(app, it, s.method, em)
+	case Connect_Waiting, Connect_Finishing:
+		connect_wait(app, em)
 	}
 }
 
@@ -441,7 +547,7 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 }
 
 @(private = "file")
-connect_fill :: proc(app: ^App, it: ^Integration, m: ^Int_Method, em: f32) {
+connect_fill :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int, em: f32) {
 	n := &app.cx.integrations
 	go := false
 	section(strings.to_upper(method_title(m), context.temp_allocator), em)
@@ -474,34 +580,46 @@ connect_fill :: proc(app: ^App, it: ^Integration, m: ^Int_Method, em: f32) {
 		ui.spacer(ui.fill())
 		if bevel_button("###int_cancel", "Cancel", "", .Normal).clicked {
 			set_text(&n.failed, "")
-			connect_reset(app)
+			connect_cancel(app)
 			return
 		}
 		ui.spacer(ui.px(em * 0.4))
-		sending := n.step == .Sending
+		_, sending := n.step.(Connect_Sending)
 		if bevel_button("###int_go", sending ? "Connecting…" : m.kind == .Oauth ? "Continue in the browser" : "Connect", ICO_CHECK, .Accent, disabled = sending).clicked { go = true }
 	}
-	if go && n.step == .Fill { connect_send(app, it, m) }
+	if _, filling := n.step.(Connect_Fill); go && filling { connect_send(app, it, m, method) }
 }
 
 @(private = "file")
-connect_wait :: proc(app: ^App, it: ^Integration, em: f32) {
+connect_wait :: proc(app: ^App, em: f32) {
 	n := &app.cx.integrations
-	section(n.by_code ? "PASTE THE CODE" : "WAITING", em)
+	w: Connect_Waiting
+	finishing := false
+	#partial switch s in n.step {
+	case Connect_Waiting:   w = s
+	case Connect_Finishing: w, finishing = s.wait, true
+	}
+	section(w.by_code ? "PASTE THE CODE" : "WAITING", em)
 	ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Text_Wrap, .Selectable}, fg = hex(HEX_TEXT), text_pad = 0})
-	ui.paragraph(fmt.tprintf("%s###int_say", label_safe(n.instructions != "" ? n.instructions : "It goes on in the browser.")))
+	ui.paragraph(fmt.tprintf("%s###int_say", label_safe(w.instructions != "" ? w.instructions : "It goes on in the browser.")))
 	ui.spacer(ui.px(em * 0.5))
+	if remote_failed(&n.poll) {
+		info_line(app, "###int_lost", "The server no longer says how this goes. It may still end: try again, or cancel it.", em, hex(HEX_YELLOW))
+		ui.spacer(ui.px(em * 0.3))
+		read_shown(app, "###int_poll", &n.poll, em, connect_poll_again)
+		ui.spacer(ui.px(em * 0.5))
+	}
 	finish := false
-	if n.by_code {
+	if w.by_code {
 		if line("###int_code", &n.code, "The code", em).committed { finish = true }
 		ui.spacer(ui.px(em * 0.5))
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###int_wfoot") {
-		if n.url != "" && bevel_button("###int_open", "Open again", ICO_GLOBE, .Normal).clicked { _ = platform.open_url(n.url) }
-		if n.instructions != "" {
+		if w.url != "" && bevel_button("###int_open", "Open again", ICO_GLOBE, .Normal).clicked { _ = platform.open_url(w.url) }
+		if w.instructions != "" {
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###int_copy", "Copy", ICO_COPY, .Normal).clicked { clip_set(n.instructions) }
+			if bevel_button("###int_copy", "Copy", ICO_COPY, .Normal).clicked { clip_set(w.instructions) }
 		}
 		ui.spacer(ui.fill())
 		if bevel_button("###int_stop", "Cancel", "", .Normal).clicked {
@@ -509,15 +627,10 @@ connect_wait :: proc(app: ^App, it: ^Integration, em: f32) {
 			connect_cancel(app)
 			return
 		}
-		if n.by_code {
+		if w.by_code {
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###int_finish", "Finish", ICO_CHECK, .Accent).clicked { finish = true }
+			if bevel_button("###int_finish", finishing ? "Finishing…" : "Finish", ICO_CHECK, .Accent, disabled = finishing).clicked { finish = true }
 		}
 	}
-	if finish {
-		code := strings.trim_space(ui.field_string(&n.code))
-		if code == "" { set_text(&n.failed, "The code is empty"); return }
-		request(app, .Connected, "POST", fmt.tprintf("%s/complete", attempt_path(n, "oauth")), fmt.tprintf(`{{"code":%s}}`, jquote(code)))
-		ui.field_set(&n.code, "")
-	}
+	if finish { connect_finish(app) }
 }

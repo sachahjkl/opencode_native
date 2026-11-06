@@ -17,8 +17,7 @@ Model_Count :: struct { name: string, steps: int, tokens_in, tokens_out, cost: f
 
 Project_Stats :: struct {
 	arena:      virtual.Arena,
-	ready:      bool,
-	project:    string,
+	project:    string,   // what they are of ("": not known yet, or none); App_Context.stats_read says how far that is
 	sessions, subagents, prompts, steps: int,
 	tokens_in, tokens_out, reasoning, cache_read, cache_write, cost: f64,
 	active_days, streak: int,
@@ -30,22 +29,40 @@ Project_Stats :: struct {
 
 stats_open :: proc(app: ^App) {
 	app.stats_open = true
-	p := chat_project(app)
+	stats_ask(app)
+}
+
+// The totals of the project of the session shown, nothing of the one before. (Also Try again.)
+stats_ask :: proc(app: ^App) {
+	p := strings.clone(chat_project(app), context.temp_allocator)   // (it may live in the arena that goes)
 	ps := &app.proj_stats
 	virtual.arena_destroy(&ps.arena)
 	ps^ = {}
 	_ = virtual.arena_init_growing(&ps.arena)
-	if p != "" {
-		ps.project = strings.clone(p, virtual.arena_allocator(&ps.arena))
-		request(app, .Stats, "GET", fmt.tprintf("/api/experimental/session/stats?project=%s&tools=detail", url_escape(p)))
-	}
+	remote_reset(&app.cx.stats_read)
+	if p == "" { return }
+	ps.project = strings.clone(p, virtual.arena_allocator(&ps.arena))
+	remote_begin(&app.cx.stats_read)
+	request(app, .Stats, "GET", fmt.tprintf("/api/experimental/session/stats?project=%s&tools=detail", url_escape(p)), remote = &app.cx.stats_read)
+}
+
+// The dialog stays on the session shown: its project comes after it opened (.Self), or the conversation changed under it.
+stats_follow :: proc(app: ^App) {
+	if chat_project(app) != app.proj_stats.project { stats_ask(app) }
+}
+
+stats_forget :: proc(app: ^App) {
+	app.stats_open = false
+	ps := &app.proj_stats
+	virtual.arena_destroy(&ps.arena)
+	ps^ = {}
+	remote_reset(&app.cx.stats_read)
 }
 
 stats_load :: proc(app: ^App, v: json.Value) {
 	ps := &app.proj_stats
 	a := virtual.arena_allocator(&ps.arena)
 	d := jget(v, "data")
-	ps.ready = true
 	ps.sessions, ps.subagents = int(jnum(d, "sessions")), int(jnum(d, "subagents"))
 	ps.prompts, ps.steps = int(jnum(d, "prompts")), int(jnum(d, "steps"))
 	ps.tokens_in, ps.tokens_out, ps.reasoning = jnum(d, "tokens", "input"), jnum(d, "tokens", "output"), jnum(d, "tokens", "reasoning")
@@ -205,6 +222,7 @@ heading :: proc(s: string, em: f32) {
 
 stats_dialog :: proc(app: ^App, em: f32) {
 	if !app.stats_open { return }
+	stats_follow(app)
 	c := &app.chat
 	s := c.have_self ? &c.self : find_session(app, c.id)
 	if ui.modal_sized("stats", DIALOG_PREFERRED_EM[.Stats] * em, &app.cx.dialogs[.Stats], &app.stats_open, DIALOG_MIN_EM[.Stats] * em) {
@@ -364,9 +382,7 @@ stats_project :: proc(app: ^App, now: f64, em: f32) {
 	ps := &app.proj_stats
 	if ps.project != "" {
 		heading("THE PROJECT", em)
-		if !ps.ready {
-			info_line(app, "###pl", "Asking the server…", em, hex(HEX_FAINT))
-		} else {
+		if read_shown(app, "###pl", &app.cx.stats_read, em, stats_ask) {
 			kv("###p1", "sessions", fmt.tprintf("%d  (+ %d sub-agents)", ps.sessions, ps.subagents), em)
 			kv("###p2", "prompts · steps", fmt.tprintf("%d · %d", ps.prompts, ps.steps), em)
 			kv("###p3", "tokens", fmt.tprintf("%s in · %s out · %s reasoning", kfmt(ps.tokens_in + ps.cache_read), kfmt(ps.tokens_out), kfmt(ps.reasoning)), em)

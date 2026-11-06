@@ -85,5 +85,8 @@ password_open :: proc(name, field: string) -> (password: string, sealed, ok: boo
 
 password_forget :: proc(name: string) {}   // (it lives in the file)
 
+// (The field does not depend on the name.)
+password_field_of :: proc(name, field: string) -> string { return field }
+
 // What the server dialog says of where the password goes (nothing to warn of here).
 password_note :: proc() -> string { return "" }

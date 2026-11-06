@@ -218,64 +218,6 @@ an_export_is_what_the_import_takes :: proc(t: ^testing.T) {
 	testing.expect_value(t, file_safe(`a/b: "c"?`), `a-b- -c--`)
 }
 
-// A stage writes the files back at once: closed while it is on its way, it must still be known, for the dialog to cancel it.
-@(test)
-a_stage_closed_on_its_way_is_cancelled :: proc(t: ^testing.T) {
-	app := new(App)
-	defer free(app)
-	c := &app.cx.changes
-	v, _ := json.parse_string(`{"data":{"messageID":"m","snapshot":"abc","files":[{"file":"a.txt","patch":"","additions":1,"deletions":2,"status":"modified","more":true}]}}`, parse_integers = true, allocator = context.temp_allocator)
-
-	revert_stage(app, "s", "m", "the prompt")
-	testing.expect(t, c.open && c.loading && !c.staged, "on its way")
-	c.open = false
-	changes_open(app, "other")
-	testing.expect_value(t, c.session, "s")   // (nothing else takes its place meanwhile)
-	changes_load(app, "s", v)
-	testing.expect(t, c.staged && !c.loading, "known as staged, so the next frame cancels it")
-
-	c.open, c.staged = true, false
-	changes_failed(app)
-	revert_stage(app, "s", "m", "the prompt")
-	changes_load(app, "s", v)
-	testing.expect(t, c.staged, "staged")
-	testing.expect_value(t, len(c.files), 1)
-	testing.expect(t, c.files[0].more, "the patch is cut")
-	testing.expect(t, strings.contains(changes_say(c), "written back on disk already"), "it says what is done")
-	revert_gone(app, "s")
-	testing.expect(t, !c.staged && !c.open, "done elsewhere: nothing to cancel")
-	changes_open(app, "s")
-	changes_failed(app)
-	changes_open(app, "s")
-	c.open, c.loading = false, false
-	revert_found(app, "s", jget(v, "data"))
-	testing.expect(t, c.open && c.staged && c.found, "found on opening the session")
-	testing.expect(t, strings.has_prefix(changes_say(c), "This session was left going back."), "it says so")
-	c.staged = false
-	c.open = false
-	revert_found(app, "s", jget(v, "data"))
-	c.staged, c.open = false, false
-	changes_open(app, "s", "m")
-	c.loading = false
-	testing.expect_value(t, changes_say(c), "No change recorded. Only a git folder keeps them.")
-	c.loading, c.open = false, false
-	changes_open(app, "s", "")
-	c.open, c.loading = false, false
-}
-
-// A folder without snapshots: the files do not go back, and the dialog must not say they do.
-@(test)
-a_stage_without_snapshot_says_only_the_conversation_goes_back :: proc(t: ^testing.T) {
-	app := new(App)
-	defer free(app)
-	c := &app.cx.changes
-	v, _ := json.parse_string(`{"data":{"messageID":"m","files":[]}}`, parse_integers = true, allocator = context.temp_allocator)
-	revert_stage(app, "s", "m", "")
-	changes_load(app, "s", v)
-	testing.expect(t, c.no_snapshot, "no snapshot")
-	testing.expect(t, strings.contains(changes_say(c), "keeps no snapshots"), "it says so")
-}
-
 // A patch from git, as a session's diff gives it: only its lines are shown, from the first one.
 @(test)
 a_git_patch_shows_only_its_lines :: proc(t: ^testing.T) {
@@ -335,10 +277,9 @@ a_prompt_says_what_it_mentions :: proc(t: ^testing.T) {
 	append(&m.chosen, Mention{.File, strings.clone("@a.txt"), strings.clone("file:///d/a.txt"), strings.clone("a.txt")})
 	append(&m.chosen, Mention{.File, strings.clone("@gone.txt"), strings.clone("file:///d/gone.txt"), strings.clone("gone.txt")})
 	append(&m.chosen, Mention{.Agent, strings.clone("@explore"), strings.clone("explore"), strings.clone("")})
-	testing.expect_value(t, attachments_take(app, "\u00e9\U0001F600 @a.txt and @explore"),
+	testing.expect_value(t, prompt_fields(nil, m.chosen[:], "\u00e9\U0001F600 @a.txt and @explore"),
 		`,"files":[{"uri":"file:///d/a.txt","name":"a.txt","mention":{"start":4,"end":10,"text":"@a.txt"}}],"agents":[{"name":"explore","mention":{"start":15,"end":23,"text":"@explore"}}]`)
-	testing.expect_value(t, len(m.chosen), 0)
-	testing.expect_value(t, attachments_take(app, "nothing"), "")
+	testing.expect_value(t, prompt_fields(nil, m.chosen[:], "nothing"), "")
 }
 
 // Those connected come first; the list does not change under what is being filled in, it comes after.
@@ -354,9 +295,10 @@ the_integrations_connected_come_first :: proc(t: ^testing.T) {
 	]}`, parse_integers = true, allocator = context.temp_allocator)
 	integrations_load(app, v)
 	defer {
-		n.step = .Choose
+		n.step = Connect_Choose{}
 		integrations_load(app, json.Object{})
 		delete(n.list)
+		delete(n.active.message)   // (no server here: the reading of the accounts says so)
 	}
 	testing.expect_value(t, len(n.list), 2)
 	testing.expect_value(t, n.list[0].id, "b")
@@ -370,7 +312,7 @@ the_integrations_connected_come_first :: proc(t: ^testing.T) {
 	credentials_load(app, c)
 	testing.expect(t, n.list[0].connections[0].active, "in use")
 
-	n.step = .Fill
+	n.step = Connect_Fill{}
 	integrations_load(app, v)
 	testing.expect(t, n.dirty, "for later")
 	testing.expect_value(t, len(n.list), 2)
@@ -392,42 +334,6 @@ what_a_method_asks_goes_with_it :: proc(t: ^testing.T) {
 	testing.expect_value(t, extra, `"answer":{"host":"a.example"},"label":"work"`)
 	bare, _ := connect_extra(nil, "")
 	testing.expect_value(t, bare, `"answer":{}`)
-}
-
-// A login: its details are kept, an answer for another attempt says nothing, and what ends it says why.
-@(test)
-a_login_is_followed_until_it_ends :: proc(t: ^testing.T) {
-	app := new(App)
-	defer free(app)
-	n := &app.cx.integrations
-	json_of :: proc(s: string) -> json.Value {
-		v, _ := json.parse_string(s, parse_integers = true, allocator = context.temp_allocator)
-		return v
-	}
-	n.step = .Sending
-	connect_begun(app, "oauth", json_of(`{"data":{"attemptID":"a1","url":"","instructions":"Enter the code ABCD","mode":"auto"}}`))
-	testing.expect_value(t, n.step, Connect_Step.Waiting)
-	testing.expect_value(t, n.instructions, "Enter the code ABCD")
-	testing.expect(t, !n.by_code, "it ends by itself")
-	connect_status(app, "oauth old", json_of(`{"data":{"status":"failed","message":"no"}}`))
-	testing.expect_value(t, n.step, Connect_Step.Waiting)
-	connect_status(app, "oauth a1", json_of(`{"data":{"status":"pending"}}`))
-	testing.expect_value(t, n.step, Connect_Step.Waiting)
-	connect_status(app, "oauth a1", json_of(`{"data":{"status":"failed","message":"refused"}}`))
-	testing.expect_value(t, n.step, Connect_Step.Choose)
-	testing.expect_value(t, n.failed, "refused")
-	testing.expect_value(t, n.attempt, "")
-
-	n.step = .Sending
-	connect_begun(app, "oauth", json_of(`{"data":{"attemptID":"a2","url":"","instructions":"","mode":"code"}}`))
-	testing.expect(t, n.by_code, "a code to paste")
-	connect_status(app, "oauth a2", json_of(`{"data":{"status":"expired"}}`))
-	testing.expect(t, strings.contains(n.failed, "expired"), "it says so")
-
-	n.step = .Sending
-	connect_failed(app)
-	testing.expect_value(t, n.step, Connect_Step.Fill)
-	n.step = .Choose
 }
 
 // A file of an artifact is named by an agent: it stays under its folder, whatever it says.

@@ -15,12 +15,25 @@ Install_State :: enum u8 {
 	This_Copy,        // the running program is the installed copy, everything in place
 	Repair,           // this is the installed copy, but a launcher or the system's record of it is missing
 	Other_Copy,       // a copy is installed elsewhere: this one runs standalone (Install replaces that one)
+	Removal_Scheduled,   // uninstalled while it ran: the file goes when this process ends, and nothing else is to be done (Setup says it, nothing on disk does)
+}
+
+// What the facts make of an install, the same on every system. No program but something of it left: to repair, or to remove. A record
+// without a version is not whole: Repair writes it.
+install_state_of :: proc(exe_there, running_it, launcher, record: bool, version: string) -> Install_State {
+	switch {
+	case !exe_there:                          return launcher || record || version != "" ? .Repair : .Not_Installed
+	case !running_it:                         return .Other_Copy
+	case launcher && record && version != "": return .This_Copy
+	}
+	return .Repair
 }
 
 Install_Facts :: struct {
 	state:     Install_State,
 	dir:       string,   // where the installed copy is (or would go)
 	exe:       string,
+	exe_there: bool,     // ... and it is there
 	running:   string,   // this program
 	start_lnk: bool,     // the launcher of the applications menu (Start menu shortcut, .desktop entry)
 	desk_lnk:  bool,     // the one on the Desktop

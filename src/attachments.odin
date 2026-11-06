@@ -71,15 +71,26 @@ attach_paste :: proc(app: ^App) -> bool {
 	return false
 }
 
-// What the JSON of a prompt says of them and of the files and agents named in `text` (empty: none), and they are gone from the composer.
-attachments_take :: proc(app: ^App, text: string) -> string {
+// An attachment read back from a prompt's JSON (outgoing.odin).
+attachment_of :: proc(uri, name: string) -> Attachment {
+	a := Attachment{name = strings.clone(name), uri = strings.clone(uri)}
+	a.size = len(uri) * 3 / 4   // (base64: about what it says)
+	if strings.has_prefix(uri, "data:image/") {
+		mime, _, _ := strings.partition(uri[len("data:"):], ";")
+		a.ref = image_ref(a.uri, .Data_Url, mime, a.name)
+	}
+	return a
+}
+
+// What the JSON of a prompt says of these and of the files and agents named in `text` (empty: none).
+prompt_fields :: proc(attachments: []Attachment, mentions: []Mention, text: string) -> string {
 	files := strings.builder_make(context.temp_allocator)
 	agents := strings.builder_make(context.temp_allocator)
-	for a in app.cx.attachments {
+	for a in attachments {
 		if strings.builder_len(files) > 0 { strings.write_byte(&files, ',') }
 		fmt.sbprintf(&files, `{{"uri":%s,"name":%s}}`, jquote(a.uri), jquote(a.name))
 	}
-	for &m in app.cx.mentions.chosen {
+	for &m in mentions {
 		mention, ok := mention_json(&m, text)
 		if !ok { continue }   // (taken out of the text since)
 		list := m.kind == .File ? &files : &agents
@@ -90,18 +101,12 @@ attachments_take :: proc(app: ^App, text: string) -> string {
 			fmt.sbprintf(list, `{{"name":%s,"mention":%s}}`, jquote(m.target), mention)
 		}
 	}
-	attachments_clear(app)
-	mentions_clear(app)
 	out := ""
 	if strings.builder_len(files) > 0 { out = fmt.tprintf(`,"files":[%s]`, strings.to_string(files)) }
 	if strings.builder_len(agents) > 0 { out = fmt.tprintf(`%s,"agents":[%s]`, out, strings.to_string(agents)) }
 	return out
 }
 
-attachments_clear :: proc(app: ^App) {
-	for a in app.cx.attachments { delete(a.name); delete(a.uri) }
-	clear(&app.cx.attachments)
-}
 
 // Over the text of the composer, in its well.
 attachments_row :: proc(app: ^App, em: f32) {

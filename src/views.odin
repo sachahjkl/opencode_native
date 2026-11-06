@@ -7,7 +7,6 @@ import "core:hash"
 import "core:math"
 import "core:strings"
 import "core:time"
-import "gt:config"
 import "gt:draw"
 import "gt:ui"
 
@@ -121,14 +120,17 @@ new_session :: proc(app: ^App) {
 	nav_visit(app, app.chat.id, "")
 	app.cx.view_msg = ""
 	nav_restore_clear(app)
+	for s in app.nav { delete(s) }   // (the way back up is the session's: none from here)
+	clear(&app.nav)
 	dir := ""
 	if s := find_session(app, app.chat.id); s != nil { dir = s.directory } else if len(app.sessions) > 0 { dir = app.sessions[0].directory }
-	chat_reset(&app.chat)
-	app.chat.loaded = true
+	chat_home(app)
+	remote_reset(&app.cx.chat_read)
 	app.stick_bottom = true
 	app.chat.new_dir = strings.clone(dir, app.chat.alloc)
 	activity_reset(app)
-	choice_recall(app)
+	find_chat_changed(app)
+	outgoing_return(app)
 	app.cx.focus_composer = true
 }
 
@@ -338,7 +340,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 	if !app.sessions_loaded {
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
-		if ui.tags("weak") { ui.label(app.online ? "Loading…" : "Connecting…") }
+		if ui.tags("weak") { ui.label(online(app) ? "Loading…" : "Connecting…") }
 		return
 	}
 	q := strings.to_lower(ui.field_string(&app.search), context.temp_allocator)
@@ -462,12 +464,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			busy := app.busy[s.id] or_else false
 			if depth > 0 {
 				// a sub-agent: its state as a lamp, its agent in its colour
-				st := Sub_State.Unknown
-				switch s.outcome {
-				case "succeeded":   st = .Done
-				case "failed":      st = .Failed
-				case "interrupted": st = .Cancelled
-				}
+				st, _ := state_of_word(s.outcome)
 				if busy { st = .Running; app.animating = true }
 				state_mark("###st", sub_state_color(st), busy, size = em * 0.75)
 				ui.spacer(ui.px(em * 0.3))
@@ -572,7 +569,7 @@ delete_dialog :: proc(app: ^App, em: f32) {
 						if app.delete_id == app.chat.id { new_session(app) }
 						nav_forget(app, app.delete_id)
 						app.delete_open = false
-						app.refresh_due = true
+						refresh_soon(app)
 					}
 				}
 				ui.spacer(ui.px(em * 1.2))
@@ -658,6 +655,7 @@ conversation :: proc(app: ^App, em: f32) {
 		if app.chat.id == "" { app.stick_bottom = false }   // (the home page is read from its top)
 		if sb != nil {
 			chat_keys(app, sb, em)
+			if scrollbar_held(app, sb) { nav_restore_clear(app) }   // (as the wheel and the keys do: frame)
 			limit := max(0, sb.view_bounds.y - sb.size.y)
 			// the scrollbar's drag (and the keyboard) moved it before this build (begin_build): up means let go of the bottom,
 			// or following it would put it back at once and the thumb would stay stuck there
@@ -723,7 +721,7 @@ go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
 	}
 	sig := ui.signal(b)
 	if sig.clicked {
-		app.stick_bottom = true
+		view_to_bottom(app)
 		sb.view_target.y = max(0, sb.view_bounds.y - sb.size.y)
 	}
 	if ui.parent(b) {
@@ -739,7 +737,7 @@ go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
 // (the composer too: the conversation is what one reads while typing); the arrows, Home and End when they mean nothing else:
 // not in a text field, not while the focus is moved with the keyboard (a click gives a button the focus, and no ring).
 chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) {
-	if app.settings_open || app.delete_open || app.stats_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || len(app.ui_state.menus) > 0 { return }
+	if overlay_open(app) { return }
 	limit := max(0, sb.view_bounds.y - sb.size.y)
 	y := sb.view_target.y
 	if ui.key_press(.Page_Up) { y -= sb.size.y * PAGE_SCROLL }
@@ -851,10 +849,12 @@ messages :: proc(app: ^App, em: f32) {
 		}
 		ui.spacer(ui.px(em * 0.6))
 	}
-	if c.loading && len(c.messages) == 0 {
+	view := chat_view(app)
+	if view == .Loading && len(c.messages) == 0 {
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
 		if ui.tags("weak") { ui.label("Loading the conversation…###loading") }
 	}
+	if view == .Failed { chat_failed(app, em) }
 	// Only the messages near the view are built (the toolkit's lazy column): the others stand as a space of the height they
 	// had when last built. A long conversation, Markdown and all, made every frame slow. Everything is built for the sweep of
 	// a find (once for a needle) and while the conversation loads; the last message always (it grows while streaming).
@@ -893,6 +893,21 @@ messages :: proc(app: ^App, em: f32) {
 		}
 	}
 	ui.spacer(ui.px(em * 2))
+}
+
+// The first page was not read: why, and the way to try again.
+@(private = "file")
+chat_failed :: proc(app: ^App, em: f32) {
+	r := &app.cx.chat_read
+	ui.next({width = ui.fill(), flags = {.Text_Wrap}, text_align = .Center})
+	if ui.tags("weak") { ui.paragraph(fmt.tprintf("The conversation could not be read: %s###read_failed", label_safe(r.message != "" ? r.message : "no answer"))) }
+	ui.spacer(ui.px(em * 0.7))
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+	if ui.row(.Center, id = "###read_retry") {
+		ui.spacer(ui.fill())
+		if bevel_button("###retry", "Try again", ICO_REFRESH, .Normal, disabled = !online(app)).clicked { chat_read(app) }
+		ui.spacer(ui.fill())
+	}
 }
 
 // One message of the conversation, in its lazy item.
@@ -1123,7 +1138,7 @@ tool_icon :: proc(name: string) -> string {
 
 status_color :: proc(s: Tool_Status) -> Color {
 	switch s {
-	case .Pending: return hex(HEX_FAINT)
+	case .Pending, .Unknown: return hex(HEX_FAINT)
 	case .Running: return hex(HEX_YELLOW)
 	case .Done:    return hex(HEX_GREEN)
 	case .Error:   return hex(HEX_RED)
@@ -1150,8 +1165,9 @@ rail_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	case .Running, .Pending:
 		lit := PULSE_LIT_MIN + PULSE_LIT_SPAN * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * PULSE_RATE))
 		draw_lamp(dc, {x, cy}, math.round(sz * 0.85), status_color(d.status), lit)
-	case .Done:  draw_pip(dc, {x, cy}, sz, hex(HEX_TOOL_DONE_PIP))
-	case .Error: draw_pip(dc, {x, cy}, sz, hex(HEX_RED))
+	case .Done:    draw_pip(dc, {x, cy}, sz, hex(HEX_TOOL_DONE_PIP))
+	case .Error:   draw_pip(dc, {x, cy}, sz, hex(HEX_RED))
+	case .Unknown: draw_pip(dc, {x, cy}, sz, status_color(d.status))
 	}
 }
 
@@ -1295,7 +1311,8 @@ reasoning_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 		ui.spacer(ui.px(em * 0.2))
 		glyph(ICO_BULB, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 		ui.spacer(ui.px(em * 0.3))
-		text("t", p.done ? "Thought" : "Thinking…", hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+		// (a run over says no more about this part: it thought)
+		text("t", p.done || !app.chat.busy ? "Thought" : "Thinking…", hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		ui.spacer(ui.px(em * 0.5))
 		if !open {
 			text("pv", preview_text(string(p.text[:])), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
@@ -1352,11 +1369,11 @@ permission_card :: proc(app: ^App, p: ^Permission, em: f32) {
 				text("d", detail, hex(HEX_PERM_DETAIL), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.4)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
-			if bevel_button("###once", "Allow once", ICO_CHECK, .Accent).clicked { reply_permission(app, p.session, p.id, "once") }
+			if bevel_button("###once", "Allow once", ICO_CHECK, .Accent, disabled = p.replying).clicked { reply_permission(app, p, "once") }
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###always", "Always", "", .Normal).clicked { reply_permission(app, p.session, p.id, "always") }
+			if bevel_button("###always", "Always", "", .Normal, disabled = p.replying).clicked { reply_permission(app, p, "always") }
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###reject", "Reject", ICO_CANCEL, .Danger).clicked { reply_permission(app, p.session, p.id, "reject") }
+			if bevel_button("###reject", "Reject", ICO_CANCEL, .Danger, disabled = p.replying).clicked { reply_permission(app, p, "reject") }
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -1424,16 +1441,21 @@ composer :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###tools") {
 			ui.spacer(ui.px(em * 0.6))
-			agent := app.chat.agent != "" ? app.chat.agent : "build"
+			agent := shown_agent(app)
+			if agent == "" { agent = "build" }
 			asig := bevel_button("###agent", agent, ICO_ROBOT, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM))
 			if asig.clicked { if app.picker.open && app.picker.id == "agent" { app.picker.open = false } else { picker_open(&app.picker, "agent", asig.box.rect) } }
 			ui.spacer(ui.px(em * 0.4))
-			model := app.chat.model != "" ? app.chat.model : "default model"
+			model, _ := shown_model(app)
+			if model == "" { model = "default model" }
 			msig := bevel_button("###model", model, ICO_CHIP, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM))
 			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(&app.picker, "model", msig.box.rect) } }
 			ui.spacer(ui.fill())
+			held := composer_held(app)
 			if app.column_w > em * COMPOSER_HINT_MIN_EM {   // (room for it beside the agent and model buttons)
-				if history_browsing(app) {
+				if held {
+					text("hint", "starting the session…", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				} else if history_browsing(app) {
 					text("hint", fmt.tprintf("history %d/%d   ·   ", app.history.at + 1, len(app.history.view)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 					if hint_action("###hist_back", "Esc  back to your text", em, app.mono) { history_leave(app, true) }
 				} else {
@@ -1446,7 +1468,7 @@ composer :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.4))
 			}
 			empty := len(strings.trim_space(ui.area_string(&app.composer))) == 0 && len(app.cx.attachments) == 0
-			if bevel_button("###send", "", ICO_SEND, .Accent, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM), disabled = empty || !app.online).clicked { submit = true }
+			if bevel_button("###send", "", ICO_SEND, .Accent, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM), disabled = empty || !online(app) || held).clicked { submit = true }
 			ui.spacer(ui.px(em * 0.55))
 
 			composer_pickers(app, agent, em)
@@ -1464,65 +1486,39 @@ composer_pickers :: proc(app: ^App, agent: string, em: f32) {
 		append(&agent_items, Pick_Item{label = a.name != "" ? a.name : a.id, detail = a.mode == "primary" ? "" : a.mode, current = a.id == agent, color = agent_color(a.id)})
 		append(&agent_ids, a.id)
 	}
-	if k := picker(app, &app.picker, "agent", "agents", agent_items[:], em); k >= 0 {
-		if app.chat.id != "" { switch_agent(app, app.chat.id, agent_ids[k]) }
-		app.chat.agent = strings.clone(agent_ids[k], app.chat.alloc)
-		choice_remember(app)
-	}
+	if k := picker(app, &app.picker, "agent", "agents", agent_items[:], em); k >= 0 { choose_agent(app, agent_ids[k]) }
+	shown, shown_provider := shown_model(app)
 	model_items := make([dynamic]Pick_Item, len(app.models), context.temp_allocator)
 	for m, i in app.models {
-		model_items[i] = Pick_Item{label = m.name != "" ? m.name : m.id, group = m.provider, detail = m.ctx_len > 0 ? kfmt(m.ctx_len) : "", current = m.id == app.chat.model && m.provider == app.chat.provider}
+		model_items[i] = Pick_Item{label = m.name != "" ? m.name : m.id, group = m.provider, detail = m.ctx_len > 0 ? kfmt(m.ctx_len) : "", current = m.id == shown && m.provider == shown_provider}
 	}
-	if k := picker(app, &app.picker, "model", "models", model_items[:], em); k >= 0 {
-		m := app.models[k]
-		if app.chat.id != "" { switch_model(app, app.chat.id, m) }
-		app.chat.model = strings.clone(m.id, app.chat.alloc)
-		app.chat.provider = strings.clone(m.provider, app.chat.alloc)
-		choice_remember(app)
-	}
+	if k := picker(app, &app.picker, "model", "models", model_items[:], em); k >= 0 { choose_model(app, app.models[k]) }
+}
+
+// The reader picks one, in the picker or the palette: the session shown takes it, and it stands until that session's end.
+choose_agent :: proc(app: ^App, agent: string) {
+	c := &app.chat
+	if c.id != "" { switch_agent(app, c.id, agent) }
+	c.chose_agent = strings.clone(agent, c.alloc)
+	choice_remember(app)
+}
+
+choose_model :: proc(app: ^App, m: Model_Info) {
+	c := &app.chat
+	if c.id != "" { switch_model(app, c.id, m) }
+	c.chose_model, c.chose_provider = strings.clone(m.id, c.alloc), strings.clone(m.provider, c.alloc)
+	choice_remember(app)
 }
 
 // The agent and the model chosen last: what a new session starts with, from one run of the program to the next.
+@(private = "file")
 choice_remember :: proc(app: ^App) {
-	pref_set(app, "session.agent", app.chat.agent)
-	pref_set(app, "session.model", app.chat.model)
-	pref_set(app, "session.provider", app.chat.provider)
-}
-
-// A session that has not begun shows them.
-choice_recall :: proc(app: ^App) {
-	c := &app.chat
-	c.agent = strings.clone(config.string_of(&app.cfg_prefs, "session.agent"), c.alloc)
-	c.model = strings.clone(config.string_of(&app.cfg_prefs, "session.model"), c.alloc)
-	c.provider = strings.clone(config.string_of(&app.cfg_prefs, "session.provider"), c.alloc)
-}
-
-// The session just made takes them, one after the other, then its first prompt: requests go on threads of their own, and
-// the prompt must not overtake them.
-session_setup :: proc(app: ^App, id: string, step: int) {
-	p := &app.cfg_prefs
-	if step == 0 {
-		if agent := config.string_of(p, "session.agent"); agent != "" {
-			request(app, .Session_Agent, "POST", fmt.tprintf("/api/session/%s/agent", id), fmt.tprintf(`{{"agent":%s}}`, jquote(agent)), id)
-			app.chat.agent = strings.clone(agent, app.chat.alloc)
-			return
-		}
-	}
-	if step <= 1 {
-		if model := config.string_of(p, "session.model"); model != "" {
-			provider := config.string_of(p, "session.provider")
-			request(app, .Session_Model, "POST", fmt.tprintf("/api/session/%s/model", id), fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s}}}}`, jquote(model), jquote(provider)), id)
-			app.chat.model = strings.clone(model, app.chat.alloc)
-			app.chat.provider = strings.clone(provider, app.chat.alloc)
-			return
-		}
-	}
-	if app.cx.prompt_waits {   // (an image alone is a prompt too: its text is empty)
-		app.cx.prompt_waits = false
-		send_prompt(app, id, app.pending_prompt)
-		delete(app.pending_prompt)
-		app.pending_prompt = ""
-	}
+	model, provider := shown_model(app)
+	agent := strings.clone(shown_agent(app), context.temp_allocator)
+	model, provider = strings.clone(model, context.temp_allocator), strings.clone(provider, context.temp_allocator)
+	pref_set(app, "session.agent", agent)
+	pref_set(app, "session.model", model)
+	pref_set(app, "session.provider", provider)
 }
 
 // The caret is on the first line the composer shows, wrapped or not (as last drawn).
@@ -1545,6 +1541,7 @@ area_insert :: proc(a: ^ui.Text_Area, s: string) {
 
 // A prompt that did not reach the server comes back to the composer, ahead of what was typed since.
 prompt_restore :: proc(app: ^App, text: string) {
+	if text == "" { return }   // (an image alone)
 	typed := ui.area_string(&app.composer)
 	ui.area_set(&app.composer, strings.trim_space(typed) == "" ? text : fmt.tprintf("%s\n%s", text, typed))
 }
@@ -1556,32 +1553,21 @@ slash_send :: proc(app: ^App, t: string) -> bool {
 	if i := strings.index_any(name, " \n"); i >= 0 { name, rest = name[:i], strings.trim_space(name[i:]) }
 	for s in app.cx.slash {
 		if s.name != name { continue }
-		request(app, .Action, "POST", fmt.tprintf("/api/session/%s/command", app.chat.id), fmt.tprintf(`{{"name":%s,"text":%s}}`, jquote(name), jquote(rest)), app.chat.id)
+		outgoing_command(app, t, name, rest)
 		return true
 	}
 	return false
 }
 
+// Enter, or Send. While the session it would go to is starting it stays in the composer: nothing is lost, the button says it.
 submit_prompt :: proc(app: ^App) {
-	t := strings.trim_space(ui.area_string(&app.composer))
-	if (t == "" && len(app.cx.attachments) == 0) || !app.online { return }
+	t := strings.clone(strings.trim_space(ui.area_string(&app.composer)), context.temp_allocator)
+	if (t == "" && len(app.cx.attachments) == 0) || !online(app) || composer_held(app) { return }
 	history_leave(app, false)
 	if t != "" { history_add(app, t) }
-	if app.chat.id != "" && slash_send(app, t) {
-		ui.area_set(&app.composer, "")
-		app.stick_bottom = true
-		return
-	}
-	if app.chat.id == "" {
-		delete(app.pending_prompt)
-		app.pending_prompt = strings.clone(t)
-		app.cx.prompt_waits = true
-		create_session(app, app.chat.new_dir)
-	} else {
-		send_prompt(app, app.chat.id, t)
-	}
+	if app.chat.id == "" || !slash_send(app, t) { outgoing_composer(app, t, app.chat.new_dir) }
 	ui.area_set(&app.composer, "")
-	app.stick_bottom = true
+	view_to_bottom(app)
 }
 
 ////////////////////////////////
@@ -1600,7 +1586,8 @@ status_bar :: proc(app: ^App, em: f32) {
 		small := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
 		ui.spacer(ui.px(em * 0.35))
 		// the server: a button that opens the menu of the servers (switch, add, edit)
-		col := app.online ? hex(HEX_GREEN) : app.auth_failed ? hex(HEX_RED) : hex(HEX_YELLOW)
+		up := online(app)
+		col := up ? hex(HEX_GREEN) : app.link == .Auth_Refused ? hex(HEX_RED) : hex(HEX_YELLOW)
 		ui.next({width = ui.children_sum(), height = ui.px(h - 4 * ui.scale()), axis = .X, cross = .Center})
 		sb := ui.build_box({.Clickable, .Focusable}, "###server_btn")
 		sb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
@@ -1611,14 +1598,20 @@ status_bar :: proc(app: ^App, em: f32) {
 		if ssig.clicked { ui.ctx_menu_open_rect(skey, sb.rect, sb.key) }
 		if ui.parent(sb) {
 			ui.spacer(ui.px(em * 0.45))
-			state_mark("###online", col, !app.online, size = em * 0.8)   // (connected is the normal state: a pip)
+			state_mark("###online", col, !up, size = em * 0.8)   // (connected is the normal state: a pip)
 			ui.spacer(ui.px(em * 0.4))
 			if len(app.servers) > 1 || !app.servers[app.server].local {
-				text("sn", server_name(app), app.online ? hex(HEX_TEXT) : col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+				text("sn", server_name(app), up ? hex(HEX_TEXT) : col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.5))
 			}
-			state := app.online ? "connected" : app.auth_failed ? "auth refused" : "connecting"
-			text("st", fmt.tprintf("%s  %s", state, server_base(app)), app.online ? hex(HEX_WEAK) : col, small)
+			state: string
+			switch app.link {
+			case .Connecting:   state = "connecting"
+			case .Online:       state = "connected"
+			case .Retrying:     state = "reconnecting"
+			case .Auth_Refused: state = "auth refused"
+			}
+			text("st", fmt.tprintf("%s  %s", state, server_base(app)), up ? hex(HEX_WEAK) : col, small)
 			ui.spacer(ui.px(em * 0.35))
 			glyph(ICO_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY))
 			ui.spacer(ui.px(em * 0.45))

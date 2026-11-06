@@ -97,10 +97,16 @@ palette_toggle :: proc(app: ^App) {
 }
 
 slash_load :: proc(app: ^App, list: []Slash) {
-	for s in app.cx.slash { delete(s.name); delete(s.description) }
-	clear(&app.cx.slash)
+	slash_forget(app)
 	append(&app.cx.slash, ..list)
 	app.cx.have_slash = true
+}
+
+// The server left: its commands are not the next one's (stream_up reads those).
+slash_forget :: proc(app: ^App) {
+	for s in app.cx.slash { delete(s.name); delete(s.description) }
+	clear(&app.cx.slash)
+	app.cx.have_slash = false
 }
 
 @(private = "file")
@@ -131,12 +137,13 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 		if want(only, '@') {
 			for a in app.agents {
 				if a.mode == "subagent" { continue }
-				append(&items, Pal_Item{kind = .Agent, id = a.id, title = fmt.tprintf("Agent: %s", a.name != "" ? a.name : a.id), detail = a.description, icon = ICO_ROBOT, toggle = true, on = a.id == app.chat.agent})
+				append(&items, Pal_Item{kind = .Agent, id = a.id, title = fmt.tprintf("Agent: %s", a.name != "" ? a.name : a.id), detail = a.description, icon = ICO_ROBOT, toggle = true, on = a.id == shown_agent(app)})
 			}
 		}
 		if want(only, '#') {
+			shown, shown_provider := shown_model(app)
 			for m, i in app.models {
-				append(&items, Pal_Item{kind = .Model, id = fmt.tprintf("%s/%s", m.provider, m.id), title = m.name != "" ? m.name : m.id, detail = m.provider, icon = ICO_CHIP, index = i, toggle = true, on = m.id == app.chat.model && m.provider == app.chat.provider})
+				append(&items, Pal_Item{kind = .Model, id = fmt.tprintf("%s/%s", m.provider, m.id), title = m.name != "" ? m.name : m.id, detail = m.provider, icon = ICO_CHIP, index = i, toggle = true, on = m.id == shown && m.provider == shown_provider})
 			}
 		}
 		if want(only, ':') {
@@ -157,14 +164,8 @@ palette_choose :: proc(app: ^App, it: ^Pal_Item) {
 	switch it.kind {
 	case .Command: command_run(app, it.cmd)
 	case .Session: open_root(app, it.id)
-	case .Agent:
-		if app.chat.id != "" { switch_agent(app, app.chat.id, it.id) }
-		app.chat.agent = strings.clone(it.id, app.chat.alloc)
-	case .Model:
-		m := app.models[it.index]
-		if app.chat.id != "" { switch_model(app, app.chat.id, m) }
-		app.chat.model = strings.clone(m.id, app.chat.alloc)
-		app.chat.provider = strings.clone(m.provider, app.chat.alloc)
+	case .Agent: choose_agent(app, it.id)
+	case .Model: choose_model(app, app.models[it.index])
 	case .Slash:
 		ui.area_set(&app.composer, fmt.tprintf("/%s ", it.id))
 		app.cx.focus_composer = true

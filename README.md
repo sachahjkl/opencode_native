@@ -7,7 +7,7 @@
 <p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.13.0-fab283" alt="version 0.13.0"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.14.0-fab283" alt="version 0.14.0"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -70,7 +70,7 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
   address, a password), `--url`; switch from the menu. Another computer's server is named in the title bar.
 - **Find in the conversation** (Ctrl+F): every match of the text shown lit, the current one brighter and scrolled into
   view; Enter or F3 for the next, Shift+Enter or Shift+F3 for the previous, Escape to close.
-- **The command palette** (Ctrl+K, Ctrl+P): commands, sessions, agents, models, the server's commands and the switches of the
+- **The command palette** (Ctrl+K, Ctrl+Shift+P): commands, sessions, agents, models, the server's commands and the switches of the
   settings in one field, narrowed by `>` `@` `/` `#` `:`. F1 lists the keys.
 - **Tool calls by what they do**: a diff for what edits a file, the lines of a file, matches under their file, a command and its
   output, a checklist.
@@ -84,7 +84,7 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 - **What an agent asks**: its questions and any form of the server over the composer, one question at a time, in tabs, then a review.
   The sidebar lights a session that waits for you, a sub-agent's question comes up in its parent.
 - **Permission requests** answered in place (once, always, reject).
-- **A terminal** with Ghostty's emulation (libghostty-vt): the shells of the server in tabs, wherever it runs, kept when the program closes.
+- **A terminal** with Ghostty's emulation (libghostty-vt): each shell of the server a tab of the dock, wherever it runs, kept when the program closes.
 - **Schedules** that wake a session, **artifacts** of a folder, **plugins** of the server. The server's experimental options are turned on by default, in its configuration, on this computer.
 - **Connections**: the integrations of the server, connected with a key, a browser login or what is on the machine; several accounts of each.
 - **`@` in the composer** names a file or a sub-agent. **Browse the files** of a session (Ctrl+P), search them, read them, mention one.

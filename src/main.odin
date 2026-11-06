@@ -12,7 +12,6 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strconv"
 import "core:strings"
-import "core:sync"
 import "core:time"
 import "gt:config"
 import "gt:devtools"
@@ -60,8 +59,7 @@ App :: struct {
 	servers_in_clear: bool,            // read passwords in clear from an older version's file: saved protected at start
 	rediscover_ms:  f64,               // when this computer's server was last looked for (servers_rediscover)
 	pending:        i32,       // (atomic) requests in flight
-	online:         bool,
-	auth_failed:    bool,
+	link:           Conn_State,
 	server_version: string,
 
 	// what we know
@@ -73,17 +71,12 @@ App :: struct {
 	chat:            Chat,
 	agents:          [dynamic]Agent_Info,
 	models:          [dynamic]Model_Info,
-	have_agents, have_models: bool,
 	permissions:     [dynamic]Permission,
 
 	// the interface's own state
 	composer:         ui.Text_Area,
 	composer_focused: bool,
 	search:           ui.Text_Field,
-	pending_prompt:   string,
-	refresh_due:      bool,
-	children_due:     bool,           // the sub-agents of the session shown changed: read them again (debounced)
-	children_ms:      f64,
 	nav:              [dynamic]string, // the sessions drilled down from, outermost first (owned): Back returns to the last
 	nav_steps:        [dynamic]Nav_Step, // navigation asked for in this frame (subagents.odin)
 	sub_open:         map[u64]bool,   // sidebar: sessions whose sub-agents are listed under them
@@ -92,14 +85,10 @@ App :: struct {
 	prefs_file:       string,         // where they are saved ("": nowhere)
 	prefs:            Prefs,          // their plain values
 	facts:            Server_Facts,   // what the server said for the settings pages
-	facts_gen:        u64,            // which reading of them is the current one
-	facts_due:        bool,
-	facts_ms:         f64,
 	settings_open:    bool,
 	settings_page:    Settings_Page,
 	opened_ms:        f64,            // when the conversation shown was opened (it follows its bottom at first)
 	seek_subagent:    bool,   // --seek-subagent (tests): scroll to the first sub-agent card
-	refresh_ms:       f64,
 	stick_bottom:     bool,
 	sidebar_w:        f32,
 	expanded:         map[u64]bool,   // tool and reasoning parts opened by the user (hash of their id)
@@ -146,7 +135,19 @@ App :: struct {
 App_Context :: struct {
 	system_stripes:      font.Subpixel_Text,   // what the system does with text (text_mode_follow)
 	system_stripes_read: bool,
-	prompt_waits:   bool,              // a first prompt waits for its session (App.pending_prompt, the attachments)
+	conns:          [dynamic]^Conn,    // every connection made: their threads stop at close (servers.odin threads_stop)
+	outgoing:       [dynamic]^Outgoing,   // prompts between the composer and the server (outgoing.odin)
+	outgoing_last:  u64,               // ... the last one's id
+	stream_seq:     u64,               // events applied so far: the clock of what is newer than an answer (Request.asked_at)
+	busy_seq:       map[string]u64,    // when the stream last said a session started or ended (keys owned)
+	waits_gone:     [dynamic]string,   // permissions and forms answered, the last WAITS_GONE_MAX (owned)
+	chat_read:      Remote,            // the newest page of the conversation shown
+	stats_read:     Remote,            // the project's totals (stats.odin)
+	refresh_read:   Deferred,          // the sessions read again
+	facts_read:     Deferred,          // the settings' pages
+	children_read:  Deferred,          // the sub-agents of the session shown
+	restore_limit:  Deferred,          // the view stops going back to where it was (subagents.odin nav_restore_begin)
+	reopen:         Nav_Place,         // what was shown when this computer's server moved (servers_rediscover), owned, id "": none
 	quote_open:     bool,              // the chip at the end of a selection (context_menus.odin)
 	quote_at:       Rect,
 	quote_kept:     string,            // ... what it quotes (owned)
@@ -179,7 +180,7 @@ App_Context :: struct {
 	restore_msg:    string,               // the message the view goes back to (owned, "": none) and how far into it
 	restore_dy:     f32,
 	restore_still, restore_frames: int,   // frames it stayed there, frames since the view began going there
-	command_due:    ^Command,          // to run after this frame (commands.odin)
+	commands_due:   [dynamic]^Command, // to run after this frame, in order (commands.odin)
 	slash:          [dynamic]Slash,    // the server's commands
 	have_slash:     bool,
 	attachments:    [dynamic]Attachment,   // what goes with the prompt (attachments.odin)
@@ -281,12 +282,14 @@ frame :: proc(app: ^App, inner := false) {
 	dt := clamp(f32(time.duration_seconds(time.tick_diff(app.last_tick, now))), DT_MIN_S, DT_MAX_S)
 	app.last_tick = now
 	if dt < FPS_RESTED_S { app.cx.frame_ms += (dt * 1000 - app.cx.frame_ms) * FPS_SMOOTH }   // (a rest is no frame rate)
-	build :: proc(app: ^App, size: draw.Vec2, events: []platform.Event, dt: f32) {
+	// `again`: another build of this frame. It runs no answer: a page read there would come after what the first build placed,
+	// and its anchor would be dropped with the frame's. It waits for the next frame, which needs_frame asks for.
+	build :: proc(app: ^App, size: draw.Vec2, events: []platform.Event, dt: f32, again := false) {
 		app.animating = false
 		app.cx.was_gliding = app.cx.gliding
 		app.cx.gliding = false
-		app.chat_sb = nil
 		ui.set_scrollbar_autohide(&app.ui_state, app.prefs.autohide_scrollbars)
+		app.ui_state.post_budget = again ? 0 : POSTS_PER_BUILD
 		ui.begin_build(&app.ui_state, {
 			window_size = size, events = events, dt = dt, animations = animations_on(app),
 			smooth_scroll = app.prefs.smooth_scroll ? .On : .Off,
@@ -294,6 +297,7 @@ frame :: proc(app: ^App, inner := false) {
 			base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(30)}, font = app.font, font_size = app.prefs.font_size, text_pad = 6, cursor = .Arrow, radius = 6},
 			clipboard_get = clip_get, clipboard_set = clip_set,
 		})
+		app.chat_sb = nil   // (only now: the answers begin_build ran read the last build's, a page placed by chat_load above all)
 		build_ui(app)
 		ui.end_build()
 		app.times.builds += 1
@@ -307,7 +311,7 @@ frame :: proc(app: ^App, inner := false) {
 	// more at that offset: the frame shows the result, never the steps.
 	if a := app.anchor; a != nil {
 		defer app.anchor = nil   // (kept through these builds: the bottom stays let go of)
-		build(app, size, nil, 0)
+		build(app, size, nil, 0, again = true)
 		// (again while it moves: what this offset builds around it is measured only then, a page read before it above all)
 		for _ in 0 ..< ANCHOR_BUILDS_MAX {
 			b := app.chat_sb
@@ -318,7 +322,7 @@ frame :: proc(app: ^App, inner := false) {
 			y := clamp(b.view_off.y + delta, 0, limit)
 			b.view_off.y, b.view_target.y = y, y
 			b.view_anim[1] = {}   // (no glide toward an older target)
-			build(app, size, nil, 0)
+			build(app, size, nil, 0, again = true)
 		}
 	}
 	// The conversation follows its bottom, placed from the last layout's content height: when this layout made it shorter
@@ -333,7 +337,7 @@ frame :: proc(app: ^App, inner := false) {
 		if b.view_off.y > limit + 1 || app.snap_bottom || grew {
 			b.view_anim[1] = {}
 			app.stick_jump = true
-			build(app, size, nil, 0)
+			build(app, size, nil, 0, again = true)
 			app.stick_jump = false
 		}
 	}
@@ -357,29 +361,32 @@ frame :: proc(app: ^App, inner := false) {
 	app.cx.work_ms += (work - app.cx.work_ms) * FPS_SMOOTH
 	free_all(context.temp_allocator)
 
+	terminals_reap(app)
+	web_events_drain(app)   // (the one place: what the page said during the frame, a modal dialog's message loop included)
 	nav_apply(app)
 	commands_apply(app)
 	preview_place(app)
 	browser_tick(app)
-	if app.refresh_due && ui.now_ms() - app.refresh_ms > REFRESH_DEBOUNCE_MS {
-		app.refresh_due = false
-		app.refresh_ms = ui.now_ms()
-		refresh_sessions(app)
-	}
 	if app.stats_pending && app.chat.loaded && app.chat.have_self { app.stats_pending = false; stats_open(app) }
 	servers_rediscover(app)
 	activity_tick(app)
-	if app.facts_due && ui.now_ms() - app.facts_ms > FACTS_DEBOUNCE_MS {
-		// an action of the settings (connect an MCP server, revoke a permission): read the pages again
-		app.facts_due = false
-		app.facts_ms = ui.now_ms()
-		if app.settings_open { server_facts_load(app) }
+	deferred_tick(app)
+}
+
+// What was put off: done if it is time, and a wake for the rest. A window at rest wakes only while something is due: the window
+// may sleep on, and a read that waits for the next input would wait for good.
+deferred_tick :: proc(app: ^App) {
+	cx := &app.cx
+	if deferred_take(&cx.refresh_read) { refresh_sessions(app) }
+	// (an action of the settings: connect an MCP server, revoke a permission)
+	if deferred_take(&cx.facts_read) && app.settings_open { server_facts_load(app) }
+	if deferred_take(&cx.children_read) { load_children(app) }
+	if deferred_take(&cx.restore_limit) { nav_restore_clear(app) }
+	soonest := 0
+	for ms in ([?]int{deferred_in_ms(&cx.refresh_read), deferred_in_ms(&cx.facts_read), deferred_in_ms(&cx.children_read), deferred_in_ms(&cx.restore_limit), activity_in_ms(app), rediscover_in_ms(app), browser_in_ms(app)}) {
+		if ms > 0 { soonest = soonest == 0 ? ms : min(soonest, ms) }
 	}
-	if app.children_due && ui.now_ms() - app.children_ms > CHILDREN_DEBOUNCE_MS {
-		app.children_due = false
-		app.children_ms = ui.now_ms()
-		load_children(app)
-	}
+	if soonest > 0 { ui.wake_within(&app.ui_state, soonest) }
 }
 
 // The faces looked for when the preference is "" (automatic), in order; the toolkit's embedded Roboto and Inconsolata
@@ -575,7 +582,7 @@ main :: proc() {
 	app.seek_subagent = slice.contains(os.args, "--seek-subagent")
 	app.stats_pending = slice.contains(os.args, "--stats")
 	app.stick_bottom = true
-	chat_reset(&app.chat)
+	chat_home(app)
 
 	servers_init(app)
 
@@ -604,7 +611,7 @@ main :: proc() {
 	app.last_tick = time.tick_now()
 	app.frames = FRAMES_AFTER_INPUT
 
-	// the event stream: its first connection loads everything (stream_state)
+	// the event stream: its first connection loads everything (stream_up)
 	server_connect(app, app.server)
 	if app.conn == nil { fmt.eprintln("opencode-native: the HTTP client failed to start"); os.exit(1) }
 
@@ -615,10 +622,11 @@ main :: proc() {
 			if i == 0 { first = time.tick_since(started) }
 			time.sleep(CHECK_FRAME_SLEEP_MS * time.Millisecond)
 		}
-		fmt.printfln("opencode-native: %d frames, %d boxes, online=%v, %d sessions, %d messages, first frame %.1f ms", frames, app.ui_state.boxes_built, app.online, len(app.sessions), len(app.chat.messages), time.duration_milliseconds(first))
+		fmt.printfln("opencode-native: %d frames, %d boxes, online=%v, %d sessions, %d messages, first frame %.1f ms", frames, app.ui_state.boxes_built, online(app), len(app.sessions), len(app.chat.messages), time.duration_milliseconds(first))
 		os.exit(0)
 	}
 
+	update_startup(app)   // (a server or none: a check of this program's own version)
 	setup_offer_at_start(app)
 	for a in os.args[1:] {   // --search=<text>: the sidebar's search, filled at start; --setup: the Setup dialog
 		if strings.has_prefix(a, "--search=") { ui.field_set(&app.search, a[len("--search="):]) }
@@ -645,8 +653,7 @@ main :: proc() {
 		frame(app)
 		if app.frames > 0 { app.frames -= 1 }
 	}
-	// the event thread may be blocked in a read: the process ends with it
-	sync.atomic_store(&app.conn.stop, true)
+	threads_stop(app)
 	ui.post_close(&app.ui_state)
 	os.exit(0)
 }

@@ -67,12 +67,8 @@ install_facts :: proc() -> (f: Install_Facts) {
 	if data, err := os.read_entire_file(pjoin({f.dir, "version"}), context.temp_allocator); err == nil {
 		f.version = strings.trim_space(string(data))
 	}
-	switch {
-	case !os.exists(f.exe):                           f.state = .Not_Installed
-	case !same_path(f.exe, f.running):                f.state = .Other_Copy
-	case f.start_lnk && f.record && f.version != "":  f.state = .This_Copy
-	case:                                             f.state = .Repair
-	}
+	f.exe_there = os.exists(f.exe)
+	f.state = install_state_of(f.exe_there, same_path(f.exe, f.running), f.start_lnk, f.record, f.version)
 	return
 }
 

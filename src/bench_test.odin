@@ -136,7 +136,7 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	append(&app.servers, Server{name = "This computer", local = true})
 	app.sidebar_w = SIDEBAR_W_DEFAULT
 	app.stick_bottom = true
-	app.online = true
+	app.link = .Online
 	chat_reset(&app.chat)
 	app.win = platform.open_window_offscreen("opencode", BENCH_SIZE)
 	testing.expect(t, app.win != nil)
@@ -374,4 +374,73 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	}
 	bench_report(&search)
 	testing.expect_value(t, ui.field_string(&app.search), BENCH_SEARCH)
+
+	older_pages_keep_the_view(t, app, s)
+}
+
+@(private = "file")
+Posted_Answer :: struct { app: ^App, r: ^Request }
+
+// As a worker thread gives it: run in begin_build.
+@(private = "file")
+post_answer :: proc(app: ^App, r: ^Request, body: string) {
+	r.status, r.ok, r.resp = 200, true, strings.clone(body)
+	p := new(Posted_Answer)
+	p^ = {app, r}
+	ui.post(&app.ui_state, proc(data: rawptr, word: u64) {
+		p := (^Posted_Answer)(data)
+		answer(p.app, p.r)
+		free(p)
+	}, p)
+}
+
+@(private = "file")
+older_page :: proc(first, n: int, next: string) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	strings.write_string(&b, `{"data":[`)
+	for i in 0 ..< n {   // (newest first)
+		if i > 0 { strings.write_byte(&b, ',') }
+		fmt.sbprintf(&b, `{{"id":"old_%d","type":"user","text":"An older prompt about a zebra, with a line of words after it.","time":{{"created":%d}}}}`, first + n - i, first + n - i)
+	}
+	fmt.sbprintf(&b, `],"cursor":{{"next":"%s"}}}}`, next)
+	return strings.to_string(b)
+}
+
+// The view at the very top: a page read before the first message goes above what is read, and the view stays on it. If it stayed at
+// offset 0 instead it would be at the top of the new page: the next one is asked for at once, and so on to the start of the history.
+@(private = "file")
+older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
+	c := &app.chat
+	app.conn = new(Conn)   // (requests are kept: answers_test.odin)
+	clear(&bench_sent)
+	c.older = strings.clone("cursor", c.alloc)
+	app.stick_bottom = false
+	sb := session.get(s, "chat")
+	sb.view_off.y, sb.view_target.y = 0, 0
+	sb.view_anim[1] = {}
+	session.frames(s, 3)
+	testing.expect_value(t, bench_count(.Older), 1)
+	name := fmt.tprintf("msg_%s", c.messages[0].id)
+	y := session.get(s, name).rect.min.y
+	post_answer(app, bench_take(t, .Older), older_page(1000, 60, "more"))
+	session.frames(s, 6)
+	sb = session.get(s, "chat")
+	testing.expect_value(t, len(c.messages), 3 * BENCH_TURNS + 60)
+	testing.expect(t, abs(session.get(s, name).rect.min.y - y) <= 2, "what was read did not move")
+	testing.expect(t, sb.view_off.y > sb.size.y * OLDER_MARGIN, "the view is under the new page")
+	testing.expect_value(t, bench_count(.Older), 0)
+
+	// a find open: the current match stays the same one when a page comes in front of it
+	find_open(app)
+	ui.field_set(&app.find.field, "zebra")
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() && ui.find_count() == 60 }, "the needle swept")
+	session.frames(s, 2)
+	app.find.index = 10
+	request(app, .Older, "GET", "/older", tag = c.id)
+	post_answer(app, bench_take(t, .Older), older_page(2000, 8, ""))
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.find_count() == 68 }, "the page swept")
+	session.frames(s, 2)
+	testing.expect_value(t, app.find.index, 18)
+	find_close(app)
+	app.conn = nil
 }
