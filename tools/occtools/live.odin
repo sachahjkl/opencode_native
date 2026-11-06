@@ -19,6 +19,7 @@ STEP_LIMIT      :: 20 * time.Second
 BACK_LIMIT      :: 15 * time.Second
 TURN_LIMIT      :: 60 * time.Second
 NEVER_LIMIT     :: 100 * time.Millisecond
+START_POLL      :: 2 * time.Millisecond    // (a start is measured: this must not be what it measures)
 POLL            :: 50 * time.Millisecond   // (what is looked at here, not in the window: a counter, the server's list)
 TURN_MESSAGES   :: 3
 
@@ -35,6 +36,7 @@ App :: struct {
 	dt:       Dt,
 	log:      string,
 	settings: string,
+	started:  time.Time,
 }
 
 @(private = "file")
@@ -112,7 +114,6 @@ api_delete :: proc(l: ^Live, what, id: string) -> bool {
 	return got && status >= 200 && status < 300
 }
 
-@(private = "file")
 live_setup :: proc(l: ^Live, args: []string) -> bool {
 	l.exe, l.session, l.dir = CHECK_OUT, DEMO_SESSION, DEMO_DIR
 	home := os.get_env("USERPROFILE", context.temp_allocator)
@@ -144,7 +145,6 @@ free_port :: proc() -> int {
 }
 
 // A copy with nothing of the user's: its settings in a folder of its own. What it says goes to a file, kept.
-@(private = "file")
 launch :: proc(l: ^Live, name: string, args: ..string) -> (app: App, ok: bool) {
 	port := free_port()
 	here, _ := os.get_working_directory(context.temp_allocator)
@@ -159,6 +159,7 @@ launch :: proc(l: ^Live, name: string, args: ..string) -> (app: App, ok: bool) {
 	append(&cmd, ..args)
 	env := env_with({"APPDATA", "XDG_CONFIG_HOME", "TOOLKIT_DEVTOOLS", "OPENCODE_NATIVE_NO_SETUP"},
 		fmt.tprintf("APPDATA=%s", app.settings), fmt.tprintf("XDG_CONFIG_HOME=%s", app.settings), fmt.tprintf("TOOLKIT_DEVTOOLS=%d", port), "OPENCODE_NATIVE_NO_SETUP=1")
+	app.started = time.now()
 	p, start_err := os.process_start({command = cmd[:], env = env, stdout = log, stderr = log})
 	if start_err != nil { fmt.eprintfln("live: %s does not start: %v", l.exe, start_err); return }
 	app.process = p
@@ -169,7 +170,7 @@ launch :: proc(l: ^Live, name: string, args: ..string) -> (app: App, ok: bool) {
 			fmt.eprintfln("live: the program ended at the start, code %d: see %s", state.exit_code, app.log)
 			return
 		}
-		time.sleep(POLL)
+		time.sleep(START_POLL)
 	}
 	fmt.eprintfln("live: no devtools on port %d, the program alive: see %s", port, app.log)
 	_ = os.process_kill(p)
@@ -181,6 +182,10 @@ close_app :: proc(l: ^Live, app: ^App) {
 	state, _ := os.process_wait(app.process, 0)
 	expect(l, !state.exited, "the program is still alive")
 	if state.exited { fmt.printfln("        it ended with code %d: see %s", state.exit_code, app.log) }
+	app_end(app)
+}
+
+app_end :: proc(app: ^App) {
 	dt_close(&app.dt)
 	_ = os.process_kill(app.process)
 	_, _ = os.process_wait(app.process, 5 * time.Second)

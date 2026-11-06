@@ -92,6 +92,13 @@ a_snapshot_reads_as_it_was_written :: proc(t: ^testing.T) {
 }
 
 @(test)
+the_middle_of_some_runs :: proc(t: ^testing.T) {
+	testing.expect_value(t, median({3, 1, 2}), 2.0)
+	testing.expect_value(t, median({4, 1, 2, 3}), 2.5)
+	testing.expect_value(t, median({}), 0.0)
+}
+
+@(test)
 the_server_lists_in_two_shapes :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(ids_of(`{"data":[{"id":"a"},{"id":"b"}]}`)), 2)
 	testing.expect_value(t, len(ids_of(`[{"id":"a"}]`)), 1)
