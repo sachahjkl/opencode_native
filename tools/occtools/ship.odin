@@ -8,6 +8,8 @@ import "core:time"
 RUN_FOUND_TRIES :: 40
 RUN_FOUND_WAIT  :: 3 * time.Second   // (GitHub says nothing of a run for some seconds: the only wait here, and it is theirs)
 RELEASE_TRIES   :: 3
+SITE_TRIES      :: 3
+SITE_WAIT       :: 4 * time.Minute   // (the service says "try again later": what it needs, it has never said)
 WATCH_INTERVAL  :: "20"
 
 // What must hold before anything leaves. "": it does. The texts are those of the files, so that a test can give them.
@@ -90,6 +92,30 @@ watch_release :: proc(id: string) -> bool {
 	return false
 }
 
+// The first run is master's own. Another is a new one: a run started again has two artifacts of the site, and is refused.
+@(private = "file")
+deploy_site :: proc(sha: string) -> bool {
+	pages := find_run("pages.yml", sha)
+	if pages != "" && watch(pages) { return true }
+	for try in 2 ..= SITE_TRIES {
+		time.sleep(SITE_WAIT)
+		list, _ := capture("gh", "run", "list", "--workflow", "pages.yml", "--limit", "1", "--json", "databaseId,headSha")
+		last := run_of_sha(list, sha)
+		if !run("gh", "workflow", "run", "pages.yml", "--ref", "master") { continue }
+		for _ in 0 ..< RUN_FOUND_TRIES {
+			time.sleep(RUN_FOUND_WAIT)
+			now, _ := capture("gh", "run", "list", "--workflow", "pages.yml", "--limit", "1", "--json", "databaseId,headSha")
+			id := run_of_sha(now, sha)
+			if id != 0 && id != last {
+				if watch(fmt.tprint(id)) { return true }
+				break
+			}
+		}
+		fmt.eprintfln("ship: the site, try %d, failed", try)
+	}
+	return false
+}
+
 @(private = "file")
 stop :: proc(what: string) -> int {
 	fmt.eprintfln("ship: STOP, %s", what)
@@ -134,10 +160,9 @@ run_ship :: proc(args: []string) -> int {
 	if release == "" || !watch_release(release) { return stop("the release failed: master untouched") }
 
 	if !run("git", "push", "-q", "origin", fmt.tprintf("%s^{{commit}}:refs/heads/master", tag)) { return stop("master was not pushed") }
-	pages := find_run("pages.yml", sha)
-	if pages == "" || !watch(pages) { return stop("the site was not deployed") }
-
-	// (published: what is left is tidying up, and a failure there undoes nothing)
+	// (published: the site follows, what is left is tidying up, and a failure there undoes nothing)
+	site := deploy_site(sha)
+	if !site { fmt.eprintln("ship: published, but the site was not deployed: gh workflow run pages.yml --ref master, later") }
 	ok := run("git", "push", "-q", "origin", "--delete", branch)
 	ok = run("git", "fetch", "-q", "origin") && ok
 	ok = run("git", "branch", "-f", "master", "origin/master") && ok
@@ -149,5 +174,5 @@ run_ship :: proc(args: []string) -> int {
 	fmt.printfln("ship: %s published, the stable manifest says %s", version, served)
 	if served != version { return stop("the stable manifest does not say this version") }
 	if !ok { fmt.eprintln("ship: published, but the local tidying up failed: see above") }
-	return 0
+	return site && ok ? 0 : 1
 }
