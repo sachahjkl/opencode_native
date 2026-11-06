@@ -104,6 +104,16 @@ a_frame_is_held_until_the_next_one :: proc(t: ^testing.T) {
 	testing.expect_value(t, list, "ffconcat version 1.0\nfile a.png\nduration 0.2500\nfile b.png\nduration 1.0000\nfile b.png\n")
 }
 
+// The list says every session of the server: clean removes from it, so another folder's must not be in what it sees.
+@(test)
+a_session_of_another_folder_is_not_ours :: proc(t: ^testing.T) {
+	list := `{"data":[{"id":"a","location":{"directory":"S:\\\\demo"}},{"id":"b","location":{"directory":"S:\\\\work"}},{"id":"c"}]}`
+	mine := ids_in(list, "S:\\demo")
+	testing.expect_value(t, len(mine), 1)
+	testing.expect_value(t, mine[0], "a")
+	testing.expect_value(t, len(new_ids({}, ids_in(list, "S:\\elsewhere"))), 0)
+}
+
 @(test)
 the_server_lists_in_two_shapes :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(ids_of(`{"data":[{"id":"a"},{"id":"b"}]}`)), 2)

@@ -92,23 +92,40 @@ ids_of :: proc(body: string) -> []string {
 	return out[:]
 }
 
-@(private = "file")
+// The server's list of sessions is the whole server's, whatever folder is asked for: what is not of `dir` is none of ours, and
+// must never reach what removes. (Its shells are the folder's.)
+ids_in :: proc(body, dir: string) -> []string {
+	out := make([dynamic]string, context.temp_allocator)
+	v, err := json.parse(transmute([]byte)body, allocator = context.temp_allocator)
+	if err != nil { return nil }
+	list, is_list := v.(json.Array)
+	if !is_list {
+		o, _ := v.(json.Object)
+		list, _ = o["data"].(json.Array)
+	}
+	for item in list {
+		o, _ := item.(json.Object)
+		where_, _ := o["location"].(json.Object)
+		folder, _ := where_["directory"].(json.String)
+		if id, ok := o["id"].(json.String); ok && folder == dir { append(&out, id) }
+	}
+	return out[:]
+}
+
 location :: proc(l: ^Live) -> string {
 	return fmt.tprintf("location[directory]=%s", net.percent_encode(l.dir, context.temp_allocator))
 }
 
-@(private = "file")
 api_list :: proc(l: ^Live, what: string) -> (ids: []string, ok: bool) {
-	limit := what == "session" ? "&limit=50" : ""
+	limit := what == "session" ? "&limit=200" : ""
 	status, body, got := http_at(l.server, "GET", fmt.tprintf("/api/%s?%s%s", what, location(l), limit), l.auth)
 	if !got || status != 200 {
 		fmt.eprintfln("%s on %v: %s, status %d: %s", what, l.server, got ? "answered" : "no answer", status, body[:min(len(body), 200)])
 		return nil, false
 	}
-	return ids_of(body), true
+	return what == "session" ? ids_in(body, l.dir) : ids_of(body), true
 }
 
-@(private = "file")
 api_delete :: proc(l: ^Live, what, id: string) -> bool {
 	status, _, got := http_at(l.server, "DELETE", fmt.tprintf("/api/%s/%s?%s", what, id, location(l)), l.auth)
 	return got && status >= 200 && status < 300
@@ -275,7 +292,6 @@ scenario_prompt :: proc(l: ^Live) {
 	close_app(l, &app)
 }
 
-@(private = "file")
 clean_now :: proc(l: ^Live) -> int {
 	text := read_text(SNAPSHOT)
 	if text == "" && !os.exists(SNAPSHOT) { fmt.println("clean: no snapshot, nothing touched"); return 0 }
@@ -297,6 +313,15 @@ clean_now :: proc(l: ^Live) -> int {
 	if failed > 0 { return 1 }
 	_ = os.remove(SNAPSHOT)
 	return 0
+}
+
+// What is there now: what clean will leave alone.
+snapshot_take :: proc(l: ^Live) -> bool {
+	if os.exists(SNAPSHOT) { fmt.eprintln("a snapshot is there from a run that did not end: occtools clean first"); return false }
+	ptys, ok_ptys := api_list(l, "pty")
+	sessions, ok_sessions := api_list(l, "session")
+	if !ok_ptys || !ok_sessions { fmt.eprintln("no answer from the server"); return false }
+	return os.write_entire_file(SNAPSHOT, transmute([]byte)snapshot_text(ptys, sessions)) == nil
 }
 
 run_clean :: proc(args: []string) -> int {
@@ -324,11 +349,7 @@ run_live :: proc(args: []string) -> int {
 	if only != "" && only != "link" && only != "password" && only != "prompt" { fmt.eprintfln("live: no scenario %s", only); return EXIT_USAGE }
 	if !os.exists(l.exe) { fmt.eprintfln("live: no %s: occtools check builds it", l.exe); return 1 }
 	if os.make_directory_all(LIVE_DIR) != nil { return 1 }
-	if os.exists(SNAPSHOT) { fmt.eprintln("live: a snapshot is there from a run that did not end: occtools clean first"); return 1 }
-	ptys, ok_ptys := api_list(&l, "pty")
-	sessions, ok_sessions := api_list(&l, "session")
-	if !ok_ptys || !ok_sessions { fmt.eprintln("live: no answer from the server"); return 1 }
-	if os.write_entire_file(SNAPSHOT, transmute([]byte)snapshot_text(ptys, sessions)) != nil { return 1 }
+	if !snapshot_take(&l) { return 1 }
 
 	begun := time.now()
 	if only == "" || only == "link" { scenario_link(&l) }
