@@ -32,14 +32,16 @@ capture :: proc(cmd: ..string) -> (out: string, ok: bool) {
 	return string(stdout), succeeded(state)
 }
 
-// This process's environment, without `name` and with `extra` ("NAME=value").
-env_with :: proc(without: string, extra: ..string) -> []string {
+// This process's environment, without the names of `without` and with `extra` ("NAME=value").
+env_with :: proc(without: []string, extra: ..string) -> []string {
 	all, err := os.environ(context.temp_allocator)
 	if err != nil { return nil }
 	out := make([dynamic]string, context.temp_allocator)
-	prefix := strings.concatenate({without, "="}, context.temp_allocator)
-	for e in all {
-		if !strings.has_prefix(e, prefix) { append(&out, e) }
+	next: for e in all {
+		for name in without {
+			if strings.has_prefix(e, strings.concatenate({name, "="}, context.temp_allocator)) { continue next }
+		}
+		append(&out, e)
 	}
 	append(&out, ..extra)
 	return out[:]

@@ -17,6 +17,8 @@ Command :: struct {
 
 COMMANDS := []Command{
 	{name = "check", about = "[--out file]: the tests of the program, of its Rust code and of this tool, then a build that must be new", run = run_check},
+	{name = "live", about = "[link|password|prompt] [--exe file]: the real program on the real server, failures made to happen; what it made is removed", run = run_live},
+	{name = "clean", about = "what a live run that did not end left in the demo folder, and only that", run = run_clean},
 	{name = "ship", about = "<version> [--dry-run]: from branch release/<version>: CI, tag, release, master, the site, each after the last one's success", run = run_ship},
 }
 
