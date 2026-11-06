@@ -127,12 +127,12 @@ wheel :: proc(s: ^Shot, notches, steps: int, gap: time.Duration) {
 public_model :: proc(dt: ^Dt) {
 	dt_click_name(dt, "model")
 	dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
-	dt_type(dt, "v4.1-flash")
+	dt_type(dt, "sonnet 5")
 	dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
 	dt_shot(dt, LIVE_DIR + "/model_pick.png")
 	dt_key(dt, "Enter")
 	dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
-	if !dt_has(dt, "deepseek-v4.1-flash-free") { fmt.eprintln("film: the public model was not taken: see model_pick.png") }
+	if !dt_has(dt, "claude-sonnet-5") { fmt.eprintln("film: the public model was not taken: see model_pick.png") }
 }
 
 @(private = "file")
