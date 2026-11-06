@@ -1,4 +1,4 @@
-# Publishes site/ (plain HTML and CSS, no build step) to GitHub Pages: https://sachahjkl.github.io/opencode_native/
+# Publishes site/ (plain HTML and CSS) to GitHub Pages, with the pages occtools makes of it: `occtools site build`, SITE_URL says where.
 # Pages use the "GitHub Actions" source (set once: gh api -X POST repos/sachahjkl/opencode_native/pages -f build_type=workflow).
 name: Pages
 
@@ -8,8 +8,8 @@ on:
     paths:
       - "site/**"
       - "CHANGELOG.md"
-      - "tools/site_changelog.mjs"
-      - "tools/site_meta.mjs"
+      - "tools/occtools/**"
+      - ".github/actions/setup-odin-tools/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -31,8 +31,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/configure-pages@v6
-      - run: node tools/site_changelog.mjs site _site
-      - run: node tools/site_meta.mjs _site _site
+      - uses: ./.github/actions/setup-odin-tools
+      - run: mkdir -p build && odin build tools/occtools -out:build/occtools
+      - run: build/occtools site build site _site
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site

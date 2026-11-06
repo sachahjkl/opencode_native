@@ -1,0 +1,23 @@
+name: Odin for the tools
+description: Odin dev-2026-11a (pinned by SHA-256, as in setup-odin-linux) on the PATH, for what only needs core, such as tools/occtools; no wgpu-native and no libraries of the program
+
+runs:
+  using: composite
+  steps:
+    - name: Odin dev-2026-11a
+      shell: bash
+      env:
+        ODIN_TAG: dev-2026-11a
+        ODIN_SHA256: 65c9f6e97d6f8a30930e151f270ce5aeaa98fe8b2ba49fe067394e2af04f7618
+      run: |
+        curl -fsSL -o "$RUNNER_TEMP/odin.tar.gz" "https://github.com/odin-lang/Odin/releases/download/$ODIN_TAG/odin-linux-amd64-$ODIN_TAG.tar.gz"
+        echo "$ODIN_SHA256  $RUNNER_TEMP/odin.tar.gz" | sha256sum -c -
+        mkdir -p "$RUNNER_TEMP/odin" && tar -xzf "$RUNNER_TEMP/odin.tar.gz" -C "$RUNNER_TEMP/odin"
+        dir="$(dirname "$(find "$RUNNER_TEMP/odin" -maxdepth 3 -name odin -type f | head -1)")"
+        echo "$dir" >> "$GITHUB_PATH"
+        "$dir/odin" version
+
+    # (Odin links through clang. The runner's image comes with it today: the install is for the image that does not)
+    - name: clang
+      shell: bash
+      run: command -v clang || { sudo apt-get update -qq && sudo apt-get install -y -qq clang; }
