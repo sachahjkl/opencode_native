@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-11-06
+
+### Fixed
+
+- The Preview in a window of its own shows the page again: 0.17.1 left it black, behind the window's surface (gui_toolkit 0.90.0).
+- A shell in a window of its own no longer flickers as the window is resized: it is told its size once the size has rested, and what it paints then shows whole.
+
 ## [0.17.1] - 2026-11-06
 
 ### Fixed
@@ -661,6 +668,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
 [Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.0...HEAD
+[0.17.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.2
 [0.17.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.1
 [0.17.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.0
 [0.16.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.16.0
