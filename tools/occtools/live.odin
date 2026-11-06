@@ -343,6 +343,7 @@ scenario_prompt :: proc(l: ^Live) {
 	expect(l, dt_wait_for(dt, "connected", STEP_LIMIT), "connected")
 	dt_key(dt, "ctrl+n")
 	expect(l, dt_wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
+	public_model(dt)   // (the server's default may be down, or private: this tests the program, not that)
 	dt_click_name(dt, "composer")
 	dt_type(dt, "Reply with the single word: ok")
 	dt_key(dt, "Enter")

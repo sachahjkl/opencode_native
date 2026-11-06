@@ -124,7 +124,6 @@ wheel :: proc(s: ^Shot, notches, steps: int, gap: time.Duration) {
 	}
 }
 
-@(private = "file")
 public_model :: proc(dt: ^Dt) {
 	dt_click_name(dt, "model")
 	dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)

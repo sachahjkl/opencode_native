@@ -7,7 +7,7 @@
 <p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.16.0-fab283" alt="version 0.16.0"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.17.0-fab283" alt="version 0.17.0"></a>
 <a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
 </p>
 
@@ -85,7 +85,7 @@ the [site](https://sachahjkl.github.io/opencode_native/) shows them.
 - **What an agent asks**: its questions and any form of the server over the composer, one question at a time, in tabs, then a review.
   The sidebar lights a session that waits for you, a sub-agent's question comes up in its parent.
 - **Permission requests** answered in place (once, always, reject).
-- **A terminal** with Ghostty's emulation (libghostty-vt): each shell of the server a tab of the dock, wherever it runs, kept when the program closes.
+- **A terminal** with Ghostty's emulation (libghostty-vt): each shell of the server a tab of the dock or a window of its own, wherever it runs, kept when the program closes.
 - **Schedules** that wake a session, **artifacts** of a folder, **plugins** of the server. The server's experimental options are turned on by default, in its configuration, on this computer.
 - **Connections**: the integrations of the server, connected with a key, a browser login or what is on the machine; several accounts of each.
 - **Messages wait in view**: while a turn runs, Enter queues a message for its end and Ctrl+Enter sends it now. What waits is listed above the composer, in order: edit it, send it now, remove it.

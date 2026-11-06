@@ -5,9 +5,15 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-06
+
 ### Added
 
 - A panel in a window of its own, for a large screen or a second one: a shell, the Preview, the Statistics. The window button on the panel's strip, or "Open this panel in a window" in the palette. Same program, same renderer, no second start: closing the window gives the panel its tab back.
+
+### Fixed
+
+- The text of a diff's full view can be selected with the pointer: in a dialog, a press went to the dialog.
 
 ## [0.16.0] - 2026-11-06
 
@@ -642,7 +648,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.0
 [0.16.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.16.0
 [0.15.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.15.1
 [0.15.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.15.0
