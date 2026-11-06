@@ -1,20 +1,15 @@
-// The web view of the Preview panel on Windows: WebView2, by the client's Rust library (native/occ_native/src/webview.rs). Its
-// profile is a folder of its own beside the preferences: what an agent does in the page does not touch the user's browser.
+// The web views of the Preview panel on Windows: WebView2, by the client's Rust library (native/occ_native/src/webview.rs). Their
+// profile is a folder of its own beside the preferences, one for every view: what an agent does in a page does not touch the user's browser.
 package occ
 
 import "base:runtime"
 import "core:path/filepath"
-import "core:strings"
 import win "core:sys/windows"
 import "gt:platform"
 import "gt:render"
 
-Web_Act :: enum i32 { Back, Forward, Reload, Stop, Focus }
-
 @(private = "file") VK_CONTROL :: 0x11
-
-@(private = "file")
-web: rawptr
+@(private = "file") VK_SHIFT   :: 0x10
 
 @(private = "file")
 composed_below: bool   // composition_below_children ran
@@ -33,7 +28,8 @@ web_available :: proc() -> bool {
 on_web :: proc "c" (user: rawptr, kind: i32, id: u64, data: [^]u8, n: uint) {
 	context = runtime.default_context()
 	k := Web_Event_Kind(kind)
-	web_event_add((^App)(user), k, id, data[:n], k == .Key && win.GetKeyState(VK_CONTROL) < 0)
+	// (Ctrl alone: with Shift it is another key of the program's, a shell's Ctrl+Shift+T above all)
+	web_event_add((^Web_View)(user), k, id, data[:n], k == .Key && win.GetKeyState(VK_CONTROL) < 0 && win.GetKeyState(VK_SHIFT) >= 0)
 }
 
 // The window's picture is a composition, on top of its child windows: the page would load, unseen, under it. Its target is
@@ -52,56 +48,30 @@ composition_below_children :: proc(app: ^App) {
 	}
 }
 
-// The view exists, or is on its way. One that failed is made anew: a failure holds for this attempt, not for ever.
-web_start :: proc(app: ^App) {
-	p := &app.preview
-	switch _ in p.web {
-	case Web_Creating, Web_Ready: return
-	case Web_Failed:              web_close(app)
-	case nil:
-	}
-	if app.win == nil { return }   // (no window: nothing to put it in)
+@(private = "file")
+hwnd_of :: proc(w: ^platform.Window) -> int { return int(uintptr(rawptr(w.hwnd))) }
+
+// A view on its way. (All of them in the one folder: the system gives views of the same folder one browser and its processes.)
+@(private = "file")
+system_open :: proc(app: ^App, v: ^Web_View, parent: ^platform.Window) -> rawptr {
 	if !composed_below {
 		composed_below = true
 		composition_below_children(app)
 	}
 	folder := pjoin({filepath.dir(prefs_path()), "webview"})
-	web = occ_webview_new(int(uintptr(rawptr(app.win.hwnd))), raw_data(folder), len(folder), on_web, app)
-	if web == nil {
-		web_state_set(p, Web_Failed{strings.clone("the WebView2 runtime did not start")})
-	} else {
-		web_state_set(p, Web_Creating{})
+	return occ_webview_new(hwnd_of(parent), raw_data(folder), len(folder), on_web, v)
+}
+
+web_host_system :: proc() -> Web_Host {
+	return {
+		open = system_open,
+		close = proc(native: rawptr) { occ_webview_free(native) },
+		parent = proc(native: rawptr, w: ^platform.Window) { occ_webview_parent(native, hwnd_of(w)) },
+		navigate = proc(native: rawptr, url: string) { occ_webview_navigate(native, raw_data(url), len(url)) },
+		act = proc(native: rawptr, what: Web_Act) { occ_webview_act(native, i32(what)) },
+		can = proc(native: rawptr, what: Web_Act) -> bool { return occ_webview_can(native, i32(what)) != 0 },
+		script = proc(native: rawptr, code: string, id: u64) { occ_webview_script(native, raw_data(code), len(code), id) },
+		capture = proc(native: rawptr, id: u64) { occ_webview_capture(native, id) },
+		place = proc(native: rawptr, x, y, w, h: int, visible: bool) { occ_webview_place(native, i32(x), i32(y), i32(w), i32(h), visible ? 1 : 0) },
 	}
 }
-
-// The view is destroyed, and what it would still say is dropped with it. (A view on its way closes itself when it comes: native.)
-web_close :: proc(app: ^App) {
-	if web != nil { occ_webview_free(web) }
-	web = nil
-	web_state_set(&app.preview, nil)
-}
-
-// The page goes into this window: the panel's, as long as it has one of its own.
-web_parent :: proc(w: ^platform.Window) {
-	if web != nil { occ_webview_parent(web, int(uintptr(rawptr(w.hwnd)))) }
-}
-
-web_navigate :: proc(app: ^App, url: string) {
-	if web == nil { web_start(app) }
-	occ_webview_navigate(web, raw_data(url), len(url))
-}
-
-web_act :: proc(app: ^App, what: Web_Act) { occ_webview_act(web, i32(what)) }
-
-// Whether the page has a place to go Back or Forward to.
-web_can :: proc(what: Web_Act) -> bool { return occ_webview_can(web, i32(what)) != 0 }
-
-web_script :: proc(code: string, id: u64) { occ_webview_script(web, raw_data(code), len(code), id) }
-
-web_capture :: proc(id: u64) { occ_webview_capture(web, id) }
-
-web_place :: proc(app: ^App, x, y, w, h: int, visible: bool) {
-	if web == nil { return }
-	occ_webview_place(web, i32(x), i32(y), i32(w), i32(h), visible ? 1 : 0)
-}
-

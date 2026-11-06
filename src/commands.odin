@@ -69,6 +69,9 @@ COMMANDS := [?]Command{
 
 	{id = "view.panel_window", title = "Open this panel in a window", group = "View", icon = ICO_WINDOW, run = panel_window_open, enabled = panel_window_can},
 	{id = "view.preview", title = "Show or hide the Preview panel", group = "View", icon = ICO_GLOBE, keys = "Ctrl+Shift+B", key = .B, mods = {.Ctrl, .Shift}, run = preview_toggle, checked = proc(app: ^App) -> bool { return app.preview.open }},
+	// (Their keys are the panel's, read while it has the keyboard: elsewhere Ctrl+W is a shell's, and a composer's to ignore.)
+	{id = "view.preview_tab", title = "New browser tab", group = "View", icon = ICO_ADD, keys = "Ctrl+T", run = preview_tab_new},
+	{id = "view.preview_tab_close", title = "Close browser tab", group = "View", icon = ICO_CANCEL, keys = "Ctrl+W", run = preview_tab_close_front, enabled = preview_tab_can_close},
 	{id = "view.sidebar", title = "Show or hide the sidebar", group = "View", icon = ICO_MENU, keys = "Ctrl+B", key = .B, mods = {.Ctrl}, run = proc(app: ^App) { app.cx.sidebar_hidden = !app.cx.sidebar_hidden }, checked = proc(app: ^App) -> bool { return !app.cx.sidebar_hidden }},
 	{id = "view.sidebar_mode", title = "Switch the sidebar's mode (inbox, projects)", group = "View", icon = ICO_LIST, run = sidebar_mode_next},
 	{id = "view.content_in", title = "Zoom in the conversation", group = "View", icon = ICO_ADD, keys = "Ctrl+=", run = proc(app: ^App) { content_zoom_by(app, ZOOM_FACTOR) }},

@@ -153,7 +153,10 @@ prompt_parts :: proc(v: json.Value, files: ^[dynamic]Attachment, mentions: ^[dyn
 // The session is made. Whoever went elsewhere meanwhile stays there: the prompt goes on without them.
 outgoing_created :: proc(app: ^App, r: ^Request, id: string) {
 	refresh_sessions(app)
-	if r.gen == app.chat.gen { open_chat(app, id) }
+	if r.gen == app.chat.gen {
+		open_chat(app, id)
+		preview_adopt(app, id)
+	}
 	o := outgoing_find(app, r.out)
 	if o == nil { return }
 	delete(o.session)

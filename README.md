@@ -77,7 +77,7 @@ the [site](https://ocn.froment.software/) shows them.
   output, a checklist.
 - **What runs in the background**: a tray under the composer (Down, Ctrl+J) with the sub-agents, the shell commands and the whole
   todo list; Enter opens, Delete stops.
-- **The Preview panel** (Ctrl+Shift+B, Windows): a page beside the conversation, in a dock; agents drive it through the MCP server
+- **The Preview panel** (Ctrl+Shift+B, Windows): a browser for each session, with tabs, beside the conversation, in a dock; agents drive it through the MCP server
   `preview` the client hosts.
 - **Updates** (Windows): channels `stable` and `beta`, signed manifests, nothing installed without you ([docs/updates.md](docs/updates.md)).
 - **Back and Forward**, as in a browser: buttons in the title bar, Alt+Left and Alt+Right, the side buttons of the mouse. The view goes

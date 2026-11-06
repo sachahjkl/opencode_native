@@ -118,9 +118,12 @@ fn hook(view: &ICoreWebView2, controller: &ICoreWebView2Controller, sink: Sink) 
                 if let Some(a) = args {
                     let mut kind = COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN;
                     let mut vk = 0u32;
+                    let mut status = COREWEBVIEW2_PHYSICAL_KEY_STATUS::default();
                     a.KeyEventKind(&mut kind)?;
                     a.VirtualKey(&mut vk)?;
-                    if kind == COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN {
+                    a.PhysicalKeyStatus(&mut status)?;
+                    // (a key held is one key: Ctrl+W held does not close every tab)
+                    if kind == COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && !status.WasKeyDown.as_bool() {
                         sink.send(EV_KEY, vk as u64, &[]);
                     }
                 }

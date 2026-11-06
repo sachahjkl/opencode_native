@@ -859,6 +859,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		if kind == "session.deleted" && sid != "" {
 			nav_forget(app, sid)
 			outgoing_session_gone(app, sid)
+			preview_session_gone(app, sid)
 			if mine {   // (elsewhere: what is shown no longer is)
 				ui.toast(.Warn, "This session was deleted")
 				append(&app.nav_steps, Nav_Step{kind = .Gone})

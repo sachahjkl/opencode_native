@@ -178,6 +178,11 @@ App_Context :: struct {
 	artifacts:      Artifacts,
 	diff_full:      Diff_Full,            // diff_full.odin
 	detached:       [dynamic]^Detached,   // detached.odin
+	web_host:       Web_Host,             // what makes web views (preview_views.odin)
+	web_views:      [dynamic]^Web_View,   // ... those alive, every session's tabs together
+	previews:       map[string]^Preview,  // the browsers of the sessions not shown, by session (keys: their own)
+	preview_clock:  u64,                  // ... what Preview_Tab.used counts in
+	preview_tabs_made: u64,               // ... what their ids count
 	plugins:        Plugins,
 	integrations:   Integrations,         // the Connections page (integrations.odin)
 	mentions:       Mentions,             // @ in the composer (files.odin)
@@ -385,6 +390,7 @@ frame :: proc(app: ^App, inner := false) {
 	web_events_drain(app)   // (the one place: what the page said during the frame, a modal dialog's message loop included)
 	nav_apply(app)
 	commands_apply(app)
+	preview_follow(app)
 	if !panel_detached(app, u32(Panel.Preview)) { preview_place(app, overlay_open(app) || ui.active_key() != 0 && app.dock.held) }
 	browser_tick(app)
 	servers_rediscover(app)
@@ -635,6 +641,7 @@ main :: proc() {
 	if !render.init_window(&app.r, app.win, app.win.size, transparent = true) { fmt.eprintln("opencode-native: no renderer"); os.exit(1) }
 	if !slice.contains(os.args, "--no-fixed-surface") { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
 	app_init(app, prefs_path())
+	app.cx.web_host = web_host_system()
 	if app.servers_in_clear { servers_save(app) }
 	platform.set_dark_title(app.win, true)
 	app.devtools = devtools.start_from_env(app.win, "opencode")
