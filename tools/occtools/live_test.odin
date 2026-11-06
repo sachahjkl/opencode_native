@@ -99,6 +99,12 @@ the_middle_of_some_runs :: proc(t: ^testing.T) {
 }
 
 @(test)
+a_frame_is_held_until_the_next_one :: proc(t: ^testing.T) {
+	list := concat_list({"a.png", "b.png"}, {10, 10.25})
+	testing.expect_value(t, list, "ffconcat version 1.0\nfile a.png\nduration 0.2500\nfile b.png\nduration 1.0000\nfile b.png\n")
+}
+
+@(test)
 the_server_lists_in_two_shapes :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(ids_of(`{"data":[{"id":"a"},{"id":"b"}]}`)), 2)
 	testing.expect_value(t, len(ids_of(`[{"id":"a"}]`)), 1)

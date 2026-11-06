@@ -133,6 +133,10 @@ App :: struct {
 // What the window keeps from one frame to the next that belongs to no panel: what is due, what is open, where things are.
 App_Context :: struct {
 	shown_size:          draw.Vec2,            // the size of the last frame shown (frame_held_ms)
+	film_slow:           f64,                  // --slow-motion (film.odin): 0, the interface's time is the system's
+	film_clock:          f64,                  // what ui.now_ms says then
+	film_clock_at:       f64,
+	film_begun:          time.Tick,
 	pending_since:       f64,                  // when requests went from none to some (the status bar)
 	system_stripes:      font.Subpixel_Text,   // what the system does with text (text_mode_follow)
 	system_stripes_read: bool,
@@ -264,6 +268,7 @@ text_mode_follow :: proc(app: ^App) {
 
 frame :: proc(app: ^App, inner := false) {
 	if ui.building() { return }
+	film_slow_tick(app)
 	app.frame_no += 1
 	at_once := pace(app, inner)
 	app.idled = false
@@ -287,7 +292,7 @@ frame :: proc(app: ^App, inner := false) {
 	render.resize(&app.r, app.win.size)
 	size := draw.Vec2{f32(app.win.size.x), f32(app.win.size.y)}
 	now := time.tick_now()
-	dt := clamp(f32(time.duration_seconds(time.tick_diff(app.last_tick, now))), DT_MIN_S, DT_MAX_S)
+	dt := film_slow_dt(app, clamp(f32(time.duration_seconds(time.tick_diff(app.last_tick, now))), DT_MIN_S, DT_MAX_S))
 	app.last_tick = now
 	if dt < FPS_RESTED_S { app.cx.frame_ms += (dt * 1000 - app.cx.frame_ms) * FPS_SMOOTH }   // (a rest is no frame rate)
 	// `again`: another build of this frame. It runs no answer: a page read there would come after what the first build placed,
@@ -657,6 +662,7 @@ main :: proc() {
 		if strings.has_prefix(a, "--find=") { find_open(app); ui.field_set(&app.find.field, a[len("--find="):]) }
 		if strings.has_prefix(a, "--image=") { image_view_start(app, a[len("--image="):]) }
 		if strings.has_prefix(a, "--attach=") { attach_path(app, a[len("--attach="):]) }   // (what a paste gives, without the clipboard)
+		if strings.has_prefix(a, "--slow-motion=") { if n, ok := strconv.parse_f64(a[len("--slow-motion="):]); ok { film_slow_start(app, n) } }
 	}
 	for a in os.args[1:] {   // --settings[=page number]: the settings open at start
 		if a == "--settings" || strings.has_prefix(a, "--settings=") {
@@ -667,6 +673,7 @@ main :: proc() {
 	platform.show_window(app.win)
 	for !platform.is_closed(app.win) && !app.quit {
 		if app.frames == 0 && !ui.needs_frame(&app.ui_state) {
+			film_slow_tick(app)
 			wait := ui.wake_in_ms(&app.ui_state)
 			if app.animating { wait = wait > 0 ? min(wait, ANIMATION_WAIT_MS) : ANIMATION_WAIT_MS }
 			platform.wait_event(app.win, wait)

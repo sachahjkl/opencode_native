@@ -13,6 +13,7 @@ import "core:time"
 
 DT_READ_LIMIT :: 75 * time.Second   // (above what any wait asks of the window: it answers at its own timeout)
 DT_CHUNK      :: 64 * 1024
+DT_ACK_ID     :: -1   // (no call waits for it)
 WS_TEXT       :: 1
 WS_CLOSE      :: 8
 WS_PING       :: 9
@@ -22,6 +23,10 @@ Dt :: struct {
 	sock:    net.TCP_Socket,
 	next_id: int,
 	buf:     [dynamic]byte,
+	// (a film: where the frames go, and what came)
+	cast_dir:   string,
+	cast_names: [dynamic]string,
+	cast_times: [dynamic]f64,
 }
 
 Box :: struct {
@@ -185,11 +190,34 @@ dt_call :: proc(d: ^Dt, method: string, params := "{}") -> (result: json.Value, 
 		text, got := dt_message(d)
 		if !got { fmt.eprintfln("%s: the connection ended", method); return nil, false }
 		r, failure, mine := dt_answer(text, d.next_id)
+		if !mine { dt_event(d, text) }
 		delete(text)
 		if !mine { continue }
 		if failure != "" { fmt.eprintfln("%s: %s", method, failure); return nil, false }
 		return r, true
 	}
+}
+
+// A frame of a film: kept, and acknowledged, or none follows.
+@(private = "file")
+dt_event :: proc(d: ^Dt, text: string) {
+	if d.cast_dir == "" || !strings.contains(text[:min(len(text), 64)], "Page.screencastFrame") { return }
+	v, err := json.parse(transmute([]byte)text)
+	if err != nil { return }
+	defer json.destroy_value(v)
+	o, _ := v.(json.Object)
+	p, _ := o["params"].(json.Object)
+	m, _ := p["metadata"].(json.Object)
+	data, _ := p["data"].(json.String)
+	id, _ := json_int(p["sessionId"])
+	png, decode_err := base64.decode(data)
+	if decode_err != nil { return }
+	defer delete(png)
+	name := fmt.aprintf("frame-%06d.png", len(d.cast_names))
+	if os.write_entire_file(fmt.tprintf("%s/%s", d.cast_dir, name), png) != nil { return }
+	append(&d.cast_names, name)
+	append(&d.cast_times, json_num(m["timestamp"]))
+	dt_write(d, WS_TEXT, transmute([]byte)fmt.tprintf(`{{"id":%d,"method":"Page.screencastFrameAck","params":{{"sessionId":%d}}}}`, DT_ACK_ID, id))
 }
 
 dt_close :: proc(d: ^Dt) { net.close(d.sock) }

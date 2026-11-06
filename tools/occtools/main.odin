@@ -20,6 +20,7 @@ COMMANDS := []Command{
 	{name = "live", about = "[link|password|prompt] [--exe file]: the real program on the real server, failures made to happen; what it made is removed", run = run_live},
 	{name = "clean", about = "what a live run that did not end left in the demo folder, and only that", run = run_clean},
 	{name = "measure", about = "[--runs n] [--exe file]: the start and the memory of the real program, the figures that may be published", run = run_measure},
+	{name = "film", about = "[probe]: the program filmed from inside, its own frames, into build/film", run = run_film},
 	{name = "ship", about = "<version> [--dry-run]: from branch release/<version>: CI, tag, release, master, the site, each after the last one's success", run = run_ship},
 }
 
