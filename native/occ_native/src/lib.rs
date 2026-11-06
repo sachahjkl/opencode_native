@@ -476,47 +476,70 @@ mod tests {
     use super::*;
     use std::io::Write;
     use std::net::TcpListener;
-    use std::time::Instant;
 
-    // A server that says one thing, a heartbeat later another, then nothing and keeps the socket open.
+    // What the socket gives, read after read: no socket, no clock, a failure is there the moment it is asked for.
+    struct Script(std::collections::VecDeque<std::io::Result<&'static [u8]>>);
+
+    impl Read for Script {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            match self.0.pop_front() {
+                Some(Ok(b)) => {
+                    buf[..b.len()].copy_from_slice(b);
+                    Ok(b.len())
+                }
+                Some(Err(e)) => Err(e),
+                None => Ok(0),
+            }
+        }
+    }
+
+    fn scripted(steps: Vec<std::io::Result<&'static [u8]>>) -> Sse {
+        let reader: Box<dyn Read + Send> = Box::new(Script(steps.into()));
+        Sse { reader: BufReader::new(reader), line: Vec::new() }
+    }
+
+    fn next(s: &mut Sse) -> (i32, Vec<u8>) {
+        unsafe {
+            let mut out = OccBuf::empty();
+            let got = occ_sse_next(s, &mut out);
+            let data = bytes(out.ptr, out.len).to_vec();
+            occ_buf_free(out);
+            (got, data)
+        }
+    }
+
     #[test]
     fn a_silent_stream_ends() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let server = std::thread::spawn(move || {
-            let (mut s, _) = listener.accept().unwrap();
-            let mut head = [0u8; 2048];
-            let _ = s.read(&mut head);
-            s.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\ndata: one\n\n").unwrap();
-            std::thread::sleep(Duration::from_millis(250));
-            s.write_all(b": beat\n\n").unwrap();
-            std::thread::sleep(Duration::from_millis(250));
-            s.write_all(b"data: two\n\n").unwrap();
-            std::thread::sleep(Duration::from_secs(3));
-        });
-        let idle = Duration::from_millis(400);
-        let c = Client { base: format!("http://127.0.0.1:{}", port), auth: None, agent: agent(None, None), stream: agent(None, Some(idle)) };
+        let silence = std::io::Error::from(std::io::ErrorKind::TimedOut); // what a read past the limit gives
+        let mut s = scripted(vec![Ok(b"data: one\n\n"), Ok(b": beat\n\n"), Ok(b"data: two\n\n"), Err(silence)]);
+        assert_eq!(next(&mut s), (1, b"one".to_vec()));
+        assert_eq!(next(&mut s), (1, b"two".to_vec()), "a heartbeat is skipped");
+        assert_eq!(next(&mut s).0, -1, "silence ends it");
+    }
+
+    #[test]
+    fn a_stream_cut_inside_an_event_gives_nothing_of_it() {
+        let cut = std::io::Error::from(std::io::ErrorKind::ConnectionReset);
+        let mut s = scripted(vec![Ok(b"data: ha"), Err(cut)]);
+        assert_eq!(next(&mut s), (-1, Vec::new()));
+    }
+
+    #[test]
+    fn a_stream_the_server_closes_ends_without_an_error() {
+        let mut s = scripted(vec![Ok(b"data: one\n\n")]);
+        assert_eq!(next(&mut s), (1, b"one".to_vec()));
+        assert_eq!(next(&mut s).0, 0);
+    }
+
+    // Without this limit on the stream's reads, nothing ever comes to say a dead link is dead.
+    #[test]
+    fn the_stream_of_a_client_has_the_limit() {
         unsafe {
-            let path = "/api/event";
-            let mut status = 0;
-            let s = occ_sse_open(&c, path.as_ptr(), path.len(), &mut status);
-            assert_eq!(status, 200);
-            assert!(!s.is_null());
-            let next = |s| {
-                let mut out = OccBuf::empty();
-                let got = occ_sse_next(s, &mut out);
-                occ_buf_free(out);
-                got
-            };
-            assert_eq!(next(s), 1);
-            // (a heartbeat in the middle keeps it alive: 500 ms between the two events, more than the limit)
-            assert_eq!(next(s), 1, "the heartbeat counted as life");
-            let silent = Instant::now();
-            assert_eq!(next(s), -1, "silence ends it");
-            assert!(silent.elapsed() < Duration::from_secs(2), "at its limit, not when the socket closes");
-            occ_sse_free(s);
+            let base = "http://127.0.0.1:1";
+            let c = occ_client_new(base.as_ptr(), base.len(), std::ptr::null(), 0, std::ptr::null(), 0);
+            assert_eq!((*c).stream.config().timeout_per_read(), Some(STREAM_IDLE));
+            drop(Box::from_raw(c));
         }
-        server.join().unwrap();
     }
 
     #[test]

@@ -47,7 +47,7 @@ mkdirSync(docs, { recursive: true })
 const PORT = 9391
 const SIZE = '1460x920'   // window pixels, whichever screen it opens on
 // (grey text: the colours of the stripes belong to a screen, and a picture is seen on others, scaled)
-const COMMON = ['--pref', 'appearance.accent=peach', '--pref', 'appearance.text_smoothing=grey', '--pref', 'appearance.zoom=1', '--scale=1.25', `--size=${SIZE}`, ...(opt['font-dir'] ? [`--font-dir=${resolve(opt['font-dir'])}`] : [])]
+const COMMON = ['--pref', 'notify.finished=off', '--pref', 'appearance.accent=peach', '--pref', 'appearance.text_smoothing=grey', '--pref', 'appearance.zoom=1', '--scale=1.25', `--size=${SIZE}`, ...(opt['font-dir'] ? [`--font-dir=${resolve(opt['font-dir'])}`] : [])]
 const SESSION = [`--session=${opt.session}`, '--search=Tour']
 const WORK_TITLE = 'Python clock'   // what the sidebar's search leaves of the sessions, and shows once they are read
 const WORK = [`--session=${opt['work-session']}`, `--search=${WORK_TITLE}`]

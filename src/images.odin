@@ -320,7 +320,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 			if sig.scrolled.y != 0 {
 				view_zoom_to(app, app.view_zoom * math.pow(f32(VIEW_ZOOM_STEP), -sig.scrolled.y), max_zoom, sig.mouse - view * 0.5)
 			}
-			if sig.pressed { app.view_grab = app.view_pan }
+			if sig.pointer_pressed { app.view_grab = app.view_pan }
 			if sig.dragging { app.view_pan = app.view_grab + sig.drag_delta }
 			if sig.double_clicked {
 				native := sc / fit

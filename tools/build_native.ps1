@@ -13,7 +13,7 @@ $lib = Join-Path $out 'occ_native.lib'
 $stampFile = Join-Path $out 'STAMP'
 
 $inputs = @(Get-Item (Join-Path $ws 'Cargo.toml'), (Join-Path $ws 'Cargo.lock'), $PSCommandPath)
-foreach ($c in Get-ChildItem $ws -Directory) {
+foreach ($c in Get-ChildItem $ws -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'Cargo.toml') }) {   # (cargo test leaves native\target)
     $inputs += @(Get-ChildItem (Join-Path $c.FullName 'src') -Recurse -File) + @(Get-Item (Join-Path $c.FullName 'Cargo.toml'))
 }
 $sha = [Security.Cryptography.SHA256]::Create()

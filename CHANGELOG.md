@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-11-06
+
+### Changed
+
+- On gui_toolkit 0.86.0, its state machines made explicit: what the window, the pointer, the clipboard and the fonts do in the corners of their lives.
+
 ## [0.15.0] - 2026-11-06
 
 ### Added
@@ -625,7 +631,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.15.1
 [0.15.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.15.0
 [0.14.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.14.0
 [0.13.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.13.0
