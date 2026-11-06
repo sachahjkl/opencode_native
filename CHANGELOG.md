@@ -5,14 +5,19 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.17.3] - 2026-11-06
+
 ### Added
 
+- A model's tooltip in the picker says what it is: its context, output, prices, what it reads, its tools, its levels of thinking, when it came out.
 - **A browser per session.** Each session has its own Preview: its pages, their history and address, open or closed. Another session shown shows its own, alive and not loaded again, and a session that never opened it has no tab. A sub-agent uses its session's browser, the home page has its own, and what was open beside a first prompt stays with the session it made.
 - **Tabs in the browser.** A strip inside the panel when a session has several, + in the address row, a click to bring one, x or a middle click to close it, Ctrl+T and Ctrl+W while the panel has the keyboard, "New browser tab" and "Close browser tab" in the palette. Closing the last closes the panel, for that session.
 - The agents' browser tools drive the tabs of the session that called, even out of sight: `tabs_list` says them all, `tabs_open` opens a new one, every tool takes a tab's id, and without one acts on the tab in front. An unknown id is refused.
 
 ### Changed
 
+- While a turn runs, Enter sends the message into it and Ctrl+Enter queues it for the end of the turn. The setting `conversation.while_running` swaps them.
+- The buttons of the browser and the terminal are beside the composer's Send, not in the title bar: they belong to the session.
 - At most 8 pages stay alive, every session's tabs together: past that the one shown longest ago goes, its address kept, and showing it loads it again.
 - The panel's window follows the session shown, with an empty panel for a session that has no browser.
 - A key held in the page counts once.
@@ -680,6 +685,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
 [Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.0...HEAD
+[0.17.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.3
 [0.17.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.2
 [0.17.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.1
 [0.17.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.0
