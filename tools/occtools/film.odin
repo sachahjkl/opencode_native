@@ -77,6 +77,7 @@ Scene :: struct {
 	name, search, session: string,
 	play:                  proc(s: ^Shot),
 	before:                proc(dt: ^Dt),   // what is done off camera
+	diff:                  string,          // a patch to open in the full view (--diff)
 }
 
 Shot :: struct {
@@ -220,28 +221,10 @@ click_text :: proc(s: ^Shot, label: string, after: time.Duration) {
 
 @(private = "file")
 play_diff :: proc(s: ^Shot) {
-	hold(s, 600 * time.Millisecond)
-	click_text(s, "Full view", 1500 * time.Millisecond)
-	click_text(s, "Split", 2200 * time.Millisecond)
-	click_text(s, "Stacked", 1000 * time.Millisecond)
-	press(s, "Escape", 600 * time.Millisecond)
-}
-
-// (a diff in view, off camera)
-@(private = "file")
-diff_ready :: proc(dt: ^Dt) {
-	x, y := film_at(dt, 0.65, 0.4)
-	_, bottom := film_at(dt, 0, 0.62)
-	_, top := film_at(dt, 0, 0.15)
-	for _ in 0 ..< 80 {
-		boxes := dt_find(dt, "Full view")
-		for b in boxes {
-			if int(b.y) > top && int(b.y) < bottom { return }   // (built is not shown: the list builds a screen around the view)
-		}
-		film_wheel(dt, x, y, -1)
-		dt_call(dt, "Toolkit.waitIdle", `{"timeout":800}`)
-	}
-	fmt.eprintln("film: no diff came into view")
+	hold(s, 1200 * time.Millisecond)
+	click_text(s, "Split", 900 * time.Millisecond)
+	wheel(s, 2, 8, 280 * time.Millisecond)
+	hold(s, 700 * time.Millisecond)
 }
 
 @(private = "file")
@@ -258,15 +241,15 @@ play_queue :: proc(s: ^Shot) {
 }
 
 SCENES :: [?]Scene{
-	{"read", "Tour", TOUR_SESSION, play_read, nil},
-	{"palette", "Tour", TOUR_SESSION, play_palette, nil},
-	{"model", "Tour", TOUR_SESSION, play_model, nil},
-	{"find", "Tour", TOUR_SESSION, play_find, nil},
-	{"stats", "Tour", TOUR_SESSION, play_stats, nil},
-	{"terminal", "", "", play_terminal, terminal_ready},
-	{"browser", "", "", play_browser, nil},
-	{"queue", "", "", play_queue, nil},
-	{"diff", "", "", play_diff, diff_ready},
+	{"read", "Tour", TOUR_SESSION, play_read, nil, ""},
+	{"palette", "Tour", TOUR_SESSION, play_palette, nil, ""},
+	{"model", "Tour", TOUR_SESSION, play_model, nil, ""},
+	{"find", "Tour", TOUR_SESSION, play_find, nil, ""},
+	{"stats", "Tour", TOUR_SESSION, play_stats, nil, ""},
+	{"terminal", "", "", play_terminal, terminal_ready, ""},
+	{"browser", "", "", play_browser, nil, ""},
+	{"queue", "", "", play_queue, nil, ""},
+	{"diff", "", "", play_diff, nil, FILM_DIR + "/preview.odin"},
 }
 
 // A session of the demo's own, a real run of a public model: what the scenes that want a project show.
@@ -284,7 +267,7 @@ prepare :: proc(l: ^Live) -> bool {
 	if !dt_wait_name(dt, "composer", STEP_LIMIT) { return false }
 	public_model(dt)
 	dt_click_name(dt, "composer")
-	dt_type(dt, "Keep a todo list. Add a --json flag to clock.py that prints the time as JSON, try it, then document it in README.md.")
+	dt_type(dt, "Keep a todo list. Add a --iso flag to clock.py that prints the time in ISO 8601, try it, then document it in README.md.")
 	dt_key(dt, "Enter")
 	dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
 	dt_shot(dt, LIVE_DIR + "/prepare_sent.png")
@@ -307,7 +290,8 @@ shoot :: proc(l: ^Live, scene: Scene) -> bool {
 	session := scene.session != "" ? scene.session : strings.trim_space(read_text(FILM_SESSION))
 	if session == "" { fmt.eprintln("film: no session: occtools film prepare"); return false }
 	search := scene.search != "" ? scene.search : "clock"
-	app, ok := launch(l, fmt.tprintf("film_%s", scene.name), FILM_SIZE, FILM_SCALE, fmt.tprintf("--slow-motion=%d", FILM_SLOW), fmt.tprintf("--session=%s", session), fmt.tprintf("--search=%s", search))
+	extra := scene.diff != "" ? fmt.tprintf("--diff=%s", scene.diff) : "--pref=notify.finished=off"
+	app, ok := launch(l, fmt.tprintf("film_%s", scene.name), FILM_SIZE, FILM_SCALE, fmt.tprintf("--slow-motion=%d", FILM_SLOW), fmt.tprintf("--session=%s", session), fmt.tprintf("--search=%s", search), extra)
 	if !ok { return false }
 	defer app_end(&app)
 	dt := &app.dt
