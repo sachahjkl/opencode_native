@@ -123,7 +123,7 @@ build_native :: proc(force: bool) -> bool {
 	stamp_file := NATIVE_OUT + "/STAMP"
 	stamp := native_stamp()
 	if !force && stamped(NATIVE_LIB, stamp_file, stamp) { fmt.printfln("occ_native up to date in %s", NATIVE_OUT); return true }
-	if os.make_directory_all(NATIVE_OUT) != nil { return false }
+	if !make_folder(NATIVE_OUT) { return false }
 	target_dir := "../" + NATIVE_OUT + "/target"
 	built := false
 	when ODIN_OS == .Windows {
@@ -167,11 +167,11 @@ build_vt :: proc(force: bool) -> bool {
 	stamp_file := VT_OUT + "/STAMP"
 	stamp := GHOSTTY_COMMIT + " " + ZIG_VERSION + " " + ZIG_SYSTEM
 	if !force && stamped(VT_LIB, stamp_file, stamp) { fmt.printfln("libghostty-vt up to date in %s", VT_OUT); return true }
-	if os.make_directory_all(VT_OUT) != nil { return false }
+	if !make_folder(VT_OUT) { return false }
 	zig, has_zig := fetch_zig()
 	if !has_zig { return false }
 	if !os.exists(VT_SOURCE + "/.git") {
-		if os.make_directory_all(VT_SOURCE) != nil { return false }
+		if !make_folder(VT_SOURCE) { return false }
 		if !run("git", "-C", VT_SOURCE, "init", "-q") { return false }
 		if !run("git", "-C", VT_SOURCE, "remote", "add", "origin", GHOSTTY_REMOTE) { return false }
 	}
@@ -229,7 +229,7 @@ build_program :: proc(b: Build) -> bool {
 	if odin == "" { odin = "odin" }
 	if !odin_is_pinned(odin) { return false }
 	if !build_native(b.force) || !build_vt(b.force) { return false }
-	if os.make_directory_all(filepath.dir(out)) != nil { return false }
+	if !make_folder(filepath.dir(out)) { return false }
 
 	cmd := make([dynamic]string, context.temp_allocator)
 	append(&cmd, odin, "build", "src", fmt.tprintf("-collection:gt=%s", gt), fmt.tprintf("-out:%s", out), "-vet")

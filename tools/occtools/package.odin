@@ -59,7 +59,7 @@ package_windows :: proc(version: string) -> bool {
 	program := "build/opencode-native.exe"
 	if !os.exists(program) { fmt.eprintfln("package: %s is missing: build it first", program); return false }
 	_ = os.remove_all(DIST_DIR)
-	if os.make_directory_all(DIST_DIR) != nil { return false }
+	if !make_folder(DIST_DIR) { return false }
 	name := fmt.tprintf("opencode-native-%s-windows-x64.exe", version)
 	path := fmt.tprintf("%s/%s", DIST_DIR, name)
 	if os.copy_file(path, program) != nil { return false }
@@ -82,7 +82,7 @@ package_linux :: proc(version: string) -> bool {
 	name := fmt.tprintf("opencode-native-%s", version)
 	stage := fmt.tprintf("%s/%s", STAGE_DIR, name)
 	_ = os.remove_all(STAGE_DIR)
-	if os.make_directory_all(stage) != nil || os.make_directory_all(DIST_DIR) != nil { return false }
+	if !make_folder(stage) || !make_folder(DIST_DIR) { return false }
 	inside := fmt.tprintf("%s/opencode-native", stage)
 	if os.copy_file(inside, program) != nil { return false }
 	if !run("chmod", "+x", inside) { return false }   // (what is copied here is bytes: it must stay a program in the archive)

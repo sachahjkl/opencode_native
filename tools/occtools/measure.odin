@@ -97,7 +97,7 @@ run_measure :: proc(args: []string) -> int {
 	}
 	info, err := os.stat(l.exe, context.temp_allocator)
 	if err != nil { fmt.eprintfln("measure: no %s: occtools check builds it", l.exe); return 1 }
-	if os.make_directory_all(LIVE_DIR) != nil { return 1 }
+	if !make_folder(LIVE_DIR) { return 1 }
 
 	warm: Sample
 	if !one_run(&l, &warm) { fmt.eprintln("measure: the first run failed"); return 1 }

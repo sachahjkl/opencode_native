@@ -43,7 +43,7 @@ film_wheel :: proc(dt: ^Dt, x, y, notches: int) {
 film_start :: proc(dt: ^Dt, name: string) -> bool {
 	dir := fmt.tprintf("%s/%s", FILM_DIR, name)
 	_ = os.remove_all(dir)
-	if os.make_directory_all(dir) != nil { return false }
+	if !make_folder(dir) { return false }
 	dt.cast_dir = strings.clone(dir)
 	_, ok := dt_call(dt, "Page.startScreencast", `{"format":"png","minIntervalMs":0}`)
 	return ok
@@ -313,7 +313,7 @@ shoot :: proc(l: ^Live, scene: Scene) -> bool {
 run_film :: proc(args: []string) -> int {
 	l: Live
 	if !live_setup(&l, args) { return 1 }
-	if os.make_directory_all(FILM_DIR) != nil || os.make_directory_all(LIVE_DIR) != nil { return 1 }
+	if !make_folder(FILM_DIR) || !make_folder(LIVE_DIR) { return 1 }
 	what := len(args) > 0 ? args[0] : "all"
 	if what == "prepare" { return prepare(&l) ? 0 : 1 }
 	if !snapshot_take(&l) { return 1 }

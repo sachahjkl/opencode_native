@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Checks the site in a real browser, Chrome or Edge with no window, on the pages tools/site_changelog.mjs makes of it (in a
+// Checks the site in a real browser, Chrome or Edge with no window, on the pages `occtools site changelog` makes of it (in a
 // folder of its own, removed after). The image viewer (site/gallery.js), on the home page and the classic screenshots: a click
 // on a capture opens it, the picture loads at its own size, the arrows go through the captures, Esc closes and gives the
 // keyboard back to the link. Every page: its links, pictures, styles and scripts are there, and the anchors they point at; it
@@ -9,7 +9,7 @@
 // Exit code 1 if something differs. Nothing is published: the folder is served on 127.0.0.1 for the time of the check.
 //   node tools/site_check.mjs [--site folder] [--shot file.png] [--browser program]
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, extname, join, normalize, resolve } from 'node:path'
@@ -37,7 +37,10 @@ if (!browser) { console.error('no Chrome or Edge found: give --browser'); proces
 
 const made = mkdtempSync(join(tmpdir(), 'site_check_site_'))
 const root = join(made, 'site')
-execFileSync(process.execPath, [join(repo, 'tools/site_changelog.mjs'), resolve(opt.site), root], { cwd: repo, stdio: 'inherit' })
+const occtools = join(repo, 'build', process.platform === 'win32' ? 'occtools.exe' : 'occtools')
+mkdirSync(dirname(occtools), { recursive: true })
+execFileSync('odin', ['build', 'tools/occtools', `-out:${occtools}`], { cwd: repo, stdio: 'inherit' })
+execFileSync(occtools, ['site', 'changelog', resolve(opt.site), root], { cwd: repo, stdio: 'inherit' })
 const pages = readdirSync(root, { recursive: true }).map((f) => f.replaceAll('\\', '/')).filter((f) => f.endsWith('.html')).sort()
 const fileOf = (path) => join(root, normalize(path.endsWith('/') ? path + 'index.html' : path))
 

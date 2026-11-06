@@ -455,7 +455,7 @@ run_shots :: proc(args: []string) -> int {
 	absolute, err := os.get_absolute_path(s.docs, context.temp_allocator)   // (the viewer opens one of them, from a folder of its own)
 	if err != nil { return 1 }
 	s.docs = absolute
-	if os.make_directory_all(s.docs) != nil || os.make_directory_all(LIVE_DIR) != nil { return 1 }
+	if !make_folder(s.docs) || !make_folder(LIVE_DIR) { return 1 }
 	if linux_build {
 		program, built := wsl_build()
 		if !built { fmt.eprintln("shots: the build in WSL failed"); return 1 }

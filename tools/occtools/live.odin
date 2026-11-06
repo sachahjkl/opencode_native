@@ -166,7 +166,7 @@ launch :: proc(l: ^Live, name: string, args: ..string) -> (app: App, ok: bool) {
 	port := free_port()
 	here, _ := os.get_working_directory(context.temp_allocator)
 	app.settings = fmt.tprintf("%s/%s/settings_%d", here, LIVE_DIR, port)
-	if os.make_directory_all(app.settings) != nil { return }
+	if !make_folder(app.settings) { return }
 	app.log = fmt.tprintf("%s/%s.log", LIVE_DIR, name)
 	log, err := os.open(app.log, os.O_WRONLY | os.O_CREATE | os.O_TRUNC | os.O_INHERITABLE, os.Permissions_Read_Write_All)   // (a child only writes to what it may inherit)
 	if err != nil { fmt.eprintfln("live: %s: %v", app.log, err); return }
@@ -422,7 +422,7 @@ run_live :: proc(args: []string) -> int {
 	}
 	if only != "" && only != "link" && only != "password" && only != "prompt" && only != "diff" { fmt.eprintfln("live: no scenario %s", only); return EXIT_USAGE }
 	if !os.exists(l.exe) { fmt.eprintfln("live: no %s: occtools check builds it", l.exe); return 1 }
-	if os.make_directory_all(LIVE_DIR) != nil { return 1 }
+	if !make_folder(LIVE_DIR) { return 1 }
 	if !snapshot_take(&l) { return 1 }
 
 	begun := time.now()
