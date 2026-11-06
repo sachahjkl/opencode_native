@@ -213,6 +213,38 @@ play_browser :: proc(s: ^Shot) {
 }
 
 @(private = "file")
+click_text :: proc(s: ^Shot, label: string, after: time.Duration) {
+	dt_call(s.dt, "Toolkit.click", fmt.tprintf(`{{"text":%s,"index":0,"count":1,"button":"left"}}`, json_text(label)))
+	hold(s, after)
+}
+
+@(private = "file")
+play_diff :: proc(s: ^Shot) {
+	hold(s, 600 * time.Millisecond)
+	click_text(s, "Full view", 1500 * time.Millisecond)
+	click_text(s, "Split", 2200 * time.Millisecond)
+	click_text(s, "Stacked", 1000 * time.Millisecond)
+	press(s, "Escape", 600 * time.Millisecond)
+}
+
+// (a diff in view, off camera)
+@(private = "file")
+diff_ready :: proc(dt: ^Dt) {
+	x, y := film_at(dt, 0.65, 0.4)
+	_, bottom := film_at(dt, 0, 0.62)
+	_, top := film_at(dt, 0, 0.15)
+	for _ in 0 ..< 80 {
+		boxes := dt_find(dt, "Full view")
+		for b in boxes {
+			if int(b.y) > top && int(b.y) < bottom { return }   // (built is not shown: the list builds a screen around the view)
+		}
+		film_wheel(dt, x, y, -1)
+		dt_call(dt, "Toolkit.waitIdle", `{"timeout":800}`)
+	}
+	fmt.eprintln("film: no diff came into view")
+}
+
+@(private = "file")
 play_queue :: proc(s: ^Shot) {
 	dt_click_name(s.dt, "composer")
 	hold(s, 300 * time.Millisecond)
@@ -234,6 +266,7 @@ SCENES := []Scene{
 	{"terminal", "", "", play_terminal, terminal_ready},
 	{"browser", "", "", play_browser, nil},
 	{"queue", "", "", play_queue, nil},
+	{"diff", "", "", play_diff, diff_ready},
 }
 
 // A session of the demo's own, a real run of a public model: what the scenes that want a project show.

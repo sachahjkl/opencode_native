@@ -176,6 +176,7 @@ App_Context :: struct {
 	terms:          Terminals,            // the Terminal panel (terminal.odin)
 	schedules:      Schedules,            // schedules.odin
 	artifacts:      Artifacts,
+	diff_full:      Diff_Full,            // diff_full.odin
 	plugins:        Plugins,
 	integrations:   Integrations,         // the Connections page (integrations.odin)
 	mentions:       Mentions,             // @ in the composer (files.odin)

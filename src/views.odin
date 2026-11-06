@@ -74,6 +74,7 @@ build_ui :: proc(app: ^App) {
 	schedules_dialog(app, em)
 	artifacts_dialog(app, em)
 	changes_dialog(app, em)
+	diff_full_dialog(app, em)
 	files_dialog(app, em)
 	palette_dialog(app, em)
 	context_menu(app, em)
@@ -1248,7 +1249,7 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 					if open {
 						tool_body(app, p, em)
 					} else if show_diff {
-						diff_view(app, "###diff", p.patch, em, DIFF_FOLDED_LINES)
+						diff_view(app, "###diff", p.patch, em, DIFF_FOLDED_LINES, tool_diff_title(p))
 					} else if show_error {
 						mono_well("###output", p.output, em, TOOL_ERROR_LINES_FOLDED, hex(HEX_ERROR_TEXT))
 					}

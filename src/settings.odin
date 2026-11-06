@@ -75,6 +75,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "conversation.width", description = "Widest the conversation column gets, in logical pixels.", kind = .Int, default = {i = 880}, bounded = true, min = COLUMN_W_MIN, max = COLUMN_W_MAX},
 	{name = "conversation.reasoning", description = "How the model's reasoning shows: folded under a line, unfolded, or not at all.", kind = .String, default = {s = "collapsed"}, choices = {"collapsed", "expanded", "hidden"}},
 	{name = "conversation.expand_tools", description = "Tool calls open with their input and output shown.", kind = .Bool, default = {b = false}},
+	{name = "conversation.diff_layout", description = "How a diff's full view shows it: old and new stacked, or side by side.", kind = .String, default = {s = "stacked"}, choices = {"stacked", "split"}},
 	{name = "conversation.tool_lines", description = "Lines of a tool's output shown before the rest is counted.", kind = .Int, default = {i = 60}, bounded = true, min = TOOL_LINES_MIN, max = TOOL_LINES_MAX},
 	{name = "conversation.page_size", description = "Messages read at a time (scrolling up reads the next page by itself).", kind = .Int, default = {i = 80}, bounded = true, min = PAGE_SIZE_MIN, max = PAGE_SIZE_MAX},
 	{name = "conversation.follow", description = "Follow new messages to the bottom while you are there.", kind = .Bool, default = {b = true}},
@@ -126,6 +127,7 @@ Prefs :: struct {
 	steer_first:  bool,   // while a turn runs, Enter sends into it (conversation.while_running)
 	subagents:    string,
 	sidebar_mode: Sidebar_Mode,
+	diff_layout:  Diff_Layout,
 	notify:       string,
 	notify_perm:  bool,
 	content_zoom: f32,
@@ -183,6 +185,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.steer_first = config.string_of(p, "conversation.while_running") == "steer"
 	s.subagents = config.string_of(p, "sidebar.subagents")
 	s.sidebar_mode = sidebar_mode_of(config.string_of(p, "sidebar.mode"))
+	s.diff_layout = diff_layout_of(config.string_of(p, "conversation.diff_layout"))
 	s.notify = config.string_of(p, "notify.finished")
 	s.notify_perm = config.bool_of(p, "notify.permission")
 	s.content_zoom = f32(config.float_of(p, "appearance.content_zoom"))

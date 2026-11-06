@@ -91,7 +91,6 @@ part_patch_set :: proc(p: ^Part, patch: string) {
 ////////////////////////////////
 // A diff
 
-@(private = "file")
 Diff_Line :: struct {
 	sign:   byte,       // ' ', '+', '-', '@' (a hunk begins)
 	text:   string,
@@ -191,7 +190,6 @@ diff_parse :: proc(patch: string) -> []Diff_Line {
 
 // In a block of lines removed then added, the k-th of each are the same line changed: what they share at each end is
 // left plain, what is between is what the eye looks for.
-@(private = "file")
 diff_mark :: proc(lines: []Diff_Line) {
 	i := 0
 	for i < len(lines) {
@@ -222,7 +220,6 @@ line_shown :: proc(s: string) -> string {
 	return ellipsize(t, TOOL_LINE_CHARS)
 }
 
-@(private = "file")
 gutter :: proc(id: string, n: int, em: f32) {
 	s := n > 0 ? fmt.tprintf("%d", n) : ""
 	text(id, s, hex(HEX_DIFF_LINE_NO), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION), text_align = .Right}, ui.px(em * GUTTER_EM))
@@ -269,8 +266,8 @@ diff_row :: proc(app: ^App, l: Diff_Line, k: int, numbered: bool, em: f32) {
 	}
 }
 
-// The lines of a patch in a well, at most `max_lines` of them (the rest is counted).
-diff_view :: proc(app: ^App, id, patch: string, em: f32, max_lines: int) {
+// The lines of a patch in a well, at most `max_lines` of them (the rest is counted, and the whole opens in its own window).
+diff_view :: proc(app: ^App, id, patch: string, em: f32, max_lines: int, title := "Diff") {
 	lines := diff_parse(patch)
 	if len(lines) == 0 { return }
 	diff_mark(lines)
@@ -281,7 +278,7 @@ diff_view :: proc(app: ^App, id, patch: string, em: f32, max_lines: int) {
 		ui.spacer(ui.px(em * 0.3))
 		shown := min(len(lines), max_lines)
 		for l, k in lines[:shown] { diff_row(app, l, k, numbered, em) }
-		more_lines(len(lines) - shown, em)
+		if diff_more(len(lines) - shown, em) { diff_full_open(app, title, patch) }
 		ui.spacer(ui.px(em * 0.3))
 	}
 }
@@ -294,6 +291,22 @@ more_lines :: proc(n: int, em: f32) {
 		ui.spacer(ui.px(em * 0.75))
 		text("m", fmt.tprintf("… %d more lines", n), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
 	}
+}
+
+// What is not shown, and the way to all of it: a text naming an action is a button.
+@(private = "file")
+diff_more :: proc(n: int, em: f32) -> (clicked: bool) {
+	ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center, cursor = .Hand})
+	b := ui.build_box({.Clickable}, "###more")
+	sig := ui.signal(b)
+	if ui.parent(b) {
+		ui.spacer(ui.px(em * 0.75))
+		col := sig.hovering ? hex(HEX_TEXT) : hex(HEX_FAINT)
+		fs := math.round(em * FS_SMALL)
+		if n > 0 { text("m", fmt.tprintf("… %d more lines", n), col, ui.Style_Mod{font = the_app.mono, font_size = fs}); ui.spacer(ui.px(em * 0.8)) }
+		text("f", "Full view", col, ui.Style_Mod{font_size = fs})
+	}
+	return sig.clicked
 }
 
 ////////////////////////////////
@@ -443,6 +456,12 @@ input_view :: proc(app: ^App, input: string, em: f32) {
 	ui.spacer(ui.px(em * 0.5))
 }
 
+// What a call that edits names: its file, as the arguments say.
+tool_diff_title :: proc(p: ^Part) -> string {
+	if p.subject != "" { return p.subject }
+	return p.tool_name != "" ? p.tool_name : "Diff"
+}
+
 // The body of a call that is open, by what it does.
 tool_body :: proc(app: ^App, p: ^Part, em: f32) {
 	failed := p.status == .Error
@@ -454,7 +473,7 @@ tool_body :: proc(app: ^App, p: ^Part, em: f32) {
 	switch tool_kind(p.tool_name) {
 	case .Edit:
 		if patch := part_patch(p, app.chat.alloc); patch != "" {
-			diff_view(app, "###diff", patch, em, lines)
+			diff_view(app, "###diff", patch, em, lines, tool_diff_title(p))
 			if failed { ui.spacer(ui.px(em * 0.4)); output(app, p, em, lines) }
 			return
 		}

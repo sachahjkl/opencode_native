@@ -460,7 +460,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 							text("d", fmt.tprintf("-%d", f.deletions), hex(HEX_RED), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 						}
 						if f.open {
-							diff_view(app, "###fd", f.patch, em, CHANGES_DIFF_LINES)
+							diff_view(app, "###fd", f.patch, em, CHANGES_DIFF_LINES, f.file)
 							if f.more { text("m", "The server gave only the beginning of this file.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)}, ui.fill()) }
 						}
 						ui.spacer(ui.px(em * 0.4))

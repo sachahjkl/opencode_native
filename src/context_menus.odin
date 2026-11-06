@@ -83,7 +83,6 @@ copied :: proc(s: string, what: string) {
 	ui.toast(.Good, "%s copied", what)
 }
 
-@(private = "file")
 input_field :: proc(p: ^Part, key: string) -> string {
 	v, err := json.parse_string(p.input, allocator = context.temp_allocator)
 	return err == nil ? jstr(v, key) : ""

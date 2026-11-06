@@ -212,9 +212,9 @@ GO_BOTTOM_W_EM    :: 6.5
 
 // The dialogs one can resize: what they open at and the least they go to, in em (the window has the last word). (Schedules is as tall
 // as what it holds, and no longer one of them: its place stays, layout.dialogs is read by position.)
-Dialog :: enum u8 { Settings, Help, Changes, Files, Schedules, Artifacts }
-DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}, .Schedules = {54, 44}, .Artifacts = {70, 46}}
-DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}, .Schedules = {36, 22}, .Artifacts = {44, 22}}
+Dialog :: enum u8 { Settings, Help, Changes, Files, Schedules, Artifacts, Diff }
+DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}, .Schedules = {54, 44}, .Artifacts = {70, 46}, .Diff = {130, 80}}
+DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}, .Schedules = {36, 22}, .Artifacts = {44, 22}, .Diff = {50, 24}}
 DIALOGS_SAVED_WITH_STATS :: 7   // sizes in a layout.dialogs written when Statistics was a dialog, the second of them
 LOGO_EDGE_CHROMA     :: 142    // red minus blue of the logo's edge in the file (0xe8935a)
 TEXT_SMOOTH_SCALE    :: 1.5    // below this scale, text is smoothed per colour stripe when the system does (main.odin text_mode_follow)
