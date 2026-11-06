@@ -48,10 +48,38 @@ one_run :: proc(l: ^Live, s: ^Sample) -> bool {
 	return true
 }
 
+// From a key to the file found, on the screen: the whole way, through the server and back.
+@(private = "file")
+measure_find :: proc(l: ^Live, runs: int) -> int {
+	app, ok := launch(l, "measure_find", "--session=ses_e7633e562ffeJfyNPycNzsVrb1", "--search=Tour")
+	if !ok { return 1 }
+	defer app_end(&app)
+	dt := &app.dt
+	if !dt_wait_for(dt, "connected", STEP_LIMIT) { return 1 }
+	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	dt_key(dt, "ctrl+p")
+	if !dt_wait_name(dt, "flr0", STEP_LIMIT) { return 1 }
+	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	found := make([]f64, runs, context.temp_allocator)
+	for i in 0 ..< runs {
+		begun := time.now()
+		dt_type(dt, "screenshots.m")   // (not the whole name: the field must not be what is found)
+		if !dt_wait_for(dt, "screenshots.mjs", STEP_LIMIT) { return 1 }
+		found[i] = time.duration_milliseconds(time.since(begun))
+		dt_key(dt, "ctrl+a")
+		dt_key(dt, "Backspace")
+		if !dt_wait_for(dt, "screenshots.mjs", STEP_LIMIT, gone = true) { return 1 }
+		dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
+	}
+	report("a key to the file found", found, "ms")
+	return 0
+}
+
 run_measure :: proc(args: []string) -> int {
 	l: Live
 	if !live_setup(&l, args) { return 1 }
 	runs := MEASURE_RUNS
+	if len(args) > 0 && args[0] == "find" { return measure_find(&l, runs) }
 	for i := 0; i < len(args); i += 1 {
 		switch {
 		case args[i] == "--exe" && i + 1 < len(args):
