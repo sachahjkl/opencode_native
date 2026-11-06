@@ -80,7 +80,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "conversation.page_size", description = "Messages read at a time (scrolling up reads the next page by itself).", kind = .Int, default = {i = 80}, bounded = true, min = PAGE_SIZE_MIN, max = PAGE_SIZE_MAX},
 	{name = "conversation.follow", description = "Follow new messages to the bottom while you are there.", kind = .Bool, default = {b = true}},
 	{name = "conversation.usage", description = "Tokens and cost under each answer.", kind = .Bool, default = {b = true}},
-	{name = "conversation.while_running", description = "What Enter does while a turn runs: queue the message for the end of the turn, or send it into the turn. Ctrl+Enter does the other.", kind = .String, default = {s = "queue"}, choices = {"queue", "steer"}},
+	{name = "conversation.while_running", description = "What Enter does while a turn runs: send the message into the turn, or queue it for the end of the turn. Ctrl+Enter does the other.", kind = .String, default = {s = "steer"}, choices = {"queue", "steer"}},
 	{name = "conversation.clock", description = "Times of messages in 24-hour or 12-hour form.", kind = .String, default = {s = "24h"}, choices = {"24h", "12h"}},
 	{name = "composer.send", description = "The key that sends: Enter (Shift+Enter breaks the line) or Ctrl+Enter (Enter breaks the line).", kind = .String, default = {s = "enter"}, choices = {"enter", "ctrl+enter"}},
 	{name = "sidebar.subagents", description = "Sub-agent sessions: under their parent, in the list with the others, or not shown.", kind = .String, default = {s = "nested"}, choices = {"nested", "flat", "hidden"}},

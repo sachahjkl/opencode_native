@@ -104,7 +104,18 @@ Chat :: struct {
 }
 
 Agent_Info :: struct { id, name, description, mode: string }
-Model_Info :: struct { id, provider, name, family: string, ctx_len: f64 }
+// (Prices in dollars per million tokens; `priced`: the server gave them, a price of 0 then being free.)
+Model_Info :: struct {
+	id, provider, name, family: string,
+	ctx_len, out_len:           f64,
+	priced:                     bool,
+	price_in, price_out, price_cached: f64,
+	inputs:                     string,   // what it reads: "text, image, pdf"
+	efforts:                    string,   // how hard it can think: "low, medium, high"
+	status:                     string,
+	tools_known, tools:         bool,
+	released:                   f64,      // ms since 1970, 0: not said
+}
 Permission :: struct {
 	id, session, action, message: string,
 	resources: []string,
@@ -314,7 +325,7 @@ agents_clear :: proc(app: ^App) {
 }
 
 models_clear :: proc(app: ^App) {
-	for m in app.models { delete(m.id); delete(m.provider); delete(m.name); delete(m.family) }
+	for m in app.models { delete(m.id); delete(m.provider); delete(m.name); delete(m.family); delete(m.status); delete(m.inputs); delete(m.efforts) }
 	clear(&app.models)
 }
 
@@ -335,10 +346,24 @@ models_load :: proc(app: ^App, v: json.Value) {
 	for it in jarr(v, "data") {
 		if jstr(it, "type") != "" && jstr(it, "type") != "chat" { continue }
 		if _, has := jget(it, "enabled").(json.Boolean); has && !jbool(it, "enabled") { continue }
-		append(&app.models, Model_Info{
+		m := Model_Info{
 			id = strings.clone(jstr(it, "id")), provider = strings.clone(jstr(it, "providerID")),
-			name = strings.clone(jstr(it, "name")), family = strings.clone(jstr(it, "family")), ctx_len = jnum(it, "limit", "context"),
-		})
+			name = strings.clone(jstr(it, "name")), family = strings.clone(jstr(it, "family")),
+			ctx_len = jnum(it, "limit", "context"), out_len = jnum(it, "limit", "output"),
+			status = strings.clone(jstr(it, "status")), released = jnum(it, "time", "released"),
+		}
+		if prices := jarr(it, "cost"); len(prices) > 0 {
+			m.priced = true
+			m.price_in, m.price_out, m.price_cached = jnum(prices[0], "input"), jnum(prices[0], "output"), jnum(prices[0], "cache", "read")
+		}
+		if _, known := jget(it, "capabilities", "tools").(json.Boolean); known { m.tools_known, m.tools = true, jbool(it, "capabilities", "tools") }
+		words := make([dynamic]string, context.temp_allocator)
+		for w in jarr(it, "capabilities", "input") { if s, is := w.(json.String); is { append(&words, string(s)) } }
+		m.inputs = strings.join(words[:], ", ")
+		clear(&words)
+		for variant in jarr(it, "variants") { append(&words, jstr(variant, "id")) }
+		m.efforts = strings.join(words[:], ", ")
+		append(&app.models, m)
 	}
 	slice.sort_by(app.models[:], proc(x, y: Model_Info) -> bool {
 		if x.provider != y.provider { return x.provider < y.provider }

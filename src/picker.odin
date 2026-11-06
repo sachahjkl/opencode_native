@@ -8,6 +8,7 @@ import "core:fmt"
 import "core:math"
 import "core:slice"
 import "core:strings"
+import "core:time"
 import "gt:draw"
 import "gt:ui"
 
@@ -17,6 +18,77 @@ Pick_Item :: struct {
 	detail:  string,   // shown at the right, not matched (a context size)
 	current: bool,
 	color:   Color,    // a rail in that colour before the label (none: zero)
+	model:   ^Model_Info,   // what its tooltip tells of it (none: nil)
+}
+
+// A price as prices read: 2, 0.20, 0.075.
+@(private = "file")
+price_text :: proc(x: f64) -> string {
+	s := fmt.tprintf("%.3f", x)
+	if strings.has_suffix(s, ".000") { return s[:len(s) - 4] }
+	return strings.has_suffix(s, "0") ? s[:len(s) - 1] : s
+}
+
+// A size as sizes read: 1M, 128k.
+@(private = "file")
+size_text :: proc(x: f64) -> string {
+	s, _ := strings.replace(kfmt(x), ".0", "", 1, context.temp_allocator)
+	return s
+}
+
+Model_Fact :: struct { label, value: string }
+
+// What a model is. What the server did not say is left out, not guessed. (In the frame's allocator.)
+model_facts :: proc(m: Model_Info) -> []Model_Fact {
+	out := make([dynamic]Model_Fact, context.temp_allocator)
+	if m.ctx_len > 0 { append(&out, Model_Fact{"Context", size_text(m.ctx_len)}) }
+	if m.out_len > 0 { append(&out, Model_Fact{"Output", size_text(m.out_len)}) }
+	if m.priced {
+		if m.price_in == 0 && m.price_out == 0 {
+			append(&out, Model_Fact{"Price", "free"})
+		} else {
+			append(&out, Model_Fact{"Price", fmt.tprintf("$%s in, $%s out per M", price_text(m.price_in), price_text(m.price_out))})
+			if m.price_cached > 0 { append(&out, Model_Fact{"Cached", fmt.tprintf("$%s per M", price_text(m.price_cached))}) }
+		}
+	}
+	if m.inputs != "" { append(&out, Model_Fact{"Reads", m.inputs}) }
+	if m.tools_known { append(&out, Model_Fact{"Tools", m.tools ? "yes" : "no"}) }
+	if m.efforts != "" { append(&out, Model_Fact{"Thinking", m.efforts}) }
+	if m.released > 0 {
+		y, mo, _ := time.date(time.unix(i64(m.released / 1000), 0))
+		append(&out, Model_Fact{"Released", fmt.tprintf("%04d-%02d", y, int(mo))})
+	}
+	if m.status != "" && m.status != "active" { append(&out, Model_Fact{"Status", m.status}) }
+	return out[:]
+}
+
+// A table, a line each: what is long does not wrap, a tooltip that reads down.
+@(private = "file")
+model_tip :: proc(app: ^App, m: Model_Info, em: f32) {
+	facts := model_facts(m)
+	if len(facts) == 0 { return }
+	fs := math.round(em * FS_SMALL)
+	line :: proc(id: string, em: f32) -> ^ui.Box {
+		ui.next({width = ui.children_sum(), height = ui.px(math.round(em * MODEL_TIP_LINE_EM)), axis = .X, cross = .Center})
+		return ui.build_box({}, id)
+	}
+	if ui.tooltip_beside() {
+		ui.spacer(ui.px(em * 0.4))
+		if ui.parent(line("###mt_name", em)) {
+			ui.spacer(ui.px(em * 0.7))
+			text("n", m.name != "" ? m.name : m.id, hex(HEX_BRIGHT), ui.Style_Mod{font_size = fs})
+			ui.spacer(ui.px(em * 0.7))
+		}
+		for f, i in facts {
+			if ui.parent(line(fmt.tprintf("###mt%d", i), em)) {
+				ui.spacer(ui.px(em * 0.7))
+				text("l", f.label, hex(HEX_FAINT), ui.Style_Mod{font_size = fs}, ui.px(math.round(em * MODEL_TIP_LABEL_EM)))
+				text("v", f.value, hex(HEX_TEXT), ui.Style_Mod{font_size = fs})
+				ui.spacer(ui.px(em * 0.7))
+			}
+		}
+		ui.spacer(ui.px(em * 0.4))
+	}
 }
 
 Picker :: struct {
@@ -206,6 +278,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 				}
 				h := hits[row.hit]
 				it := items[h.index]
+				if it.model != nil && ui.hovered_for(rs, TOOLTIP_DELAY_S) { model_tip(app, it.model^, em) }
 				if ui.parent(rb) {
 					ui.spacer(ui.px(em * (row.group != "" ? 1.9 : 0.75)))
 					if it.color.a > 0 {

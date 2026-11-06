@@ -249,13 +249,6 @@ title_bar :: proc(app: ^App, em: f32) {
 			throbber(app, "###tscan", accent(), math.round(em * 3), math.round(em * 0.75), em)
 			ui.spacer(ui.px(em))
 		}
-		if preview_available() {
-			ui.a11y({role = .Button, name = "Preview panel"})
-			psig := glyph_button("###preview_btn", ICO_GLOBE, math.round(h * 0.78), app.preview.open ? accent() : Color{})
-			if psig.clicked { command_run(app, command_find("view.preview")) }
-			if ui.hovered_for(psig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Preview panel  (Ctrl+Shift+B)") } }
-			ui.spacer(ui.px(em * 0.5))
-		}
 		_, _ = ui.window_buttons()
 	}
 	// the bar's lower edge: a carved line
@@ -1493,6 +1486,7 @@ composer :: proc(app: ^App, em: f32) {
 				}
 			}
 			ui.spacer(ui.px(em * 0.8))
+			composer_panels(app, em)
 			if app.chat.busy {
 				if bevel_button("###stop2", "", ICO_STOP, .Danger, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM)).clicked { interrupt_session(app, app.chat.id) }
 				ui.spacer(ui.px(em * 0.4))
@@ -1520,6 +1514,21 @@ composer :: proc(app: ^App, em: f32) {
 	if submit { submit_prompt(app, other) }
 }
 
+// The browser and the shells, lit while they are open.
+@(private = "file")
+composer_panels :: proc(app: ^App, em: f32) {
+	size := math.round(em * BUTTON_H_EM)
+	panel :: proc(app: ^App, id, icon, name, tip, command: string, lit: bool, size, em: f32) {
+		ui.a11y({role = .Button, name = name})
+		sig := glyph_button(id, icon, size, lit ? accent() : Color{})
+		if sig.clicked { command_run(app, command_find(command)) }
+		if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(tip) } }
+		ui.spacer(ui.px(em * 0.4))
+	}
+	if preview_available() { panel(app, "###preview_btn", ICO_GLOBE, "Preview panel", "Preview panel  (Ctrl+Shift+B)", "view.preview", app.preview.open, size, em) }
+	panel(app, "###terminal_btn", ICO_TERMINAL, "Terminal", "Terminal  (Ctrl+Shift+T)", "view.terminal", app.cx.terms.open, size, em)
+}
+
 composer_pickers :: proc(app: ^App, agent: string, em: f32) {
 	// the agent and the model: pickers searched as one types
 	agent_items := make([dynamic]Pick_Item, context.temp_allocator)
@@ -1533,7 +1542,7 @@ composer_pickers :: proc(app: ^App, agent: string, em: f32) {
 	shown, shown_provider := shown_model(app)
 	model_items := make([dynamic]Pick_Item, len(app.models), context.temp_allocator)
 	for m, i in app.models {
-		model_items[i] = Pick_Item{label = m.name != "" ? m.name : m.id, group = m.provider, detail = m.ctx_len > 0 ? kfmt(m.ctx_len) : "", current = m.id == shown && m.provider == shown_provider}
+		model_items[i] = Pick_Item{label = m.name != "" ? m.name : m.id, group = m.provider, detail = m.ctx_len > 0 ? kfmt(m.ctx_len) : "", model = &app.models[i], current = m.id == shown && m.provider == shown_provider}
 	}
 	if k := picker(app, &app.picker, "model", "models", model_items[:], em); k >= 0 { choose_model(app, app.models[k]) }
 }

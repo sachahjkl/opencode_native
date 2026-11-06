@@ -56,27 +56,31 @@ attach :: proc(app: ^App, name: string) {
 // How a prompt goes
 
 @(test)
-while_a_turn_runs_enter_queues_and_the_other_key_sends_now :: proc(t: ^testing.T) {
+while_a_turn_runs_enter_sends_now_and_the_other_key_queues :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
+	for d in PREF_DEFS {
+		if d.name == "conversation.while_running" { testing.expect_value(t, d.default.s, "steer") }   // (a new reader gets this)
+	}
 	app := bench_new()
 	running(app, "s")
-	ui.area_set(&app.composer, "later")
+	pref_set(app, "conversation.while_running", "steer")
+	ui.area_set(&app.composer, "now")
 	submit_prompt(app)
+	testing.expect(t, strings.contains(bench_take(t, .Prompt).body, `"delivery":"steer"`))
+
+	ui.area_set(&app.composer, "later")
+	submit_prompt(app, true)
 	r := bench_take(t, .Prompt)
 	testing.expect(t, strings.contains(r.body, `"delivery":"queue"`), r.body)
 	bench_answer(app, r, 200, fmt.tprintf(`{{"data":%s}}`, item_json("i1", "later", "queue")))
 
-	ui.area_set(&app.composer, "now")
-	submit_prompt(app, true)
-	testing.expect(t, strings.contains(bench_take(t, .Prompt).body, `"delivery":"steer"`))
-
-	pref_set(app, "conversation.while_running", "steer")
+	pref_set(app, "conversation.while_running", "queue")
 	ui.area_set(&app.composer, "swapped")
 	submit_prompt(app)
-	testing.expect(t, strings.contains(bench_take(t, .Prompt).body, `"delivery":"steer"`), "the preference swaps them")
+	testing.expect(t, strings.contains(bench_take(t, .Prompt).body, `"delivery":"queue"`), "the preference swaps them")
 	ui.area_set(&app.composer, "swapped too")
 	submit_prompt(app, true)
-	testing.expect(t, strings.contains(bench_take(t, .Prompt).body, `"delivery":"queue"`))
+	testing.expect(t, strings.contains(bench_take(t, .Prompt).body, `"delivery":"steer"`))
 }
 
 @(test)

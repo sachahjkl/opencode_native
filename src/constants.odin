@@ -176,7 +176,9 @@ HEX_PREVIEW_BG :: 0x0d0d0dff
 TAB_PAD_EM     :: 0.9    // a tab's word, from its ends
 TAB_LINE_INSET_EM :: 0.6 // the line under the tab shown, from them
 DOCK_TAB_H_EM  :: 2.1
-TOOLTIP_DELAY_S :: 0.5   // over a button of the title bar
+TOOLTIP_DELAY_S :: 0.5   // over a button
+MODEL_TIP_LINE_EM  :: 1.45   // a line of a model's tooltip
+MODEL_TIP_LABEL_EM :: 5.0    // its labels' column
 HEADER_FIGURES_MIN_EM :: 40   // a conversation narrower than this keeps its title, not its figures
 PREVIEW_PLACE_MS :: 40   // the page follows a move at this pace at most
 

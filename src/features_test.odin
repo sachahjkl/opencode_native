@@ -526,3 +526,25 @@ a_pickers_groups_fold_while_nothing_is_typed :: proc(t: ^testing.T) {
 	agents := []Pick_Item{{label = "build"}, {label = "plan"}}
 	testing.expect_value(t, len(picker_rows(&p, agents, hits[:2], false)), 2)   // (no group: no header)
 }
+
+@(test)
+a_model_says_what_it_is :: proc(t: ^testing.T) {
+	m := Model_Info{
+		ctx_len = 1000000, out_len = 128000, priced = true, price_in = 2, price_out = 10, price_cached = 0.25,
+		inputs = "text, image", tools_known = true, tools = true, efforts = "low, high", released = 1767225600000, status = "beta",
+	}
+	facts := model_facts(m)
+	testing.expect_value(t, facts[0], Model_Fact{"Context", "1M"})
+	testing.expect_value(t, facts[1], Model_Fact{"Output", "128k"})
+	testing.expect_value(t, facts[2], Model_Fact{"Price", "$2 in, $10 out per M"})
+	testing.expect_value(t, facts[3], Model_Fact{"Cached", "$0.25 per M"})
+	testing.expect_value(t, facts[4], Model_Fact{"Reads", "text, image"})
+	testing.expect_value(t, facts[5], Model_Fact{"Tools", "yes"})
+	testing.expect_value(t, facts[6], Model_Fact{"Thinking", "low, high"})
+	testing.expect_value(t, facts[7], Model_Fact{"Released", "2026-01"})
+	testing.expect_value(t, facts[8], Model_Fact{"Status", "beta"})
+	free := model_facts({priced = true})
+	testing.expect_value(t, len(free), 1)
+	testing.expect_value(t, free[0], Model_Fact{"Price", "free"})
+	testing.expect_value(t, len(model_facts({})), 0)   // (nothing said, nothing invented)
+}
