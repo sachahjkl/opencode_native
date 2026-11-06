@@ -27,7 +27,7 @@ COMMANDS :: [?]Command{
 	{name = "measure", about = "[find] [--runs n] [--exe file]: the start and the memory of the real program, or a file search; the figures that may be published", run = run_measure},
 	{name = "film", about = "prepare | all | <scene>: the program filmed from inside, its own frames, into build/film", run = run_film},
 	{name = "ship", about = "<version> [--dry-run]: from branch release/<version>: CI, tag, release, master, the site, each after the last one's success", run = run_ship},
-	{name = "site", about = "build|changelog|meta <site> <out> | card: the site's pages from site/ and CHANGELOG.md, what is published; the sharing card", run = run_site},
+	{name = "site", about = "build|changelog|meta <site> <out> | card | check [--site folder] [--shot file.png] [--browser program]: the site's pages from site/ and CHANGELOG.md, what is published; the sharing card; the pages in a real browser, served on this machine", run = run_site},
 }
 
 main :: proc() {

@@ -46,9 +46,10 @@ run_site :: proc(args: []string) -> int {
 		return site_meta(out, out)
 	case "card":
 		if len(args) == 1 { return site_card() }
-	// case "check": return run_site_check(args[1:])   // (site_check.odin, on the branch that brings it)
+	case "check":
+		return run_site_check(args[1:])
 	}
-	fmt.eprintln("site build|changelog|meta <site> <out> | card")
+	fmt.eprintln("site build|changelog|meta <site> <out> | card | check [--site folder] [--shot file.png] [--browser program]")
 	return EXIT_USAGE
 }
 

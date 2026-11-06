@@ -23,6 +23,7 @@ Dt :: struct {
 	sock:    net.TCP_Socket,
 	next_id: int,
 	buf:     [dynamic]byte,
+	session: string,   // (a browser: the page the calls go to)
 	// (a film: where the frames go, and what came)
 	cast_dir:   string,
 	cast_names: [dynamic]string,
@@ -122,9 +123,12 @@ dt_connect :: proc(port: int) -> (d: Dt, ok: bool) {
 	url := targets[0].webSocketDebuggerUrl
 	slash := strings.index(url[min(len("ws://"), len(url)):], "/")
 	if slash < 0 { return }
-	path := url[len("ws://") + slash:]
+	return dt_open(port, url[len("ws://") + slash:])
+}
 
-	sock, err := net.dial_tcp_from_endpoint(here)
+// The WebSocket at `path` of this machine's `port`. (A browser's own, whose pages are sessions of one connection, or a window's.)
+dt_open :: proc(port: int, path: string) -> (d: Dt, ok: bool) {
+	sock, err := net.dial_tcp_from_endpoint(net.Endpoint{address = net.IP4_Loopback, port = port})
 	if err != nil { return }
 	_ = net.set_option(sock, .Receive_Timeout, DT_READ_LIMIT)
 	d.sock = sock
@@ -181,10 +185,16 @@ dt_message :: proc(d: ^Dt) -> (text: string, ok: bool) {
 	}
 }
 
+// `session`: "" for the connection's own target.
+dt_request :: proc(id: int, method, params, session: string) -> string {
+	if session == "" { return fmt.tprintf(`{{"id":%d,"method":%s,"params":%s}}`, id, json_text(method), params) }
+	return fmt.tprintf(`{{"id":%d,"method":%s,"params":%s,"sessionId":%s}}`, id, json_text(method), params, json_text(session))
+}
+
 // `params`: a JSON object. What the window answers; a failure is said here, once.
 dt_call :: proc(d: ^Dt, method: string, params := "{}") -> (result: json.Value, ok: bool) {
 	d.next_id += 1
-	message := fmt.tprintf(`{{"id":%d,"method":%s,"params":%s}}`, d.next_id, json_text(method), params)
+	message := dt_request(d.next_id, method, params, d.session)
 	if !dt_write(d, WS_TEXT, transmute([]byte)message) { fmt.eprintfln("%s: the window is gone", method); return nil, false }
 	for {
 		text, got := dt_message(d)
