@@ -5,6 +5,18 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-11-06
+
+### Fixed
+
+- A panel in a window of its own stays stable while the window is resized: what it shows is no longer stretched and squeezed, and it is drawn at every step, as in the main window.
+- Text in a dialog can be selected wherever it is, with the text cursor over it (gui_toolkit 0.88.0).
+
+### Changed
+
+- The site's address is [ocn.froment.software](https://ocn.froment.software); the old one leads there.
+- `tools/occtools` does the rest of the project's machinery: `build`, `package`, `update`, `shots` and `site`, the same on Windows and Linux. The PowerShell, shell and Node scripts they replace are gone.
+
 ## [0.17.0] - 2026-11-06
 
 ### Added
@@ -649,6 +661,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
 [Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.0...HEAD
+[0.17.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.1
 [0.17.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.0
 [0.16.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.16.0
 [0.15.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.15.1
