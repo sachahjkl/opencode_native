@@ -1,4 +1,4 @@
-// libghostty-vt, the terminal emulation of Ghostty: what the Terminal panel uses of its C API. Built by tools/build_vt.*, pinned
+// libghostty-vt, the terminal emulation of Ghostty: what the Terminal panel uses of its C API. Built by occtools build, pinned
 // there; the numbers below are those of its headers at that commit (zig-out/include/ghostty/vt).
 package occ
 

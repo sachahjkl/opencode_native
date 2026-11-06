@@ -623,7 +623,7 @@ main :: proc() {
 	app.win = platform.open_window(APP_NAME, {WINDOW_W, WINDOW_H}, transparent = true, integrated_title = true)
 	if app.win == nil { fmt.eprintln("opencode-native: no window"); os.exit(1) }
 	if !fonts_init(app) { fmt.eprintln("opencode-native: no UI font"); os.exit(1) }
-	for a in os.args[1:] {   // --size=<w>x<h>: the window's size in pixels, whichever screen it opens on (tools/screenshots.mjs)
+	for a in os.args[1:] {   // --size=<w>x<h>: the window's size in pixels, whichever screen it opens on (occtools shots)
 		if !strings.has_prefix(a, "--size=") { continue }
 		wh := strings.split(a[len("--size="):], "x", context.temp_allocator)
 		if len(wh) != 2 { continue }

@@ -42,7 +42,7 @@ jobs:
         run: call build.bat
 
       - name: Package
-        run: ./tools/package.ps1 -Version ${{ steps.version.outputs.version }}
+        run: build/occtools package ${{ steps.version.outputs.version }}
 
       - name: Sign the update
         env:
@@ -51,7 +51,7 @@ jobs:
           $v = '${{ steps.version.outputs.version }}'
           $channels = '${{ github.ref_name }}' -match '-beta' ? @('beta') : @('stable', 'beta')
           foreach ($c in $channels) {
-            odin run tools/update_tool -- manifest "build/dist/opencode-native-$v-windows-x64.exe" $v $c "build/dist/update-windows-x64-$c.json"
+            build/occtools update manifest "build/dist/opencode-native-$v-windows-x64.exe" $v $c "build/dist/update-windows-x64-$c.json"
             if ($LASTEXITCODE) { throw "the $c manifest could not be signed" }
           }
 
@@ -75,7 +75,7 @@ jobs:
         run: ./build.sh
 
       - name: Package
-        run: tools/package.sh "${GITHUB_REF_NAME#v}"
+        run: build/occtools package "${GITHUB_REF_NAME#v}"
 
       - uses: actions/upload-artifact@v7
         with:

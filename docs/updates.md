@@ -25,6 +25,6 @@ Ed25519, its own pair. Public half: `src/update/public_key.odin`. Private half: 
 and the repository's secret `UPDATE_SIGNING_KEY`, which the release workflow signs with. Changing the key orphans every copy
 already out: they would refuse what the new key signs.
 
-    odin run tools/update_tool -- keygen <file outside the repository>
-    odin run tools/update_tool -- manifest <exe> <version> <channel> <out.json>   (key: $UPDATE_SIGNING_KEY)
-    odin run tools/update_tool -- verify <file.json> <channel>
+    occtools update keygen <file outside the repository>
+    occtools update manifest <exe> <version> <channel> <out.json>   (key: $UPDATE_SIGNING_KEY)
+    occtools update verify <file.json> <channel>

@@ -9,28 +9,8 @@
 # OUT=<file> writes the program elsewhere; ODIN=<compiler> another Odin.
 set -euo pipefail
 cd "$(dirname "$0")"
-GT="${GT:-ext/gui_toolkit}"
-if [ ! -d "$GT/ui" ]; then
-  if [ -d ../gui_toolkit/ui ]; then GT=../gui_toolkit; else echo "the toolkit is missing: git submodule update --init"; exit 1; fi
-fi
-OUT="${OUT:-build/opencode-native}"
 ODIN="${ODIN:-odin}"
-want="$(tr -d '[:space:]' < odin.version)"
-if [ -z "${OCC_ANY_ODIN:-}" ] && ! "$ODIN" version 2>/dev/null | grep -q "$want"; then
-  echo "This tree needs Odin $want (odin.version); found: $("$ODIN" version 2>&1 | head -1)"
-  echo "Install that release, or set OCC_ANY_ODIN=1 to build anyway."
-  exit 1
-fi
-tools/build_native.sh
-tools/build_vt.sh
-mkdir -p "$(dirname "$OUT")"
-# the text backend is the toolkit's native one, inside the Rust library (no DirectWrite here); wgpu-native is a second Rust
-# library: both carry Rust's standard library, whose few unmangled symbols (rust_eh_personality) are the same code
-flags=(-collection:gt="$GT" -out:"$OUT" -vet -define:FONT_BACKEND=native -define:FONT_NATIVE_LINK=false
-       -extra-linker-flags:"-Wl,--allow-multiple-definition")
-if [ "${1:-}" = debug ]; then
-  "$ODIN" build src "${flags[@]}" -debug
-else
-  "$ODIN" build src "${flags[@]}" -o:speed
-fi
-echo "built $OUT (toolkit: $GT)"
+mkdir -p build
+# What builds it is tools/occtools, here built first: the steps are the same on Windows (build.bat).
+"$ODIN" build tools/occtools -out:build/occtools
+ODIN="$ODIN" exec build/occtools build "$@"

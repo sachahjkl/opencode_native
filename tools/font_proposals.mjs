@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Typefaces tried in the real client: fetches the faces of each proposal (open licences, from Fontsource) into
-// build/font_proposals/<id>/fonts and takes its pictures there with tools/screenshots.mjs, over `--font-dir`: nothing is
+// build/font_proposals/<id>/fonts and takes its pictures there with occtools shots, over `--font-dir`: nothing is
 // installed on the system, and nothing is sent to the opencode server. Prints what each would add to the program.
 //   node tools/font_proposals.mjs [--only id[,id]] [--toolkit folder] [--exe file]
 import { spawnSync } from 'node:child_process'
@@ -51,11 +51,11 @@ for (const p of PROPOSALS) {
       }
     }
   }
-  const args = [join(repo, 'tools', 'screenshots.mjs'), '--out', out, '--only', 'conversation,subagents,settings']
+  const args = ['shots', '--out', out, '--only', 'conversation,subagents,settings']
   if (p.ui) args.push('--font-dir', fonts)
   if (opt.toolkit) args.push('--toolkit', opt.toolkit)
   if (opt.exe) args.push('--exe', opt.exe)
-  const r = spawnSync(process.execPath, args, { stdio: 'inherit' })
+  const r = spawnSync(join(repo, 'build', 'occtools' + (process.platform === 'win32' ? '.exe' : '')), args, { stdio: 'inherit' })
   if (r.status !== 0) process.exit(1)
   console.log(`${p.id}: ${Math.round(bytes / 1024)} KiB of faces (Latin only)`)
 }

@@ -8,7 +8,7 @@
 
 <p align="center">
 <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.17.0-fab283" alt="version 0.17.0"></a>
-<a href="https://sachahjkl.github.io/opencode_native/"><img src="https://img.shields.io/badge/site-github.io-56b6c2" alt="site"></a>
+<a href="https://ocn.froment.software/"><img src="https://img.shields.io/badge/site-ocn.froment.software-56b6c2" alt="site"></a>
 </p>
 
 ![A conversation: the tool calls on their timeline, sub-agents at work, the agent's reasoning](docs/screenshots/subagents.png)
@@ -22,7 +22,7 @@ wells, carved grooves, and lamps only where something is live.
     ./build.sh         ->  build/opencode-native         (Linux)
 
 Prebuilt programs for Windows x64 and Linux x64 are attached to the [GitHub releases](https://github.com/sachahjkl/opencode_native/releases);
-the [site](https://sachahjkl.github.io/opencode_native/) shows them.
+the [site](https://ocn.froment.software/) shows them.
 
 ## Screenshots
 
@@ -156,7 +156,7 @@ since a program on this computer can then type into a session.
 clang, fontconfig's headers and Rust (stable), then `./build.sh`. At run time: Vulkan, libxkbcommon, fontconfig, and
 Wayland or X11; libxcb-cursor for the theme's cursors on X11, an emoji font for color emoji.
 
-Both build the Rust library first (`tools/build_native.*`, nothing when it is up to date; crates pinned by
+Both build `tools/occtools` and let it do the rest (`occtools help`): the Rust library first (nothing when it is up to date; crates pinned by
 `native/Cargo.lock`; on Linux it carries the toolkit's text backend), then the program. The toolkit is the submodule
 `ext/gui_toolkit`; `GT=<folder>` builds against another copy, `OUT=<file>` writes the program elsewhere.
 
@@ -179,7 +179,7 @@ Both build the Rust library first (`tools/build_native.*`, nothing when it is up
 | `native/occ_native` | the Rust library (C functions): ureq + rustls, image decoding (and the text backend on Linux) |
 | `src/bench_test.odin` | the heavy cases in the test's process (a long conversation, hundreds of sessions); timed with `-define:OCC_BENCH=true` ([docs/performance.md](docs/performance.md)) |
 | `site/` | the GitHub Pages site |
-| `tools/` | the Rust library's build, packaging, the site's changelog and its classic pages; `screenshots.mjs` retakes every picture of the README and the site (over the DevTools protocol; `--linux-build` builds the Linux one in WSL with `flake.nix`); `doc_check` is in the toolkit |
+| `tools/` | the Rust library's build, packaging, the site's changelog and its classic pages; `occtools shots` retakes every picture of the README and the site (over the DevTools protocol; `--linux-build` builds the Linux one in WSL with `flake.nix`); `doc_check` is in the toolkit |
 | `res/`, `assets/` | resources of the exe (icon, version, manifest), the logo, Lucide (`assets/fonts`, ISC) |
 
 ## License

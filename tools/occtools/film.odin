@@ -209,7 +209,7 @@ play_browser :: proc(s: ^Shot) {
 	press(s, "ctrl+shift+b", 900 * time.Millisecond)
 	dt_click_name(s.dt, "pv_url")
 	hold(s, 200 * time.Millisecond)
-	type(s, "sachahjkl.github.io/opencode_native")
+	type(s, "ocn.froment.software")
 	press(s, "Enter", 6000 * time.Millisecond)
 }
 

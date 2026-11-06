@@ -1,5 +1,5 @@
 // HTTP and the server's event stream, over the client's Rust library (native/occ_native: ureq, rustls with the
-// system's trust store; tools\build_native.ps1 -> build\native\occ_native.lib). Blocking calls, made from worker
+// system's trust store; occtools build -> build\native\occ_native.lib). Blocking calls, made from worker
 // threads; one client for the whole program, shared by every thread.
 package occ
 

@@ -22,9 +22,7 @@ run_check :: proc(args: []string) -> int {
 	if !run_in({dir = "native/occ_native"}, "cargo", "test", "--release", "--locked", "--target-dir", RUST_TEST_DIR) { return 1 }
 
 	before, had := os.modification_time_by_path(out)
-	how := Run{env = env_with({"GT"}, fmt.tprintf("OUT=%s", out))}
-	built := run_in(how, "cmd", "/c", ".\\build.bat") when ODIN_OS == .Windows else run_in(how, "bash", "build.sh")
-	if !built { return 1 }
+	if !build_program({gt = GT_DEFAULT, out = out}) { return 1 }
 	after, err := os.modification_time_by_path(out)
 	if err != nil { fmt.eprintfln("check: no %s after the build", out); return 1 }
 	if had == nil && time.diff(before, after) <= 0 { fmt.eprintfln("check: %s is not new: the build wrote nothing", out); return 1 }

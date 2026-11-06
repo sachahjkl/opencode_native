@@ -128,9 +128,8 @@ diff_cell_line :: proc(app: ^App, l: Diff_Line, numbers: Diff_Numbers, col, mark
 	} else {
 		append(&runs, ui.Rich_Run{text = l.text != "" ? open(l.text) : " ", style = base})
 	}
-	// A paragraph, and one that takes its press: in a dialog a press is the body's otherwise, and a selection only starts on the
-	// text's own, while a plain label that takes it counts as a button. One line: the two sides face; a copy has the whole of it.
-	ui.next({width = ui.fill(), font_size = fs, flags = {.Selectable, .Clickable}})
+	// One line: the two sides face; a copy has the whole of it.
+	ui.next({width = ui.fill(), font_size = fs, flags = {.Selectable}})
 	ui.rich_paragraph("###t", runs[:], 1)
 }
 

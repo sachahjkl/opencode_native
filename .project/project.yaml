@@ -7,7 +7,7 @@ topics:
   - "immediate-mode-ui"
   - "windows"
   - "linux"
-homepage: "https://sachahjkl.github.io/opencode_native/"
+homepage: "https://ocn.froment.software/"
 source:
   provider: github
   namespace: "sachahjkl"

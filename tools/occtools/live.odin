@@ -206,7 +206,7 @@ app_end :: proc(app: ^App) {
 	dt_close(&app.dt)
 	_ = os.process_kill(app.process)
 	_, _ = os.process_wait(app.process, 5 * time.Second)
-	_ = os.remove_all(app.settings)
+	if app.settings != "" { _ = os.remove_all(app.settings) }   // (a program in WSL has its own, there)
 }
 
 @(private = "file")

@@ -63,12 +63,12 @@ measure_find :: proc(l: ^Live, runs: int) -> int {
 	found := make([]f64, runs, context.temp_allocator)
 	for i in 0 ..< runs {
 		begun := time.now()
-		dt_type(dt, "screenshots.m")   // (not the whole name: the field must not be what is found)
-		if !dt_wait_for(dt, "screenshots.mjs", STEP_LIMIT) { return 1 }
+		dt_type(dt, "make_logo.p")   // (not the whole name: the field must not be what is found)
+		if !dt_wait_for(dt, "make_logo.ps1", STEP_LIMIT) { return 1 }
 		found[i] = time.duration_milliseconds(time.since(begun))
 		dt_key(dt, "ctrl+a")
 		dt_key(dt, "Backspace")
-		if !dt_wait_for(dt, "screenshots.mjs", STEP_LIMIT, gone = true) { return 1 }
+		if !dt_wait_for(dt, "make_logo.ps1", STEP_LIMIT, gone = true) { return 1 }
 		dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
 	}
 	report("a key to the file found", found, "ms")

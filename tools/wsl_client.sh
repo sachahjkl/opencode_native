@@ -2,7 +2,7 @@
 # Runs a Linux build of the client in WSL, on the opencode server of Windows (a relay brings that server's port into WSL) and
 # with an empty settings folder. On NixOS, where nothing is in a standard path, it finds the libraries the client opens.
 #   OC_PORT=<port> OC_PASSWORD=<password> tools/wsl_client.sh <program> [arguments]
-# (tools/screenshots.mjs --linux starts it; the password comes by the environment so that no command line shows it.)
+# (occtools shots --linux starts it; the password comes by the environment so that no command line shows it.)
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 

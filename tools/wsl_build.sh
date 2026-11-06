@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the Linux client from this tree, in Linux, without a release (tools/screenshots.mjs --linux-build starts it from
+# Builds the Linux client from this tree, in Linux, without a release (occtools shots --linux-build starts it from
 # Windows): a copy in a Linux folder, since the Rust and Odin outputs are not to mix with those of Windows in build/.
 #   tools/wsl_build.sh [folder]      default ~/.cache/opencode-native-build; the program: <folder>/build/opencode-native
 set -euo pipefail
