@@ -5,9 +5,11 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-11-07
+
 ### Fixed
 
-- **The session shown, in a light theme,** is on the theme's own neutral a step darker, not on a pale accent: an orange that pale read as pink (Gruvbox).
+- **The session shown, in a light theme,** is on the sidebar's own ground a step darker, its hue and chroma kept: a pale accent read as another colour (Gruvbox's orange as pink), and a neutral of less colour than the sidebar's yellow as blue.
 
 ## [0.18.0] - 2026-11-07
 
@@ -787,7 +789,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.18.1...HEAD
+[0.18.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.1
 [0.18.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.0
 [0.17.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.8
 [0.17.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.7
