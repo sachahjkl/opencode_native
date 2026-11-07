@@ -17,6 +17,8 @@ run_check :: proc(args: []string) -> int {
 		fmt.eprintfln("check: what is %s?", args[i])
 		return EXIT_USAGE
 	}
+	// (where the headers are: a build of the emulation is what brings them, and the CI keeps only its library)
+	if os.exists(VT_HEADERS) && vt_run(VT_HEADERS, true) != 0 { return 1 }
 	if !run("odin", "test", "src", "-collection:gt=ext/gui_toolkit", "-out:build/test" + EXE) { return 1 }
 	if !run("odin", "test", "tools/occtools", "-out:build/occtools_test" + EXE) { return 1 }
 	if !run_in({dir = "native/occ_native"}, "cargo", "test", "--release", "--locked", "--target-dir", RUST_TEST_DIR) { return 1 }
