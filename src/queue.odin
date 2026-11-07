@@ -31,12 +31,12 @@ Queue_Item :: struct {
 	files:    int,         // what goes with it
 	skills:   bool,        // ... skills, which the composer cannot give back: it is not edited here
 	act:      Queue_Act,
-	born:     u64,         // the stream's clock when it came (a list asked before that does not know it)
-	changed:  u64,         // ... when its delivery changed
+	born:     Seq,         // the stream's clock when it came (a list asked before that does not know it)
+	changed:  Seq,         // ... when its delivery changed
 }
 
 // What left the list lately: a list asked before that still has it.
-Queue_Gone :: struct { id: string, at: u64, delivered: bool }
+Queue_Gone :: struct { id: string, at: Seq, delivered: bool }
 
 // The item that the composer holds, and what the composer held before it (owned, id "": none).
 Queue_Edit :: struct {
@@ -89,7 +89,7 @@ queue_editing :: proc(app: ^App) -> bool { return app.cx.queue.edit.id != "" }
 
 // What changes here without an event still counts on the stream's clock: a list asked before it is older.
 @(private = "file")
-queue_tick :: proc(app: ^App) -> u64 {
+queue_tick :: proc(app: ^App) -> Seq {
 	app.cx.stream_seq += 1
 	return app.cx.stream_seq
 }
@@ -99,7 +99,7 @@ item_free :: proc(it: Queue_Item) { delete(it.id); delete(it.text); delete(it.pa
 
 // An item as the list, an event or a prompt's answer gives it: its type, its delivery, its payload.
 @(private = "file")
-item_of :: proc(id: string, v: json.Value, born: u64) -> Queue_Item {
+item_of :: proc(id: string, v: json.Value, born: Seq) -> Queue_Item {
 	payload := jget(v, "payload")
 	data, _ := json.marshal(payload, allocator = context.temp_allocator)
 	return {
@@ -109,7 +109,7 @@ item_of :: proc(id: string, v: json.Value, born: u64) -> Queue_Item {
 }
 
 // (once: an event and the answer to the prompt both say it)
-queue_add :: proc(app: ^App, id: string, v: json.Value, born: u64) {
+queue_add :: proc(app: ^App, id: string, v: json.Value, born: Seq) {
 	q := &app.cx.queue
 	if id == "" || q.session != app.chat.id || queue_find(app, id) != nil { return }
 	for g in q.gone { if g.id == id { return } }
@@ -126,7 +126,7 @@ queue_prompt_answered :: proc(app: ^App, session: string, v: json.Value) {
 }
 
 // It left the list: delivered, cancelled, here or elsewhere.
-queue_gone :: proc(app: ^App, id: string, delivered: bool, at: u64) {
+queue_gone :: proc(app: ^App, id: string, delivered: bool, at: Seq) {
 	q := &app.cx.queue
 	if id == "" { return }
 	if q.edit.id == id {
@@ -144,7 +144,7 @@ queue_gone :: proc(app: ^App, id: string, delivered: bool, at: u64) {
 	append(&q.gone, Queue_Gone{strings.clone(id), at, delivered})
 }
 
-queue_delivery_changed :: proc(app: ^App, id: string, to: Delivery, at: u64) {
+queue_delivery_changed :: proc(app: ^App, id: string, to: Delivery, at: Seq) {
 	it := queue_find(app, id)
 	if it == nil { return }
 	it.delivery, it.changed = to, at
@@ -160,7 +160,7 @@ queue_read :: proc(app: ^App) {
 }
 
 // The answer replaces the list. Not what the stream said since it was asked for: what came since stays, what went does not return.
-queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: u64) {
+queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: Seq) {
 	q := &app.cx.queue
 	if session != q.session { return }
 	next := make([dynamic]Queue_Item, 0, max(len(q.items), 4))
@@ -168,10 +168,10 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: u64) {
 		id := jstr(it, "id")
 		if id == "" || jstr(it, "type") != "user" { continue }
 		went := false
-		for g in q.gone { if g.id == id && g.at > asked_at { went = true } }
+		for g in q.gone { if g.id == id && newer(g.at, asked_at) { went = true } }
 		if went { continue }
 		if old := queue_find(app, id); old != nil {
-			if old.changed <= asked_at { old.delivery = delivery_of(jstr(it, "delivery")) }
+			if !newer(old.changed, asked_at) { old.delivery = delivery_of(jstr(it, "delivery")) }
 			append(&next, old^)
 			old.id = ""   // (it moved)
 			continue
@@ -182,7 +182,7 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: u64) {
 	}
 	for &old in q.items {
 		if old.id == "" { continue }
-		if old.born > asked_at { append(&next, old); continue }
+		if newer(old.born, asked_at) { append(&next, old); continue }
 		if q.edit.id == old.id {
 			queue_edit_end(app, .Lost)
 			ui.toast(.Warn, "That message is no longer waiting: what you wrote stays in the composer")
@@ -192,7 +192,7 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: u64) {
 	delete(q.items)
 	q.items = next
 	for i := len(q.gone) - 1; i >= 0; i -= 1 {
-		if q.gone[i].at <= asked_at {
+		if !newer(q.gone[i].at, asked_at) {
 			delete(q.gone[i].id)
 			ordered_remove(&q.gone, i)
 		}

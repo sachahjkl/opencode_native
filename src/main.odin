@@ -143,20 +143,16 @@ App_Context :: struct {
 	conns:          [dynamic]^Conn,    // every connection made: their threads stop at close (servers.odin threads_stop)
 	outgoing:       [dynamic]^Outgoing,   // prompts between the composer and the server (outgoing.odin)
 	outgoing_last:  u64,               // ... the last one's id
-	stream_seq:     u64,               // events applied so far: the clock of what is newer than an answer (Request.asked_at)
-	busy_seq:       map[string]u64,    // when the stream last said a session started or ended (keys owned)
+	stream_seq:     Seq,               // events applied so far: the clock of what is newer than an answer (Request.asked_at)
+	busy_seq:       map[string]Seq,    // when the stream last said a session started or ended (keys owned)
 	waits_gone:     [dynamic]string,   // permissions and forms answered, the last WAITS_GONE_MAX (owned)
 	chat_read:      Remote,            // the newest page of the conversation shown
 	stats_read:     Remote,            // the project's totals (stats.odin)
 	stats_context:  Stats_Context,     // what fills the context of the session shown
 	context_read:   Remote,            // ... its reading
-	context_due:    Deferred,          // ... read again, a step having ended
 	stats_w:        f32,               // the panel's width, at this build
 	queue:          Queue,             // what waits in the inbox of the session shown (queue.odin)
-	refresh_read:   Deferred,          // the sessions read again
-	facts_read:     Deferred,          // the settings' pages
-	children_read:  Deferred,          // the sub-agents of the session shown
-	restore_limit:  Deferred,          // the view stops going back to where it was (subagents.odin nav_restore_begin)
+	due:            [Due]Deferred,     // what was put off (remote.odin)
 	reopen:         Nav_Place,         // what was shown when this computer's server moved (servers_rediscover), owned, id "": none
 	quote_open:     bool,              // the chip at the end of a selection (context_menus.odin)
 	quote_at:       Rect,
@@ -418,20 +414,28 @@ frame_held_ms :: proc(app: ^App, size: draw.Vec2) -> int {
 	return max(int(OPEN_HOLD_MS - (ui.now_ms() - app.opened_ms)), 0)
 }
 
+due_run :: proc(app: ^App, k: Due) {
+	switch k {
+	case .Refresh:   refresh_sessions(app)
+	case .Facts:     if app.settings_open { server_facts_load(app) }   // (an action of the settings: connect an MCP server, revoke a permission)
+	case .Children:  load_children(app)
+	case .Context:   if app.stats_open { context_ask(app) }
+	case .Restore:   nav_restore_clear(app)
+	case .Term_Size: terms_size_due(app)
+	case .Side_Wake: app.frames = max(app.frames, FRAMES_AFTER_INPUT)   // (the build sees the pointer has rested)
+	}
+}
+
+due_tick :: proc(app: ^App, k: Due) { if deferred_take(&app.cx.due[k]) { due_run(app, k) } }
+
 // What was put off: done if it is time, and a wake for the rest. A window at rest wakes only while something is due: the window
 // may sleep on, and a read that waits for the next input would wait for good.
 deferred_tick :: proc(app: ^App) {
 	cx := &app.cx
-	if deferred_take(&cx.refresh_read) { refresh_sessions(app) }
-	// (an action of the settings: connect an MCP server, revoke a permission)
-	if deferred_take(&cx.facts_read) && app.settings_open { server_facts_load(app) }
-	if deferred_take(&cx.children_read) { load_children(app) }
-	if deferred_take(&cx.context_due) && app.stats_open { context_ask(app) }
-	if deferred_take(&cx.restore_limit) { nav_restore_clear(app) }
-	terms_size_tick(app)
-	if deferred_take(&cx.side_hold.wake) { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }   // (the build sees the pointer has rested)
+	for k in Due { due_tick(app, k) }
 	soonest := 0
-	for ms in ([?]int{deferred_in_ms(&cx.refresh_read), deferred_in_ms(&cx.facts_read), deferred_in_ms(&cx.children_read), deferred_in_ms(&cx.context_due), deferred_in_ms(&cx.restore_limit), deferred_in_ms(&cx.terms.size_wake), deferred_in_ms(&cx.side_hold.wake), activity_in_ms(app), rediscover_in_ms(app), browser_in_ms(app)}) {
+	for &d in cx.due { if ms := deferred_in_ms(&d); ms > 0 { soonest = soonest == 0 ? ms : min(soonest, ms) } }
+	for ms in ([?]int{activity_in_ms(app), rediscover_in_ms(app), browser_in_ms(app)}) {
 		if ms > 0 { soonest = soonest == 0 ? ms : min(soonest, ms) }
 	}
 	if soonest > 0 { ui.wake_within(&app.ui_state, soonest) }

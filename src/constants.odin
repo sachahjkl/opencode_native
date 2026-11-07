@@ -243,7 +243,7 @@ TERM_PANEL_BASE      :: 1000   // a shell's id in the dock is this and up: Panel
 OUTPUT_PANEL_BASE    :: 1_000_000   // a command's output in a window of its own (output_view.odin): never a shell's
 OUTPUT_POLL_MS       :: 200    // between two readings of a command that prints nothing
 OUTPUT_KEEP_BYTES    :: 8 * 1024 * 1024   // of what it printed, for Copy: the terminal keeps its own scrollback
-OUTPUT_END_H_EM      :: 2.3    // the line that says it ended
+OUTPUT_BAR_H_EM      :: 2.3    // the bar under the grid
 OUTPUT_TITLE_CHARS   :: 60     // of the command, as a window's title
 TERM_OUT_MAX         :: 1 << 20   // bytes waiting for a socket on its way: past that, what is typed is dropped
 TERM_RETRIES         :: 8      // a lost socket is opened again this many times, then on a click or when the server answers again

@@ -151,7 +151,6 @@ Side_Hold :: struct {
 	on:       bool,
 	sections: [dynamic]Side_Held,
 	over:     u64,        // what the list is of: another search, mode or preference is another list
-	wake:     Deferred,   // the frame that lets go, when nothing else would come
 }
 
 // `wanted`: the pointer is there. `of`: what this list is of.
@@ -191,7 +190,7 @@ sidebar_hold_end :: proc(app: ^App) {
 	}
 	clear(&h.sections)
 	h.on = false
-	h.wake = {}
+	app.cx.due[.Side_Wake] = {}   // (the frame that lets go, when nothing else would come)
 }
 
 // What the pointer asks of the list, from the box that scrolls it.
@@ -199,8 +198,8 @@ sidebar_hold_wanted :: proc(app: ^App, list: ^ui.Box) -> bool {
 	since := ui.now_ms() - app.cx.pointer_ms
 	if !rect_contains(list.rect, ui.mouse_pos()) || since >= SIDEBAR_HOLD_MS { return false }
 	// (at rest nothing draws: this is what ends the hold if the pointer stays where it is)
-	app.cx.side_hold.wake = {}
-	deferred_ask(&app.cx.side_hold.wake, SIDEBAR_HOLD_MS - since + 1)
+	app.cx.due[.Side_Wake] = {}
+	deferred_ask(&app.cx.due[.Side_Wake], SIDEBAR_HOLD_MS - since + 1)
 	return true
 }
 

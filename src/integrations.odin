@@ -56,7 +56,6 @@ Integrations :: struct {
 	active:   Remote,            // which account is in use
 	list:     [dynamic]Integration,
 	arena:    virtual.Arena,
-	has_arena: bool,
 	dirty:    bool,              // changed on the server while something was being filled in
 	search:   ui.Text_Field,
 	shown:    string,            // the integration open (owned, "": the list)
@@ -86,8 +85,7 @@ connect_idle :: proc(n: ^Integrations) -> bool {
 integrations_free :: proc(n: ^Integrations) {
 	for it in n.list { for m in it.methods { if m.form != nil { form_free(m.form) } } }
 	clear(&n.list)
-	if n.has_arena { virtual.arena_destroy(&n.arena) }
-	n.has_arena = false
+	virtual.arena_destroy(&n.arena)
 }
 
 @(private = "file")
@@ -108,7 +106,6 @@ integrations_load :: proc(app: ^App, v: json.Value) {
 	if !connect_idle(n) { n.dirty = true; return }
 	integrations_free(n)
 	_ = virtual.arena_init_growing(&n.arena)
-	n.has_arena = true
 	a := virtual.arena_allocator(&n.arena)
 	list := jarr(v, "data")
 	for pass in 0 ..< 2 {

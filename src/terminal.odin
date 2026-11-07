@@ -99,7 +99,6 @@ Terminals :: struct {
 	make_after: bool,          // one was asked for while the list was read: what it says comes first
 	list:    [dynamic]^Term,
 	gone:    [dynamic]^Term,   // closed in this frame: what was built for them is still to be drawn (terminals_reap)
-	size_wake: Deferred,       // a size to send, a picture to show: a frame then, the window may be at rest
 	next_panel: u32,
 	last_panel: u32,           // the last shell that had the keyboard: a new one goes beside it
 	replaces:   u32,           // a shell restarted: the new one takes its tab
@@ -114,13 +113,8 @@ Terminals :: struct {
 }
 
 @(private = "file")
-term_location :: proc(dir: string) -> string {
-	return dir != "" ? fmt.tprintf("location[directory]=%s", url_escape(dir)) : ""
-}
-
-@(private = "file")
 term_path :: proc(t: ^Term, tail := "") -> string {
-	q := term_location(t.dir)
+	q := location_query(t.dir)
 	return fmt.tprintf("/api/pty/%s%s%s%s", url_escape(t.id), tail, q != "" ? "?" : "", q)
 }
 
@@ -332,7 +326,7 @@ term_news :: proc(data: rawptr, word: u64) {
 	t := term_of_conn(app, d.conn)
 	if t == nil { return }   // (a shell closed, a server left)
 	if d.is_link { term_link_set(app, t, d.link, d.given_up) } else { term_feed(t, d.text) }
-	if t.told_ms != 0 { deferred_ask(&app.cx.terms.size_wake, TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS) }
+	if t.told_ms != 0 { deferred_ask(&app.cx.due[.Term_Size], TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS) }
 	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
 }
 
@@ -379,7 +373,7 @@ term_of_panel :: proc(app: ^App, panel: u32) -> ^Term {
 
 @(private = "file")
 term_list_path :: proc(dir: string) -> string {
-	q := term_location(dir)
+	q := location_query(dir)
 	return fmt.tprintf("/api/pty%s%s", q != "" ? "?" : "", q)
 }
 
@@ -588,7 +582,7 @@ term_made_failed :: proc(app: ^App) -> (told: bool) {
 term_made_left :: proc(app: ^App, r: ^Request, v: json.Value) {
 	id := jstr(v, "data", "id")
 	if id == "" { return }
-	q := term_location(r.tag)
+	q := location_query(r.tag)
 	request(app, .Action, "DELETE", fmt.tprintf("/api/pty/%s%s%s", url_escape(id), q != "" ? "?" : "", q), conn = r.conn)
 }
 
@@ -1095,8 +1089,8 @@ term_resize :: proc(app: ^App, t: ^Term, cols, rows: u16, cell_w, cell_h: u32) {
 		ghostty_terminal_resize(t.vt, cols, rows, cell_w, cell_h)
 		term_selection_drop(t)
 		t.grid_ms = ui.now_ms()
-		app.cx.terms.size_wake = {}   // (from this step, the last so far: an earlier wake would find the grid not rested, and nothing would come after it)
-		deferred_ask(&app.cx.terms.size_wake, TERM_SIZE_QUIET_MS)
+		app.cx.due[.Term_Size] = {}   // (from this step, the last so far: an earlier wake would find the grid not rested, and nothing would come after it)
+		deferred_ask(&app.cx.due[.Term_Size], TERM_SIZE_QUIET_MS)
 	}
 	term_size_send(app, t)
 }
@@ -1128,7 +1122,7 @@ term_size_answered :: proc(app: ^App, id: string) {
 	if t == nil { return }
 	t.size_flying, t.size_sent = false, t.size_asked
 	t.told_ms, t.asked_ms = ui.now_ms(), 0
-	deferred_ask(&app.cx.terms.size_wake, TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS)
+	deferred_ask(&app.cx.due[.Term_Size], TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS)
 	term_size_send(app, t)
 }
 
@@ -1141,15 +1135,14 @@ terms_close_due :: proc(app: ^App) {
 }
 
 // What comes due after a size: the shell is told, or its picture shown. (A frame, where the window may be at rest.)
-terms_size_tick :: proc(app: ^App) {
+terms_size_due :: proc(app: ^App) {
 	s := &app.cx.terms
-	if !deferred_take(&s.size_wake) { return }
 	now := ui.now_ms()
 	for t in s.list {
 		term_size_send(app, t)
 		if t.told_ms == 0 { continue }
 		if term_painting(now, t.told_ms, t.fed_ms, t.asked_ms) {
-			deferred_ask(&s.size_wake, TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS)
+			deferred_ask(&app.cx.due[.Term_Size], TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS)
 		} else {
 			t.told_ms = 0
 		}

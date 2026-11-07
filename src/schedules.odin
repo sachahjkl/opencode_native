@@ -56,7 +56,6 @@ Schedules :: struct {
 	removing: string,   // the one asked about (owned)
 	list:     [dynamic]Schedule,
 	arena:    virtual.Arena,
-	has_arena: bool,
 	mode:     When_Mode,
 	prompt, value: ui.Text_Field,
 	fresh:    bool,     // just opened: the prompt takes the focus
@@ -70,8 +69,7 @@ set_text :: proc(s: ^string, value: string) {
 
 @(private = "file")
 schedules_clear :: proc(s: ^Schedules) {
-	if s.has_arena { virtual.arena_destroy(&s.arena) }
-	s.has_arena = false
+	virtual.arena_destroy(&s.arena)
 	clear(&s.list)
 }
 
@@ -130,7 +128,6 @@ schedules_load :: proc(app: ^App, v: json.Value) {
 	s := &app.cx.schedules
 	schedules_clear(s)
 	_ = virtual.arena_init_growing(&s.arena)
-	s.has_arena = true
 	a := virtual.arena_allocator(&s.arena)
 	for it in jarr(v, "data") {
 		append(&s.list, Schedule{
@@ -370,23 +367,15 @@ Artifacts :: struct {
 	shown:    string,   // the artifact read (owned)
 	list:     [dynamic]Artifact,
 	arena:    virtual.Arena,
-	has_arena: bool,
 	files:    [dynamic]Artifact_File,
 	files_arena: virtual.Arena,
-	has_files: bool,
 	file:     int,      // the one on screen
 	version:  u64,
 }
 
 @(private = "file")
-artifact_location :: proc(a: ^Artifacts) -> string {
-	return a.dir != "" ? fmt.tprintf("location[directory]=%s", url_escape(a.dir)) : ""
-}
-
-@(private = "file")
 artifacts_clear :: proc(a: ^Artifacts) {
-	if a.has_arena { virtual.arena_destroy(&a.arena) }
-	a.has_arena = false
+	virtual.arena_destroy(&a.arena)
 	clear(&a.list)
 	set_text(&a.removing, ""); set_text(&a.shown, "")
 	artifact_files_clear(a)
@@ -405,7 +394,7 @@ artifacts_open :: proc(app: ^App) {
 
 artifacts_ask :: proc(app: ^App) {
 	a := &app.cx.artifacts
-	q := artifact_location(a)
+	q := location_query(a.dir)
 	remote_begin(&a.read)
 	request(app, .Artifacts, "GET", fmt.tprintf("/api/experimental/artifacts%s%s", q != "" ? "?" : "", q), remote = &a.read)
 }
@@ -420,10 +409,7 @@ artifacts_forget :: proc(app: ^App) {
 
 artifacts_load :: proc(app: ^App, v: json.Value) {
 	a := &app.cx.artifacts
-	if a.has_arena { virtual.arena_destroy(&a.arena) }
-	_ = virtual.arena_init_growing(&a.arena)
-	a.has_arena = true
-	al := virtual.arena_allocator(&a.arena)
+	al := arena_renew(&a.arena)
 	clear(&a.list)
 	for it in jarr(v, "data") {
 		append(&a.list, Artifact{strings.clone(jstr(it, "id"), al), strings.clone(jstr(it, "title"), al), strings.clone(jstr(it, "entry"), al), strings.clone(jstr(it, "url"), al), strings.clone(jstr(it, "provider"), al)})
@@ -443,7 +429,7 @@ artifact_show :: proc(app: ^App, id: string) {
 @(private = "file")
 artifact_read :: proc(app: ^App) {
 	a := &app.cx.artifacts
-	q := artifact_location(a)
+	q := location_query(a.dir)
 	remote_begin(&a.file_read)
 	request(app, .Artifact_Read, "GET", fmt.tprintf("/api/experimental/artifacts/%s%s%s", url_escape(a.shown), q != "" ? "?" : "", q), remote = &a.file_read)
 }
@@ -455,8 +441,7 @@ artifacts_changed :: proc(app: ^App) {
 
 @(private = "file")
 artifact_files_clear :: proc(a: ^Artifacts) {
-	if a.has_files { virtual.arena_destroy(&a.files_arena) }
-	a.has_files = false
+	virtual.arena_destroy(&a.files_arena)
 	clear(&a.files)
 	a.file = 0
 }
@@ -474,7 +459,6 @@ artifact_loaded :: proc(app: ^App, v: json.Value) {
 	a := &app.cx.artifacts
 	artifact_files_clear(a)
 	_ = virtual.arena_init_growing(&a.files_arena)
-	a.has_files = true
 	al := virtual.arena_allocator(&a.files_arena)
 	files, _ := jget(v, "data", "files").(json.Object)
 	entry := jstr(v, "data", "info", "entry")
@@ -574,7 +558,7 @@ artifact_right :: proc(app: ^App, em: f32) {
 		text("p", it.provider, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)}, ui.fill())
 		if it.id == a.removing {
 			if bevel_button("###ar_yes", "Delete", ICO_DELETE, .Danger, height = small).clicked {
-				q := artifact_location(a)
+				q := location_query(a.dir)
 				request(app, .Artifact_Done, "DELETE", fmt.tprintf("/api/experimental/artifacts/%s%s%s", url_escape(it.id), q != "" ? "?" : "", q))
 				set_text(&a.removing, ""); set_text(&a.shown, "")
 				artifact_files_clear(a)
@@ -626,7 +610,6 @@ Plugins :: struct {
 	builtin:  bool,
 	list:     [dynamic]Plugin,
 	arena:    virtual.Arena,
-	has_arena: bool,
 }
 
 plugins_ask :: proc(app: ^App) {
@@ -637,26 +620,16 @@ plugins_ask :: proc(app: ^App) {
 
 plugins_forget :: proc(app: ^App) {
 	p := &app.cx.plugins
-	if p.has_arena { virtual.arena_destroy(&p.arena) }
-	p.has_arena = false
+	virtual.arena_destroy(&p.arena)
 	clear(&p.list)
 	remote_reset(&p.read)
 	remote_reset(&p.check)
 }
 
-@(private = "file")
-json_on :: proc(v: json.Value, key: string) -> bool {
-	b, _ := jget(v, key).(json.Boolean)
-	return bool(b)
-}
-
 // Those one chose first: what is built in is the server's own.
 plugins_load :: proc(app: ^App, v: json.Value) {
 	p := &app.cx.plugins
-	if p.has_arena { virtual.arena_destroy(&p.arena) }
-	_ = virtual.arena_init_growing(&p.arena)
-	p.has_arena = true
-	a := virtual.arena_allocator(&p.arena)
+	a := arena_renew(&p.arena)
 	clear(&p.list)
 	for pass in 0 ..< 2 {
 		for it in jarr(v, "data") {
@@ -667,14 +640,14 @@ plugins_load :: proc(app: ^App, v: json.Value) {
 			features := strings.builder_make(context.temp_allocator)
 			f := jget(it, "features")
 			for name in ([]string{"server", "tui", "rpc", "gui"}) {
-				if !json_on(f, name) { continue }
+				if !jbool(f, name) { continue }
 				if strings.builder_len(features) > 0 { strings.write_string(&features, ", ") }
 				strings.write_string(&features, name)
 			}
 			src := jget(it, "source")
 			append(&p.list, Plugin{
 				id = strings.clone(jstr(it, "id"), a), kind = strings.clone(kind, a), target = strings.clone(target, a), version = strings.clone(jstr(it, "source", "version"), a),
-				error = strings.clone(jstr(it, "state", "error"), a), outdated = json_on(src, "outdated"), updating = json_on(src, "updating"),
+				error = strings.clone(jstr(it, "state", "error"), a), outdated = jbool(src, "outdated"), updating = jbool(src, "updating"),
 				failed = jstr(it, "state", "status") == "failed", features = strings.clone(strings.to_string(features), a),
 			})
 		}

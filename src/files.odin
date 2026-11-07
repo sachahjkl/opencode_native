@@ -20,11 +20,6 @@ files_dir :: proc(app: ^App) -> string {
 	return d != "" ? d : app.chat.new_dir
 }
 
-@(private = "file")
-files_location :: proc(dir: string) -> string {
-	return dir != "" ? fmt.tprintf("location[directory]=%s", url_escape(dir)) : ""
-}
-
 // The server writes paths with the separators of its system; a prompt reads better with one kind.
 @(private = "file")
 path_clean :: proc(p: string) -> string {
@@ -91,7 +86,6 @@ Mentions :: struct {
 	dir:       string,   // the folder the server answered for (owned)
 	hits:      [dynamic]Mention_Hit,
 	arena:     virtual.Arena,
-	has_arena: bool,
 	chosen:    [dynamic]Mention,
 }
 
@@ -120,7 +114,7 @@ mention_ask :: proc(app: ^App) {
 		delete(m.folder)
 		m.folder = strings.clone(folder)
 	}
-	q := files_location(folder)
+	q := location_query(folder)
 	amp := q != "" ? "&" : ""
 	remote_begin(&m.read)
 	if m.query == "" {
@@ -132,8 +126,7 @@ mention_ask :: proc(app: ^App) {
 
 @(private = "file")
 mention_hits_clear :: proc(m: ^Mentions) {
-	if m.has_arena { virtual.arena_destroy(&m.arena) }
-	m.has_arena = false
+	virtual.arena_destroy(&m.arena)
 	clear(&m.hits)
 	delete(m.dir)
 	m.dir = ""
@@ -174,7 +167,6 @@ mention_load :: proc(app: ^App, v: json.Value) {
 	mention_hits_clear(m)
 	m.sel = sel
 	_ = virtual.arena_init_growing(&m.arena)
-	m.has_arena = true
 	a := virtual.arena_allocator(&m.arena)
 	m.dir = strings.clone(jstr(v, "location", "directory"))
 	for ag in app.agents {
@@ -300,7 +292,7 @@ mentions_destroy :: proc(app: ^App) {
 	m := &app.cx.mentions
 	mentions_clear(app)
 	delete(m.chosen); delete(m.hits); delete(m.query); delete(m.dir); delete(m.folder); delete(m.read.message)
-	if m.has_arena { virtual.arena_destroy(&m.arena) }
+	virtual.arena_destroy(&m.arena)
 	m^ = {}
 }
 
@@ -334,7 +326,6 @@ Files :: struct {
 	read:    Remote,               // the rows
 	rows:    [dynamic]File_Row,
 	arena:   virtual.Arena,
-	has_arena: bool,
 	file:    string,               // the file shown (owned, "": none)
 	file_read: Remote,             // it
 	binary:  bool,                 // it is not text
@@ -345,8 +336,7 @@ Files :: struct {
 
 @(private = "file")
 files_rows_clear :: proc(f: ^Files) {
-	if f.has_arena { virtual.arena_destroy(&f.arena) }
-	f.has_arena = false
+	virtual.arena_destroy(&f.arena)
 	clear(&f.rows)
 	f.sel = 0
 }
@@ -362,7 +352,7 @@ files_list :: proc(app: ^App) {
 	f := &app.cx.files
 	word := strings.trim_space(ui.field_string(&f.field))
 	f.searching = word != ""
-	q := files_location(f.dir)
+	q := location_query(f.dir)
 	amp := q != "" ? "&" : ""
 	remote_begin(&f.read)
 	if f.searching {
@@ -402,7 +392,6 @@ files_load :: proc(app: ^App, v: json.Value) {
 	f := &app.cx.files
 	files_rows_clear(f)
 	_ = virtual.arena_init_growing(&f.arena)
-	f.has_arena = true
 	a := virtual.arena_allocator(&f.arena)
 	for pass in 0 ..< 2 {
 		for it in jarr(v, "data") {
@@ -430,7 +419,7 @@ file_read :: proc(app: ^App) {
 	f.content, f.binary, f.size = "", false, 0
 	remote_reset(&f.file_read)
 	remote_begin(&f.file_read)
-	q := files_location(f.dir)
+	q := location_query(f.dir)
 	request(app, .File_Read, "GET", fmt.tprintf("/api/fs/read/%s%s%s", path_escape(f.file), q != "" ? "?" : "", q), remote = &f.file_read)
 }
 

@@ -277,7 +277,7 @@ Request :: struct {
 	remote: ^Remote,   // the reading it is (nil: none), and which one: answer settles it
 	ticket: u64,
 	out:    u64,       // the prompt on its way it carries (outgoing.odin, 0: none)
-	asked_at: u64,     // App_Context.stream_seq when it left: what the stream said after that is newer than its answer
+	asked_at: Seq,     // App_Context.stream_seq when it left: what the stream said after that is newer than its answer
 	// the answer
 	status: int,
 	resp:   string,
@@ -392,8 +392,12 @@ answer :: proc(app: ^App, r: ^Request) {
 	}
 	if r.status == 401 { answer_failed(app, r, .Auth, "Authentication refused by the server"); return }
 	if r.status >= 400 { answer_failed(app, r, .Refused, refusal_text(r)); return }
-	v, err := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if err != nil && answer_is_json(r.kind) { answer_failed(app, r, .Unreadable, "Unreadable answer"); return }
+	v: json.Value
+	if read_as_json := answer_is_json(r.kind); read_as_json || r.kind == .Prompt {   // (a prompt's answer says more when it can: queue_prompt_answered)
+		err: json.Error
+		v, err = json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
+		if err != nil && read_as_json { answer_failed(app, r, .Unreadable, "Unreadable answer"); return }
+	}
 	if r.remote != nil { remote_settle(r.remote, .Ready, "") }
 	switch r.kind {
 	case .Sessions:    sessions_load(app, v)
@@ -829,11 +833,11 @@ conn_auth_refused :: proc(app: ^App) {
 }
 
 // A session changed: the list is read again once things are quiet.
-refresh_soon :: proc(app: ^App) { deferred_ask(&app.cx.refresh_read, REFRESH_DEBOUNCE_MS, REFRESH_DEBOUNCE_MS * DEFERRED_MOST) }
+refresh_soon :: proc(app: ^App) { deferred_ask(&app.cx.due[.Refresh], REFRESH_DEBOUNCE_MS, REFRESH_DEBOUNCE_MS * DEFERRED_MOST) }
 
-children_soon :: proc(app: ^App) { deferred_ask(&app.cx.children_read, CHILDREN_DEBOUNCE_MS, CHILDREN_DEBOUNCE_MS * DEFERRED_MOST) }
+children_soon :: proc(app: ^App) { deferred_ask(&app.cx.due[.Children], CHILDREN_DEBOUNCE_MS, CHILDREN_DEBOUNCE_MS * DEFERRED_MOST) }
 
-facts_soon :: proc(app: ^App) { deferred_ask(&app.cx.facts_read, FACTS_DEBOUNCE_MS, FACTS_DEBOUNCE_MS * DEFERRED_MOST) }
+facts_soon :: proc(app: ^App) { deferred_ask(&app.cx.due[.Facts], FACTS_DEBOUNCE_MS, FACTS_DEBOUNCE_MS * DEFERRED_MOST) }
 
 on_event :: proc(data: rawptr, word: u64) {
 	app := the_app

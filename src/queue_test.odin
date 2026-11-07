@@ -707,11 +707,11 @@ the_context_is_read_when_a_step_ends_and_only_with_the_panel_open :: proc(t: ^te
 	show(app, "s")
 	STEP :: `{"type":"session.step.ended","data":{"sessionID":"s","assistantMessageID":"m","finish":"stop","tokens":{"input":1,"output":1,"reasoning":0,"cache":{"read":0}}}}`
 	bench_event(app, STEP)
-	testing.expect_value(t, deferred_in_ms(&app.cx.context_due), 0)
+	testing.expect_value(t, deferred_in_ms(&app.cx.due[.Context]), 0)
 	stats_open(app)
 	bench_clear(app)
 	bench_event(app, STEP)
-	testing.expect(t, deferred_in_ms(&app.cx.context_due) > 0, "a wake is due")
+	testing.expect(t, deferred_in_ms(&app.cx.due[.Context]) > 0, "a wake is due")
 	testing.expect_value(t, bench_count(.Context), 0)   // (once, a little after)
 	bench_clock += CONTEXT_DEBOUNCE_MS + 1
 	deferred_tick(app)

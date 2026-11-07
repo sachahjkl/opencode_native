@@ -72,7 +72,7 @@ Message :: struct {
 	sub_child, sub_state, sub_agent, sub_desc: string,
 	images:    [dynamic]Image_Ref,   // attached to a user's prompt
 	from_page: bool,                 // read from a page (what the stream builds is only pieces)
-	touched:   u64,                  // the stream's clock when it last changed it (a page asked before that is older: chat_load)
+	touched:   Seq,                  // the stream's clock when it last changed it (a page asked before that is older: chat_load)
 }
 
 // The open conversation. Everything in it lives in its arena, dropped when another conversation opens. A page read again
@@ -95,7 +95,7 @@ Chat :: struct {
 	tokens_in, tokens_out, cache_read: f64,
 	model, provider, agent: string,        // what it used last, as read and as streamed
 	chose_agent, chose_model, chose_provider: string,   // what the reader picked for it: goes before that (shown_agent, shown_model)
-	seq:       u64,                        // the stream's clock at the event being applied (Message.touched)
+	seq:       Seq,                        // the stream's clock at the event being applied (Message.touched)
 	// the session itself (GET /api/session/:id), its parent, its sub-agents
 	self:         Session_Info,
 	have_self:    bool,
@@ -122,7 +122,7 @@ Permission :: struct {
 	id, session, action, message: string,
 	resources: []string,
 	replying:  bool,   // the answer is on its way
-	born:      u64,    // the stream's clock when it came (a list asked before that does not know it: permissions_replace)
+	born:      Seq,    // the stream's clock when it came (a list asked before that does not know it: permissions_replace)
 }
 
 chat_reset :: proc(c: ^Chat) {
@@ -220,9 +220,7 @@ session_from_json :: proc(it: json.Value, a: mem.Allocator) -> Session_Info {
 Project_Logo :: struct { ref: Image_Ref, has_ref: bool, color: string, worktree: string }
 
 projects_load :: proc(app: ^App, v: json.Value) {
-	virtual.arena_destroy(&app.proj_arena)
-	_ = virtual.arena_init_growing(&app.proj_arena)
-	a := virtual.arena_allocator(&app.proj_arena)
+	a := arena_renew(&app.proj_arena)
 	app.projects = make(map[string]Project_Logo, allocator = a)
 	list, _ := v.(json.Array)
 	if list == nil { list = jarr(v, "data") }
@@ -254,7 +252,7 @@ chat_project :: proc(app: ^App) -> string {
 }
 
 // The session shown, as the server describes it (its parent, its outcome, its totals).
-self_load :: proc(app: ^App, v: json.Value, asked_at: u64) {
+self_load :: proc(app: ^App, v: json.Value, asked_at: Seq) {
 	c := &app.chat
 	c.self = session_from_json(jget(v, "data"), c.alloc)
 	c.have_self = true
@@ -275,9 +273,7 @@ parent_load :: proc(app: ^App, v: json.Value) {
 // The sub-agents of the session shown (its children), newest first.
 children_load :: proc(app: ^App, v: json.Value) {
 	c := &app.chat
-	virtual.arena_destroy(&c.children_arena)
-	_ = virtual.arena_init_growing(&c.children_arena)
-	a := virtual.arena_allocator(&c.children_arena)
+	a := arena_renew(&c.children_arena)
 	c.children = make([dynamic]Session_Info, a)
 	for it in jarr(v, "data") { append(&c.children, session_from_json(it, a)) }
 }
@@ -293,9 +289,7 @@ load_children :: proc(app: ^App) {
 }
 
 sessions_load :: proc(app: ^App, v: json.Value) {
-	virtual.arena_destroy(&app.sess_arena)
-	_ = virtual.arena_init_growing(&app.sess_arena)
-	a := virtual.arena_allocator(&app.sess_arena)
+	a := arena_renew(&app.sess_arena)
 	app.sessions = make([dynamic]Session_Info, a)
 	for it in jarr(v, "data") { append(&app.sessions, session_from_json(it, a)) }
 	slice.sort_by(app.sessions[:], proc(x, y: Session_Info) -> bool { return x.updated > y.updated })
@@ -375,23 +369,23 @@ models_load :: proc(app: ^App, v: json.Value) {
 
 // The sessions running now (the stream only tells about runs that start after it connected). What the stream said since this
 // list was asked for is newer than it: a run that started is not stopped by it, one that ended does not start again.
-active_load :: proc(app: ^App, v: json.Value, asked_at := max(u64)) {
+active_load :: proc(app: ^App, v: json.Value, asked_at := max(Seq)) {
 	cx := &app.cx
 	obj, _ := jget(v, "data").(json.Object)
-	newer :: proc(cx: ^App_Context, id: string, asked_at: u64) -> bool { return asked_at != max(u64) && (cx.busy_seq[id] or_else 0) > asked_at }
+	busy_newer :: proc(cx: ^App_Context, id: string, asked_at: Seq) -> bool { return newer(cx.busy_seq[id] or_else 0, asked_at) }
 	over := make([dynamic]string, context.temp_allocator)
-	for id in app.busy { if id not_in obj && !newer(cx, id, asked_at) { append(&over, strings.clone(id, context.temp_allocator)) } }
+	for id in app.busy { if id not_in obj && !busy_newer(cx, id, asked_at) { append(&over, strings.clone(id, context.temp_allocator)) } }
 	for id in over { set_busy(app, id, false) }
 	if len(over) > 0 { sessions_seen_shown(app) }   // (an end the stream missed, in the session on screen: seen all the same)
 	for id in obj {
-		if !newer(cx, id, asked_at) { set_busy(app, id, true) }
+		if !busy_newer(cx, id, asked_at) { set_busy(app, id, true) }
 		session_waits_load(app, id)
 	}
 	// (one that does not run waits for nobody: what shows for it is reconciled too)
 	for id in waits_sessions(app) { if id not_in obj { session_waits_load(app, id) } }
 	// what this list is newer than has nothing more to say
 	old := make([dynamic]string, context.temp_allocator)
-	for id, at in cx.busy_seq { if at <= asked_at { append(&old, id) } }
+	for id, at in cx.busy_seq { if !newer(at, asked_at) { append(&old, id) } }
 	for id in old { key, _ := delete_key(&cx.busy_seq, id); delete(key) }
 }
 
@@ -437,10 +431,10 @@ permission_add :: proc(app: ^App, v: json.Value) {
 
 // What the server says a session waits for: it replaces what is shown for that session, so that a card whose event was missed
 // goes. Not a card that came since this list was asked for, and not one being answered: those are newer than the list.
-permissions_replace :: proc(app: ^App, session: string, list: json.Array, asked_at: u64) {
+permissions_replace :: proc(app: ^App, session: string, list: json.Array, asked_at: Seq) {
 	for i := len(app.permissions) - 1; i >= 0; i -= 1 {
 		p := app.permissions[i]
-		if p.session != session || p.replying || p.born > asked_at { continue }
+		if p.session != session || p.replying || newer(p.born, asked_at) { continue }
 		listed := false
 		for it in list { if jstr(it, "id") == p.id { listed = true; break } }
 		if !listed { permission_free(p); ordered_remove(&app.permissions, i) }
@@ -490,7 +484,7 @@ permission_remove :: proc(app: ^App, id: string) {
 // A page of messages (newest first in the answer). `older`: it goes before the ones already shown; without it, it replaces
 // the newest ones (and what the stream had added to them), and the pages read before them stay.
 // `asked_at`: when the page was asked for (Request.asked_at). What the stream said since is newer than it and stays.
-chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(u64)) {
+chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(Seq)) {
 	c := &app.chat
 	a := c.alloc
 	c.loading = false
@@ -504,7 +498,7 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(u64)) {
 		if older && old != nil { continue }
 		// (what is final stays as it is: cloned at each reading, images and all, it would pile up in the arena)
 		m := old != nil && message_final(old, it) ? old^ : message_from_json(it, a)
-		if old != nil && old.touched > asked_at { message_keep_newer(&m, old) }
+		if old != nil && newer(old.touched, asked_at) { message_keep_newer(&m, old) }
 		if m.kind == .Idle && len(page) > 0 && page[len(page) - 1].kind == .Idle { continue }
 		append(&page, m)
 	}
@@ -527,7 +521,7 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(u64)) {
 	} else {
 		// (what the stream began after this page was asked for is not in it)
 		for m in c.messages {
-			if m.touched <= asked_at { continue }
+			if !newer(m.touched, asked_at) { continue }
 			there := false
 			for p in page { if p.id == m.id { there = true; break } }
 			if !there { append(&page, m) }

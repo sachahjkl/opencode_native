@@ -272,15 +272,15 @@ nav_restore_begin :: proc(app: ^App, msg: string, dy: f32) {
 	nav_restore_clear(app)
 	cx.restore_msg, cx.restore_dy = strings.clone(msg), dy
 	cx.restore_still, cx.restore_frames = 0, 0
-	deferred_ask(&cx.restore_limit, NAV_RESTORE_WAIT_MS)
+	deferred_ask(&cx.due[.Restore], NAV_RESTORE_WAIT_MS)
 }
 
 // A page came: the way to the message goes on, a whole wait from now. (A long history takes many pages: the limit is on a view that
 // no longer gets anywhere. Asked again as it stands, a Deferred would keep its first bound.)
 nav_restore_page :: proc(app: ^App) {
 	if app.cx.restore_msg == "" { return }
-	app.cx.restore_limit = {}
-	deferred_ask(&app.cx.restore_limit, NAV_RESTORE_WAIT_MS)
+	app.cx.due[.Restore] = {}
+	deferred_ask(&app.cx.due[.Restore], NAV_RESTORE_WAIT_MS)
 }
 
 // What the reader asks for wins over a view going back: Latest, a prompt sent.
@@ -327,7 +327,7 @@ nav_restore_step :: proc(app: ^App, sb, item: ^ui.Box) {
 nav_restore_clear :: proc(app: ^App) {
 	delete(app.cx.restore_msg)
 	app.cx.restore_msg = ""
-	app.cx.restore_limit = {}
+	app.cx.due[.Restore] = {}
 }
 
 // After a page was read: a message that is in none of them (its session changed) gives up, and the view takes the end.

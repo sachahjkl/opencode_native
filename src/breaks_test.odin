@@ -36,7 +36,7 @@ told_after_drag :: proc(t: ^testing.T, stop: int) -> bool {
 	term_resize(app, s, 100, 30, 8, 16)
 	bench_answer(app, bench_take(t, .Pty_Size), 200, "")
 	bench_clock += 2000
-	terms_size_tick(app)
+	due_tick(app, .Term_Size)
 	app.frames = 0
 
 	cols := u16(100)
@@ -49,7 +49,7 @@ told_after_drag :: proc(t: ^testing.T, stop: int) -> bool {
 	next_frame := bench_clock + 17
 	for _ in 0 ..< 3000 {
 		bench_clock += 1
-		if deferred_in_ms(&app.cx.terms.size_wake) > 0 && bench_clock >= app.cx.terms.size_wake.due_ms { terms_size_tick(app) }
+		if deferred_in_ms(&app.cx.due[.Term_Size]) > 0 && bench_clock >= app.cx.due[.Term_Size].due_ms { due_tick(app, .Term_Size) }
 		if app.frames > 0 && bench_clock >= next_frame {
 			term_resize(app, s, cols, 30, 8, 16)   // (terminal_panel's term_fit, at each build)
 			app.frames -= 1

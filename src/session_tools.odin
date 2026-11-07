@@ -128,16 +128,14 @@ Changes :: struct {
 	state:     Changes_State,
 	read:      Remote,          // what Viewing reads, a step at a time
 	revert:    Remote,          // the stage, the commit or the cancel on its way
-	gone_seq:  u64,             // the stream's clock when going back last ended for the session shown: a read asked before that is old
+	gone_seq:  Seq,             // the stream's clock when going back last ended for the session shown: a read asked before that is old
 	files:     [dynamic]File_Change,
 	arena:     virtual.Arena,
-	has_arena: bool,
 }
 
 @(private = "file")
 changes_files_clear :: proc(c: ^Changes) {
-	if c.has_arena { virtual.arena_destroy(&c.arena) }
-	c.has_arena = false
+	virtual.arena_destroy(&c.arena)
 	clear(&c.files)
 }
 
@@ -265,7 +263,6 @@ revert_stage :: proc(app: ^App, id, msg, prompt: string) {
 changes_fill :: proc(c: ^Changes, list: json.Array) {
 	changes_files_clear(c)
 	_ = virtual.arena_init_growing(&c.arena)
-	c.has_arena = true
 	a := virtual.arena_allocator(&c.arena)
 	for it, i in list {
 		more, _ := jget(it, "more").(json.Boolean)
@@ -294,9 +291,9 @@ revert_staged :: proc(app: ^App, v: json.Value) {
 
 // `revert`, the session's staged going back, as its description has it: this session was left there. (`asked_at`: a description read
 // before going back ended says what no longer is.)
-revert_found :: proc(app: ^App, id: string, revert: json.Value, asked_at: u64) {
+revert_found :: proc(app: ^App, id: string, revert: json.Value, asked_at: Seq) {
 	c := &app.cx.changes
-	if _, closed := c.state.(Changes_Closed); !closed || asked_at < c.gone_seq { return }
+	if _, closed := c.state.(Changes_Closed); !closed || newer(c.gone_seq, asked_at) { return }
 	c.state = Changes_Staged{
 		session = strings.clone(id), message = strings.clone(jstr(revert, "messageID")),
 		found = true, no_snapshot = jstr(revert, "snapshot") == "",

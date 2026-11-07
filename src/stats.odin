@@ -45,7 +45,6 @@ Ctx_Group :: struct {
 
 Stats_Context :: struct {
 	arena:    virtual.Arena,
-	has_arena: bool,
 	session:  string,   // whose it is (owned)
 	groups:   [dynamic]Ctx_Group,   // the largest first
 	total:    f64,      // what the last step sent the model (0: no step yet)
@@ -106,7 +105,7 @@ stats_forget :: proc(app: ^App) {
 @(private = "file")
 context_clear :: proc(app: ^App) {
 	x := &app.cx.stats_context
-	if x.has_arena { virtual.arena_destroy(&x.arena) }
+	virtual.arena_destroy(&x.arena)
 	delete(x.session)
 	x^ = {}
 }
@@ -128,7 +127,7 @@ context_ask :: proc(app: ^App) {
 
 // The stream has no event for it: a step that ended is when the context changed. Nothing is read while the panel is closed.
 stats_context_soon :: proc(app: ^App) {
-	if app.stats_open { deferred_ask(&app.cx.context_due, CONTEXT_DEBOUNCE_MS, CONTEXT_DEBOUNCE_MS * DEFERRED_MOST) }
+	if app.stats_open { deferred_ask(&app.cx.due[.Context], CONTEXT_DEBOUNCE_MS, CONTEXT_DEBOUNCE_MS * DEFERRED_MOST) }
 }
 
 @(private = "file")
@@ -200,9 +199,9 @@ context_message :: proc(x: ^Stats_Context, m: json.Value) {
 // The answer replaces what was read. Sizes are in proportion to the text, and together never more than what the step really sent.
 context_load :: proc(app: ^App, session: string, v: json.Value) {
 	x := &app.cx.stats_context
-	if x.has_arena { virtual.arena_destroy(&x.arena) }
+	virtual.arena_destroy(&x.arena)
 	delete(x.session)
-	x^ = {session = strings.clone(session), has_arena = true}
+	x^ = {session = strings.clone(session)}
 	_ = virtual.arena_init_growing(&x.arena)
 	x.groups = make([dynamic]Ctx_Group, virtual.arena_allocator(&x.arena))
 	for m in jarr(v, "data") { context_message(x, m) }

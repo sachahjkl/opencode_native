@@ -1294,7 +1294,7 @@ a_shell_the_server_refused_is_not_shown_as_set :: proc(t: ^testing.T) {
 	testing.expect_value(t, f.shell, "/bin/new")
 	bench_answer(app, bench_take(t, .Shell_Set), 400, `{"message":"no"}`)
 	testing.expect_value(t, f.shell, "/bin/old")
-	testing.expect(t, deferred_in_ms(&app.cx.facts_read) > 0, "what it says is read")
+	testing.expect(t, deferred_in_ms(&app.cx.due[.Facts]) > 0, "what it says is read")
 	shell_set(app, Shell_Info{"new", "/bin/new", true})
 	bench_answer(app, bench_take(t, .Shell_Set), 200, "")
 	testing.expect_value(t, f.shell, "/bin/new")

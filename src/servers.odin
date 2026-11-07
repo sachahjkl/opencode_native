@@ -228,7 +228,7 @@ server_forget :: proc(app: ^App) {
 	slash_forget(app)
 	queue_forget(app)
 	outgoing_forget(app)
-	app.cx.refresh_read, app.cx.facts_read, app.cx.children_read, app.cx.context_due = {}, {}, {}, {}
+	app.cx.due[.Refresh], app.cx.due[.Facts], app.cx.due[.Children], app.cx.due[.Context] = {}, {}, {}, {}
 	app.picker.open = false
 	app.delete_open, app.rename.open = false, false   // (their ids were that server's: nothing acts on one with what came from the other)
 	sidebar_hold_end(app)

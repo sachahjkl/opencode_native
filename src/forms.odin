@@ -39,7 +39,7 @@ Form_Req :: struct {
 	fields:   []Form_Field,
 	arena:    virtual.Arena,
 	sending:  bool,  // its answer or its dismissal is on its way: one at a time
-	born:     u64,   // the stream's clock when it came (a list asked before that does not know it: forms_replace)
+	born:     Seq,   // the stream's clock when it came (a list asked before that does not know it: forms_replace)
 	page:     int,   // several questions: the one shown, among those shown; past the last, the review
 }
 
@@ -52,12 +52,6 @@ json_text :: proc(v: json.Value) -> string {
 	case json.Boolean: return x ? "true" : "false"
 	}
 	return ""
-}
-
-@(private = "file")
-json_true :: proc(v: json.Value, key: string) -> bool {
-	b, ok := jget(v, key).(json.Boolean)
-	return ok && b
 }
 
 @(private = "file")
@@ -79,11 +73,11 @@ form_add :: proc(app: ^App, v: json.Value) {
 }
 
 // What the server says a session asks: as permissions_replace. A form that stays keeps what the person has filled in.
-forms_replace :: proc(app: ^App, session: string, list: json.Array, asked_at: u64) {
+forms_replace :: proc(app: ^App, session: string, list: json.Array, asked_at: Seq) {
 	forms := &app.cx.forms
 	for i := len(forms) - 1; i >= 0; i -= 1 {
 		f := forms[i]
-		if f.session != session || f.sending || f.born > asked_at { continue }
+		if f.session != session || f.sending || newer(f.born, asked_at) { continue }
 		listed := false
 		for it in list { if jstr(it, "id") == f.id { listed = true; break } }
 		if !listed { form_remove(app, f.id) }
@@ -102,7 +96,7 @@ form_new :: proc(id, session, title: string, question: bool, list: json.Array) -
 		fd := &f.fields[i]
 		fd.key, fd.title, fd.description = strings.clone(jstr(it, "key"), a), strings.clone(jstr(it, "title"), a), strings.clone(jstr(it, "description"), a)
 		fd.kind, fd.placeholder, fd.url = strings.clone(jstr(it, "type"), a), strings.clone(jstr(it, "placeholder"), a), strings.clone(jstr(it, "url"), a)
-		fd.required, fd.custom, fd.hidden = json_true(it, "required"), json_true(it, "custom"), json_true(it, "hidden")
+		fd.required, fd.custom, fd.hidden = jbool(it, "required"), jbool(it, "custom"), jbool(it, "hidden")
 		fd.min, fd.max = json_number(it, "minimum"), json_number(it, "maximum")
 		fd.choice = -1
 		opts := jarr(it, "options")

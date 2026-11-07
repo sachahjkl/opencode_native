@@ -12,6 +12,7 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:math"
 import "core:strings"
+import "gt:draw"
 import "gt:platform"
 import "gt:ui"
 
@@ -276,72 +277,70 @@ output_view_word :: proc(v: ^Output_View) -> (word: string, color: Color) {
 	return "ended", hex(HEX_GREEN)
 }
 
-// The end, as it happened: the output is whole, and there is nothing more to wait for here.
+// A line along its top: the grid above is the view, this is only what goes with it.
 @(private = "file")
-output_view_end_line :: proc(app: ^App, v: ^Output_View, em: f32, margin: f32) {
-	word, color := output_view_word(v)
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * OUTPUT_END_H_EM)), axis = .X, cross = .Center})
-	if ui.row(.Center, id = "###out_end") {
-		ui.spacer(ui.px(margin))
-		glyph(v.has_exit && v.exit != 0 || v.status != .Exited ? ICO_CANCEL : ICO_CHECK, color, math.round(em * ICON_SMALL), em * 1.3)
-		ui.spacer(ui.px(em * 0.3))
-		says := v.lost ? "The server no longer has this command." : fmt.tprintf("Finished (%s): nothing more will come.", word)
-		text("w", says, hex(HEX_TEXT_SOFT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
-		if bevel_button("###out_close", "Close", ICO_CANCEL, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { output_view_close(app, v) }
-		ui.spacer(ui.px(margin))
-	}
+output_bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+	draw.rect(dc, {b.rect.min, {b.rect.max.x, b.rect.min.y + px1()}}, hex(HEX_LINE))
 }
 
-// Its command, how it stands, what can be done with it, and the grid.
-output_view_body :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
-	margin := em * (in_window ? 0.7 : DIALOG_MARGIN_EM)
+// How it stands, and what can be done with it, under the grid. It stays where it is whatever the size of the window; what gives way is the
+// text in its middle. Ended as one watched, that text says so, and Close is what stands out.
+@(private = "file")
+output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
 	running := !v.over
-	if running { app.animating = true }
-	ui.spacer(ui.px(em * (in_window ? 0.5 : 0.25)))   // (in the dialog: level with its close button)
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), axis = .X, cross = .Center})
-	if ui.row(.Center, id = "###out_head") {
-		ui.spacer(ui.px(margin))
-		word, color := output_view_word(v)
-		state_mark("###st", color, running, size = em * 0.8)
-		ui.spacer(ui.px(em * 0.5))
-		text("t", first_line(v.command), hex(HEX_BRIGHT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_NOTE), height = ui.px(em * 2)}, ui.fill())
-		ui.spacer(ui.px(em * 0.6))
-		if v.dropped {
-			text("d", "the start is gone", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-			ui.spacer(ui.px(em * 0.7))
-		}
-		text("s", word, color, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
-		ui.spacer(ui.px(em * 0.5))
+	word, color := output_view_word(v)
+	note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * OUTPUT_BAR_H_EM)), axis = .X, cross = .Center})
+	bar := ui.build_box({}, "###out_bar")
+	bar.custom = output_bar_draw
+	if ui.parent(bar) {
+		ui.spacer(ui.px(em * 0.8))
+		state_mark("###st", color, running, size = em * 0.7)
+		ui.spacer(ui.px(em * 0.45))
+		text("s", word, color, note)
 		if dur := duration(v.started, v.ended > 0 ? v.ended : (running ? now_epoch_ms() : 0)); dur != "" {
-			text("e", dur, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
-			ui.spacer(ui.px(em * 0.7))
+			ui.spacer(ui.px(em * 0.6))
+			text("e", dur, hex(HEX_FAINT), note)
 		}
-		h := math.round(em * BUTTON_COMPACT_H_EM)
-		if bevel_button("###out_copy", "Copy", ICO_COPY, .Normal, height = h, disabled = len(v.raw) == 0).clicked {
+		ui.spacer(ui.px(em * 1.1))
+		switch {
+		case v.lost:     text("m", "The server no longer has this command.", hex(HEX_WEAK), note, ui.fill())
+		case v.seen_end: text("m", "Finished: nothing more will come.", hex(HEX_TEXT_SOFT), note, ui.fill())
+		case v.dropped:  text("m", "The server kept the end of it.", hex(HEX_FAINT), note, ui.fill())
+		case in_window:  ui.spacer(ui.fill())   // (the title bar has the command)
+		case:            text("m", first_line(v.command), hex(HEX_FAINT), note, ui.fill())
+		}
+		ui.spacer(ui.px(em * 0.8))
+		h := math.round(em * BUTTON_SMALL_H_EM)
+		if bevel_button("###out_copy", "Copy", ICO_COPY, .Ghost, height = h, disabled = len(v.raw) == 0, quiet = true).clicked {
 			clip_set(plain_output(string(v.raw[:])))
 			ui.toast(.Good, "Output copied")
 		}
 		if !in_window {
-			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###out_win", "Open in a window", ICO_WINDOW, .Normal, height = h).clicked { app.cx.outputs.window = v }
-			ui.spacer(ui.px(em * 3.2))   // (the dialog's close button is there)
-		} else {
-			ui.spacer(ui.px(margin))
+			ui.spacer(ui.px(em * 0.2))
+			if bevel_button("###out_win", "Window", ICO_WINDOW, .Ghost, height = h, quiet = true).clicked { app.cx.outputs.window = v }
 		}
+		if !in_window || v.seen_end {
+			ui.spacer(ui.px(em * 0.2))
+			if bevel_button("###out_close", "Close", "", v.seen_end ? .Normal : .Ghost, height = h, quiet = !v.seen_end).clicked { output_view_close(app, v) }
+		}
+		ui.spacer(ui.px(em * 0.5))
 	}
-	ui.spacer(ui.px(em * 0.5))
-	if v.seen_end {
-		output_view_end_line(app, v, em, margin)
-		ui.spacer(ui.px(em * 0.3))
-	}
+}
+
+// The grid, all the room there is, and the bar. (In the dialog, an edge: its corners are round, the grid's are not.)
+output_view_body :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
+	if !v.over { app.animating = true }
+	inset := in_window ? 0 : math.round(em * 0.55)
+	ui.spacer(ui.px(inset))
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 	if ui.row(id = "###out_body") {
-		if !in_window { ui.spacer(ui.px(margin)) }
+		ui.spacer(ui.px(inset))
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 		if ui.column(id = "###out_grid") { terminal_panel(app, em, v.term) }
-		if !in_window { ui.spacer(ui.px(margin)) }
+		ui.spacer(ui.px(inset))
 	}
-	if !in_window { ui.spacer(ui.px(margin)) }
+	output_view_bar(app, v, em, in_window)
 }
 
 output_view_dialog :: proc(app: ^App, em: f32) {
@@ -350,8 +349,7 @@ output_view_dialog :: proc(app: ^App, em: f32) {
 	open := true
 	if ui.modal_sized("output", DIALOG_PREFERRED_EM[.Output] * em, &app.cx.dialogs[.Output], &open, DIALOG_MIN_EM[.Output] * em) {
 		dialog_backdrop()
-		output_view_body(app, v, em, false)
-		dialog_close(&open)
+		output_view_body(app, v, em, false)   // (its bar has the Close)
 	}
 	if !open { output_view_close(app, v) }
 }

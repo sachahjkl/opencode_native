@@ -205,7 +205,7 @@ a_server_left_leaves_nothing_behind :: proc(t: ^testing.T) {
 	testing.expect(t, !app.find.open)
 	testing.expect_value(t, len(app.permissions), 0)
 	testing.expect_value(t, len(app.cx.waits_gone), 0)
-	testing.expect_value(t, app.cx.refresh_read.due_ms, 0)
+	testing.expect_value(t, app.cx.due[.Refresh].due_ms, 0)
 	testing.expect_value(t, chat_view(app), Chat_View.Home)
 }
 
@@ -563,7 +563,7 @@ a_deferred_read_comes_after_the_last_asking_and_not_never :: proc(t: ^testing.T)
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	refresh_soon(app)
-	testing.expect(t, deferred_in_ms(&app.cx.refresh_read) > 0, "a wake is due")
+	testing.expect(t, deferred_in_ms(&app.cx.due[.Refresh]) > 0, "a wake is due")
 	bench_clock += REFRESH_DEBOUNCE_MS - 1
 	refresh_soon(app)   // (another event: it moves back)
 	bench_clock += 2    // (past the first deadline: that one would race what the event followed)
@@ -572,7 +572,7 @@ a_deferred_read_comes_after_the_last_asking_and_not_never :: proc(t: ^testing.T)
 	bench_clock += REFRESH_DEBOUNCE_MS
 	deferred_tick(app)
 	testing.expect_value(t, bench_count(.Sessions), 1)
-	testing.expect_value(t, deferred_in_ms(&app.cx.refresh_read), 0)
+	testing.expect_value(t, deferred_in_ms(&app.cx.due[.Refresh]), 0)
 	bench_clear(app)
 	// events without end
 	for _ in 0 ..< 100 {

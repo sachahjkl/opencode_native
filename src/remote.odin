@@ -5,6 +5,8 @@ package occ
 
 import "core:fmt"
 import "core:math"
+import "core:mem"
+import "core:mem/virtual"
 import "core:strings"
 import "gt:ui"
 
@@ -69,10 +71,27 @@ read_shown :: proc(app: ^App, id: string, x: ^Remote, em: f32, ask: proc(app: ^A
 	return false
 }
 
+// What was in it goes, and it starts over. (Destroying an arena that is zero does nothing, and an arena destroyed can be destroyed again.)
+arena_renew :: proc(a: ^virtual.Arena) -> mem.Allocator {
+	virtual.arena_destroy(a)
+	_ = virtual.arena_init_growing(a)
+	return virtual.arena_allocator(a)
+}
+
+// The stream's clock: a count of what it said. A list and the stream have no clock in common: an answer is older than what the stream said after
+// it was asked for.
+Seq :: distinct u64
+
+newer :: proc(at, asked_at: Seq) -> bool { return at > asked_at }
+
 // Something to do once things are quiet: asked again it moves back, so that it comes after what asked for it (an event after
 // a POST reads what that POST changed), but never later than `most` after the first asking: events without end still read.
 // (`most` left out: no later than the first wait. To start a wait over, clear it first.)
 Deferred :: struct { due_ms, latest_ms: f64 }   // (0: nothing asked)
+
+// What the program puts off. Each is run (due_run: a new one does not compile until it says what it does) and wakes a window at rest, from one
+// list.
+Due :: enum u8 { Refresh, Facts, Children, Context, Restore, Term_Size, Side_Wake }
 
 deferred_ask :: proc(d: ^Deferred, wait_ms: f64, most_ms: f64 = 0) {
 	now := ui.now_ms()
