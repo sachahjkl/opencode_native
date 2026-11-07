@@ -83,6 +83,7 @@ theme_setup :: proc(t: ^ui.Theme) {
 	ui.theme_add(t, "floating border", hex(HEX_FLOATING_BORDER))
 	ui.theme_add(t, "floating scrim background", CLEAR)   // (dialog_backdrop paints it; "floating background" made it opaque)
 	ui.theme_add(t, "selection", with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
+	ui.theme_add(t, "selection text", hex(HEX_BRIGHT))   // (over the selection, whatever the text's own colour: a faint one was lost on it)
 	ui.apply_palette(t, OPENCODE_PALETTE)
 }
 

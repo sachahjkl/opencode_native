@@ -5,6 +5,23 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.17.8] - 2026-11-07
+
+### Added
+
+- **A command's output begins with the command.** It is written at the head of the grid after a prompt, whole, as if typed, and scrolls with what it printed; the bar no longer shows it cut.
+- **A menu on a terminal.** A right click on a shell's grid, or on a command's output, offers Copy (the selection), Paste (a shell), Select all, and for a command's output, all of it, plain. A program that takes the mouse keeps the right button; Shift and a right click open the menu all the same.
+- **Paths to copy.** The folder under a conversation's title and the file a diff shows can be selected and copied.
+
+### Changed
+
+- **Tables share their width as a browser does.** A table wider than its place keeps each column at least as wide as its longest word, gives the columns that lack the least all they need first, and lets the long ones wrap: "client" is no longer cut into "clie" and "nt".
+- **Selected text reads on its selection,** whatever its colour: a faint line (a done task) was lost on the selection's.
+
+### Fixed
+
+- **The sidebar's handle lets go of its colour** once dragged: it kept the keyboard's focus, and showed it as if a key had brought it there.
+
 ## [0.17.7] - 2026-11-07
 
 ### Added
@@ -744,7 +761,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.7...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.8...HEAD
+[0.17.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.8
 [0.17.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.7
 [0.17.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.6
 [0.17.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.5

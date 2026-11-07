@@ -300,3 +300,8 @@ TABLE_MEASURE_W :: 1e6   // a table's cell is laid out this wide to measure it: 
 TABLE_CELL_PAD_Y_EM :: 0.4   // above and under a table cell's words (markdown.odin table_block)
 RENAME_PAD_EM :: 0.5   // a title edited in place: its words from the field's edge (context_menus.odin rename_in_place)
 RENAME_ROOM_EM :: 3   // a title edited in place, beside others: room to type after its words (context_menus.odin rename_in_place)
+TABLE_CODE_SLACK_EM :: 0.5   // a code word in a table cell: the room of its chip around it (markdown.odin table_block)
+TERM_MENU_EM :: 14   // a shell's menu, its width (terminal.odin term_menu)
+OUTPUT_PROMPT      :: "\x1b[2m$\x1b[0m "    // before a command's first line at the head of its output (output_view.odin output_view_echo)
+OUTPUT_PROMPT_MORE :: "\x1b[2m>\x1b[0m "    // before its next lines
+OUTPUT_ECHO_ON     :: "\x1b[1m"              // the command itself: bold

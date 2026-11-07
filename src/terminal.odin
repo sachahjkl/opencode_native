@@ -109,6 +109,8 @@ Terminals :: struct {
 	pressed: ^Term,
 	press_button: platform.Mouse_Button,
 	press_pos:    [2]f32,
+	menu_for: ^Term,           // a right click asked for its menu (at menu_at): its next build opens it
+	menu_at:  [2]f32,
 	font_size, cell_w, cell_h, ascent: f32,
 }
 
@@ -919,7 +921,10 @@ term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 		case .Mouse_Press:
 			t := term_at(app, e.pos)
 			if t == nil || t.vt == nil { break }
-			if term_tracks_mouse(t) && .Shift not_in e.mods {
+			if e.button == .Right && (!term_tracks_mouse(t) || .Shift in e.mods) {
+				s.menu_for, s.menu_at = t, e.pos
+				take = true
+			} else if term_tracks_mouse(t) && .Shift not_in e.mods {
 				term_mouse(t, s, VT_MOUSE_PRESS, mouse_button_of(e.button), e.pos, e.mods, true)
 				if s.press == .None { s.press, s.pressed, s.press_button, s.press_pos = .Program, t, e.button, e.pos }
 			} else if e.button == .Left && s.press == .None {
@@ -1023,6 +1028,27 @@ terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
 	s.ascent = m.ascent
 	term_fit(app, t, b.rect)
 	b.custom, b.custom_user = term_draw, t
+	menu := ui.key_from_string(b.key, "term_menu")
+	if s.menu_for == t { ui.ctx_menu_open(menu, s.menu_at); s.menu_for = nil }
+	if ui.ctx_menu(menu, em * TERM_MENU_EM) { term_menu(app, t) }
+}
+
+// What a right click on a shell's grid offers: its selection, what the clipboard holds, the whole screen; a command's output, all of it.
+@(private = "file")
+term_menu :: proc(app: ^App, t: ^Term) {
+	if ui.menu_item("Copy", t.read_only ? "Ctrl+C" : "Ctrl+Shift+C", icon = ICO_COPY, enabled = t.has_selection).clicked {
+		clip_set(term_selection_text(t))
+	}
+	if !t.read_only && ui.menu_item("Paste", "Ctrl+Shift+V").clicked { term_paste(app, t) }
+	if ui.menu_item("Select all", enabled = len(t.lines) > 0).clicked {
+		last := len(t.lines) - 1
+		t.sel_from, t.sel_to = {0, 0}, {max(utf8.rune_count(t.lines[last]) - 1, 0), last}
+		t.selecting, t.has_selection = false, true
+	}
+	if v := output_view_of_term(app, t); v != nil {
+		ui.menu_separator()
+		if ui.menu_item("Copy all the output", enabled = len(v.raw) > 0).clicked { clip_set(plain_output(string(v.raw[:]))) }
+	}
 }
 
 // What stands in the dock while there is no shell: the reading of the list or of the new shell, and how it ended.

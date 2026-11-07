@@ -68,11 +68,11 @@ frame :: proc(app: ^App) {
 }
 ` + "```" + `
 
-| Step | Before | After |
-|:-----|-------:|:-----:|
-| build | 1.20 ms | 0.80 ms |
-| draw | 0.40 ms | 0.35 ms |
-| ` + "`render`" + ` | 0.90 ms | 0.90 ms |
+| Step | Before | After | What changed |
+|:-----|-------:|:-----:|:-------------|
+| build | 1.20 ms | 0.80 ms | the lazy column builds only what is seen, and the heights it learned keep the scrollbar where it was while the rest is measured |
+| draw | 0.40 ms | 0.35 ms | fewer boxes |
+| ` + "`render`" + ` | 0.90 ms | 0.90 ms | ` + "`render/surface.odin`" + ` unchanged |
 
 > A quote, to close: what is measured is kept, the rest is written down.
 
@@ -175,10 +175,12 @@ output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 	testing.expect(t, session.find(s, "out_bar") != nil, "the bar")
 	testing.expect(t, session.find(s, "out_close") != nil, "Close, ended as one watched")
 	testing.expect(t, session.find(s, "term_box") != nil, "the grid")
+	testing.expectf(t, len(v.term.lines) > 0 && strings.has_prefix(v.term.lines[0], "$ cargo build"), "the command, at the head of the grid: %q", len(v.term.lines) > 0 ? v.term.lines[0] : "")
 	// a drag over the grid selects, and Ctrl+C copies it
 	if g := session.find(s, "term_box"); g != nil {
-		from := [2]f32{g.rect.min.x + 12, g.rect.min.y + 12}
-		to := [2]f32{g.rect.min.x + 160, g.rect.min.y + 12}
+		y := g.rect.min.y + app.cx.terms.cell_h * 1.5   // (its second row: the first is the command)
+		from := [2]f32{g.rect.min.x + 12, y}
+		to := [2]f32{g.rect.min.x + 160, y}
 		session.move(s, from)
 		session.event(s, {kind = .Mouse_Press, button = .Left, pos = from})
 		session.frames(s, 1)
@@ -191,6 +193,19 @@ output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 		session.frames(s, 1)
 		testing.expectf(t, strings.contains(session.clipboard(s), "Compiling"), "copied: %q", session.clipboard(s))
 	}
+	// a right click on the grid: its menu
+	v.term.selecting, v.term.has_selection = false, false
+	session.click(s, "term_box", .Right)
+	session.frames(s, 2)
+	testing.expect(t, session.find_text(s, "Select all") != nil && session.find_text(s, "Copy all the output") != nil, "the grid's menu")
+	session.click_text(s, "Select all")
+	session.frames(s, 2)
+	testing.expect(t, v.term.has_selection, "Select all: the screen selected")
+	session.click(s, "term_box", .Right)
+	session.frames(s, 2)
+	session.click_text(s, "Copy all the output")
+	session.frames(s, 2)
+	testing.expectf(t, strings.contains(session.clipboard(s), "Compiling") && !strings.contains(session.clipboard(s), "\x1b") && !strings.contains(session.clipboard(s), "cargo build"), "all the output, plain, without the command: %q", session.clipboard(s))
 	// the wheel over the grid scrolls the grid, not the conversation behind the dialog
 	if g := session.find(s, "term_box"); g != nil {
 		for i in 0 ..< 200 { output_view_feed(v, fmt.tprintf("line %d\n", i)) }

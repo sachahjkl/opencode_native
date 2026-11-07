@@ -156,7 +156,7 @@ Side_Handle_Draw :: struct { hot: bool, groove_y: f32 }
 @(private = "file")
 side_handle :: proc(split: ui.Splitter_Result, groove_y: f32) {
 	d := ui.frame_new(Side_Handle_Draw)
-	d^ = {split.hovering || split.dragging || split.focused, groove_y}
+	d^ = {split.hovering || split.dragging || split.focused && the_app.state.focus_visible, groove_y}   // (focused by the keys only: a drag leaves the focus on it, not the colour)
 	split.box.custom_user = d
 	split.box.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		d := (^Side_Handle_Draw)(user)
@@ -814,7 +814,7 @@ chat_header :: proc(app: ^App, em: f32) {
 				}
 			}
 			dir := s != nil ? s.directory : app.chat.new_dir
-			text("dir", dir != "" ? dir : "default folder", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2)}, ui.fill())
+			text("dir", dir != "" ? dir : "default folder", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2), flags = dir != "" ? {.Selectable} : {}}, ui.fill())
 			ui.spacer(ui.fill())
 		}
 		c := &app.chat

@@ -53,6 +53,12 @@ output_view_of_panel :: proc(app: ^App, panel: u32) -> ^Output_View {
 	return nil
 }
 
+// The view whose grid `t` is (nil: a shell of the tabs).
+output_view_of_term :: proc(app: ^App, t: ^Term) -> ^Output_View {
+	for v in app.cx.outputs.list { if v.term == t { return v } }
+	return nil
+}
+
 @(private = "file")
 output_view_of_shell :: proc(app: ^App, id: string) -> ^Output_View {
 	for v in app.cx.outputs.list { if v.shell == id && !v.gone { return v } }
@@ -70,6 +76,7 @@ output_view_new :: proc(app: ^App, shell, tool, command, dir: string) -> ^Output
 	v.term = term_new(shell != "" ? shell : tool, command, dir)
 	v.term.read_only, v.term.detached, v.term.panel = true, true, v.panel   // (detached: no part in the main window's input)
 	term_feed(v.term, "\x1b[?25l")   // (nothing is typed here: no cursor)
+	output_view_echo(v)
 	append(&o.list, v)
 	return v
 }
@@ -119,6 +126,21 @@ output_view_open_part :: proc(app: ^App, p: ^Part) {
 
 // Whether there is anything to look at, for a button that says so.
 output_view_can :: proc(p: ^Part) -> bool { return p.shell_id != "" || p.output != "" }
+
+// The command at the head of the grid, as it was typed after a prompt: whole, in the scrollback with what it printed, not cut in
+// the bar. (Not in what is copied of the output: it is the terminal's, not the command's.)
+@(private = "file")
+output_view_echo :: proc(v: ^Output_View) {
+	if strings.trim_space(v.command) == "" { return }
+	b := strings.builder_make(context.temp_allocator)
+	for line, i in strings.split_lines(strings.trim_right_space(v.command), context.temp_allocator) {
+		strings.write_string(&b, i == 0 ? OUTPUT_PROMPT : OUTPUT_PROMPT_MORE)
+		strings.write_string(&b, OUTPUT_ECHO_ON)
+		strings.write_string(&b, strings.trim_right(line, "\r"))
+		strings.write_string(&b, "\x1b[0m\r\n")
+	}
+	term_feed(v.term, strings.to_string(b))
+}
 
 // Bytes as the terminal wants them.
 output_view_feed :: proc(v: ^Output_View, s: string) {
@@ -307,8 +329,7 @@ output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
 		case v.lost:     text("m", "The server no longer has this command.", hex(HEX_WEAK), note, ui.fill())
 		case v.seen_end: text("m", "Finished: nothing more will come.", hex(HEX_TEXT_SOFT), note, ui.fill())
 		case v.dropped:  text("m", "The server kept the end of it.", hex(HEX_FAINT), note, ui.fill())
-		case in_window:  ui.spacer(ui.fill())   // (the title bar has the command)
-		case:            text("m", first_line(v.command), hex(HEX_FAINT), note, ui.fill())
+		case:            ui.spacer(ui.fill())   // (the command is at the head of the grid)
 		}
 		ui.spacer(ui.px(em * 0.8))
 		h := math.round(em * BUTTON_SMALL_H_EM)

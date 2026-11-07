@@ -193,7 +193,7 @@ diff_full_dialog :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###df_head") {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-			text("t", d.title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
+			text("t", d.title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2), flags = {.Selectable}}, ui.fill())   // (a path: to copy, to go to)
 			text("a", fmt.tprintf("+%d", d.added), hex(HEX_GREEN), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
 			ui.spacer(ui.px(em * 0.5))
 			text("d", fmt.tprintf("-%d", d.removed), hex(HEX_RED), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})

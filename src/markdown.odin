@@ -274,8 +274,10 @@ table_cells :: proc(line: string) -> []string {
 	return cells
 }
 
-// A Markdown table as a grid: the header row bold, columns as wide as their widest cell (shrunk to the room when the
-// table is wider), each column aligned as its separator says (":--", ":-:", "--:"), alternate rows shaded.
+// A Markdown table as a grid: the header row bold, each column aligned as its separator says (":--", ":-:", "--:"), alternate
+// rows shaded. Its columns: each as wide as its widest cell on one line when the table fits; else each keeps at least its longest
+// word, the columns that lack the least are given all they lack first (a short one stays on one line), and the long ones share
+// the rest as they lack it: they are the ones that wrap.
 table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 	em := ui.font_size()
 	rows := make([dynamic][]string, context.temp_allocator)
@@ -299,9 +301,10 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 	if len(rows) == 0 { return }
 	ncol := 0
 	for r in rows { ncol = max(ncol, len(r)) }
-	// widths: the widest cell of each column, as its runs are laid out (bold, code and all: what is shown is what is measured)
+	// each column's widest cell on one line, and its longest word: as its runs are laid out (bold, code and all)
 	pad := math.round(em * 0.7)
 	widths := make([]f32, ncol, context.temp_allocator)
+	least := make([]f32, ncol, context.temp_allocator)
 	cell_size := math.round(fs * FS_LABEL)
 	cells := make([][][dynamic]ui.Rich_Run, len(rows), context.temp_allocator)
 	st := &the_app.state
@@ -314,6 +317,41 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 			inline_runs(c, {bold = ri == 0, color = ri == 0 ? hex(HEX_BRIGHT) : color}, &cells[ri][ci])
 			l := ui.rich_layout(rc, cells[ri][ci][:], TABLE_MEASURE_W, allocator = context.temp_allocator)
 			widths[ci] = max(widths[ci], math.ceil(l.size.x) + 2 * pad)
+			for run in cells[ri][ci] {
+				face, size := ui.rich_face(rc, run.style)
+				for word in strings.split(run.text, " ", context.temp_allocator) {
+					least[ci] = max(least[ci], math.ceil(ui.text_width(face, size, word) + (run.style.code ? em * TABLE_CODE_SLACK_EM : 0)) + 2 * pad)
+				}
+			}
+		}
+	}
+	// the room: the place the table had in the last layout (none yet: the widths as they are, shrunk if they must)
+	strict := f32(TABLE_COL_STRICTNESS)
+	room := ui.parent_box().rect.max.x - ui.parent_box().rect.min.x
+	want, low: f32
+	for ci in 0 ..< ncol { want += widths[ci]; low += least[ci] }
+	if room > 0 && want > room {
+		if low >= room {
+			copy(widths, least)   // (not even its words fit: the words, the table wider than its place)
+		} else {
+			left := room - low
+			whole := make([]bool, ncol, context.temp_allocator)
+			for {   // the column that lacks the least, whole, while the others can still have their words
+				pick, lack := -1, f32(0)
+				for ci in 0 ..< ncol {
+					if whole[ci] { continue }
+					if l := widths[ci] - least[ci]; pick < 0 || l < lack { pick, lack = ci, l }
+				}
+				if pick < 0 || lack > left { break }
+				whole[pick] = true
+				left -= lack
+			}
+			rest: f32   // what the others lack, together
+			for ci in 0 ..< ncol { if !whole[ci] { rest += widths[ci] - least[ci] } }
+			for ci in 0 ..< ncol {
+				if !whole[ci] { widths[ci] = math.floor(least[ci] + (rest > 0 ? left * (widths[ci] - least[ci]) / rest : 0)) }
+			}
+			strict = 1
 		}
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
@@ -326,7 +364,7 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 					c := ci < len(r) ? r[ci] : ""
 					runs := cells[ri][ci]
 					al := ci < len(aligns) ? aligns[ci] : ui.Text_Align.Left
-					ui.next({width = ui.px(widths[ci], TABLE_COL_STRICTNESS), height = ui.children_sum(), axis = .X})
+					ui.next({width = ui.px(widths[ci], strict), height = ui.children_sum(), axis = .X})
 					if ui.row(id = fmt.tprintf("###tc%d", ci)) {
 						ui.spacer(ui.px(pad))
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
