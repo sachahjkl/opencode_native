@@ -263,7 +263,7 @@ server_view_forget :: proc(app: ^App) {
 server_dialogs_forget :: proc(app: ^App) {
 	app.cx.due[.Refresh], app.cx.due[.Facts], app.cx.due[.Children], app.cx.due[.Context] = {}, {}, {}, {}
 	app.picker.open = false
-	app.delete_open, app.rename.open = false, false   // (their ids were that server's: nothing acts on one with what came from the other)
+	app.delete_open, app.rename.open, app.rename.at = false, false, .None   // (their ids were that server's: nothing acts on one with what came from the other)
 	sidebar_hold_end(app)
 	delete(app.cx.fork_prompt)
 	app.cx.fork_prompt = ""

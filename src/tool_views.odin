@@ -431,7 +431,8 @@ value_text :: proc(v: json.Value) -> string {
 	return jtext(v)
 }
 
-// The input as keys and values; a long value in a well of its own.
+// The input as keys and values, in one well: a long value under its key, at the place of the short ones' values' start. (No well in
+// the well: one edge beside another reads as unfinished.)
 input_view :: proc(app: ^App, input: string, em: f32) {
 	v, err := json.parse_string(input, allocator = context.temp_allocator)
 	obj, is := v.(json.Object)
@@ -445,10 +446,20 @@ input_view :: proc(app: ^App, input: string, em: f32) {
 		for k, i in keys {
 			s := value_text(obj[k])
 			if strings.index_byte(s, '\n') >= 0 || len(s) > TOOL_LINE_CHARS {
-				section_label(fmt.tprintf("ik%d", i), k, em)
-				mono_well(fmt.tprintf("###iv%d", i), s, em, TOOL_INPUT_LINES_MAX)
+				if i > 0 { ui.spacer(ui.px(em * 0.3)) }
+				ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
+				if ui.row(.Center, id = fmt.tprintf("###ik%d", i)) {
+					ui.spacer(ui.px(em * INPUT_PAD_EM))
+					text("l", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+				}
+				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+				if ui.column(id = fmt.tprintf("###iv%d", i)) {
+					body, extra := mono_cut(s, TOOL_INPUT_LINES_MAX)
+					mono_text(body, extra, em, INPUT_PAD_EM, flush = true)
+				}
+				if i + 1 < len(keys) { ui.spacer(ui.px(em * 0.3)) }
 			} else {
-				kv_row(fmt.tprintf("###kv%d", i), k, s, em, {h = 1.4, key_w = 7, key_fs = FS_CAPTION, val_fs = FS_SMALL, pad_l = 0.8, val = HEX_TEXT_SOFT})
+				kv_row(fmt.tprintf("###kv%d", i), k, s, em, {h = 1.4, key_w = 7, key_fs = FS_CAPTION, val_fs = FS_SMALL, pad_l = INPUT_PAD_EM, val = HEX_TEXT_SOFT})
 			}
 		}
 		ui.spacer(ui.px(em * 0.4))

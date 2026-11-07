@@ -5,6 +5,24 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.17.7] - 2026-11-07
+
+### Added
+
+- **A session's title is renamed where it is.** A double click on the title above the conversation, or on a session's row in the sidebar, makes it a field in place: Enter or a click elsewhere keeps it, Escape leaves it as it was. Above the conversation, the line is the title's while it is edited.
+
+### Changed
+
+- **The wheel scrolls as much as in a browser, as Windows says.** A notch moves the lines per notch of the mouse's settings, a browser's line each (100 px for three lines at 100 %). With five lines, a notch goes about three times as far as before. The terminals follow the same setting.
+- **A tool's input is one well.** A long value (an `execute` call's code) sits under its name in the input's well, aligned with the short ones, not in a well of its own inside it.
+
+### Fixed
+
+- **A command's output can be selected and scrolled.** In the read-only view, a drag selects and Ctrl+C copies, and the wheel scrolls its grid, not the conversation behind it. Both failed when no terminal of the tabs was open.
+- **Tables keep their words whole.** A column is as wide as its widest cell as it is shown (bold, code and all): no more "Befor" over "e". The header has no tinted box of its own in the table's well.
+- **Tabs show as space.** Code and tools' output indented with tabs showed a missing glyph per tab.
+- **The frame rate choice shows its words.** In the advanced settings, "Screen" and "Uncapped" were cut; the choice goes under its description when it is too wide beside it.
+
 ## [0.17.6] - 2026-11-07
 
 ### Changed
@@ -726,7 +744,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.6...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.7...HEAD
+[0.17.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.7
 [0.17.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.6
 [0.17.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.5
 [0.17.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.4

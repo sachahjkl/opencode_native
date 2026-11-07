@@ -751,7 +751,6 @@ term_cell_at :: proc(t: ^Term, s: ^Terminals, p: [2]f32) -> [2]int {
 	return {max(x, 0), max(y, 0)}
 }
 
-@(private = "file")
 term_at_bottom :: proc(t: ^Term) -> bool {
 	bar: Vt_Scrollbar
 	if t.vt == nil || ghostty_terminal_get(t.vt, VT_DATA_SCROLLBAR, &bar) != VT_OK { return true }
@@ -878,7 +877,7 @@ term_key_event :: proc(app: ^App, t: ^Term, e: platform.Event) -> (take: bool) {
 // the pointer to the one it is over: both are shown, as the last build says, or there is none.
 term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 	s := &app.cx.terms
-	if (!s.open && s.only == nil) || len(s.list) == 0 { return events }   // (the tabs hidden, a shell in its window still hears)
+	if s.only == nil && (!s.open || len(s.list) == 0) { return events }   // (the tabs hidden, a shell in its window still hears; a command's output is no shell of the list)
 	if s.only == nil && overlay_open(app) {
 		if s.pressed == nil || !s.pressed.read_only { term_press_end(s) }   // (a selection in the dialog: that overlay is its own)
 		return events
@@ -912,7 +911,9 @@ term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 				term_mouse(t, s, VT_MOUSE_PRESS, button, e.pos, e.mods, false)
 				term_mouse(t, s, VT_MOUSE_RELEASE, button, e.pos, e.mods, false)
 			} else {
-				ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = i64(math.round(e.delta.y * TERM_WHEEL_LINES))})
+				n := platform.wheel_lines()   // (the lines the system says; where it says a page, a page less a line)
+				if n <= 0 { n = f32(max(int(t.rows) - 1, 1)) }
+				ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = i64(math.round(e.delta.y * n))})
 				term_selection_drop(t)
 			}
 		case .Mouse_Press:

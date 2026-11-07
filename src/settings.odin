@@ -658,7 +658,20 @@ pref_choice :: proc(app: ^App, name: string, labels: []string, em: f32, width: f
 	sel := 0
 	for c, i in d.choices { if c == cur { sel = i } }
 	w := width > 0 ? width : em * 7.6 * f32(len(labels))
-	ui.next({width = ui.px(w), height = ui.px(math.round(em * 2))})
+	// (never narrower than its words: the segments are of one width, the longest label's with its room around it)
+	widest: f32
+	for l in labels { widest = max(widest, ui.text_width(app.font, ui.font_size(), l)) }
+	w = max(w, f32(len(labels)) * (widest + em * SEGMENT_PAD_EM))
+	// Too wide beside its words, it goes under them: the words keep the line, it has the room. (setting_end closes this line as it would
+	// have closed the first one.)
+	line := ui.parent_box()
+	if room := line.rect.max.x - line.rect.min.x; room > 0 && w > room * WIDE_CHOICE_SHARE {
+		ui.pop_parent()   // ###line
+		ui.spacer(ui.px(em * 0.4))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+		ui.push_parent(ui.build_box({}, "###under"))
+	}
+	ui.next({width = ui.px(math.round(w)), height = ui.px(math.round(em * 2))})
 	if ui.segmented("###seg", labels, &sel) { pref_set(app, name, d.choices[sel]) }
 }
 

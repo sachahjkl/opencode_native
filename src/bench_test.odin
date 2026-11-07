@@ -102,6 +102,9 @@ bench_page :: proc() -> string {
 				turn, k, k, jquote(out), t + 1, t + 2)
 		}
 		fmt.sbprintf(&parts, `,{{"type":"text","text":%s}}`, jquote(BENCH_ANSWER))
+		if turn == BENCH_TURNS - 1 {   // (a tool of no known kind, its input a long value and a short one)
+			fmt.sbprintf(&parts, `,{{"type":"tool","id":"call_x","name":"execute","state":{{"status":"completed","input":{{"code":%s,"session":"main"}},"content":[{{"type":"text","text":"{{\"connected\":true}}"}}]}},"time":{{"created":%f,"completed":%f}}}}`, jquote("const s = await tools.browse.status();\nlet p; try { p = await tools.browse.files.read('x.json') }\ncatch (e) { p = 'ERR ' + String(e.message) }\nreturn { connected: s.status.connected, p };"), t + 1, t + 2)
+		}
 		item(&b, &n, fmt.tprintf(`{{"id":"msg_%d_a","type":"assistant","agent":"build","model":{{"id":"claude-model","providerID":"anthropic"}},"finish":"stop","cost":0.01,"tokens":{{"input":1200,"output":800,"reasoning":50,"cache":{{"read":9000}}}},"time":{{"created":%f,"completed":%f}},"content":[%s]}}`,
 			turn, t + 1, t + 2, strings.to_string(parts)))
 		item(&b, &n, fmt.tprintf(`{{"id":"msg_%d_u","type":"user","text":%s,"time":{{"created":%f}}}}`, turn, jquote(fmt.tprintf("Step %d: look at the lazy column and tell me what it costs.", turn)), t))
@@ -172,6 +175,36 @@ output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 	testing.expect(t, session.find(s, "out_bar") != nil, "the bar")
 	testing.expect(t, session.find(s, "out_close") != nil, "Close, ended as one watched")
 	testing.expect(t, session.find(s, "term_box") != nil, "the grid")
+	// a drag over the grid selects, and Ctrl+C copies it
+	if g := session.find(s, "term_box"); g != nil {
+		from := [2]f32{g.rect.min.x + 12, g.rect.min.y + 12}
+		to := [2]f32{g.rect.min.x + 160, g.rect.min.y + 12}
+		session.move(s, from)
+		session.event(s, {kind = .Mouse_Press, button = .Left, pos = from})
+		session.frames(s, 1)
+		session.event(s, {kind = .Mouse_Move, pos = to, buttons = {.Left}})
+		session.frames(s, 1)
+		session.event(s, {kind = .Mouse_Release, button = .Left, pos = to})
+		session.frames(s, 2)
+		testing.expectf(t, v.term.has_selection, "a selection (selecting %v, from %v to %v)", v.term.selecting, v.term.sel_from, v.term.sel_to)
+		session.event(s, {kind = .Key_Press, key = .C, mods = {.Ctrl}})
+		session.frames(s, 1)
+		testing.expectf(t, strings.contains(session.clipboard(s), "Compiling"), "copied: %q", session.clipboard(s))
+	}
+	// the wheel over the grid scrolls the grid, not the conversation behind the dialog
+	if g := session.find(s, "term_box"); g != nil {
+		for i in 0 ..< 200 { output_view_feed(v, fmt.tprintf("line %d\n", i)) }
+		session.frames(s, 2)
+		testing.expect(t, term_at_bottom(v.term), "it follows its end")
+		chat := session.get(s, "chat")
+		behind := chat.view_target.y
+		at := session.center(g)
+		session.move(s, at)
+		session.event(s, {kind = .Scroll, pos = at, delta = {0, -3}})
+		session.frames(s, 2)
+		testing.expect(t, !term_at_bottom(v.term), "the grid scrolled up")
+		testing.expect_value(t, session.get(s, "chat").view_target.y, behind)
+	}
 	session.event(s, {kind = .Key_Press, key = .Escape})
 	session.frames(s, 3)
 	testing.expect(t, session.find(s, "out_bar") == nil, "Escape closes it")
@@ -247,6 +280,35 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	testing.expect(t, limit > f32(BENCH_TURNS) * sb.size.y * 0.5, "the conversation is many pages long")
 	testing.expect(t, sb.view_off.y >= limit - 1, "opened at its bottom")
 	testing.expect(t, session.find(s, "msg_msg_0_a") == nil, "the first one is not")
+	// a tool of no known kind, open: its input in one well, the long value under its key
+	app.prefs.expand_tools = true
+	session.frames(s, 6)
+	testing.expect(t, session.find(s, "iv0") != nil && session.find(s, "kv1") != nil, "the input's long value and its short one")
+	app.prefs.expand_tools = false
+	app.snap_bottom = true
+	session.frames(s, 6)
+	// a double click on the title edits it in place: Enter keeps it, Escape leaves it, a click elsewhere keeps it
+	session.click(s, "title_b", count = 2)
+	session.frames(s, 2)
+	testing.expect(t, app.rename.at == .Header && session.find(s, "ren_f") != nil && !app.rename.open, "the header's title, a field in place")
+	session.key(s, .A, {.Ctrl})
+	session.type_text(s, "Frame pacing")
+	session.frames(s, 1)
+	testing.expect_value(t, ui.field_string(&app.rename.field), "Frame pacing")
+	session.key(s, .Return)
+	session.frames(s, 2)
+	testing.expect(t, app.rename.at == .None && session.find(s, "ren_f") == nil, "Enter: the words back")
+	if row := session.get(s, "r_" + BENCH_CHAT_ID); row.rect.min.y > 0 { session.click_at(s, session.center(row), count = 2) } else { testing.fail_now(t, "the open session's row, out of view") }
+	session.frames(s, 2)
+	testing.expect(t, app.rename.at == .Side && session.find(s, "ren_f") != nil, "a row of the sidebar, a field in place")
+	session.key(s, .Escape)
+	session.frames(s, 2)
+	testing.expect(t, app.rename.at == .None && session.find(s, "ren_f") == nil, "Escape: as it was")
+	session.click(s, "title_b", count = 2)
+	session.frames(s, 2)
+	session.click(s, "composer")
+	session.frames(s, 2)
+	testing.expect(t, app.rename.at == .None, "a click elsewhere: kept")
 	bottom_boxes := ui.boxes_built(&app.state)
 
 	when OCC_BENCH { render.set_gpu_profile(&app.r, true) }
@@ -282,7 +344,9 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	bench_report(&typing)
 	testing.expect_value(t, len(ui.area_string(&app.composer)), BENCH_FRAMES)
 
-	// the wheel, up through the conversation
+	// the wheel, up through the conversation (from its bottom as it is now: the heights it learned since have moved it)
+	sb = session.get(s, "chat")
+	limit = sb.view_bounds.y - sb.size.y
 	mid := session.center(sb)
 	session.move(s, mid)
 	scroll := Bench_Case{name = "scroll"}
@@ -294,7 +358,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	profile_end("scroll")
 	bench_report(&scroll)
 	sb = session.get(s, "chat")
-	testing.expect(t, sb.view_target.y < limit, "scrolled up")
+	testing.expectf(t, sb.view_target.y < limit - f32(BENCH_FRAMES * BENCH_WHEEL) * ui.WHEEL_LINE_PX, "scrolled up, a notch at least a line of the wheel: %v from %v", sb.view_target.y, limit)
 	testing.expect(t, ui.boxes_built(&app.state) < 2 * bottom_boxes, "still only what is seen")
 
 	// the palette, open, its list filtered by what is typed

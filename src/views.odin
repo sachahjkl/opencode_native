@@ -440,6 +440,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				drill_down(app, s.id)
 			} else { open_root(app, s.id) }
 		}
+		if sig.double_clicked { rename_inline(app, s.id, .Side) }
 		if sig.right_clicked {
 			ui.ctx_menu_open(ui.key_from_string(0, "session_menu"), b.rect.min + sig.mouse)
 			delete(app.menu_session)
@@ -480,12 +481,14 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				if ui.column(id = "###words") {
 					ui.spacer(ui.fill())
 					title_style.height = ui.px(math.round(em * 1.3))
-					text("t", title, tcol, title_style, ui.fill())
+					if renaming_at(app, s.id, .Side) { rename_in_place(app, em, title_style.font_size.?, math.round(em * 1.3)) } else { text("t", title, tcol, title_style, ui.fill()) }
 					where_ := s.directory != "" ? base_name(s.directory) : "(no folder)"
 					if session_unseen(app, s) && s.outcome != "succeeded" && s.outcome != "" { where_ = fmt.tprintf("%s · %s", where_, s.outcome) }
 					text("p", ellipsize(where_, SIDE_PROJECT_CHARS), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(math.round(em * 1.1))}, ui.fill())
 					ui.spacer(ui.fill())
 				}
+			} else if renaming_at(app, s.id, .Side) {
+				rename_in_place(app, em, title_style.font_size.?, math.round(em * 1.6))
 			} else {
 				text("t", title, tcol, title_style, ui.fill())
 			}
@@ -800,18 +803,29 @@ chat_header :: proc(app: ^App, em: f32) {
 				}
 			}
 			title := s != nil ? s.title : "New session"
-			text("title", title != "" ? title : "Untitled", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_HEADING), height = ui.px(em * 1.5)}, ui.fill())
+			if s != nil && renaming_at(app, s.id, .Header) {
+				rename_in_place(app, em, math.round(em * FS_HEADING), em * 1.5, fit = true)
+			} else {
+				ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
+				tb := ui.build_box(s != nil ? {.Clickable} : {}, "###title_b")
+				if s != nil && ui.signal(tb).double_clicked { rename_inline(app, s.id, .Header) }
+				if ui.parent(tb) {
+					text("title", title != "" ? title : "Untitled", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_HEADING), height = ui.px(em * 1.5)}, ui.fill())
+				}
+			}
 			dir := s != nil ? s.directory : app.chat.new_dir
 			text("dir", dir != "" ? dir : "default folder", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2)}, ui.fill())
 			ui.spacer(ui.fill())
 		}
 		c := &app.chat
-		if len(c.children) > 0 && !(app.cx.docked_w > 0 && app.cx.docked_w < em * HEADER_FIGURES_MIN_EM && len(active_children(app)) == 0) {
+		// (its title edited: the line is the title's, the figures and the sub-agents wait)
+		editing := s != nil && renaming_at(app, s.id, .Header)
+		if !editing && len(c.children) > 0 && !(app.cx.docked_w > 0 && app.cx.docked_w < em * HEADER_FIGURES_MIN_EM && len(active_children(app)) == 0) {
 			subagents_button(app, em)
 			ui.spacer(ui.px(em * 0.6))
 		}
 		// (narrow, as a panel of the dock: the title first, the figures are in the statistics)
-		narrow := app.cx.docked_w > 0 && app.cx.docked_w < em * HEADER_FIGURES_MIN_EM
+		narrow := editing || app.cx.docked_w > 0 && app.cx.docked_w < em * HEADER_FIGURES_MIN_EM
 		if !narrow && c.tokens_in + c.tokens_out > 0 {
 			if pill_button("###tok", fmt.tprintf("%s in · %s out", kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, ICO_BOLT).clicked { stats_toggle(app) }
 			ui.spacer(ui.px(em * 0.4))
@@ -1278,8 +1292,40 @@ MONO_WELL_MAX_BYTES :: 20000   // of a tool's text, whatever the lines allow
 
 // Monospace text in a sunken well, at most `max_lines` lines (the rest is counted).
 mono_well :: proc(id: string, s: string, em: f32, max_lines: int, color := Color{}) {
-	body := s
-	extra := 0
+	body, extra := mono_cut(s, max_lines)
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+	if well(id, radius = 6, base = HEX_CODE_WELL) {
+		ui.spacer(ui.px(em * 0.5))
+		mono_text(body, extra, em, 0.75, color)
+		ui.spacer(ui.px(em * 0.5))
+	}
+}
+
+// What mono_well holds, for a well that holds more: `body` (already cut), the lines left out, `pad` em on each side (`flush`: the text's own,
+// none).
+mono_text :: proc(body: string, extra: int, em, pad: f32, color := Color{}, flush := false) {
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+	if ui.row(id = "###r") {
+		ui.spacer(ui.px(em * pad))
+		runs := [1]ui.Rich_Run{{text = body, style = {font = the_app.mono, color = color.a > 0 ? color : hex(HEX_TOOL_OUTPUT)}}}
+		m := ui.Style_Mod{width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}}
+		if flush { m.text_pad = 0 }   // (its text starts at the pad, as a key above it)
+		ui.next(m)
+		ui.rich_paragraph("###t", runs[:])
+		ui.spacer(ui.px(em * pad))
+	}
+	if extra > 0 {
+		ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###more") {
+			ui.spacer(ui.px(em * pad))
+			text("m", fmt.tprintf("… %d more lines", extra), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
+		}
+	}
+}
+
+// `s` cut to `max_lines` lines and MONO_WELL_MAX_BYTES: what is shown, and how many lines are left out.
+mono_cut :: proc(s: string, max_lines: int) -> (body: string, extra: int) {
+	body = s
 	n, cut := 0, len(s)
 	for i in 0 ..< len(s) {
 		if s[i] == '\n' {
@@ -1292,26 +1338,7 @@ mono_well :: proc(id: string, s: string, em: f32, max_lines: int, color := Color
 		body = s[:cut]
 	}
 	if len(body) > MONO_WELL_MAX_BYTES { body = body[:MONO_WELL_MAX_BYTES] }
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well(id, radius = 6, base = HEX_CODE_WELL) {
-		ui.spacer(ui.px(em * 0.5))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row(id = "###r") {
-			ui.spacer(ui.px(em * 0.75))
-			runs := [1]ui.Rich_Run{{text = body, style = {font = the_app.mono, color = color.a > 0 ? color : hex(HEX_TOOL_OUTPUT)}}}
-			ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}})
-			ui.rich_paragraph("###t", runs[:])
-			ui.spacer(ui.px(em * 0.75))
-		}
-		if extra > 0 {
-			ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
-			if ui.row(.Center, id = "###more") {
-				ui.spacer(ui.px(em * 0.75))
-				text("m", fmt.tprintf("… %d more lines", extra), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
-			}
-		}
-		ui.spacer(ui.px(em * 0.5))
-	}
+	return
 }
 
 reasoning_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {

@@ -233,7 +233,6 @@ TERM_ROWS            :: 24
 TERM_SCROLLBACK_LINES :: 10000
 TERM_PAD             :: 6      // between the panel and the grid
 TERM_KEY_BYTES       :: 128
-TERM_WHEEL_LINES     :: 3      // what a notch scrolls
 TERM_TAB_CHARS       :: 24
 TERM_READ_MS         :: 5      // what a key may wait for its shell's thread
 TERM_SIZE_QUIET_MS   :: 150.0  // a shell is told its size once the grid has rested this long: each size it takes, it paints again
@@ -293,3 +292,11 @@ OS_SETTINGS_READ_MS :: 2000   // how often the system's animation setting is rea
 POINTER_MOVING_MS :: 80                         // since the last move or notch: the pointer is still moving
 FPS_SMOOTH   :: 0.08           // the status bar's rate: how fast it follows
 FPS_RESTED_S :: 0.05           // a longer gap between two frames: the loop rested
+
+SEGMENT_PAD_EM :: 1.0   // the room around the longest label of a segmented choice (settings.odin pref_choice)
+WIDE_CHOICE_SHARE :: 0.45   // past this share of its line, a segmented choice goes under its words (settings.odin pref_choice)
+INPUT_PAD_EM :: 0.8   // a tool's input in its well: where its keys start, and a long value's text (tool_views.odin input_view)
+TABLE_MEASURE_W :: 1e6   // a table's cell is laid out this wide to measure it: on one line (markdown.odin table_block)
+TABLE_CELL_PAD_Y_EM :: 0.4   // above and under a table cell's words (markdown.odin table_block)
+RENAME_PAD_EM :: 0.5   // a title edited in place: its words from the field's edge (context_menus.odin rename_in_place)
+RENAME_ROOM_EM :: 3   // a title edited in place, beside others: room to type after its words (context_menus.odin rename_in_place)

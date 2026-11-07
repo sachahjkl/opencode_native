@@ -299,34 +299,43 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 	if len(rows) == 0 { return }
 	ncol := 0
 	for r in rows { ncol = max(ncol, len(r)) }
-	// widths: the widest cell of each column (inline Markdown markers stripped for the measure)
+	// widths: the widest cell of each column, as its runs are laid out (bold, code and all: what is shown is what is measured)
 	pad := math.round(em * 0.7)
 	widths := make([]f32, ncol, context.temp_allocator)
 	cell_size := math.round(fs * FS_LABEL)
+	cells := make([][][dynamic]ui.Rich_Run, len(rows), context.temp_allocator)
+	st := &the_app.state
+	rc := ui.Rich_Context{fonts = st.fonts, base_font = the_app.font, base_size = cell_size, mono = st.mono_font, faces = &st.rich_faces}
 	for r, ri in rows {
-		for c, ci in r {
-			plain, _ := strings.remove_all(c, "**", context.temp_allocator)
-			plain, _ = strings.remove_all(plain, "`", context.temp_allocator)
-			w := ui.text_width(ri == 0 ? the_app.mono_bold : the_app.font, cell_size, plain) + 2 * pad
-			widths[ci] = max(widths[ci], w)
+		cells[ri] = make([][dynamic]ui.Rich_Run, ncol, context.temp_allocator)
+		for ci in 0 ..< ncol {
+			c := ci < len(r) ? r[ci] : ""
+			cells[ri][ci] = make([dynamic]ui.Rich_Run, context.temp_allocator)
+			inline_runs(c, {bold = ri == 0, color = ri == 0 ? hex(HEX_BRIGHT) : color}, &cells[ri][ci])
+			l := ui.rich_layout(rc, cells[ri][ci][:], TABLE_MEASURE_W, allocator = context.temp_allocator)
+			widths[ci] = max(widths[ci], math.ceil(l.size.x) + 2 * pad)
 		}
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well(id, radius = 6, base = HEX_TABLE_WELL) {
 		ui.spacer(ui.px(em * 0.3))
 		for r, ri in rows {
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, bg = ri == 0 ? with_alpha(accent(), 0.10) : ri % 2 == 0 ? Color{1, 1, 1, 0.01} : {}})
+			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, bg = ri > 0 && ri % 2 == 0 ? Color{1, 1, 1, 0.01} : {}})   // (the header is told by its words and its rule: a tint of its own was a second rounded box in the well)
 			if ui.row(flags = {.Draw_Background}, id = fmt.tprintf("###tr%d", ri)) {
 				for ci in 0 ..< ncol {
 					c := ci < len(r) ? r[ci] : ""
-					runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
-					inline_runs(c, {bold = ri == 0, color = ri == 0 ? hex(HEX_BRIGHT) : color}, &runs)
+					runs := cells[ri][ci]
 					al := ci < len(aligns) ? aligns[ci] : ui.Text_Align.Left
 					ui.next({width = ui.px(widths[ci], TABLE_COL_STRICTNESS), height = ui.children_sum(), axis = .X})
 					if ui.row(id = fmt.tprintf("###tc%d", ci)) {
 						ui.spacer(ui.px(pad))
-						ui.next({width = ui.fill(), font_size = cell_size, flags = {.Selectable}, text_align = al})
-						ui.rich_paragraph("###p", runs[:], version = src_version(c, c, cell_size))
+						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+						if ui.column(id = "###v") {   // (the room around the words is the spacers': measured so)
+							ui.spacer(ui.px(math.round(em * TABLE_CELL_PAD_Y_EM)))
+							ui.next({width = ui.fill(), font = the_app.font, font_size = cell_size, flags = {.Selectable}, text_align = al, text_pad = 0})
+							ui.rich_paragraph("###p", runs[:], version = src_version(c, c, cell_size))
+							ui.spacer(ui.px(math.round(em * TABLE_CELL_PAD_Y_EM)))
+						}
 						ui.spacer(ui.px(pad))
 					}
 				}

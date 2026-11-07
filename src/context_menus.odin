@@ -270,24 +270,68 @@ quote_chip :: proc(app: ^App, em: f32) {
 // Rename
 
 Rename :: struct {
-	open:  bool,
+	open:  bool,        // the dialog
+	at:    Rename_At,   // or in place, where the title is (a double click on it)
 	fresh: bool,
-	id:    string,   // (owned)
+	held:  bool,        // in place: the field had the keyboard (losing it commits, as a click elsewhere)
+	shown: bool,        // in place: its field was built in this build (or it began in it)
+	id:    string,      // (owned)
 	field: ui.Text_Field,
 }
+
+Rename_At :: enum u8 { None, Header, Side }
 
 rename_open :: proc(app: ^App, id: string) {
 	r := &app.rename
 	delete(r.id)
 	r.id = strings.clone(id)
-	r.open, r.fresh = true, true
+	r.open, r.fresh, r.at = true, true, .None
 	s := find_session(app, id)
+	if s == nil && app.chat.have_self && app.chat.self.id == id { s = &app.chat.self }
 	ui.field_set(&r.field, s != nil ? s.title : "")
 	ui.field_select_all(&r.field)
 }
 
+// The title of session `id`, edited where it is shown (`at`): Enter or a click elsewhere keeps it, Escape leaves it as it was.
+rename_inline :: proc(app: ^App, id: string, at: Rename_At) {
+	rename_open(app, id)
+	app.rename.open, app.rename.at, app.rename.held, app.rename.shown = false, at, false, true
+}
+
+// Whether session `id`'s title is being edited at `at`: then rename_in_place stands where its words would.
+renaming_at :: proc(app: ^App, id: string, at: Rename_At) -> bool {
+	return app.rename.at == at && app.rename.id == id
+}
+
+// The title's field, in place of its words: as tall, in their size, in a well that says it is a field. `fit`: as wide as its words
+// and room to type (where the words had no more than theirs: beside others that take their own), else the whole place.
+rename_in_place :: proc(app: ^App, em, font_size, height: f32, fit := false) {
+	r := &app.rename
+	r.shown = true
+	pad := math.round(em * RENAME_PAD_EM)
+	w := ui.fill()
+	if fit { w = ui.px(math.round(ui.text_width(app.font, font_size, ui.field_string(&r.field)) + 2 * pad + em * RENAME_ROOM_EM), 0) }
+	ui.next({width = w, height = ui.px(height), axis = .X, cross = .Center})
+	if well("###ren_in", .X, radius = 5, focus = 1) {
+		if ui.tags("bare") {
+			ui.next({width = ui.fill(), height = ui.pct(1), font_size = font_size, text_pad = pad})
+			res := ui.line_edit("###ren_f", &r.field, "Title")
+			if r.fresh { ui.set_focus(res.box.key); r.fresh = false } else if res.focused { r.held = true }
+			switch {
+			case res.cancelled:          r.at = .None
+			case res.committed:          rename_commit(app)
+			case r.held && !res.focused: rename_commit(app)   // (a click elsewhere, Tab: as Enter)
+			}
+		}
+	}
+}
+
 rename_dialog :: proc(app: ^App, em: f32) {
 	r := &app.rename
+	// (built after the sidebar and the conversation: a title edited in place that neither built - another session shown, its row
+	// scrolled away - is left as it was)
+	if r.at != .None && !r.shown { r.at = .None }
+	r.shown = false
 	if ui.modal("rename", em * 28, &r.open) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em))
@@ -327,8 +371,9 @@ rename_dialog :: proc(app: ^App, em: f32) {
 rename_commit :: proc(app: ^App) {
 	r := &app.rename
 	t := strings.trim_space(ui.field_string(&r.field))
-	r.open = false
+	r.open, r.at = false, .None
 	if t == "" { return }
+	if s := find_session(app, r.id); s != nil && s.title == t { return }   // (nothing changed: nothing to ask)
 	rename_session(app, r.id, t)
 	refresh_soon(app)
 }
