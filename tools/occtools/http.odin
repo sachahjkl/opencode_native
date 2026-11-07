@@ -41,7 +41,7 @@ http_unchunk :: proc(text: string) -> (out: string, ok: bool) {
 	}
 }
 
-http_at :: proc(at: net.Endpoint, method, path, auth: string) -> (status: int, body: string, ok: bool) {
+http_at :: proc(at: net.Endpoint, method, path, auth: string, send := "") -> (status: int, body: string, ok: bool) {
 	sock, err := net.dial_tcp_from_endpoint(at)
 	if err != nil { return }
 	defer net.close(sock)
@@ -49,7 +49,9 @@ http_at :: proc(at: net.Endpoint, method, path, auth: string) -> (status: int, b
 	head := strings.builder_make(context.temp_allocator)
 	fmt.sbprintf(&head, "%s %s HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nConnection: close\r\nAccept: application/json\r\n", method, path, at.port)
 	if auth != "" { fmt.sbprintf(&head, "Authorization: Basic %s\r\n", auth) }
+	if send != "" { fmt.sbprintf(&head, "Content-Type: application/json\r\nContent-Length: %d\r\n", len(send)) }
 	strings.write_string(&head, "\r\n")
+	strings.write_string(&head, send)
 	if _, e := net.send_tcp(sock, transmute([]byte)strings.to_string(head)); e != nil { return }
 	raw := make([dynamic]byte, context.temp_allocator)
 	chunk: [16 * 1024]byte

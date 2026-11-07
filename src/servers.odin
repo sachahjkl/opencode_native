@@ -28,6 +28,7 @@ Conn :: struct {
 	http:   Http,
 	stop:   bool,      // (atomic) the event thread stops at its next event or retry
 	browser: ^Browser_Link,   // the agents' browser tools on this connection, while they are wanted (browser_mcp.odin)
+	browsers_left: [dynamic]^Browser_Link,   // ... in the folders one left while an agent works there
 }
 
 servers_path :: proc() -> string {

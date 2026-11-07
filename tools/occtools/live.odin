@@ -420,6 +420,65 @@ scenario_browser :: proc(l: ^Live) {
 	close_app(l, &app)
 }
 
+// A real agent, and another folder shown while it works: its tools stay, the next call of its turn is answered.
+@(private = "file")
+scenario_folders :: proc(l: ^Live) {
+	fmt.println("=== an agent's tools, another folder shown")
+	here, _ := os.get_working_directory(context.temp_allocator)
+	other := fmt.tprintf("%s/%s/other_folder", here, LIVE_DIR)
+	if !make_folder(other) { expect(l, false, "a folder"); return }
+	where_ := fmt.tprintf("location[directory]=%s", net.percent_encode(other, context.temp_allocator))
+	status, made, got := http_at(l.server, "POST", fmt.tprintf("/api/session?%s", where_), l.auth, fmt.tprintf(`{{"title":"occtools other folder","location":{{"directory":%q}}}}`, other))
+	v, _ := json.parse(transmute([]byte)made, allocator = context.temp_allocator)
+	top, _ := v.(json.Object)
+	data, _ := top["data"].(json.Object)
+	id, _ := data["id"].(json.String)
+	if !got || status != 200 || id == "" { expect(l, false, "a session in another folder"); return }
+	defer { _, _, _ = http_at(l.server, "DELETE", fmt.tprintf("/api/session/%s?%s", id, where_), l.auth) }
+	before, listed := api_list(l, "session")
+	if !listed { expect(l, false, "the server lists its sessions"); return }
+	app, started := launch(l, "folders", fmt.tprintf("--session=%s", l.session), "--pref", "browser.tools=true", "--search=occtools other")
+	if !started { expect(l, false, "the program answers"); return }
+	dt := &app.dt
+	expect(l, dt_wait_for(dt, "connected", STEP_LIMIT), "connected")
+	expect(l, dt_wait_for(dt, "occtools other folder", STEP_LIMIT), "the other folder's session is in the list")
+	time.sleep(TOOLS_OFFERED)
+	dt_key(dt, "ctrl+n")
+	expect(l, dt_wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
+	public_model(dt)
+	dt_click_name(dt, "composer")
+	dt_type(dt, "Call the browser tool tabs_open with the url https://example.com. Then run this shell command: Start-Sleep -Seconds 25. Then call the browser tool tabs_list. Then reply with the single word: done")
+	dt_key(dt, "Enter")
+	fresh: []string
+	begun := time.now()
+	for time.since(begun) < TURN_LIMIT && len(fresh) == 0 {
+		now, _ := api_list(l, "session")
+		fresh = new_ids(before, now)
+		time.sleep(POLL)
+	}
+	expect(l, len(fresh) == 1, "the prompt made a session")
+	if len(fresh) != 1 { close_app(l, &app); return }
+	body := ""
+	opened := false
+	for time.since(begun) < BROWSER_TURN_LIMIT && !opened {
+		status2, text, ok := http_at(l.server, "GET", fmt.tprintf("/api/session/%s/message?%s", fresh[0], location(l)), l.auth)
+		if ok && status2 == 200 { body = text; opened = strings.contains(body, "Start-Sleep") }
+		time.sleep(POLL)
+	}
+	expect(l, opened, "it opened its page and went on to its command")
+	dt_call(dt, "Toolkit.click", `{"text":"occtools other folder","index":0,"count":1,"button":"left"}`)
+	expect(l, dt_wait_for(dt, "other_folder", STEP_LIMIT), "the other folder is shown while it works")
+	done := false
+	for time.since(begun) < BROWSER_TURN_LIMIT && !done {
+		status2, text, ok := http_at(l.server, "GET", fmt.tprintf("/api/session/%s/message?%s", fresh[0], location(l)), l.auth)
+		if ok && status2 == 200 { body = text; done = strings.contains(body, "focusedTabID") }
+		time.sleep(POLL * 4)
+	}
+	expect(l, done, "its next call was answered, the other folder shown")
+	if !done { fmt.printfln("        the end of what it said: %s", body[max(0, len(body) - 600):]) }
+	close_app(l, &app)
+}
+
 clean_now :: proc(l: ^Live) -> int {
 	text := read_text(SNAPSHOT)
 	if text == "" && !os.exists(SNAPSHOT) { fmt.println("clean: no snapshot, nothing touched"); return 0 }
@@ -474,7 +533,7 @@ run_live :: proc(args: []string) -> int {
 			return EXIT_USAGE
 		}
 	}
-	if only != "" && only != "link" && only != "password" && only != "prompt" && only != "diff" && only != "browser" { fmt.eprintfln("live: no scenario %s", only); return EXIT_USAGE }
+	if only != "" && only != "link" && only != "password" && only != "prompt" && only != "diff" && only != "browser" && only != "folders" { fmt.eprintfln("live: no scenario %s", only); return EXIT_USAGE }
 	if !os.exists(l.exe) { fmt.eprintfln("live: no %s: occtools check builds it", l.exe); return 1 }
 	if !make_folder(LIVE_DIR) { return 1 }
 	if !snapshot_take(&l) { return 1 }
@@ -485,6 +544,7 @@ run_live :: proc(args: []string) -> int {
 	if only == "" || only == "prompt" { scenario_prompt(&l) }
 	if only == "" || only == "diff" { scenario_diff(&l) }
 	if only == "browser" { scenario_browser(&l) }
+	if only == "folders" { scenario_folders(&l) }
 	cleaned := clean_now(&l)
 	fmt.printfln("live: %d failed, in %d s", l.failed, int(time.duration_seconds(time.since(begun))))
 	return l.failed > 0 || cleaned != 0 ? 1 : 0

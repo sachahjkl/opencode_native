@@ -5,6 +5,23 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **A command's output as a terminal shows it.** "Inspect" in the activity tray, under a shell call and in its menu opens it read-only: colours, scrollback, selection, live while it runs. It can go to a window of its own, and when the command ends the view says so and offers to close.
+
+### Fixed
+
+- A queued message edited just as it was delivered could reach the model twice: the server answers the same either way, so what was stored is now read back.
+- The last answer of a browser tool was lost when a session of another folder opened at that moment.
+- A shell could keep its old size after a resize, until the next thing it printed.
+- A shell in its own window stopped hearing the keyboard once the shells were hidden, and its Close did nothing.
+- A check for updates that failed said "up to date" and dropped the version on offer.
+- A browser tab closed by the limit before its first page loaded stayed on "Starting the web view…".
+- A redirect replaced the address being typed in the browser's own window.
+- Terminal output that started with a zero byte was lost.
+- Windows of their own now take the main window's density, rounding, fonts and scroll bars, and their tooltips, hidden bars and clicks no longer wait for the next movement of the mouse.
+- Leaving a server closes the Delete and Rename dialogs, whose session was that server's.
+
 ## [0.17.4] - 2026-11-07
 
 ### Changed

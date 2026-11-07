@@ -1133,3 +1133,41 @@ an_agent_reaches_a_tab_the_limit_took :: proc(t: ^testing.T) {
 	urls := fake(first).urls
 	testing.expect_value(t, urls[len(urls) - 1], "http://0.local/2")
 }
+
+// An agent at work in a folder keeps its tools when another folder is shown; done, the link goes.
+@(test)
+a_folder_at_work_keeps_its_link :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	l := link(app)
+	app.prefs.browser_tools = true
+	app.link = .Online
+	app.sessions = make([dynamic]Session_Info)
+	append(&app.sessions, Session_Info{id = "a", directory = "C:/a"})
+	with_page(app, "a", "http://a.local/", "A")
+	app.chat.self.directory = strings.clone("C:/a", app.chat.alloc)
+	browser_tick(app)
+	_, moved := browser_link_target(l)
+	app.busy["a"] = true
+
+	chat_reset(&app.chat)
+	app.chat.id = strings.clone("b", app.chat.alloc)
+	app.chat.have_self = true
+	app.chat.self.directory = strings.clone("C:/b", app.chat.alloc)
+	preview_follow(app)
+	browser_tick(app)
+	testing.expect(t, !browser_link_moved(l, moved), "it stays with the agent")
+	testing.expect(t, !sync.atomic_load(&l.stop))
+	testing.expect(t, app.conn.browser != l, "another takes what is shown")
+	testing.expect_value(t, app.conn.browser.dir, "C:/b")
+	testing.expect_value(t, len(app.conn.browsers_left), 1)
+
+	// A message of that socket is still answered.
+	browser_message(app, {l, 1}, `{"jsonrpc":"2.0","id":9,"method":"ping"}`)
+	testing.expect(t, strings.contains(answers(l), `"id":9`))
+
+	delete_key(&app.busy, "a")
+	browser_tick(app)
+	testing.expect(t, sync.atomic_load(&l.stop), "the agent done, it goes")
+	testing.expect_value(t, len(app.conn.browsers_left), 0)
+}

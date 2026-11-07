@@ -10,6 +10,9 @@
 // what waits in the link's outbox between two reads. Everything else happens on the interface's thread, where the web view lives, and that
 // thread never touches a socket. A socket has a serial: a call is answered on the socket it came by, or not at all. A call that waits for
 // the page (a load, a script, a picture) is answered when the page answers.
+//
+// A client's tools are its folder's. The link follows the session shown, unless a session of the folder it is in is at work: it stays there for
+// that agent, and another takes what is shown, until the agent is done (browser_links_follow).
 package occ
 
 import "core:encoding/base64"
@@ -54,7 +57,6 @@ Browser_Link_State :: enum u8 {
 @(private = "file")
 Browser_Out :: struct { socket: u64, text: string }   // (text owned)
 
-// What the interface and a connection's thread share. (Never freed: a late message may still name it, and it is small.)
 // The socket as the link uses it. (A test gives its own.)
 Browser_Socket :: struct {
 	open:         proc "c" (c: rawptr, path: [^]u8, path_len: uint) -> rawptr,
@@ -64,6 +66,7 @@ Browser_Socket :: struct {
 	free:         proc "c" (w: rawptr),
 }
 
+// What the interface and a connection's thread share. (Never freed: a late message may still name it, and it is small.)
 Browser_Link :: struct {
 	app:    ^App,
 	ws:     Browser_Socket,
@@ -203,10 +206,14 @@ browser_thread :: proc(l: ^Browser_Link) {
 
 // The event stream came back after a loss: as the shells' (terminals_renew), this socket may be dead without knowing it.
 browser_renew :: proc(app: ^App) {
-	l := app.conn != nil ? app.conn.browser : nil
-	if l == nil { return }
-	sync.mutex_guard(&l.lock)
-	l.moved += 1
+	c := app.conn
+	if c == nil { return }
+	renew :: proc(l: ^Browser_Link) {
+		sync.mutex_guard(&l.lock)
+		l.moved += 1
+	}
+	if c.browser != nil { renew(c.browser) }
+	for l in c.browsers_left { renew(l) }
 }
 
 // The connection's link, while the preference wants one. Its folder starts empty: a server is not offered the last one's.
@@ -226,12 +233,70 @@ browser_follow :: proc(app: ^App) {
 	case c.browser == nil:
 		if app.prefs.browser_tools && online(app) && preview_available() { browser_start(app) }
 	case !app.prefs.browser_tools:
-		sync.atomic_store(&c.browser.stop, true)
-		browser_calls_drop(app, {link = c.browser})
+		browser_link_end(app, c.browser)
 		c.browser = nil
+		for l in c.browsers_left { browser_link_end(app, l) }
+		clear(&c.browsers_left)
 	}
-	// (A move closes the socket, and the answers that wait for it with it: the session shown changes now, the socket after them.)
-	if c.browser != nil && len(app.browser.calls) == 0 { browser_link_follow(c.browser, chat_dir(app)) }
+	if c.browser != nil { browser_links_follow(app, c) }
+}
+
+@(private = "file")
+browser_link_end :: proc(app: ^App, l: ^Browser_Link) {
+	sync.atomic_store(&l.stop, true)
+	browser_calls_drop(app, {link = l})
+}
+
+// Whether a session of that folder is at work.
+@(private = "file")
+browser_dir_busy :: proc(app: ^App, dir: string) -> bool {
+	if dir == "" { return false }
+	for id, on in app.busy {
+		if !on { continue }
+		if s := find_session(app, id); s != nil && s.directory == dir { return true }
+	}
+	return false
+}
+
+@(private = "file")
+browser_link_has_calls :: proc(app: ^App, l: ^Browser_Link) -> bool {
+	for c in app.browser.calls { if c.to.link == l { return true } }
+	return false
+}
+
+// The link of what is shown, and those left with an agent. (A move closes the socket, and the answers that wait for it with it: with no agent
+// to stay for, the session shown changes now and the socket after them.)
+@(private = "file")
+browser_links_follow :: proc(app: ^App, c: ^Conn) {
+	dir := chat_dir(app)
+	l := c.browser
+	if dir != "" && dir != l.dir {
+		left := -1   // (a folder come back to has its link still)
+		for x, i in c.browsers_left { if x.dir == dir { left = i } }
+		switch {
+		case l.dir != "" && browser_dir_busy(app, l.dir):
+			append(&c.browsers_left, l)
+			c.browser = nil
+			if left >= 0 {
+				c.browser = c.browsers_left[left]
+				ordered_remove(&c.browsers_left, left)
+			} else {
+				browser_start(app)
+				browser_link_follow(c.browser, dir)
+			}
+		case left >= 0 && !browser_link_has_calls(app, l):
+			browser_link_end(app, l)
+			c.browser = c.browsers_left[left]
+			ordered_remove(&c.browsers_left, left)
+		case len(app.browser.calls) == 0:
+			browser_link_follow(l, dir)
+		}
+	}
+	#reverse for x, i in c.browsers_left {
+		if browser_dir_busy(app, x.dir) || browser_link_has_calls(app, x) { continue }
+		browser_link_end(app, x)
+		ordered_remove(&c.browsers_left, i)
+	}
 }
 
 // The server is left, and with it what its agents asked: nobody is there to answer. (Its thread ends with the connection.)
@@ -243,7 +308,10 @@ browser_forget :: proc(app: ^App) {
 
 // The window closes.
 browser_stop :: proc(app: ^App) {
-	if app.conn != nil && app.conn.browser != nil { sync.atomic_store(&app.conn.browser.stop, true) }
+	c := app.conn
+	if c == nil { return }
+	if c.browser != nil { sync.atomic_store(&c.browser.stop, true) }
+	for l in c.browsers_left { sync.atomic_store(&l.stop, true) }
 }
 
 ////////////////////////////////
@@ -426,7 +494,7 @@ tool_call :: proc(app: ^App, to: Browser_To, id, name: string, args: json.Value,
 
 // A message of the socket `to`. One of a socket or a server gone is dropped: what it asks has nobody to answer to.
 browser_message :: proc(app: ^App, to: Browser_To, text: string) {
-	if app.conn == nil || to.link != app.conn.browser || sync.atomic_load(&to.link.socket) != to.socket { return }
+	if app.conn == nil || to.link.conn != app.conn || sync.atomic_load(&to.link.stop) || sync.atomic_load(&to.link.socket) != to.socket { return }
 	v, err := json.parse_string(text, parse_integers = true, allocator = context.temp_allocator)
 	if err != nil { return }
 	method := jstr(v, "method")
