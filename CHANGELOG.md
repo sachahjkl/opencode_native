@@ -5,12 +5,15 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.17.5] - 2026-11-07
+
 ### Added
 
 - **A command's output as a terminal shows it.** "Inspect" in the activity tray, under a shell call and in its menu opens it read-only: colours, scrollback, selection, live while it runs. It can go to a window of its own, and when the command ends the view says so and offers to close.
 
 ### Changed
 
+- A long conversation costs much less to show: at 9,000 messages a frame at rest is built in 1 ms instead of 4.8, one that streams in 1.9 instead of 9.6.
 - Coming back to a session puts the view where it was at once, to the pixel, however the heights of the messages around it settle.
 - What the server answers is read on the request's own thread: a large page no longer stands before a click.
 - A window of its own draws only when something it shows changes: a pointer passing over the main window costs it nothing.
@@ -716,7 +719,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.5...HEAD
+[0.17.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.5
 [0.17.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.4
 [0.17.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.3
 [0.17.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.2
