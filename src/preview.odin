@@ -301,6 +301,7 @@ web_events_drain :: proc(app: ^App) {
 		if len(v.events) == 0 { continue }
 		batch := v.events
 		v.events = {}
+		app.cx.shared_moved = true
 		for e in batch {
 			if !v.gone { web_event_apply(app, v, e) }
 			delete(e.data)

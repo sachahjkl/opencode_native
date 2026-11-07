@@ -326,3 +326,21 @@ the_answer_a_change_of_folder_waited_for_is_not_lost :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	testing.expect_value(t, answers_sent(true), 1)
 }
+
+// A pointer passing over the main window builds nothing in the others; what they show changing, or their own input, does.
+@(test)
+a_window_of_its_own_rests_while_nothing_it_shows_changes :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	d := new(Detached)
+	d.win = new(platform.Window)
+	d.win.size, d.shown = {800, 600}, {800, 600}
+	ui.set_clock(&d.state, &bench_clock)
+	testing.expect(t, detached_still(app, d, false))
+	testing.expect(t, !detached_still(app, d, true), "its own input")
+	app.cx.shared_moved = true
+	testing.expect(t, !detached_still(app, d, false), "what every window shows")
+	app.cx.shared_moved = false
+	d.win.size = {900, 600}
+	testing.expect(t, !detached_still(app, d, false), "its size")
+}

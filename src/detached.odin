@@ -65,6 +65,12 @@ detached_asks :: proc(app: ^App, s: ^ui.State, had_input: bool) {
 	if wait := ui.wake_in_ms(s); wait > 0 { ui.wake_within(&app.ui_state, wait) }
 }
 
+// Nothing it shows can have changed: its last picture stays, and it costs nothing. (A pointer passing over the main window used to build and
+// present every other window too.)
+detached_still :: proc(app: ^App, d: ^Detached, had_input: bool) -> bool {
+	return !had_input && !app.cx.shared_moved && d.win.size == d.shown && !ui.needs_frame(&d.state) && !ui.wake_due(&d.state)
+}
+
 // The panel was closed, by whatever way: its window goes at the next frame.
 detached_closing :: proc(app: ^App, panel: u32) {
 	for d in app.cx.detached {
@@ -169,6 +175,10 @@ detached_frame :: proc(app: ^App, d: ^Detached) {
 	events := platform.poll_events(d.win, false)
 	if !slice.contains(app.cx.detached[:], d) { return }
 	had_input := len(events) > 0
+	if detached_still(app, d, had_input) {
+		detached_asks(app, &d.state, false)   // (what it waits for still wakes the program)
+		return
+	}
 	s := &app.cx.terms
 	ui.use(&d.state)
 	app.cx.built = &d.state

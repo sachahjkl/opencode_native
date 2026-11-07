@@ -204,6 +204,8 @@ App_Context :: struct {
 	restore_msg:    string,               // the message the view goes back to (owned, "": none) and how far into it
 	restore_dy:     f32,
 	restore_still:  int,                  // builds it stayed there
+	shared_moved:   bool,                 // something of what every window shows may have changed this frame (detached_still)
+	posts_run_seen: u64,                  // ... the count of posts run at the last frame
 	wheeled:        bool,                 // a wheel turned in this frame (views.odin: a hand moved the conversation)
 	commands_due:   [dynamic]^Command, // to run after this frame, in order (commands.odin)
 	slash:          [dynamic]Slash,    // the server's commands
@@ -301,6 +303,8 @@ frame :: proc(app: ^App, inner := false) {
 	devtools.service(app.devtools, &app.ui_state, &app.r)
 	events := platform.poll_events(app.win, false)
 	render.mark_input(&app.r)
+	app.cx.shared_moved = false
+	for e in events { if e.kind != .Mouse_Move && e.kind != .Scroll { app.cx.shared_moved = true } }   // (a pointer that passes over this window changes nothing in another)
 	if len(events) > 0 { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }
 	events = output_view_events(app, events)
 	app.cx.wheeled = false
@@ -402,6 +406,10 @@ frame :: proc(app: ^App, inner := false) {
 	free_all(context.temp_allocator)
 	answers_spent_free(app)
 
+	if run := ui.post_stats(&app.ui_state).run; run != app.cx.posts_run_seen {   // (an answer, a shell's output, an event of the server)
+		app.cx.posts_run_seen = run
+		app.cx.shared_moved = true
+	}
 	terminals_reap(app)
 	output_views_tick(app)
 	web_events_drain(app)   // (the one place: what the page said during the frame, a modal dialog's message loop included)
@@ -439,7 +447,11 @@ due_run :: proc(app: ^App, k: Due) {
 	}
 }
 
-due_tick :: proc(app: ^App, k: Due) { if deferred_take(&app.cx.due[k]) { due_run(app, k) } }
+due_tick :: proc(app: ^App, k: Due) {
+	if !deferred_take(&app.cx.due[k]) { return }
+	due_run(app, k)
+	app.cx.shared_moved = true
+}
 
 // What was put off: done if it is time, and a wake for the rest. A window at rest wakes only while something is due: the window
 // may sleep on, and a read that waits for the next input would wait for good.
