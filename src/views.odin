@@ -127,7 +127,7 @@ new_session :: proc(app: ^App) {
 	if s := find_session(app, app.chat.id); s != nil { dir = s.directory } else if len(app.sessions) > 0 { dir = app.sessions[0].directory }
 	chat_home(app)
 	remote_reset(&app.cx.chat_read)
-	app.stick_bottom = true
+	app.view = {stick_bottom = true}
 	app.chat.new_dir = strings.clone(dir, app.chat.alloc)
 	chat_shown_changed(app)
 	app.cx.focus_composer = true

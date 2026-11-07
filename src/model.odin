@@ -178,9 +178,7 @@ open_chat :: proc(app: ^App, session_id: string) {
 	chat_reset(&app.chat)
 	app.chat.id = strings.clone(id, app.chat.alloc)
 	app.chat.loading = true
-	app.opened_ms = ui.now_ms()
-	app.chat_target = 0
-	app.stick_bottom = true
+	app.view = {opened_ms = ui.now_ms(), stick_bottom = true}
 	app.chat.busy = app.busy[id] or_else false
 	if s := find_session(app, id); s != nil {
 		app.chat.model = strings.clone(s.model, app.chat.alloc)

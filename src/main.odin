@@ -62,6 +62,7 @@ App :: struct {
 
 	using known:     Server_Known,      // what we know, as long as that server is the one
 	chat:            Chat,
+	using view:      Chat_View_State,   // where the conversation shown is read (one per session shown: open_chat starts it over)
 
 	// the interface's own state
 	composer:         ui.Text_Area,
@@ -77,9 +78,7 @@ App :: struct {
 	facts:            Server_Facts,   // what the server said for the settings pages
 	settings_open:    bool,
 	settings_page:    Settings_Page,
-	opened_ms:        f64,            // when the conversation shown was opened (it follows its bottom at first)
 	seek_subagent:    bool,   // --seek-subagent (tests): scroll to the first sub-agent card
-	stick_bottom:     bool,
 	sidebar_w:        f32,
 	expanded:         map[u64]bool,   // tool and reasoning parts opened by the user (hash of their id)
 	folded:           map[u64]bool,   // sidebar groups folded (hash of the directory)
@@ -89,9 +88,6 @@ App :: struct {
 	logo:             Logo,
 	column_w:         f32,    // the conversation column, frame pixels (this frame)
 	chat_sb:          ^ui.Box, // the conversation scroll box, when built this frame
-	stick_jump:       bool,    // the second build of a frame: the bottom is reached at once, no glide
-	snap_bottom:      bool,           // the conversation's first page arrived: shown at its bottom in that frame (frame)
-	chat_target:      f32,     // the conversation's scroll target at the end of the last build (a drag before this one moved it)
 	stats_open:       bool,           // the Statistics panel of the session shown (stats.odin)
 	proj_stats:       Project_Stats,
 	images:           map[u64]Image_Entry,   // decoded images, by key (images.odin)
@@ -103,8 +99,6 @@ App :: struct {
 	view_pan:         [2]f32,                // of the picture's centre from the view's, frame pixels
 	view_grab:        [2]f32,                // view_pan when the drag began
 	view_start:       Image_Ref,             // --image=<file>: opened in the viewer once it is decoded (its data owned)
-	anchor:           ^ui.Box, // a part header just clicked: kept where it is on screen (part_toggle, frame)
-	anchor_y:         f32,
 	// pacing (frame / pace)
 	pacer:            render.Pacer,   // the toolkit's frame pacing (render/pacer.odin)
 	devtools:         ^devtools.Server,   // TOOLKIT_DEVTOOLS=<port>: driven over the Chrome DevTools Protocol (tools/cdp.mjs)
@@ -114,6 +108,17 @@ App :: struct {
 	last_tick:        time.Tick,
 	frames:           int,
 	times:            Frame_Times,   // the last frame's steps
+}
+
+// Where the conversation shown is read, and how it moves: it starts over with another session.
+Chat_View_State :: struct {
+	opened_ms:    f64,       // when it was opened (it follows its bottom at first)
+	stick_bottom: bool,
+	stick_jump:   bool,      // the second build of a frame: the bottom is reached at once, no glide
+	snap_bottom:  bool,      // its first page arrived: shown at its bottom in that frame (frame)
+	chat_target:  f32,       // its scroll target at the end of the last build (a drag before this one moved it)
+	anchor:       ^ui.Box,   // a part header just clicked: kept where it is on screen (part_toggle, frame)
+	anchor_y:     f32,
 }
 
 // What a server told, and nothing else: it starts from zero with the next one (server_known_end). A field added here does too. (What has a
