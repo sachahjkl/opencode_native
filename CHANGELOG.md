@@ -5,6 +5,28 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-07
+
+### Added
+
+- **Themes.** Seventeen, each in a dark and a light version: OpenCode and its black with another accent (Ink, Orchid, Moss, Lagoon, Rose), Monokai, Gruvbox, Dracula, Nord, Tokyo Night, Catppuccin, One Dark, Solarized, and the terminals' Campbell, Retro and Naysayer. Settings > Appearance shows each in its own colours. Every colour of the interface follows: its greys go to the theme's steps, its colours to the theme's of the nearest hue.
+- **Light, dark or as the system.** The mode follows Windows' app mode by default, and changes with it at once. A light version is drawn flat.
+- **Themes of your own,** in `themes.txt` beside the preferences ("Themes of your own" in Settings opens it, written with how it is read the first time): a theme can start from another and give only the colours it changes, dark and light.
+- **A flat style,** lighter than the machined one: plain surfaces and thin lines, no reliefs nor halos.
+- **A session's mark** in the sidebar: the first letter of its title on a colour its id picks.
+- **The conversation's width by hand:** a handle each side of its column, where there is room, both moving it the same; what it is let go at is the widest wanted, and a narrower window narrows it.
+
+### Changed
+
+- **The accent is the theme's.** The accent preference goes: a theme with another accent is another theme.
+- **The session shown in the sidebar** is a quiet ground, no rail, no border; its words keep their contrast on it in every theme (WCAG AA for the title).
+- **Choices** (Inbox and Projects, the settings' options) are a sunken track with a small raised plate under the one chosen, its word lit: no more glossy accent.
+
+### Fixed
+
+- **The composer's buttons stay within it:** with a run going and "Send now", or a long model's name, the hint, then the send button's word, step aside when the toolbar has no room.
+- **A long session's todo list shows** even when its last update is pages back: the older pages are read for it alone.
+
 ## [0.17.8] - 2026-11-07
 
 ### Added
@@ -761,7 +783,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.8...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.0
 [0.17.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.8
 [0.17.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.7
 [0.17.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.6

@@ -192,6 +192,7 @@ Req_Kind :: enum u8 {
 	Sessions,       // GET /api/session
 	Messages,       // GET /api/session/:id/message (newest page)
 	Older,          // GET /api/session/:id/message?cursor= (an older page)
+	Todo_Scan,      // GET /api/session/:id/message?cursor= (an older page, read for its last todo list alone: activity.odin)
 	Agents,
 	Models,
 	Info,
@@ -392,6 +393,7 @@ Req_Facts :: struct { json: bool, life: Req_Life }
 	.Sessions         = {json = true},
 	.Messages         = {json = true, life = .Chat},
 	.Older            = {json = true, life = .Chat},
+	.Todo_Scan        = {json = true, life = .Chat},
 	.Agents           = {json = true},
 	.Models           = {json = true},
 	.Info             = {json = true},
@@ -554,6 +556,8 @@ answer :: proc(app: ^App, r: ^Request) {
 		chat_load(app, v, false, r.asked_at)
 		if first && app.stick_bottom { app.snap_bottom = true }   // (shown at its bottom in the very frame it arrives: frame)
 		nav_restore_check(app)
+	case .Todo_Scan:
+		todos_scan_load(app, r, v)
 	case .Older:
 		chat_load(app, v, true)
 		nav_restore_page(app)
@@ -701,6 +705,8 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 		nav_restore_clear(app)   // (what it would go back to will not come)
 	case .Older:
 		older_failed(app, r)
+	case .Todo_Scan:
+		if r.tag == app.activity.scan.session { app.activity.scan.busy, app.activity.scan.over = false, true }   // (not again: the list stays as the pages read say)
 	case .Form_Reply, .Form_Dismiss:
 		if fr := form_find(app, r.tag); fr != nil { fr.sending = false }
 	case .Permission_Reply:

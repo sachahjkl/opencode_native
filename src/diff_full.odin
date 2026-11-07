@@ -206,7 +206,7 @@ diff_full_dialog :: proc(app: ^App, em: f32) {
 			sel := int(app.prefs.diff_layout)
 			labels := []string{"Stacked", "Split"}
 			ui.next({width = ui.px(em * 12), height = ui.px(em * 2)})
-			if ui.segmented("###df_mode", labels, &sel) { pref_set(app, "conversation.diff_layout", diff_layout_name(Diff_Layout(sel))) }
+			if choice("###df_mode", labels, &sel) { pref_set(app, "conversation.diff_layout", diff_layout_name(Diff_Layout(sel))) }
 			ui.spacer(ui.px(em * 3.2))   // (the dialog's close button is there)
 		}
 		ui.spacer(ui.px(em * 0.6))

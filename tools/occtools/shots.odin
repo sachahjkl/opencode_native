@@ -33,7 +33,7 @@ SCROLL_MOST :: 10     // notches at a time
 TOUR_TITLE  :: "Tour of picker.odin"
 WORK_TITLE  :: "Python clock"   // what the sidebar's search leaves of the sessions, and shows once they are read
 // (grey text: the colours of the stripes belong to a screen, and a picture is seen on others, scaled)
-SHOT_ARGS   :: [?]string{"--pref", "appearance.accent=peach", "--pref", "appearance.text_smoothing=grey", "--pref", "appearance.zoom=1", "--scale=1.25"}
+SHOT_ARGS   :: [?]string{"--pref", "appearance.theme=OpenCode", "--pref", "appearance.mode=dark", "--pref", "appearance.style=machined", "--pref", "appearance.text_smoothing=grey", "--pref", "appearance.zoom=1", "--scale=1.25"}
 // (these are published: a model that is not public never goes out in one)
 SHOT_SECRETS :: [?]string{"iceman", "Contributor"}
 

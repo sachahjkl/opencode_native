@@ -7,7 +7,7 @@
 <p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.17.8-fab283" alt="version 0.17.8"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.18.0-fab283" alt="version 0.18.0"></a>
 <a href="https://ocn.froment.software/"><img src="https://img.shields.io/badge/site-ocn.froment.software-56b6c2" alt="site"></a>
 </p>
 
@@ -95,7 +95,7 @@ the [site](https://ocn.froment.software/) shows them.
 - **Statistics of a session** (its token count in the header, Ctrl+I): tokens in, out, reasoning, cache reads and
   writes, cost, cache hits, the context the last step filled against the model's window, time and pace, tool calls by
   tool (failures counted), models, its sub-agents, and the whole project's totals from the server.
-- **Settings** (Ctrl+,): accent colour, the fonts of the interface, the answers and code (built in, the system's, or any installed one, in a searched picker), text size, zoom, density, rounding, animations, smooth scrolling, scroll bars that hide, glow; how the conversation shows;
+- **Settings** (Ctrl+,): the theme (17 of them, each dark and light, as the system or always one; themes of your own in `themes.txt`) and the style (machined or flat), the fonts of the interface, the answers and code (built in, the system's, or any installed one, in a searched picker), text size, zoom, density, rounding, animations, smooth scrolling, scroll bars that hide, glow; how the conversation shows;
   the send key; sub-agents in the sidebar; notifications when a session finishes or asks. And what the server lets one see
   or change: its shell, its MCP servers (connect, disconnect), the usage limits and budgets of an OpenCode workspace, the
   saved permissions (revoke), providers, models, agents, skills, commands, the configuration files.
@@ -132,7 +132,7 @@ TLS is rustls, checked against the system's trust store.
 | `--size=<w>x<h>` | the window's size in pixels (screenshots) |
 | `--image=<file>` | open the image viewer on a file |
 | `--font-dir=<folder>` | try faces from files, nothing installed (`tools/font_proposals.mjs`) |
-| `--pref name=value` | set a preference for the run (names in Settings, e.g. `appearance.accent=blue`) |
+| `--pref name=value` | set a preference for the run (names in Settings, e.g. `appearance.theme=Nord`) |
 | `--settings[=n]` | open the settings at start (on page n) |
 | `--frames=N` | N frames of a hidden window, then exit (a check that it runs; it says how long the first frame took) |
 

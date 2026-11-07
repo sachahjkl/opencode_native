@@ -302,6 +302,22 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	app.prefs.expand_tools = false
 	app.snap_bottom = true
 	session.frames(s, 6)
+	// the composer's toolbar, a run going (Stop) and "Send now", as the column narrows: the send button stays within it
+	{
+		busy, steer, width := app.chat.busy, app.prefs.steer_first, app.prefs.column_w
+		app.chat.busy, app.prefs.steer_first = true, true
+		session.click(s, "composer")
+		session.type_text(s, "go on")
+		for w in ([]f32{900, 760, 640, 560, 500, 440}) {
+			app.prefs.column_w = w
+			session.frames(s, 4)
+			tools, send := session.get(s, "tools"), session.get(s, "send")
+			testing.expectf(t, send.rect.max.x <= tools.rect.max.x + 0.5, "at %v, the send button within the toolbar: %v past %v (%q)", w, send.rect.max.x, tools.rect.max.x, send.text)
+		}
+		app.chat.busy, app.prefs.steer_first, app.prefs.column_w = busy, steer, width
+		ui.area_set(&app.composer, "")
+		session.frames(s, 4)
+	}
 	// a double click on the title edits it in place: Enter keeps it, Escape leaves it, a click elsewhere keeps it
 	session.click(s, "title_b", count = 2)
 	session.frames(s, 2)

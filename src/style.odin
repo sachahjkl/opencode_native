@@ -56,7 +56,8 @@ OPENCODE_PALETTE :: ui.Palette{
 	finish = .Gradient, bar = HEX_BG1,
 }
 
-hex :: draw.hex
+// One of opencode's colours (a HEX_ constant), as the theme shown has it (theme.odin).
+hex :: proc(c: u32) -> Color { return draw.hex(themed(c)) }
 BLACK :: Color{0, 0, 0, 1}
 WHITE :: Color{1, 1, 1, 1}
 CLEAR :: Color{0, 0, 0, 0}
@@ -84,8 +85,35 @@ theme_setup :: proc(t: ^ui.Theme) {
 	ui.theme_add(t, "floating scrim background", CLEAR)   // (dialog_backdrop paints it; "floating background" made it opaque)
 	ui.theme_add(t, "selection", with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
 	ui.theme_add(t, "selection text", hex(HEX_BRIGHT))   // (over the selection, whatever the text's own colour: a faint one was lost on it)
-	ui.apply_palette(t, OPENCODE_PALETTE)
+	ui.apply_palette(t, themed_palette())
 }
+
+// The theme shown, in the toolkit's theme: its palette and our entries made of opencode's colours (a theme was chosen).
+theme_refresh :: proc(t: ^ui.Theme) {
+	ui.theme_set(t, "code_bg", hex(HEX_CODE_BG))
+	ui.theme_set(t, "link", hex(HEX_BLUE))
+	ui.theme_set(t, "floating background", hex(HEX_FLOATING_BG))
+	ui.theme_set(t, "floating border", hex(HEX_FLOATING_BORDER))
+	ui.theme_set(t, "selection", with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
+	ui.theme_set(t, "selection text", hex(HEX_BRIGHT))
+	ui.apply_palette(t, themed_palette())
+}
+
+// opencode's palette for the toolkit, as the theme shown has it; flat in the flat style.
+themed_palette :: proc() -> ui.Palette {
+	p := OPENCODE_PALETTE
+	for c in ([]^u32{&p.bg, &p.panel, &p.panel2, &p.text, &p.weak, &p.border, &p.accent, &p.accent_text, &p.good, &p.warn, &p.bad, &p.bar}) { c^ = themed(c^) }
+	if flat() { p.finish = .Flat }
+	p.dark = !theme_light()   // (the toolkit's own marks, the window's buttons among them, light on dark or dark on light)
+	return p
+}
+
+// The flat style: surfaces plain, edges as thin lines, no reliefs nor halos (appearance.style).
+flat :: proc() -> bool { return the_app != nil && (the_app.prefs.flat || the_app.cx.theme.light) }   // (a light version: flat, its reliefs are made for the dark)
+
+// The thin edge of a flat surface of this face: the theme's line, lit a little under the pointer.
+flat_edge :: proc(face: Color, hot: f32) -> Color { return draw.mix(hex(HEX_LINE), lighten(hex(HEX_LINE), 0.25), hot) }
+
 
 // The icons: Lucide on every system (assets/fonts/lucide.ttf, embedded: ISC licence, assets/fonts/LUCIDE-LICENSE.txt),
 // so they look the same everywhere and nothing depends on the fonts installed.
@@ -192,6 +220,12 @@ draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, h
 	p := px1()
 	rr := radii4(radius)
 	face := lighten(base, 0.06 * hot)
+	if flat() {   // a plain face, its edge a thin line; under the pointer a step toward the text, held a step further
+		face = draw.mix(base, hex(HEX_TEXT), FLAT_HOT * hot)
+		draw.rect(dc, r, pressed < 0.5 ? face : draw.mix(base, hex(HEX_TEXT), FLAT_PRESSED), radius)
+		draw.rect(dc, r, flat_edge(face, hot), radius, p)
+		return
+	}
 	if pressed < 0.5 {
 		draw.box_shadow(dc, draw.rect_shift(r, {0, 1.5 * s}), rr, 2.2 * s, {0, 0, 0, 0.65})
 		if glow.a > 0 && hot > FADE_VISIBLE && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 2.5 * s, with_alpha(glow, 0.2 * hot)) }   // (under the pointer only, and tight: a wide halo reached the carved edge above)
@@ -233,6 +267,11 @@ draw_well :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, fo
 	s := ui.scale()
 	p := px1()
 	rr := radii4(radius)
+	if flat() {   // a plain face; its edge a thin line, the accent's under the focus
+		draw.rect(dc, r, base, radius)
+		draw.rect(dc, r, draw.mix(flat_edge(base, 0), with_alpha(accent, 0.9), focus), radius, p)
+		return
+	}
 	if focus > FADE_VISIBLE && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 4 * s, with_alpha(accent, 0.12 * focus)) }
 	draw.rect(dc, r, base, radius)
 	draw.inset_shadow(dc, r, rr, draw.rect_shift(draw.rect_pad(r, -0.5 * s), {0, 2.5 * s}), rr, 3.5 * s, {0, 0, 0, 0.85})
@@ -247,6 +286,10 @@ draw_well :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, fo
 // A carved line: a dark cut with the light catching its lower edge.
 draw_groove :: proc(dc: ^draw.Context, a, b: Vec2, vertical := false) {
 	p := px1()
+	if flat() {   // a line
+		draw.rect(dc, vertical ? Rect{a, {a.x + p, b.y}} : Rect{a, {b.x, a.y + p}}, hex(HEX_LINE))
+		return
+	}
 	if vertical {
 		draw.rect(dc, {a, {a.x + p, b.y}}, {0, 0, 0, 0.9})
 		draw.rect(dc, {{a.x + p, a.y}, {a.x + 2 * p, b.y}}, {1, 1, 1, 0.05})
@@ -263,6 +306,10 @@ draw_lamp :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color, lit: f32 = 1) 
 	defer draw.set_circular_corners(dc, prev)
 	r := Rect{c - d * 0.5, c + d * 0.5}
 	rr := radii4(d * 0.5)
+	if flat() {   // a dot, dimmed as it pulses
+		draw.rect(dc, draw.rect_pad(r, -d * 0.12), draw.mix(darken(col, 0.45), col, lit), d * 0.5)
+		return
+	}
 	if lit > FADE_VISIBLE && the_app.prefs.glow { draw.box_shadow(dc, r, rr, d * 0.45, with_alpha(col, 0.4 * lit)) }
 	draw.rect(dc, draw.rect_pad(r, 1 * s), {0, 0, 0, 0.8}, d * 0.5 + s)
 	body := draw.mix(darken(col, 0.3), col, lit)   // (dimmed, not browned: the colour stays clean through a pulse)
@@ -278,6 +325,11 @@ draw_pip :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color) {
 	defer draw.set_circular_corners(dc, prev)
 	p := px1()
 	r := Rect{c - d * 0.5, c + d * 0.5}
+	if flat() {   // a small dot
+		in_f := draw.rect_pad(r, -max(p, math.round(d * 0.25)))
+		draw.rect(dc, in_f, with_alpha(col, col.a * 0.8), (in_f.max.x - in_f.min.x) * 0.5)
+		return
+	}
 	draw.rect(dc, r, {0, 0, 0, 0.75}, d * 0.5)
 	draw.rect(dc, {{r.min.x, r.max.y - p}, {r.max.x, r.max.y + p}}, {1, 1, 1, 0.05}, d * 0.5)   // the lit lower lip
 	in_r := draw.rect_pad(r, -max(p, math.round(d * 0.22)))
@@ -540,6 +592,12 @@ plate_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	r := b.rect
 	rad := d.radius * s * corners()
 	rr := radii4(rad)
+	if flat() {   // one colour, a thin edge
+		face := draw.mix(d.top, d.bottom, 0.5)
+		draw.rect(dc, r, face, rad)
+		draw.rect(dc, r, d.border.a > 0 ? flat_edge(face, 0) : CLEAR, rad, p)
+		return
+	}
 	if d.shadow > 0 { draw.box_shadow(dc, draw.rect_shift(r, {0, 2 * s}), rr, d.shadow * s, {0, 0, 0, 0.6}) }
 	if d.glow.a > 0 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 6 * s, with_alpha(d.glow, d.glow.a * 0.5)) }
 	draw.rect_corners(dc, r, {d.top, d.bottom, d.top, d.bottom}, rr)
@@ -646,3 +704,62 @@ rail_row :: proc(id: string, color: Color) -> bool {
 	return true
 }
 
+
+////////////////////////////////
+// A choice of a few: a sunken track, the one chosen on a small raised plate that slides to it, its word lit, the others quiet.
+
+@(private = "file")
+Choice_Draw :: struct { t: f32, n: int, pad: f32 }
+
+@(private = "file")
+choice_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+	d := (^Choice_Draw)(user)
+	r := b.rect
+	radius := (r.max.y - r.min.y) * CHOICE_RADIUS_SHARE / ui.scale()
+	draw_well(dc, r, radius, hex(HEX_WELL))
+	if d.n <= 0 { return }
+	w := (r.max.x - r.min.x - 2 * d.pad) / f32(d.n)
+	x := r.min.x + d.pad + d.t * w
+	plate := Rect{{math.round(x), r.min.y + d.pad}, {math.round(x + w), r.max.y - d.pad}}
+	draw_bevel(dc, plate, max(0, radius - d.pad / ui.scale()), hex(HEX_BTN_FACE), 0, 0)
+}
+
+// `if choice(id, labels, &sel)`: true when another was chosen. Size it with `next` before it.
+choice :: proc(id: string, labels: []string, selected: ^int) -> (changed: bool) {
+	em := ui.font_size()
+	t := ui.anim(ui.key_from_string(ui.parent_box().key, fmt.tprintf("%s_t", id)), f32(selected^), CHOICE_RATE, f32(selected^))
+	pad := math.round(em * CHOICE_PAD_EM)
+	b := ui.build_box({}, id)   // (sized by the caller's next; its row inside)
+	d := ui.frame_new(Choice_Draw)
+	d^ = {t, len(labels), pad}
+	b.custom, b.custom_user = choice_draw, d
+	ui.a11y_default(b, {role = .Radio_Group, orientation = .X})
+	if ui.parent(b) {
+		ui.next({width = ui.pct(1), height = ui.pct(1), axis = .X})
+		if ui.row(id = "###r") {
+		ui.spacer(ui.px(pad))
+		for label, i in labels {
+			ui.next({width = ui.fill(), height = ui.pct(1), text_align = .Center, cursor = .Hand})   // (equal shares of what the pads leave)
+			item := ui.build_box({.Clickable, .Focusable, .Draw_Text}, fmt.tprintf("%s###ch%d", label, i))
+			sig := ui.signal(item)
+			item.text_color = i == selected^ ? hex(HEX_BRIGHT) : sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK)
+			if sig.clicked && i != selected^ { selected^ = i; changed = true }
+			ui.a11y_default(item, {role = .Radio_Button, toggled = i == selected^ ? .True : .False, position = i + 1, set_size = len(labels)})
+		}
+		ui.spacer(ui.px(pad))
+		}
+	}
+	return
+}
+
+////////////////////////////////
+// What is chosen in a list (ui.contrast and ui.readable keep the words on it read)
+
+// The ground of what is chosen in a list (the session shown): the raised step's lightness, a little of the accent's hue and chroma
+// (OKLCH: as much colour whatever the accent's own lightness, never a muddy brown). Words on it go through readable.
+chosen_ground :: proc() -> Color {
+	base := ui.to_oklch(hex(HEX_BG3))
+	acc := ui.to_oklch(accent())
+	L := base[0] + (theme_light() ? -CHOSEN_LIGHTNESS : CHOSEN_LIGHTNESS)
+	return ui.from_oklch({clamp(L, 0, 1), CHOSEN_CHROMA, acc[2]})
+}

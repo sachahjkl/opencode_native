@@ -138,9 +138,7 @@ term_new :: proc(id, title, dir: string, cols: u16 = TERM_COLS, rows: u16 = TERM
 	ghostty_terminal_set(t.vt, VT_OPT_USERDATA, t)
 	ghostty_terminal_set(t.vt, VT_OPT_WRITE_PTY, rawptr(term_answers))
 	ghostty_terminal_set(t.vt, VT_OPT_TITLE_CHANGED, rawptr(term_title_changed))
-	bg, fg := rgb_of(HEX_TERM_BG), rgb_of(HEX_TEXT)
-	ghostty_terminal_set(t.vt, VT_OPT_COLOR_BACKGROUND, &bg)
-	ghostty_terminal_set(t.vt, VT_OPT_COLOR_FOREGROUND, &fg)
+	term_recolour(t)
 	track := true
 	ghostty_mouse_encoder_set(t.mouse_enc, VT_MOUSE_OPT_TRACK_LAST_CELL, &track)
 	return t
@@ -149,8 +147,24 @@ term_new :: proc(id, title, dir: string, cols: u16 = TERM_COLS, rows: u16 = TERM
 @(private = "file")
 rgb_of :: proc(x: u32) -> Vt_Rgb { return {u8(x >> 24), u8(x >> 16), u8(x >> 8)} }   // (0xRRGGBBAA)
 
+// A colour the grid has: the program's own, as it asked for it (a theme moves only what the terminal chose: term_recolour).
 @(private = "file")
-color_of :: proc(c: Vt_Rgb) -> Color { return hex(u32(c.r) << 24 | u32(c.g) << 16 | u32(c.b) << 8 | 0xff) }
+color_of :: proc(c: Vt_Rgb) -> Color { return draw.hex(u32(c.r) << 24 | u32(c.g) << 16 | u32(c.b) << 8 | 0xff) }
+
+// The grid's own background and text, the theme's.
+@(private = "file")
+term_recolour :: proc(t: ^Term) {
+	if t.vt == nil { return }
+	bg, fg := rgb_of(themed(HEX_TERM_BG)), rgb_of(themed(HEX_TEXT))
+	ghostty_terminal_set(t.vt, VT_OPT_COLOR_BACKGROUND, &bg)
+	ghostty_terminal_set(t.vt, VT_OPT_COLOR_FOREGROUND, &fg)
+}
+
+// Another theme: every grid's own colours follow it.
+terms_recolour :: proc(app: ^App) {
+	for t in app.cx.terms.list { term_recolour(t) }
+	for v in app.cx.outputs.list { term_recolour(v.term) }
+}
 
 term_free :: proc(t: ^Term) {
 	if t.detached { detached_forget(the_app, t.panel) }

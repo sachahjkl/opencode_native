@@ -136,6 +136,9 @@ Server_Known :: struct {
 
 // What the window keeps from one frame to the next that belongs to no panel: what is due, what is open, where things are.
 App_Context :: struct {
+	column_drag_from:    f32,                  // the conversation's width when a handle of it was pressed (views.odin column_handles)
+	composer_fit:        struct { level: int, at: [2]f32 },   // what the composer's toolbar leaves out, and at which widths (views.odin composer_fit)
+	theme:               Theme_State,          // the themes, the one shown, its colours (theme.odin)
 	film_slow:           f64,                  // --slow-motion (film.odin): 0, the interface's time is the system's
 	film_clock:          f64,                  // what ui.now_ms says then
 	film_clock_at:       f64,
@@ -314,6 +317,7 @@ build_params :: proc(app: ^App, win: ^platform.Window, size: draw.Vec2, events: 
 @(private = "file")
 main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
 	app := (^App)(h.user)
+	theme_follow_system(app)   // (the system went light or dark: an integer compared)
 	events := read
 	app.cx.shared_moved = false
 	for e in events { if e.kind != .Mouse_Move && e.kind != .Scroll { app.cx.shared_moved = true } }   // (a pointer that passes over this window changes nothing in another)
@@ -683,7 +687,7 @@ main :: proc() {
 	app_init(app, prefs_path())
 	app.cx.web_host = web_host_system()
 	if app.servers_in_clear { servers_save(app) }
-	platform.set_dark_title(app.win, true)
+	platform.set_dark_title(app.win, !app.cx.theme.light)
 	app.devtools = devtools.start_from_env(app.win, "opencode")
 	main_window_adopt(app)
 	app.last_tick = time.tick_now()

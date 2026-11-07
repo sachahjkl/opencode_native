@@ -3,11 +3,14 @@
 package occ
 
 import "core:fmt"
+import "core:unicode"
+import "core:unicode/utf8"
 import "core:hash"
 import "core:math"
 import "core:strings"
 import "core:time"
 import "gt:draw"
+import "gt:font"
 import "gt:ui"
 
 
@@ -26,8 +29,6 @@ HEX_HEADER_TOP        :: 0x131313ff
 HEX_HEADER_BOTTOM     :: 0x0d0d0dff
 HEX_STATUS_TOP        :: 0x141414ff
 HEX_STATUS_BOTTOM     :: 0x0e0e0eff
-HEX_ITEM_SELECTED     :: 0x0b0b0bff
-HEX_ITEM_HOVER        :: 0x1c1c1cff
 HEX_SUB_OFF_TITLE     :: 0x7a7a7aff
 HEX_USER_PLATE_TOP    :: 0x222222ff
 HEX_USER_PLATE_BOTTOM :: 0x1a1a1aff
@@ -143,6 +144,7 @@ Bar_Draw :: struct { top, bottom: Color, lit_top: bool }
 bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Bar_Draw)(user)
 	r := b.rect
+	if flat() { draw.rect(dc, r, draw.mix(d.top, d.bottom, 0.5)); return }
 	draw.rect_corners(dc, r, {d.top, d.bottom, d.top, d.bottom}, {})
 	// (only with nothing above it: under a carved line, whose lower half is lit, it would be a second line)
 	if d.lit_top { draw.rect(dc, {r.min, {r.max.x, r.min.y + px1()}}, {1, 1, 1, 0.05}) }
@@ -272,14 +274,12 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	s := ui.scale()
 	r := b.rect
 	rad := 6 * s
+	rad *= corners()
+	// the one shown: a ground of the accent, nothing more (its mark and its lamp say the rest); under the pointer, a lighter one
 	if d.selected {
-		draw_well(dc, r, rad, hex(HEX_ITEM_SELECTED))
-		// the peach rail, glowing
-		rail := Rect{{r.min.x + 3 * s, r.min.y + 7 * s}, {r.min.x + 6 * s, r.max.y - 7 * s}}
-		draw.box_shadow(dc, rail, radii4(1.5 * s), 3 * s, with_alpha(accent(), 0.3))
-		draw.rect(dc, rail, accent(), 1.5 * s)
+		draw.rect(dc, r, chosen_ground(), rad)
 	} else if b.hot_t > FADE_VISIBLE {
-		draw_bevel(dc, r, rad, hex(HEX_ITEM_HOVER), 0, b.active_t)
+		draw.rect(dc, r, with_alpha(hex(HEX_TEXT), ITEM_HOVER_TINT * b.hot_t), rad)
 	}
 }
 
@@ -420,6 +420,26 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 
 // A session of the sidebar; `depth` 1: a sub-agent listed under its parent. `kids`: its sub-agents (indices into
 // app.sessions), listed under it when its toggle is open. `project`: its folder under its title, when the list does not say it.
+// A session's mark: the first letter of its title on a colour of the palette its id picks (the same session, the same colour,
+// whatever its title becomes), the colour faint behind, full on the letter.
+session_badge :: proc(s: ^Session_Info, size, em: f32) {
+	letter := "·"
+	for r, i in s.title {
+		if unicode.is_letter(r) || unicode.is_digit(r) { letter = strings.to_upper(s.title[i:i + utf8.rune_size(r)], context.temp_allocator); break }
+	}
+	c := hex(SESSION_BADGE_HEX[session_badge_index(s.id)])
+	ui.next({width = ui.px(size), height = ui.px(size), bg = with_alpha(c, SESSION_BADGE_ALPHA), fg = c, radius = math.round(size * 0.3 * corners()),
+		text_align = .Center, font = font.styled_face(&the_app.fonts, the_app.font, true, false), font_size = math.round(size * 0.55), text_pad = 0})
+	ui.build_box({.Draw_Background, .Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###badge", letter))
+}
+
+// Which colour of the palette a session's id picks (FNV-1a: the same id, the same colour, on every machine).
+session_badge_index :: proc(id: string) -> int {
+	h: u32 = 2166136261
+	for i in 0 ..< len(id) { h = (h ~ u32(id[i])) * 16777619 }
+	return int(h % u32(len(SESSION_BADGE_HEX)))
+}
+
 session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0, kids: []int = nil, project := false) {
 	selected := s.id == app.chat.id
 	sub_list := false
@@ -448,6 +468,10 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 		}
 		if ui.parent(b) {
 			ui.spacer(ui.px(em * (s.parent != "" && depth == 0 ? 1.6 : 0.95)))
+			if depth == 0 {
+				session_badge(s, math.round(em * (project ? SESSION_BADGE_INBOX_EM : SESSION_BADGE_EM)), em)
+				ui.spacer(ui.px(em * 0.55))
+			}
 			busy := app.busy[s.id] or_else false
 			if depth > 0 {
 				// a sub-agent: its state as a lamp, its agent in its colour
@@ -474,7 +498,9 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			// a sub-agent: lit while it runs, dimmed once it is done
 			tcol := hex(HEX_TEXT_SOFT)
 			if depth > 0 { tcol = busy ? hex(HEX_TEXT) : hex(HEX_SUB_OFF_TITLE) }
-			if selected { tcol = hex(HEX_BRIGHT) }
+			ground := selected ? chosen_ground() : hex(HEX_BG1)
+			if selected { tcol = ui.readable(hex(HEX_BRIGHT), ground, READABLE_TEXT) }
+			quiet := selected ? ui.readable(hex(HEX_WEAK), ground, READABLE_QUIET) : hex(HEX_FAINT)   // (the folder, the age)
 			title_style := ui.Style_Mod{font_size = math.round(em * (depth > 0 ? FS_NOTE : FS_LABEL))}
 			if project {
 				ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
@@ -484,7 +510,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 					if renaming_at(app, s.id, .Side) { rename_in_place(app, em, title_style.font_size.?, math.round(em * 1.3)) } else { text("t", title, tcol, title_style, ui.fill()) }
 					where_ := s.directory != "" ? base_name(s.directory) : "(no folder)"
 					if session_unseen(app, s) && s.outcome != "succeeded" && s.outcome != "" { where_ = fmt.tprintf("%s · %s", where_, s.outcome) }
-					text("p", ellipsize(where_, SIDE_PROJECT_CHARS), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(math.round(em * 1.1))}, ui.fill())
+					text("p", ellipsize(where_, SIDE_PROJECT_CHARS), quiet, ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(math.round(em * 1.1))}, ui.fill())
 					ui.spacer(ui.fill())
 				}
 			} else if renaming_at(app, s.id, .Side) {
@@ -499,7 +525,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				sub_list = sub_toggle(app, s.id, len(kids), running, em)
 				ui.spacer(ui.px(em * 0.35))
 			}
-			text("a", rel_time(now, s.updated), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("a", rel_time(now, s.updated), quiet, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.7))
 		}
 		ui.spacer(ui.px(em * 0.5))
@@ -697,10 +723,53 @@ conversation :: proc(app: ^App, em: f32) {
 			if app.anchor == nil && app.cx.restore_msg == "" { app.stick_bottom = at_bottom && follow }
 			app.chat_target = sb.view_target.y
 		}
+		if sb != nil && app.chat.id != "" { column_handles(app, sb, main, side, col, avail, em) }
 		dock(app, em, side, col)
 		// the find bar over the conversation's top-right corner, under the header
 		find_bar(app, em, avail - em * 1.4, sb != nil ? sb.rect.min.y - main.rect.min.y + em * 0.6 : em * 4)
 		go_bottom_pill(app, sb, main, avail, em)
+	}
+}
+
+// The conversation's width by hand: a handle each side of its column where there is room, both moving it the same (the column stays
+// in the middle). What it is let go at is the widest wanted (conversation.width): a narrower window narrows it, a wider one gives it
+// back. Each shows as two short strokes, faint until the pointer comes.
+@(private = "file")
+column_handles :: proc(app: ^App, sb, main: ^ui.Box, side, col, avail, em: f32) {
+	hw := math.round(em * COLUMN_HANDLE_EM)
+	unit := ui.scale() * app.prefs.content_zoom   // (the preference is in logical pixels of the conversation)
+	// (no room beside it, or the window narrows it already: nothing to give it by hand)
+	if side < hw * 1.5 || col < app.prefs.column_w * unit - 1 { return }
+	top := sb.rect.min.y - main.rect.min.y
+	h := sb.rect.max.y - sb.rect.min.y
+	for right in ([]bool{false, true}) {
+		x := right ? side + col : side - hw
+		ui.next({fixed_x = math.round(x), fixed_y = math.round(top), width = ui.px(hw), height = ui.px(h), cursor = .Col_Resize})
+		ui.a11y({role = .Slider, name = "Conversation width"})
+		b := ui.build_box({.Clickable}, right ? "###col_r" : "###col_l")
+		sig := ui.signal(b)
+		if sig.pressed { app.cx.column_drag_from = col / unit }
+		if sig.dragging {
+			d := (right ? sig.drag_delta.x : -sig.drag_delta.x) * 2 / unit
+			most := min(f32(COLUMN_W_MAX), (avail - em * 3) / unit)
+			app.prefs.column_w = clamp(math.round(app.cx.column_drag_from + d), f32(COLUMN_W_MIN), max(f32(COLUMN_W_MIN), app.cx.column_drag_from, most))   // (never under where it began for want of room)
+		}
+		if sig.released { pref_set(app, "conversation.width", fmt.tprintf("%d", int(app.prefs.column_w))) }
+		g := ui.frame_new(f32)
+		g^ = sig.dragging ? 1 : b.hot_t
+		b.custom_user = g
+		b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+			lit := (^f32)(user)^
+			p := px1()
+			s := ui.scale()
+			c := draw.rect_center(b.rect)
+			len_ := math.round(COLUMN_GRIP_PX * s)
+			col := ui.srgb_step(hex(HEX_LINE), hex(HEX_WEAK), lit)
+			for i in ([]f32{-1, 1}) {   // two short strokes, side by side
+				x := math.round(c.x + i * 1.5 * p)
+				draw.rect(dc, {{x - p * 0.5, c.y - len_ * 0.5}, {x + p * 0.5, c.y + len_ * 0.5}}, col, p * 0.5)
+			}
+		}
 	}
 }
 
@@ -1486,6 +1555,7 @@ composer :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.35))
 		}
 		// toolbar
+		fit := composer_fit(app, em)
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###tools") {
 			ui.spacer(ui.px(em * 0.6))
@@ -1500,7 +1570,7 @@ composer :: proc(app: ^App, em: f32) {
 			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(&app.picker, "model", msig.box.rect) } }
 			ui.spacer(ui.fill())
 			held := composer_held(app)
-			if app.column_w > em * COMPOSER_HINT_MIN_EM {   // (room for it beside the agent and model buttons)
+			if app.column_w > em * COMPOSER_HINT_MIN_EM && fit < 1 {   // (room for it beside the agent and model buttons)
 				if held {
 					text("hint", "starting the session…", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				} else if history_browsing(app) {
@@ -1536,7 +1606,7 @@ composer :: proc(app: ^App, em: f32) {
 				case .Steer: send_label = "Send now"
 				}
 			}
-			if app.column_w <= em * QUEUE_WORDS_MIN_EM { send_label = "" }   // (narrow, its glyph says it: the toolbar has no room)
+			if app.column_w <= em * QUEUE_WORDS_MIN_EM || fit >= 2 { send_label = "" }   // (narrow, its glyph says it: the toolbar has no room)
 			send_w: Maybe(ui.Size) = send_label == "" ? ui.px(math.round(em * COMPOSER_BUTTON_W_EM)) : nil
 			if bevel_button("###send", send_label, send_icon, .Accent, send_w, math.round(em * BUTTON_H_EM), disabled = empty || !online(app) || held).clicked { submit = true }
 			ui.spacer(ui.px(em * 0.55))
@@ -1545,6 +1615,27 @@ composer :: proc(app: ^App, em: f32) {
 		}
 	}
 	if submit { submit_prompt(app, other) }
+}
+
+// What the composer's toolbar leaves out to stay within itself: 1, the keys' hint; 2, the send button's word too. A step is taken
+// when what it held went past its end in the last layout (a long model's name, Stop beside "Send now"), and given back once the row
+// is wider than where it went past (by a margin: what came back would not go past at once).
+@(private = "file")
+composer_fit :: proc(app: ^App, em: f32) -> int {
+	f := &app.cx.composer_fit
+	tools := ui.prev_box("###tools")
+	if tools == nil { return f.level }
+	w := tools.rect.max.x - tools.rect.min.x
+	end: f32
+	for c := tools.first; c != nil; c = c.next {
+		if .Floating_X not_in c.flags { end = max(end, c.rect.max.x) }
+	}
+	if end > tools.rect.max.x + 0.5 && f.level < len(f.at) {
+		f.at[f.level] = w
+		f.level += 1
+	}
+	for f.level > 0 && w > f.at[f.level - 1] + em * COMPOSER_FIT_SLACK_EM { f.level -= 1 }
+	return f.level
 }
 
 // The browser and the shells, lit while they are open.

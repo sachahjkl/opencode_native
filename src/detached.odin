@@ -89,6 +89,7 @@ panel_detach :: proc(app: ^App, panel: u32) {
 		ui.toast(.Bad, "No window: the renderer refused it")
 		return
 	}
+	platform.set_dark_title(d.win, !app.cx.theme.light)
 	detached_hooks(d)
 	ui.set_autoscroll_enabled(&d.state, true)
 	if t := term_of_panel(app, panel); t != nil { t.detached = true }

@@ -39,6 +39,7 @@ Activity :: struct {
 	peeks:      map[string]Peek,    // by session (keys owned)
 	todos:      [dynamic]Todo,      // (strings owned)
 	todos_sig:  u64,
+	scan:       Todo_Scan,          // the last list, from pages not read yet (todos_scan)
 	dir:        string,             // the folder the commands were read for (owned)
 	mouse:      Vec2,
 	mouse_moved: bool,              // since the last build: the row under it is the selected one
@@ -68,6 +69,7 @@ activity_reset :: proc(app: ^App) {
 	a.poll_ms = 0
 	todos_clear(a)
 	a.todos_sig = 0
+	todo_scan_reset(&a.scan)
 }
 
 @(private = "file")
@@ -285,6 +287,53 @@ activity_peek_load :: proc(app: ^App, v: json.Value, id: string) {
 	p.text = strings.join(lines[first:], "\n")
 }
 
+// A long session's last todo list can be pages back, past what the conversation reads (its newest page). Those pages are read for
+// it alone, one at a time, back to where it is (TODO_SCAN_PAGES at most), and nothing of them is shown but the list.
+Todo_Scan :: struct {
+	session: string,   // whose (owned)
+	gen:     u64,      // of the conversation it was begun for
+	pages:   int,      // read so far
+	busy:    bool,     // a page asked for
+	over:    bool,     // found, or none to find
+	todos:   [dynamic]Todo,   // what it found (strings owned)
+	found:   bool,
+}
+
+todo_scan_reset :: proc(sc: ^Todo_Scan) {
+	delete(sc.session)
+	for t in sc.todos { delete(t.content); delete(t.status) }
+	clear(&sc.todos)
+	sc.session, sc.gen, sc.pages, sc.busy, sc.over, sc.found = "", 0, 0, false, false, false
+}
+
+// An older page, read for its last todo list: found, kept; else the page before it, until there is none (or enough were read).
+todos_scan_load :: proc(app: ^App, r: ^Request, v: json.Value) {
+	a := &app.activity
+	sc := &a.scan
+	if r.tag != sc.session || r.gen != sc.gen { return }
+	sc.busy = false
+	sc.pages += 1
+	best: json.Value
+	best_at := -1.0
+	for m in jarr(v, "data") {
+		at := jnum(m, "time", "created")
+		for p in jarr(m, "content") {
+			if jstr(p, "type") != "tool" || !strings.contains(jstr(p, "name"), "todo") { continue }
+			if list := jarr(p, "state", "input", "todos"); list != nil && at >= best_at { best, best_at = p, at }
+		}
+	}
+	if best_at >= 0 {
+		for t in jarr(best, "state", "input", "todos") { append(&sc.todos, Todo{strings.clone(jstr(t, "content")), strings.clone(jstr(t, "status"))}) }
+		sc.found, sc.over = true, true
+		a.todos_sig = 0   // (read again: the list is there)
+		return
+	}
+	next := jstr(v, "cursor", "next")
+	if next == "" || sc.pages >= TODO_SCAN_PAGES { sc.over = true; return }
+	sc.busy = true
+	request(app, .Todo_Scan, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", sc.session, app.prefs.page_size, url_escape(next)), tag = sc.session)
+}
+
 // The todo list: the last call of the tool that writes it, in the pages read. Read again when the last messages change.
 todos_update :: proc(app: ^App) {
 	a := &app.activity
@@ -308,6 +357,19 @@ todos_update :: proc(app: ^App) {
 		}
 	}
 	todos_clear(a)
+	// none in the pages read: the older ones may have it
+	sc := &a.scan
+	if sc.session != c.id || sc.gen != c.gen {
+		todo_scan_reset(sc)
+		sc.session, sc.gen = strings.clone(c.id), c.gen
+	}
+	if sc.found {
+		for t in sc.todos { append(&a.todos, Todo{strings.clone(t.content), strings.clone(t.status)}) }
+	} else if !sc.over && !sc.busy && c.loaded && c.id != "" {
+		if c.older == "" { sc.over = true; return }
+		sc.busy = true
+		request(app, .Todo_Scan, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", c.id, app.prefs.page_size, url_escape(c.older)), tag = c.id)
+	}
 }
 
 @(private = "file")

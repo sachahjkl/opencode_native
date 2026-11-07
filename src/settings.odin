@@ -53,12 +53,12 @@ HEX_MCP_NAME       :: 0xf0f0f0ff
 HEX_WORKSPACE_NAME :: 0xe0e0e0ff
 HEX_CATALOG_NAME   :: 0xe8e8e8ff
 
-ACCENTS :: []string{"peach", "blue", "purple", "green", "cyan", "rose"}
-ACCENT_HEX := [?]u32{HEX_PEACH, HEX_BLUE, HEX_PURPLE, HEX_GREEN, HEX_CYAN, HEX_ROSE}
 TEXT_SMOOTHINGS :: []string{"auto", "rgb", "bgr", "grey"}
 
 PREF_DEFS := [?]config.Def{
-	{name = "appearance.accent", description = "The colour of primary buttons, the selection, links of attention and focus rings.", kind = .String, default = {s = "peach"}, choices = ACCENTS},
+	{name = "appearance.theme", description = "The colours of the whole interface: opencode's black with an accent of its own, or an editor's palette. Themes of your own go in themes.txt beside the preferences.", kind = .String, default = {s = "OpenCode"}},
+	{name = "appearance.mode", description = "Each theme in its dark or its light version: as the system's apps are, or always one.", kind = .String, default = {s = "system"}, choices = {"system", "dark", "light"}},
+	{name = "appearance.style", description = "Machined: raised buttons, sunken wells, carved lines, glowing lamps. Flat: plain surfaces and thin lines.", kind = .String, default = {s = "machined"}, choices = {"machined", "flat"}},
 	{name = "appearance.font", description = "The face of the interface's text: the client's own (automatic), the system's usual one, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.prose_font", description = "The face of the answers: the client's own (automatic), the interface's, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.mono_font", description = "The face of code, paths and figures: the client's own (automatic), the system's usual one, or any installed family.", kind = .String, default = {s = ""}},
@@ -105,8 +105,10 @@ PREF_DEFS := [?]config.Def{
 
 // The preferences as plain values (read on every frame: no lookups by name there).
 Prefs :: struct {
-	accent:       Color,
+	accent:       Color,   // the theme's (theme.odin)
 	accent_hex:   u32,
+	flat:         bool,    // appearance.style
+	mode:         string,  // appearance.mode: system, dark, light (the preference's own text: not owned)
 	font_size:    f32,
 	zoom:         f32,
 	density:      f32,
@@ -161,16 +163,19 @@ prefs_init :: proc(app: ^App, file: string) {
 prefs_refresh :: proc(app: ^App) {
 	p := &app.cfg_prefs
 	s := &app.prefs
-	acc := config.string_of(p, "appearance.accent")
-	s.accent_hex = HEX_PEACH
-	for name, i in ACCENTS { if name == acc { s.accent_hex = ACCENT_HEX[i] } }
-	s.accent = hex(s.accent_hex)
+	s.flat = config.string_of(p, "appearance.style") == "flat"
+	s.mode = config.string_of(p, "appearance.mode")
+	theme_load(app)
+	theme_set(app, theme_index(app, config.string_of(p, "appearance.theme")), theme_wants_light(s.mode))
+	theme_titles(app)
+	s.accent_hex = themed(HEX_PEACH)
+	s.accent = hex(HEX_PEACH)
 	s.font_size = f32(config.int_of(p, "appearance.font_size"))
 	s.zoom = f32(config.float_of(p, "appearance.zoom"))
 	s.density = config.string_of(p, "appearance.density") == "compact" ? COMPACT_DENSITY : 1
 	s.rounding = f32(config.float_of(p, "appearance.rounding"))
 	s.animations = config.string_of(p, "appearance.animations")
-	s.glow = config.bool_of(p, "appearance.glow")
+	s.glow = config.bool_of(p, "appearance.glow") && config.string_of(p, "appearance.style") != "flat"   // (no halos in the flat style)
 	s.smooth_scroll = config.bool_of(p, "appearance.smooth_scroll")
 	s.autohide_scrollbars = config.bool_of(p, "appearance.autohide_scrollbars")
 	s.column_w = f32(config.int_of(p, "conversation.width"))
@@ -209,10 +214,8 @@ prefs_refresh :: proc(app: ^App) {
 	ui.set_zoom(&app.state, s.zoom)
 	ui.set_density(&app.state, s.density)
 	ui.set_rounding(&app.state, s.rounding)
-	pal := OPENCODE_PALETTE
-	pal.accent = s.accent_hex
-	ui.apply_palette(&app.theme, pal)
-	ui.theme_set(&app.theme, "selection", with_alpha(s.accent, SELECTION_ALPHA))
+	theme_refresh(&app.theme)
+	terms_recolour(app)
 }
 
 prefs_save :: proc(app: ^App) {
@@ -672,7 +675,7 @@ pref_choice :: proc(app: ^App, name: string, labels: []string, em: f32, width: f
 		ui.push_parent(ui.build_box({}, "###under"))
 	}
 	ui.next({width = ui.px(math.round(w)), height = ui.px(math.round(em * 2))})
-	if ui.segmented("###seg", labels, &sel) { pref_set(app, name, d.choices[sel]) }
+	if choice("###seg", labels, &sel) { pref_set(app, name, d.choices[sel]) }
 }
 
 @(private = "file")
@@ -705,28 +708,78 @@ pref_slider :: proc(app: ^App, name: string, lo, hi, step: f32, format: string, 
 	}
 }
 
-page_appearance :: proc(app: ^App, em: f32) {
-	if setting(app, "appearance.accent", em) {
-		// swatches: a lit bead per colour
-		for name, i in ACCENTS {
-			ui.next({width = ui.px(math.round(em * 2.1)), height = ui.px(math.round(em * 2.1))})
-			ui.a11y({role = .Radio_Button, name = name, toggled = config.string_of(&app.cfg_prefs, "appearance.accent") == name ? .True : .False})
-			b := ui.build_box({.Clickable, .Focusable}, fmt.tprintf("###acc%d", i))
-			col := ui.frame_new(Color)
-			col^ = hex(ACCENT_HEX[i])
-			b.custom_user = col
-			b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-				c := (^Color)(user)^
-				sel := b.text == "*"
-				sz := min(b.rect.max.x - b.rect.min.x, b.rect.max.y - b.rect.min.y)
-				if sel { draw_well(dc, b.rect, sz * 0.5, hex(HEX_SWATCH_WELL), 1, c) }
-				draw_lamp(dc, draw.rect_center(b.rect), sz * (sel ? 0.55 : 0.5 + 0.06 * b.hot_t), c, sel ? 1 : 0.55 + 0.45 * b.hot_t)
+@(private = "file")
+Theme_Card :: struct { cols: ^Theme_Colors, chosen: bool }
+
+// The themes, three to a row, each in its own colours: its surface, its name in its text, its colours as dots, a ring of its
+// accent around the one shown.
+@(private = "file")
+theme_cards :: proc(app: ^App, em: f32) {
+	all := themes(app)
+	cur := app.cx.theme.at
+	PER_ROW :: 3
+	for row := 0; row < len(all); row += PER_ROW {
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+		if ui.row(id = fmt.tprintf("###themes%d", row)) {
+			for i in row ..< row + PER_ROW {
+				if i > row { ui.spacer(ui.px(em * 0.5)) }
+				if i >= len(all) { ui.next({width = ui.fill(), height = ui.px(1)}); ui.build_box({}, fmt.tprintf("###th_pad%d", i)); continue }
+				def := &all[i]
+				ui.next({width = ui.fill(), height = ui.px(math.round(em * THEME_CARD_H_EM)), axis = .Y, cursor = .Hand})
+				ui.a11y({role = .Radio_Button, name = def.name, toggled = i == cur ? .True : .False})
+				b := ui.build_box({.Clickable, .Focusable}, fmt.tprintf("###th%d", i))
+				d := ui.frame_new(Theme_Card)
+				cols := app.cx.theme.light && def.has_light ? &def.light : &def.dark   // (in the version shown)
+				d^ = {cols, i == cur}
+				b.custom, b.custom_user = theme_card_draw, d
+				if ui.signal(b).clicked && i != cur { pref_set(app, "appearance.theme", def.name) }
+				if ui.parent(b) {
+					ui.spacer(ui.px(em * 0.55))
+					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+					if ui.row(id = "###n") {
+						ui.spacer(ui.px(em * 0.8))
+						text("t", def.name, draw.hex(cols.texts[2]), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.4)}, ui.fill())
+					}
+				}
 			}
-			if config.string_of(&app.cfg_prefs, "appearance.accent") == name { b.text = "*" }
-			if ui.signal(b).clicked { pref_set(app, "appearance.accent", name) }
-			ui.spacer(ui.px(em * 0.2))
 		}
+		ui.spacer(ui.px(em * 0.5))
 	}
+}
+
+@(private = "file")
+theme_card_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+	d := (^Theme_Card)(user)
+	t := d.cols
+	r := b.rect
+	s := ui.scale()
+	radius := math.round(THEME_CARD_RADIUS * s * corners())
+	draw.rect(dc, r, draw.hex(t.steps[3]), radius)
+	accent := draw.hex(t.hues[0])
+	edge := d.chosen ? accent : draw.mix(draw.hex(t.steps[5]), draw.hex(t.texts[1]), 0.35 * b.hot_t)
+	draw.rect(dc, r, edge, radius, d.chosen ? 2 * px1() : px1())
+	// its colours, as dots along the bottom: the accent first, larger
+	dot := math.round((r.max.y - r.min.y) * 0.16)
+	x := r.min.x + math.round(0.8 * ui.font_size() * s)
+	y := r.max.y - math.round(0.55 * ui.font_size() * s) - dot
+	prev := draw.set_circular_corners(dc, true)
+	defer draw.set_circular_corners(dc, prev)
+	for h, i in t.hues {
+		if i == 2 || i == 7 { continue }   // (purple and rose: the accent and the others say enough)
+		sz := i == 0 ? dot * 1.5 : dot
+		cy := y + dot * 0.5
+		draw.rect(dc, {{x, cy - sz * 0.5}, {x + sz, cy + sz * 0.5}}, draw.hex(h), sz * 0.5)
+		x += sz + math.round(dot * 0.6)
+	}
+}
+
+page_appearance :: proc(app: ^App, em: f32) {
+	if setting(app, "appearance.theme", em) {}   // (its title and its words; the cards under them)
+	theme_cards(app, em)
+	if hint_action("###themes_file", "Themes of your own: themes.txt", em) { themes_file_open(app) }
+	ui.spacer(ui.px(em * 0.6))
+	if setting(app, "appearance.mode", em) { pref_choice(app, "appearance.mode", {"System", "Dark", "Light"}, em, em * 16) }
+	if setting(app, "appearance.style", em) { pref_choice(app, "appearance.style", {"Machined", "Flat"}, em, em * 14) }
 	if setting(app, "appearance.font", em) { font_button(app, "appearance.font", em) }
 	if setting(app, "appearance.prose_font", em) { font_button(app, "appearance.prose_font", em) }
 	if setting(app, "appearance.mono_font", em) { font_button(app, "appearance.mono_font", em) }
