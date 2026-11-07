@@ -947,12 +947,13 @@ messages :: proc(app: ^App, em: f32) {
 	}
 	if view == .Failed { chat_failed(app, em) }
 	// Only the messages near the view are built (the toolkit's lazy column): the others stand as a space of the height they
-	// had when last built. A long conversation, Markdown and all, made every frame slow. Everything is built for the sweep of
-	// a find (once for a needle) and while the conversation loads; the last message always (it grows while streaming).
+	// had when last built. A long conversation, Markdown and all, made every frame slow. A find reads them all once for a needle,
+	// a slice at each frame (its sweep: the window never freezes on a long conversation); everything is built while the
+	// conversation loads; the last message always (it grows while streaming).
 	// (The item is the if's block, like a row's; the column ends with this block: the space of the last messages skipped
 	// goes before what follows.)
 	{
-		lz := ui.lazy_begin(all = ui.find_sweep() || app.chat.loading)
+		lz := ui.lazy_begin(all = app.chat.loading, sweep = ui.find_sweep())
 		// (a view going back to where it was: the column keeps it on its message, however the heights around it settle)
 		restore := app.cx.restore_msg != "" && !c.loading
 		if restore { ui.lazy_pin(lz, fmt.tprintf("###msg_%s", app.cx.restore_msg), app.cx.restore_dy) }

@@ -134,8 +134,8 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 				if res.cancelled { find_close(app) }
 			}
 			needle := ui.field_string(&f.field)
-			pending := ui.find_pending()   // (not read yet: nothing to say, "no match" would be a lie)
-			count := needle == "" || pending ? "" : n == 0 ? "no match" : fmt.tprintf("%d / %d", max(f.index, 0) + 1, n)
+			pending := ui.find_pending()   // (read so far, and how far: "no match" would be a lie before the end; nothing while the needle rests)
+			count := needle == "" ? "" : pending ? (ui.find_progress() < 1 ? fmt.tprintf("%d…  %d %%", n, int(ui.find_progress() * 100)) : "") : n == 0 ? "no match" : fmt.tprintf("%d / %d", max(f.index, 0) + 1, n)
 			text("fc", count, n == 0 && !pending ? hex(HEX_RED) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)})
 			ui.spacer(ui.px(em * 0.5))
 		}

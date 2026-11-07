@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.18.3] - 2026-11-07
+
+### Fixed
+
+- **Find in a long conversation no longer freezes the window**: the messages not on screen are read a slice at each frame, not all in one, and the bar says how far it is (what was found so far and the percentage read) until it knows the count. (gui_toolkit 0.97.0)
+
 ## [0.18.2] - 2026-11-07
 
 ### Changed
@@ -795,7 +801,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.18.2...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.18.3...HEAD
+[0.18.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.3
 [0.18.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.2
 [0.18.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.1
 [0.18.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.0
