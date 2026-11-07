@@ -166,6 +166,9 @@ PULSE_LIT_MIN  :: 0.45
 PULSE_LIT_SPAN :: 0.55
 SCANNER_RATE   :: 0.0028
 
+// Something pulses, in the window being built: the next frame soon. (detached_asks tells the loop of a window's.)
+animate :: proc(app: ^App) { ui.wake_within(app.cx.built != nil ? app.cx.built : &app.ui_state, ANIMATION_WAIT_MS) }
+
 px1 :: proc() -> f32 { return max(1, math.round(ui.scale())) }
 
 radii4 :: proc(r: f32) -> [4]f32 { return {r, r, r, r} }
@@ -459,12 +462,12 @@ scanner :: proc(id: string, color: Color, width, height: f32) {
 		draw.pop_clip(dc)
 	}
 	b.custom_user = d
-	the_app.animating = true
+	animate(the_app)
 }
 
 // A live state as a pulsing lamp, a finished one as a pip.
 state_mark :: proc(id: string, color: Color, live: bool, size: f32 = 0) {
-	if live { lamp(id, color, 1, pulse = true, size = size); the_app.animating = true } else { pip(id, color, size) }
+	if live { lamp(id, color, 1, pulse = true, size = size); animate(the_app) } else { pip(id, color, size) }
 }
 
 @(private = "file")

@@ -21,13 +21,12 @@ Shell_Job :: struct {
 	started, ended: f64,
 	cursor:        int,                 // of the output read so far
 	tail:          [dynamic]u8,         // the end of the output
-	reading:       bool,                // a read is on its way
 	seen:          bool,                // in the last answer of the list
 }
 
 Todo :: struct { content, status: string }   // (in Activity.todo_arena's allocator: context of todos_read)
 
-Peek :: struct { text: string, reading: bool, read_ms: f64 }   // the end of a sub-agent's work (text owned)
+Peek :: struct { text: string, read_ms: f64 }   // the end of a sub-agent's work (text owned)
 
 Activity :: struct {
 	open:       bool,
@@ -41,7 +40,6 @@ Activity :: struct {
 	todos:      [dynamic]Todo,      // (strings owned)
 	todos_sig:  u64,
 	dir:        string,             // the folder the commands were read for (owned)
-	listing:    bool,
 	mouse:      Vec2,
 	mouse_moved: bool,              // since the last build: the row under it is the selected one
 	by_keys:    bool,               // the selection came from the keyboard: the selected row opens
@@ -66,7 +64,7 @@ activity_reset :: proc(app: ^App) {
 	clear(&a.jobs)
 	for k, p in a.peeks { delete(k); delete(p.text) }
 	clear(&a.peeks)
-	a.sel, a.reveal, a.listing = 0, false, false
+	a.sel, a.reveal = 0, false
 	a.poll_ms = 0
 	todos_clear(a)
 	a.todos_sig = 0
@@ -152,8 +150,7 @@ activity_read :: proc(app: ^App) {
 	dir := chat_dir(app)
 	if dir != a.dir { delete(a.dir); a.dir = strings.clone(dir) }
 	q := location_query(dir)
-	if !a.listing {
-		a.listing = true
+	if !flying(app, .Shell_List, dir) {
 		request(app, .Shell_List, "GET", q != "" ? fmt.tprintf("/api/shell?%s", q) : "/api/shell", tag = dir)
 	}
 	for &j in a.jobs { if j.status == .Running { job_read(app, &j) } }
@@ -161,15 +158,14 @@ activity_read :: proc(app: ^App) {
 	for &s in app.chat.children {
 		busy := app.busy[s.id] or_else false
 		p, known := a.peeks[s.id]
-		if p.reading || (known && !busy) { continue }   // (one that is over does not change)
+		if flying(app, .Peek, s.id) || (known && !busy) { continue }   // (one that is over does not change)
 		peek_read(app, s.id)
 	}
 }
 
 @(private = "file")
 job_read :: proc(app: ^App, j: ^Shell_Job) {
-	if j.reading { return }
-	j.reading = true
+	if flying(app, .Shell_Output, j.id) { return }
 	q := location_query(app.activity.dir)
 	request(app, .Shell_Output, "GET", fmt.tprintf("/api/shell/%s/output?cursor=%d&limit=%s%s%s", j.id, j.cursor, ACT_OUTPUT_CHUNK, q != "" ? "&" : "", q), tag = j.id)
 }
@@ -180,7 +176,6 @@ peek_read :: proc(app: ^App, id: string) {
 	p, known := a.peeks[id]
 	key := id
 	if !known { key = strings.clone(id) }
-	p.reading = true
 	a.peeks[key] = p
 	request(app, .Peek, "GET", fmt.tprintf("/api/session/%s/message?limit=%s&order=desc", id, ACT_PEEK_MESSAGES), tag = id)
 }
@@ -208,7 +203,6 @@ job_fill :: proc(j: ^Shell_Job, it: json.Value) {
 // The answer to GET /api/shell: the commands running now. One that is no longer there has ended: read how.
 activity_shells_load :: proc(app: ^App, v: json.Value, dir: string) {
 	a := &app.activity
-	a.listing = false
 	if dir != a.dir { return }
 	for &j in a.jobs { j.seen = false }
 	for it in jarr(v, "data") {
@@ -248,7 +242,6 @@ activity_shell_load :: proc(app: ^App, v: json.Value, id: string) {
 activity_output_load :: proc(app: ^App, v: json.Value, id: string) {
 	j := job_find(&app.activity, id)
 	if j == nil { return }
-	j.reading = false
 	out := jstr(v, "data", "output")
 	if out != "" {
 		append(&j.tail, out)
@@ -258,18 +251,9 @@ activity_output_load :: proc(app: ^App, v: json.Value, id: string) {
 }
 
 activity_request_failed :: proc(app: ^App, r: ^Request) {
-	a := &app.activity
-	#partial switch r.kind {
-	case .Shell_List:
-		a.listing = false
-	case .Shell_Output:
-		if j := job_find(a, r.tag); j != nil { j.reading = false }
-	case .Shell_One:
-		// (the server no longer knows it: it is over, however it ended. Not reached says nothing: the next list asks again)
-		if j := job_find(a, r.tag); j != nil && r.status == 404 { j.status = .Exited }
-	case .Peek:
-		if p, ok := &a.peeks[r.tag]; ok { p.reading = false }
-	}
+	// (the server no longer knows it: it is over, however it ended. Not reached says nothing: the next list asks again)
+	if r.kind != .Shell_One || r.status != 404 { return }
+	if j := job_find(&app.activity, r.tag); j != nil { j.status = .Exited }
 }
 
 // The last things a sub-agent did: its tool calls in a line each, the end of what it wrote.
@@ -277,7 +261,6 @@ activity_peek_load :: proc(app: ^App, v: json.Value, id: string) {
 	a := &app.activity
 	p, ok := &a.peeks[id]
 	if !ok { return }
-	p.reading = false
 	p.read_ms = ui.now_ms()
 	lines := make([dynamic]string, context.temp_allocator)
 	items := jarr(v, "data")
@@ -530,7 +513,7 @@ activity_strip :: proc(app: ^App, em: f32) {
 	open_todos := len(a.todos) > 0 && done < len(a.todos)
 	if agents + shells == 0 && !open_todos && !a.open { return }
 	running := agents + shells > 0
-	if running { app.animating = true }
+	if running { animate(app) }
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * BUTTON_COMPACT_H_EM)), axis = .X, cross = .Center})
 	ui.a11y({role = .Button, name = "Activity"})
 	b := ui.build_box({.Clickable, .Focusable}, "###act_strip")
@@ -596,7 +579,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 	selected := a.open && i == a.sel
 	opened := r.kind == .Shell && a.opened == r.id
 	running := r.state == .Running || r.state == .Starting
-	if running { app.animating = true }
+	if running { animate(app) }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	ui.a11y({role = .Button, name = fmt.tprintf("%s, %s: %s", sub_state_label(r.state), r.name, r.title)})
 	b := ui.build_box({.Clickable, .Hot_Within}, fmt.tprintf("###row_%s", r.id))
@@ -676,7 +659,7 @@ todo_row :: proc(app: ^App, t: Todo, k: int, em: f32) {
 			case "cancelled": glyph(ICO_CANCEL, hex(HEX_FAINT), math.round(em * ICON_SMALL), em * 1.1)
 			case "in_progress":
 				state_mark("###s", hex(HEX_YELLOW), true, size = em * 0.8)
-				app.animating = true
+				animate(app)
 			case: glyph(ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
 			}
 		}

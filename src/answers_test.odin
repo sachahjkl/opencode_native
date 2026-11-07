@@ -61,6 +61,7 @@ bench_count :: proc(kind: Req_Kind) -> int {
 
 // Everything left unanswered is forgotten.
 bench_clear :: proc(app: ^App) {
+	clear(&app.cx.flights)
 	for r in bench_sent { request_free(r); app.pending -= 1 }
 	clear(&bench_sent)
 }
@@ -174,9 +175,9 @@ a_bad_answer_does_not_leave_the_list_of_commands_stuck :: proc(t: ^testing.T) {
 	app.chat.have_self = true
 	app.chat.self.directory = "D:/w"
 	activity_tick(app)
-	testing.expect(t, app.activity.listing, "asked")
+	testing.expect(t, flying(app, .Shell_List, "D:/w"), "asked")
 	bench_answer(app, bench_take(t, .Shell_List), 200, "<html>")
-	testing.expect(t, !app.activity.listing, "a 200 that cannot be read lowers it too")
+	testing.expect(t, !flying(app, .Shell_List, "D:/w"), "a 200 that cannot be read ends it too")
 }
 
 ////////////////////////////////
@@ -189,7 +190,6 @@ a_server_left_leaves_nothing_behind :: proc(t: ^testing.T) {
 	slash_load(app, []Slash{{strings.clone("old"), strings.clone("")}})
 	show(app, "s")
 	append(&app.activity.jobs, Shell_Job{id = strings.clone("j"), status = .Running})
-	app.activity.listing = true
 	app.activity.open = true
 	app.find.open = true
 	app.find.index = 3
@@ -201,7 +201,7 @@ a_server_left_leaves_nothing_behind :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(app.cx.slash), 0)
 	testing.expect(t, !app.cx.have_slash)
 	testing.expect_value(t, len(app.activity.jobs), 0)
-	testing.expect(t, !app.activity.listing && !app.activity.open)
+	testing.expect(t, !app.activity.open)
 	testing.expect(t, !app.find.open)
 	testing.expect_value(t, len(app.permissions), 0)
 	testing.expect_value(t, len(app.cx.waits_gone), 0)
@@ -399,13 +399,12 @@ what_is_late_for_a_chat_left_is_dropped :: proc(t: ^testing.T) {
 	bench_answer(app, r, 200, `{"data":{"id":"imported"}}`)
 	testing.expect_value(t, len(app.nav_steps), 0)
 
-	append(&app.activity.jobs, Shell_Job{id = strings.clone("j"), status = .Running, reading = true})
+	append(&app.activity.jobs, Shell_Job{id = strings.clone("j"), status = .Running})
 	request(app, .Shell_Output, "GET", "/o", tag = "j")
 	old := bench_take(t, .Shell_Output)
 	old.gen -= 1
 	bench_answer(app, old, 200, `{"data":{"output":"late","cursor":9}}`)
 	testing.expect_value(t, len(app.activity.jobs[0].tail), 0)
-	testing.expect(t, app.activity.jobs[0].reading, "that flag is of the reading on its way")
 }
 
 ////////////////////////////////

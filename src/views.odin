@@ -79,6 +79,7 @@ build_ui :: proc(app: ^App) {
 	files_dialog(app, em)
 	palette_dialog(app, em)
 	context_menu(app, em)
+	when ODIN_DEBUG { assert(len(app.ui_state.modals_built) == 0 || overlay_open(app), "a dialog overlay_open does not know: the program's keys would act behind it") }
 	// (over the top of the conversation, under its header: at the bottom they hid the send button, when one wants to try again)
 	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.ui_state.window_size})
 	ui.toasts_build()
@@ -119,7 +120,6 @@ global_keys :: proc(app: ^App) {
 
 new_session :: proc(app: ^App) {
 	nav_visit(app, app.chat.id, "")
-	app.cx.view_msg = ""
 	nav_restore_clear(app)
 	for s in app.nav { delete(s) }   // (the way back up is the session's: none from here)
 	clear(&app.nav)
@@ -129,9 +129,7 @@ new_session :: proc(app: ^App) {
 	remote_reset(&app.cx.chat_read)
 	app.stick_bottom = true
 	app.chat.new_dir = strings.clone(dir, app.chat.alloc)
-	activity_reset(app)
-	find_chat_changed(app)
-	outgoing_return(app)
+	chat_shown_changed(app)
 	app.cx.focus_composer = true
 }
 
@@ -453,18 +451,18 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			if depth > 0 {
 				// a sub-agent: its state as a lamp, its agent in its colour
 				st, _ := state_of_word(s.outcome)
-				if busy { st = .Running; app.animating = true }
+				if busy { st = .Running; animate(app) }
 				state_mark("###st", sub_state_color(st), busy, size = em * 0.75)
 				ui.spacer(ui.px(em * 0.3))
 				text("ag", s.agent, hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.35))
 			} else if session_waits(app, s.id) {   // (a run that cannot go on without the person)
 				lamp("###waits", hex(HEX_YELLOW), pulse = true, size = em * 0.85)
-				app.animating = true
+				animate(app)
 				ui.spacer(ui.px(em * 0.35))
 			} else if busy {
 				lamp("###busy", accent(), pulse = true, size = em * 0.85)
-				app.animating = true
+				animate(app)
 				ui.spacer(ui.px(em * 0.35))
 			} else if session_unseen(app, s) {   // (over and not seen: how it ended, unlit)
 				st, _ := state_of_word(s.outcome)
@@ -837,7 +835,7 @@ kfmt :: proc(v: f64) -> string {
 }
 
 messages :: proc(app: ^App, em: f32) {
-	app.first_msg = nil
+	app.chat.first_msg = nil
 	c := &app.chat
 	ui.spacer(ui.px(em * 1.2))
 	subagent_banner(app, em)
@@ -874,12 +872,12 @@ messages :: proc(app: ^App, em: f32) {
 			id := m.id != "" ? fmt.tprintf("###msg_%s", m.id) : fmt.tprintf("###msg_end%d", len(c.messages) - i)
 			restoring := app.cx.restore_msg != "" && m.id == app.cx.restore_msg
 			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || (c.keep_id != "" && m.id == c.keep_id) || restoring) {
-				if i == 0 { app.first_msg = ui.parent_box() }
+				if i == 0 { app.chat.first_msg = ui.parent_box() }
 				item := ui.parent_box()
 				if sb := lz.scroll; sb != nil {
 					if !top_seen && m.id != "" && item.rect.max.y > sb.rect.min.y {
 						top_seen = true
-						app.cx.view_msg, app.cx.view_dy = m.id, sb.rect.min.y - item.rect.min.y
+						app.chat.view_msg, app.chat.view_dy = m.id, sb.rect.min.y - item.rect.min.y
 					}
 					if restoring && app.anchor == nil && !c.loading && item.rect.max.y != item.rect.min.y { nav_restore_step(app, sb, item) }
 				}
@@ -1068,7 +1066,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 				draw.rect(dc, r, d.live ? d.col : with_alpha(d.col, 0.75), 1.5 * s)
 			}
 			rb.custom_user = wd
-			if m.streaming { app.animating = true }
+			if m.streaming { animate(app) }
 			ui.spacer(ui.px(em * 0.4))
 			name := m.agent != "" ? m.agent : "assistant"
 			text("ag", strings.to_upper(name[:1], context.temp_allocator), agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
@@ -1194,7 +1192,7 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 	open := part_open(app, p.tool_id != "" ? p.tool_id : pid, app.prefs.expand_tools)
 	head_h := math.round(em * 2.0)
 	running := p.status == .Running || p.status == .Pending
-	if running { app.animating = true }
+	if running { animate(app) }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = fmt.tprintf("###tp_%s", pid)) {
 		ui.next({width = ui.px(math.round(em * 1.5)), height = ui.px(head_h)})   // (the rail draws down to the row's bottom: fill() in a row sized by its children resolves far above)

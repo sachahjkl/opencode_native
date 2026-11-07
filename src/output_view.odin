@@ -330,7 +330,7 @@ output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
 
 // The grid, all the room there is, and the bar. (In the dialog, an edge: its corners are round, the grid's are not.)
 output_view_body :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
-	if !v.over { app.animating = true }
+	if !v.over { animate(app) }
 	inset := in_window ? 0 : math.round(em * 0.55)
 	ui.spacer(ui.px(inset))
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .X})

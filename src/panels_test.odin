@@ -1247,7 +1247,7 @@ an_empty_file_ends_the_wait :: proc(t: ^testing.T) {
 	defer os.remove(path)
 	image_view_start(app, path)
 	image_view_wait(app)
-	testing.expect(t, !app.animating, "no frame after frame")
+	testing.expect_value(t, ui.wake_in_ms(&app.ui_state), 0)   // (no frame after frame)
 	testing.expect_value(t, app.view_start.key, u64(0))
 	testing.expect_value(t, toasts(app), 1)
 }

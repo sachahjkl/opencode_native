@@ -87,6 +87,9 @@ Chat :: struct {
 	loading:   bool,
 	loading_older: bool,           // that page is on its way
 	older_failed:  f64,            // when it could not be read (ui.now_ms): tried again a little later, on the next scroll
+	first_msg: ^ui.Box,            // its first message, when built at the last build (an answer arrives before the next one: begin_build)
+	view_msg:  string,             // the message at the top of the view (of the arena) and how far into it
+	view_dy:   f32,
 	keep_id:   string,             // the message built whatever while the page before it comes in (the view stays on it)
 	new_dir:   string,             // the folder of the session about to be made
 	loaded:    bool,
@@ -171,13 +174,11 @@ open_chat :: proc(app: ^App, session_id: string) {
 	if session_id == app.chat.id { return }
 	id := strings.clone(session_id, context.temp_allocator)   // (it may live in the arena chat_reset drops)
 	nav_visit(app, app.chat.id, id)
-	app.cx.view_msg = ""   // (of the arena that goes)
 	chat_reset(&app.chat)
 	app.chat.id = strings.clone(id, app.chat.alloc)
 	app.chat.loading = true
 	app.opened_ms = ui.now_ms()
 	app.chat_target = 0
-	app.first_msg = nil
 	app.stick_bottom = true
 	app.chat.busy = app.busy[id] or_else false
 	if s := find_session(app, id); s != nil {
@@ -189,9 +190,15 @@ open_chat :: proc(app: ^App, session_id: string) {
 		if !app.chat.busy { session_seen(app, s) }
 	}
 	app.chat.live = make(map[string]Sub_Live, allocator = app.chat.alloc)
+	chat_shown_changed(app)
+}
+
+// What follows the session shown, whichever way it changed: one door. (Read before outgoing_return: the queue's change gives the composer what it
+// held, and what failed goes on top of that.)
+chat_shown_changed :: proc(app: ^App) {
 	activity_reset(app)
 	find_chat_changed(app)
-	chat_read(app)
+	if app.chat.id != "" { chat_read(app) }
 	outgoing_return(app)
 }
 
@@ -377,10 +384,14 @@ active_load :: proc(app: ^App, v: json.Value, asked_at := max(Seq)) {
 	for id in app.busy { if id not_in obj && !busy_newer(cx, id, asked_at) { append(&over, strings.clone(id, context.temp_allocator)) } }
 	for id in over { set_busy(app, id, false) }
 	if len(over) > 0 { sessions_seen_shown(app) }   // (an end the stream missed, in the session on screen: seen all the same)
+	// What a session waits on is the stream's to say, once it is up: what is read is what it could not have said. (A session that ends with
+	// something showing, below, is how a word it missed goes.)
 	for id in obj {
+		unsaid := cx.waits_unread || !(app.busy[id] or_else false)
 		if !busy_newer(cx, id, asked_at) { set_busy(app, id, true) }
-		session_waits_load(app, id)
+		if unsaid { session_waits_load(app, id) }
 	}
+	cx.waits_unread = false
 	// (one that does not run waits for nobody: what shows for it is reconciled too)
 	for id in waits_sessions(app) { if id not_in obj { session_waits_load(app, id) } }
 	// what this list is newer than has nothing more to say
@@ -510,7 +521,7 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(Seq)) {
 		// message on screen: built for a view that glides toward it (a match, Home), it is far above, and the view stopped there
 		// went to the end. The lazy column keeps that view, its target too. (A view on its way to a message of an older page stays
 		// at the top instead: that is what reads the pages up to it.)
-		if b, sb := app.first_msg, app.chat_sb; b != nil && sb != nil && !app.stick_bottom && app.cx.restore_msg == "" && len(c.messages) > 0 && b.rect.max.y > sb.rect.min.y {
+		if b, sb := app.chat.first_msg, app.chat_sb; b != nil && sb != nil && !app.stick_bottom && app.cx.restore_msg == "" && len(c.messages) > 0 && b.rect.max.y > sb.rect.min.y {
 			c.keep_id = c.messages[0].id
 			app.anchor = b
 			app.anchor_y = b.rect.min.y

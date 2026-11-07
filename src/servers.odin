@@ -121,7 +121,7 @@ reopen_keep :: proc(app: ^App) {
 	cx := &app.cx
 	reopen_clear(app)
 	if app.chat.id == "" { return }
-	cx.reopen = {id = strings.clone(app.chat.id), msg = strings.clone(cx.view_msg), dy = cx.view_dy, bottom = app.stick_bottom}
+	cx.reopen = {id = strings.clone(app.chat.id), msg = strings.clone(app.chat.view_msg), dy = app.chat.view_dy, bottom = app.stick_bottom}
 }
 
 reopen_clear :: proc(app: ^App) {
@@ -212,7 +212,6 @@ server_forget :: proc(app: ^App) {
 	app.link = .Connecting
 	delete(app.server_version)
 	app.server_version = ""
-	app.cx.view_msg = ""   // (of the arena that goes)
 	chat_home(app)
 	remote_reset(&app.cx.chat_read)
 	for id in app.nav { delete(id) }

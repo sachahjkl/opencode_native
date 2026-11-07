@@ -270,7 +270,7 @@ Request :: struct {
 	method: string,
 	path:   string,
 	body:   string,
-	tag:    string,    // the session it is about
+	tag:    string,    // what it is about: a session, or what Req_Kind says
 	gen:    u64,       // the chat generation it was made for (answers for a chat since left are dropped)
 	conn:   ^Conn,     // the connection it goes by (answers from a server since left are dropped)
 	app:    ^App,      // (for its thread: the_app is the interface's)
@@ -286,6 +286,26 @@ Request :: struct {
 }
 
 // (`conn`: a server left, for what must be undone there: answer_left.)
+// A request on its way. Its answer ends it, whatever that answer is and whoever reads it: no flag to lower on each way out.
+Flight :: struct { kind: Req_Kind, tag: string, conn: ^Conn }   // (tag owned)
+
+// Whether that is on its way to the server of now.
+flying :: proc(app: ^App, kind: Req_Kind, tag: string) -> bool {
+	for f in app.cx.flights { if f.kind == kind && f.conn == app.conn && f.tag == tag { return true } }
+	return false
+}
+
+@(private = "file")
+flight_ends :: proc(app: ^App, r: ^Request) {
+	for f, i in app.cx.flights {
+		if f.kind == r.kind && f.conn == r.conn && f.tag == r.tag {
+			delete(f.tag)
+			ordered_remove(&app.cx.flights, i)
+			return
+		}
+	}
+}
+
 request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "", delay := 0, remote: ^Remote = nil, out: u64 = 0, conn: ^Conn = nil) {
 	to := conn != nil ? conn : app.conn
 	if to == nil {   // (no server yet: nothing to ask)
@@ -296,6 +316,7 @@ request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag
 	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = to, app = app, delay = delay, remote = remote, out = out, asked_at = app.cx.stream_seq}
 	if remote != nil { r.ticket = remote.ticket }
 	sync.atomic_add(&app.pending, 1)
+	append(&app.cx.flights, Flight{kind, strings.clone(tag), to})
 	when ODIN_TEST {   // (answers_test.odin: kept for the test to answer, in the order it wants)
 		bench_sent_add(r)
 		return
@@ -322,23 +343,109 @@ ERROR_EXCERPT_BYTES :: 80   // of an error's body, in its toast
 // On the interface's thread.
 on_answer :: proc(data: rawptr, word: u64) { answer(the_app, (^Request)(data)) }
 
-// Whether an answer of this kind is read as JSON: one that cannot be read is then a failure.
+// How long a request's answer means anything, past the server it went to (Request.conn).
+Req_Life :: enum u8 {
+	Server,     // whatever is shown: what acts on what comes
+	Chat,       // the conversation and the session it was asked for
+	Chat_Gen,   // the conversation it was asked in (its tag is a folder or a command)
+}
+
+// What is known of a kind of request, in one place. `json`: an answer that cannot be read is a failure; of the others, only that they went
+// through matters, or the answer is not JSON at all. (Every kind is here: a new one does not compile until it says.)
+Req_Facts :: struct { json: bool, life: Req_Life }
+
+@(rodata) REQ_FACTS := [Req_Kind]Req_Facts{
+	.Sessions         = {json = true},
+	.Messages         = {json = true, life = .Chat},
+	.Older            = {json = true, life = .Chat},
+	.Agents           = {json = true},
+	.Models           = {json = true},
+	.Info             = {json = true},
+	.Permissions      = {json = true},
+	.Permission_Reply = {},
+	.Active           = {json = true},
+	.Self             = {json = true, life = .Chat},
+	.Parent           = {json = true, life = .Chat},
+	.Children         = {json = true, life = .Chat},
+	.Cfg              = {json = true},
+	.Shells           = {json = true},
+	.Mcp              = {json = true},
+	.Saved            = {json = true},
+	.Usage            = {json = true},
+	.Providers        = {json = true},
+	.Skills           = {json = true},
+	.Commands         = {json = true},
+	.Shell_Set        = {},
+	.Mcp_Done         = {},
+	.Saved_Done       = {},
+	.Projects         = {json = true},
+	.Stats            = {json = true},
+	.Created          = {json = true},
+	.Action           = {},
+	.Prompt           = {},
+	.Shell_List       = {json = true, life = .Chat_Gen},
+	.Shell_One        = {json = true, life = .Chat_Gen},
+	.Shell_Output     = {json = true, life = .Chat_Gen},
+	.Peek             = {json = true, life = .Chat_Gen},
+	.Slash            = {json = true},
+	.Forked           = {json = true},
+	.Session_Agent    = {},
+	.Session_Model    = {},
+	.Session_Choice   = {},
+	.Session_Moved    = {},
+	.Session_Export   = {json = true},
+	.Session_Import   = {json = true},
+	.Pty_List         = {json = true},
+	.Pty_Made         = {json = true},
+	.Pty_Size         = {},
+	.Schedules        = {json = true},
+	.Schedule_Made    = {json = true},
+	.Schedule_Done    = {},
+	.Artifacts        = {json = true},
+	.Artifact_Read    = {json = true},
+	.Artifact_Done    = {},
+	.Plugins          = {json = true},
+	.Plugins_Check    = {json = true},
+	.Plugin_Update    = {},
+	.Integrations     = {json = true},
+	.Credentials      = {json = true},
+	.Credential_Done  = {},
+	.Connected        = {},
+	.Connect_Begin    = {json = true},
+	.Connect_Status   = {json = true},
+	.Mention_Files    = {json = true},
+	.Files_List       = {json = true},
+	.File_Read        = {},
+	.Changes_Range    = {json = true},
+	.Changes          = {json = true},
+	.Revert_Staged    = {json = true},
+	.Revert_Done      = {},
+	.Revert_Cancelled = {},
+	.Forms            = {json = true},
+	.Form_Reply       = {},
+	.Form_Dismiss     = {},
+	.Inbox            = {json = true},
+	.Inbox_Take       = {},
+	.Queue_List       = {json = true},
+	.Queue_Steer      = {},
+	.Queue_Cancel     = {},
+	.Queue_Replace    = {},
+	.Queue_Check      = {},
+	.Output_Read      = {json = true},
+	.Output_State     = {json = true},
+	.Context          = {json = true, life = .Chat},
+	.Session_Viewed   = {},
+}
+
+// The conversation it was asked for is gone: what it says is about nothing shown, success or failure.
 @(private = "file")
-answer_is_json :: proc(k: Req_Kind) -> bool {
-	switch k {
-	case .Sessions, .Messages, .Older, .Agents, .Models, .Info, .Permissions, .Active, .Self, .Parent, .Children,
-	     .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands, .Projects, .Stats, .Created,
-	     .Shell_List, .Shell_One, .Shell_Output, .Peek, .Slash, .Forked, .Session_Export, .Session_Import,
-	     .Pty_List, .Pty_Made, .Schedules, .Schedule_Made, .Artifacts, .Artifact_Read, .Plugins, .Plugins_Check, .Integrations, .Credentials,
-	     .Connect_Begin, .Connect_Status, .Mention_Files, .Files_List, .Changes_Range, .Changes, .Revert_Staged, .Forms, .Inbox, .Queue_List, .Context, .Output_Read, .Output_State:
-		return true
-	// (only that they went through matters, or the answer is not JSON at all)
-	case .Action, .Pty_Size, .Prompt, .Session_Agent, .Session_Model, .Session_Choice, .Inbox_Take, .Form_Reply, .Form_Dismiss, .Permission_Reply,
-	     .Session_Moved, .Revert_Done, .Revert_Cancelled, .Connected, .Credential_Done, .Schedule_Done, .Artifact_Done, .Plugin_Update, .File_Read,
-	     .Shell_Set, .Mcp_Done, .Saved_Done, .Queue_Steer, .Queue_Cancel, .Queue_Replace, .Queue_Check, .Session_Viewed:
-		return false
+req_outlived :: proc(app: ^App, r: ^Request) -> bool {
+	switch REQ_FACTS[r.kind].life {
+	case .Server:   return false
+	case .Chat:     return r.gen != app.chat.gen || r.tag != app.chat.id
+	case .Chat_Gen: return r.gen != app.chat.gen
 	}
-	return true
+	return false
 }
 
 // What the server said when it refused (its `message`, else the start of the body).
@@ -371,6 +478,7 @@ answer_left :: proc(app: ^App, r: ^Request) {
 answer :: proc(app: ^App, r: ^Request) {
 	defer request_free(r)
 	sync.atomic_sub(&app.pending, 1)
+	flight_ends(app, r)
 	if r.conn != app.conn {
 		// a server left: server_forget cleaned up what depends on it. A reading it forgot does not stay Loading, and a
 		// prompt on its way still has to say whether it got there.
@@ -380,7 +488,7 @@ answer :: proc(app: ^App, r: ^Request) {
 		answer_left(app, r)
 		return
 	}
-	if r.remote != nil && r.remote.ticket != r.ticket {   // a reading given up
+	if (r.remote != nil && r.remote.ticket != r.ticket) || req_outlived(app, r) {   // a reading given up, a conversation left
 		answer_left(app, r)
 		return
 	}
@@ -393,7 +501,7 @@ answer :: proc(app: ^App, r: ^Request) {
 	if r.status == 401 { answer_failed(app, r, .Auth, "Authentication refused by the server"); return }
 	if r.status >= 400 { answer_failed(app, r, .Refused, refusal_text(r)); return }
 	v: json.Value
-	if read_as_json := answer_is_json(r.kind); read_as_json || r.kind == .Prompt {   // (a prompt's answer says more when it can: queue_prompt_answered)
+	if read_as_json := REQ_FACTS[r.kind].json; read_as_json || r.kind == .Prompt {   // (a prompt's answer says more when it can: queue_prompt_answered)
 		err: json.Error
 		v, err = json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
 		if err != nil && read_as_json { answer_failed(app, r, .Unreadable, "Unreadable answer"); return }
@@ -402,18 +510,14 @@ answer :: proc(app: ^App, r: ^Request) {
 	switch r.kind {
 	case .Sessions:    sessions_load(app, v)
 	case .Messages:
-		if r.gen == app.chat.gen && r.tag == app.chat.id {
-			first := !app.chat.loaded
-			chat_load(app, v, false, r.asked_at)
-			if first && app.stick_bottom { app.snap_bottom = true }   // (shown at its bottom in the very frame it arrives: frame)
-			nav_restore_check(app)
-		}
+		first := !app.chat.loaded
+		chat_load(app, v, false, r.asked_at)
+		if first && app.stick_bottom { app.snap_bottom = true }   // (shown at its bottom in the very frame it arrives: frame)
+		nav_restore_check(app)
 	case .Older:
-		if r.gen == app.chat.gen && r.tag == app.chat.id {
-			chat_load(app, v, true)
-			nav_restore_page(app)
-			nav_restore_check(app)
-		}
+		chat_load(app, v, true)
+		nav_restore_page(app)
+		nav_restore_check(app)
 	case .Agents:      agents_load(app, v)
 	case .Models:      models_load(app, v)
 	case .Info:        delete(app.server_version); app.server_version = strings.clone(jstr(v, "version"))
@@ -422,9 +526,9 @@ answer :: proc(app: ^App, r: ^Request) {
 		waits_gone(app, r.tag)
 		permission_remove(app, r.tag)
 	case .Active:      active_load(app, v, r.asked_at)
-	case .Self:        if r.tag == app.chat.id && r.gen == app.chat.gen { self_load(app, v, r.asked_at) }
-	case .Parent:      if r.tag == app.chat.id && r.gen == app.chat.gen { parent_load(app, v) }
-	case .Children:    if r.tag == app.chat.id && r.gen == app.chat.gen { children_load(app, v) }
+	case .Self:        self_load(app, v, r.asked_at)
+	case .Parent:      parent_load(app, v)
+	case .Children:    children_load(app, v)
 	case .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands: server_facts_answer(app, r.kind, v)
 	case .Shell_Set:
 		ui.toast(.Good, "Shell set")
@@ -493,11 +597,11 @@ answer :: proc(app: ^App, r: ^Request) {
 	case .Queue_Check:   outgoing_replaced(app, r.out, false)   // (stored: it was delivered)
 	case .Output_Read:   output_view_output_load(app, v, r.tag)
 	case .Output_State:  output_view_state_load(app, v, r.tag)
-	case .Context:       if r.tag == app.chat.id && r.gen == app.chat.gen { context_load(app, r.tag, v) }
-	case .Shell_List:   if r.gen == app.chat.gen { activity_shells_load(app, v, r.tag) }
-	case .Shell_One:    if r.gen == app.chat.gen { activity_shell_load(app, v, r.tag) }
-	case .Shell_Output: if r.gen == app.chat.gen { activity_output_load(app, v, r.tag) }
-	case .Peek:         if r.gen == app.chat.gen { activity_peek_load(app, v, r.tag) }
+	case .Context:       context_load(app, r.tag, v)
+	case .Shell_List:   activity_shells_load(app, v, r.tag)
+	case .Shell_One:    activity_shell_load(app, v, r.tag)
+	case .Shell_Output: activity_output_load(app, v, r.tag)
+	case .Peek:         activity_peek_load(app, v, r.tag)
 	case .Slash:
 		list := make([dynamic]Slash, context.temp_allocator)
 		for it in jarr(v, "data") { append(&list, Slash{strings.clone(jstr(it, "name")), strings.clone(jstr(it, "description"))}) }
@@ -553,10 +657,8 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 	case .Created, .Prompt:
 		outgoing_answered(app, r, false)
 	case .Messages:
-		if r.gen == app.chat.gen {
-			app.chat.loading = false
-			nav_restore_clear(app)   // (what it would go back to will not come)
-		}
+		app.chat.loading = false
+		nav_restore_clear(app)   // (what it would go back to will not come)
 	case .Older:
 		older_failed(app, r)
 	case .Form_Reply, .Form_Dismiss:
@@ -784,6 +886,7 @@ stream_up :: proc(app: ^App) {
 	was := app.link
 	app.link = .Online
 	if was == .Online { return }
+	app.cx.waits_unread = true
 	if was == .Retrying {
 		terminals_renew(app)
 		browser_renew(app)

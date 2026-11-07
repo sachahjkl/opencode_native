@@ -218,7 +218,7 @@ nav_mark :: proc(app: ^App) {
 	p := &cx.nav_hist[cx.nav_at]
 	if p.id != app.chat.id || p.id == "" { return }
 	delete(p.msg)
-	p.msg, p.dy, p.bottom = strings.clone(cx.view_msg), cx.view_dy, app.stick_bottom
+	p.msg, p.dy, p.bottom = strings.clone(app.chat.view_msg), app.chat.view_dy, app.stick_bottom
 }
 
 // Where one has been, as in a browser: every session opened and the home page ("") go here, whichever way they were reached (the
@@ -303,8 +303,8 @@ nav_hold_view :: proc(app: ^App) {
 		app.chat_target = 0   // (the new box starts at the top: seen against the old target, it would read as the reader going up)
 		return
 	}
-	if cx.view_msg == "" { return }
-	nav_restore_begin(app, cx.view_msg, cx.view_dy)
+	if app.chat.view_msg == "" { return }
+	nav_restore_begin(app, app.chat.view_msg, app.chat.view_dy)
 }
 
 // The view on the message, the frame placing it as for a part that was toggled. Again until it stays: what the first layouts say of
@@ -360,7 +360,7 @@ nav_clear :: proc(app: ^App) {
 	for p in app.cx.nav_hist { nav_place_free(p) }
 	clear(&app.cx.nav_hist)
 	app.cx.nav_at = 0
-	app.cx.view_msg = ""
+	app.chat.view_msg = ""
 	nav_restore_clear(app)
 }
 
@@ -397,7 +397,7 @@ subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 	part_id := p.tool_id != "" ? p.tool_id : pid
 	open := part_open(app, part_id)
 	running := v.state == .Running || v.state == .Starting
-	if running { app.animating = true }
+	if running { animate(app) }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	pt, pb: u32 = HEX_PLATE_TOP, HEX_PLATE_BOTTOM
 	shadow, rim: f32 = 3, 0.07
@@ -669,7 +669,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 					if known {
 						ui.spacer(ui.px(em * 0.5))
 						state_mark("###l", sub_state_color(st), st == .Running, size = em * 0.75)
-						if st == .Running { app.animating = true }
+						if st == .Running { animate(app) }
 						ui.spacer(ui.px(em * 0.25))
 						text("s", sub_state_label(st), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 					}
@@ -709,7 +709,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 	key := ui.key_from_string(0, "subagents_menu")
 	sig: ui.Signal
 	if len(active) > 0 {
-		app.animating = true
+		animate(app)
 		lamp("###sub_lamp", hex(HEX_YELLOW), 1, pulse = true, size = em * 1.0)
 		ui.spacer(ui.px(em * 0.3))
 		sig = bevel_button("###subs", fmt.tprintf("%d active", len(active)), ICO_ROBOT, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM))
@@ -771,7 +771,7 @@ glyph_label_button :: proc(app: ^App, id, label: string, em: f32) -> ui.Signal {
 active_strip :: proc(app: ^App, em: f32) {
 	active := active_children(app)
 	if len(active) == 0 { return }
-	app.animating = true
+	animate(app)
 	now := now_epoch_ms()
 	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.5, em * 0.5}})
 	if ui.flow({em * 0.5, em * 0.5}, "###active_strip") {
@@ -827,7 +827,7 @@ sub_toggle :: proc(app: ^App, id: string, n: int, running: int, em: f32) -> bool
 		if running > 0 {
 			// the running ones, loud: a pulsing lamp and their count; the total quietly after
 			lamp("###l", hex(HEX_YELLOW), 1, pulse = true, size = em * 0.7)
-			the_app.animating = true
+			animate(the_app)
 			ui.spacer(ui.px(em * 0.2))
 			text("r", fmt.tprintf("%d", running), hex(HEX_YELLOW), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 			text("n", fmt.tprintf("/%d", n), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)})

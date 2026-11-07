@@ -90,7 +90,7 @@ orbit_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 
 // `width`, `height`: frame pixels. `id` tells two of them apart.
 throbber :: proc(app: ^App, id: string, color: Color, width, height: f32, em: f32) {
-	app.animating = true
+	animate(app)
 	switch app.prefs.throbber {
 	case "scanner":
 		scanner(id, color, width, height)

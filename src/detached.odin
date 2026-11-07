@@ -171,6 +171,7 @@ detached_frame :: proc(app: ^App, d: ^Detached) {
 	had_input := len(events) > 0
 	s := &app.cx.terms
 	ui.use(&d.state)
+	app.cx.built = &d.state
 	render.surface_use(&app.r, &d.surface)
 	render.resize(&app.r, d.win.size)
 	keyboard := s.focused
@@ -196,6 +197,7 @@ detached_frame :: proc(app: ^App, d: ^Detached) {
 	s.only, s.focused = nil, keyboard
 	render.surface_use(&app.r, &d.surface)   // (the exchange undone: the main window's again)
 	ui.use(&app.ui_state)
+	app.cx.built = nil
 }
 
 // After the main window's frame. A window closed gives its panel its tab back; a panel closed takes its window.

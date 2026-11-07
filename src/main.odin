@@ -95,12 +95,10 @@ App :: struct {
 	folded:           map[u64]bool,   // sidebar groups folded (hash of the directory)
 	delete_id:        string,
 	delete_open:      bool,
-	animating:        bool,           // something pulses this frame: keep drawing
 	menu_session:     string,         // the session the context menu is about (owned)
 	logo:             Logo,
 	column_w:         f32,    // the conversation column, frame pixels (this frame)
 	chat_sb:          ^ui.Box, // the conversation scroll box, when built this frame
-	first_msg:        ^ui.Box, // the conversation's first message, when built at the last build (an answer arrives before the next one: begin_build)
 	stick_jump:       bool,    // the second build of a frame: the bottom is reached at once, no glide
 	snap_bottom:      bool,           // the conversation's first page arrived: shown at its bottom in that frame (frame)
 	chat_target:      f32,     // the conversation's scroll target at the end of the last build (a drag before this one moved it)
@@ -143,6 +141,9 @@ App_Context :: struct {
 	conns:          [dynamic]^Conn,    // every connection made: their threads stop at close (servers.odin threads_stop)
 	outgoing:       [dynamic]^Outgoing,   // prompts between the composer and the server (outgoing.odin)
 	outgoing_last:  u64,               // ... the last one's id
+	waits_unread:   bool,              // the stream just came up: what sessions wait on, asked before it, is read from the next list
+	built:          ^ui.State,         // the state of a window of its own, while it is built (nil: the main one)
+	flights:        [dynamic]Flight,   // what is on its way (net.odin)
 	stream_seq:     Seq,               // events applied so far: the clock of what is newer than an answer (Request.asked_at)
 	busy_seq:       map[string]Seq,    // when the stream last said a session started or ended (keys owned)
 	waits_gone:     [dynamic]string,   // permissions and forms answered, the last WAITS_GONE_MAX (owned)
@@ -189,8 +190,6 @@ App_Context :: struct {
 	nav_hist:       [dynamic]Nav_Place,   // where one has been (subagents.odin nav_visit)
 	nav_at:         int,                  // where one is in it
 	nav_moving:     bool,                 // a step of the history: nothing to add to it
-	view_msg:       string,               // the message at the top of the view (of the chat's arena) and how far into it
-	view_dy:        f32,
 	restore_msg:    string,               // the message the view goes back to (owned, "": none) and how far into it
 	restore_dy:     f32,
 	restore_still, restore_frames: int,   // frames it stayed there, frames since the view began going there
@@ -314,7 +313,6 @@ frame :: proc(app: ^App, inner := false) {
 	// `again`: another build of this frame. It runs no answer: a page read there would come after what the first build placed,
 	// and its anchor would be dropped with the frame's. It waits for the next frame, which needs_frame asks for.
 	build :: proc(app: ^App, size: draw.Vec2, events: []platform.Event, dt: f32, again := false) {
-		app.animating = false
 		app.cx.was_gliding = app.cx.gliding
 		app.cx.gliding = false
 		ui.set_scrollbar_autohide(&app.ui_state, app.prefs.autohide_scrollbars)
@@ -700,9 +698,7 @@ main :: proc() {
 	for !platform.is_closed(app.win) && !app.quit {
 		if app.frames == 0 && !ui.needs_frame(&app.ui_state) {
 			film_slow_tick(app)
-			wait := ui.wake_in_ms(&app.ui_state)
-			if app.animating { wait = wait > 0 ? min(wait, ANIMATION_WAIT_MS) : ANIMATION_WAIT_MS }
-			platform.wait_event(app.win, wait)
+			platform.wait_event(app.win, ui.wake_in_ms(&app.ui_state))
 			app.idled = true
 		}
 		frame(app)

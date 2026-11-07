@@ -32,7 +32,7 @@ home_session :: proc(app: ^App, s: ^Session_Info, em, now: f64, busy: bool) {
 		ui.spacer(ui.px(e * 0.6))
 		if busy {
 			lamp("###l", accent(), pulse = true, size = e * 0.85)
-			app.animating = true
+			animate(app)
 		} else if !logo_of(app, "###lg", project_logo(app, s.project), math.round(e * 1.25)) {
 			glyph(ICO_CHAT, hex(HEX_FAINT), math.round(e * ICON_SMALL), e * 1.25)
 		}

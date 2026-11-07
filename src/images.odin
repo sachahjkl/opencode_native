@@ -176,7 +176,7 @@ image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) ->
 			w, h = math.round(f32(e.w) * k), math.round(f32(e.h) * k)
 		}
 	}
-	if state == .Pending { app.animating = true }
+	if state == .Pending { animate(app) }
 	ui.next({width = ui.px(w), height = ui.px(h), cursor = .Hand})
 	ui.a11y({role = .Button, name = ref.name != "" ? ref.name : "Image"})
 	b := ui.build_box({.Clickable, .Focusable}, id)
@@ -236,7 +236,7 @@ image_view_wait :: proc(app: ^App) {
 	if app.view_start.key == 0 { return }
 	s := image_get(app, app.view_start)
 	if s != nil && s.state == .Pending {
-		app.animating = true
+		animate(app)
 		return
 	}
 	if s != nil && s.state == .Ready {
