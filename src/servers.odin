@@ -5,6 +5,7 @@ package occ
 
 import "core:fmt"
 import "core:math"
+import "core:mem/virtual"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -205,13 +206,50 @@ server_connect :: proc(app: ^App, i: int) {
 	thread.create_and_start_with_data(c, events_thread, self_cleanup = true)
 }
 
-// What was read from the server left. Each feature has its *_forget (or reset), called from here: what it holds, and every flag
+// What holds something of a server. Every one is here: a new one does not compile until it says what it forgets, what it holds and every flag
 // that says something is on its way, since the answer will be dropped (answer) and could not lower it. A Remote is reset there too.
-// `app.conn` is still that server: what must be undone there can be asked of it (changes_forget, integrations_forget).
+Feature :: enum u8 {
+	View, Activity, Find, Waits, Permissions, Forms, Busy, Slash, Queue, Outgoing, Dialogs, Known, Facts, Stats, Changes, Integrations, Plugins,
+	Schedules, Artifacts, Files, Mentions, Terminals, Outputs, Browser, Preview,
+}
+
+@(rodata) FEATURE_FORGET := [Feature]proc(app: ^App){
+	.View         = server_view_forget,
+	.Activity     = activity_forget,
+	.Find         = find_forget,
+	.Waits        = waits_forget,
+	.Permissions  = permissions_clear,
+	.Forms        = forms_clear,
+	.Busy         = busy_forget,
+	.Slash        = slash_forget,
+	.Queue        = queue_forget,
+	.Outgoing     = outgoing_forget,
+	.Dialogs      = server_dialogs_forget,
+	.Known        = server_known_end,
+	.Facts        = server_facts_forget,
+	.Stats        = stats_forget,
+	.Changes      = changes_forget,
+	.Integrations = integrations_forget,
+	.Plugins      = plugins_forget,
+	.Schedules    = schedules_forget,
+	.Artifacts    = artifacts_forget,
+	.Files        = files_forget,
+	.Mentions     = mentions_forget,
+	.Terminals    = terminals_forget,
+	.Outputs      = output_views_forget,
+	.Browser      = browser_forget,
+	.Preview      = preview_forget,
+}
+
+// What was read from the server left, in the order of Feature. `app.conn` is still that server: what must be undone there can be asked of it
+// (changes_forget, integrations_forget).
 server_forget :: proc(app: ^App) {
 	app.link = .Connecting
-	delete(app.server_version)
-	app.server_version = ""
+	for forget in FEATURE_FORGET { forget(app) }
+}
+
+@(private = "file")
+server_view_forget :: proc(app: ^App) {
 	chat_home(app)
 	remote_reset(&app.cx.chat_read)
 	for id in app.nav { delete(id) }
@@ -219,41 +257,33 @@ server_forget :: proc(app: ^App) {
 	for st in app.nav_steps { delete(st.id) }
 	clear(&app.nav_steps)
 	nav_clear(app)
-	activity_forget(app)
-	find_forget(app)
-	waits_forget(app)
-	permissions_clear(app)
-	forms_clear(app)
-	busy_forget(app)
-	slash_forget(app)
-	queue_forget(app)
-	outgoing_forget(app)
+}
+
+@(private = "file")
+server_dialogs_forget :: proc(app: ^App) {
 	app.cx.due[.Refresh], app.cx.due[.Facts], app.cx.due[.Children], app.cx.due[.Context] = {}, {}, {}, {}
 	app.picker.open = false
 	app.delete_open, app.rename.open = false, false   // (their ids were that server's: nothing acts on one with what came from the other)
 	sidebar_hold_end(app)
 	delete(app.cx.fork_prompt)
 	app.cx.fork_prompt = ""
-	app.sessions = nil
-	app.sessions_loaded = false
 	app.opened_first = false
 	app.start_session = ""
+}
+
+// (What it owns, and then all of it.)
+@(private = "file")
+server_known_end :: proc(app: ^App) {
 	agents_clear(app)
 	models_clear(app)
-	app.projects = nil
-	server_facts_forget(app)
-	stats_forget(app)
-	changes_forget(app)
-	integrations_forget(app)
-	plugins_forget(app)
-	schedules_forget(app)
-	artifacts_forget(app)
-	files_forget(app)
-	mentions_forget(app)
-	terminals_forget(app)
-	output_views_forget(app)
-	browser_forget(app)
-	preview_forget(app)
+	delete(app.server_version)
+	delete(app.busy)
+	delete(app.agents)
+	delete(app.models)
+	delete(app.permissions)
+	virtual.arena_destroy(&app.sess_arena)
+	virtual.arena_destroy(&app.proj_arena)
+	app.known = {}
 }
 
 // The window closes. Every connection's threads are told; none is waited for (one may be blocked in a read: the process ends with it).

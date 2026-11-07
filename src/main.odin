@@ -59,19 +59,9 @@ App :: struct {
 	servers_in_clear: bool,            // read passwords in clear from an older version's file: saved protected at start
 	rediscover_ms:  f64,               // when this computer's server was last looked for (servers_rediscover)
 	pending:        i32,       // (atomic) requests in flight
-	link:           Conn_State,
-	server_version: string,
 
-	// what we know
-	sessions:        [dynamic]Session_Info,
-	sess_arena:      virtual.Arena,
-	sessions_loaded: bool,
-	opened_first:    bool,
-	busy:            map[string]bool,   // sessions running (keys owned)
+	using known:     Server_Known,      // what we know, as long as that server is the one
 	chat:            Chat,
-	agents:          [dynamic]Agent_Info,
-	models:          [dynamic]Model_Info,
-	permissions:     [dynamic]Permission,
 
 	// the interface's own state
 	composer:         ui.Text_Area,
@@ -113,8 +103,6 @@ App :: struct {
 	view_pan:         [2]f32,                // of the picture's centre from the view's, frame pixels
 	view_grab:        [2]f32,                // view_pan when the drag began
 	view_start:       Image_Ref,             // --image=<file>: opened in the viewer once it is decoded (its data owned)
-	projects:         map[string]Project_Logo,   // by project id (in proj_arena)
-	proj_arena:       virtual.Arena,
 	anchor:           ^ui.Box, // a part header just clicked: kept where it is on screen (part_toggle, frame)
 	anchor_y:         f32,
 	// pacing (frame / pace)
@@ -126,6 +114,23 @@ App :: struct {
 	last_tick:        time.Tick,
 	frames:           int,
 	times:            Frame_Times,   // the last frame's steps
+}
+
+// What a server told, and nothing else: it starts from zero with the next one (server_known_end). A field added here does too. (What has a
+// Remote stays out: a late answer of the last server compares its ticket with it, and a count that started over could match.)
+Server_Known :: struct {
+	link:            Conn_State,
+	server_version:  string,
+	sessions:        [dynamic]Session_Info,
+	sess_arena:      virtual.Arena,
+	sessions_loaded: bool,
+	opened_first:    bool,
+	busy:            map[string]bool,   // sessions running (keys owned)
+	agents:          [dynamic]Agent_Info,
+	models:          [dynamic]Model_Info,
+	permissions:     [dynamic]Permission,
+	projects:        map[string]Project_Logo,   // by project id (in proj_arena)
+	proj_arena:      virtual.Arena,
 }
 
 // What the window keeps from one frame to the next that belongs to no panel: what is due, what is open, where things are.
