@@ -233,8 +233,9 @@ Frame_Times :: struct {
 
 @(thread_local) the_app: ^App   // (the interface's thread: a thread of work is given its App)
 
-clip_get :: proc() -> string { return platform.get_clipboard(the_app.win, context.temp_allocator) }
-clip_set :: proc(text: string) { platform.set_clipboard(the_app.win, text) }
+// (the window being built's, or the main one's)
+clip_get :: proc() -> string { return ui.window_clipboard_get() }
+clip_set :: proc(text: string) { ui.window_clipboard_set(text) }
 
 // When the frame starts and how it is shown: the toolkit's pacer (render/pacer.odin, on the cadence model). What matters
 // most here is the resize step: a frame at a new size is presented at once (no wait for the swap chain, none for the
@@ -357,10 +358,7 @@ frame :: proc(app: ^App, inner := false) {
 			if b == nil { break }
 			delta := a.rect.min.y - app.anchor_y
 			if abs(delta) <= 0.5 { break }
-			limit := max(0, b.view_bounds.y - b.size.y)
-			y := clamp(b.view_off.y + delta, 0, limit)
-			b.view_off.y, b.view_target.y = y, y
-			b.view_anim[1] = {}   // (no glide toward an older target)
+			ui.view_jump(b, clamp(b.view_off.y + delta, 0, ui.view_limit(b)))   // (no glide toward an older target)
 			build(app, size, nil, 0, again = true)
 		}
 	}
@@ -371,10 +369,10 @@ frame :: proc(app: ^App, inner := false) {
 	// A conversation's first page just arrived (a session opened): this build placed it from the empty one's bounds, at
 	// its top. Build it again at its bottom, at once: no frame at the top, no glide down.
 	if b := app.chat_sb; b != nil && app.stick_bottom {
-		limit := max(0, b.view_bounds.y - b.size.y)
+		limit := ui.view_limit(b)
 		grew := b.view_bounds.y > app.cx.chat_height + 0.5 && b.view_off.y < limit - 0.5
 		if b.view_off.y > limit + 1 || app.snap_bottom || grew {
-			b.view_anim[1] = {}
+			b.view_anim[1].active = false   // (the glide stops where it is: the second build reaches the bottom at once)
 			app.stick_jump = true
 			build(app, size, nil, 0, again = true)
 			app.stick_jump = false

@@ -182,7 +182,7 @@ detached_frame :: proc(app: ^App, d: ^Detached) {
 	s := &app.cx.terms
 	ui.use(&d.state)
 	app.cx.built = &d.state
-	render.surface_use(&app.r, &d.surface)
+	render.surface_scope(&app.r, &d.surface)   // (the main window's again at the end, whichever way out)
 	render.resize(&app.r, d.win.size)
 	keyboard := s.focused
 	if t := term_of_panel(app, d.panel); t != nil {
@@ -205,7 +205,6 @@ detached_frame :: proc(app: ^App, d: ^Detached) {
 	if d.panel == u32(Panel.Preview) { preview_place(app, false) }
 	detached_asks(app, &d.state, had_input)
 	s.only, s.focused = nil, keyboard
-	render.surface_use(&app.r, &d.surface)   // (the exchange undone: the main window's again)
 	ui.use(&app.ui_state)
 	app.cx.built = nil
 }

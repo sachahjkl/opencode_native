@@ -241,8 +241,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 			lb := ui.parent_box()
 			if p.reveal {
 				top := f32(p.sel) * row_h
-				if top < lb.view_target.y { lb.view_target.y = top }
-				if top + row_h > lb.view_target.y + view_h { lb.view_target.y = top + row_h - view_h }
+				lb.view_target.y = ui.view_reveal_offset(lb.view_target.y, top, top + row_h, view_h)
 				p.reveal = false
 			}
 			if n == 0 {

@@ -660,7 +660,7 @@ conversation :: proc(app: ^App, em: f32) {
 		if sb != nil {
 			by_hand := chat_keys(app, sb, em) || app.cx.wheeled || ui.active_key() != 0
 			if scrollbar_held(app, sb) { nav_restore_clear(app) }   // (as the wheel and the keys do: frame)
-			limit := max(0, sb.view_bounds.y - sb.size.y)
+			limit := ui.view_limit(sb)
 			// the scrollbar's drag, the wheel, the keyboard moved it before this build (begin_build): up means let go of the bottom, or following
 			// it would put it back at once and the thumb would stay stuck there. Only a hand: a box built anew starts at its top, and that is no
 			// reader going up.
@@ -686,7 +686,7 @@ conversation :: proc(app: ^App, em: f32) {
 		app.chat_sb = ui.prev_box("###chat")
 		if sb != nil {
 			// follow the bottom while the reader is there; scrolling up lets go of it
-			limit := max(0, sb.view_bounds.y - sb.size.y)
+			limit := ui.view_limit(sb)
 			at_bottom := sb.view_target.y >= limit - BOTTOM_SLACK_PX * ui.scale()
 			// (with following off, only the first moments of a conversation just opened follow its bottom)
 			follow := (app.prefs.follow || ui.now_ms() - app.opened_ms < OPENED_FOLLOW_MS) && app.chat.id != ""
@@ -705,7 +705,7 @@ conversation :: proc(app: ^App, em: f32) {
 // up to read something again needs no button.
 go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
 	if sb == nil || app.chat.id == "" { return }
-	far := max(0, sb.view_bounds.y - sb.size.y) - sb.view_off.y > sb.size.y * GO_BOTTOM_SCREENS
+	far := ui.view_limit(sb) - sb.view_off.y > sb.size.y * GO_BOTTOM_SCREENS
 	t := ui.anim(ui.key_from_string(0, "go_bottom"), far ? 1 : 0, GO_BOTTOM_RATE)
 	if t < 0.02 { return }
 	h := math.round(em * BUTTON_COMPACT_H_EM)
@@ -727,7 +727,7 @@ go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
 	sig := ui.signal(b)
 	if sig.clicked {
 		view_to_bottom(app)
-		sb.view_target.y = max(0, sb.view_bounds.y - sb.size.y)
+		sb.view_target.y = ui.view_limit(sb)
 	}
 	if ui.parent(b) {
 		ui.spacer(ui.fill())
@@ -743,7 +743,7 @@ go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
 // not in a text field, not while the focus is moved with the keyboard (a click gives a button the focus, and no ring).
 chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) -> (moved: bool) {
 	if overlay_open(app) { return }
-	limit := max(0, sb.view_bounds.y - sb.size.y)
+	limit := ui.view_limit(sb)
 	y := sb.view_target.y
 	if ui.key_press(.Page_Up) { y -= sb.size.y * PAGE_SCROLL }
 	if ui.key_press(.Page_Down) { y += sb.size.y * PAGE_SCROLL }

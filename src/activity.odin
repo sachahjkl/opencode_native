@@ -717,10 +717,8 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	if a.reveal && len(rows) > 0 {
 		a.reveal = false
 		if rb := ui.prev_box(fmt.tprintf("###row_%s", rows[clamp(a.sel, 0, len(rows) - 1)].id)); rb != nil {
-			top := rb.rect.min.y - sb.rect.min.y
-			bottom := rb.rect.max.y - sb.rect.min.y
-			if top < 0 { sb.view_target.y += top }
-			if bottom > sb.size.y { sb.view_target.y += bottom - sb.size.y }
+			top := rb.rect.min.y - sb.rect.min.y + sb.view_off.y   // (in the content, as the last layout placed it)
+			_ = ui.view_reveal(sb, top, top + (rb.rect.max.y - rb.rect.min.y))
 		}
 	}
 }

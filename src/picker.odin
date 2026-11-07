@@ -237,9 +237,8 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 			lb := ui.parent_box()
 			if p.reveal {
 				top := f32(p.sel) * row_h
-				if top < lb.view_target.y { lb.view_target.y = top }
-				if top + row_h > lb.view_target.y + view_h { lb.view_target.y = top + row_h - view_h }
-				if p.fresh { lb.view_off.y = lb.view_target.y }   // (opened: at once)
+				y := ui.view_reveal_offset(lb.view_target.y, top, top + row_h, view_h)
+				if p.fresh { ui.view_jump(lb, y) } else { lb.view_target.y = y }   // (opened: at once)
 				p.reveal = false
 			}
 			if n == 0 {
