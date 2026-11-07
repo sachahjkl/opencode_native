@@ -9,8 +9,17 @@ project follows [semantic versioning](https://semver.org).
 
 - **A command's output as a terminal shows it.** "Inspect" in the activity tray, under a shell call and in its menu opens it read-only: colours, scrollback, selection, live while it runs. It can go to a window of its own, and when the command ends the view says so and offers to close.
 
+### Changed
+
+- Coming back to a session puts the view where it was at once, to the pixel, however the heights of the messages around it settle.
+- What the server answers is read on the request's own thread: a large page no longer stands before a click.
+- A window of its own draws only when something it shows changes: a pointer passing over the main window costs it nothing.
+- What a session waits on is read when the event stream could not have said it, not at each reading of the list: fewer requests.
+
 ### Fixed
 
+- An agent at work in one folder lost its browser tools when a session of another folder was shown.
+- The rounding of corners applies to everything the program draws: set to 0, buttons, fields and panels are square.
 - A queued message edited just as it was delivered could reach the model twice: the server answers the same either way, so what was stored is now read back.
 - The last answer of a browser tool was lost when a session of another folder opened at that moment.
 - A shell could keep its old size after a resize, until the next thing it printed.
