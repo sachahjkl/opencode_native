@@ -368,6 +368,10 @@ scenario_prompt :: proc(l: ^Live) {
 	close_app(l, &app)
 }
 
+// What the agent is asked, by the tools' full names: other servers of the user's may offer browsers of their own (a "browse"), and a model
+// that looks there finds none of ours. (The client offers its tools under BROWSER_NAME, "preview".)
+BROWSER_ASK :: "Use the tools of the MCP server named preview, not any other browser. Call preview_tabs_open with the url https://example.com. "
+
 // A real agent, its session left while it works: the page it opens is its session's, and not the one shown. (Asked for by name: it costs a
 // real turn of a model, and a turn with tools takes its time.)
 @(private = "file")
@@ -384,7 +388,7 @@ scenario_browser :: proc(l: ^Live) {
 	expect(l, dt_wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
 	public_model(dt)
 	dt_click_name(dt, "composer")
-	dt_type(dt, "Call the browser tool tabs_open with the url https://example.com. Then call tabs_list. Then reply with the single word: done")
+	dt_type(dt, BROWSER_ASK + "Then call preview_tabs_list. Then reply with the single word: done")
 	dt_key(dt, "Enter")
 
 	fresh: []string
@@ -404,10 +408,11 @@ scenario_browser :: proc(l: ^Live) {
 	done := false
 	for time.since(begun) < BROWSER_TURN_LIMIT && !done {
 		status, text, got := http_at(l.server, "GET", fmt.tprintf("/api/session/%s/message?%s", fresh[0], location(l)), l.auth)
-		if got && status == 200 { body = text; done = strings.contains(body, "done") && strings.contains(body, "tabs_list") }
+		if got && status == 200 { body = text; done = strings.contains(body, "done") && strings.contains(body, "focusedTabID") }
 		time.sleep(POLL * 4)
 	}
-	expect(l, strings.contains(body, "tabs_open"), "the agent had the tool")
+	expect(l, strings.contains(body, "focusedTabID"), "the agent had the tools: what tabs_list says is ours")
+	if !strings.contains(body, "focusedTabID") { fmt.printfln("        what it said: %s", tool_words(body)) }
 	expect(l, strings.contains(body, "example.com"), "it opened the page")
 	expect(l, done, "it finished its turn")
 	expect(l, !dt_has(dt, "Example Domain"), "the session shown has not its page")
@@ -447,7 +452,7 @@ scenario_folders :: proc(l: ^Live) {
 	expect(l, dt_wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
 	public_model(dt)
 	dt_click_name(dt, "composer")
-	dt_type(dt, "Call the browser tool tabs_open with the url https://example.com. Then run this shell command: Start-Sleep -Seconds 25. Then call the browser tool tabs_list. Then reply with the single word: done")
+	dt_type(dt, BROWSER_ASK + "Then run this shell command: Start-Sleep -Seconds 25. Then call preview_tabs_list. Then reply with the single word: done")
 	dt_key(dt, "Enter")
 	fresh: []string
 	begun := time.now()
@@ -477,6 +482,34 @@ scenario_folders :: proc(l: ^Live) {
 	expect(l, done, "its next call was answered, the other folder shown")
 	if !done { fmt.printfln("        the end of what it said: %s", body[max(0, len(body) - 600):]) }
 	close_app(l, &app)
+}
+
+// What an agent called and said, short: what a failure is about.
+tool_words :: proc(body: string) -> string {
+	v, err := json.parse(transmute([]byte)body, allocator = context.temp_allocator)
+	if err != nil { return body[:min(len(body), 400)] }
+	top, _ := v.(json.Object)
+	data, _ := top["data"].(json.Array)
+	b := strings.builder_make(context.temp_allocator)
+	for m in data {
+		mo, _ := m.(json.Object)
+		content, _ := mo["content"].(json.Array)
+		for c in content {
+			co, _ := c.(json.Object)
+			kind, _ := co["type"].(json.String)
+			switch kind {
+			case "tool":
+				name, _ := co["name"].(json.String)
+				st, _ := co["state"].(json.Object)
+				out, _ := st["content"].(json.String)
+				fmt.sbprintf(&b, "[tool %s: %s] ", name, out[:min(len(out), 160)])
+			case "text":
+				text, _ := co["text"].(json.String)
+				fmt.sbprintf(&b, "[text %s] ", text[:min(len(text), 300)])
+			}
+		}
+	}
+	return strings.to_string(b)
 }
 
 clean_now :: proc(l: ^Live) -> int {
