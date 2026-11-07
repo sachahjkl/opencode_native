@@ -24,6 +24,7 @@ Server :: struct {
 // One connection: its HTTP client and its event thread. Never freed while the program runs: a request's worker or the
 // thread of a server left may still be using it (they end on their own; what they bring back is dropped).
 Conn :: struct {
+	app:    ^App,      // (for its threads: the_app is the interface's)
 	http:   Http,
 	stop:   bool,      // (atomic) the event thread stops at its next event or retry
 	browser: ^Browser_Link,   // the agents' browser tools on this connection, while they are wanted (browser_mcp.odin)
@@ -186,6 +187,7 @@ server_connect :: proc(app: ^App, i: int) {
 	server_password_retry(&app.servers[i])
 	s := app.servers[i]
 	c := new(Conn)
+	c.app = app
 	if !http_init(&c.http, s.url, "opencode", s.password) {
 		ui.toast(.Bad, "No HTTP client for %s", s.url)
 		free(c)
@@ -228,6 +230,7 @@ server_forget :: proc(app: ^App) {
 	outgoing_forget(app)
 	app.cx.refresh_read, app.cx.facts_read, app.cx.children_read, app.cx.context_due = {}, {}, {}, {}
 	app.picker.open = false
+	app.delete_open, app.rename.open = false, false   // (their ids were that server's: nothing acts on one with what came from the other)
 	sidebar_hold_end(app)
 	delete(app.cx.fork_prompt)
 	app.cx.fork_prompt = ""

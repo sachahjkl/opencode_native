@@ -361,6 +361,13 @@ editing_brings_the_message_back_and_cancel_changes_nothing :: proc(t: ^testing.T
 	testing.expect(t, queue_find(app, "i") != nil)
 }
 
+// The DELETE went through, and the server has not stored that message: it really left the inbox.
+@(private = "file")
+replaced :: proc(t: ^testing.T, app: ^App) {
+	bench_answer(app, bench_take(t, .Queue_Replace), 204, "")
+	bench_answer(app, bench_take(t, .Queue_Check), 404, `{"_tag":"MessageNotFoundError"}`)
+}
+
 @(test)
 enter_replaces_what_was_edited :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
@@ -375,7 +382,7 @@ enter_replaces_what_was_edited :: proc(t: ^testing.T) {
 	testing.expect_value(t, ui.area_string(&app.composer), "a draft")
 	testing.expect_value(t, queue_find(app, "i").act, Queue_Act.Replacing)
 	testing.expect_value(t, bench_count(.Prompt), 0)   // (out first: it cannot go twice)
-	bench_answer(app, bench_take(t, .Queue_Replace), 204, "")
+	replaced(t, app)
 	testing.expect(t, queue_find(app, "i") == nil)
 	r := bench_take(t, .Prompt)
 	testing.expect(t, strings.contains(r.body, "later, better"))
@@ -392,7 +399,7 @@ a_steered_message_edited_stays_steered :: proc(t: ^testing.T) {
 	queue_edit(app, "i")
 	ui.area_set(&app.composer, "sooner")
 	submit_prompt(app)
-	bench_answer(app, bench_take(t, .Queue_Replace), 204, "")
+	replaced(t, app)
 	testing.expect(t, strings.contains(bench_take(t, .Prompt).body, `"delivery":"steer"`))
 }
 
@@ -422,7 +429,7 @@ an_edit_whose_prompt_fails_comes_back :: proc(t: ^testing.T) {
 	queue_edit(app, "i")
 	ui.area_set(&app.composer, "better")
 	submit_prompt(app)
-	bench_answer(app, bench_take(t, .Queue_Replace), 204, "")
+	replaced(t, app)
 	bench_lost(app, bench_take(t, .Prompt))
 	testing.expect_value(t, ui.area_string(&app.composer), "better")
 }
@@ -454,6 +461,58 @@ what_is_delivered_as_it_is_replaced_does_not_go_twice :: proc(t: ^testing.T) {
 	r := bench_take(t, .Queue_Replace)
 	delivered(app, "i")
 	bench_answer(app, r, 204, "")
+	testing.expect_value(t, bench_count(.Prompt), 0)
+	testing.expect_value(t, ui.area_string(&app.composer), "better")
+}
+
+// The two connections have no order between them: the 204 comes first, or the stream is down. The stored message says it.
+@(test)
+what_is_delivered_before_a_204_the_stream_is_late_for_does_not_go_twice :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	running(app, "s")
+	enqueued(app, "i", "later", "queue")
+	queue_edit(app, "i")
+	ui.area_set(&app.composer, "better")
+	submit_prompt(app)
+	bench_answer(app, bench_take(t, .Queue_Replace), 204, "")
+	testing.expect_value(t, bench_count(.Prompt), 0)
+	r := bench_take(t, .Queue_Check)
+	testing.expect(t, strings.has_suffix(strings.split(r.path, "?", context.temp_allocator)[0], "/api/session/s/message/i"))
+	delivered(app, "i")
+	bench_answer(app, r, 200, `{"data":{"id":"i","type":"user"}}`)
+	testing.expect_value(t, bench_count(.Prompt), 0)
+	testing.expect_value(t, ui.area_string(&app.composer), "better")
+}
+
+@(test)
+a_session_left_before_the_204_does_not_send_what_was_delivered :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	running(app, "s")
+	enqueued(app, "i", "later", "queue")
+	queue_edit(app, "i")
+	ui.area_set(&app.composer, "better")
+	submit_prompt(app)
+	r := bench_take(t, .Queue_Replace)
+	delivered(app, "i")
+	show(app, "other")   // (what the stream said of "s" goes with it)
+	bench_answer(app, r, 204, "")
+	bench_answer(app, bench_take(t, .Queue_Check), 200, `{"data":{"id":"i","type":"user"}}`)
+	testing.expect_value(t, bench_count(.Prompt), 0)
+}
+
+@(test)
+a_check_that_cannot_answer_brings_the_text_back :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	running(app, "s")
+	enqueued(app, "i", "later", "queue")
+	queue_edit(app, "i")
+	ui.area_set(&app.composer, "better")
+	submit_prompt(app)
+	bench_answer(app, bench_take(t, .Queue_Replace), 204, "")
+	bench_lost(app, bench_take(t, .Queue_Check))
 	testing.expect_value(t, bench_count(.Prompt), 0)
 	testing.expect_value(t, ui.area_string(&app.composer), "better")
 }

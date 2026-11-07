@@ -369,11 +369,17 @@ preview_address :: proc(s: string) -> string {
 	return fmt.tprintf("https://%s", t)
 }
 
+// The state of the window the panel is in: its focus is there.
+preview_state :: proc(app: ^App) -> ^ui.State {
+	if s := detached_state(app, u32(Panel.Preview)); s != nil { return s }
+	return &app.ui_state
+}
+
 // The web view's news (on the interface's thread, between two frames).
 preview_set_url :: proc(app: ^App, t: ^Preview_Tab, url: string) {
 	delete(t.url)
 	t.url = strings.clone(url)
-	if !preview_tab_shown(app, t) || ui.focus_key() != app.preview.addr_key { ui.field_set(&t.field, url) }
+	if !preview_tab_shown(app, t) || ui.focus_key_of(preview_state(app)) != app.preview.addr_key { ui.field_set(&t.field, url) }
 }
 
 preview_set_title :: proc(t: ^Preview_Tab, title: string) {
@@ -544,10 +550,6 @@ main_area :: proc(app: ^App, em: f32) {
 	}
 	res := ui.dock_end(d)
 	if res.closed != ui.DOCK_NO_PANEL { panel_close(app, res.closed) }
-	if s.close_due != 0 {
-		panel_close(app, s.close_due)
-		s.close_due = 0
-	}
 }
 
 // After the frame: the page where its panel was laid out, or out of the way of what the toolkit shows over it.

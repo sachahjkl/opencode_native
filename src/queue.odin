@@ -349,13 +349,13 @@ queue_edit_commit :: proc(app: ^App, text: string) {
 	queue_edit_end(app, .Done)
 }
 
-// The item is out: unless it was delivered first, its replacement goes.
+// The item is out: unless it was delivered first, its replacement goes. (Whether it was is read back unless the stream said it: outgoing_check.)
 queue_replaced :: proc(app: ^App, r: ^Request) {
 	q := &app.cx.queue
 	delivered := false
 	for g in q.gone { if g.id == r.tag && g.delivered { delivered = true } }
 	queue_gone(app, r.tag, false, queue_tick(app))
-	outgoing_replaced(app, r.out, !delivered)
+	if delivered { outgoing_replaced(app, r.out, false) } else { outgoing_check(app, r.out, r.tag) }
 }
 
 queue_replace_failed :: proc(app: ^App, r: ^Request) {

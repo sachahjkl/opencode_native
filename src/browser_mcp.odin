@@ -55,7 +55,18 @@ Browser_Link_State :: enum u8 {
 Browser_Out :: struct { socket: u64, text: string }   // (text owned)
 
 // What the interface and a connection's thread share. (Never freed: a late message may still name it, and it is small.)
+// The socket as the link uses it. (A test gives its own.)
+Browser_Socket :: struct {
+	open:         proc "c" (c: rawptr, path: [^]u8, path_len: uint) -> rawptr,
+	read:         proc "c" (w: rawptr, out: ^Occ_Buf) -> i32,
+	send:         proc "c" (w: rawptr, data: [^]u8, n: uint) -> i32,
+	read_timeout: proc "c" (w: rawptr, ms: u32),
+	free:         proc "c" (w: rawptr),
+}
+
 Browser_Link :: struct {
+	app:    ^App,
+	ws:     Browser_Socket,
 	conn:   ^Conn,
 	stop:   bool,                  // (atomic) the preference was turned off
 	state:  Browser_Link_State,    // (atomic)
@@ -136,15 +147,14 @@ browser_link_flush :: proc(l: ^Browser_Link, ws: rawptr, socket: u64) {
 	l.outbox = {}
 	sync.unlock(&l.lock)
 	for o in batch {
-		if o.socket == socket { _ = occ_ws_send(ws, raw_data(o.text), len(o.text)) }
+		if o.socket == socket { _ = l.ws.send(ws, raw_data(o.text), len(o.text)) }
 		delete(o.text)
 	}
 	delete(batch)
 }
 
-@(private = "file")
 browser_thread :: proc(l: ^Browser_Link) {
-	app := the_app
+	app := l.app
 	for !browser_link_over(l) {
 		// Not before the folder is known: a socket closed while the server lists its tools, right after another came, takes the name
 		// away from that one.
@@ -153,7 +163,7 @@ browser_thread :: proc(l: ^Browser_Link) {
 			time.sleep(BROWSER_DIR_WAIT_MS * time.Millisecond)
 		}
 		path, moved := browser_link_target(l)
-		ws := occ_ws_open(l.conn.http.client, raw_data(path), len(path))
+		ws := l.ws.open(l.conn.http.client, raw_data(path), len(path))
 		delete(path)
 		free_all(context.temp_allocator)
 		if ws == nil {
@@ -163,7 +173,7 @@ browser_thread :: proc(l: ^Browser_Link) {
 			}
 			continue
 		}
-		occ_ws_read_timeout(ws, BROWSER_READ_MS)
+		l.ws.read_timeout(ws, BROWSER_READ_MS)
 		l.serial += 1
 		socket := l.serial
 		sync.atomic_store(&l.socket, socket)
@@ -171,7 +181,7 @@ browser_thread :: proc(l: ^Browser_Link) {
 		for !browser_link_over(l) && !browser_link_moved(l, moved) {
 			browser_link_flush(l, ws, socket)
 			out: Occ_Buf
-			r := occ_ws_read(ws, &out)
+			r := l.ws.read(ws, &out)
 			if r < 0 { break }
 			if r == 0 { continue }   // (the read waited, a little: this is what sends come between)
 			m := new(Mcp_Msg)
@@ -179,9 +189,10 @@ browser_thread :: proc(l: ^Browser_Link) {
 			occ_buf_free(out)
 			if !ui.post(&app.ui_state, on_mcp, m) { delete(m.text); free(m) }
 		}
-		sync.atomic_store(&l.socket, 0)
+		sync.atomic_store(&l.socket, 0)   // (what comes now waits for the next one)
+		browser_link_flush(l, ws, socket)   // (what the page answered as the folder changed: the agent is told, or it does it again)
 		sync.atomic_store(&l.state, Browser_Link_State.Waiting)
-		occ_ws_free(ws)
+		l.ws.free(ws)
 		m := new(Mcp_Msg)
 		m^ = {to = {l, socket}}
 		if !ui.post(&app.ui_state, on_mcp_closed, m) { free(m) }
@@ -202,7 +213,7 @@ browser_renew :: proc(app: ^App) {
 @(private = "file")
 browser_start :: proc(app: ^App) {
 	l := new(Browser_Link)
-	l.conn = app.conn
+	l.app, l.ws, l.conn = app, {occ_ws_open, occ_ws_read, occ_ws_send, occ_ws_read_timeout, occ_ws_free}, app.conn
 	app.conn.browser = l
 	when !ODIN_TEST { thread.create_and_start_with_poly_data(l, browser_thread, self_cleanup = true) }
 }

@@ -110,6 +110,14 @@ outgoing_replace :: proc(app: ^App, text, item, fields: string) {
 	request(app, .Queue_Replace, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", o.session, item), tag = item, out = o.id)
 }
 
+// The DELETE said yes, which it also says of what was delivered, and the stream may be late or down: only a message stored says that it left
+// that way. (Waiting, an item is not one: this asks about nothing else.)
+outgoing_check :: proc(app: ^App, out: u64, item: string) {
+	o := outgoing_find(app, out)
+	if o == nil { return }
+	request(app, .Queue_Check, "GET", fmt.tprintf("/api/session/%s/message/%s", o.session, item), tag = item, out = out)
+}
+
 // `go`: it is out, the prompt goes. Otherwise it had just been delivered: what was written comes back.
 outgoing_replaced :: proc(app: ^App, out: u64, go: bool) {
 	o := outgoing_find(app, out)

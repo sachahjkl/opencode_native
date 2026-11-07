@@ -36,6 +36,35 @@ detached_window :: proc(app: ^App, panel: u32) -> ^platform.Window {
 	return nil
 }
 
+// The state of the panel's window, if it has one.
+detached_state :: proc(app: ^App, panel: u32) -> ^ui.State {
+	for d in app.cx.detached {
+		if d.panel == panel { return &d.state }
+	}
+	return nil
+}
+
+// A panel looks the same out of the main window: what its state was given, whenever a preference gave it, is read at each frame. (Plain
+// values, and faces that only change the state when they differ.)
+detached_style :: proc(app: ^App, s: ^ui.State) {
+	m := &app.ui_state
+	ui.set_zoom(s, m.zoom)
+	ui.set_density(s, m.density)
+	ui.set_rounding(s, m.rounding)
+	ui.set_scrollbar_autohide(s, app.prefs.autohide_scrollbars)
+	ui.set_toast_position(s, m.toast_pos)
+	s.icon_font, s.mono_font = m.icon_font, m.mono_font
+	for regular, set in m.rich_faces { ui.rich_set_faces(s, regular, set[1], set[2], set[3]) }
+}
+
+// What a window's build leaves to the program's loop, which only looks at the main state: input settles as it does there, and what the window
+// waits for (a tooltip, a bar to hide, a caret) wakes it.
+detached_asks :: proc(app: ^App, s: ^ui.State, had_input: bool) {
+	if had_input { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }
+	if ui.needs_frame(s) { app.frames = max(app.frames, 1) }
+	if wait := ui.wake_in_ms(s); wait > 0 { ui.wake_within(&app.ui_state, wait) }
+}
+
 // The panel was closed, by whatever way: its window goes at the next frame.
 detached_closing :: proc(app: ^App, panel: u32) {
 	for d in app.cx.detached {
@@ -59,7 +88,7 @@ panel_detach :: proc(app: ^App, panel: u32) {
 		return
 	}
 	ui.init(&d.state, &app.fonts, &app.theme)
-	ui.set_zoom(&d.state, app.prefs.zoom)
+	ui.set_autoscroll_enabled(&d.state, true)
 	ui.use(&app.ui_state)
 	if t := term_of_panel(app, panel); t != nil { t.detached = true }
 	ui.dock_close(&app.dock, panel)
@@ -133,6 +162,7 @@ detached_frame :: proc(app: ^App, d: ^Detached) {
 	// leaves them. It may also end this window.
 	events := platform.poll_events(d.win, false)
 	if !slice.contains(app.cx.detached[:], d) { return }
+	had_input := len(events) > 0
 	s := &app.cx.terms
 	ui.use(&d.state)
 	render.surface_use(&app.r, &d.surface)
@@ -143,13 +173,8 @@ detached_frame :: proc(app: ^App, d: ^Detached) {
 		events = term_events(app, events)
 	}
 	size := draw.Vec2{f32(d.win.size.x), f32(d.win.size.y)}
-	ui.begin_build(&d.state, {
-		window_size = size, events = events, dt = DETACHED_DT_S, animations = animations_on(app),
-		smooth_scroll = app.prefs.smooth_scroll ? .On : .Off,
-		dpi_scale = app.scale > 0 ? app.scale : d.win.dpi_scale, window = d.win,
-		base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(30)}, font = app.font, font_size = app.prefs.font_size, text_pad = 6, cursor = .Arrow, radius = 6},
-		clipboard_get = clip_get, clipboard_set = clip_set,
-	})
+	detached_style(app, &d.state)
+	ui.begin_build(&d.state, build_params(app, d.win, size, events, DETACHED_DT_S))
 	detached_body(app, d, size, math.round(ui.font_size()))
 	ui.end_build()
 	platform.set_cursor(d.win, ui.cursor(&d.state))
@@ -161,7 +186,7 @@ detached_frame :: proc(app: ^App, d: ^Detached) {
 	render.frame_end(&app.r, false)
 	d.shown = d.win.size
 	if d.panel == u32(Panel.Preview) { preview_place(app, false) }
-	if ui.needs_frame(&d.state) { app.frames = max(app.frames, 1) }
+	detached_asks(app, &d.state, had_input)
 	s.only, s.focused = nil, keyboard
 	render.surface_use(&app.r, &d.surface)   // (the exchange undone: the main window's again)
 	ui.use(&app.ui_state)

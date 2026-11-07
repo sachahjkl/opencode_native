@@ -258,6 +258,7 @@ Req_Kind :: enum u8 {
 	Queue_Steer,    // PATCH .../inbox/:message: a queued one goes now (the tag: the item)
 	Queue_Cancel,   // DELETE .../inbox/:message: it does not go (the tag: the item)
 	Queue_Replace,  // DELETE .../inbox/:message: it gives way to its edited text, an Outgoing (the tag: the item)
+	Queue_Check,    // GET .../message/:message: it answers 204 for what was delivered too; only a stored message says so
 	Context,        // GET /api/session/:id/context: what the model has in front of it (stats.odin)
 	Session_Viewed, // POST /api/session/:id/view: the end of its last run was seen (sidebar.odin)
 }
@@ -270,6 +271,7 @@ Request :: struct {
 	tag:    string,    // the session it is about
 	gen:    u64,       // the chat generation it was made for (answers for a chat since left are dropped)
 	conn:   ^Conn,     // the connection it goes by (answers from a server since left are dropped)
+	app:    ^App,      // (for its thread: the_app is the interface's)
 	remote: ^Remote,   // the reading it is (nil: none), and which one: answer settles it
 	ticket: u64,
 	out:    u64,       // the prompt on its way it carries (outgoing.odin, 0: none)
@@ -289,7 +291,7 @@ request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag
 		return
 	}
 	r := new(Request)
-	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = to, delay = delay, remote = remote, out = out, asked_at = app.cx.stream_seq}
+	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = to, app = app, delay = delay, remote = remote, out = out, asked_at = app.cx.stream_seq}
 	if remote != nil { r.ticket = remote.ticket }
 	sync.atomic_add(&app.pending, 1)
 	when ODIN_TEST {   // (answers_test.odin: kept for the test to answer, in the order it wants)
@@ -297,10 +299,9 @@ request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag
 		return
 	}
 	thread.create_and_start_with_poly_data(r, proc(r: ^Request) {
-		app := the_app
 		if r.delay > 0 { time.sleep(time.Duration(r.delay) * time.Millisecond) }
 		r.status, r.resp, r.ok = http_request(&r.conn.http, r.method, r.path, r.body)
-		if !ui.post(&app.ui_state, on_answer, r) { request_free(r) }
+		if !ui.post(&r.app.ui_state, on_answer, r) { request_free(r) }
 	}, self_cleanup = true)
 }
 
@@ -332,7 +333,7 @@ answer_is_json :: proc(k: Req_Kind) -> bool {
 	// (only that they went through matters, or the answer is not JSON at all)
 	case .Action, .Pty_Size, .Prompt, .Session_Agent, .Session_Model, .Session_Choice, .Inbox_Take, .Form_Reply, .Form_Dismiss, .Permission_Reply,
 	     .Session_Moved, .Revert_Done, .Revert_Cancelled, .Connected, .Credential_Done, .Schedule_Done, .Artifact_Done, .Plugin_Update, .File_Read,
-	     .Shell_Set, .Mcp_Done, .Saved_Done, .Queue_Steer, .Queue_Cancel, .Queue_Replace, .Session_Viewed:
+	     .Shell_Set, .Mcp_Done, .Saved_Done, .Queue_Steer, .Queue_Cancel, .Queue_Replace, .Queue_Check, .Session_Viewed:
 		return false
 	}
 	return true
@@ -373,7 +374,7 @@ answer :: proc(app: ^App, r: ^Request) {
 		// prompt on its way still has to say whether it got there.
 		if x := r.remote; x != nil && x.ticket == r.ticket { remote_reset(x) }
 		if r.kind == .Prompt { outgoing_answered(app, r, r.ok && r.status < 400) }
-		if r.kind == .Queue_Replace { outgoing_answered(app, r, false) }   // (taken out or not, that server is left: what was written comes back)
+		if r.kind == .Queue_Replace || r.kind == .Queue_Check { outgoing_answered(app, r, false) }   // (taken out or not, that server is left: what was written comes back)
 		answer_left(app, r)
 		return
 	}
@@ -483,6 +484,7 @@ answer :: proc(app: ^App, r: ^Request) {
 	case .Queue_List:    queue_load(app, r.tag, v, r.asked_at)
 	case .Queue_Steer, .Queue_Cancel: queue_answered(app, r)
 	case .Queue_Replace: queue_replaced(app, r)
+	case .Queue_Check:   outgoing_replaced(app, r.out, false)   // (stored: it was delivered)
 	case .Context:       if r.tag == app.chat.id && r.gen == app.chat.gen { context_load(app, r.tag, v) }
 	case .Shell_List:   if r.gen == app.chat.gen { activity_shells_load(app, v, r.tag) }
 	case .Shell_One:    if r.gen == app.chat.gen { activity_shell_load(app, v, r.tag) }
@@ -592,6 +594,10 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 	case .Queue_Replace:
 		queue_replace_failed(app, r)
 		return true      // (Outgoing says it)
+	case .Queue_Check:
+		// (404: not stored, so it really left the inbox. Anything else says nothing: what was written comes back rather than go twice.)
+		if r.status == 404 { outgoing_replaced(app, r.out, true) } else { outgoing_answered(app, r, false) }
+		return true
 	case .Mention_Files:
 		mention_failed(app)   // (what was proposed is not what is typed any more)
 		return refused        // (a server without one, a folder gone: nothing to say)
@@ -730,19 +736,18 @@ STREAM_RETRY_S :: 2   // between two connections of the event stream
 
 events_thread :: proc(data: rawptr) {
 	c := (^Conn)(data)
-	app := the_app
 	for !sync.atomic_load(&c.stop) {
 		st := http_sse(&c.http, "/api/event", &c.stop, proc(data: string, user: rawptr) -> bool {
 			c := (^Conn)(user)
 			e := new(Event_Msg)
 			e^ = {conn = c, text = strings.clone(data)}
-			if !ui.post(&the_app.ui_state, on_event, e, EVENT_WORD) { delete(e.text); free(e); return false }
+			if !ui.post(&c.app.ui_state, on_event, e, EVENT_WORD) { delete(e.text); free(e); return false }
 			return true
 		}, c, proc(user: rawptr) {
-			ui.post(&the_app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_up(the_app) } }, user)
+			ui.post(&(^Conn)(user).app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_up(the_app) } }, user)
 		})
 		if sync.atomic_load(&c.stop) { break }
-		ui.post(&app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_down(the_app, int(word)) } }, c, u64(st))
+		ui.post(&c.app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_down(the_app, int(word)) } }, c, u64(st))
 		time.sleep(STREAM_RETRY_S * time.Second)
 	}
 }

@@ -51,6 +51,7 @@ IMAGE_MAX_DIM_PX :: 2048   // what a decode scales down to, when the textures al
 
 @(private = "file")
 Decode_Job :: struct {
+	app:      ^App,   // (for its thread: the_app is the interface's)
 	key:      u64,
 	data:     string,   // (owned copy)
 	encoding: Image_Encoding,
@@ -70,12 +71,12 @@ image_get :: proc(app: ^App, ref: Image_Ref) -> ^Image_Entry {
 	}
 	app.images[ref.key] = {state = .Pending, used = app.frame_no}
 	job := new(Decode_Job)
-	job^ = {key = ref.key, data = strings.clone(ref.data), encoding = ref.encoding, max_dim = u32(min(IMAGE_MAX_DIM_PX, render.max_texture_size(&app.r)))}
+	job^ = {app = app, key = ref.key, data = strings.clone(ref.data), encoding = ref.encoding, max_dim = u32(min(IMAGE_MAX_DIM_PX, render.max_texture_size(&app.r)))}
 	sync.atomic_add(&app.pending, 1)
 	thread.create_and_start_with_poly_data(job, proc(job: ^Decode_Job) {
 		r := occ_image_decode(raw_data(job.data), len(job.data), i32(job.encoding), job.max_dim, &job.w, &job.h, &job.out)
 		job.ok = r == 0
-		if !ui.post(&the_app.ui_state, image_decoded, job) { occ_buf_free(job.out); delete(job.data); free(job) }
+		if !ui.post(&job.app.ui_state, image_decoded, job) { occ_buf_free(job.out); delete(job.data); free(job) }
 	}, self_cleanup = true)
 	return &app.images[ref.key]
 }

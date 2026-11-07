@@ -90,8 +90,10 @@ web_parent :: proc(t: ^Preview_Tab, w: ^platform.Window) {
 	v.parent = w
 }
 
+// (Until the page says where it went, what was asked is its address: the limit may take the view before it does, preview_trim.)
 web_navigate :: proc(app: ^App, t: ^Preview_Tab, url: string) {
 	t.asked = true
+	if t.url == "" { t.url = strings.clone(url) }
 	if t.view == nil { web_start(app, t) }
 	if v := t.view; v != nil { app.cx.web_host.navigate(v.native, url) }
 }

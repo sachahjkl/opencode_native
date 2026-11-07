@@ -221,7 +221,7 @@ Frame_Times :: struct {
 	builds:  int,
 }
 
-the_app: ^App
+@(thread_local) the_app: ^App   // (the interface's thread: a thread of work is given its App)
 
 clip_get :: proc() -> string { return platform.get_clipboard(the_app.win, context.temp_allocator) }
 clip_set :: proc(text: string) { platform.set_clipboard(the_app.win, text) }
@@ -229,7 +229,7 @@ clip_set :: proc(text: string) { platform.set_clipboard(the_app.win, text) }
 // When the frame starts and how it is shown: the toolkit's pacer (render/pacer.odin, on the cadence model). What matters
 // most here is the resize step: a frame at a new size is presented at once (no wait for the swap chain, none for the
 // refresh, two frames queued); waiting, the compositor shows the last frame stretched over the new size until one of that
-// size arrives. Input after a rest is answered at once too. `inner`: a frame asked for from a loop of the system (the
+// size arrives. `inner`: a frame asked for from a loop of the system (the
 // live resize's WM_PAINT). A splitter or a scroll bar held paces as a drag: one frame per slot. So does a pointer or a wheel
 // that moves with no button down: what follows it (a row lit under it, a page that scrolls) is read against the pointer
 // itself, which the system draws at the screen's top rate. On a variable refresh screen that Windows reports at 60 Hz
@@ -273,6 +273,17 @@ text_mode_follow :: proc(app: ^App) {
 	font.set_settings(&app.fonts, settings)
 }
 
+// What a build of any window is given: they differ by their size and what came to them.
+build_params :: proc(app: ^App, win: ^platform.Window, size: draw.Vec2, events: []platform.Event, dt: f32) -> ui.Build_Params {
+	return {
+		window_size = size, events = events, dt = dt, animations = animations_on(app),
+		smooth_scroll = app.prefs.smooth_scroll ? .On : .Off,
+		dpi_scale = app.scale > 0 ? app.scale : win.dpi_scale, window = win,
+		base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(30)}, font = app.font, font_size = app.prefs.font_size, text_pad = 6, cursor = .Arrow, radius = 6},
+		clipboard_get = clip_get, clipboard_set = clip_set,
+	}
+}
+
 frame :: proc(app: ^App, inner := false) {
 	if ui.building() { return }
 	film_slow_tick(app)
@@ -310,13 +321,7 @@ frame :: proc(app: ^App, inner := false) {
 		app.cx.gliding = false
 		ui.set_scrollbar_autohide(&app.ui_state, app.prefs.autohide_scrollbars)
 		app.ui_state.post_budget = again ? 0 : POSTS_PER_BUILD
-		ui.begin_build(&app.ui_state, {
-			window_size = size, events = events, dt = dt, animations = animations_on(app),
-			smooth_scroll = app.prefs.smooth_scroll ? .On : .Off,
-			dpi_scale = app.scale > 0 ? app.scale : app.win.dpi_scale, window = app.win,
-			base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(30)}, font = app.font, font_size = app.prefs.font_size, text_pad = 6, cursor = .Arrow, radius = 6},
-			clipboard_get = clip_get, clipboard_set = clip_set,
-		})
+		ui.begin_build(&app.ui_state, build_params(app, app.win, size, events, dt))
 		app.chat_sb = nil   // (only now: the answers begin_build ran read the last build's, a page placed by chat_load above all)
 		build_ui(app)
 		ui.end_build()
@@ -391,6 +396,7 @@ frame :: proc(app: ^App, inner := false) {
 	nav_apply(app)
 	commands_apply(app)
 	preview_follow(app)
+	terms_close_due(app)
 	if !panel_detached(app, u32(Panel.Preview)) { preview_place(app, overlay_open(app) || ui.active_key() != 0 && app.dock.held) }
 	browser_tick(app)
 	servers_rediscover(app)

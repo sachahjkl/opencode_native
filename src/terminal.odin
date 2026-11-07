@@ -102,7 +102,7 @@ Terminals :: struct {
 	next_panel: u32,
 	last_panel: u32,           // the last shell that had the keyboard: a new one goes beside it
 	replaces:   u32,           // a shell restarted: the new one takes its tab
-	close_due:  u32,           // a tab to close once the dock is built
+	close_due:  u32,           // a tab to close once the frame is built
 	focused: ^Term,            // has the keyboard, in the last build (shown, and its grid has the focus)
 	ask:     Term_Focus_Ask,
 	press:   Term_Press,
@@ -221,13 +221,15 @@ Term_Thread :: struct { app: ^App, conn: ^Term_Conn, http: ^Http, id, path, list
 Term_News :: struct { conn: ^Term_Conn, text: string, is_link: bool, link: Term_Link, given_up: bool }
 
 // A frame of the socket: the output it holds moves the cursor. The server counts what a JavaScript string counts, 16-bit units, whatever
-// the bytes on the wire; a frame with a zero first says where it stands and is not output.
+// the bytes on the wire; a frame with a zero first and a cursor says where it stands and is not output. (A zero that only starts the output is.)
 term_frame :: proc(c: ^Term_Conn, frame: string) -> (output: bool) {
 	if len(frame) == 0 { return false }
 	if frame[0] == 0 {
 		v, err := json.parse_string(frame[1:], parse_integers = true, allocator = context.temp_allocator)
-		if err == nil && jget(v, "cursor") != nil { c.cursor = i64(jnum(v, "cursor")) }
-		return false
+		if err == nil && jget(v, "cursor") != nil {
+			c.cursor = i64(jnum(v, "cursor"))
+			return false
+		}
 	}
 	for b in transmute([]u8)frame {
 		if b & 0xC0 != 0x80 { c.cursor += 1 }   // (a character)
@@ -883,7 +885,7 @@ term_key_event :: proc(app: ^App, t: ^Term, e: platform.Event) -> (take: bool) {
 // the pointer to the one it is over: both are shown, as the last build says, or there is none.
 term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 	s := &app.cx.terms
-	if !s.open || len(s.list) == 0 { return events }
+	if (!s.open && s.only == nil) || len(s.list) == 0 { return events }   // (the tabs hidden, a shell in its window still hears)
 	if s.only == nil && overlay_open(app) {
 		term_press_end(s)
 		return events
@@ -1087,7 +1089,8 @@ term_resize :: proc(app: ^App, t: ^Term, cols, rows: u16, cell_w, cell_h: u32) {
 		ghostty_terminal_resize(t.vt, cols, rows, cell_w, cell_h)
 		term_selection_drop(t)
 		t.grid_ms = ui.now_ms()
-		deferred_ask(&app.cx.terms.size_wake, TERM_SIZE_QUIET_MS, TERM_SIZE_QUIET_MS)
+		app.cx.terms.size_wake = {}   // (from this step, the last so far: an earlier wake would find the grid not rested, and nothing would come after it)
+		deferred_ask(&app.cx.terms.size_wake, TERM_SIZE_QUIET_MS)
 	}
 	term_size_send(app, t)
 }
@@ -1121,6 +1124,14 @@ term_size_answered :: proc(app: ^App, id: string) {
 	t.told_ms, t.asked_ms = ui.now_ms(), 0
 	deferred_ask(&app.cx.terms.size_wake, TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS)
 	term_size_send(app, t)
+}
+
+// The banner's Close, in the dock or in a window of its own: after the frame, whichever built it.
+terms_close_due :: proc(app: ^App) {
+	s := &app.cx.terms
+	if s.close_due == 0 { return }
+	panel_close(app, s.close_due)
+	s.close_due = 0
 }
 
 // What comes due after a size: the shell is told, or its picture shown. (A frame, where the window may be at rest.)

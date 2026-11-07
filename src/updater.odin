@@ -72,6 +72,7 @@ update_version :: proc(u: ^Updater) -> string {
 }
 
 Update_Job :: struct {
+	app:             ^App,      // (for its thread: the_app is the interface's)
 	base, path:      string,    // (owned)
 	channel:         string,    // (owned)
 	manifest:        update.Manifest,
@@ -94,22 +95,30 @@ update_base :: proc(app: ^App) -> string {
 	return UPDATE_HOST
 }
 
+// `missing`: the server was reached, and it has no such file.
 @(private = "file")
-fetch :: proc(h: ^Http, path: string) -> (data: string, ok: bool) {
+fetch :: proc(h: ^Http, path: string) -> (data: string, ok, missing: bool) {
 	status, body, reached := http_request(h, "GET", path)
-	if !reached || status != 200 { delete(body); return "", false }
-	return body, true
+	if !reached || status != 200 { delete(body); return "", false, update_says_missing(status, reached) }
+	return body, true, false
 }
+
+// Only this says that a channel has no release. No network, a 5xx: nothing was learned, and "up to date" would be a guess that loses what is
+// on offer.
+update_says_missing :: proc(status: int, reached: bool) -> bool { return reached && status == 404 }
 
 @(private = "file")
 check_job :: proc(j: ^Update_Job) {
 	h: Http
 	if !http_init(&h, j.base, "", "") { j.err = strings.clone("the HTTP client failed to start"); return }
 	name := fmt.tprintf("update-%s-%s.json", update.PLATFORM_WINDOWS_X64, j.channel)
-	manifest, m_ok := fetch(&h, fmt.tprintf("%s%s", j.path, name))
-	if !m_ok { j.nothing_new = true; return }   // (no release on this channel yet)
+	manifest, m_ok, missing := fetch(&h, fmt.tprintf("%s%s", j.path, name))
+	if !m_ok {
+		if missing { j.nothing_new = true } else { j.err = strings.clone("the server could not be read") }   // (missing: no release on this channel yet)
+		return
+	}
 	defer delete(manifest)
-	sig, s_ok := fetch(&h, fmt.tprintf("%s%s.sig", j.path, name))
+	sig, s_ok, _ := fetch(&h, fmt.tprintf("%s%s.sig", j.path, name))
 	if !s_ok { j.err = strings.clone("the update has no signature: refused"); return }
 	defer delete(sig)
 	m, err := update.check_release(transmute([]byte)manifest, sig, update.UPDATE_PUBLIC_KEY, update.PLATFORM_WINDOWS_X64, j.channel, APP_VERSION, "")
@@ -141,7 +150,7 @@ update_place :: proc(exe: string, data: []byte, m: update.Manifest) -> string {
 install_job :: proc(j: ^Update_Job) {
 	h: Http
 	if !http_init(&h, j.base, "", "") { j.err = strings.clone("the HTTP client failed to start"); return }
-	data, ok := fetch(&h, fmt.tprintf("%s%s", j.path, j.manifest.file))
+	data, ok, _ := fetch(&h, fmt.tprintf("%s%s", j.path, j.manifest.file))
 	if !ok { j.err = strings.clone("the update could not be downloaded"); return }
 	defer delete(data)
 	bytes := transmute([]byte)data
@@ -211,6 +220,7 @@ update_checked :: proc(app: ^App, j: ^Update_Job) {
 // The check's folder is the channel's; an install's is that of its offer.
 @(private = "file")
 update_job_start :: proc(app: ^App, j: ^Update_Job) {
+	j.app = app
 	j.base = strings.clone(update_base(app))
 	if !j.install {
 		j.channel = strings.clone(app.prefs.update_channel)
@@ -222,7 +232,7 @@ update_job_start :: proc(app: ^App, j: ^Update_Job) {
 	}
 	thread.create_and_start_with_poly_data(j, proc(j: ^Update_Job) {
 		if j.install { install_job(j) } else { check_job(j) }
-		_ = ui.post(&the_app.ui_state, on_update, j)
+		_ = ui.post(&j.app.ui_state, on_update, j)
 		free_all(context.temp_allocator)
 	}, self_cleanup = true)
 }
