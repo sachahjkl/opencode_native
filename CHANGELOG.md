@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.17.6] - 2026-11-07
+
+### Changed
+
+- The main window and the windows of their own are framed by the toolkit's own window (gui_toolkit 0.92.0): one way to pace, build and show a frame for all of them. Nothing changes on screen.
+- The browser page steps aside only while a tab or a border of the dock is really held, as the press says, not as a flag remembered it.
+
 ## [0.17.5] - 2026-11-07
 
 ### Added
@@ -719,7 +726,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.5...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.6...HEAD
+[0.17.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.6
 [0.17.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.5
 [0.17.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.4
 [0.17.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.3

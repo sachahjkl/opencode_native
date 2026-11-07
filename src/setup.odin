@@ -14,7 +14,7 @@ import "gt:draw"
 import "gt:render"
 import "gt:ui"
 
-APP_VERSION :: "0.17.5"
+APP_VERSION :: "0.17.6"
 
 LOGO_PNG :: #load("../assets/logo_256.png")
 
