@@ -1,5 +1,6 @@
 package occtools
 
+import "base:runtime"
 import "core:net"
 import "core:testing"
 
@@ -34,6 +35,7 @@ half_a_frame_waits_for_the_rest :: proc(t: ^testing.T) {
 
 @(test)
 an_answer_is_the_one_of_its_call :: proc(t: ^testing.T) {
+	context.allocator = context.temp_allocator   // (an answer is read and dropped, as a call does with it)
 	_, _, mine := dt_answer(`{"method":"Page.frame","params":{}}`, 3)
 	testing.expect(t, !mine, "an event")
 	_, _, mine = dt_answer(`{"id":2,"result":{}}`, 3)
@@ -124,6 +126,7 @@ the_server_lists_in_two_shapes :: proc(t: ^testing.T) {
 // The proxy on real sockets, nothing to wait for: a connection goes through, and drop ends it at once.
 @(test)
 the_proxy_passes_and_cuts :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()   // (a proxy, its threads, its pairs live as long as the program: there is no stopping one)
 	listener, err := net.listen_tcp({address = net.IP4_Loopback, port = 0})
 	testing.expect(t, err == nil)
 	defer net.close(listener)
