@@ -420,7 +420,7 @@ main_after_frame :: proc(h: ^host.Host) {
 	commands_apply(app)
 	preview_follow(app)
 	terms_close_due(app)
-	if !panel_detached(app, u32(Panel.Preview)) { preview_place(app, overlay_open(app) || ui.active_key() != 0 && app.dock.held) }
+	if !panel_detached(app, u32(Panel.Preview)) { preview_place(app, overlay_open(app) || ui.dock_held(&app.dock)) }
 	browser_tick(app)
 	servers_rediscover(app)
 	activity_tick(app)
