@@ -35,9 +35,6 @@ Queue_Item :: struct {
 	changed:  Seq,         // ... when its delivery changed
 }
 
-// What left the list lately: a list asked before that still has it.
-Queue_Gone :: struct { id: string, at: Seq, delivered: bool }
-
 // The item that the composer holds, and what the composer held before it (owned, id "": none).
 Queue_Edit :: struct {
 	id:       string,
@@ -49,7 +46,7 @@ Queue_Edit :: struct {
 Queue :: struct {
 	session: string,   // whose it is (owned)
 	items:   [dynamic]Queue_Item,
-	gone:    [dynamic]Queue_Gone,
+	gone:    Gone_List,   // what left it lately
 	read:    Remote,
 	edit:    Queue_Edit,
 }
@@ -112,7 +109,7 @@ item_of :: proc(id: string, v: json.Value, born: Seq) -> Queue_Item {
 queue_add :: proc(app: ^App, id: string, v: json.Value, born: Seq) {
 	q := &app.cx.queue
 	if id == "" || q.session != app.chat.id || queue_find(app, id) != nil { return }
-	for g in q.gone { if g.id == id { return } }
+	if gone_find(&q.gone, id) != nil { return }
 	append(&q.items, item_of(id, v, born))
 }
 
@@ -136,12 +133,7 @@ queue_gone :: proc(app: ^App, id: string, delivered: bool, at: Seq) {
 	for it, i in q.items {
 		if it.id == id { item_free(it); ordered_remove(&q.items, i); break }
 	}
-	for g in q.gone { if g.id == id { return } }
-	if len(q.gone) >= QUEUE_GONE_MAX {
-		delete(q.gone[0].id)
-		ordered_remove(&q.gone, 0)
-	}
-	append(&q.gone, Queue_Gone{strings.clone(id), at, delivered})
+	gone_add(&q.gone, id, at, QUEUE_GONE_MAX, delivered)
 }
 
 queue_delivery_changed :: proc(app: ^App, id: string, to: Delivery, at: Seq) {
@@ -167,9 +159,7 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: Seq) {
 	for it in jarr(v, "data") {
 		id := jstr(it, "id")
 		if id == "" || jstr(it, "type") != "user" { continue }
-		went := false
-		for g in q.gone { if g.id == id && newer(g.at, asked_at) { went = true } }
-		if went { continue }
+		if g := gone_find(&q.gone, id); g != nil && newer(g.at, asked_at) { continue }
 		if old := queue_find(app, id); old != nil {
 			if !newer(old.changed, asked_at) { old.delivery = delivery_of(jstr(it, "delivery")) }
 			append(&next, old^)
@@ -191,12 +181,7 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: Seq) {
 	}
 	delete(q.items)
 	q.items = next
-	for i := len(q.gone) - 1; i >= 0; i -= 1 {
-		if !newer(q.gone[i].at, asked_at) {
-			delete(q.gone[i].id)
-			ordered_remove(&q.gone, i)
-		}
-	}
+	gone_settled(&q.gone, asked_at)
 	for it in q.items { chat_drop(&app.chat, it.id) }   // (a page read before this list)
 }
 
@@ -206,8 +191,7 @@ queue_switch :: proc(app: ^App) {
 	if queue_editing(app) { queue_edit_end(app, .Cancel) }
 	for it in q.items { item_free(it) }
 	clear(&q.items)
-	for g in q.gone { delete(g.id) }
-	clear(&q.gone)
+	gone_clear(&q.gone)
 	remote_reset(&q.read)
 	delete(q.session)
 	q.session = strings.clone(app.chat.id)
@@ -352,8 +336,8 @@ queue_edit_commit :: proc(app: ^App, text: string) {
 // The item is out: unless it was delivered first, its replacement goes. (Whether it was is read back unless the stream said it: outgoing_check.)
 queue_replaced :: proc(app: ^App, r: ^Request) {
 	q := &app.cx.queue
-	delivered := false
-	for g in q.gone { if g.id == r.tag && g.delivered { delivered = true } }
+	g := gone_find(&q.gone, r.tag)
+	delivered := g != nil && g.delivered
 	queue_gone(app, r.tag, false, queue_tick(app))
 	if delivered { outgoing_replaced(app, r.out, false) } else { outgoing_check(app, r.out, r.tag) }
 }

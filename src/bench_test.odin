@@ -24,7 +24,7 @@ import session "gt:testkit/session"
 OCC_BENCH :: #config(OCC_BENCH, false)
 
 BENCH_SIZE        :: [2]int{1600, 1000}
-BENCH_TURNS       :: 150     // a user's prompt and the agent's answer each (tool calls, reasoning, Markdown)
+BENCH_TURNS       :: #config(OCC_BENCH_TURNS, 150)     // a user's prompt and the agent's answer each (tool calls, reasoning, Markdown)
 BENCH_SESSIONS    :: 400
 BENCH_PROJECTS    :: 12
 BENCH_TOOLS       :: 4       // tool calls per answer

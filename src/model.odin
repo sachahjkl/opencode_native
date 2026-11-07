@@ -454,25 +454,11 @@ permissions_replace :: proc(app: ^App, session: string, list: json.Array, asked_
 }
 
 // A permission or a form answered, here or elsewhere: a list read before that still has it.
-waits_gone :: proc(app: ^App, id: string) {
-	cx := &app.cx
-	if waits_were_answered(app, id) { return }
-	if len(cx.waits_gone) >= WAITS_GONE_MAX {
-		delete(cx.waits_gone[0])
-		ordered_remove(&cx.waits_gone, 0)
-	}
-	append(&cx.waits_gone, strings.clone(id))
-}
+waits_gone :: proc(app: ^App, id: string) { gone_add(&app.cx.waits_gone, id, app.cx.stream_seq, WAITS_GONE_MAX) }
 
-waits_were_answered :: proc(app: ^App, id: string) -> bool {
-	for g in app.cx.waits_gone { if g == id { return true } }
-	return false
-}
+waits_were_answered :: proc(app: ^App, id: string) -> bool { return gone_find(&app.cx.waits_gone, id) != nil }
 
-waits_forget :: proc(app: ^App) {
-	for g in app.cx.waits_gone { delete(g) }
-	clear(&app.cx.waits_gone)
-}
+waits_forget :: proc(app: ^App) { gone_clear(&app.cx.waits_gone) }
 
 // The sessions something shows a wait for.
 waits_sessions :: proc(app: ^App) -> []string {

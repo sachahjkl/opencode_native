@@ -143,10 +143,11 @@ App_Context :: struct {
 	outgoing_last:  u64,               // ... the last one's id
 	waits_unread:   bool,              // the stream just came up: what sessions wait on, asked before it, is read from the next list
 	built:          ^ui.State,         // the state of a window of its own, while it is built (nil: the main one)
+	answers_spent:  [dynamic]^virtual.Arena,   // what this frame's answers were read into (net.odin)
 	flights:        [dynamic]Flight,   // what is on its way (net.odin)
 	stream_seq:     Seq,               // events applied so far: the clock of what is newer than an answer (Request.asked_at)
 	busy_seq:       map[string]Seq,    // when the stream last said a session started or ended (keys owned)
-	waits_gone:     [dynamic]string,   // permissions and forms answered, the last WAITS_GONE_MAX (owned)
+	waits_gone:     Gone_List,         // permissions and forms answered, the last WAITS_GONE_MAX
 	chat_read:      Remote,            // the newest page of the conversation shown
 	stats_read:     Remote,            // the project's totals (stats.odin)
 	stats_context:  Stats_Context,     // what fills the context of the session shown
@@ -386,6 +387,7 @@ frame :: proc(app: ^App, inner := false) {
 	work := f32(time.duration_milliseconds(app.times.build + app.times.draw + app.times.render))
 	app.cx.work_ms += (work - app.cx.work_ms) * FPS_SMOOTH
 	free_all(context.temp_allocator)
+	answers_spent_free(app)
 
 	terminals_reap(app)
 	output_views_tick(app)

@@ -255,7 +255,7 @@ Fake_Socket :: struct { app: ^App, l: ^Browser_Link, move: bool, reads, opens: i
 @(thread_local, private = "file") fake: Fake_Socket
 
 @(private = "file")
-FAKE_SOCKET :: Browser_Socket{
+FAKE_SOCKET :: Ws_Ops{
 	open = proc "c" (c: rawptr, path: [^]u8, n: uint) -> rawptr {
 		fake.opens += 1
 		if fake.opens > 1 { fake.l.stop = true; return nil }

@@ -84,6 +84,40 @@ Seq :: distinct u64
 
 newer :: proc(at, asked_at: Seq) -> bool { return at > asked_at }
 
+// What left a list lately, by id: a list asked before that still has it, and it does not come back. `most` holds it to a size, past what any
+// answer on its way can matter.
+Gone :: struct { id: string, at: Seq, delivered: bool }   // (id owned)
+
+Gone_List :: struct { items: [dynamic]Gone }
+
+gone_find :: proc(l: ^Gone_List, id: string) -> ^Gone {
+	for &g in l.items { if g.id == id { return &g } }
+	return nil
+}
+
+gone_add :: proc(l: ^Gone_List, id: string, at: Seq, most: int, delivered := false) {
+	if gone_find(l, id) != nil { return }
+	if len(l.items) >= most {
+		delete(l.items[0].id)
+		ordered_remove(&l.items, 0)
+	}
+	append(&l.items, Gone{strings.clone(id), at, delivered})
+}
+
+// A list asked for at `asked_at` has arrived: what left before it, it no longer has.
+gone_settled :: proc(l: ^Gone_List, asked_at: Seq) {
+	#reverse for g, i in l.items {
+		if newer(g.at, asked_at) { continue }
+		delete(g.id)
+		ordered_remove(&l.items, i)
+	}
+}
+
+gone_clear :: proc(l: ^Gone_List) {
+	for g in l.items { delete(g.id) }
+	clear(&l.items)
+}
+
 // Something to do once things are quiet: asked again it moves back, so that it comes after what asked for it (an event after
 // a POST reads what that POST changed), but never later than `most` after the first asking: events without end still read.
 // (`most` left out: no later than the first wait. To start a wait over, clear it first.)

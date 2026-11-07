@@ -255,16 +255,10 @@ term_post :: proc(job: ^Term_Thread, news: Term_News) {
 // Reads until the socket goes.
 @(private = "file")
 term_read :: proc(job: ^Term_Thread, ws: rawptr) {
-	for !sync.atomic_load(&job.conn.stop) && !sync.atomic_load(&job.conn.renew) {
-		term_flush(ws, job.conn)
-		out: Occ_Buf
-		r := occ_ws_read(ws, &out)
-		if r < 0 { return }
-		if r == 0 { continue }   // (the read waited, a little: this is what sends come between)
-		text := string(out.ptr[:out.len])
-		if term_frame(job.conn, text) { term_post(job, {text = strings.clone(text)}) }
-		occ_buf_free(out)
-	}
+	ws_pump(WS_OPS, ws, job,
+		proc(job: ^Term_Thread) -> bool { return !sync.atomic_load(&job.conn.stop) && !sync.atomic_load(&job.conn.renew) },
+		proc(job: ^Term_Thread, ws: rawptr) { term_flush(ws, job.conn) },
+		proc(job: ^Term_Thread, text: string) { if term_frame(job.conn, text) { term_post(job, {text = strings.clone(text)}) } })
 }
 
 // A socket that ends says nothing of why: the list of the server does. A shell that exited is over, at once; a server that does not answer

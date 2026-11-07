@@ -8,6 +8,7 @@ import "core:fmt"
 import "core:os"
 import "core:strconv"
 import "core:strings"
+import "core:mem/virtual"
 import "core:sync"
 import "core:thread"
 import "core:time"
@@ -283,6 +284,10 @@ Request :: struct {
 	resp:   string,
 	ok:     bool,
 	delay:  int,      // ms to sleep first, in its thread
+	// ... read on its thread: nothing here waits for it on the interface's (nil: read there, by answer)
+	read_in:    ^virtual.Arena,
+	value:      json.Value,
+	unreadable: bool,
 }
 
 // (`conn`: a server left, for what must be undone there: answer_left.)
@@ -324,6 +329,7 @@ request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag
 	thread.create_and_start_with_poly_data(r, proc(r: ^Request) {
 		if r.delay > 0 { time.sleep(time.Duration(r.delay) * time.Millisecond) }
 		r.status, r.resp, r.ok = http_request(&r.conn.http, r.method, r.path, r.body)
+		req_read(r)
 		if !ui.post(&r.app.ui_state, on_answer, r) { request_free(r) }
 	}, self_cleanup = true)
 }
@@ -333,7 +339,35 @@ request_later :: proc(app: ^App, kind: Req_Kind, path: string, ms: int, tag: str
 	request(app, kind, "GET", path, tag = tag, delay = ms, remote = remote)
 }
 
+// Whether what it says is read at all. (A prompt's answer says more when it can: queue_prompt_answered.)
+@(private = "file")
+req_is_read :: proc(r: ^Request) -> bool { return REQ_FACTS[r.kind].json || r.kind == .Prompt }
+
+// On the request's thread: the answer does not stand before a click in the interface's. What it holds lives as what a handler reads from the
+// frame's allocator does: answers_spent_free.
+@(private = "file")
+req_read :: proc(r: ^Request) {
+	if !r.ok || r.status >= 400 || !req_is_read(r) { return }
+	r.read_in = new(virtual.Arena)
+	_ = virtual.arena_init_growing(r.read_in)
+	v, err := json.parse_string(r.resp, parse_integers = true, allocator = virtual.arena_allocator(r.read_in))
+	r.value, r.unreadable = v, err != nil
+}
+
+// After a frame: what the answers of that frame held.
+answers_spent_free :: proc(app: ^App) {
+	for a in app.cx.answers_spent {
+		virtual.arena_destroy(a)
+		free(a)
+	}
+	clear(&app.cx.answers_spent)
+}
+
 request_free :: proc(r: ^Request) {
+	if r.read_in != nil {
+		virtual.arena_destroy(r.read_in)
+		free(r.read_in)
+	}
 	delete(r.method); delete(r.path); delete(r.body); delete(r.tag); delete(r.resp)
 	free(r)
 }
@@ -476,7 +510,11 @@ answer_left :: proc(app: ^App, r: ^Request) {
 
 // Everything an answer can be, in one place. A Remote is settled here, before any handler.
 answer :: proc(app: ^App, r: ^Request) {
-	defer request_free(r)
+	defer {
+		if r.read_in != nil { append(&app.cx.answers_spent, r.read_in) }
+		r.read_in = nil
+		request_free(r)
+	}
 	sync.atomic_sub(&app.pending, 1)
 	flight_ends(app, r)
 	if r.conn != app.conn {
@@ -500,12 +538,14 @@ answer :: proc(app: ^App, r: ^Request) {
 	}
 	if r.status == 401 { answer_failed(app, r, .Auth, "Authentication refused by the server"); return }
 	if r.status >= 400 { answer_failed(app, r, .Refused, refusal_text(r)); return }
-	v: json.Value
-	if read_as_json := REQ_FACTS[r.kind].json; read_as_json || r.kind == .Prompt {   // (a prompt's answer says more when it can: queue_prompt_answered)
+	v := r.value
+	unreadable := r.unreadable
+	if r.read_in == nil && req_is_read(r) {   // (a test's answer: no thread read it)
 		err: json.Error
 		v, err = json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-		if err != nil && read_as_json { answer_failed(app, r, .Unreadable, "Unreadable answer"); return }
+		unreadable = err != nil
 	}
+	if unreadable && REQ_FACTS[r.kind].json { answer_failed(app, r, .Unreadable, "Unreadable answer"); return }
 	if r.remote != nil { remote_settle(r.remote, .Ready, "") }
 	switch r.kind {
 	case .Sessions:    sessions_load(app, v)

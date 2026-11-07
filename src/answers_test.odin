@@ -204,7 +204,7 @@ a_server_left_leaves_nothing_behind :: proc(t: ^testing.T) {
 	testing.expect(t, !app.activity.open)
 	testing.expect(t, !app.find.open)
 	testing.expect_value(t, len(app.permissions), 0)
-	testing.expect_value(t, len(app.cx.waits_gone), 0)
+	testing.expect_value(t, len(app.cx.waits_gone.items), 0)
 	testing.expect_value(t, app.cx.due[.Refresh].due_ms, 0)
 	testing.expect_value(t, chat_view(app), Chat_View.Home)
 }
