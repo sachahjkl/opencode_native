@@ -54,10 +54,21 @@ release_notes :: proc(changelog, version: string) -> (notes: string, ok: bool) {
 	return strings.concatenate({section, NOTES_TAIL}, context.temp_allocator), true
 }
 
+// What is published is optimized: a program built otherwise (build.bat with no word, debug) is no release.
+@(private = "file")
+package_is_release :: proc(program: string) -> bool {
+	if mode := build_mode_of(program); mode != "release" {
+		fmt.eprintfln("package: %s was built %s, not for release: build release (build.bat release, ./build.sh release)", program, mode != "" ? mode : "in a way not known")
+		return false
+	}
+	return true
+}
+
 @(private = "file")
 package_windows :: proc(version: string) -> bool {
 	program := "build/opencode-native.exe"
 	if !os.exists(program) { fmt.eprintfln("package: %s is missing: build it first", program); return false }
+	if !package_is_release(program) { return false }
 	_ = os.remove_all(DIST_DIR)
 	if !make_folder(DIST_DIR) { return false }
 	name := fmt.tprintf("opencode-native-%s-windows-x64.exe", version)
@@ -79,6 +90,7 @@ package_windows :: proc(version: string) -> bool {
 package_linux :: proc(version: string) -> bool {
 	program := "build/opencode-native"
 	if !os.exists(program) { fmt.eprintfln("package: %s is missing: build it first", program); return false }
+	if !package_is_release(program) { return false }
 	name := fmt.tprintf("opencode-native-%s", version)
 	stage := fmt.tprintf("%s/%s", STAGE_DIR, name)
 	_ = os.remove_all(STAGE_DIR)

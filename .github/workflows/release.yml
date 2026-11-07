@@ -39,7 +39,7 @@ jobs:
 
       - name: Build (build.bat)
         shell: cmd
-        run: call build.bat
+        run: call build.bat release
 
       - name: Package
         run: build/occtools package ${{ steps.version.outputs.version }}
@@ -72,7 +72,7 @@ jobs:
       - uses: ./.github/actions/setup-odin-linux
 
       - name: Build (build.sh)
-        run: ./build.sh
+        run: ./build.sh release
 
       - name: Package
         run: build/occtools package "${GITHUB_REF_NAME#v}"

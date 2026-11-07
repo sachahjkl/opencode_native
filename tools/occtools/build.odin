@@ -50,9 +50,20 @@ when ODIN_OS == .Windows {
 ZIG_NAME :: "zig-x86_64-" + ZIG_SYSTEM + "-" + ZIG_VERSION
 
 Build :: struct {
-	gt, out:      string,
-	debug, force: bool,
+	gt, out: string,
+	mode:    Build_Mode,
+	force:   bool,
 }
+
+// How a program is compiled. Dev: at once (-o:minimal: modules apart, kept between builds; a second at most), what every check, every
+// try and every picture runs. Release: optimized (-o:speed: a minute), what is published, and what alone is measured for speed (the
+// diff's frames in live). Debug: debug information, the console.
+Build_Mode :: enum u8 { Dev, Release, Debug }
+
+BUILD_MODE_NAMES := [Build_Mode]string{.Dev = "dev", .Release = "release", .Debug = "debug"}
+
+// The mode a program was built in, as the build wrote it beside it (<program>.mode); "": not known (built otherwise).
+build_mode_of :: proc(program: string) -> string { return strings.trim_space(read_text(fmt.tprintf("%s.mode", program))) }
 
 // APP_VERSION in the text of src/setup.odin.
 app_version :: proc(setup: string) -> (version: string, ok: bool) {
@@ -237,15 +248,20 @@ build_program :: proc(b: Build) -> bool {
 		if !write_version_header() { return false }
 		// (the C runtime linked in: no vcruntime140.dll to ship)
 		append(&cmd, "-resource:res/opencode-native.rc", "-extra-linker-flags:/NODEFAULTLIB:vcruntime.lib /DEFAULTLIB:libvcruntime.lib")
-		if !b.debug { append(&cmd, "-subsystem:windows") }
+		if b.mode != .Debug { append(&cmd, "-subsystem:windows") }
 	} else {
 		// the text backend is the toolkit's native one, inside the Rust library (no DirectWrite here); wgpu-native is a second Rust
 		// library: both carry Rust's standard library, whose few unmangled symbols (rust_eh_personality) are the same code
 		append(&cmd, "-define:FONT_BACKEND=native", "-define:FONT_NATIVE_LINK=false", "-extra-linker-flags:-Wl,--allow-multiple-definition")
 	}
-	append(&cmd, b.debug ? "-debug" : "-o:speed")
+	switch b.mode {
+	case .Dev:     append(&cmd, "-o:minimal")
+	case .Release: append(&cmd, "-o:speed")
+	case .Debug:   append(&cmd, "-debug")
+	}
 	if !run(..cmd[:]) { return false }
-	fmt.printfln("built %s (toolkit: %s)", out, gt)
+	if !write_text(fmt.tprintf("%s.mode", out), BUILD_MODE_NAMES[b.mode]) { return false }
+	fmt.printfln("built %s, %s (toolkit: %s)", out, BUILD_MODE_NAMES[b.mode], gt)
 	return true
 }
 
@@ -256,7 +272,8 @@ run_build :: proc(args: []string) -> int {
 	}
 	for a in args {
 		switch a {
-		case "debug":   b.debug = true
+		case "debug":   b.mode = .Debug
+		case "release": b.mode = .Release
 		case "--force": b.force = true
 		case:
 			fmt.eprintfln("build: what is %s?", a)

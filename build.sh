@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds opencode native on Linux. Output: build/opencode-native (one file: the Rust library, the icon font and the logo
 # are in it; wgpu-native linked statically).
-#   ./build.sh            optimized (what is released)
+#   ./build.sh            at once, not optimized (what is tried)
+#   ./build.sh release    optimized (what is released, and what is measured for speed)
 #   ./build.sh debug      debug information
 # Needs the Odin compiler (odin.version) with wgpu-native's static library in its vendor/wgpu/lib (the toolkit's tools/tk fetch_wgpu),
 # clang (Odin links with it) and Rust (cargo, stable). At run time: Vulkan (mesa), libxkbcommon, and Wayland or X11.

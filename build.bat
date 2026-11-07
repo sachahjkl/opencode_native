@@ -1,7 +1,8 @@
 @echo off
 :: Builds opencode native. Output: build\opencode-native.exe (one file: icon, version, manifest, the Rust library and the
 :: C runtime are in it).
-::   build.bat            optimized (what is released)
+::   build.bat            at once, not optimized (what is tried: a second)
+::   build.bat release    optimized (what is released, and what is measured for speed: a minute)
 ::   build.bat debug      debug information, console output, D3D debug layer
 ::   build.bat logo       draws the logo again (assets\, tools\make_logo.ps1)
 :: Needs the Odin compiler (odin.version), MSVC (link.exe, rc.exe) and Rust (cargo, stable, x86_64-pc-windows-msvc).

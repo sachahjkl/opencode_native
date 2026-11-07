@@ -295,6 +295,9 @@ scenario_diff :: proc(l: ^Live) {
 	r, _ := dt_call(dt, "Toolkit.state")
 	o, _ := r.(json.Object)
 	w, h := json_num(o["width"]), json_num(o["height"])
+	// (speed is measured on what is published only: a dev build's frames say how it was compiled)
+	timed := build_mode_of(l.exe) == "release"
+	if !timed { fmt.printfln("        (%s is no release build: its frames are not measured; build release to measure them)", l.exe) }
 	frame_p95(dt)
 	for _ in 0 ..< 40 {
 		dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseWheel","x":%d,"y":%d,"deltaX":0,"deltaY":1500}}`, int(w / 2), int(h / 2)))
@@ -302,7 +305,7 @@ scenario_diff :: proc(l: ^Live) {
 	}
 	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
 	stacked := frame_p95(dt)
-	expect(l, stacked >= 0 && stacked < DIFF_FRAME_MAX, fmt.tprintf("stacked, scrolled: 95 %% of the frames under %.1f ms", stacked))
+	if timed { expect(l, stacked >= 0 && stacked < DIFF_FRAME_MAX, fmt.tprintf("stacked, scrolled: 95 %% of the frames under %.1f ms", stacked)) }
 	dt_call(dt, "Toolkit.click", `{"text":"Split","index":0,"count":1,"button":"left"}`)
 	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
 	frame_p95(dt)
@@ -312,7 +315,7 @@ scenario_diff :: proc(l: ^Live) {
 	}
 	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
 	split := frame_p95(dt)
-	expect(l, split >= 0 && split < DIFF_FRAME_MAX, fmt.tprintf("split, scrolled: 95 %% of the frames under %.1f ms", split))
+	if timed { expect(l, split >= 0 && split < DIFF_FRAME_MAX, fmt.tprintf("split, scrolled: 95 %% of the frames under %.1f ms", split)) }
 	y := int(h * 0.5)
 	dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseMoved","x":%d,"y":%d}}`, int(w * 0.62), y))
 	dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mousePressed","x":%d,"y":%d,"button":"left","buttons":1,"clickCount":1}}`, int(w * 0.62), y))

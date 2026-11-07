@@ -920,6 +920,7 @@ find_follows_the_conversation :: proc(t: ^testing.T) {
 // connection, and not for a shell of another server.
 @(test)
 the_stream_coming_back_renews_the_shells_sockets :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()   // (the App keeps what it made, as the program does, till it ends)
 	app := bench_new()
 	here, there := new(Term_Conn), new(Term_Conn)
 	other := new(Conn)

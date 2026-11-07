@@ -3,6 +3,7 @@ package occ
 // What the newer parts decide by themselves, without a window: a diff, the end of a command's output, an address, the links
 // of a text, the history's steps.
 
+import "base:runtime"
 import "core:encoding/json"
 import "core:mem/virtual"
 import "core:strings"
@@ -58,6 +59,7 @@ the_first_link_of_a_text_ends_where_it_ends :: proc(t: ^testing.T) {
 
 @(test)
 the_history_comes_back_to_what_was_typed :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()   // (the App keeps what it made, as the program does, till it ends)
 	app := new(App)
 	defer free(app)
 	chat_reset(&app.chat)

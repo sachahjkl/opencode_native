@@ -907,6 +907,7 @@ a_server_left_forgets_its_calls :: proc(t: ^testing.T) {
 @(test)
 each_connection_has_its_folder :: proc(t: ^testing.T) {
 	a, b: Browser_Link
+	defer delete(a.dir)
 	browser_link_follow(&a, "C:/a")
 	path, _ := browser_link_target(&b)
 	testing.expect(t, !strings.contains(path, "C%3A"), "the next server is not offered the last one's")
@@ -917,6 +918,7 @@ each_connection_has_its_folder :: proc(t: ^testing.T) {
 @(test)
 a_move_after_the_target_is_a_move :: proc(t: ^testing.T) {
 	l: Browser_Link
+	defer delete(l.dir)
 	browser_link_follow(&l, "C:/a")
 	path, moved := browser_link_target(&l)
 	delete(path)
