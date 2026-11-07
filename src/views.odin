@@ -658,6 +658,7 @@ SPLITTER_W_PX     :: 5
 AVAIL_FALLBACK_PX :: 1000   // before the window has a width
 COLUMN_MIN_W_PX   :: 240
 BOTTOM_SLACK_PX   :: 4      // this near its end the conversation is at its bottom
+AUTOSCROLL_SLACK_PX :: 0.01 // ... while the wheel's click scrolls it: its steps are smaller than the slack (each would be put back at the bottom)
 OPENED_FOLLOW_MS  :: 2000   // a conversation just opened follows its bottom that long, whatever the preference
 PAGE_SCROLL       :: 0.9    // of the view: the end of the last page stays in sight
 LINE_SCROLL_EM    :: 3
@@ -688,13 +689,16 @@ conversation :: proc(app: ^App, em: f32) {
 		find_update(app, sb, em)
 		if app.chat.id == "" { app.stick_bottom = false }   // (the home page is read from its top)
 		if sb != nil {
-			by_hand := chat_keys(app, sb, em) || app.cx.wheeled || ui.active_key() != 0
+			// (the wheel's click scrolls it by steps of a pixel a frame or less: under any slack, each one counts)
+			auto := ui.autoscroll_running(&app.state)
+			slack := auto ? AUTOSCROLL_SLACK_PX : BOTTOM_SLACK_PX * ui.scale()
+			by_hand := chat_keys(app, sb, em) || app.cx.wheeled || ui.active_key() != 0 || auto
 			if scrollbar_held(app, sb) { nav_restore_clear(app) }   // (as the wheel and the keys do: frame)
 			limit := ui.view_limit(sb)
 			// the scrollbar's drag, the wheel, the keyboard moved it before this build (begin_build): up means let go of the bottom, or following
 			// it would put it back at once and the thumb would stay stuck there. Only a hand: a box built anew starts at its top, and that is no
 			// reader going up.
-			if app.stick_bottom && by_hand && sb.view_target.y < app.chat_target - 1 && sb.view_target.y < limit - BOTTOM_SLACK_PX * ui.scale() { app.stick_bottom = false }
+			if app.stick_bottom && by_hand && sb.view_target.y < app.chat_target - (auto ? 0 : 1) && sb.view_target.y < limit - slack { app.stick_bottom = false }
 			if app.stick_bottom {
 				sb.view_target.y = limit
 				// (the tray that opens under it moves it: a glide of its own on top of that one would lag behind it)
@@ -717,7 +721,7 @@ conversation :: proc(app: ^App, em: f32) {
 		if sb != nil {
 			// follow the bottom while the reader is there; scrolling up lets go of it
 			limit := ui.view_limit(sb)
-			at_bottom := sb.view_target.y >= limit - BOTTOM_SLACK_PX * ui.scale()
+			at_bottom := sb.view_target.y >= limit - (ui.autoscroll_running(&app.state) ? AUTOSCROLL_SLACK_PX : BOTTOM_SLACK_PX * ui.scale())
 			// (with following off, only the first moments of a conversation just opened follow its bottom)
 			follow := (app.prefs.follow || ui.now_ms() - app.opened_ms < OPENED_FOLLOW_MS) && app.chat.id != ""
 			// (a part just toggled: it let go of the bottom. A view going back to where it was has not got there yet)

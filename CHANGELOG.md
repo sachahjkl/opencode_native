@@ -5,6 +5,14 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.18.4] - 2026-11-07
+
+### Fixed
+
+- **Memory: a long conversation no longer holds gigabytes.** Every image (a tool's screenshots, attached pictures) was kept as a texture of up to 2048 pixels, up to 96 of them whatever their size: about a gigabyte once a long conversation's pages were read. A thumbnail is now decoded at the size it is shown at (a tool's capture: 512 pixels instead of 2048), the viewer decodes the whole image when it opens, and the textures together keep within 96 MB, the ones shown longest ago going first. Images are decoded three at a time, and one no longer on screen when its turn comes is not decoded: a find over a long conversation started decoding all of them at once, and went past 14 GB.
+- **Find with a needle of thousands of matches** no longer leaves hundreds of MB behind: the text outside the clip makes nothing to draw, and the buffers go back down after a peak. (gui_toolkit 0.98.0)
+- **The wheel's click (autoscroll) goes up from the bottom of a conversation**: its first steps, less than a pixel a frame, were put back at the bottom the view was following, and the conversation's column read the rounding of its rows as a move of the content: the view stayed there, or broke free in a jump. (gui_toolkit 0.98.1)
+
 ## [0.18.3] - 2026-11-07
 
 ### Fixed
@@ -801,7 +809,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.18.3...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.18.4...HEAD
+[0.18.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.4
 [0.18.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.3
 [0.18.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.2
 [0.18.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.1

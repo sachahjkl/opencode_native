@@ -375,6 +375,35 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	bench_report(&typing)
 	testing.expect_value(t, len(ui.area_string(&app.composer)), BENCH_FRAMES)
 
+	// a click of the wheel at the bottom, the pointer then a little above it: the view goes up, slowly, and lets go of the bottom.
+	// Its steps (a pixel a frame or less) were each put back at the bottom it was following, and the lazy column read the error
+	// of its rounded rects as a move: it stayed there, or broke free in a jump.
+	{
+		testing.expect(t, app.stick_bottom, "at its bottom, following it")
+		mid := session.center(session.get(s, "chat"))
+		session.move(s, mid)
+		session.click_at(s, mid, .Middle)
+		testing.expect(t, ui.autoscroll_running(&app.state), "the wheel's click: scrolling by the pointer")
+		session.move(s, mid - {0, ui.autoscroll_settings(&app.state).dead_zone + 6})   // (just past the dead zone: the slowest)
+		// (how far from the bottom: the content's height moves a little while the column learns the heights of what it builds)
+		up: [dynamic]f32
+		defer delete(up)
+		for _ in 0 ..< 40 {
+			session.frames(s, 1)
+			b := session.get(s, "chat")
+			append(&up, ui.view_limit(b) - b.view_target.y)
+		}
+		testing.expectf(t, up[len(up) - 1] > 4, "gone up: %v from the bottom", up[len(up) - 1])
+		testing.expect(t, !app.stick_bottom, "the bottom let go of")
+		for i in 1 ..< len(up) {
+			testing.expectf(t, up[i] >= up[i - 1] - 0.1, "never back down: %v then %v from the bottom (frame %d)", up[i - 1], up[i], i)
+			testing.expectf(t, up[i] - up[i - 1] < 40, "no jump: %v then %v from the bottom (frame %d)", up[i - 1], up[i], i)
+		}
+		session.click_at(s, mid)   // (a click ends it)
+		session.frames(s, 2)
+		testing.expect(t, !ui.autoscroll_running(&app.state), "a click ends it")
+	}
+
 	// the wheel, up through the conversation (from its bottom as it is now: the heights it learned since have moved it)
 	sb = session.get(s, "chat")
 	limit = sb.view_bounds.y - sb.size.y

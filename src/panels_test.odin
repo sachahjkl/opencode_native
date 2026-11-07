@@ -1254,6 +1254,61 @@ an_empty_file_ends_the_wait :: proc(t: ^testing.T) {
 	testing.expect_value(t, toasts(app), 1)
 }
 
+// A thumbnail is decoded at its place's size, in a few classes; the viewer at the whole image (what a texture holds).
+@(test)
+an_image_is_decoded_at_the_size_it_is_shown :: proc(t: ^testing.T) {
+	testing.expect_value(t, image_dim_class(20, 2048), u32(32))     // a logo
+	testing.expect_value(t, image_dim_class(200, 2048), u32(256))
+	testing.expect_value(t, image_dim_class(420, 2048), u32(512))   // a tool's capture at 1.75
+	testing.expect_value(t, image_dim_class(430, 2048), u32(512))   // (a window a little wider: the same texture)
+	testing.expect_value(t, image_dim_class(910, 2048), u32(1024))
+	testing.expect_value(t, image_dim_class(3000, 2048), u32(2048))
+	testing.expect_value(t, image_dim_class(0, 2048), u32(2048))     // the viewer
+}
+
+// What waits for a decoder and is no longer shown when its turn comes is let go, not decoded: a find or a fast scroll that built a
+// thousand thumbnails on its way decoded them all at once (14 GB).
+@(test)
+an_image_no_longer_shown_is_not_decoded :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	app.frame_no = 100
+	pending := app.pending
+	for i in 0 ..< 5 {
+		key := u64(i * 2 + 1)
+		app.images[key] = {state = .Pending, used = 10}   // (shown long ago)
+		job := new(Decode_Job)
+		job^ = {app = app, key = key, data = strings.clone("x")}
+		append(&app.cx.image_queue, job)
+		sync.atomic_add(&app.pending, 1)
+	}
+	images_pump(app)
+	testing.expect_value(t, len(app.cx.image_queue), 0)
+	testing.expect_value(t, app.cx.image_decoding, 0)   // (none started)
+	testing.expect_value(t, len(app.images), 0)          // (asked again if shown again)
+	testing.expect_value(t, app.pending, pending)
+}
+
+// The textures kept hold no more than the budget, the ones shown longest ago going first; what was just shown stays.
+@(test)
+the_textures_kept_hold_a_budget :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	app.frame_no = 100
+	side := 1024   // 4 MiB each
+	n := IMAGE_BUDGET_BYTES / (side * side * 4) + 10
+	for i in 0 ..< n { app.images[u64(i * 2 + 1)] = {state = .Ready, w = side, h = side, used = u64(i)} }   // (no texture: nothing to destroy)
+	app.images[9999] = {state = .Ready, w = 4096, h = 4096, used = 100}   // shown now: stays, whatever it costs
+	images_trim(app)
+	held := 0
+	for _, e in app.images { held += e.w * e.h * 4 }
+	testing.expect(t, 9999 in app.images, "what is shown stays")
+	testing.expect(t, !(u64(1) in app.images), "the oldest went")
+	testing.expect(t, u64((n - 1) * 2 + 1) in app.images, "the newest stays")
+	testing.expectf(t, held <= IMAGE_BUDGET_BYTES, "within the budget: %d MB", held >> 20)
+	testing.expectf(t, held > IMAGE_BUDGET_BYTES - side * side * 4, "no more went than needed: %d MB", held >> 20)
+}
+
 @(test)
 a_picture_that_failed_says_why :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()

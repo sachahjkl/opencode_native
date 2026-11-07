@@ -1,6 +1,10 @@
 // Images: those attached to prompts, those tools hand back (screenshots, images read), and projects' logos. Each is
-// decoded once by the Rust library (PNG, JPEG, WebP, GIF, BMP; scaled down to fit a texture) on a worker thread, then
-// kept as a texture keyed by a hash of its data. Thumbnails open a viewer that fits the image to the window.
+// decoded by the Rust library (PNG, JPEG, WebP, GIF, BMP) on a worker thread, scaled down to the size it is shown at (a
+// thumbnail's, the viewer's: the whole of it), then kept as a texture keyed by a hash of its data and that size. The
+// textures together hold no more than IMAGE_BUDGET_BYTES, the ones shown longest ago going first; a few decoders work at a
+// time, and an image no longer shown when its turn comes is not decoded. (A 2048-pixel texture for every thumbnail of a
+// long conversation held a gigabyte; a find that built them all decoded them all at once.) Thumbnails open the viewer,
+// which fits the image to the window.
 package occ
 
 import "core:fmt"
@@ -46,39 +50,83 @@ Image_Entry :: struct {
 	error:   string,   // (owned)
 }
 
-MAX_TEXTURES :: 96
-IMAGE_MAX_DIM_PX :: 2048   // what a decode scales down to, when the textures allow more
+IMAGE_BUDGET_BYTES :: 96 << 20    // the pixels of every texture kept (those shown in this frame and the last ones stay whatever)
+IMAGE_MAX_DIM_PX   :: 2048        // what a decode scales down to, when the textures allow more
+IMAGE_DECODERS     :: 3           // decodes at a time
+IMAGE_CLASS_STEP_PX :: 256        // the sizes decoded at: powers of two up to it, then its multiples
+IMAGE_KEEP_FRAMES  :: 2           // an image shown this many frames ago is still shown (its decode goes on, its texture stays)
 
-@(private = "file")
 Decode_Job :: struct {
 	app:      ^App,   // (for its thread: the_app is the interface's)
 	key:      u64,
 	data:     string,   // (owned copy)
 	encoding: Image_Encoding,
 	max_dim:  u32,
+	mips:     bool,   // the whole image (the viewer: shown much smaller than it is); a thumbnail is decoded at its size, sharper without
 	// the answer
 	w, h:     u32,
 	out:      Occ_Buf,
 	ok:       bool,
 }
 
-// The texture of `ref`, decoding it when first asked for (nil while it is not known yet).
-image_get :: proc(app: ^App, ref: Image_Ref) -> ^Image_Entry {
+// The longest side an image is decoded at for a place whose longest side is `need` frame pixels (0: the whole image, up to
+// what a texture holds). In classes: places of nearly one size share a texture, and a window resized does not decode again.
+image_dim :: proc(app: ^App, need: f32) -> u32 {
+	return image_dim_class(need, u32(min(IMAGE_MAX_DIM_PX, render.max_texture_size(&app.r))))
+}
+
+// (`most`: the longest side a texture may have here)
+image_dim_class :: proc(need: f32, most: u32) -> u32 {
+	if need <= 0 { return most }
+	n := u32(max(1, math.ceil(need)))
+	c: u32 = 32
+	if n <= IMAGE_CLASS_STEP_PX {
+		for c < n { c *= 2 }
+	} else {
+		c = (n + IMAGE_CLASS_STEP_PX - 1) / IMAGE_CLASS_STEP_PX * IMAGE_CLASS_STEP_PX
+	}
+	return min(c, most)
+}
+
+// The texture of `ref` for a place whose longest side is `need` frame pixels (0: the whole image), its decode asked for the first
+// time (nil: no image).
+image_get :: proc(app: ^App, ref: Image_Ref, need: f32) -> ^Image_Entry {
 	if ref.key == 0 || ref.data == "" { return nil }
-	if e, ok := &app.images[ref.key]; ok {
+	dim := image_dim(app, need)
+	key := (ref.key ~ u64(dim) * HASH_MIX_B) | 1
+	if e, ok := &app.images[key]; ok {
 		e.used = app.frame_no
 		return e
 	}
-	app.images[ref.key] = {state = .Pending, used = app.frame_no}
+	app.images[key] = {state = .Pending, used = app.frame_no}
 	job := new(Decode_Job)
-	job^ = {app = app, key = ref.key, data = strings.clone(ref.data), encoding = ref.encoding, max_dim = u32(min(IMAGE_MAX_DIM_PX, render.max_texture_size(&app.r)))}
+	job^ = {app = app, key = key, data = strings.clone(ref.data), encoding = ref.encoding, max_dim = dim, mips = need <= 0}
 	sync.atomic_add(&app.pending, 1)
-	thread.create_and_start_with_poly_data(job, proc(job: ^Decode_Job) {
-		r := occ_image_decode(raw_data(job.data), len(job.data), i32(job.encoding), job.max_dim, &job.w, &job.h, &job.out)
-		job.ok = r == 0
-		if !ui.post(&job.app.state, image_decoded, job) { occ_buf_free(job.out); delete(job.data); free(job) }
-	}, self_cleanup = true)
-	return &app.images[ref.key]
+	append(&app.cx.image_queue, job)
+	images_pump(app)
+	return &app.images[key]
+}
+
+// Decoders for what waits, the last asked for first (what is on screen now, when the view went by many). What is no longer shown
+// when its turn comes is let go: asked again if it is shown again.
+images_pump :: proc(app: ^App) {
+	q := &app.cx.image_queue
+	for app.cx.image_decoding < IMAGE_DECODERS && len(q) > 0 {
+		job := pop(q)
+		if e, ok := app.images[job.key]; !ok || e.used + IMAGE_KEEP_FRAMES < app.frame_no {
+			delete_key(&app.images, job.key)
+			delete(job.data)
+			free(job)
+			sync.atomic_sub(&app.pending, 1)
+			continue
+		}
+		app.cx.image_decoding += 1
+		thread.create_and_start_with_poly_data(job, proc(job: ^Decode_Job) {
+			r := occ_image_decode(raw_data(job.data), len(job.data), i32(job.encoding), job.max_dim, &job.w, &job.h, &job.out)
+			job.ok = r == 0
+			if !ui.post(&job.app.state, image_decoded, job) { occ_buf_free(job.out); delete(job.data); free(job) }
+		}, self_cleanup = true)
+	}
 }
 
 // On the interface's thread: the pixels become a texture.
@@ -87,14 +135,16 @@ image_decoded :: proc(data: rawptr, word: u64) {
 	app := the_app
 	job := (^Decode_Job)(data)
 	defer { occ_buf_free(job.out); delete(job.data); free(job) }
+	defer images_pump(app)
 	sync.atomic_sub(&app.pending, 1)
+	app.cx.image_decoding -= 1
 	e, ok := &app.images[job.key]
 	if !ok { return }
 	if !job.ok || job.w == 0 || job.h == 0 {
 		image_failed(e, string(job.out.ptr[:job.out.len]))
 		return
 	}
-	e.tex = render.create_texture_rgba(&app.r, int(job.w), int(job.h))
+	e.tex = render.create_texture_rgba(&app.r, int(job.w), int(job.h), mips = job.mips)
 	if e.tex == 0 { image_failed(e, "no room for its texture"); return }
 	render.update_texture_rgba(&app.r, e.tex, 0, 0, int(job.w), int(job.h), job.out.ptr[:job.out.len])
 	e.w, e.h = int(job.w), int(job.h)
@@ -113,15 +163,18 @@ image_failed_words :: proc(e: ^Image_Entry) -> string {
 	return e.error != "" ? fmt.tprintf("image unreadable: %s", e.error) : "image unreadable"
 }
 
-// Keeps at most MAX_TEXTURES textures: the ones shown longest ago go (they are decoded again when shown).
+// Keeps the textures within IMAGE_BUDGET_BYTES: the ones shown longest ago go (they are decoded again when shown).
 images_trim :: proc(app: ^App) {
-	for len(app.images) > MAX_TEXTURES {
+	held := 0
+	for _, e in app.images { held += e.w * e.h * 4 }
+	for held > IMAGE_BUDGET_BYTES {
 		oldest: u64
 		best := max(u64)
 		for k, e in app.images {
-			if e.state != .Pending && e.used < best && e.used + 2 < app.frame_no { best, oldest = e.used, k }
+			if e.state != .Pending && e.used < best && e.used + IMAGE_KEEP_FRAMES < app.frame_no { best, oldest = e.used, k }
 		}
 		if oldest == 0 { return }
+		held -= app.images[oldest].w * app.images[oldest].h * 4
 		e := app.images[oldest]
 		if e.tex != 0 { render.destroy_texture(&app.r, e.tex) }
 		delete(e.error)
@@ -165,7 +218,7 @@ image_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 
 // A thumbnail of `ref` fitting `max_w` x `max_h` (frame pixels), clickable: a click opens the viewer.
 image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) -> ui.Signal {
-	e := image_get(app, ref)
+	e := image_get(app, ref, max(max_w, max_h))
 	w, h := max_w * THUMB_PENDING_SCALE, max_h * THUMB_PENDING_SCALE
 	state := Image_State.Pending
 	tex: render.Texture
@@ -209,7 +262,7 @@ image_strip :: proc(app: ^App, id: string, refs: []Image_Ref, max_w, max_h: f32)
 // A small square logo (a project's), drawn from its texture; nothing while it decodes.
 logo_of :: proc(app: ^App, id: string, ref: ^Image_Ref, size: f32) -> bool {
 	if ref == nil { return false }
-	e := image_get(app, ref^)
+	e := image_get(app, ref^, size)
 	if e == nil || e.state != .Ready { return false }
 	ui.next({width = ui.px(size), height = ui.px(size)})
 	b := ui.build_box({}, id)
@@ -234,7 +287,7 @@ image_view_start :: proc(app: ^App, path: string) {
 // ever come, and the wait would draw frames for good.)
 image_view_wait :: proc(app: ^App) {
 	if app.view_start.key == 0 { return }
-	s := image_get(app, app.view_start)
+	s := image_get(app, app.view_start, 0)
 	if s != nil && s.state == .Pending {
 		animate(app)
 		return
@@ -247,9 +300,11 @@ image_view_wait :: proc(app: ^App) {
 	app.view_start.key = 0
 }
 
+// The viewer, on the whole image (decoded now if the thumbnail's was all there was: it waits for it).
 image_view_open :: proc(app: ^App, ref: Image_Ref) {
 	delete(app.view_name)
-	app.view_key = ref.key
+	_ = image_get(app, ref, 0)
+	app.view_key = (ref.key ~ u64(image_dim(app, 0)) * HASH_MIX_B) | 1
 	app.view_name = strings.clone(ref.name)
 	app.view_open = true
 	app.view_zoom, app.view_pan = 1, {}
@@ -298,8 +353,20 @@ image_viewer :: proc(app: ^App, em: f32) {
 	image_view_wait(app)
 	if !app.view_open { return }
 	e, ok := &app.images[app.view_key]
-	if !ok || e.state != .Ready { app.view_open = false; return }
+	if !ok || e.state == .Failed { app.view_open = false; return }
 	e.used = app.frame_no
+	if e.state == .Pending {
+		// (its decode: a moment, over the conversation dimmed)
+		animate(app)
+		if ui.modal("image_view", em * 12, &app.view_open) {
+			dialog_backdrop()
+			ui.spacer(ui.px(em))
+			ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
+			if ui.tags("weak") { ui.label("Opening the image…###view_wait") }
+			ui.spacer(ui.px(em))
+		}
+		return
+	}
 	win := app.state.window_size
 	sc := ui.scale()
 	view := [2]f32{math.round(win.x * VIEWER_FILL - em * 2), math.round(win.y * VIEWER_FILL - em * VIEWER_CHROME_EM)}

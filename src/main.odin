@@ -90,7 +90,7 @@ App :: struct {
 	chat_sb:          ^ui.Box, // the conversation scroll box, when built this frame
 	stats_open:       bool,           // the Statistics panel of the session shown (stats.odin)
 	proj_stats:       Project_Stats,
-	images:           map[u64]Image_Entry,   // decoded images, by key (images.odin)
+	images:           map[u64]Image_Entry,   // decoded images, by key and size (images.odin)
 	frame_no:         u64,
 	view_open:        bool,                  // the image viewer
 	view_key:         u64,
@@ -152,6 +152,8 @@ App_Context :: struct {
 	waits_unread:   bool,              // the stream just came up: what sessions wait on, asked before it, is read from the next list
 	built:          ^ui.State,         // the state of a window of its own, while it is built (nil: the main one)
 	answers_spent:  [dynamic]^virtual.Arena,   // what this frame's answers were read into (net.odin)
+	image_queue:    [dynamic]^Decode_Job,      // images waiting for a decoder, the last asked for first (images.odin)
+	image_decoding: int,                       // ... decoders at work
 	flights:        [dynamic]Flight,   // what is on its way (net.odin)
 	stream_seq:     Seq,               // events applied so far: the clock of what is newer than an answer (Request.asked_at)
 	busy_seq:       map[string]Seq,    // when the stream last said a session started or ended (keys owned)
