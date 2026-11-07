@@ -145,7 +145,7 @@ term_new :: proc(id, title, dir: string, cols: u16 = TERM_COLS, rows: u16 = TERM
 	ghostty_terminal_set(t.vt, VT_OPT_COLOR_BACKGROUND, &bg)
 	ghostty_terminal_set(t.vt, VT_OPT_COLOR_FOREGROUND, &fg)
 	track := true
-	ghostty_mouse_encoder_setopt(t.mouse_enc, VT_MOUSE_OPT_TRACK_LAST_CELL, &track)
+	ghostty_mouse_encoder_set(t.mouse_enc, VT_MOUSE_OPT_TRACK_LAST_CELL, &track)
 	return t
 }
 
@@ -718,13 +718,13 @@ term_encode_key :: proc(t: ^Term, k: platform.Key, mods: platform.Modifiers, rep
 	key, printable, unshifted := term_key(k)
 	if key == 0 { return "" }
 	if printable && (mods & {.Ctrl, .Alt} == {} || mods & {.Ctrl, .Alt} == {.Ctrl, .Alt}) { return "" }
-	ghostty_key_encoder_setopt_from_terminal(t.key_enc, t.vt)
+	ghostty_key_encoder_set_from_terminal(t.key_enc, t.vt)
 	ghostty_key_event_set_key(t.key_ev, key)
 	ghostty_key_event_set_action(t.key_ev, repeat ? VT_ACTION_REPEAT : VT_ACTION_PRESS)
 	ghostty_key_event_set_mods(t.key_ev, mods_of(mods))
 	ghostty_key_event_set_consumed_mods(t.key_ev, 0)
 	ghostty_key_event_set_unshifted_codepoint(t.key_ev, unshifted)
-	ghostty_key_event_set_utf8(t.key_ev, nil, 0)
+	ghostty_key_event_set_utf8(t.key_ev, {})
 	buf := make([]u8, TERM_KEY_BYTES, context.temp_allocator)
 	n: uint
 	if ghostty_key_encoder_encode(t.key_enc, t.key_ev, raw_data(buf), len(buf), &n) != VT_OK { return "" }
@@ -809,15 +809,15 @@ term_inside :: proc(t: ^Term, p: [2]f32) -> [2]f32 {
 term_mouse :: proc(t: ^Term, s: ^Terminals, action, button: i32, at: [2]f32, mods: platform.Modifiers, held: bool) {
 	if t.vt == nil { return }
 	pos := term_inside(t, at)
-	ghostty_mouse_encoder_setopt_from_terminal(t.mouse_enc, t.vt)
+	ghostty_mouse_encoder_set_from_terminal(t.mouse_enc, t.vt)
 	size := Vt_Mouse_Size{
 		size = size_of(Vt_Mouse_Size), screen_width = u32(t.rect.max.x - t.rect.min.x), screen_height = u32(t.rect.max.y - t.rect.min.y),
 		cell_width = u32(s.cell_w), cell_height = u32(s.cell_h),
 		padding_top = u32(TERM_PAD), padding_bottom = u32(TERM_PAD), padding_right = u32(TERM_PAD), padding_left = u32(TERM_PAD),
 	}
-	ghostty_mouse_encoder_setopt(t.mouse_enc, VT_MOUSE_OPT_SIZE, &size)
+	ghostty_mouse_encoder_set(t.mouse_enc, VT_MOUSE_OPT_SIZE, &size)
 	any := held
-	ghostty_mouse_encoder_setopt(t.mouse_enc, VT_MOUSE_OPT_ANY_PRESSED, &any)
+	ghostty_mouse_encoder_set(t.mouse_enc, VT_MOUSE_OPT_ANY_PRESSED, &any)
 	ghostty_mouse_event_set_action(t.mouse_ev, action)
 	if button != 0 { ghostty_mouse_event_set_button(t.mouse_ev, button) } else { ghostty_mouse_event_clear_button(t.mouse_ev) }
 	ghostty_mouse_event_set_mods(t.mouse_ev, mods_of(mods))
@@ -1169,7 +1169,7 @@ term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		t.drawn = true
 	}
 	colors := Vt_Colors{size = size_of(Vt_Colors)}
-	if ghostty_render_state_colors_get(t.state, &colors) != VT_OK { return }
+	if ghostty_render_state_get(t.state, VT_STATE_COLORS, &colors) != VT_OK { return }
 	if ghostty_render_state_get(t.state, VT_STATE_ROW_ITERATOR, &t.rows_it) != VT_OK { return }
 	origin := b.rect.min + TERM_PAD
 	for l in t.lines { delete(l) }
@@ -1197,15 +1197,14 @@ term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		for ghostty_render_state_row_cells_next(t.cells) {
 			defer x += 1
 			left := origin.x + f32(x) * s.cell_w
-			n: u32
-			ghostty_render_state_row_cells_get(t.cells, VT_CELL_GRAPHEMES_LEN, &n)
-			style := Vt_Style{size = size_of(Vt_Style)}
+			style: Vt_Style
 			ghostty_render_state_row_cells_get(t.cells, VT_CELL_STYLE, &style)
+			bold := style.flags & VT_STYLE_BOLD != 0
 			fg := colors.foreground
 			ghostty_render_state_row_cells_get(t.cells, VT_CELL_FG, &fg)
 			bg := colors.background
 			has_bg := ghostty_render_state_row_cells_get(t.cells, VT_CELL_BG, &bg) == VT_OK
-			if style.inverse { fg, bg, has_bg = bg, fg, true }
+			if style.flags & VT_STYLE_INVERSE != 0 { fg, bg, has_bg = bg, fg, true }
 			cell := draw.Rect{{left, top}, {left + s.cell_w, top + s.cell_h}}
 			if in_selection(t, x, y) {
 				draw.rect(dc, cell, hex(HEX_TERM_SELECTION))
@@ -1213,24 +1212,26 @@ term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 				draw.rect(dc, cell, color_of(bg))
 			}
 			color := color_of(fg)
-			if style.faint { color.a *= TERM_FAINT }
+			if style.flags & VT_STYLE_FAINT != 0 { color.a *= TERM_FAINT }
 			glyphs: [8]u32
-			if n > 0 && n <= len(glyphs) { ghostty_render_state_row_cells_get(t.cells, VT_CELL_GRAPHEMES_BUF, &glyphs) }
-			if style.invisible { n = 0 }
-			if style.underline != 0 { draw.rect(dc, {{left, top + s.ascent + 1}, {left + s.cell_w, top + s.ascent + 2}}, color) }
-			if style.strikethrough { draw.rect(dc, {{left, top + s.cell_h * 0.55}, {left + s.cell_w, top + s.cell_h * 0.55 + 1}}, color) }
+			read := Vt_Codepoints{ptr = &glyphs[0], cap = len(glyphs)}
+			ghostty_render_state_row_cells_get(t.cells, VT_CELL_GRAPHEMES_BUF, &read)   // (more than it holds: the first of them)
+			n := min(read.len, len(glyphs))
+			if style.flags & VT_STYLE_INVISIBLE != 0 { n = 0 }
+			if style.flags & VT_STYLE_UNDERLINE != 0 { draw.rect(dc, {{left, top + s.ascent + 1}, {left + s.cell_w, top + s.ascent + 2}}, color) }
+			if style.flags & VT_STYLE_STRIKETHROUGH != 0 { draw.rect(dc, {{left, top + s.cell_h * 0.55}, {left + s.cell_w, top + s.cell_h * 0.55 + 1}}, color) }
 			ascii := n == 1 && glyphs[0] < 0x80
 			if n == 0 {
 				strings.write_byte(&line, ' ')
 				if strings.builder_len(row) > 0 { strings.write_byte(&row, ' ') }
 				continue
 			}
-			for g in glyphs[:min(n, len(glyphs))] { strings.write_rune(&line, rune(g)) }
-			if !ascii || color != run_color || style.bold != run_bold || strings.builder_len(row) == 0 {
+			for g in glyphs[:n] { strings.write_rune(&line, rune(g)) }
+			if !ascii || color != run_color || bold != run_bold || strings.builder_len(row) == 0 {
 				flush(&runs, &row, run_x, run_color, run_bold)
-				run_x, run_color, run_bold = left, color, style.bold
+				run_x, run_color, run_bold = left, color, bold
 			}
-			for g in glyphs[:min(n, len(glyphs))] { strings.write_rune(&row, rune(g)) }
+			for g in glyphs[:n] { strings.write_rune(&row, rune(g)) }
 			if !ascii { flush(&runs, &row, run_x, run_color, run_bold) }
 		}
 		flush(&runs, &row, run_x, run_color, run_bold)

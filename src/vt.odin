@@ -1,5 +1,6 @@
 // libghostty-vt, the terminal emulation of Ghostty: what the Terminal panel uses of its C API. Built by occtools build, pinned
-// there; the numbers below are those of its headers at that commit (zig-out/include/ghostty/vt).
+// there; the numbers below are those of its headers at that commit (zig-out/include/ghostty/vt). They are copied by hand and nothing
+// checks them at the build: a number off by one still links. vt_test.odin reads through each of them on the real library.
 package occ
 
 when ODIN_OS == .Windows {
@@ -20,14 +21,23 @@ Vt_Mouse_Event   :: distinct rawptr
 Vt_Rgb :: struct { r, g, b: u8 }
 Vt_String :: struct { ptr: [^]u8, len: uint }
 
-Vt_Style_Color :: struct { tag: i32, value: u64 }
+Vt_Style_Color :: struct { tag: u8, value: [3]u8 }   // (the union is a palette index or three bytes)
 
 Vt_Style :: struct {
-	size: uint,
 	fg, bg, underline_color: Vt_Style_Color,
-	bold, italic, faint, blink, inverse, invisible, strikethrough, overline: bool,
-	underline: i32,
+	flags:                   u16,
+	reserved:                u16,
 }
+
+VT_STYLE_BOLD          :: 1 << 0
+VT_STYLE_FAINT         :: 1 << 2
+VT_STYLE_INVERSE       :: 1 << 4
+VT_STYLE_INVISIBLE     :: 1 << 5
+VT_STYLE_STRIKETHROUGH :: 1 << 6
+VT_STYLE_UNDERLINE     :: 0x7 << 8   // (a kind, not a flag: 0 is none)
+
+// Where a cell's codepoints go. `len`: how many it has, even past `cap`.
+Vt_Codepoints :: struct { ptr: [^]u32, cap, len: uint }
 
 Vt_Colors :: struct {
 	size: uint,
@@ -58,12 +68,12 @@ Vt_Mouse_Position :: struct { x, y: f32 }
 VT_OK :: 0
 
 // GhosttyTerminalOption
-VT_OPT_USERDATA      :: 0
-VT_OPT_WRITE_PTY     :: 1
-VT_OPT_TITLE_CHANGED :: 5
-VT_OPT_COLOR_FOREGROUND :: 11
-VT_OPT_COLOR_BACKGROUND :: 12
-VT_OPT_SCROLLBACK_MAX_LINES :: 28
+VT_OPT_USERDATA      :: 1
+VT_OPT_WRITE_PTY     :: 2
+VT_OPT_TITLE_CHANGED :: 6
+VT_OPT_COLOR_FOREGROUND :: 12
+VT_OPT_COLOR_BACKGROUND :: 13
+VT_OPT_SCROLLBACK_MAX_LINES :: 29
 
 // GhosttyTerminalData
 VT_DATA_SCROLLBAR      :: 9
@@ -78,6 +88,7 @@ VT_STATE_CURSOR_VISIBLE :: 11
 VT_STATE_CURSOR_IN_VIEW :: 14
 VT_STATE_CURSOR_X       :: 15
 VT_STATE_CURSOR_Y       :: 16
+VT_STATE_COLORS         :: 19
 
 VT_CURSOR_BAR       :: 0
 VT_CURSOR_BLOCK     :: 1
@@ -87,7 +98,6 @@ VT_ROW_CELLS :: 3
 
 // GhosttyRenderStateRowCellsData
 VT_CELL_STYLE         :: 2
-VT_CELL_GRAPHEMES_LEN :: 3
 VT_CELL_GRAPHEMES_BUF :: 4
 VT_CELL_BG            :: 5
 VT_CELL_FG            :: 6
@@ -109,9 +119,9 @@ VT_MOUSE_MIDDLE :: 3
 VT_MOUSE_FOUR   :: 4   // (the wheel, up)
 VT_MOUSE_FIVE   :: 5   // (the wheel, down)
 
-VT_MOUSE_OPT_SIZE            :: 2
-VT_MOUSE_OPT_ANY_PRESSED     :: 3
-VT_MOUSE_OPT_TRACK_LAST_CELL :: 4
+VT_MOUSE_OPT_SIZE            :: 3
+VT_MOUSE_OPT_ANY_PRESSED     :: 4
+VT_MOUSE_OPT_TRACK_LAST_CELL :: 5
 
 // GhosttyKey: the W3C codes, as a C compiler reads them in the headers.
 VT_KEY_COMMA :: 5
@@ -152,13 +162,12 @@ foreign ghostty_vt {
 	ghostty_terminal_resize :: proc(t: Vt_Terminal, cols, rows: u16, cell_w, cell_h: u32) -> i32 ---
 	ghostty_terminal_set :: proc(t: Vt_Terminal, option: i32, value: rawptr) -> i32 ---
 	ghostty_terminal_get :: proc(t: Vt_Terminal, data: i32, out: rawptr) -> i32 ---
-	ghostty_terminal_scroll_viewport :: proc(t: Vt_Terminal, behaviour: Vt_Scroll) ---
+	ghostty_terminal_scroll_viewport :: proc(t: Vt_Terminal, behaviour: Vt_Scroll) -> i32 ---
 
 	ghostty_render_state_new :: proc(alloc: rawptr, s: ^Vt_State) -> i32 ---
 	ghostty_render_state_free :: proc(s: Vt_State) ---
 	ghostty_render_state_update :: proc(s: Vt_State, t: Vt_Terminal) -> i32 ---
 	ghostty_render_state_get :: proc(s: Vt_State, data: i32, out: rawptr) -> i32 ---
-	ghostty_render_state_colors_get :: proc(s: Vt_State, out: ^Vt_Colors) -> i32 ---
 	ghostty_render_state_row_iterator_new :: proc(alloc: rawptr, it: ^Vt_Rows) -> i32 ---
 	ghostty_render_state_row_iterator_free :: proc(it: Vt_Rows) ---
 	ghostty_render_state_row_iterator_next :: proc(it: Vt_Rows) -> bool ---
@@ -170,27 +179,27 @@ foreign ghostty_vt {
 
 	ghostty_key_encoder_new :: proc(alloc: rawptr, e: ^Vt_Key_Encoder) -> i32 ---
 	ghostty_key_encoder_free :: proc(e: Vt_Key_Encoder) ---
-	ghostty_key_encoder_setopt_from_terminal :: proc(e: Vt_Key_Encoder, t: Vt_Terminal) ---
+	ghostty_key_encoder_set_from_terminal :: proc(e: Vt_Key_Encoder, t: Vt_Terminal) -> i32 ---
 	ghostty_key_encoder_encode :: proc(e: Vt_Key_Encoder, ev: Vt_Key_Event, out: [^]u8, size: uint, n: ^uint) -> i32 ---
 	ghostty_key_event_new :: proc(alloc: rawptr, ev: ^Vt_Key_Event) -> i32 ---
 	ghostty_key_event_free :: proc(ev: Vt_Key_Event) ---
-	ghostty_key_event_set_key :: proc(ev: Vt_Key_Event, key: i32) ---
-	ghostty_key_event_set_action :: proc(ev: Vt_Key_Event, action: i32) ---
-	ghostty_key_event_set_mods :: proc(ev: Vt_Key_Event, mods: u16) ---
-	ghostty_key_event_set_consumed_mods :: proc(ev: Vt_Key_Event, mods: u16) ---
-	ghostty_key_event_set_unshifted_codepoint :: proc(ev: Vt_Key_Event, cp: u32) ---
-	ghostty_key_event_set_utf8 :: proc(ev: Vt_Key_Event, s: [^]u8, n: uint) ---
+	ghostty_key_event_set_key :: proc(ev: Vt_Key_Event, key: i32) -> i32 ---
+	ghostty_key_event_set_action :: proc(ev: Vt_Key_Event, action: i32) -> i32 ---
+	ghostty_key_event_set_mods :: proc(ev: Vt_Key_Event, mods: u16) -> i32 ---
+	ghostty_key_event_set_consumed_mods :: proc(ev: Vt_Key_Event, mods: u16) -> i32 ---
+	ghostty_key_event_set_unshifted_codepoint :: proc(ev: Vt_Key_Event, cp: u32) -> i32 ---
+	ghostty_key_event_set_utf8 :: proc(ev: Vt_Key_Event, s: Vt_String) -> i32 ---
 
 	ghostty_mouse_encoder_new :: proc(alloc: rawptr, e: ^Vt_Mouse_Encoder) -> i32 ---
 	ghostty_mouse_encoder_free :: proc(e: Vt_Mouse_Encoder) ---
-	ghostty_mouse_encoder_setopt :: proc(e: Vt_Mouse_Encoder, option: i32, value: rawptr) ---
-	ghostty_mouse_encoder_setopt_from_terminal :: proc(e: Vt_Mouse_Encoder, t: Vt_Terminal) ---
+	ghostty_mouse_encoder_set :: proc(e: Vt_Mouse_Encoder, option: i32, value: rawptr) -> i32 ---
+	ghostty_mouse_encoder_set_from_terminal :: proc(e: Vt_Mouse_Encoder, t: Vt_Terminal) -> i32 ---
 	ghostty_mouse_encoder_encode :: proc(e: Vt_Mouse_Encoder, ev: Vt_Mouse_Event, out: [^]u8, size: uint, n: ^uint) -> i32 ---
 	ghostty_mouse_event_new :: proc(alloc: rawptr, ev: ^Vt_Mouse_Event) -> i32 ---
 	ghostty_mouse_event_free :: proc(ev: Vt_Mouse_Event) ---
-	ghostty_mouse_event_set_action :: proc(ev: Vt_Mouse_Event, action: i32) ---
-	ghostty_mouse_event_set_button :: proc(ev: Vt_Mouse_Event, button: i32) ---
-	ghostty_mouse_event_clear_button :: proc(ev: Vt_Mouse_Event) ---
-	ghostty_mouse_event_set_mods :: proc(ev: Vt_Mouse_Event, mods: u16) ---
-	ghostty_mouse_event_set_position :: proc(ev: Vt_Mouse_Event, pos: Vt_Mouse_Position) ---
+	ghostty_mouse_event_set_action :: proc(ev: Vt_Mouse_Event, action: i32) -> i32 ---
+	ghostty_mouse_event_set_button :: proc(ev: Vt_Mouse_Event, button: i32) -> i32 ---
+	ghostty_mouse_event_clear_button :: proc(ev: Vt_Mouse_Event) -> i32 ---
+	ghostty_mouse_event_set_mods :: proc(ev: Vt_Mouse_Event, mods: u16) -> i32 ---
+	ghostty_mouse_event_set_position :: proc(ev: Vt_Mouse_Event, pos: Vt_Mouse_Position) -> i32 ---
 }

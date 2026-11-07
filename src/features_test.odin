@@ -390,8 +390,8 @@ the_plugins_one_chose_come_first :: proc(t: ^testing.T) {
 // The ABI of libghostty-vt: what is passed by value or filled by size must be as big as in its headers (a C compiler says these).
 @(test)
 the_terminal_structs_are_those_of_the_headers :: proc(t: ^testing.T) {
-	testing.expect_value(t, size_of(Vt_Style), 72)
-	testing.expect_value(t, size_of(Vt_Style_Color), 16)
+	testing.expect_value(t, size_of(Vt_Style), 16)
+	testing.expect_value(t, size_of(Vt_Style_Color), 4)
 	testing.expect_value(t, size_of(Vt_Colors), 792)
 	testing.expect_value(t, size_of(Vt_Scroll), 24)
 	testing.expect_value(t, size_of(Vt_Mode), 4)

@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.17.4] - 2026-11-07
+
+### Changed
+
+- The Terminal runs on libghostty-vt 1.0, the first stable version of Ghostty's terminal library, built with Zig 0.17.
+
 ## [0.17.3] - 2026-11-06
 
 ### Added
@@ -685,6 +691,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
 [Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.17.0...HEAD
+[0.17.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.4
 [0.17.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.3
 [0.17.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.2
 [0.17.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.17.1

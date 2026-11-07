@@ -1,7 +1,7 @@
 package occtools
 
 // The program built, the same steps on Windows and Linux: the Rust library, Ghostty's emulation, the numbers of the version, then
-// the program. What is pinned is here: Ghostty by commit (the one Ghostling, its reference client, builds against), Zig by version
+// the program. What is pinned is here: Ghostty by the commit of its tag vt-1.0.0, libghostty-vt's first stable version, Zig by version
 // and SHA-256, the crates by native/Cargo.lock (--locked). Ghostty's source and Zig are fetched into build/vt, and nowhere else.
 
 import "core:fmt"
@@ -22,9 +22,9 @@ VT_SOURCE  :: VT_OUT + "/ghostty"
 VERSION_H  :: "build/version.h"
 SETUP_FILE :: "src/setup.odin"
 
-GHOSTTY_COMMIT :: "f64f4aca2c29b554d111b36c3d946a9bddd159ff"
+GHOSTTY_COMMIT :: "0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec"
 GHOSTTY_REMOTE :: "https://github.com/ghostty-org/ghostty.git"
-ZIG_VERSION    :: "0.16.0"
+ZIG_VERSION    :: "0.17.0"
 
 when ODIN_OS == .Windows {
 	NATIVE_LIB      :: NATIVE_OUT + "/occ_native.lib"
@@ -35,7 +35,7 @@ when ODIN_OS == .Windows {
 	VT_TARGET       :: "x86_64-windows-msvc"
 	ZIG_SYSTEM      :: "windows"
 	ZIG_ARCHIVE     :: ".zip"
-	ZIG_SHA256      :: "68659eb5f1e4eb1437a722f1dd889c5a322c9954607f5edcf337bc3684a75a7e"
+	ZIG_SHA256      :: "b5663f69581dcf391293fbf16c06cb80d81d806545ce618b4d0bab7f0eb8c428"
 } else {
 	NATIVE_LIB      :: NATIVE_OUT + "/libocc_native.a"
 	NATIVE_TARGET   :: ""
@@ -45,7 +45,7 @@ when ODIN_OS == .Windows {
 	VT_TARGET       :: "x86_64-linux-gnu"
 	ZIG_SYSTEM      :: "linux"
 	ZIG_ARCHIVE     :: ".tar.xz"
-	ZIG_SHA256      :: "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00"
+	ZIG_SHA256      :: "1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026"
 }
 ZIG_NAME :: "zig-x86_64-" + ZIG_SYSTEM + "-" + ZIG_VERSION
 
