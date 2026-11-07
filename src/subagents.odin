@@ -265,13 +265,13 @@ nav_restore :: proc(app: ^App, id: string) {
 	app.stick_bottom = false
 }
 
-// Its limit runs on the clock: the message may never be built (restore_frames only counts once it is), and until the view has
+// Its limit runs on the clock: the message may never be built, and until the view has
 // arrived the bottom is not followed.
 nav_restore_begin :: proc(app: ^App, msg: string, dy: f32) {
 	cx := &app.cx
 	nav_restore_clear(app)
 	cx.restore_msg, cx.restore_dy = strings.clone(msg), dy
-	cx.restore_still, cx.restore_frames = 0, 0
+	cx.restore_still = 0
 	deferred_ask(&cx.due[.Restore], NAV_RESTORE_WAIT_MS)
 }
 
@@ -300,28 +300,20 @@ nav_hold_view :: proc(app: ^App) {
 	cx := &app.cx
 	if app.stick_bottom {
 		app.snap_bottom = true
-		app.chat_target = 0   // (the new box starts at the top: seen against the old target, it would read as the reader going up)
 		return
 	}
 	if app.chat.view_msg == "" { return }
 	nav_restore_begin(app, app.chat.view_msg, app.chat.view_dy)
 }
 
-// The view on the message, the frame placing it as for a part that was toggled. Again until it stays: what the first layouts say of
-// the heights around it is not what the next ones find, and one placing would be left hundreds of pixels off.
-nav_restore_step :: proc(app: ^App, sb, item: ^ui.Box) {
+// The column holds the view on the message (ui.lazy_pin): what the first layouts say of the heights around it is not what the next ones find.
+// Once it stayed a few builds without moving, the view is the reader's again.
+nav_restore_held :: proc(app: ^App, found, moved: bool) {
 	cx := &app.cx
-	y := sb.rect.min.y - cx.restore_dy
 	app.stick_bottom = false
 	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
-	cx.restore_frames += 1
-	if abs(item.rect.min.y - y) > NAV_RESTORE_NEAR_PX {
-		app.anchor, app.anchor_y = item, y
-		cx.restore_still = 0
-	} else {
-		cx.restore_still += 1
-	}
-	if cx.restore_still >= NAV_RESTORE_STILL || cx.restore_frames >= NAV_RESTORE_FRAMES_MAX { nav_restore_clear(app) }
+	cx.restore_still = found && !moved ? cx.restore_still + 1 : 0
+	if cx.restore_still >= NAV_RESTORE_STILL { nav_restore_clear(app) }
 }
 
 nav_restore_clear :: proc(app: ^App) {

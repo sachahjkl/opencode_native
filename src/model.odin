@@ -58,6 +58,7 @@ Msg_Kind :: enum u8 { User, Assistant, Synthetic, Shell, Compaction, Idle, Other
 
 Message :: struct {
 	id:        string,
+	lazy_id:   string,        // its id in the lazy column, once built
 	kind:      Msg_Kind,
 	created:   f64,
 	completed: f64,

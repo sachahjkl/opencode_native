@@ -284,9 +284,7 @@ FORM_FIELD_GAP_EM  :: 0.95
 FORM_OPTION_GAP_EM :: 0.25
 
 NAV_HISTORY_MAX :: 100   // places remembered for Back and Forward
-NAV_RESTORE_NEAR_PX    :: 1     // the view is on its message this near
 NAV_RESTORE_STILL      :: 3     // frames it stays there before it is left alone
-NAV_RESTORE_FRAMES_MAX :: 60    // however long the heights around it take to settle
 NAV_RESTORE_WAIT_MS    :: 4000  // without a page or a placing for this long, the view is the reader's again
 DEFERRED_MOST          :: 5     // a read asked again and again still comes after this many of its waits
 WAITS_GONE_MAX         :: 128   // permissions and forms remembered as answered (a late list must not bring them back)

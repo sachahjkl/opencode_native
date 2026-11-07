@@ -36,7 +36,6 @@ BENCH_TYPED       :: "the quick brown fox jumps over the lazy dog "
 BENCH_FIND        :: "lazy column"
 BENCH_SEARCH      :: "project"
 BENCH_CHAT_ID     :: "ses_bench"
-LAST_ANSWER       :: "msg_msg_149_a"   // (BENCH_TURNS - 1)
 LAST_SESSION      :: "ls_ses_395"      // the last session of the last group (project_11), not a sub-agent
 SIDEBAR_WHEEL     :: 10
 BENCH_EPOCH_MS    :: 1.7e12
@@ -157,7 +156,7 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	testing.cleanup(t, bench_end, app)
 	s = session.attach(t, {win = app.win, state = &app.ui_state, renderer = &app.r, user = app, frame = proc(user: rawptr) { frame((^App)(user)) }, allocator = context.allocator})
 	// (the lazy column learns the heights of what it builds: the bottom settles in a few frames)
-	session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, LAST_ANSWER) != nil }, "the last answer built")
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, fmt.tprintf("msg_msg_%d_a", BENCH_TURNS - 1)) != nil }, "the last answer built")
 	return
 }
 

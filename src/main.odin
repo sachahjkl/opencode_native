@@ -198,7 +198,8 @@ App_Context :: struct {
 	nav_moving:     bool,                 // a step of the history: nothing to add to it
 	restore_msg:    string,               // the message the view goes back to (owned, "": none) and how far into it
 	restore_dy:     f32,
-	restore_still, restore_frames: int,   // frames it stayed there, frames since the view began going there
+	restore_still:  int,                  // builds it stayed there
+	wheeled:        bool,                 // a wheel turned in this frame (views.odin: a hand moved the conversation)
 	commands_due:   [dynamic]^Command, // to run after this frame, in order (commands.odin)
 	slash:          [dynamic]Slash,    // the server's commands
 	have_slash:     bool,
@@ -297,9 +298,11 @@ frame :: proc(app: ^App, inner := false) {
 	render.mark_input(&app.r)
 	if len(events) > 0 { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }
 	events = output_view_events(app, events)
+	app.cx.wheeled = false
 	events = term_events(app, events)
 	for e in events {
 		if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() }
+		if e.kind == .Scroll { app.cx.wheeled = true }
 		if e.kind == .Scroll || e.kind == .Key_Press { nav_restore_clear(app) }   // (the reader goes elsewhere: the view is theirs)
 		// the side buttons of the mouse, as in a browser
 		if e.kind == .Mouse_Press && !overlay_open(app) {

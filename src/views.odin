@@ -658,12 +658,13 @@ conversation :: proc(app: ^App, em: f32) {
 		find_update(app, sb, em)
 		if app.chat.id == "" { app.stick_bottom = false }   // (the home page is read from its top)
 		if sb != nil {
-			chat_keys(app, sb, em)
+			by_hand := chat_keys(app, sb, em) || app.cx.wheeled || ui.active_key() != 0
 			if scrollbar_held(app, sb) { nav_restore_clear(app) }   // (as the wheel and the keys do: frame)
 			limit := max(0, sb.view_bounds.y - sb.size.y)
-			// the scrollbar's drag (and the keyboard) moved it before this build (begin_build): up means let go of the bottom,
-			// or following it would put it back at once and the thumb would stay stuck there
-			if app.stick_bottom && sb.view_target.y < app.chat_target - 1 && sb.view_target.y < limit - BOTTOM_SLACK_PX * ui.scale() { app.stick_bottom = false }
+			// the scrollbar's drag, the wheel, the keyboard moved it before this build (begin_build): up means let go of the bottom, or following
+			// it would put it back at once and the thumb would stay stuck there. Only a hand: a box built anew starts at its top, and that is no
+			// reader going up.
+			if app.stick_bottom && by_hand && sb.view_target.y < app.chat_target - 1 && sb.view_target.y < limit - BOTTOM_SLACK_PX * ui.scale() { app.stick_bottom = false }
 			if app.stick_bottom {
 				sb.view_target.y = limit
 				// (the tray that opens under it moves it: a glide of its own on top of that one would lag behind it)
@@ -740,7 +741,7 @@ go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
 // The keyboard scrolls the conversation, before this build reads where it is. Page Up and Page Down whatever has the focus
 // (the composer too: the conversation is what one reads while typing); the arrows, Home and End when they mean nothing else:
 // not in a text field, not while the focus is moved with the keyboard (a click gives a button the focus, and no ring).
-chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) {
+chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) -> (moved: bool) {
 	if overlay_open(app) { return }
 	limit := max(0, sb.view_bounds.y - sb.size.y)
 	y := sb.view_target.y
@@ -754,8 +755,10 @@ chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 		if ui.key_press(.End) { y = limit }
 	}
 	y = clamp(y, 0, limit)
-	if y != sb.view_target.y { ui.scrollbar_reveal(sb) }
+	moved = y != sb.view_target.y
+	if moved { ui.scrollbar_reveal(sb) }
 	sb.view_target.y = y
+	return
 }
 
 chat_header :: proc(app: ^App, em: f32) {
@@ -866,10 +869,14 @@ messages :: proc(app: ^App, em: f32) {
 	// goes before what follows.)
 	{
 		lz := ui.lazy_begin(all = ui.find_sweep() || app.chat.loading)
+		// (a view going back to where it was: the column keeps it on its message, however the heights around it settle)
+		restore := app.cx.restore_msg != "" && !c.loading
+		if restore { ui.lazy_pin(lz, fmt.tprintf("###msg_%s", app.cx.restore_msg), app.cx.restore_dy) }
 		top_seen := false   // the first message under the top of the view, for Back and Forward (subagents.odin nav_mark)
 		for &m, i in c.messages {
 			// (by its id: a page read before it does not change what it is, its height is still known)
-			id := m.id != "" ? fmt.tprintf("###msg_%s", m.id) : fmt.tprintf("###msg_end%d", len(c.messages) - i)
+			if m.id != "" && m.lazy_id == "" { m.lazy_id = fmt.aprintf("###msg_%s", m.id, allocator = c.alloc) }   // (once: this is every message, at every build)
+			id := m.id != "" ? m.lazy_id : fmt.tprintf("###msg_end%d", len(c.messages) - i)
 			restoring := app.cx.restore_msg != "" && m.id == app.cx.restore_msg
 			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || (c.keep_id != "" && m.id == c.keep_id) || restoring) {
 				if i == 0 { app.chat.first_msg = ui.parent_box() }
@@ -879,12 +886,12 @@ messages :: proc(app: ^App, em: f32) {
 						top_seen = true
 						app.chat.view_msg, app.chat.view_dy = m.id, sb.rect.min.y - item.rect.min.y
 					}
-					if restoring && app.anchor == nil && !c.loading && item.rect.max.y != item.rect.min.y { nav_restore_step(app, sb, item) }
 				}
 				message(app, c, &m, i, em)
 				ctx_check(app, ui.parent_box(), .Message, m.id)
 			}
 		}
+		if restore { nav_restore_held(app, ui.lazy_pinned(lz)) }
 	}
 	// The line of a run stands in the room the end of the conversation keeps anyway: the height is the same with it and without it, so
 	// the bottom does not move when a run starts or ends. (It came on top of that room, and took four lines for one word.)
