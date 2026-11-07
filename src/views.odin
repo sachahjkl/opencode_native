@@ -420,9 +420,10 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 
 // A session of the sidebar; `depth` 1: a sub-agent listed under its parent. `kids`: its sub-agents (indices into
 // app.sessions), listed under it when its toggle is open. `project`: its folder under its title, when the list does not say it.
-// A session's mark: the first letter of its title on a colour of the palette its id picks (the same session, the same colour,
+// A session's mark: its project's logo; else the first letter of its title on a colour of the palette its id picks (the same session, the same colour,
 // whatever its title becomes), the colour faint behind, full on the letter.
-session_badge :: proc(s: ^Session_Info, size, em: f32) {
+session_badge :: proc(app: ^App, s: ^Session_Info, size, em: f32) {
+	if logo_of(app, "###badge_logo", project_logo(app, s.project), size) { return }   // (its project's logo, when it has one)
 	letter := "·"
 	for r, i in s.title {
 		if unicode.is_letter(r) || unicode.is_digit(r) { letter = strings.to_upper(s.title[i:i + utf8.rune_size(r)], context.temp_allocator); break }
@@ -469,7 +470,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 		if ui.parent(b) {
 			ui.spacer(ui.px(em * (s.parent != "" && depth == 0 ? 1.6 : 0.95)))
 			if depth == 0 {
-				session_badge(s, math.round(em * (project ? SESSION_BADGE_INBOX_EM : SESSION_BADGE_EM)), em)
+				session_badge(app, s, math.round(em * (project ? SESSION_BADGE_INBOX_EM : SESSION_BADGE_EM)), em)
 				ui.spacer(ui.px(em * 0.55))
 			}
 			busy := app.busy[s.id] or_else false
