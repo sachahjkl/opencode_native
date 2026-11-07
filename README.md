@@ -36,8 +36,12 @@ the [site](https://ocn.froment.software/) shows them.
 | **What runs in the background** (Down from the composer, Ctrl+J) | **Updates** (Windows): signed, stable or beta |
 | ![The conversation of a sub-agent: where it comes from, the way back](docs/screenshots/subagent-session.png) | ![The model picker, searched as one types](docs/screenshots/picker.png) |
 | **A sub-agent's own conversation**: the breadcrumb, Back | **The model picker**: subsequence search ("sonnet"), the matched letters lit |
-| ![Session statistics](docs/screenshots/statistics.png) | ![Settings](docs/screenshots/settings.png) |
-| **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Settings**: the client's preferences (fonts among them) and the server's pages |
+| ![Session statistics](docs/screenshots/statistics.png) | ![Settings: the themes, each in its own colours](docs/screenshots/settings.png) |
+| **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Themes**: seventeen, dark and light or as the system, machined or flat, and your own in themes.txt |
+| ![Gruvbox, light](docs/screenshots/theme-gruvbox-light.png) | ![Nord, flat](docs/screenshots/theme-nord-flat.png) |
+| **Gruvbox**, its light version | **Nord** in the flat style: plain surfaces, thin lines |
+| ![Retro: a black that holds, colours that pop](docs/screenshots/theme-retro.png) | ![The conversation](docs/screenshots/conversation.png) |
+| **Retro**: a black that holds, colours that pop | **OpenCode**, its own black and peach |
 | ![An image in the viewer, zoomed in](docs/screenshots/viewer.png) | ![On Linux](docs/screenshots/linux.png) |
 | **The image viewer**: zoom where the pointer is, drag to move | **On Linux** (Wayland, Vulkan): the same program |
 | ![The terminal panel under the conversation](docs/screenshots/terminal.png) | ![@ in the composer, the files of the folder proposed](docs/screenshots/mention.png) |

@@ -280,6 +280,7 @@ Picture :: struct {
 	name:  string,
 	work:  bool,     // the session that edits a file, not the tour
 	extra: string,   // one more argument
+	theme, mode, style: string,   // the look it shows, other than SHOT_ARGS' (appearance.theme, .mode, .style)
 	ready: proc(s: ^Snap),
 	after: proc(s: ^Snap),
 	on_conversation: bool,   // the viewer: on the conversation's picture, taken first
@@ -304,6 +305,10 @@ PICTURES :: [?]Picture{
 	{name = "settings", extra = "--settings=0"},
 	{name = "subagent-session", ready = ready_subagent_session},
 	{name = "viewer", on_conversation = true, ready = ready_viewer},
+	// the themes: a light one, a flat one, a black one with its own colours
+	{name = "theme-gruvbox-light", theme = "Gruvbox", mode = "light"},
+	{name = "theme-nord-flat", theme = "Nord", style = "flat"},
+	{name = "theme-retro", theme = "Retro"},
 	// the Linux build, in WSL, on Windows's server: its port and password from what the service wrote (never printed)
 	{name = "linux", linux = true},
 }
@@ -381,6 +386,9 @@ take :: proc(s: ^Shots, p: Picture) -> bool {
 	if s.font_dir != "" { append(&args, fmt.tprintf("--font-dir=%s", s.font_dir)) }
 	append(&args, fmt.tprintf("--session=%s", p.work ? s.work_session : s.live.session), fmt.tprintf("--search=%s", p.work ? WORK_TITLE : "Tour"))
 	if p.extra != "" { append(&args, p.extra) }
+	if p.theme != "" { append(&args, "--pref", fmt.tprintf("appearance.theme=%s", p.theme)) }
+	if p.mode != "" { append(&args, "--pref", fmt.tprintf("appearance.mode=%s", p.mode)) }
+	if p.style != "" { append(&args, "--pref", fmt.tprintf("appearance.style=%s", p.style)) }
 	if p.on_conversation { append(&args, fmt.tprintf("--image=%s/conversation.png", s.docs)) }
 
 	app: App

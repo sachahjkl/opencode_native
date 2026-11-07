@@ -326,3 +326,4 @@ READABLE_TEXT    :: 4.5    // words that are read: WCAG AA (ui.readable)
 READABLE_QUIET   :: 3.0    // what is glanced at: a folder, an age
 CHOSEN_LIGHTNESS :: 0.045  // what is chosen in a list: this much off the raised step's lightness (style.odin chosen_ground)
 CHOSEN_CHROMA    :: 0.035  // ... and this much of the accent's colour
+CHOSEN_LIGHTNESS_LIGHT :: 0.07   // ... in a light version: this much darker than the raised step, in its own hue

@@ -5,6 +5,10 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The session shown, in a light theme,** is on the theme's own neutral a step darker, not on a pale accent: an orange that pale read as pink (Gruvbox).
+
 ## [0.18.0] - 2026-11-07
 
 ### Added

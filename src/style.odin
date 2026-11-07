@@ -755,11 +755,14 @@ choice :: proc(id: string, labels: []string, selected: ^int) -> (changed: bool) 
 ////////////////////////////////
 // What is chosen in a list (ui.contrast and ui.readable keep the words on it read)
 
-// The ground of what is chosen in a list (the session shown): the raised step's lightness, a little of the accent's hue and chroma
-// (OKLCH: as much colour whatever the accent's own lightness, never a muddy brown). Words on it go through readable.
+// The ground of what is chosen in a list (the session shown). Dark: the raised step's lightness, a little of the accent's hue and
+// chroma (OKLCH: as much colour whatever the accent's own lightness, never a muddy brown). Light: the raised step a little darker, its
+// own hue: a pale accent would read as another colour. Words on it go through readable.
 chosen_ground :: proc() -> Color {
 	base := ui.to_oklch(hex(HEX_BG3))
+	if theme_light() {   // (light: the theme's own neutral a step darker. A pale accent reads as another colour: an orange, as pink)
+		return ui.from_oklch({clamp(base[0] - CHOSEN_LIGHTNESS_LIGHT, 0, 1), base[1], base[2]})
+	}
 	acc := ui.to_oklch(accent())
-	L := base[0] + (theme_light() ? -CHOSEN_LIGHTNESS : CHOSEN_LIGHTNESS)
-	return ui.from_oklch({clamp(L, 0, 1), CHOSEN_CHROMA, acc[2]})
+	return ui.from_oklch({clamp(base[0] + CHOSEN_LIGHTNESS, 0, 1), CHOSEN_CHROMA, acc[2]})
 }
