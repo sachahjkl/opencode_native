@@ -160,6 +160,23 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	return
 }
 
+// A command's output, in the real interface: its grid, its bar, Close when it ended as one watched, and Escape closes it. (In the session of
+// the test that has one: the testkit drives one window at a time.)
+@(private = "file")
+output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
+	v := output_view_open_shell(app, "sh_1", "cargo build", "C:/code/project_0")
+	output_view_feed(v, "\x1b[32mCompiling\x1b[0m occ\n")
+	v.over, v.seen_end, v.status, v.has_exit = true, true, .Exited, true
+	session.frames(s, 3)
+	testing.expect(t, session.find(s, "out_bar") != nil, "the bar")
+	testing.expect(t, session.find(s, "out_close") != nil, "Close, ended as one watched")
+	testing.expect(t, session.find(s, "term_box") != nil, "the grid")
+	session.event(s, {kind = .Key_Press, key = .Escape})
+	session.frames(s, 3)
+	testing.expect(t, session.find(s, "out_bar") == nil, "Escape closes it")
+	testing.expect_value(t, len(app.cx.outputs.list), 0)
+}
+
 // What the system gives back (the window, the device, the fonts); the rest goes with the process.
 @(private = "file")
 bench_end :: proc(p: rawptr) {
@@ -375,6 +392,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	testing.expect_value(t, ui.field_string(&app.search), BENCH_SEARCH)
 
 	older_pages_keep_the_view(t, app, s)
+	output_view_built(t, app, s)
 }
 
 @(private = "file")
