@@ -58,7 +58,7 @@ stats_open :: proc(app: ^App) {
 	ui.dock_activate(&app.dock, u32(Panel.Stats))
 	stats_ask(app)
 	context_ask(app)
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 // Shown, hidden. (Open, but under the Preview's tab: it comes up. What the pill is for is to see it.)
@@ -67,7 +67,7 @@ stats_toggle :: proc(app: ^App) {
 	case !app.stats_open:                         stats_open(app)
 	case !ui.dock_shown(&app.dock, u32(Panel.Stats)):
 		ui.dock_activate(&app.dock, u32(Panel.Stats))
-		app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+		app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 	case:                                         panel_close(app, u32(Panel.Stats))
 	}
 }

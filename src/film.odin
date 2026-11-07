@@ -13,7 +13,7 @@ film_slow_start :: proc(app: ^App, n: f64) {
 	app.cx.film_clock = ui.now_ms()
 	app.cx.film_clock_at = app.cx.film_clock
 	app.cx.film_begun = time.tick_now()
-	ui.set_clock(&app.ui_state, &app.cx.film_clock)
+	ui.set_clock(&app.state, &app.cx.film_clock)
 }
 
 film_slow_tick :: proc(app: ^App) {

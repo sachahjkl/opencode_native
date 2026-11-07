@@ -162,7 +162,7 @@ a_view_refused_says_nothing :: proc(t: ^testing.T) {
 	sessions(app, LIST)
 	open_chat(app, "ended")
 	bench_answer(app, bench_take(t, .Session_Viewed), 404, `{"message":"no such session"}`)
-	for toast in app.ui_state.toasts { testing.expect(t, !toast.alive, "a toast at each session opened") }
+	for toast in app.state.toasts { testing.expect(t, !toast.alive, "a toast at each session opened") }
 }
 
 @(test)

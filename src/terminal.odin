@@ -249,7 +249,7 @@ term_post :: proc(job: ^Term_Thread, news: Term_News) {
 	d := new(Term_News)
 	d^ = news
 	d.conn = job.conn
-	if !ui.post(&job.app.ui_state, term_news, d) { delete(d.text); free(d) }
+	if !ui.post(&job.app.state, term_news, d) { delete(d.text); free(d) }
 }
 
 // Reads until the socket goes.
@@ -321,7 +321,7 @@ term_news :: proc(data: rawptr, word: u64) {
 	if t == nil { return }   // (a shell closed, a server left)
 	if d.is_link { term_link_set(app, t, d.link, d.given_up) } else { term_feed(t, d.text) }
 	if t.told_ms != 0 { deferred_ask(&app.cx.due[.Term_Size], TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS) }
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 term_link_set :: proc(app: ^App, t: ^Term, link: Term_Link, given_up := false) {
@@ -445,7 +445,7 @@ terminal_toggle :: proc(app: ^App) {
 	case:
 		panel_close(app, u32(Panel.Terminal))
 	}
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 // (the palette) Another shell, the panel opened for it if need be.
@@ -1141,7 +1141,7 @@ terms_size_due :: proc(app: ^App) {
 			t.told_ms = 0
 		}
 	}
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 @(private = "file")

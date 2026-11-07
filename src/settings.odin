@@ -206,9 +206,9 @@ prefs_refresh :: proc(app: ^App) {
 		fonts_apply(app)
 	}
 
-	ui.set_zoom(&app.ui_state, s.zoom)
-	ui.set_density(&app.ui_state, s.density)
-	ui.set_rounding(&app.ui_state, s.rounding)
+	ui.set_zoom(&app.state, s.zoom)
+	ui.set_density(&app.state, s.density)
+	ui.set_rounding(&app.state, s.rounding)
 	pal := OPENCODE_PALETTE
 	pal.accent = s.accent_hex
 	ui.apply_palette(&app.theme, pal)
@@ -235,7 +235,7 @@ accent :: proc() -> Color { return the_app.prefs.accent }
 
 // Ctrl + wheel changed the zoom: keep it.
 prefs_track_zoom :: proc(app: ^App) {
-	z := ui.zoom(&app.ui_state)
+	z := ui.zoom(&app.state)
 	if abs(z - app.prefs.zoom) > ZOOM_EPSILON {
 		app.prefs.zoom = z
 		config.set_from_string(&app.cfg_prefs, "appearance.zoom", fmt.tprintf("%.3f", z), .User)
@@ -688,7 +688,7 @@ pref_slider :: proc(app: ^App, name: string, lo, hi, step: f32, format: string, 
 	if (sig.released || (sig.focused && !sig.dragging && abs(v - idle) > SLIDER_EPSILON)) && (d.kind == .Int ? i64(math.round(v)) != config.int_of(p, name) : abs(f64(v) - config.float_of(p, name)) > SLIDER_EPSILON) {
 		pref_set(app, name, d.kind == .Int ? fmt.tprintf("%d", i64(math.round(v))) : fmt.tprintf("%.2f", v))
 	} else if sig.dragging && d.kind == .Float && name == "appearance.rounding" {
-		ui.set_rounding(&app.ui_state, v)   // (live while dragged)
+		ui.set_rounding(&app.state, v)   // (live while dragged)
 	}
 }
 

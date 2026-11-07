@@ -69,7 +69,7 @@ form_add :: proc(app: ^App, v: json.Value) {
 	f := form_new(id, jstr(v, "sessionID"), jstr(v, "title"), jstr(v, "metadata", "kind") == "question", jarr(v, "fields"))
 	f.born = app.cx.stream_seq
 	append(&app.cx.forms, f)
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 // What the server says a session asks: as permissions_replace. A form that stays keeps what the person has filled in.
@@ -334,7 +334,7 @@ form_card :: proc(app: ^App, f: ^Form_Req, others: int, em: f32) {
 			form_tabs(f, pages[:], em)
 			reviewing = f.page == len(pages)   // (a tab just clicked: this frame shows it)
 		}
-		room := min(FORM_BODY_H_EM, app.ui_state.window_size.y * FORM_BODY_WINDOW / em)
+		room := min(FORM_BODY_H_EM, app.state.window_size.y * FORM_BODY_WINDOW / em)
 		want := f32(len(pages)) * FORM_LINE_EM
 		if !reviewing && len(pages) > 0 { want = field_height(&f.fields[pages[f.page]]) }
 		// (too much at once scrolls: the conversation stays in sight, and nothing is crushed)

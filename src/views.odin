@@ -79,9 +79,9 @@ build_ui :: proc(app: ^App) {
 	files_dialog(app, em)
 	palette_dialog(app, em)
 	context_menu(app, em)
-	when ODIN_DEBUG { assert(len(app.ui_state.modals_built) == 0 || overlay_open(app), "a dialog overlay_open does not know: the program's keys would act behind it") }
+	when ODIN_DEBUG { assert(len(app.state.modals_built) == 0 || overlay_open(app), "a dialog overlay_open does not know: the program's keys would act behind it") }
 	// (over the top of the conversation, under its header: at the bottom they hid the send button, when one wants to try again)
-	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.ui_state.window_size})
+	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.state.window_size})
 	ui.toasts_build()
 	// (last: what is open and a field that has it took Escape before it gets here)
 	if app.chat.busy && !overlay_open(app) && !mention_takes_escape(app) && ui.key_press(.Escape) { interrupt_session(app, app.chat.id) }
@@ -748,7 +748,7 @@ chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) -> (moved: bool) {
 	if ui.key_press(.Page_Up) { y -= sb.size.y * PAGE_SCROLL }
 	if ui.key_press(.Page_Down) { y += sb.size.y * PAGE_SCROLL }
 	f := ui.box_from_key(ui.focus_key())
-	if f == nil || (.Text_Input not_in f.flags && !app.ui_state.focus_visible) {
+	if f == nil || (.Text_Input not_in f.flags && !app.state.focus_visible) {
 		if ui.key_press(.Up) { y -= em * LINE_SCROLL_EM }
 		if ui.key_press(.Down) { y += em * LINE_SCROLL_EM }
 		if ui.key_press(.Home) { y = 0 }

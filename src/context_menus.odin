@@ -123,8 +123,8 @@ composer_menu :: proc(app: ^App) {
 
 @(private = "file")
 message_menu :: proc(app: ^App, m: ^Message) {
-	if ui.has_selection(&app.ui_state) {
-		sel := ui.selected_text(&app.ui_state, context.temp_allocator)
+	if ui.has_selection(&app.state) {
+		sel := ui.selected_text(&app.state, context.temp_allocator)
 		if ui.menu_item("Quote", "").clicked { quote_text(app, sel, false) }
 		if ui.menu_item("Quote with a comment", "Ctrl+Q").clicked { quote_text(app, sel, true) }
 		if ui.menu_item("Copy the selection", "Ctrl+C").clicked { copied(sel, "Selection") }
@@ -220,7 +220,7 @@ quote_text :: proc(app: ^App, text: string, comment: bool) {
 }
 
 quote_selection :: proc(app: ^App) {
-	quote_text(app, ui.selected_text(&app.ui_state, context.temp_allocator), true)
+	quote_text(app, ui.selected_text(&app.state, context.temp_allocator), true)
 }
 
 // The chip of selection `serial`: a new one goes where the pointer ended it (true). One that comes back, a dialog that hid it closed,
@@ -235,7 +235,7 @@ quote_place :: proc(cx: ^App_Context, serial: u64, pointer: Vec2) -> (new_select
 
 // Where a selection ends: what can be done with it, at hand. The press on it may take the selection away: the text was kept.
 quote_chip :: proc(app: ^App, em: f32) {
-	s := &app.ui_state
+	s := &app.state
 	cx := &app.cx
 	id := "###quote_chip"
 	on_chip := false

@@ -23,8 +23,8 @@ bench_sent_add :: proc(r: ^Request) { append(&bench_sent, r) }
 bench_new :: proc() -> ^App {
 	context.allocator = runtime.heap_allocator()
 	app := new(App)
-	ui.use(&app.ui_state)
-	ui.set_clock(&app.ui_state, &bench_clock)
+	ui.use(&app.state)
+	ui.set_clock(&app.state, &bench_clock)
 	bench_clock = 1000
 	clear(&bench_sent)
 	app.conn = new(Conn)
@@ -588,10 +588,10 @@ at_rest_nothing_wakes_the_window :: proc(t: ^testing.T) {
 	app := bench_new()
 	append(&app.servers, Server{local = false})
 	deferred_tick(app)
-	testing.expect_value(t, app.ui_state.wake_ms, 0)
+	testing.expect_value(t, app.state.wake_ms, 0)
 	children_soon(app)
 	deferred_tick(app)
-	testing.expect(t, app.ui_state.wake_ms > 0, "it does while something is due")
+	testing.expect(t, app.state.wake_ms > 0, "it does while something is due")
 }
 
 @(test)
@@ -846,9 +846,9 @@ the_scroll_bar_held_is_the_reader_moving :: proc(t: ^testing.T) {
 	sb := new(ui.Box)
 	sb.key = 7
 	bar := ui.Key(8)
-	app.ui_state.sb_owner[bar] = sb.key
+	app.state.sb_owner[bar] = sb.key
 	testing.expect(t, !scrollbar_held(app, sb))
-	app.ui_state.active_key[.Left] = bar
+	app.state.active_key[.Left] = bar
 	testing.expect(t, scrollbar_held(app, sb))
 }
 
@@ -944,7 +944,7 @@ what_was_shown_stays_while_a_first_page_comes :: proc(t: ^testing.T) {
 	app.chat.id, app.chat.loading, app.chat.loaded = "s", true, false
 	app.opened_ms = ui.now_ms()
 	testing.expect_value(t, frame_held_ms(app, size), 0)   // (nothing shown yet)
-	app.cx.shown_size = size
+	app.shown = {int(size.x), int(size.y)}
 	testing.expect(t, frame_held_ms(app, size) > 0, "held")
 	testing.expect_value(t, frame_held_ms(app, {801, 600}), 0)   // (resized: the picture would not fit)
 	app.opened_ms = ui.now_ms() - OPEN_HOLD_MS - 1

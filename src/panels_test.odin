@@ -48,7 +48,7 @@ outbox :: proc(s: ^Term) -> string { return string(s.conn.out[:]) }
 
 @(private = "file")
 toasts :: proc(app: ^App) -> (n: int) {
-	for &x in app.ui_state.toasts { if x.alive { n += 1 } }
+	for &x in app.state.toasts { if x.alive { n += 1 } }
 	return
 }
 
@@ -610,7 +610,7 @@ a_drag_ends_when_what_is_held_is_another_box :: proc(t: ^testing.T) {
 	built(app, s, 11)
 	ev := []platform.Event{{kind = .Mouse_Press, pos = {10, 10}, button = .Left}}
 	_ = term_events(app, ev)
-	app.ui_state.active_key[.Left] = 99
+	app.state.active_key[.Left] = 99
 	terminals_settle(app)
 	testing.expect(t, !s.selecting, "it stops")
 }
@@ -1247,7 +1247,7 @@ an_empty_file_ends_the_wait :: proc(t: ^testing.T) {
 	defer os.remove(path)
 	image_view_start(app, path)
 	image_view_wait(app)
-	testing.expect_value(t, ui.wake_in_ms(&app.ui_state), 0)   // (no frame after frame)
+	testing.expect_value(t, ui.wake_in_ms(&app.state), 0)   // (no frame after frame)
 	testing.expect_value(t, app.view_start.key, u64(0))
 	testing.expect_value(t, toasts(app), 1)
 }

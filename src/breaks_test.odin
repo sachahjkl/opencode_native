@@ -37,7 +37,7 @@ told_after_drag :: proc(t: ^testing.T, stop: int) -> bool {
 	bench_answer(app, bench_take(t, .Pty_Size), 200, "")
 	bench_clock += 2000
 	due_tick(app, .Term_Size)
-	app.frames = 0
+	app.settle = 0
 
 	cols := u16(100)
 	for ms := 0; ms <= stop; ms += 10 {
@@ -45,14 +45,14 @@ told_after_drag :: proc(t: ^testing.T, stop: int) -> bool {
 		term_resize(app, s, cols, 30, 8, 16)
 		if ms < stop { bench_clock += 10 }
 	}
-	app.frames = FRAMES_AFTER_INPUT
+	app.settle = FRAMES_AFTER_INPUT
 	next_frame := bench_clock + 17
 	for _ in 0 ..< 3000 {
 		bench_clock += 1
 		if deferred_in_ms(&app.cx.due[.Term_Size]) > 0 && bench_clock >= app.cx.due[.Term_Size].due_ms { due_tick(app, .Term_Size) }
-		if app.frames > 0 && bench_clock >= next_frame {
+		if app.settle > 0 && bench_clock >= next_frame {
 			term_resize(app, s, cols, 30, 8, 16)   // (terminal_panel's term_fit, at each build)
-			app.frames -= 1
+			app.settle -= 1
 			next_frame = bench_clock + 17
 		}
 	}
@@ -216,22 +216,22 @@ leaving_a_server_closes_what_acts_on_its_sessions :: proc(t: ^testing.T) {
 what_a_window_waits_for_wakes_the_program :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	app.frames = 0
+	app.settle = 0
 	s: ui.State
 	ui.set_clock(&s, &bench_clock)
 	s.wake_ms = 400
 	detached_asks(app, &s, false)
-	testing.expect_value(t, app.frames, 0)
-	testing.expect(t, ui.wake_in_ms(&app.ui_state) > 0, "the delay is the loop's too")
+	testing.expect_value(t, app.settle, 0)
+	testing.expect(t, ui.wake_in_ms(&app.state) > 0, "the delay is the loop's too")
 	detached_asks(app, &s, true)
-	testing.expect_value(t, app.frames, FRAMES_AFTER_INPUT)
+	testing.expect_value(t, app.settle, FRAMES_AFTER_INPUT)
 }
 
 @(test)
 a_panels_window_looks_as_the_main_one :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	m := &app.ui_state
+	m := &app.state
 	ui.set_density(m, 1.2)
 	ui.set_rounding(m, 0.5)
 	m.mono_font = 7

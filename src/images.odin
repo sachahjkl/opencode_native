@@ -76,7 +76,7 @@ image_get :: proc(app: ^App, ref: Image_Ref) -> ^Image_Entry {
 	thread.create_and_start_with_poly_data(job, proc(job: ^Decode_Job) {
 		r := occ_image_decode(raw_data(job.data), len(job.data), i32(job.encoding), job.max_dim, &job.w, &job.h, &job.out)
 		job.ok = r == 0
-		if !ui.post(&job.app.ui_state, image_decoded, job) { occ_buf_free(job.out); delete(job.data); free(job) }
+		if !ui.post(&job.app.state, image_decoded, job) { occ_buf_free(job.out); delete(job.data); free(job) }
 	}, self_cleanup = true)
 	return &app.images[ref.key]
 }
@@ -300,7 +300,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 	e, ok := &app.images[app.view_key]
 	if !ok || e.state != .Ready { app.view_open = false; return }
 	e.used = app.frame_no
-	win := app.ui_state.window_size
+	win := app.state.window_size
 	sc := ui.scale()
 	view := [2]f32{math.round(win.x * VIEWER_FILL - em * 2), math.round(win.y * VIEWER_FILL - em * VIEWER_CHROME_EM)}
 	// fits the view, never enlarged beyond its pixels times the scale; then the reader's zoom

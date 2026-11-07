@@ -1,29 +1,28 @@
 package occ
 
 import "core:math"
-import "core:slice"
 import "gt:draw"
+import "gt:host"
 import "gt:platform"
-import "gt:render"
 import "gt:ui"
 
 // A panel in a window of its own, for a large screen or a second one. The same program, the same renderer, the same connection:
 // the window has a ui.State and a surface of its own, and is built after the main one, in its frame. The panel goes on as ever;
 // closing the window gives it its tab back.
 //
-// Being resized it is as stable as the main window, by the same two means. Its surface is a composition swap chain whose buffers keep
-// the monitor's size, shown 1:1 and clipped by the window: nothing is ever stretched. (Below its child windows: the page moved into it
-// would be behind it.) And it draws from inside the system's loop, which
-// holds the thread for as long as the border is held: without on_frame no frame comes until the release.
+// It is a host.Host, as the main window: its frame goes in the toolkit's order, this program's parts in its hooks. Being resized it is as
+// stable as the main window, by the same means: a composition surface whose buffers keep the monitor's size, shown 1:1 and clipped by the
+// window (below its child windows: the page moved into it would be behind it), and frames from inside the system's loop for as long as the
+// border is held. A step of a resize is this window's alone, at once; when the border rests, the program's whole frame goes on.
 
 Detached :: struct {
-	app:     ^App,
-	panel:   u32,
-	win:     ^platform.Window,
-	closing: bool,   // its panel was closed: a Preview's window outlives a session with no browser, not this
-	state:   ui.State,
-	surface: render.Surface,
-	shown:   [2]int,   // the size of the last frame
+	using window: host.Host,   // win, state, surface, shown
+	app:       ^App,
+	panel:     u32,
+	closing:   bool,   // its panel was closed: a Preview's window outlives a session with no browser, not this
+	had_input: bool,   // in this frame
+	built:     bool,   // ... and it was built
+	keyboard:  ^Term,  // whose the keys were before this window's build took them
 }
 
 panel_detached :: proc(app: ^App, panel: u32) -> bool { return detached_window(app, panel) != nil }
@@ -47,7 +46,7 @@ detached_state :: proc(app: ^App, panel: u32) -> ^ui.State {
 // A panel looks the same out of the main window: what its state was given, whenever a preference gave it, is read at each frame. (Plain
 // values, and faces that only change the state when they differ.)
 detached_style :: proc(app: ^App, s: ^ui.State) {
-	m := &app.ui_state
+	m := &app.state
 	ui.set_zoom(s, m.zoom)
 	ui.set_density(s, m.density)
 	ui.set_rounding(s, m.rounding)
@@ -60,9 +59,9 @@ detached_style :: proc(app: ^App, s: ^ui.State) {
 // What a window's build leaves to the program's loop, which only looks at the main state: input settles as it does there, and what the window
 // waits for (a tooltip, a bar to hide, a caret) wakes it.
 detached_asks :: proc(app: ^App, s: ^ui.State, had_input: bool) {
-	if had_input { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }
-	if ui.needs_frame(s) { app.frames = max(app.frames, 1) }
-	if wait := ui.wake_in_ms(s); wait > 0 { ui.wake_within(&app.ui_state, wait) }
+	if had_input { app.settle = max(app.settle, FRAMES_AFTER_INPUT) }
+	if ui.needs_frame(s) { app.settle = max(app.settle, 1) }
+	if wait := ui.wake_in_ms(s); wait > 0 { ui.wake_within(&app.state, wait) }
 }
 
 // Nothing it shows can have changed: its last picture stays, and it costs nothing. (A pointer passing over the main window used to build and
@@ -84,26 +83,20 @@ panel_can_detach :: proc(panel: u32) -> bool { return panel != u32(Panel.Convers
 panel_detach :: proc(app: ^App, panel: u32) {
 	if !panel_can_detach(panel) || panel_detached(app, panel) { return }
 	d := new(Detached)
-	d.panel = panel
-	d.app = app
-	d.win = platform.open_window(panel_title(app, panel), {DETACHED_W, DETACHED_H}, transparent = true)
-	if !render.surface_init(&app.r, &d.surface, platform.native_surface_handles(d.win), d.win.size, transparent = true, fixed_size = platform.monitor_size(d.win), under_children = panel == u32(Panel.Preview)) {
-		platform.destroy_window(d.win)
+	d.panel, d.app = panel, app
+	if !host.host_open(&d.window, &app.gfx, {title = panel_title(app, panel), size = {DETACHED_W, DETACHED_H}, under_children = panel == u32(Panel.Preview)}, detached_build, d) {
 		free(d)
 		ui.toast(.Bad, "No window: the renderer refused it")
 		return
 	}
-	ui.init(&d.state, &app.fonts, &app.theme)
+	detached_hooks(d)
 	ui.set_autoscroll_enabled(&d.state, true)
-	ui.use(&app.ui_state)
 	if t := term_of_panel(app, panel); t != nil { t.detached = true }
 	if panel < OUTPUT_PANEL_BASE { ui.dock_close(&app.dock, panel) }   // (a command's output never had a tab)
 	append(&app.cx.detached, d)
 	if panel == u32(Panel.Preview) { preview_move(app, d.win) }
-	d.win.user = d
-	d.win.on_frame = detached_paint
 	platform.show_window(d.win)
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 @(private = "file")
@@ -112,11 +105,9 @@ detached_end :: proc(app: ^App, i: int) {
 	ordered_remove(&app.cx.detached, i)
 	if d.panel < OUTPUT_PANEL_BASE { if t := term_of_panel(app, d.panel); t != nil { t.detached = false } }
 	if d.panel == u32(Panel.Preview) { preview_move(app, app.win) }
-	render.surface_destroy(&app.r, &d.surface)
-	ui.destroy(&d.state)
-	ui.use(&app.ui_state)
-	platform.destroy_window(d.win)
-	output_view_window_left(app, d.panel)
+	panel := d.panel
+	host.host_close(&d.window)
+	output_view_window_left(app, panel)
 	free(d)
 }
 
@@ -153,60 +144,55 @@ detached_body :: proc(app: ^App, d: ^Detached, size: draw.Vec2, em: f32) {
 	}
 }
 
-// A frame asked for from inside the system's loop. A step of a resize is this window's alone, and at once: waiting for the main window's
-// frame, or drawing it first, is what shows a window late on its border. The loop's timer, when the border rests, makes the program's
-// whole frame: the main window, what a server said, a shell's output, go on.
 @(private = "file")
-detached_paint :: proc(user: rawptr) {
-	d := (^Detached)(user)
-	if ui.building() { return }
-	if d.win.size != d.shown {
-		detached_frame(d.app, d)
-		free_all(context.temp_allocator)
-	} else {
-		frame(d.app, inner = true)
-	}
+detached_build :: proc(h: ^host.Host, size: draw.Vec2) {
+	d := (^Detached)(h.user)
+	detached_body(d.app, d, size, math.round(ui.font_size()))
 }
 
+// Its parts of a frame. The shell of a window of its own has its keys: what comes to this window is for it.
 @(private = "file")
-detached_frame :: proc(app: ^App, d: ^Detached) {
-	// First of all: the system's loop may begin in this call, a border held, and its frames want the renderer and the interface as a frame
-	// leaves them. It may also end this window.
-	events := platform.poll_events(d.win, false)
-	if !slice.contains(app.cx.detached[:], d) { return }
-	had_input := len(events) > 0
-	if detached_still(app, d, had_input) {
-		detached_asks(app, &d.state, false)   // (what it waits for still wakes the program)
-		return
+detached_hooks :: proc(d: ^Detached) {
+	h := &d.window
+	h.background = hex(HEX_BG0)
+	h.still = proc(h: ^host.Host, events: []platform.Event) -> bool {
+		d := (^Detached)(h.user)
+		d.had_input = len(events) > 0
+		if !detached_still(d.app, d, d.had_input) { return false }
+		detached_asks(d.app, &d.state, false)   // (what it waits for still wakes the program)
+		return true
 	}
-	s := &app.cx.terms
-	ui.use(&d.state)
-	app.cx.built = &d.state
-	render.surface_scope(&app.r, &d.surface)   // (the main window's again at the end, whichever way out)
-	render.resize(&app.r, d.win.size)
-	keyboard := s.focused
-	if t := term_of_panel(app, d.panel); t != nil {
-		s.only, s.focused = t, t   // (what comes to this window is for its shell)
-		events = term_events(app, events)
+	h.input = proc(h: ^host.Host, events: []platform.Event) -> []platform.Event {
+		d := (^Detached)(h.user)
+		app := d.app
+		s := &app.cx.terms
+		app.cx.built = &d.state
+		d.built, d.keyboard = true, s.focused
+		t := term_of_panel(app, d.panel)
+		if t == nil { return events }
+		s.only, s.focused = t, t
+		return term_events(app, events)
 	}
-	size := draw.Vec2{f32(d.win.size.x), f32(d.win.size.y)}
-	detached_style(app, &d.state)
-	ui.begin_build(&d.state, build_params(app, d.win, size, events, DETACHED_DT_S))
-	detached_body(app, d, size, math.round(ui.font_size()))
-	ui.end_build()
-	platform.set_cursor(d.win, ui.cursor(&d.state))
-	platform.set_title(d.win, panel_title(app, d.panel))
-	draw.begin_frame(&app.dc, size)
-	render.frame_begin(&app.r, hex(HEX_BG0))
-	ui.draw_tree(&d.state, &app.dc)
-	draw.end_frame(&app.dc)
-	render.frame_end(&app.r, false)
-	d.shown = d.win.size
-	if d.panel == u32(Panel.Preview) { preview_place(app, false) }
-	detached_asks(app, &d.state, had_input)
-	s.only, s.focused = nil, keyboard
-	ui.use(&app.ui_state)
-	app.cx.built = nil
+	h.params = proc(h: ^host.Host, p: ^ui.Build_Params) {
+		d := (^Detached)(h.user)
+		detached_style(d.app, &d.state)
+		p^ = build_params(d.app, h.win, p.window_size, p.events, DETACHED_DT_S)
+	}
+	h.after_build = proc(h: ^host.Host) {
+		d := (^Detached)(h.user)
+		s := &d.app.cx.terms
+		platform.set_title(h.win, panel_title(d.app, d.panel))
+		s.only, s.focused = nil, d.keyboard
+		d.app.cx.built = nil
+	}
+	h.after_frame = proc(h: ^host.Host) {
+		d := (^Detached)(h.user)
+		if !d.built { return }
+		d.built = false
+		if d.panel == u32(Panel.Preview) { preview_place(d.app, false) }
+		detached_asks(d.app, &d.state, d.had_input)
+	}
+	h.rest_frame = proc(h: ^host.Host) { frame((^Detached)(h.user).app, inner = true) }
 }
 
 // After the main window's frame. A window closed gives its panel its tab back; a panel closed takes its window.
@@ -218,9 +204,9 @@ detached_frames :: proc(app: ^App) {
 		if platform.is_closed(d.win) || gone {
 			detached_end(app, i)
 			dock_setup(app)
-			app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+			app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 		} else {
-			detached_frame(app, d)
+			host.host_frame(&d.window)
 		}
 	}
 }

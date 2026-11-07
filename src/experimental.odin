@@ -186,7 +186,7 @@ experimental_check :: proc(app: ^App) {
 				if job.write { answer.changed = experimental_write(job.conn, keys) }
 			}
 		}
-		if !ui.post(&job.app.ui_state, experimental_answer, answer) { free(answer) }
+		if !ui.post(&job.app.state, experimental_answer, answer) { free(answer) }
 	}, self_cleanup = true)
 }
 

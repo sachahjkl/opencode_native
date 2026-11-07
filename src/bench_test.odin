@@ -60,7 +60,7 @@ The lazy column builds only the messages near the view: the others stand as a **
 frame :: proc(app: ^App) {
 	events := platform.poll_events(app.win, false)
 	build(app, size, events, dt)
-	ui.draw_tree(&app.ui_state, &app.dc)
+	ui.draw_tree(&app.state, &app.dc)
 	for m, i in app.chat.messages {
 		if i % 2 == 0 { continue }
 		fmt.println(m.id, len(m.parts))
@@ -143,6 +143,7 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	testing.expect(t, fonts_init(app))
 	testing.expect(t, render.init_offscreen(&app.r, app.win.size, warp = !OCC_BENCH))
 	app_init(app, "")
+	main_window_adopt(app)
 	app.last_tick = time.tick_now()
 	app.opened_first = true
 	app.chat.id = strings.clone(BENCH_CHAT_ID, app.chat.alloc)
@@ -154,7 +155,7 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	chat_load(app, v, false)
 	app.snap_bottom = true
 	testing.cleanup(t, bench_end, app)
-	s = session.attach(t, {win = app.win, state = &app.ui_state, renderer = &app.r, user = app, frame = proc(user: rawptr) { frame((^App)(user)) }, allocator = context.allocator})
+	s = session.attach(t, {win = app.win, state = &app.state, renderer = &app.r, user = app, frame = proc(user: rawptr) { frame((^App)(user)) }, allocator = context.allocator})
 	// (the lazy column learns the heights of what it builds: the bottom settles in a few frames)
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, fmt.tprintf("msg_msg_%d_a", BENCH_TURNS - 1)) != nil }, "the last answer built")
 	return
@@ -182,7 +183,7 @@ output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 bench_end :: proc(p: rawptr) {
 	app := (^App)(p)
 	context.allocator = runtime.heap_allocator()
-	ui.destroy(&app.ui_state)
+	ui.destroy(&app.state)
 	draw.destroy(&app.dc)
 	render.destroy(&app.r)
 	font.destroy(&app.fonts)
@@ -200,13 +201,13 @@ bench_frame :: proc(s: ^session.Session, c: ^Bench_Case) {
 	start := time.tick_now()
 	session.frame(s)
 	total := time.duration_milliseconds(time.tick_since(start))
-	append(&c.build, time.duration_milliseconds(app.times.build))
-	append(&c.draw, time.duration_milliseconds(app.times.draw))
-	append(&c.render, time.duration_milliseconds(app.times.render))
+	append(&c.build, time.duration_milliseconds(app.frame_times.build))
+	append(&c.draw, time.duration_milliseconds(app.frame_times.draw))
+	append(&c.render, time.duration_milliseconds(app.frame_times.render))
 	append(&c.total, total)
 	append(&c.gpu, f64(render.gpu_ms(&app.r)))
-	c.builds += app.times.builds
-	c.boxes = ui.boxes_built(&app.ui_state)
+	c.builds += app.frame_times.builds
+	c.boxes = ui.boxes_built(&app.state)
 }
 
 // The `i`th character of `s` (ASCII), round again past its end.
@@ -246,7 +247,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	testing.expect(t, limit > f32(BENCH_TURNS) * sb.size.y * 0.5, "the conversation is many pages long")
 	testing.expect(t, sb.view_off.y >= limit - 1, "opened at its bottom")
 	testing.expect(t, session.find(s, "msg_msg_0_a") == nil, "the first one is not")
-	bottom_boxes := ui.boxes_built(&app.ui_state)
+	bottom_boxes := ui.boxes_built(&app.state)
 
 	when OCC_BENCH { render.set_gpu_profile(&app.r, true) }
 	idle := Bench_Case{name = "idle"}
@@ -294,7 +295,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	bench_report(&scroll)
 	sb = session.get(s, "chat")
 	testing.expect(t, sb.view_target.y < limit, "scrolled up")
-	testing.expect(t, ui.boxes_built(&app.ui_state) < 2 * bottom_boxes, "still only what is seen")
+	testing.expect(t, ui.boxes_built(&app.state) < 2 * bottom_boxes, "still only what is seen")
 
 	// the palette, open, its list filtered by what is typed
 	command_run(app, command_find("app.palette"))
@@ -404,7 +405,7 @@ post_answer :: proc(app: ^App, r: ^Request, body: string) {
 	r.status, r.ok, r.resp = 200, true, strings.clone(body)
 	p := new(Posted_Answer)
 	p^ = {app, r}
-	ui.post(&app.ui_state, proc(data: rawptr, word: u64) {
+	ui.post(&app.state, proc(data: rawptr, word: u64) {
 		p := (^Posted_Answer)(data)
 		answer(p.app, p.r)
 		free(p)

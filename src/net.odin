@@ -330,7 +330,7 @@ request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag
 		if r.delay > 0 { time.sleep(time.Duration(r.delay) * time.Millisecond) }
 		r.status, r.resp, r.ok = http_request(&r.conn.http, r.method, r.path, r.body)
 		req_read(r)
-		if !ui.post(&r.app.ui_state, on_answer, r) { request_free(r) }
+		if !ui.post(&r.app.state, on_answer, r) { request_free(r) }
 	}, self_cleanup = true)
 }
 
@@ -894,13 +894,13 @@ events_thread :: proc(data: rawptr) {
 			c := (^Conn)(user)
 			e := new(Event_Msg)
 			e^ = {conn = c, text = strings.clone(data)}
-			if !ui.post(&c.app.ui_state, on_event, e, EVENT_WORD) { delete(e.text); free(e); return false }
+			if !ui.post(&c.app.state, on_event, e, EVENT_WORD) { delete(e.text); free(e); return false }
 			return true
 		}, c, proc(user: rawptr) {
-			ui.post(&(^Conn)(user).app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_up(the_app) } }, user)
+			ui.post(&(^Conn)(user).app.state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_up(the_app) } }, user)
 		})
 		if sync.atomic_load(&c.stop) { break }
-		ui.post(&c.app.ui_state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_down(the_app, int(word)) } }, c, u64(st))
+		ui.post(&c.app.state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_down(the_app, int(word)) } }, c, u64(st))
 		time.sleep(STREAM_RETRY_S * time.Second)
 	}
 }

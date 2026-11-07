@@ -17,18 +17,18 @@ import "gt:config"
 import "gt:devtools"
 import "gt:draw"
 import "gt:font"
+import "gt:host"
 import "gt:platform"
 import "gt:render"
 import "gt:ui"
 
+// A face of the fonts. (Inside App, `font` names the face of the interface, from host.Shared: not the package.)
+Face_Id :: font.Font_Id
+
 App :: struct {
-	win:      ^platform.Window,
-	r:        render.Renderer,
-	fonts:    font.State,
-	dc:       draw.Context,
-	theme:    ui.Theme,
-	ui_state: ui.State,
-	prose, font, mono, mono_bold, icons, tk_icons: font.Font_Id,
+	using gfx:    host.Shared,   // the renderer, the drawing, the fonts, the theme, the interface's face (font)
+	using window: host.Host,     // the main window: win, its interface (state), its pacing, what it still owes (settle)
+	prose, mono, mono_bold, icons, tk_icons: Face_Id,   // (Face_Id: in here, font is the interface's face, host.Shared's)
 	own:           Own_Faces,
 	prose_scale:   f32,        // the answers' size, of the text around them
 	prose_face:    string,     // the system face of the answers ("": not one)
@@ -99,15 +99,11 @@ App :: struct {
 	view_pan:         [2]f32,                // of the picture's centre from the view's, frame pixels
 	view_grab:        [2]f32,                // view_pan when the drag began
 	view_start:       Image_Ref,             // --image=<file>: opened in the viewer once it is decoded (its data owned)
-	// pacing (frame / pace)
-	pacer:            render.Pacer,   // the toolkit's frame pacing (render/pacer.odin)
 	devtools:         ^devtools.Server,   // TOOLKIT_DEVTOOLS=<port>: driven over the Chrome DevTools Protocol (tools/cdp.mjs)
-	idled:            bool,   // the loop slept before this frame
 	setup:            Setup_UI,
 	quit:             bool,
 	last_tick:        time.Tick,
-	frames:           int,
-	times:            Frame_Times,   // the last frame's steps
+	frame_times:      Frame_Times,   // the last frame's steps
 }
 
 // Where the conversation shown is read, and how it moves: it starts over with another session.
@@ -140,7 +136,6 @@ Server_Known :: struct {
 
 // What the window keeps from one frame to the next that belongs to no panel: what is due, what is open, where things are.
 App_Context :: struct {
-	shown_size:          draw.Vec2,            // the size of the last frame shown (frame_held_ms)
 	film_slow:           f64,                  // --slow-motion (film.odin): 0, the interface's time is the system's
 	film_clock:          f64,                  // what ui.now_ms says then
 	film_clock_at:       f64,
@@ -237,22 +232,42 @@ Frame_Times :: struct {
 clip_get :: proc() -> string { return ui.window_clipboard_get() }
 clip_set :: proc(text: string) { ui.window_clipboard_set(text) }
 
-// When the frame starts and how it is shown: the toolkit's pacer (render/pacer.odin, on the cadence model). What matters
-// most here is the resize step: a frame at a new size is presented at once (no wait for the swap chain, none for the
-// refresh, two frames queued); waiting, the compositor shows the last frame stretched over the new size until one of that
-// size arrives. `inner`: a frame asked for from a loop of the system (the
-// live resize's WM_PAINT). A splitter or a scroll bar held paces as a drag: one frame per slot. So does a pointer or a wheel
-// that moves with no button down: what follows it (a row lit under it, a page that scrolls) is read against the pointer
-// itself, which the system draws at the screen's top rate. On a variable refresh screen that Windows reports at 60 Hz
-// (here 180), as Continuous frames those waited for a 60 Hz refresh: every hover came 2 or 3 of the pointer's frames late.
-pace :: proc(app: ^App, inner: bool) -> (at_once: bool) {
-	moving := ui.now_ms() - app.cx.pointer_ms < POINTER_MOVING_MS || app.cx.gliding   // (a panel that opens: read as closely)
-	app.pacer.choices.target_hz = app.prefs.target_hz
-	app.pacer.cadence.uncapped = app.prefs.uncapped
-	return render.pace_frame(&app.pacer, &app.r, app.win, idled = app.idled, dragging = ui.active_key() != 0 || moving, inner = inner)
+// The main window is a host.Host (host_adopt: the window, the device loaded on a thread and the fonts are this program's own start). Its
+// frame is the toolkit's, in the order its parts must come (host.host_frame); what is this program's goes in its hooks.
+frame :: proc(app: ^App, inner := false) { host.host_frame(&app.window, inner) }
+
+main_window_adopt :: proc(app: ^App) {
+	host.host_adopt(&app.window, &app.gfx, app.win, nil, app)
+	h := &app.window
+	h.after_input = FRAMES_AFTER_INPUT
+	h.background = hex(HEX_BG0)
+	h.dragging = main_dragging
+	h.before_input = proc(h: ^host.Host) {
+		app := (^App)(h.user)
+		film_slow_tick(app)
+		app.frame_no += 1
+		devtools.service(app.devtools, &app.state, &app.r)
+	}
+	h.input = main_input
+	h.builds = main_builds
+	h.hold = proc(h: ^host.Host, size: draw.Vec2) -> int { return frame_held_ms((^App)(h.user), size) }
+	h.after_frame = main_after_frame
 }
 
-
+// How the frame is paced: the toolkit's pacer (render/pacer.odin, on the cadence model). What matters most here is the resize step: a frame
+// at a new size is presented at once (no wait for the swap chain, none for the refresh, two frames queued); waiting, the compositor shows
+// the last frame stretched over the new size until one of that size arrives. A splitter or a scroll bar held paces as a drag: one frame per
+// slot. So does a pointer or a wheel that moves with no button down: what follows it (a row lit under it, a page that scrolls) is read
+// against the pointer itself, which the system draws at the screen's top rate. On a variable refresh screen that Windows reports at 60 Hz
+// (here 180), as Continuous frames those waited for a 60 Hz refresh: every hover came 2 or 3 of the pointer's frames late.
+@(private = "file")
+main_dragging :: proc(h: ^host.Host) -> bool {
+	app := (^App)(h.user)
+	app.pacer.choices.target_hz = app.prefs.target_hz
+	app.pacer.cadence.uncapped = app.prefs.uncapped
+	moving := ui.now_ms() - app.cx.pointer_ms < POINTER_MOVING_MS || app.cx.gliding   // (a panel that opens: read as closely)
+	return ui.active_key() != 0 || moving
+}
 
 FRAMES_AFTER_INPUT :: 3        // still drawn after an event, and at start: what it set off settles
 DT_MIN_S           :: 0.0005
@@ -295,18 +310,13 @@ build_params :: proc(app: ^App, win: ^platform.Window, size: draw.Vec2, events: 
 	}
 }
 
-frame :: proc(app: ^App, inner := false) {
-	if ui.building() { return }
-	film_slow_tick(app)
-	app.frame_no += 1
-	at_once := pace(app, inner)
-	app.idled = false
-	devtools.service(app.devtools, &app.ui_state, &app.r)
-	events := platform.poll_events(app.win, false)
-	render.mark_input(&app.r)
+// What the main window's input is, before the interface sees it: what goes to a shell or a command's output is taken out.
+@(private = "file")
+main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
+	app := (^App)(h.user)
+	events := read
 	app.cx.shared_moved = false
 	for e in events { if e.kind != .Mouse_Move && e.kind != .Scroll { app.cx.shared_moved = true } }   // (a pointer that passes over this window changes nothing in another)
-	if len(events) > 0 { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }
 	events = output_view_events(app, events)
 	app.cx.wheeled = false
 	events = term_events(app, events)
@@ -323,8 +333,13 @@ frame :: proc(app: ^App, inner := false) {
 	content_zoom_events(app, events)
 	dialogs_track(app)
 	text_mode_follow(app)
-	render.resize(&app.r, app.win.size)
-	size := draw.Vec2{f32(app.win.size.x), f32(app.win.size.y)}
+	return events
+}
+
+// The builds of a frame. (Its own dt: the film's slow motion has one, and the status bar's rate is read from it.)
+@(private = "file")
+main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _: f32) {
+	app := (^App)(h.user)
 	now := time.tick_now()
 	dt := film_slow_dt(app, clamp(f32(time.duration_seconds(time.tick_diff(app.last_tick, now))), DT_MIN_S, DT_MAX_S))
 	app.last_tick = now
@@ -334,15 +349,15 @@ frame :: proc(app: ^App, inner := false) {
 	build :: proc(app: ^App, size: draw.Vec2, events: []platform.Event, dt: f32, again := false) {
 		app.cx.was_gliding = app.cx.gliding
 		app.cx.gliding = false
-		ui.set_scrollbar_autohide(&app.ui_state, app.prefs.autohide_scrollbars)
-		app.ui_state.post_budget = again ? 0 : POSTS_PER_BUILD
-		ui.begin_build(&app.ui_state, build_params(app, app.win, size, events, dt))
+		ui.set_scrollbar_autohide(&app.state, app.prefs.autohide_scrollbars)
+		app.state.post_budget = again ? 0 : POSTS_PER_BUILD
+		ui.begin_build(&app.state, build_params(app, app.win, size, events, dt))
 		app.chat_sb = nil   // (only now: the answers begin_build ran read the last build's, a page placed by chat_load above all)
 		build_ui(app)
 		ui.end_build()
-		app.times.builds += 1
+		app.frame_times.builds += 1
 	}
-	app.times = {}
+	app.frame_times = {}
 	t_build := time.tick_now()
 	build(app, size, events, dt)
 	prefs_track_zoom(app)
@@ -382,29 +397,19 @@ frame :: proc(app: ^App, inner := false) {
 	app.snap_bottom = false
 	app.chat.keep_id = ""
 	if b := app.chat_sb; b != nil { load_older(app, b) }
-	platform.set_cursor(app.win, ui.cursor(&app.ui_state))
-	t_draw := time.tick_now()
-	app.times.build = time.tick_diff(t_build, t_draw)
-	if left := frame_held_ms(app, size); left > 0 {
-		ui.wake_within(&app.ui_state, left)
-	} else {
-		draw.begin_frame(&app.dc, size)
-		render.frame_begin(&app.r, hex(HEX_BG0))
-		ui.draw_tree(&app.ui_state, &app.dc)
-		draw.end_frame(&app.dc)
-		t_render := time.tick_now()
-		app.times.draw = time.tick_diff(t_draw, t_render)
-		render.frame_end(&app.r, !at_once)
-		render.paced_present(&app.pacer)
-		app.times.render = time.tick_since(t_render)
-		app.cx.shown_size = size
-	}
-	work := f32(time.duration_milliseconds(app.times.build + app.times.draw + app.times.render))
-	app.cx.work_ms += (work - app.cx.work_ms) * FPS_SMOOTH
-	free_all(context.temp_allocator)
-	answers_spent_free(app)
+	app.frame_times.build = time.tick_since(t_build)
+}
 
-	if run := ui.post_stats(&app.ui_state).run; run != app.cx.posts_run_seen {   // (an answer, a shell's output, an event of the server)
+// Between two frames: what the frame set off, what the page said, what is due, then the windows of their own.
+@(private = "file")
+main_after_frame :: proc(h: ^host.Host) {
+	app := (^App)(h.user)
+	app.frame_times.draw, app.frame_times.render = h.times.draw, h.times.present
+	work := f32(time.duration_milliseconds(app.frame_times.build + app.frame_times.draw + app.frame_times.render))
+	app.cx.work_ms += (work - app.cx.work_ms) * FPS_SMOOTH
+	h.times = {}   // (a frame held draws nothing: it costs nothing either)
+	answers_spent_free(app)
+	if run := ui.post_stats(&app.state).run; run != app.cx.posts_run_seen {   // (an answer, a shell's output, an event of the server)
 		app.cx.posts_run_seen = run
 		app.cx.shared_moved = true
 	}
@@ -421,7 +426,6 @@ frame :: proc(app: ^App, inner := false) {
 	activity_tick(app)
 	deferred_tick(app)
 	detached_frames(app)
-	free_all(context.temp_allocator)
 }
 
 // A conversation just opened, its first page on its way: an empty page shown for the instant that takes is a blink, from what was there to
@@ -429,7 +433,7 @@ frame :: proc(app: ^App, inner := false) {
 // nothing. Only what is shown is held: input is read and built as ever. How long more, in ms (0: show the frame). A server that takes
 // longer gets its "Loading"; a window with nothing on it yet, or of another size, has no picture to keep.
 frame_held_ms :: proc(app: ^App, size: draw.Vec2) -> int {
-	if chat_view(app) != .Loading || app.cx.shown_size != size { return 0 }
+	if chat_view(app) != .Loading || app.shown != {int(size.x), int(size.y)} { return 0 }   // (shown: the size of the last picture)
 	return max(int(OPEN_HOLD_MS - (ui.now_ms() - app.opened_ms)), 0)
 }
 
@@ -441,7 +445,7 @@ due_run :: proc(app: ^App, k: Due) {
 	case .Context:   if app.stats_open { context_ask(app) }
 	case .Restore:   nav_restore_clear(app)
 	case .Term_Size: terms_size_due(app)
-	case .Side_Wake: app.frames = max(app.frames, FRAMES_AFTER_INPUT)   // (the build sees the pointer has rested)
+	case .Side_Wake: app.settle = max(app.settle, FRAMES_AFTER_INPUT)   // (the build sees the pointer has rested)
 	}
 }
 
@@ -461,7 +465,7 @@ deferred_tick :: proc(app: ^App) {
 	for ms in ([?]int{activity_in_ms(app), rediscover_in_ms(app), browser_in_ms(app)}) {
 		if ms > 0 { soonest = soonest == 0 ? ms : min(soonest, ms) }
 	}
-	if soonest > 0 { ui.wake_within(&app.ui_state, soonest) }
+	if soonest > 0 { ui.wake_within(&app.state, soonest) }
 }
 
 // The faces looked for when the preference is "" (automatic), in order; the toolkit's embedded Roboto and Inconsolata
@@ -549,14 +553,14 @@ fonts_from_dir :: proc(app: ^App) {
 	app.font = face(app, dir, "ui", app.font)
 	app.mono = face(app, dir, "mono", app.mono)
 	app.mono_bold = face(app, dir, "mono-bold", app.mono)
-	app.ui_state.mono_font = app.mono
+	app.state.mono_font = app.mono
 	bold := face(app, dir, "ui-bold", app.font)
 	italic := face(app, dir, "ui-italic", app.font)
 	bi := face(app, dir, "ui-bold-italic", bold)
-	ui.rich_set_faces(&app.ui_state, app.font, bold, italic, bi)
+	ui.rich_set_faces(&app.state, app.font, bold, italic, bi)
 	app.prose = face(app, dir, "prose", app.font)
 	if app.prose != app.font {
-		ui.rich_set_faces(&app.ui_state, app.prose, face(app, dir, "prose-bold", app.prose), face(app, dir, "prose-italic", app.prose), face(app, dir, "prose-bold-italic", app.prose))
+		ui.rich_set_faces(&app.state, app.prose, face(app, dir, "prose-bold", app.prose), face(app, dir, "prose-italic", app.prose), face(app, dir, "prose-bold-italic", app.prose))
 	}
 }
 
@@ -573,21 +577,21 @@ fonts_apply :: proc(app: ^App) {
 		app.mono_bold = app.mono
 		if b, ok := font.load_system(&app.fonts, mono_face, WEIGHT_MONO_BOLD); ok { app.mono_bold = b }
 	}
-	app.ui_state.mono_font = app.mono
+	app.state.mono_font = app.mono
 	ui_set := app.ui_face != "" ? system_set(app, app.ui_face, app.font) : app.own.ui
-	ui.rich_set_faces(&app.ui_state, app.font, ui_set[1], ui_set[2], ui_set[3])
+	ui.rich_set_faces(&app.state, app.font, ui_set[1], ui_set[2], ui_set[3])
 	// the answers: their own face, the interface's, or a family of the system
 	prose_face := ""
 	prose_own := want_prose == "" || want_prose == FONT_BUILTIN
 	app.prose = app.font
 	if prose_own {
 		app.prose = app.own.prose[0]
-		ui.rich_set_faces(&app.ui_state, app.prose, app.own.prose[1], app.own.prose[2], app.own.prose[3])
+		ui.rich_set_faces(&app.state, app.prose, app.own.prose[1], app.own.prose[2], app.own.prose[3])
 	} else if want_prose != FONT_SAME {
 		if f, ok := font.load_system(&app.fonts, want_prose); ok {
 			app.prose, prose_face = f, want_prose
 			set := system_set(app, want_prose, f)
-			ui.rich_set_faces(&app.ui_state, f, set[1], set[2], set[3])
+			ui.rich_set_faces(&app.state, f, set[1], set[2], set[3])
 		}
 	}
 	app.prose_scale = prose_own ? PROSE_OWN_SCALE : 1
@@ -616,14 +620,14 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	draw.init(&app.dc, &app.r, &app.fonts)
 	logo_load(app)
 	theme_setup(&app.theme)
-	ui.init(&app.ui_state, &app.fonts, &app.theme)
-	app.ui_state.icon_font = app.tk_icons
-	ui.set_toast_position(&app.ui_state, .Top_Right)
-	ui.set_autoscroll_enabled(&app.ui_state, true)   // a click of the wheel scrolls by the pointer, as in the browsers
+	ui.init(&app.state, &app.fonts, &app.theme)
+	app.state.icon_font = app.tk_icons
+	ui.set_toast_position(&app.state, .Top_Right)
+	ui.set_autoscroll_enabled(&app.state, true)   // a click of the wheel scrolls by the pointer, as in the browsers
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
 	history_init(app, prefs_file != "" ? pjoin({filepath.dir(prefs_file), "history.jsonl"}) : "")
 	palette_init(app, prefs_file != "" ? pjoin({filepath.dir(prefs_file), "palette_usage.txt"}) : "")
-	ui.post_configure(&app.ui_state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
+	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
 }
 
 // The fonts, before the renderer: they load while the graphics device is made (render.preload_device).
@@ -681,10 +685,9 @@ main :: proc() {
 	if app.servers_in_clear { servers_save(app) }
 	platform.set_dark_title(app.win, true)
 	app.devtools = devtools.start_from_env(app.win, "opencode")
-	app.win.user = app
-	app.win.on_frame = proc(user: rawptr) { frame((^App)(user), inner = true) }
+	main_window_adopt(app)
 	app.last_tick = time.tick_now()
-	app.frames = FRAMES_AFTER_INPUT
+	app.settle = FRAMES_AFTER_INPUT
 
 	// the event stream: its first connection loads everything (stream_up)
 	server_connect(app, app.server)
@@ -697,7 +700,7 @@ main :: proc() {
 			if i == 0 { first = time.tick_since(started) }
 			time.sleep(CHECK_FRAME_SLEEP_MS * time.Millisecond)
 		}
-		fmt.printfln("opencode-native: %d frames, %d boxes, online=%v, %d sessions, %d messages, first frame %.1f ms", frames, app.ui_state.boxes_built, online(app), len(app.sessions), len(app.chat.messages), time.duration_milliseconds(first))
+		fmt.printfln("opencode-native: %d frames, %d boxes, online=%v, %d sessions, %d messages, first frame %.1f ms", frames, app.state.boxes_built, online(app), len(app.sessions), len(app.chat.messages), time.duration_milliseconds(first))
 		os.exit(0)
 	}
 
@@ -721,16 +724,15 @@ main :: proc() {
 	}
 	platform.show_window(app.win)
 	for !platform.is_closed(app.win) && !app.quit {
-		if app.frames == 0 && !ui.needs_frame(&app.ui_state) {
+		if app.settle == 0 && !ui.needs_frame(&app.state) {
 			film_slow_tick(app)
-			platform.wait_event(app.win, ui.wake_in_ms(&app.ui_state))
-			app.idled = true
+			platform.wait_event(app.win, ui.wake_in_ms(&app.state))
+			app.slept = true
 		}
-		frame(app)
-		if app.frames > 0 { app.frames -= 1 }
+		frame(app)   // (what it still owes goes down there: host_frame)
 	}
 	threads_stop(app)
-	ui.post_close(&app.ui_state)
+	ui.post_close(&app.state)
 	os.exit(0)
 }
 

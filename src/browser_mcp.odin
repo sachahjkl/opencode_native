@@ -182,7 +182,7 @@ browser_thread :: proc(l: ^Browser_Link) {
 			proc(p: ^Browser_Pump, text: string) {
 				m := new(Mcp_Msg)
 				m^ = {{p.link, p.socket}, strings.clone(text)}
-				if !ui.post(&p.link.app.ui_state, on_mcp, m) { delete(m.text); free(m) }
+				if !ui.post(&p.link.app.state, on_mcp, m) { delete(m.text); free(m) }
 			})
 		sync.atomic_store(&l.socket, 0)   // (what comes now waits for the next one)
 		browser_link_flush(l, ws, socket)   // (what the page answered as the folder changed: the agent is told, or it does it again)
@@ -190,7 +190,7 @@ browser_thread :: proc(l: ^Browser_Link) {
 		l.ws.free(ws)
 		m := new(Mcp_Msg)
 		m^ = {to = {l, socket}}
-		if !ui.post(&app.ui_state, on_mcp_closed, m) { free(m) }
+		if !ui.post(&app.state, on_mcp_closed, m) { free(m) }
 		time.sleep(BROWSER_REOPEN_MS * time.Millisecond)   // (the server lets go of the name first)
 	}
 	sync.atomic_store(&l.state, Browser_Link_State.Over)

@@ -167,7 +167,7 @@ PULSE_LIT_SPAN :: 0.55
 SCANNER_RATE   :: 0.0028
 
 // Something pulses, in the window being built: the next frame soon. (detached_asks tells the loop of a window's.)
-animate :: proc(app: ^App) { ui.wake_within(app.cx.built != nil ? app.cx.built : &app.ui_state, ANIMATION_WAIT_MS) }
+animate :: proc(app: ^App) { ui.wake_within(app.cx.built != nil ? app.cx.built : &app.state, ANIMATION_WAIT_MS) }
 
 px1 :: proc() -> f32 { return max(1, math.round(ui.scale())) }
 
@@ -177,7 +177,7 @@ radii4 :: proc(r: f32) -> [4]f32 { return {r, r, r, r} }
 corners :: proc() -> f32 {
 	app := the_app
 	if app == nil { return 1 }
-	return ui.rounding(app.cx.built != nil ? app.cx.built : &app.ui_state)
+	return ui.rounding(app.cx.built != nil ? app.cx.built : &app.state)
 }
 
 ////////////////////////////////

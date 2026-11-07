@@ -196,7 +196,7 @@ nav_apply :: proc(app: ^App) {
 		delete(st.id)
 	}
 	clear(&app.nav_steps)
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 // A place of the history: a session ("": the home page), and where the reader was in it: the message at the top of the view and how
@@ -291,7 +291,7 @@ view_to_bottom :: proc(app: ^App) {
 
 // The conversation's scroll bar is held.
 scrollbar_held :: proc(app: ^App, sb: ^ui.Box) -> bool {
-	owner, held := app.ui_state.sb_owner[ui.active_key()]
+	owner, held := app.state.sb_owner[ui.active_key()]
 	return held && owner == sb.key
 }
 
@@ -310,7 +310,7 @@ nav_hold_view :: proc(app: ^App) {
 nav_restore_held :: proc(app: ^App, found, moved: bool) {
 	cx := &app.cx
 	app.stick_bottom = false
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 	cx.restore_still = found && !moved ? cx.restore_still + 1 : 0
 	if cx.restore_still >= NAV_RESTORE_STILL { nav_restore_clear(app) }
 }

@@ -203,7 +203,7 @@ preview_tab_front :: proc(app: ^App, p: ^Preview, t: ^Preview_Tab) {
 	if shown && old != nil { tab_leave(app, old) }
 	for it, i in p.tabs { if it == t { p.front = i } }
 	if shown { tab_bring(app, t) }
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 @(private = "file")
@@ -233,7 +233,7 @@ preview_tab_close :: proc(app: ^App, p: ^Preview, t: ^Preview_Tab) {
 		p.front = min(at, len(p.tabs) - 1)
 		if p == &app.preview { tab_bring(app, preview_front(p)) }
 	}
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 // The palette's and the keys'. (The panel closed: opening it is what was asked, with a tab of its own if it had others.)
@@ -381,7 +381,7 @@ preview_switch :: proc(app: ^App, key: string) {
 		}
 		d.saved = d.serial   // (another session shown is no change of the layout: the panel keeps its place in what is saved)
 	}
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 // What holds nothing is not kept: going through a hundred sessions leaves nothing behind.

@@ -82,7 +82,7 @@ output_view_show :: proc(app: ^App, v: ^Output_View) {
 		return
 	}
 	app.cx.outputs.shown = v
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 // A command of the server, running or ended.
@@ -155,7 +155,7 @@ output_view_ask_state :: proc(app: ^App, v: ^Output_View) {
 output_view_ends :: proc(app: ^App, v: ^Output_View, seen: bool) {
 	v.over, v.draining, v.seen_end = true, false, seen
 	if v.cursor == 0 && len(v.raw) == 0 && v.fallback != "" { output_view_feed(v, v.fallback) }
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 // GET /api/shell/:id/output. Printing, it is read again at once while there is more; at rest, what is to say is whether it ended.
@@ -166,7 +166,7 @@ output_view_output_load :: proc(app: ^App, data: json.Value, id: string) {
 	if jbool(data, "data", "truncated") { v.dropped = true }
 	if c := int(jnum(data, "data", "cursor")); c > v.cursor { v.cursor = c }
 	output_view_feed(v, out)
-	if out != "" { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }
+	if out != "" { app.settle = max(app.settle, FRAMES_AFTER_INPUT) }
 	switch {
 	case v.cursor < int(jnum(data, "data", "size")): output_view_read(app, v)
 	case v.draining:                                 output_view_ends(app, v, v.watched)
@@ -211,7 +211,7 @@ output_view_close :: proc(app: ^App, v: ^Output_View) {
 	if o.shown == v { o.shown = nil }
 	if o.window == v { o.window = nil }
 	detached_closing(app, v.panel)
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 @(private = "file")

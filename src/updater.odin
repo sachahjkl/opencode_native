@@ -166,7 +166,7 @@ update_answered :: proc(app: ^App, j: ^Update_Job) {
 		delete(j.base); delete(j.path); delete(j.channel); delete(j.exe); delete(j.err)
 		free(j)
 	}
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 	if j.install { update_installed(app, j) } else { update_checked(app, j) }
 }
 
@@ -232,7 +232,7 @@ update_job_start :: proc(app: ^App, j: ^Update_Job) {
 	}
 	thread.create_and_start_with_poly_data(j, proc(j: ^Update_Job) {
 		if j.install { install_job(j) } else { check_job(j) }
-		_ = ui.post(&j.app.ui_state, on_update, j)
+		_ = ui.post(&j.app.state, on_update, j)
 		free_all(context.temp_allocator)
 	}, self_cleanup = true)
 }

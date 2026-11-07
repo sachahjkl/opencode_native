@@ -210,7 +210,7 @@ field_line :: proc(id: string, f: ^ui.Text_Field, hint: string, em: f32, label :
 schedules_dialog :: proc(app: ^App, em: f32) {
 	s := &app.cx.schedules
 	if !s.open { return }
-	win := app.ui_state.window_size
+	win := app.state.window_size
 	margin := em * ui.MODAL_MARGIN_EM
 	w := min(math.round(em * SCHEDULES_W_EM), win.x - 2 * margin)
 	if ui.modal("schedules", w, &s.open, SCHEDULES_TOP) {

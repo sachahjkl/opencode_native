@@ -47,7 +47,7 @@ COMMANDS := [?]Command{
 	{id = "session.new", title = "New session", group = "Session", icon = ICO_ADD, keys = "Ctrl+N", key = .N, mods = {.Ctrl}, run = new_session},
 	{id = "session.stop", title = "Stop the run", group = "Session", icon = ICO_STOP, keys = "Ctrl+Esc", key = .Escape, mods = {.Ctrl}, run = proc(app: ^App) { interrupt_session(app, app.chat.id) }, enabled = is_busy},
 	{id = "session.activity", title = "What runs in the background", group = "Session", icon = ICO_TERMINAL, keys = "Ctrl+J", key = .J, mods = {.Ctrl}, run = activity_toggle, enabled = has_session},
-	{id = "session.quote", title = "Quote what is selected", group = "Session", icon = ICO_EDIT, keys = "Ctrl+Q", key = .Q, mods = {.Ctrl}, run = quote_selection, enabled = proc(app: ^App) -> bool { return ui.has_selection(&app.ui_state) }},
+	{id = "session.quote", title = "Quote what is selected", group = "Session", icon = ICO_EDIT, keys = "Ctrl+Q", key = .Q, mods = {.Ctrl}, run = quote_selection, enabled = proc(app: ^App) -> bool { return ui.has_selection(&app.state) }},
 	{id = "session.find", title = "Find in the conversation", group = "Session", icon = ICO_SEARCH, keys = "Ctrl+F", run = find_open, enabled = has_session},
 	{id = "session.stats", title = "Show or hide the Statistics panel", group = "Session", icon = ICO_GAUGE, keys = "Ctrl+I", key = .I, mods = {.Ctrl}, run = stats_toggle, enabled = has_session, checked = proc(app: ^App) -> bool { return app.stats_open }},
 	{id = "session.rename", title = "Rename the session…", group = "Session", icon = ICO_EDIT, keys = "F2", key = .F2, run = proc(app: ^App) { rename_open(app, app.chat.id) }, enabled = has_session},
@@ -77,9 +77,9 @@ COMMANDS := [?]Command{
 	{id = "view.content_in", title = "Zoom in the conversation", group = "View", icon = ICO_ADD, keys = "Ctrl+=", run = proc(app: ^App) { content_zoom_by(app, ZOOM_FACTOR) }},
 	{id = "view.content_out", title = "Zoom out the conversation", group = "View", icon = ICO_DOWN, keys = "Ctrl+-", run = proc(app: ^App) { content_zoom_by(app, 1 / ZOOM_FACTOR) }},
 	{id = "view.content_reset", title = "Reset the conversation's zoom", group = "View", icon = ICO_UNDO, keys = "Ctrl+0", run = proc(app: ^App) { content_zoom_set(app, 1) }},
-	{id = "view.chrome_in", title = "Zoom in the interface", group = "View", icon = ICO_ADD, keys = "Ctrl+Shift+=", run = proc(app: ^App) { ui.set_zoom(&app.ui_state, ui.zoom(&app.ui_state) * ZOOM_FACTOR) }},
-	{id = "view.chrome_out", title = "Zoom out the interface", group = "View", icon = ICO_DOWN, keys = "Ctrl+Shift+-", run = proc(app: ^App) { ui.set_zoom(&app.ui_state, ui.zoom(&app.ui_state) / ZOOM_FACTOR) }},
-	{id = "view.chrome_reset", title = "Reset the interface's zoom", group = "View", icon = ICO_UNDO, keys = "Ctrl+Shift+0", run = proc(app: ^App) { ui.set_zoom(&app.ui_state, 1) }},
+	{id = "view.chrome_in", title = "Zoom in the interface", group = "View", icon = ICO_ADD, keys = "Ctrl+Shift+=", run = proc(app: ^App) { ui.set_zoom(&app.state, ui.zoom(&app.state) * ZOOM_FACTOR) }},
+	{id = "view.chrome_out", title = "Zoom out the interface", group = "View", icon = ICO_DOWN, keys = "Ctrl+Shift+-", run = proc(app: ^App) { ui.set_zoom(&app.state, ui.zoom(&app.state) / ZOOM_FACTOR) }},
+	{id = "view.chrome_reset", title = "Reset the interface's zoom", group = "View", icon = ICO_UNDO, keys = "Ctrl+Shift+0", run = proc(app: ^App) { ui.set_zoom(&app.state, 1) }},
 }
 
 command_enabled :: proc(app: ^App, c: ^Command) -> bool { return c.enabled == nil || c.enabled(app) }
@@ -96,7 +96,7 @@ commands_apply :: proc(app: ^App) {
 	if len(app.cx.commands_due) == 0 { return }
 	for i := 0; i < len(app.cx.commands_due); i += 1 { app.cx.commands_due[i].run(app) }
 	clear(&app.cx.commands_due)
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 // Whether its key does something now: what is open over the window has the keyboard, unless the command is meant to work there.
@@ -116,7 +116,7 @@ commands_keys :: proc(app: ^App) {
 
 // A dialog, a picker or a menu is over the window: the one list of them. What reads the keyboard behind them asks here.
 overlay_open :: proc(app: ^App) -> bool {
-	return changes_shown(&app.cx.changes) || app.cx.diff_full.open || app.cx.outputs.shown != nil || app.cx.files.open || app.cx.schedules.open || app.cx.artifacts.open || app.settings_open || app.delete_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.rename.open || len(app.ui_state.menus) > 0
+	return changes_shown(&app.cx.changes) || app.cx.diff_full.open || app.cx.outputs.shown != nil || app.cx.files.open || app.cx.schedules.open || app.cx.artifacts.open || app.settings_open || app.delete_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.rename.open || len(app.state.menus) > 0
 }
 
 content_zoom_set :: proc(app: ^App, z: f32) {

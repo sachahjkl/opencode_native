@@ -210,7 +210,7 @@ panel_close :: proc(app: ^App, panel: u32) {
 	case:
 		if t := term_of_panel(app, panel); t != nil { term_close(app, t) }
 	}
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 // (read once: this is asked at every frame, and it is a look in the registry)
@@ -233,7 +233,7 @@ preview_show :: proc(app: ^App, by := Asked_By.User) {
 	preview_revive(app, t)
 	ui.dock_activate(&app.dock, u32(Panel.Preview))
 	t.focus_address = by == .User && t.url == ""   // (nothing to show yet: what comes next is an address)
-	app.frames = max(app.frames, FRAMES_AFTER_INPUT)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 // As preview_show, for any session's: a parked one opens where it is, out of sight, and shows when its session does.
@@ -287,7 +287,7 @@ web_event_add :: proc(v: ^Web_View, kind: Web_Event_Kind, id: u64, data: []u8, c
 	own := make([]u8, len(data))
 	copy(own, data)
 	append(&v.events, Web_Event{kind, id, own, ctrl})
-	v.app.frames = max(v.app.frames, FRAMES_AFTER_INPUT)
+	v.app.settle = max(v.app.settle, FRAMES_AFTER_INPUT)
 }
 
 web_events_drop :: proc(v: ^Web_View) {
@@ -374,7 +374,7 @@ preview_address :: proc(s: string) -> string {
 // The state of the window the panel is in: its focus is there.
 preview_state :: proc(app: ^App) -> ^ui.State {
 	if s := detached_state(app, u32(Panel.Preview)); s != nil { return s }
-	return &app.ui_state
+	return &app.state
 }
 
 // The web view's news (on the interface's thread, between two frames).
@@ -569,7 +569,7 @@ preview_place :: proc(app: ^App, over: bool) {
 	if same { return }
 	now := ui.now_ms()
 	if show == t.placed_shown && now - t.placed_ms < PREVIEW_PLACE_MS {
-		app.frames = max(app.frames, 1)   // (the last step is not lost)
+		app.settle = max(app.settle, 1)   // (the last step is not lost)
 		return
 	}
 	t.placed, t.placed_shown, t.placed_ms = {x, y, w, h}, show, now
