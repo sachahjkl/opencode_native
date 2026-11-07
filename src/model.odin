@@ -41,6 +41,7 @@ Part :: struct {
 	input:     string,        // JSON text
 	subject:   string,        // what the tool works on (a path, a command, a pattern), for its header
 	output:    string,
+	shell_id:  string,        // the command of the server it runs, once it says (output_view.odin)
 	done:      bool,
 	// a sub-agent launched by this call (tool "subagent")
 	sub_session, sub_agent, sub_desc, sub_prompt, sub_model: string,
@@ -62,6 +63,7 @@ Message :: struct {
 	completed: f64,
 	agent, model, provider, finish: string,
 	text:      string,        // user, synthetic, shell
+	shell_id:  string,        // shell: its command on the server
 	parts:     [dynamic]Part,
 	tokens_in, tokens_out, reasoning, cache_read: f64,
 	cost:      f64,
@@ -654,6 +656,7 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 	case "shell":
 		m.kind = .Shell
 		m.text = strings.clone(jstr(it, "command"), a)
+		m.shell_id = strings.clone(jstr(it, "shellID"), a)
 	case "compaction":
 		m.kind = .Compaction
 	case "idle":
@@ -727,6 +730,7 @@ subagent_body :: proc(s: string) -> string {
 // What the server says of a tool call as it runs (a sub-agent's session).
 tool_set_meta :: proc(p: ^Part, meta: json.Value, a: mem.Allocator) {
 	if sid := jstr(meta, "sessionID"); sid != "" && p.sub_session == "" { p.sub_session = strings.clone(sid, a) }
+	if id := jstr(meta, "shellID"); id != "" && p.shell_id == "" { p.shell_id = strings.clone(id, a) }
 	if files := jarr(meta, "files"); len(files) > 0 {
 		b := strings.builder_make(context.temp_allocator)
 		for f in files { strings.write_string(&b, jstr(f, "patch")) }

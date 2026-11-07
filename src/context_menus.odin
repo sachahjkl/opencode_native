@@ -151,6 +151,7 @@ message_menu :: proc(app: ^App, m: ^Message) {
 		fork_item(app, m)
 	case .Synthetic, .Shell:
 		if ui.menu_item("Copy", icon = ICO_COPY, enabled = m.text != "").clicked { copied(m.text, "Text") }
+		if m.shell_id != "" { if ui.menu_item("Inspect the output", icon = ICO_TERMINAL).clicked { output_view_open_shell(app, m.shell_id, m.text, chat_dir(app)) } }
 		ui.menu_separator()
 		fork_item(app, m)
 	case .Compaction, .Idle, .Other:
@@ -165,6 +166,9 @@ tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
 	if p.patch != "" { if ui.menu_item("Copy the diff", icon = ICO_COPY).clicked { copied(p.patch, "Diff") } }
 	if c := input_field(p, "command"); c != "" {
 		if ui.menu_item("Copy the command", icon = ICO_TERMINAL).clicked { copied(c, "Command") }
+	}
+	if tool_kind(p.tool_name) == .Shell && output_view_can(p) {
+		if ui.menu_item("Inspect the output", icon = ICO_TERMINAL).clicked { output_view_open_part(app, p) }
 	}
 	path := input_field(p, "filePath")
 	if path == "" { path = input_field(p, "path") }

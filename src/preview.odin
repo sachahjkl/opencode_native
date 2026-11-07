@@ -123,6 +123,7 @@ strip_end :: proc(user: rawptr, d: ^ui.Dock, leaf: i32) {
 
 panel_title :: proc(user: rawptr, panel: u32) -> string {
 	app := (^App)(user)
+	if v := output_view_of_panel(app, panel); v != nil { return ellipsize(first_line(v.command), OUTPUT_TITLE_CHARS) }
 	if t := term_of_panel(app, panel); t != nil { return term_label(t) }
 	switch Panel(panel) {
 	case .Conversation: return "Conversation"

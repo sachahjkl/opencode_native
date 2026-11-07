@@ -91,7 +91,7 @@ panel_detach :: proc(app: ^App, panel: u32) {
 	ui.set_autoscroll_enabled(&d.state, true)
 	ui.use(&app.ui_state)
 	if t := term_of_panel(app, panel); t != nil { t.detached = true }
-	ui.dock_close(&app.dock, panel)
+	if panel < OUTPUT_PANEL_BASE { ui.dock_close(&app.dock, panel) }   // (a command's output never had a tab)
 	append(&app.cx.detached, d)
 	if panel == u32(Panel.Preview) { preview_move(app, d.win) }
 	d.win.user = d
@@ -104,12 +104,13 @@ panel_detach :: proc(app: ^App, panel: u32) {
 detached_end :: proc(app: ^App, i: int) {
 	d := app.cx.detached[i]
 	ordered_remove(&app.cx.detached, i)
-	if t := term_of_panel(app, d.panel); t != nil { t.detached = false }
+	if d.panel < OUTPUT_PANEL_BASE { if t := term_of_panel(app, d.panel); t != nil { t.detached = false } }
 	if d.panel == u32(Panel.Preview) { preview_move(app, app.win) }
 	render.surface_destroy(&app.r, &d.surface)
 	ui.destroy(&d.state)
 	ui.use(&app.ui_state)
 	platform.destroy_window(d.win)
+	output_view_window_left(app, d.panel)
 	free(d)
 }
 
@@ -127,6 +128,11 @@ detached_stop :: proc(app: ^App) {
 
 @(private = "file")
 detached_body :: proc(app: ^App, d: ^Detached, size: draw.Vec2, em: f32) {
+	if v := output_view_of_panel(app, d.panel); v != nil {
+		output_view_body(app, v, em, true)
+		ui.set_focus(v.term.box)
+		return
+	}
 	switch {
 	case d.panel == u32(Panel.Stats):
 		app.cx.stats_w = size.x

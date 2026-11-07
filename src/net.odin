@@ -259,6 +259,8 @@ Req_Kind :: enum u8 {
 	Queue_Cancel,   // DELETE .../inbox/:message: it does not go (the tag: the item)
 	Queue_Replace,  // DELETE .../inbox/:message: it gives way to its edited text, an Outgoing (the tag: the item)
 	Queue_Check,    // GET .../message/:message: it answers 204 for what was delivered too; only a stored message says so
+	Output_Read,    // GET /api/shell/:id/output: for a view of a command (output_view.odin; the tag: the command)
+	Output_State,   // GET /api/shell/:id: ... how it stands
 	Context,        // GET /api/session/:id/context: what the model has in front of it (stats.odin)
 	Session_Viewed, // POST /api/session/:id/view: the end of its last run was seen (sidebar.odin)
 }
@@ -328,7 +330,7 @@ answer_is_json :: proc(k: Req_Kind) -> bool {
 	     .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands, .Projects, .Stats, .Created,
 	     .Shell_List, .Shell_One, .Shell_Output, .Peek, .Slash, .Forked, .Session_Export, .Session_Import,
 	     .Pty_List, .Pty_Made, .Schedules, .Schedule_Made, .Artifacts, .Artifact_Read, .Plugins, .Plugins_Check, .Integrations, .Credentials,
-	     .Connect_Begin, .Connect_Status, .Mention_Files, .Files_List, .Changes_Range, .Changes, .Revert_Staged, .Forms, .Inbox, .Queue_List, .Context:
+	     .Connect_Begin, .Connect_Status, .Mention_Files, .Files_List, .Changes_Range, .Changes, .Revert_Staged, .Forms, .Inbox, .Queue_List, .Context, .Output_Read, .Output_State:
 		return true
 	// (only that they went through matters, or the answer is not JSON at all)
 	case .Action, .Pty_Size, .Prompt, .Session_Agent, .Session_Model, .Session_Choice, .Inbox_Take, .Form_Reply, .Form_Dismiss, .Permission_Reply,
@@ -485,6 +487,8 @@ answer :: proc(app: ^App, r: ^Request) {
 	case .Queue_Steer, .Queue_Cancel: queue_answered(app, r)
 	case .Queue_Replace: queue_replaced(app, r)
 	case .Queue_Check:   outgoing_replaced(app, r.out, false)   // (stored: it was delivered)
+	case .Output_Read:   output_view_output_load(app, v, r.tag)
+	case .Output_State:  output_view_state_load(app, v, r.tag)
 	case .Context:       if r.tag == app.chat.id && r.gen == app.chat.gen { context_load(app, r.tag, v) }
 	case .Shell_List:   if r.gen == app.chat.gen { activity_shells_load(app, v, r.tag) }
 	case .Shell_One:    if r.gen == app.chat.gen { activity_shell_load(app, v, r.tag) }
@@ -594,6 +598,9 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 	case .Queue_Replace:
 		queue_replace_failed(app, r)
 		return true      // (Outgoing says it)
+	case .Output_Read, .Output_State:
+		output_view_failed(app, r)
+		return true      // (the view says it)
 	case .Queue_Check:
 		// (404: not stored, so it really left the inbox. Anything else says nothing: what was written comes back rather than go twice.)
 		if r.status == 404 { outgoing_replaced(app, r.out, true) } else { outgoing_answered(app, r, false) }

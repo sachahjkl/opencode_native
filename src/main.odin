@@ -174,6 +174,7 @@ App_Context :: struct {
 	was_docked:     bool,                 // the conversation was in the dock (preview.odin main_area)
 	show_licence:   bool,                 // Ghostty's, in the settings
 	terms:          Terminals,            // the Terminal panel (terminal.odin)
+	outputs:        Output_Views,         // commands' output, read as a terminal shows it (output_view.odin)
 	schedules:      Schedules,            // schedules.odin
 	artifacts:      Artifacts,
 	diff_full:      Diff_Full,            // diff_full.odin
@@ -294,6 +295,7 @@ frame :: proc(app: ^App, inner := false) {
 	events := platform.poll_events(app.win, false)
 	render.mark_input(&app.r)
 	if len(events) > 0 { app.frames = max(app.frames, FRAMES_AFTER_INPUT) }
+	events = output_view_events(app, events)
 	events = term_events(app, events)
 	for e in events {
 		if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() }
@@ -392,6 +394,7 @@ frame :: proc(app: ^App, inner := false) {
 	free_all(context.temp_allocator)
 
 	terminals_reap(app)
+	output_views_tick(app)
 	web_events_drain(app)   // (the one place: what the page said during the frame, a modal dialog's message loop included)
 	nav_apply(app)
 	commands_apply(app)

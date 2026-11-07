@@ -484,6 +484,13 @@ tool_body :: proc(app: ^App, p: ^Part, em: f32) {
 	case .Shell:
 		command_view(app, "###cmd", p.input, em)
 		output(app, p, em, lines)
+		if output_view_can(p) {
+			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+			if ui.row(.Center, id = "###cmd_more") {
+				ui.spacer(ui.fill())
+				if bevel_button("###inspect", "Inspect the output", ICO_TERMINAL, .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true).clicked { output_view_open_part(app, p) }
+			}
+		}
 		return
 	case .Todo:
 		if todo_view(app, p.input, em) { return }

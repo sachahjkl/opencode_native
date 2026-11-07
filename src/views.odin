@@ -75,6 +75,7 @@ build_ui :: proc(app: ^App) {
 	artifacts_dialog(app, em)
 	changes_dialog(app, em)
 	diff_full_dialog(app, em)
+	output_view_dialog(app, em)
 	files_dialog(app, em)
 	palette_dialog(app, em)
 	context_menu(app, em)

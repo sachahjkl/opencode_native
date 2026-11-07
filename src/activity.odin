@@ -112,7 +112,6 @@ chat_dir :: proc(app: ^App) -> string {
 	return ""
 }
 
-@(private = "file")
 location_query :: proc(dir: string) -> string {
 	return dir != "" ? fmt.tprintf("location[directory]=%s", url_escape(dir)) : ""
 }
@@ -192,7 +191,6 @@ job_find :: proc(a: ^Activity, id: string) -> ^Shell_Job {
 	return nil
 }
 
-@(private = "file")
 job_fill :: proc(j: ^Shell_Job, it: json.Value) {
 	switch jstr(it, "status") {
 	case "running": j.status = .Running
@@ -342,7 +340,6 @@ todos_done :: proc(a: ^Activity) -> (done: int, doing: string) {
 // The rows
 
 // `s` without what a terminal would act on: colour sequences, carriage returns.
-@(private = "file")
 plain_output :: proc(s: string) -> string {
 	b := strings.builder_make(0, len(s), context.temp_allocator)
 	i := 0
@@ -484,6 +481,20 @@ row_stop :: proc(app: ^App, r: Act_Row) {
 	}
 }
 
+// Its output as a terminal shows it. (A call whose command the list does not have: the call's own view of it.)
+@(private = "file")
+row_inspect :: proc(app: ^App, r: Act_Row) {
+	switch r.kind {
+	case .Agent:
+	case .Shell:
+		if j := job_find(&app.activity, r.id); j != nil { output_view_open_shell(app, j.id, j.command, app.activity.dir) }
+	case .Tool:
+		for &m in app.chat.messages {
+			for &p in m.parts { if p.kind == .Tool && p.tool_id == r.id { output_view_open_part(app, &p); return } }
+		}
+	}
+}
+
 // Before the composer's own keys, while the tray is open. Up past the first row is the way back to the composer.
 activity_keys :: proc(app: ^App) {
 	a := &app.activity
@@ -622,6 +633,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 					ui.spacer(ui.px(em * 0.2))
 				}
 				if r.kind == .Agent && bevel_button("###open", "Open", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true).clicked { row_act(app, r) }
+				if r.kind != .Agent && bevel_button("###inspect", "Inspect", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true).clicked { row_inspect(app, r) }
 				if r.kind == .Shell && r.preview != "" && bevel_button("###copy", "Copy", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true).clicked {
 					clip_set(plain_output(r.preview))
 					ui.toast(.Good, "Output copied")

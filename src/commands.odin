@@ -116,7 +116,7 @@ commands_keys :: proc(app: ^App) {
 
 // A dialog, a picker or a menu is over the window: the one list of them. What reads the keyboard behind them asks here.
 overlay_open :: proc(app: ^App) -> bool {
-	return changes_shown(&app.cx.changes) || app.cx.diff_full.open || app.cx.files.open || app.cx.schedules.open || app.cx.artifacts.open || app.settings_open || app.delete_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.rename.open || len(app.ui_state.menus) > 0
+	return changes_shown(&app.cx.changes) || app.cx.diff_full.open || app.cx.outputs.shown != nil || app.cx.files.open || app.cx.schedules.open || app.cx.artifacts.open || app.settings_open || app.delete_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.rename.open || len(app.ui_state.menus) > 0
 }
 
 content_zoom_set :: proc(app: ^App, z: f32) {

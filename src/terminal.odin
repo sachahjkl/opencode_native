@@ -73,6 +73,7 @@ Term :: struct {
 	drawn:    bool,            // its state was read once: there is a picture to keep
 	fitted: bool,              // its grid was laid out: until then its size says nothing (a shell found again under another tab has its own)
 	shown:  bool,              // its panel was built in this build
+	read_only: bool,           // nothing goes to it (output_view.odin): the keys that are not for reading are the program's
 	detached: bool,            // in a window of its own (detached.odin): no tab, and no part in the main window's input
 	box:    ui.Key,
 	rect:   draw.Rect,         // the grid, as last laid out
@@ -369,6 +370,7 @@ term_of_conn :: proc(app: ^App, c: ^Term_Conn) -> ^Term {
 term_of_panel :: proc(app: ^App, panel: u32) -> ^Term {
 	if panel < TERM_PANEL_BASE { return nil }
 	for t in app.cx.terms.list { if t.panel == panel { return t } }
+	if v := output_view_of_panel(app, panel); v != nil { return v.term }
 	return nil
 }
 
@@ -749,6 +751,7 @@ term_paste_text :: proc(t: ^Term, s: string) -> string {
 
 @(private = "file")
 term_tracks_mouse :: proc(t: ^Term) -> bool {
+	if t.read_only { return false }   // (nobody to tell: the pointer selects)
 	on: bool
 	return ghostty_terminal_get(t.vt, VT_DATA_MOUSE_TRACKING, &on) == VT_OK && on
 }
@@ -860,9 +863,9 @@ term_selection_text :: proc(t: ^Term) -> string {
 term_key_event :: proc(app: ^App, t: ^Term, e: platform.Event) -> (take: bool) {
 	if e.key == .T && e.mods == {.Ctrl, .Shift} { return false }
 	switch {
-	case e.key == .C && e.mods == {.Ctrl, .Shift}:
+	case e.key == .C && (e.mods == {.Ctrl, .Shift} || (t.read_only && e.mods == {.Ctrl})):   // (Ctrl+C alone is a shell's)
 		if t.has_selection { clip_set(term_selection_text(t)) }
-	case e.key == .V && e.mods == {.Ctrl, .Shift}:
+	case e.key == .V && e.mods == {.Ctrl, .Shift} && !t.read_only:
 		term_paste(app, t)
 	case e.key == .Page_Up && e.mods == {.Shift}:
 		ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = -i64(t.rows)})
@@ -870,6 +873,8 @@ term_key_event :: proc(app: ^App, t: ^Term, e: platform.Event) -> (take: bool) {
 	case e.key == .Page_Down && e.mods == {.Shift}:
 		ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = i64(t.rows)})
 		term_selection_drop(t)
+	case t.read_only:
+		return false
 	case e.key == .Shift || e.key == .Ctrl || e.key == .Alt:
 	case:
 		if s := term_encode_key(t, e.key, e.mods, e.repeat); s != "" {
@@ -887,7 +892,7 @@ term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 	s := &app.cx.terms
 	if (!s.open && s.only == nil) || len(s.list) == 0 { return events }   // (the tabs hidden, a shell in its window still hears)
 	if s.only == nil && overlay_open(app) {
-		term_press_end(s)
+		if s.pressed == nil || !s.pressed.read_only { term_press_end(s) }   // (a selection in the dialog: that overlay is its own)
 		return events
 	}
 	kept := 0
@@ -895,13 +900,14 @@ term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 		take := false
 		keys := s.focused
 		if keys != nil && keys.vt == nil { keys = nil }
+		typed := keys != nil && !keys.read_only
 		#partial switch e.kind {
 		case .Key_Press:
 			if keys != nil { take = term_key_event(app, keys, e) }
 		case .Key_Release:
-			take = keys != nil
+			take = typed
 		case .Text:
-			if keys == nil { break }
+			if !typed { break }
 			take = true
 			if e.text >= ' ' && e.text != 127 {
 				b, n := utf8.encode_rune(e.text)

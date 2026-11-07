@@ -251,6 +251,7 @@ server_forget :: proc(app: ^App) {
 	files_forget(app)
 	mentions_forget(app)
 	terminals_forget(app)
+	output_views_forget(app)
 	browser_forget(app)
 	preview_forget(app)
 }

@@ -220,9 +220,9 @@ GO_BOTTOM_W_EM    :: 6.5
 
 // The dialogs one can resize: what they open at and the least they go to, in em (the window has the last word). (Schedules is as tall
 // as what it holds, and no longer one of them: its place stays, layout.dialogs is read by position.)
-Dialog :: enum u8 { Settings, Help, Changes, Files, Schedules, Artifacts, Diff }
-DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}, .Schedules = {54, 44}, .Artifacts = {70, 46}, .Diff = {130, 80}}
-DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}, .Schedules = {36, 22}, .Artifacts = {44, 22}, .Diff = {50, 24}}
+Dialog :: enum u8 { Settings, Help, Changes, Files, Schedules, Artifacts, Diff, Output }
+DIALOG_PREFERRED_EM := [Dialog][2]f32{.Settings = {62, 44}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}, .Schedules = {54, 44}, .Artifacts = {70, 46}, .Diff = {130, 80}, .Output = {96, 56}}
+DIALOG_MIN_EM       := [Dialog][2]f32{.Settings = {40, 24}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}, .Schedules = {36, 22}, .Artifacts = {44, 22}, .Diff = {50, 24}, .Output = {44, 20}}
 DIALOGS_SAVED_WITH_STATS :: 7   // sizes in a layout.dialogs written when Statistics was a dialog, the second of them
 LOGO_EDGE_CHROMA     :: 142    // red minus blue of the logo's edge in the file (0xe8935a)
 TEXT_SMOOTH_SCALE    :: 1.5    // below this scale, text is smoothed per colour stripe when the system does (main.odin text_mode_follow)
@@ -240,6 +240,11 @@ TERM_SIZE_QUIET_MS   :: 150.0  // a shell is told its size once the grid has res
 TERM_PAINT_QUIET_MS  :: 60.0   // told, it has painted once nothing came for this long
 TERM_PAINT_MOST_MS   :: 400.0  // and at the latest: a shell that says nothing is shown as it is
 TERM_PANEL_BASE      :: 1000   // a shell's id in the dock is this and up: Panel's values stay under it
+OUTPUT_PANEL_BASE    :: 1_000_000   // a command's output in a window of its own (output_view.odin): never a shell's
+OUTPUT_POLL_MS       :: 200    // between two readings of a command that prints nothing
+OUTPUT_KEEP_BYTES    :: 8 * 1024 * 1024   // of what it printed, for Copy: the terminal keeps its own scrollback
+OUTPUT_END_H_EM      :: 2.3    // the line that says it ended
+OUTPUT_TITLE_CHARS   :: 60     // of the command, as a window's title
 TERM_OUT_MAX         :: 1 << 20   // bytes waiting for a socket on its way: past that, what is typed is dropped
 TERM_RETRIES         :: 8      // a lost socket is opened again this many times, then on a click or when the server answers again
 TERM_RETRY_MS        :: 500    // before the first of them; each wait doubles
