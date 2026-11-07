@@ -173,12 +173,20 @@ px1 :: proc() -> f32 { return max(1, math.round(ui.scale())) }
 
 radii4 :: proc(r: f32) -> [4]f32 { return {r, r, r, r} }
 
+// appearance.rounding, for what this program draws itself as the toolkit does for its own boxes: the window being drawn's (0: square).
+corners :: proc() -> f32 {
+	app := the_app
+	if app == nil { return 1 }
+	return ui.rounding(app.cx.built != nil ? app.cx.built : &app.ui_state)
+}
+
 ////////////////////////////////
 // Primitives (frame pixels)
 
 // A raised, machined surface: soft drop shadow, a dark outer edge, a vertical gradient, a lit inner rim along the top
 // and a shaded one along the bottom (the "ridge"). Pressed, it sinks: flat darker face and an inner shadow from above.
-draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius: f32, base: Color, hot, pressed: f32, glow: Color = CLEAR) {
+draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, hot, pressed: f32, glow: Color = CLEAR) {
+	radius := radius_asked * corners()
 	s := ui.scale()
 	p := px1()
 	rr := radii4(radius)
@@ -219,7 +227,8 @@ hint_action :: proc(id, label: string, em: f32, face: font.Font_Id = 0) -> bool 
 
 // A sunken well (fields, code, the composer): darker face, inner shadow from above, a lit lip under the bottom edge;
 // `focus` lights a glowing accent ring around it.
-draw_well :: proc(dc: ^draw.Context, r: Rect, radius: f32, base: Color, focus: f32 = 0, accent := Color{}) {
+draw_well :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, focus: f32 = 0, accent := Color{}) {
+	radius := radius_asked * corners()
 	s := ui.scale()
 	p := px1()
 	rr := radii4(radius)
@@ -528,7 +537,7 @@ plate_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	s := ui.scale()
 	p := px1()
 	r := b.rect
-	rad := d.radius * s
+	rad := d.radius * s * corners()
 	rr := radii4(rad)
 	if d.shadow > 0 { draw.box_shadow(dc, draw.rect_shift(r, {0, 2 * s}), rr, d.shadow * s, {0, 0, 0, 0.6}) }
 	if d.glow.a > 0 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 6 * s, with_alpha(d.glow, d.glow.a * 0.5)) }

@@ -157,7 +157,7 @@ activity_read :: proc(app: ^App) {
 	if !a.open { return }
 	for &s in app.chat.children {
 		busy := app.busy[s.id] or_else false
-		p, known := a.peeks[s.id]
+		_, known := a.peeks[s.id]
 		if flying(app, .Peek, s.id) || (known && !busy) { continue }   // (one that is over does not change)
 		peek_read(app, s.id)
 	}
@@ -518,7 +518,7 @@ activity_strip :: proc(app: ^App, em: f32) {
 	ui.a11y({role = .Button, name = "Activity"})
 	b := ui.build_box({.Clickable, .Focusable}, "###act_strip")
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-		if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.03 * b.hot_t}, BUTTON_RADIUS * ui.scale()) }
+		if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.03 * b.hot_t}, BUTTON_RADIUS * ui.scale() * corners()) }
 	}
 	sig := ui.signal(b)
 	if sig.clicked { activity_toggle(app) }
@@ -566,10 +566,10 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	r.min.x += 6 * s
 	r.max.x -= 6 * s
 	if (^Row_Draw)(user).selected {
-		draw.rect(dc, r, hex(HEX_ACT_ROW_SELECTED), 6 * s)
+		draw.rect(dc, r, hex(HEX_ACT_ROW_SELECTED), 6 * s * corners())
 		draw.rect(dc, {{r.min.x + 2 * s, r.min.y + 5 * s}, {r.min.x + 4 * s, r.max.y - 5 * s}}, accent(), 1 * s)
 	} else if b.hot_t > FADE_VISIBLE {
-		draw.rect(dc, r, {1, 1, 1, 0.025 * b.hot_t}, 6 * s)
+		draw.rect(dc, r, {1, 1, 1, 0.025 * b.hot_t}, 6 * s * corners())
 	}
 }
 
@@ -728,7 +728,7 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 // A flat surface with a fine edge, inside its own box: while it opens a clip cuts its bottom, and a well's shadows and lip,
 // which go past the box, were cut with it and left the corners ragged.
 tray_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	r := TRAY_RADIUS * ui.scale()
+	r := TRAY_RADIUS * ui.scale() * corners()
 	draw.rect(dc, b.rect, hex(HEX_ACT_WELL), r)
 	draw.rect(dc, b.rect, hex(HEX_LINE), r, px1())
 }

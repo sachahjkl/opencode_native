@@ -297,7 +297,6 @@ scrollbar_held :: proc(app: ^App, sb: ^ui.Box) -> bool {
 
 // The conversation is built anew where it stands: the view stays on what was being read.
 nav_hold_view :: proc(app: ^App) {
-	cx := &app.cx
 	if app.stick_bottom {
 		app.snap_bottom = true
 		return

@@ -146,7 +146,7 @@ image_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Image_Draw)(user)
 	s := ui.scale()
 	r := b.rect
-	rad := d.radius * s
+	rad := d.radius * s * corners()
 	if d.frame { draw.box_shadow(dc, draw.rect_shift(r, {0, 2 * s}), radii4(rad), 5 * s, {0, 0, 0, 0.6}) }
 	switch d.state {
 	case .Ready:
