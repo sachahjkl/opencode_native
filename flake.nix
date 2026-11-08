@@ -48,13 +48,13 @@
 
       # The latest Linux release, as published: the tag and the hash of its SHA256SUMS.txt.
       # The Vulkan driver is the system's (/run/opengl-driver): mesa is not in its RUNPATH.
-      version = "0.18.4";
+      version = "0.19.0";
       opencode-native = pkgs.stdenv.mkDerivation {
         pname = "opencode-native";
         inherit version;
         src = pkgs.fetchurl {
           url = "https://github.com/sachahjkl/opencode_native/releases/download/v${version}/opencode-native-${version}-linux-x64.tar.gz";
-          sha256 = "7793c6f6eedfd5f513695232a454dc4b572285aceea56dbd5326f86ed183beb1";
+          sha256 = "19297d130fd35a55f17fa9c1835a4dc0dc72d8945f21b7a45deadffbb7613997";
         };
         nativeBuildInputs = [ pkgs.autoPatchelfHook pkgs.copyDesktopItems ];
         buildInputs = [ pkgs.fontconfig pkgs.freetype pkgs.stdenv.cc.cc.lib ];
