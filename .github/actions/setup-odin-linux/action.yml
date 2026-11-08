@@ -43,4 +43,6 @@ runs:
     # (Odin's Linux archive has no wgpu-native: the toolkit's tools/tk fetches it, pinned by SHA-256)
     - name: wgpu-native
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}   # (tk fetches it through GitHub's API when the release download fails: more requests with it)
       run: mkdir -p build && odin run ext/gui_toolkit/tools/tk -out:build/tk -- fetch_wgpu
