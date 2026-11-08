@@ -568,7 +568,7 @@ site_viewer :: proc(s: ^Site_Run, path: string) {
 
 // A browser of each system: what it says it runs on (navigator.userAgent, navigator.platform, navigator.userAgentData), the
 // download the home page offers it (the button: where, what it says, the file it says under that, the logo it shows; the small link
-// to the other system's).
+// to the other system's). A Mac and a phone get Windows's: whoever reads the page there installs it on a computer.
 @(private = "file")
 Site_System :: struct { name, agent, platform, data, button, label, sub, icon, other: string }
 
@@ -576,7 +576,8 @@ Site_System :: struct { name, agent, platform, data, button, label, sub, icon, o
 SITE_SYSTEMS := [?]Site_System{
 	{"Windows", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "Win32", "Windows", "-windows-x64.exe", "Download for Windows", " · Windows 10 / 11 · x64 · .exe", "windows", "-linux-x64.tar.gz"},
 	{"Linux", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "Linux x86_64", "Linux", "-linux-x64.tar.gz", "Download for Linux", " · x64 · .tar.gz · Vulkan", "linux", "-windows-x64.exe"},
-	{"macOS", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "MacIntel", "macOS", "#download", "Get opencode native", "for Windows or Linux · x64", "any", "/releases/latest"},
+	{"macOS", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "MacIntel", "macOS", "-windows-x64.exe", "Download for Windows", " · Windows 10 / 11 · x64 · .exe", "windows", "-linux-x64.tar.gz"},
+	{"Android", "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36", "Linux armv8l", "Android", "-windows-x64.exe", "Download for Windows", " · Windows 10 / 11 · x64 · .exe", "windows", "-linux-x64.tar.gz"},
 }
 
 @(private = "file")
@@ -593,7 +594,7 @@ site_downloads :: proc(s: ^Site_Run) {
 		icons :: `[...document.querySelectorAll('.hero [data-os-icon]')].filter((e) => e.getClientRects().length > 0).map((e) => e.dataset.osIcon).join(',')`
 		expect(s, site_true(s, fmt.tprintf(`%s.href.endsWith(%s) && %s === %s`, button, json_text(sys.button), main, json_text(sys.label))),
 			fmt.tprintf("index.html, %s: the button is %s, %q (%s, %s)", sys.name, sys.button, sys.label, site_text(s, button + ".href"), site_text(s, main)))
-		expect(s, site_true(s, fmt.tprintf(`%s.endsWith(%s) && /\d+\.\d+\.\d+|Windows or Linux/.test(%s)`, sub, json_text(sys.sub), sub)),
+		expect(s, site_true(s, fmt.tprintf(`%s.endsWith(%s) && /\d+\.\d+\.\d+/.test(%s)`, sub, json_text(sys.sub), sub)),
 			fmt.tprintf("index.html, %s: under it %q (%s)", sys.name, sys.sub, site_text(s, sub)))
 		expect(s, site_true(s, fmt.tprintf(`%s === %s`, icons, json_text(sys.icon))),
 			fmt.tprintf("index.html, %s: the logo %q (%s)", sys.name, sys.icon, site_text(s, icons)))
