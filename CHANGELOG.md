@@ -12,6 +12,7 @@ project follows [semantic versioning](https://semver.org).
 - **Setup: the toolkit's desktop package.** Install, repair, uninstall, the Start menu and Desktop shortcuts, the Settings > Apps record, the applications menu entry and its icon are gui_toolkit's `desktop` package (shared with Wren); opencode native keeps its names and marks, and the same folders, shortcut names, `.desktop` file and registry key. The install folder now has a manifest (`opencode-native-install.txt`): the uninstall removes exactly the files it lists. An install made by Setup 0.20.0 or earlier shows as one to repair: Repair rewrites it in today's form (the Linux `version` file goes), and Uninstall removes it whole.
 - **NixOS: a classic install runs by itself.** nix-build makes a profile of the libraries the program needs (those of `flake.nix`), and the installed copy is patched to use it: no nix-ld. An update of that copy is patched the same way. The line about what nix-ld lacks is gone.
 - **The command line's report** (`--install`, `--status`) reaches the console that started a Windows copy.
+- **`occtools logo [--out folder] [--hint 0|1|2]`** draws the logo and the icon (`assets/logo*.png`, `opencode-native.ico`) on Windows and Linux, with the toolkit's paint package, in place of tools/make_logo.ps1 (GDI+, Windows only), which is gone. The same files, names and sizes; the committed ones stay (the new drawing differs from them by antialiasing only).
 
 ## [0.20.0] - 2026-11-08
 
