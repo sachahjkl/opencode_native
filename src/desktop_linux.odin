@@ -13,6 +13,7 @@ import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
+import "gt:platform"
 
 EXE_NAME :: "opencode-native"
 APP_ID   :: "opencode-native"   // the .desktop file's name, the icon's, the windows' class
@@ -54,8 +55,8 @@ same_path :: proc(a, b: string) -> bool {
 	return strings.trim_right(ca, "/") == strings.trim_right(cb, "/")
 }
 
-// (the windows' class is set by the platform layer)
-set_app_id :: proc() {}
+// The windows' Wayland app_id and X11 WM_CLASS: the desktop finds opencode-native.desktop by it, for the icon and the name in a task bar.
+set_app_id :: proc() { platform.set_app_id(APP_ID) }
 
 desktop_clean_old :: proc() {}
 

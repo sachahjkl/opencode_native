@@ -1,6 +1,6 @@
 package occtools
 
-// The signed manifests of a release (src/update, docs/updates.md).
+// The signed manifests of a release (the toolkit's update package, src/update for the product, docs/updates.md).
 //   occtools update keygen <file>                                the update key pair; <file> is outside the repository
 //   occtools update pubkey                                       the public key of $UPDATE_SIGNING_KEY
 //   occtools update manifest <exe> <version> <channel> <out.json>   a manifest and its .sig, by $UPDATE_SIGNING_KEY
@@ -12,7 +12,8 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:time"
-import update "../../src/update"
+import update "gt:update"
+import occ_update "../../src/update"
 
 KEY_ENV :: "UPDATE_SIGNING_KEY"
 
@@ -65,17 +66,13 @@ manifest :: proc(exe, version, channel, out: string) -> int {
 	if !ok { return 1 }
 	// the platform is the one whose release name the program has
 	platform := ""
-	for p in update.PLATFORMS { if filepath.base(exe) == update.expected_file_name(version, p, context.temp_allocator) { platform = p } }
+	for p in update.PLATFORMS { if filepath.base(exe) == update.expected_file_name(occ_update.PRODUCT, version, p, context.temp_allocator) { platform = p } }
 	if platform == "" { fmt.eprintfln("update: %s is not named as the program of a release of %s", exe, version); return 1 }
 	data, err := os.read_entire_file(exe, context.allocator)
 	if err != nil { fmt.eprintfln("update: cannot read %s", exe); return 1 }
-	m := update.Manifest{
-		channel = channel, version = version, platform = platform,
-		file = update.expected_file_name(version, platform, context.temp_allocator),
-		sha256 = update.sha256_hex(data, context.temp_allocator), published = today(), size = i64(len(data)),
-	}
-	bytes := update.manifest_bytes(m)
-	sig, signed := update.sign(seed[:], bytes, context.temp_allocator)
+	m := update.manifest_of(occ_update.PRODUCT, data, version, platform, channel, today(), context.temp_allocator)
+	bytes := update.manifest_bytes(occ_update.PRODUCT, m)
+	sig, signed := update.sign(occ_update.PRODUCT, seed[:], bytes, context.temp_allocator)
 	if !signed { fmt.eprintln("update: cannot sign"); return 1 }
 	if os.write_entire_file(out, bytes) != nil { fmt.eprintfln("update: cannot write %s", out); return 1 }
 	if os.write_entire_file(fmt.tprintf("%s.sig", out), transmute([]u8)sig) != nil { fmt.eprintln("update: cannot write the signature"); return 1 }
@@ -90,9 +87,9 @@ verify :: proc(file, channel: string) -> int {
 	if e1 != nil || e2 != nil { fmt.eprintln("update: cannot read the manifest or its signature"); return 1 }
 	// the platform is in the manifest's name: update-<platform>-<channel>.json
 	platform := ""
-	for p in update.PLATFORMS { if strings.has_prefix(filepath.base(file), fmt.tprintf("update-%s-", p)) { platform = p } }
-	if platform == "" { fmt.eprintfln("update: %s is not named update-<platform>-<channel>.json", file); return 1 }
-	m, err := update.verify(data, string(sig), update.UPDATE_PUBLIC_KEY, platform, channel, context.temp_allocator)
+	for p in update.PLATFORMS { if filepath.base(file) == update.manifest_name(p, channel, context.temp_allocator) { platform = p } }
+	if platform == "" { fmt.eprintfln("update: %s is not named update-<platform>-<channel>.json for that channel", file); return 1 }
+	m, err := update.verify(occ_update.PRODUCT, data, string(sig), platform, channel, context.temp_allocator)
 	if err != .None { fmt.eprintln(update.error_text(err)); return 1 }
 	fmt.printfln("good: %s %s %s", m.channel, m.version, m.file)
 	return 0

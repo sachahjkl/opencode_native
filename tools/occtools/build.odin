@@ -9,7 +9,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:slice"
 import "core:strings"
-import update "../../src/update"
+import update "gt:update"
 
 GT_DEFAULT  :: "ext/gui_toolkit"
 GT_BESIDE   :: "../gui_toolkit"

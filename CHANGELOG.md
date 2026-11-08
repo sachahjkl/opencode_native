@@ -5,6 +5,14 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+
+- **Updates: the toolkit's update package.** The checks of a signed manifest and the placement of the new program are gui_toolkit's `update` package, shared with Wren; `src/update` keeps what opencode native is to it (its name, its signing context, its key). Manifests and signatures are the same bytes as before.
+
+### Fixed
+
+- **Linux: the windows say they are opencode native.** Their Wayland app_id and X11 WM_CLASS are `opencode-native`, the name of the menu entry, where they said "gui_toolkit": a task bar shows the program's icon and name. (gui_toolkit 0.99.0)
+
 ## [0.19.0] - 2026-11-08
 
 ### Added

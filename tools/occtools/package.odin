@@ -6,7 +6,8 @@ package occtools
 import "core:fmt"
 import "core:os"
 import "core:strings"
-import update "../../src/update"
+import update "gt:update"
+import occ_update "../../src/update"
 
 DIST_DIR  :: "build/dist"
 STAGE_DIR :: "build/stage"
@@ -113,7 +114,7 @@ package_linux :: proc(version: string) -> bool {
 	archive := fmt.tprintf("%s/%s-linux-x64.tar.gz", DIST_DIR, name)
 	if !run("tar", "-C", STAGE_DIR, "-czf", archive, name) { return false }
 	// the program alone too: what the updater downloads (update.expected_file_name)
-	alone := fmt.tprintf("%s/%s", DIST_DIR, update.expected_file_name(version, update.PLATFORM_LINUX_X64, context.temp_allocator))
+	alone := fmt.tprintf("%s/%s", DIST_DIR, update.expected_file_name(occ_update.PRODUCT, version, update.PLATFORM_LINUX_X64, context.temp_allocator))
 	if os.copy_file(alone, program) != nil || !run("chmod", "+x", alone) { return false }
 	fmt.printfln("packaged %s, %s", archive, alone)
 	return true

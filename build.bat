@@ -17,5 +17,7 @@ if /I "%1"=="logo" (
 )
 if not exist build mkdir build
 :: What builds it is tools\occtools, here built first: the steps are the same on Linux (build.sh).
-odin build tools\occtools -out:build\occtools.exe || exit /b 1
+set "OCC_GT=%GT%"
+if "%OCC_GT%"=="" set "OCC_GT=ext\gui_toolkit"
+odin build tools\occtools -collection:gt=%OCC_GT% -out:build\occtools.exe || exit /b 1
 build\occtools.exe build %*

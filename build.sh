@@ -13,5 +13,5 @@ cd "$(dirname "$0")"
 ODIN="${ODIN:-odin}"
 mkdir -p build
 # What builds it is tools/occtools, here built first: the steps are the same on Windows (build.bat).
-"$ODIN" build tools/occtools -out:build/occtools
+"$ODIN" build tools/occtools -collection:gt="${GT:-ext/gui_toolkit}" -out:build/occtools
 ODIN="$ODIN" exec build/occtools build "$@"
