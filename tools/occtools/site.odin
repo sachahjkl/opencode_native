@@ -4,7 +4,8 @@
 //   occtools site meta <site> <out>        site_meta.odin: what a page says when it is shared, the files around the pages
 //   occtools site card                     site_meta.odin: draws site/img/card.png, once, by hand
 // The history comes from CHANGELOG.md: a page with every version (changelog.html) and the last ones on the home page, in place
-// of <!-- whats-new -->. The classic presentation, classic/ (a line of plain links, a column of text with the news beside it,
+// of <!-- whats-new -->. {{version}} in the home page is the last version: its download links name the files of that release, a
+// download at once rather than a page of GitHub (the site is deployed when a release is: it cannot name a file not there yet). The classic presentation, classic/ (a line of plain links, a column of text with the news beside it,
 // site/classic/classic.css), comes from the same sources: the home page's sections and the versions, their links moved into
 // classic/. Each modern page's footer links its classic page ("Classic version"), each classic page the modern one ("Modern
 // version"). CHANGELOG.md is Keep a Changelog: "## [x.y.z] - date", "### Added"..., "[x.y.z]: url" at the end.
@@ -27,6 +28,7 @@ FEATURES_ID       :: "features"
 CLASSIC           :: "classic"             // the classic pages' folder in the site
 CLASSIC_LINK      :: `<a href="classic/">Classic version</a>`   // in the home page's footer
 WHATS_NEW         :: "<!-- whats-new -->"
+VERSION_MARK      :: "{{version}}"   // in the home page: the last version
 VERSIONS_OPEN     :: 6                     // versions unfolded on the page
 NEWS_VERSIONS     :: 3                     // versions on the home page
 NEWS_LEADS        :: 3                     // entries of each there
@@ -1040,6 +1042,12 @@ make_pages :: proc(index: string, releases: []^Release) -> (pages: []Page, why: 
 	return out[:], ""
 }
 
+// The home page with the last version where it says VERSION_MARK.
+with_version :: proc(index, version: string) -> string {
+	s, _ := strings.replace_all(index, VERSION_MARK, version, context.temp_allocator)
+	return s
+}
+
 // (CHANGELOG.md is the repository's: main stands at its root.)
 site_changelog :: proc(site, out: string) -> int {
 	index, has_index := read_utf8(cat(site, "/", SITE_HOME))
@@ -1047,7 +1055,7 @@ site_changelog :: proc(site, out: string) -> int {
 	if !has_index || !has_changes { return 1 }
 	releases := parse_changelog(changes)
 	if len(releases) == 0 { fmt.eprintfln("site: no version in %s", SITE_CHANGES); return 1 }
-	pages, why := make_pages(index, releases)
+	pages, why := make_pages(with_version(index, releases[0].version), releases)
 	if why != "" { fmt.eprintfln("site: %s/%s: %s", site, SITE_HOME, why); return 1 }
 	if !copy_site(site, out) { return 1 }
 	for page in pages {

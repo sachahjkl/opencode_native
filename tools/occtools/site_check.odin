@@ -6,7 +6,8 @@ package occtools
 // links, pictures, styles and scripts are there, and the anchors they point at; it links the same page in the other presentation
 // ("Classic version", "Modern version"). The classic pages: no sideways scrolling on a phone or a desktop, a skip link the
 // keyboard reaches first and shows, a main landmark, a text for every picture, light and dark; the classic home about a screen
-// high. Exit code 1 if something differs. Nothing is published: the folder is served on 127.0.0.1 for the time of the check.
+// high. The home page's download, as each system's browser sees it: Windows and Linux their file, the other one's as a small link;
+// macOS (no version for it) the section that says which there are. Exit code 1 if something differs. Nothing is published: the folder is served on 127.0.0.1 for the time of the check.
 // Like `live`, nothing waits for a delay to run out: what a step leads to is awaited, under a limit.
 
 import "core:encoding/json"
@@ -565,6 +566,34 @@ site_viewer :: proc(s: ^Site_Run, path: string) {
 	expect(s, site_true(s, SITE_SCROLLS), fmt.tprintf("%s: the page scrolls again", path))
 }
 
+// A browser of each system: what it says it runs on (navigator.userAgent, navigator.platform, navigator.userAgentData), the
+// download the home page offers it (the button: where, what it says; the small link to the other system's).
+@(private = "file")
+Site_System :: struct { name, agent, platform, data, button, label, other: string }
+
+@(private = "file")
+SITE_SYSTEMS := [?]Site_System{
+	{"Windows", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "Win32", "Windows", "-windows-x64.exe", "Download for Windows", "-linux-x64.tar.gz"},
+	{"Linux", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "Linux x86_64", "Linux", "-linux-x64.tar.gz", "Download for Linux", "-windows-x64.exe"},
+	{"macOS", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "MacIntel", "macOS", "#download", "Download", "/releases/latest"},
+}
+
+@(private = "file")
+site_downloads :: proc(s: ^Site_Run) {
+	for sys in SITE_SYSTEMS {
+		site_call(s, "Emulation.setUserAgentOverride", fmt.tprintf(`{{"userAgent":%s,"platform":%s,"userAgentMetadata":{{"platform":%s,"platformVersion":"","architecture":"x86","model":"","mobile":false}}}}`,
+			json_text(sys.agent), json_text(sys.platform), json_text(sys.data)))
+		if !site_go(s, "index.html") { continue }
+		button :: `document.querySelector('.hero .actions .btn.accent')`
+		other :: `document.querySelector('.hero p.small a')`
+		expect(s, site_true(s, fmt.tprintf(`%s.href.endsWith(%s) && %s.textContent === %s`, button, json_text(sys.button), button, json_text(sys.label))),
+			fmt.tprintf("index.html, %s: the button is %s (%s)", sys.name, sys.button, site_text(s, button + ".href")))
+		expect(s, site_true(s, fmt.tprintf(`%s.href.endsWith(%s)`, other, json_text(sys.other))),
+			fmt.tprintf("index.html, %s: the small link is %s (%s)", sys.name, sys.other, site_text(s, other + ".href")))
+	}
+	site_call(s, "Emulation.setUserAgentOverride", `{"userAgent":""}`)   // (the browser's own again)
+}
+
 @(private = "file")
 site_classic :: proc(s: ^Site_Run, path: string) {
 	expect(s, site_true(s, SITE_LANDMARKS), fmt.tprintf("%s: a main, a header, a nav and a footer", path))
@@ -630,6 +659,7 @@ site_checks :: proc(s: ^Site_Run, pages: []string) -> bool {
 	viewers := [?]string{"index.html", SITE_CLASSIC + "screenshots.html"}
 	for path in viewers { site_viewer(s, path) }
 	for path in pages { site_page(s, path, pages) }
+	site_downloads(s)
 	return true
 }
 

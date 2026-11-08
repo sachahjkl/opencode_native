@@ -28,10 +28,10 @@
       Windows or Linux, no runtime to install, every session and sub-agent streamed live.<br>
       <small>Independent: not built by the OpenCode team, not affiliated with them.</small></p>
     <div class="actions">
-      <a class="btn accent" href="https://github.com/sachahjkl/opencode_native/releases/latest">Download the latest release</a>
+      <a class="btn accent" href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-windows-x64.exe" data-linux-href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-linux-x64.tar.gz" data-linux-text="Download for Linux" data-other-href="#download" data-other-text="Download">Download for Windows</a>
       <a class="btn" href="https://github.com/sachahjkl/opencode_native">Source on GitHub</a>
     </div>
-    <p class="small">Windows 10 / 11 x64 &nbsp;·&nbsp; Linux x64 (Vulkan) &nbsp;·&nbsp; MIT</p>
+    <p class="small">Version {{version}} &nbsp;·&nbsp; <span data-linux-text="Linux x64 (Vulkan)" data-other-text="Windows 10 / 11 x64, Linux x64">Windows 10 / 11 x64</span> &nbsp;·&nbsp; <a href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-linux-x64.tar.gz" data-linux-href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-windows-x64.exe" data-linux-text="Windows version" data-other-href="https://github.com/sachahjkl/opencode_native/releases/latest" data-other-text="All files">Linux version</a> &nbsp;·&nbsp; MIT</p>
   </section>
 
   <figure class="shot wide">
@@ -166,16 +166,16 @@
         <h3>Windows</h3>
         <p>One executable (Windows 10 and 11, x64). Run it, or install it for your user from its Setup (title bar menu):
           a Start menu shortcut and a Settings &gt; Apps entry, no administrator rights.</p>
-        <code>opencode-native-&lt;version&gt;-windows-x64.exe</code>
+        <code><a href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-windows-x64.exe">opencode-native-{{version}}-windows-x64.exe</a></code>
       </div>
       <div class="well">
         <h3>Linux</h3>
         <p>One program in an archive (x64). Run it, or <code>./opencode-native --install</code> for an entry in the
           applications menu. Needs Vulkan, libxkbcommon, fontconfig, Wayland or X11.</p>
-        <code>opencode-native-&lt;version&gt;-linux-x64.tar.gz</code>
+        <code><a href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-linux-x64.tar.gz">opencode-native-{{version}}-linux-x64.tar.gz</a></code>
       </div>
     </div>
-    <p><a class="btn accent" href="https://github.com/sachahjkl/opencode_native/releases/latest">All files of the latest release</a></p>
+    <p><a class="btn accent" href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-windows-x64.exe" data-linux-href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-linux-x64.tar.gz" data-linux-text="Download for Linux" data-other-href="https://github.com/sachahjkl/opencode_native/releases/latest" data-other-text="Download from GitHub">Download for Windows</a> &nbsp; <a class="small" href="https://github.com/sachahjkl/opencode_native/releases/latest">All files and checksums</a></p>
     <p class="small">It finds this computer's opencode server by itself (where <code>opencode service status</code> says it runs);
       another one: <code>--url=https://host:port --password=…</code> or the status bar's server menu.</p>
   </section>
@@ -193,6 +193,17 @@
   bar.querySelectorAll('nav a').forEach(a => a.addEventListener('click', shut));
   document.addEventListener('click', e => { if (!bar.contains(e.target)) shut(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') shut(); });
+  // the download for this system: the page's links are Windows's; Linux gets its archive, a system with neither (macOS, a phone)
+  // the section that says which there are
+  {
+    const ua = navigator.userAgent, platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+    const os = /android|iphone|ipad|ipod/i.test(ua) || /mac/i.test(platform) ? 'other' : /linux|x11|bsd/i.test(platform + ' ' + ua) ? 'linux' : 'windows';
+    if (os !== 'windows') {
+      document.querySelectorAll('[data-' + os + '-href]').forEach(a => { a.href = a.getAttribute('data-' + os + '-href'); });
+      document.querySelectorAll('[data-' + os + '-text]').forEach(e => { e.textContent = e.getAttribute('data-' + os + '-text'); });
+      document.querySelectorAll('[data-' + os + '-hidden]').forEach(e => { e.hidden = true; });
+    }
+  }
 </script>
 <script src="gallery.js" defer></script>
 </body>

@@ -249,3 +249,14 @@ the_address_is_said_once :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(robots_txt(), cat(SITE_URL, "sitemap.xml")))
 	testing.expect(t, strings.has_suffix(card_html("x"), "</p></main>"))
 }
+
+// The download links name the files of the last version: a download at once, not a page of GitHub.
+@(test)
+the_download_links_name_the_last_version :: proc(t: ^testing.T) {
+	home := with_version(`<a href="r/download/v{{version}}/app-{{version}}-windows-x64.exe">Version {{version}}</a>`, "1.2.3")
+	testing.expect_value(t, home, `<a href="r/download/v1.2.3/app-1.2.3-windows-x64.exe">Version 1.2.3</a>`)
+	index, ok := read_utf8("site/index.html")
+	if !testing.expect(t, ok, "the home page") { return }
+	testing.expect(t, strings.contains(index, "/releases/download/v{{version}}/opencode-native-{{version}}-windows-x64.exe"), "Windows: the release's file")
+	testing.expect(t, strings.contains(index, "/releases/download/v{{version}}/opencode-native-{{version}}-linux-x64.tar.gz"), "Linux: the release's file")
+}
