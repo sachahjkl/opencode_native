@@ -576,7 +576,7 @@ Site_System :: struct { name, agent, platform, data, button, label, sub, icon, o
 SITE_SYSTEMS := [?]Site_System{
 	{"Windows", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "Win32", "Windows", "-windows-x64.exe", "Download for Windows", " · Windows 10 / 11 · x64 · .exe", "windows", "-linux-x64.tar.gz"},
 	{"Linux", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "Linux x86_64", "Linux", "-linux-x64.tar.gz", "Download for Linux", " · x64 · .tar.gz · Vulkan", "linux", "-windows-x64.exe"},
-	{"macOS", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "MacIntel", "macOS", "#download", "Download", "Windows or Linux, x64", "", "/releases/latest"},
+	{"macOS", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "MacIntel", "macOS", "#download", "Get opencode native", "for Windows or Linux · x64", "any", "/releases/latest"},
 }
 
 @(private = "file")
