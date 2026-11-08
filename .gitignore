@@ -5,4 +5,5 @@ build/
 *.ilk
 native/target/
 *.res
-.claude/
+.claude/*
+!.claude/settings.json
