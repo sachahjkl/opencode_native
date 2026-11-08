@@ -9,6 +9,9 @@ project follows [semantic versioning](https://semver.org).
 
 - **Every step is a command of `tools/occtools`**: `release dist` and `release publish` (what the release workflow's scripts did), `fonts_check`, `font_proposals`, `wsl_build`, `wsl_client` and `relay` in place of tools/*.mjs and tools/wsl_*.sh, which are gone; `build.sh` and `build.bat` are shortcuts of `occtools build`. The toolkit's packages are in `ext/gui_toolkit/src` (gui_toolkit 0.101.0). AGENTS.md replaces CLAUDE.md.
 - **The site's steps and the DevTools client are the toolkit's** (`gt:site`, `gt:cdp`): `occtools site` keeps this site's names, address and colours and its own check (the download each system's browser is offered); its copies (tools/occtools/devtools.odin, site_meta.odin, site_check.odin and most of site.odin) are gone, and the pages it makes are the same, byte for byte. The development shell no longer has Node.
+- **Setup: the toolkit's desktop package.** Install, repair, uninstall, the Start menu and Desktop shortcuts, the Settings > Apps record, the applications menu entry and its icon are gui_toolkit's `desktop` package (shared with Wren); opencode native keeps its names and marks, and the same folders, shortcut names, `.desktop` file and registry key. The install folder now has a manifest (`opencode-native-install.txt`): the uninstall removes exactly the files it lists. An install made by Setup 0.20.0 or earlier shows as one to repair: Repair rewrites it in today's form (the Linux `version` file goes), and Uninstall removes it whole.
+- **NixOS: a classic install runs by itself.** nix-build makes a profile of the libraries the program needs (those of `flake.nix`), and the installed copy is patched to use it: no nix-ld. An update of that copy is patched the same way. The line about what nix-ld lacks is gone.
+- **The command line's report** (`--install`, `--status`) reaches the console that started a Windows copy.
 
 ## [0.20.0] - 2026-11-08
 

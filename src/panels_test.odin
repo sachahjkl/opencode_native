@@ -1121,26 +1121,30 @@ an_uninstall_that_failed_says_so_and_keeps_the_rest :: proc(t: ^testing.T) {
 
 @(test)
 the_state_of_an_install_is_the_same_everywhere :: proc(t: ^testing.T) {
-	testing.expect_value(t, install_state_of(false, false, false, false, ""), Install_State.Not_Installed)
-	testing.expect_value(t, install_state_of(false, false, true, false, ""), Install_State.Repair)   // (a shortcut to nothing)
-	testing.expect_value(t, install_state_of(false, false, false, true, "1.0"), Install_State.Repair)
-	testing.expect_value(t, install_state_of(true, false, true, true, "1.0"), Install_State.Other_Copy)
-	testing.expect_value(t, install_state_of(true, true, true, true, "1.0"), Install_State.This_Copy)
-	testing.expect_value(t, install_state_of(true, true, true, true, ""), Install_State.Repair)      // (no version: what Windows took for whole)
-	testing.expect_value(t, install_state_of(true, true, false, true, "1.0"), Install_State.Repair)
-}
-
-when ODIN_OS == .Windows {
-	@(test)
-	the_removal_waits_for_the_process_without_a_limit :: proc(t: ^testing.T) {
-		s := removal_script(`C:\p\x.exe`, `C:\p`, 4242)
-		wait := strings.index(s, ":wait")
-		first_del := strings.index(s, `del /f /q "C:\p\x.exe"`)
-		testing.expect(t, wait >= 0 && wait < first_del, "it waits first")
-		testing.expect(t, strings.contains(s, "PID eq 4242"), "for this process")
-		testing.expect(t, strings.contains(s, `find "4242"`), "by its number: what is said of none depends on the language")
-		testing.expect(t, !strings.contains(s[:first_del], "geq"), "however long it takes")
-	}
+	testing.expect_value(t, install_state_of({}), Install_State.Not_Installed)
+	testing.expect_value(t, install_state_of({start_lnk = true}), Install_State.Repair)   // (a shortcut to nothing)
+	testing.expect_value(t, install_state_of({record = true}), Install_State.Repair)
+	testing.expect_value(t, install_state_of({manifest = true}), Install_State.Repair)   // (a manifest whose program is gone)
+	whole := Install_Facts{exe_there = true, start_lnk = true, record = true, manifest = true}
+	testing.expect_value(t, install_state_of(whole), Install_State.Other_Copy)
+	this := whole
+	this.running_it = true
+	testing.expect_value(t, install_state_of(this), Install_State.This_Copy)
+	no_launcher := this
+	no_launcher.start_lnk = false
+	testing.expect_value(t, install_state_of(no_launcher), Install_State.Repair)
+	no_record := this
+	no_record.record = false
+	testing.expect_value(t, install_state_of(no_record), Install_State.Repair)
+	a_file_gone := this
+	a_file_gone.missing = 1
+	testing.expect_value(t, install_state_of(a_file_gone), Install_State.Repair)
+	// an install of Setup before 0.21 (no manifest): Repair rewrites it, from the installed copy or from another one
+	earlier := this
+	earlier.manifest = false
+	testing.expect_value(t, install_state_of(earlier), Install_State.Repair)
+	earlier.running_it = false
+	testing.expect_value(t, install_state_of(earlier), Install_State.Repair)
 }
 
 ////////////////////////////////

@@ -108,27 +108,6 @@ passwords_in_the_file :: proc(t: ^testing.T) {
 	testing.expect(t, !clear2)
 }
 
-when ODIN_OS == .Windows {
-	@(test)
-	a_failed_install_puts_the_copy_back :: proc(t: ^testing.T) {
-		dir := pjoin({os.get_env("TEMP", context.temp_allocator), "oc_install_test"})
-		_ = os.make_directory_all(dir)
-		defer os.remove_all(dir)
-		exe := pjoin({dir, "installed.exe"})
-		testing.expect(t, os.write_entire_file(exe, "the installed copy") == nil)
-		msg, ok := install_copy(pjoin({dir, "no such program.exe"}), exe)
-		testing.expect(t, !ok, msg)
-		data, err := os.read_entire_file(exe, context.temp_allocator)
-		testing.expect(t, err == nil && string(data) == "the installed copy")
-		good := pjoin({dir, "new.exe"})
-		testing.expect(t, os.write_entire_file(good, "the new copy") == nil)
-		_, ok = install_copy(good, exe)
-		testing.expect(t, ok)
-		data, err = os.read_entire_file(exe, context.temp_allocator)
-		testing.expect(t, err == nil && string(data) == "the new copy")
-	}
-}
-
 @(test)
 versions_compare_by_number :: proc(t: ^testing.T) {
 	testing.expect(t, version_older("0.5.6", "0.6.0"))

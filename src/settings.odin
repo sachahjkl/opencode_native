@@ -13,6 +13,7 @@ import "core:path/filepath"
 import "core:strconv"
 import "core:strings"
 import "gt:config"
+import desktop "gt:desktop"
 import "gt:draw"
 import "gt:font"
 import "gt:platform"
@@ -1050,7 +1051,7 @@ page_server :: proc(app: ^App, em: f32) {
 	ui.spacer(ui.px(em * 0.4))
 	if read_shown(app, "###sh_read", &f.reads[.Shells], em, server_facts_load) {
 		sel := -1
-		for s, i in f.shells { if f.shell != "" && same_path(s.path, f.shell) { sel = i } }
+		for s, i in f.shells { if f.shell != "" && desktop.same_path(s.path, f.shell) { sel = i } }
 		for s, i in f.shells {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###sh%d", i)) {

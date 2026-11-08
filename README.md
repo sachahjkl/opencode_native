@@ -108,7 +108,12 @@ release, with its menu entry and its icon):
   saved permissions (revoke), providers, models, agents, skills, commands, the configuration files.
 - **Desktop integration** without administrator rights: Setup installs the running copy for the user, and opens by itself to offer an upgrade when a newer copy starts over an older install. On Windows: a
   Start menu shortcut with its AppUserModelID, a Settings > Apps entry, an uninstaller. On Linux: `~/.local/share`, an
-  entry in the applications menu and its icon. On NixOS, Setup advises the Nix package, and still makes a classic install on request (it runs with nix-ld: Setup says which libraries nix-ld lacks).
+  entry in the applications menu and its icon. In the install folder a manifest (`opencode-native-install.txt`) lists the
+  version and the files placed: the uninstall removes exactly these. On NixOS, Setup advises the Nix package, and still makes a
+  classic install on request: nix-build makes a profile of the libraries it needs, and the installed copy runs with it.
+  A copy that runs from the Nix store is never offered an install or an update. An install made by Setup 0.20.0 or
+  earlier shows as one to repair: Repair (or Uninstall) handles it in one click. The `desktop` package of gui_toolkit does
+  the work.
 
 ## The server
 
@@ -129,9 +134,9 @@ TLS is rustls, checked against the system's trust store.
 | `--server=<name>` | a saved server at start |
 | `--session=<id>` | open that session at start |
 | `--search=<text>` | the sidebar's search, filled at start |
-| `--install [--desktop]` | install this copy for the user (Windows: `%LOCALAPPDATA%\Programs\opencode-native`, Start menu, Settings > Apps; Linux: `~/.local/share/opencode-native`, the applications menu) |
-| `--uninstall [--quiet]` | remove it |
-| `--status` | exit code 0 installed, 2 needs repair, 1 not installed |
+| `--install [--desktop]` | install this copy for the user, or repair the install (Windows: `%LOCALAPPDATA%\Programs\opencode-native`, Start menu, Settings > Apps; Linux: `~/.local/share/opencode-native`, the applications menu, the icon); `--desktop` adds a shortcut on the Desktop |
+| `--uninstall [--quiet]` | remove it (it asks first unless `--quiet`); the files of a copy that runs go when it ends |
+| `--status` | prints the state and the installed program; exit code 0 installed, 2 needs repair, 1 not installed |
 | `--setup` | open Setup at start |
 | `--add-server` | open the dialog that adds a server at start |
 | `--find=<text>` | open the find bar (Ctrl+F) with that text |

@@ -1,5 +1,6 @@
 // The version, the client's own preferences, the command line of the desktop integration, and the Setup dialog:
-// install this copy for the user (Start menu, Settings > Apps), repair, or uninstall (desktop_windows.odin does the work).
+// install this copy for the user (Start menu, Settings > Apps), repair, or uninstall (desktop.odin does the work, with the
+// toolkit's desktop package).
 package occ
 
 import "core:fmt"
@@ -10,7 +11,9 @@ import "core:path/filepath"
 import "core:slice"
 import "core:strconv"
 import "core:strings"
+import desktop "gt:desktop"
 import "gt:draw"
+import process "gt:process"
 import "gt:render"
 import "gt:ui"
 
@@ -56,21 +59,20 @@ desktop_cli :: proc() -> (handled: bool, code: int) {
 	switch {
 	case slice.contains(args, "--install"):
 		ok, msg := desktop_install(slice.contains(args, "--desktop"))
-		fmt.println(ok ? fmt.tprintf("installed: %s", msg) : fmt.tprintf("install failed: %s", msg))
-		if os.exists("/etc/NIXOS") {
-			fmt.println(NIXOS_ADVICE)
-			if lacks := nix_ld_missing(); lacks != "" { fmt.printfln("nix-ld lacks %s. Add to your configuration:\n  %s", lacks, NIX_LD_CONFIG) }
-		}
+		say(ok ? "installed: %s\n" : "install failed: %s\n", msg)
+		if desktop.is_nixos() { say("%s\n", NIXOS_ADVICE) }
 		return true, ok ? 0 : 1
 	case slice.contains(args, "--uninstall"):
 		quiet := slice.contains(args, "--quiet")
 		if !quiet && message_box("Remove opencode native from this computer?\n\n" + LBL_PIECES + " and the program are removed. Nothing on the opencode server changes.", true) != 6 { return true, 1 }
-		ok, _, msg := desktop_uninstall()
+		ok, leftovers, msg := desktop_uninstall()
+		// (this process ends now: what it holds goes after it)
+		if len(leftovers) > 0 && !desktop_remove_later(leftovers[:]) { ok, msg = false, "cannot schedule the removal of the program" }
 		if !quiet { message_box(ok ? "opencode native was removed." : fmt.tprintf("The removal failed: %s", msg), false) }
 		return true, ok ? 0 : 1
 	case slice.contains(args, "--status"):
 		f := install_facts()
-		fmt.printfln("%v %s", f.state, f.exe)
+		say("%v %s\n", f.state, f.exe)
 		return true, f.state == .This_Copy || f.state == .Other_Copy ? 0 : f.state == .Repair ? 2 : 1
 	}
 	return false, 0
@@ -136,6 +138,17 @@ Setup_UI :: struct {
 	note:      Setup_Note,
 	installed: string,   // an install just made: the copy to start (owned)
 	removal_scheduled: bool,   // this copy was uninstalled while it runs: nothing is left to do but close
+	leftovers: [dynamic]string,   // ... and its files, deleted once this process has ended (setup_finish; owned)
+}
+
+// At the end of the process: the deletion of what an uninstall left because this process held it. It is scheduled here, not
+// at the click: the system's helper waits a few minutes at most for the process, and the window can stay open longer.
+setup_finish :: proc(app: ^App) {
+	st := &app.setup
+	if len(st.leftovers) > 0 { _ = desktop_remove_later(st.leftovers[:]) }
+	for l in st.leftovers { delete(l) }
+	delete(st.leftovers)
+	st.leftovers = nil
 }
 
 setup_open :: proc(app: ^App) {
@@ -207,6 +220,7 @@ setup_wanted :: proc(state: Install_State, installed, choice: string) -> bool {
 setup_offer_at_start :: proc(app: ^App) {
 	if os.get_env("OPENCODE_NATIVE_NO_SETUP", context.temp_allocator) != "" { return }
 	f := install_facts()
+	if f.from_nix { return }   // (Nix installs and updates this copy: there is nothing to offer it)
 	if setup_wanted(f.state, f.version, settings_get("setup")) { setup_open(app) }
 }
 
@@ -238,12 +252,19 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				switch f.state {
 				case .Not_Installed: state = "Not installed: this copy runs on its own."
 				case .This_Copy:     state = "Installed: this is the installed copy."; col = hex(HEX_GREEN)
-				case .Repair:        state = f.exe_there ? "Installed, but a shortcut or the Settings entry is missing." : "The installed program is missing: what is left of it can be repaired or removed."; col = hex(HEX_RED)
+				case .Repair:
+					col = hex(HEX_RED)
+					switch {
+					case !f.exe_there:  state = "The installed program is missing: what is left of it can be repaired or removed."
+					case !f.manifest && f.running_it: state = "Installed by an earlier Setup: Repair writes the record this version keeps."; col = accent()
+					case !f.manifest:   state = "A copy is installed by an earlier Setup: Repair puts this copy in its place."; col = accent()
+					case:               state = "Installed, but " + LBL_PIECES_MISSING + " is missing."
+					}
 				case .Other_Copy:    state = fmt.tprintf("A copy is installed (%s): this one runs on its own.", f.version != "" ? f.version : "?")
 				case .Removal_Scheduled: state = "Uninstalled: the program is deleted when this window closes."
 				case .Nix_Package:   state = "Installed by Nix: the Nix package has the menu entry and the icon."; col = hex(HEX_GREEN)
 				}
-				upgrade := setup_is_upgrade(f.state, f.version)
+				upgrade := setup_is_upgrade(f.state, f.version) && !f.from_nix
 				if upgrade { state = fmt.tprintf("An older copy is installed (%s): upgrade it to %s?", f.version, APP_VERSION); col = accent() }
 				ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 				if ui.row(.Center) {
@@ -251,12 +272,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 					ui.spacer(ui.px(em * 0.45))
 					text("s", state, hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 				}
-				if f.nixos && f.state != .Nix_Package {
-					info_line(app, "###setup_nixos", NIXOS_ADVICE, em)
-					if f.nix_ld != "" {
-						info_line(app, "###setup_nix_ld", fmt.tprintf("nix-ld lacks %s. Add to your configuration: %s", f.nix_ld, NIX_LD_CONFIG), em, hex(HEX_RED))
-					}
-				}
+				if f.nixos && f.state != .Nix_Package { info_line(app, "###setup_nixos", NIXOS_ADVICE, em) }
 			}
 			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
 		}
@@ -279,7 +295,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
 		}
 		ui.spacer(ui.px(em * 0.8))
-		if f.state != .Nix_Package {
+		if !f.from_nix {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row() {
 				ui.spacer(ui.px(em * 1.3))
@@ -302,8 +318,10 @@ setup_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
 			if f.state == .This_Copy || f.state == .Repair || f.state == .Other_Copy {
 				if bevel_button("###uninstall", "Uninstall", ICO_DELETE, .Danger).clicked {
-					ok, deferred, msg := desktop_uninstall()
-					setup_uninstalled(app, ok, deferred, msg)
+					ok, leftovers, msg := desktop_uninstall()
+					for l in leftovers { append(&st.leftovers, l) }
+					delete(leftovers)
+					setup_uninstalled(app, ok, len(st.leftovers) > 0, msg)
 				}
 			}
 			ui.spacer(ui.fill())
@@ -331,7 +349,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				if bevel_button("###close", "Close", "", .Normal).clicked { st.open = false }
 				ui.spacer(ui.px(em * 0.5))
 			}
-			if !just_installed && f.state != .Removal_Scheduled && f.state != .Nix_Package {
+			if !just_installed && f.state != .Removal_Scheduled && !f.from_nix {
 				label := "Install"
 				#partial switch f.state {
 				case .Not_Installed: label = f.nixos ? "Install the classic way" : "Install"
@@ -343,7 +361,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 					ok, msg := desktop_install(st.desktop)
 					if ok {
 						settings_set("setup", "installed")
-						running_installed := same_path(running_exe(), msg)
+						running_installed := desktop.same_path(process.executable_path(), msg)
 						set_message(app, true, running_installed ? "Done: everything is in place." : "Installed. Start it from " + LBL_START + ", or now:")
 						if !running_installed {
 							delete(st.installed)

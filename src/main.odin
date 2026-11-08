@@ -742,6 +742,7 @@ main :: proc() {
 	}
 	threads_stop(app)
 	ui.post_close(&app.state)
+	setup_finish(app)
 	os.exit(0)
 }
 

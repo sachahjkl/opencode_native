@@ -8,6 +8,7 @@ import "core:os"
 import "core:strings"
 import "core:thread"
 import "gt:config"
+import process "gt:process"
 import "gt:ui"
 import occ_update "update"
 import update "gt:update"
@@ -136,7 +137,9 @@ install_job :: proc(j: ^Update_Job) {
 	data, ok, _ := fetch(&h, fmt.tprintf("%s%s", j.path, j.manifest.file))
 	if !ok { j.err = strings.clone("the update could not be downloaded"); return }
 	defer delete(data)
-	if e := update.place(j.exe, transmute([]byte)data, j.manifest); e != .None { j.err = strings.clone(update.error_text(e)) }
+	if e := update.place(j.exe, transmute([]byte)data, j.manifest); e != .None { j.err = strings.clone(update.error_text(e)); return }
+	// the installed copy: its manifest and record say the new version, and on NixOS the release is made to run by itself again
+	if recorded, msg := desktop_updated(j.exe, j.manifest.version); !recorded { j.err = strings.clone(fmt.tprintf("the update is in place, but %s", msg)) }
 }
 
 @(private = "file")
@@ -265,13 +268,13 @@ update_install :: proc(app: ^App) {
 	j := new(Update_Job)
 	j.install, j.manifest = true, r.offer.manifest
 	j.path, j.channel = strings.clone(r.offer.path), strings.clone(r.offer.channel)
-	j.exe = strings.clone(running_exe())
+	j.exe = strings.clone(process.executable_path())
 	update_job_start(app, j)
 }
 
 // The new program takes over.
 update_restart :: proc(app: ^App) {
-	args := []string{running_exe()}
+	args := []string{process.executable_path()}
 	if _, err := os.process_start({command = args}); err != nil { ui.toast(.Bad, "Restart it by hand: it could not be started"); return }
 	app.quit = true
 }
@@ -281,7 +284,7 @@ update_startup :: proc(app: ^App) {
 	u := &app.updater
 	if u.checked { return }
 	u.checked = true
-	update.remove_leftovers(running_exe())
+	update.remove_leftovers(process.executable_path())
 	if app.prefs.update_auto && app.prefs_file != "" { update_check(app, false) }
 }
 
