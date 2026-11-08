@@ -102,7 +102,7 @@ App :: struct {
 	view_pan:         [2]f32,                // of the picture's centre from the view's, frame pixels
 	view_grab:        [2]f32,                // view_pan when the drag began
 	view_start:       Image_Ref,             // --image=<file>: opened in the viewer once it is decoded (its data owned)
-	devtools:         ^devtools.Server,   // TOOLKIT_DEVTOOLS=<port>: driven over the Chrome DevTools Protocol (tools/cdp.mjs)
+	devtools:         ^devtools.Server,   // TOOLKIT_DEVTOOLS=<port>: driven over the Chrome DevTools Protocol (the toolkit's tk cdp, or gt:cdp in occtools)
 	setup:            Setup_UI,
 	quit:             bool,
 	last_tick:        time.Tick,

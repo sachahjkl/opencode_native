@@ -8,6 +8,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 import "core:time"
+import cdp "gt:cdp"
 
 FILM_DIR        :: "build/film"
 FILM_FPS        :: "30"
@@ -30,38 +31,33 @@ concat_list :: proc(names: []string, times: []f64) -> string {
 }
 
 // A point of the window as parts of its size (its units are not the pixels of --size: --scale divides them).
-film_at :: proc(dt: ^Dt, x, y: f64) -> (px, py: int) {
-	r, _ := dt_call(dt, "Toolkit.state")
+film_at :: proc(dt: ^cdp.Client, x, y: f64) -> (px, py: int) {
+	r, _ := cdp.call(dt, "Toolkit.state")
 	o, _ := r.(json.Object)
-	return int(json_num(o["width"]) * x), int(json_num(o["height"]) * y)
+	return int(cdp.number(o["width"]) * x), int(cdp.number(o["height"]) * y)
 }
 
-film_wheel :: proc(dt: ^Dt, x, y, notches: int) {
-	dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseWheel","x":%d,"y":%d,"deltaX":0,"deltaY":%d}}`, x, y, notches * 100))
+film_wheel :: proc(dt: ^cdp.Client, x, y, notches: int) {
+	cdp.call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseWheel","x":%d,"y":%d,"deltaX":0,"deltaY":%d}}`, x, y, notches * 100))
 }
 
-film_start :: proc(dt: ^Dt, name: string) -> bool {
+film_start :: proc(dt: ^cdp.Client, sc: ^cdp.Screencast, name: string) -> bool {
 	dir := fmt.tprintf("%s/%s", FILM_DIR, name)
 	_ = os.remove_all(dir)
 	if !make_folder(dir) { return false }
-	dt.cast_dir = strings.clone(dir)
-	_, ok := dt_call(dt, "Page.startScreencast", `{"format":"png","minIntervalMs":0}`)
-	return ok
+	sc.dir = strings.clone(dir)
+	return cdp.screencast_start(dt, sc, 0)
 }
 
 // Stops, and makes the clip of what came.
-film_end :: proc(dt: ^Dt, name: string) -> bool {
-	dt_call(dt, "Page.stopScreencast")
-	dir := dt.cast_dir
-	dt.cast_dir = ""
-	n := len(dt.cast_times)
+film_end :: proc(dt: ^cdp.Client, sc: ^cdp.Screencast, name: string) -> bool {
+	cdp.screencast_stop(dt)
+	n := len(sc.times)
 	if n < 2 { fmt.eprintfln("film: %s: %d frames", name, n); return false }
-	span := dt.cast_times[n - 1] - dt.cast_times[0]
+	span := sc.times[n - 1] - sc.times[0]
 	fmt.printfln("film: %s: %d frames in %.2f s, %.1f a second", name, n, span, f64(n - 1) / max(span, 0.001))
-	list := fmt.tprintf("%s/frames.ffconcat", dir)
-	if os.write_entire_file(list, transmute([]byte)concat_list(dt.cast_names[:], dt.cast_times[:])) != nil { return false }
-	clear(&dt.cast_names)
-	clear(&dt.cast_times)
+	list := fmt.tprintf("%s/frames.ffconcat", sc.dir)
+	if os.write_entire_file(list, transmute([]byte)concat_list(sc.names[:], sc.times[:])) != nil { return false }
 	return run("ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list, "-vf", "crop=trunc(iw/2)*2:trunc(ih/2)*2,fps=" + FILM_FPS, "-c:v", "libx264", "-crf", "14", "-preset", "slow", "-pix_fmt", "yuv420p", fmt.tprintf("%s/%s.mp4", FILM_DIR, name))
 }
 
@@ -76,12 +72,12 @@ SECRETS :: [?]string{"iceman", "Contributor", "START IN", "Other folder", "The r
 Scene :: struct {
 	name, search, session: string,
 	play:                  proc(s: ^Shot),
-	before:                proc(dt: ^Dt),   // what is done off camera
+	before:                proc(dt: ^cdp.Client),   // what is done off camera
 	diff:                  string,          // a patch to open in the full view (--diff)
 }
 
 Shot :: struct {
-	dt:   ^Dt,
+	dt:   ^cdp.Client,
 	leak: string,
 }
 
@@ -90,12 +86,12 @@ Shot :: struct {
 hold :: proc(s: ^Shot, how_long: time.Duration) {
 	begun := time.now()
 	for time.since(begun) < how_long * FILM_SLOW {
-		r, _ := dt_call(s.dt, "Toolkit.state")
+		r, _ := cdp.call(s.dt, "Toolkit.state")
 		o, _ := r.(json.Object)
-		height := json_num(o["height"])
+		height := cdp.number(o["height"])
 		secrets := SECRETS
 		for secret in secrets {
-			for b in dt_find(s.dt, secret) {
+			for b in cdp.find(s.dt, secret) {
 				if b.h > 0 && b.y + b.h > 0 && b.y < height { s.leak = secret }
 			}
 		}
@@ -105,14 +101,14 @@ hold :: proc(s: ^Shot, how_long: time.Duration) {
 @(private = "file")
 type :: proc(s: ^Shot, text: string) {
 	for c in text {
-		dt_type(s.dt, fmt.tprintf("%c", c))
+		cdp.type_text(s.dt, fmt.tprintf("%c", c))
 		hold(s, KEY_GAP)
 	}
 }
 
 @(private = "file")
 press :: proc(s: ^Shot, key: string, after: time.Duration) {
-	dt_key(s.dt, key)
+	cdp.key(s.dt, key)
 	hold(s, after)
 }
 
@@ -125,15 +121,15 @@ wheel :: proc(s: ^Shot, notches, steps: int, gap: time.Duration) {
 	}
 }
 
-public_model :: proc(dt: ^Dt) {
-	dt_click_name(dt, "model")
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
-	dt_type(dt, "sonnet 5")
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
-	dt_shot(dt, LIVE_DIR + "/model_pick.png")
-	dt_key(dt, "Enter")
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
-	if !dt_has(dt, "claude-sonnet-5") { fmt.eprintln("film: the public model was not taken: see model_pick.png") }
+public_model :: proc(dt: ^cdp.Client) {
+	cdp.click_name(dt, "model")
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
+	cdp.type_text(dt, "sonnet 5")
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
+	cdp.shot(dt, LIVE_DIR + "/model_pick.png")
+	cdp.key(dt, "Enter")
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
+	if !cdp.has(dt, "claude-sonnet-5") { fmt.eprintln("film: the public model was not taken: see model_pick.png") }
 }
 
 @(private = "file")
@@ -158,7 +154,7 @@ play_palette :: proc(s: ^Shot) {
 @(private = "file")
 play_model :: proc(s: ^Shot) {
 	hold(s, 500 * time.Millisecond)
-	dt_click_name(s.dt, "model")
+	cdp.click_name(s.dt, "model")
 	hold(s, 700 * time.Millisecond)
 	type(s, "sonnet")
 	hold(s, 1000 * time.Millisecond)
@@ -184,14 +180,14 @@ play_stats :: proc(s: ^Shot) {
 
 // (the shell's suggestions come from the history of whoever films: none, and a clean screen)
 @(private = "file")
-terminal_ready :: proc(dt: ^Dt) {
-	dt_key(dt, "ctrl+shift+t")
-	dt_wait_name(dt, "term_box", STEP_LIMIT)
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
-	dt_click_name(dt, "term_box")
-	dt_type(dt, "Set-PSReadLineOption -PredictionSource None; Clear-Host")
-	dt_key(dt, "Enter")
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+terminal_ready :: proc(dt: ^cdp.Client) {
+	cdp.key(dt, "ctrl+shift+t")
+	cdp.wait_name(dt, "term_box", STEP_LIMIT)
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	cdp.click_name(dt, "term_box")
+	cdp.type_text(dt, "Set-PSReadLineOption -PredictionSource None; Clear-Host")
+	cdp.key(dt, "Enter")
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
 }
 
 @(private = "file")
@@ -207,7 +203,7 @@ play_terminal :: proc(s: ^Shot) {
 play_browser :: proc(s: ^Shot) {
 	hold(s, 400 * time.Millisecond)
 	press(s, "ctrl+shift+b", 900 * time.Millisecond)
-	dt_click_name(s.dt, "pv_url")
+	cdp.click_name(s.dt, "pv_url")
 	hold(s, 200 * time.Millisecond)
 	type(s, "ocn.froment.software")
 	press(s, "Enter", 6000 * time.Millisecond)
@@ -215,7 +211,7 @@ play_browser :: proc(s: ^Shot) {
 
 @(private = "file")
 click_text :: proc(s: ^Shot, label: string, after: time.Duration) {
-	dt_call(s.dt, "Toolkit.click", fmt.tprintf(`{{"text":%s,"index":0,"count":1,"button":"left"}}`, json_text(label)))
+	cdp.call(s.dt, "Toolkit.click", fmt.tprintf(`{{"text":%s,"index":0,"count":1,"button":"left"}}`, cdp.quote(label)))
 	hold(s, after)
 }
 
@@ -229,7 +225,7 @@ play_diff :: proc(s: ^Shot) {
 
 @(private = "file")
 play_queue :: proc(s: ^Shot) {
-	dt_click_name(s.dt, "composer")
+	cdp.click_name(s.dt, "composer")
 	hold(s, 300 * time.Millisecond)
 	type(s, "Write a long story about a clock")
 	press(s, "Enter", 1200 * time.Millisecond)
@@ -262,25 +258,25 @@ prepare :: proc(l: ^Live) -> bool {
 	if !ok { return false }
 	defer app_end(&app)
 	dt := &app.dt
-	if !dt_wait_for(dt, "connected", STEP_LIMIT) { return false }
-	dt_key(dt, "ctrl+n")
-	if !dt_wait_name(dt, "composer", STEP_LIMIT) { return false }
+	if !cdp.wait_for(dt, "connected", STEP_LIMIT) { return false }
+	cdp.key(dt, "ctrl+n")
+	if !cdp.wait_name(dt, "composer", STEP_LIMIT) { return false }
 	public_model(dt)
-	dt_click_name(dt, "composer")
-	dt_type(dt, "Keep a todo list. Add a --iso flag to clock.py that prints the time in ISO 8601, try it, then document it in README.md.")
-	dt_key(dt, "Enter")
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
-	dt_shot(dt, LIVE_DIR + "/prepare_sent.png")
+	cdp.click_name(dt, "composer")
+	cdp.type_text(dt, "Keep a todo list. Add a --iso flag to clock.py that prints the time in ISO 8601, try it, then document it in README.md.")
+	cdp.key(dt, "Enter")
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
+	cdp.shot(dt, LIVE_DIR + "/prepare_sent.png")
 	begun := time.now()
 	id := ""
 	for time.since(begun) < PREPARE_LIMIT {
 		now, _ := api_list(l, "session")
 		if fresh := new_ids(before, now); len(fresh) > 0 { id = fresh[0] }
-		if id != "" && !dt_has(dt, "Untitled") && dt_has(dt, "README") && !dt_has(dt, "Stop") { break }
-		if dt_has(dt, "The run failed") { fmt.eprintln("film: the run failed"); return false }
+		if id != "" && !cdp.has(dt, "Untitled") && cdp.has(dt, "README") && !cdp.has(dt, "Stop") { break }
+		if cdp.has(dt, "The run failed") { fmt.eprintln("film: the run failed"); return false }
 		time.sleep(time.Second)
 	}
-	if id == "" || dt_has(dt, "Untitled") { fmt.eprintln("film: no finished session came"); return false }
+	if id == "" || cdp.has(dt, "Untitled") { fmt.eprintln("film: no finished session came"); return false }
 	fmt.printfln("film: session %s", id)
 	return os.write_entire_file(FILM_SESSION, transmute([]byte)id) == nil
 }
@@ -295,13 +291,16 @@ shoot :: proc(l: ^Live, scene: Scene) -> bool {
 	if !ok { return false }
 	defer app_end(&app)
 	dt := &app.dt
-	if !dt_wait_for(dt, "connected", STEP_LIMIT * FILM_SLOW) { return false }
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":15000}`)
+	if !cdp.wait_for(dt, "connected", STEP_LIMIT * FILM_SLOW) { return false }
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":15000}`)
 	if scene.before != nil { scene.before(dt) }
-	if !film_start(dt, scene.name) { return false }
+	sc: cdp.Screencast
+	defer cdp.screencast_destroy(&sc)
+	defer delete(sc.dir)
+	if !film_start(dt, &sc, scene.name) { return false }
 	shot := Shot{dt = dt}
 	scene.play(&shot)
-	done := film_end(dt, scene.name)
+	done := film_end(dt, &sc, scene.name)
 	if shot.leak != "" {
 		fmt.eprintfln("film: %s REFUSED: \"%s\" was in the picture", scene.name, shot.leak)
 		_ = os.remove(fmt.tprintf("%s/%s.mp4", FILM_DIR, scene.name))

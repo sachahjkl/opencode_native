@@ -103,7 +103,7 @@
       };
 
       devShells.${system}.default = pkgs.mkShell {
-        packages = [ odin ] ++ (with pkgs; [ clang lld cargo rustc nodejs rsync socat ]);
+        packages = [ odin ] ++ (with pkgs; [ clang lld cargo rustc rsync socat ]);
         buildInputs = [ pkgs.fontconfig ];
         shellHook = "export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath runtime} FONTCONFIG_FILE=${pkgs.makeFontsConf { fontDirectories = [ pkgs.noto-fonts-color-emoji ]; }}";   # (nix develop clears the variable if set as an attribute)
         # the system's Vulkan drivers where it has them; under WSL, occtools wsl_client says which

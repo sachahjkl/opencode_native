@@ -19,6 +19,7 @@ import "core:math"
 import "core:os"
 import "core:strings"
 import "core:time"
+import cdp "gt:cdp"
 
 SHOTS_EXE   :: "build/screenshots" + EXE
 SHOTS_DOCS  :: "docs/screenshots"
@@ -49,7 +50,7 @@ Shots :: struct {
 
 // A picture in the making: the first step that fails is what is said, the steps after it do nothing.
 Snap :: struct {
-	dt:   ^Dt,
+	dt:   ^cdp.Client,
 	ok:   bool,
 }
 
@@ -59,18 +60,18 @@ step :: proc(s: ^Snap, done: bool) { s.ok = s.ok && done }
 @(private = "file")
 idle :: proc(s: ^Snap) {
 	if !s.ok { return }
-	_, done := dt_call(s.dt, "Toolkit.waitIdle")
+	_, done := cdp.call(s.dt, "Toolkit.waitIdle")
 	step(s, done)
 }
 
 @(private = "file")
-key :: proc(s: ^Snap, name: string) { if s.ok { step(s, dt_key(s.dt, name)) } }
+key :: proc(s: ^Snap, name: string) { if s.ok { step(s, cdp.key(s.dt, name)) } }
 
 @(private = "file")
-typed :: proc(s: ^Snap, text: string) { if s.ok { step(s, dt_type(s.dt, text)) } }
+typed :: proc(s: ^Snap, text: string) { if s.ok { step(s, cdp.type_text(s.dt, text)) } }
 
 @(private = "file")
-click :: proc(s: ^Snap, name: string) { if s.ok { step(s, dt_click_name(s.dt, name)) } }
+click :: proc(s: ^Snap, name: string) { if s.ok { step(s, cdp.click_name(s.dt, name)) } }
 
 // What ends by itself with nothing to read: an animation, a shell that answers. What a window can say is awaited, not this.
 @(private = "file")
@@ -80,23 +81,23 @@ settle :: proc(s: ^Snap, how_long: time.Duration) { if s.ok { time.sleep(how_lon
 mouse :: proc(s: ^Snap, kind: string, x, y: f64, press := false) {
 	if !s.ok { return }
 	extra := press ? fmt.tprintf(`,"button":"left","buttons":%d,"clickCount":1`, kind == "mousePressed" ? 1 : 0) : ""
-	_, done := dt_call(s.dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"%s","x":%f,"y":%f%s}}`, kind, x, y, extra))
+	_, done := cdp.call(s.dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"%s","x":%f,"y":%f%s}}`, kind, x, y, extra))
 	step(s, done)
 }
 
 @(private = "file")
-window_height :: proc(dt: ^Dt) -> f64 {
-	r, _ := dt_call(dt, "Toolkit.state")
+window_height :: proc(dt: ^cdp.Client) -> f64 {
+	r, _ := cdp.call(dt, "Toolkit.state")
 	o, _ := r.(json.Object)
-	return json_num(o["height"])
+	return cdp.number(o["height"])
 }
 
 // A place in the window as parts of it, rounded: a wheel zooms around it, so a pixel off moves the whole of a picture.
 @(private = "file")
-shot_at :: proc(dt: ^Dt, x, y: f64) -> (px, py: int) {
-	r, _ := dt_call(dt, "Toolkit.state")
+shot_at :: proc(dt: ^cdp.Client, x, y: f64) -> (px, py: int) {
+	r, _ := cdp.call(dt, "Toolkit.state")
 	o, _ := r.(json.Object)
-	return int(math.round(json_num(o["width"]) * x)), int(math.round(json_num(o["height"]) * y))
+	return int(math.round(cdp.number(o["width"]) * x)), int(math.round(cdp.number(o["height"]) * y))
 }
 
 // How many notches bring something `distance` pixels away nearer: at least one, at most SCROLL_MOST.
@@ -112,7 +113,7 @@ scroll_to :: proc(s: ^Snap, text: string, at: f64) {
 	height := window_height(s.dt)
 	x, y := shot_at(s.dt, 0.65, 0.4)
 	for _ in 0 ..< SCROLL_TRIES {
-		boxes := dt_find(s.dt, text)
+		boxes := cdp.find(s.dt, text)
 		if len(boxes) == 0 {   // (a lazy column: it is further up, what a conversation opened at its end has above)
 			film_wheel(s.dt, x, y, -5)
 			idle(s)
@@ -132,7 +133,7 @@ scroll_to :: proc(s: ^Snap, text: string, at: f64) {
 click_exact :: proc(s: ^Snap, text: string, n: int) {
 	if !s.ok { return }
 	seen := 0
-	for b in dt_find(s.dt, text) {
+	for b in cdp.find(s.dt, text) {
 		if b.text != text { continue }
 		if seen == n {
 			x, y := b.x + b.w / 2, b.y + b.h / 2
@@ -202,7 +203,7 @@ ready_activity :: proc(s: ^Snap) {
 @(private = "file")
 ready_terminal :: proc(s: ^Snap) {
 	key(s, "ctrl+shift+t")
-	if s.ok { step(s, dt_wait_name(s.dt, "term_box", SHOT_LIMIT)) }
+	if s.ok { step(s, cdp.wait_name(s.dt, "term_box", SHOT_LIMIT)) }
 	settle(s, 3 * time.Second)
 	any_model(s)
 	click(s, "term_box")
@@ -256,20 +257,20 @@ ready_connections :: proc(s: ^Snap) {
 }
 
 // (it looks at start)
-@(private = "file") ready_updates :: proc(s: ^Snap) { if s.ok { step(s, dt_wait_for(s.dt, "Up to date", SHOT_LIMIT)) } }
+@(private = "file") ready_updates :: proc(s: ^Snap) { if s.ok { step(s, cdp.wait_for(s.dt, "Up to date", SHOT_LIMIT)) } }
 
 @(private = "file")
 ready_subagent_session :: proc(s: ^Snap) {
 	scroll_to(s, "Summarise src/stats.odin", 0.4)
 	click_exact(s, "Open", 2)
-	if s.ok { step(s, dt_wait_for(s.dt, "sub-agent", SHOT_LIMIT)) }
+	if s.ok { step(s, cdp.wait_for(s.dt, "sub-agent", SHOT_LIMIT)) }
 	idle(s)
 }
 
 // (about one pixel of the picture per pixel of the window: sharp)
 @(private = "file")
 ready_viewer :: proc(s: ^Snap) {
-	if s.ok { step(s, dt_wait_for(s.dt, "conversation.png", SHOT_LIMIT)) }
+	if s.ok { step(s, cdp.wait_for(s.dt, "conversation.png", SHOT_LIMIT)) }
 	if !s.ok { return }
 	x, y := shot_at(s.dt, 0.45, 0.45)
 	film_wheel(s.dt, x, y, -1)
@@ -367,7 +368,7 @@ start_linux :: proc(s: ^Shots, args: []string) -> (app: App, ok: bool) {
 	app.process = p
 	begun := time.now()
 	for time.since(begun) < WSL_LIMIT {
-		if d, connected := dt_connect(WSL_PORT); connected { app.dt = d; return app, true }
+		if d, connected := cdp.connect(WSL_PORT); connected { app.dt = d; return app, true }
 		if state, _ := os.process_wait(p, 0); state.exited { fmt.eprintfln("shots: the program ended: see %s", app.log); return }
 		time.sleep(POLL)
 	}
@@ -378,11 +379,11 @@ start_linux :: proc(s: ^Shots, args: []string) -> (app: App, ok: bool) {
 
 // Would a secret be in the picture? (What is scrolled out of the window is in the tree, not in the picture.)
 @(private = "file")
-leak_of :: proc(dt: ^Dt) -> string {
+leak_of :: proc(dt: ^cdp.Client) -> string {
 	height := window_height(dt)
 	secrets := SHOT_SECRETS
 	for secret in secrets {
-		for b in dt_find(dt, secret) {
+		for b in cdp.find(dt, secret) {
 			if b.h > 0 && b.y + b.h > 0 && b.y < height { return secret }
 		}
 	}
@@ -412,10 +413,10 @@ take :: proc(s: ^Shots, p: Picture) -> bool {
 	if !started { return false }
 	defer app_end(&app)
 	dt := &app.dt
-	defer if p.linux { dt_call(dt, "Browser.close") }
-	if !dt_wait_for(dt, "connected", SHOT_LIMIT) { return false }
-	if !dt_wait_for(dt, p.work ? WORK_TITLE : TOUR_TITLE, SHOT_LIMIT) { return false }
-	if _, quiet := dt_call(dt, "Toolkit.waitIdle", fmt.tprintf(`{{"timeout":%d}}`, int(time.duration_milliseconds(SHOT_LIMIT)))); !quiet { return false }
+	defer if p.linux { cdp.call(dt, "Browser.close") }
+	if !cdp.wait_for(dt, "connected", SHOT_LIMIT) { return false }
+	if !cdp.wait_for(dt, p.work ? WORK_TITLE : TOUR_TITLE, SHOT_LIMIT) { return false }
+	if _, quiet := cdp.call(dt, "Toolkit.waitIdle", fmt.tprintf(`{{"timeout":%d}}`, int(time.duration_milliseconds(SHOT_LIMIT)))); !quiet { return false }
 
 	snap := Snap{dt = dt, ok = true}
 	if p.ready != nil { p.ready(&snap) }
@@ -430,7 +431,7 @@ take :: proc(s: ^Shots, p: Picture) -> bool {
 	if secret := leak_of(dt); secret != "" { fmt.eprintfln("shots: %s: \"%s\" would be in the picture", p.name, secret); return false }
 
 	out := fmt.tprintf("%s/%s.png", s.docs, p.name)
-	if !dt_shot(dt, out) { return false }
+	if !cdp.shot(dt, out) { return false }
 	if s.to_site && p.name != "conversation" {   // (the README's alone)
 		if os.copy_file(fmt.tprintf("%s/%s.png", SHOTS_SITE, p.name), out) != nil { return false }
 	}

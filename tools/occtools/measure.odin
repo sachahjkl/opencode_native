@@ -8,6 +8,7 @@ import "core:os"
 import "core:slice"
 import "core:strconv"
 import "core:time"
+import cdp "gt:cdp"
 
 MEASURE_RUNS :: 7
 MB           :: 1024.0 * 1024.0
@@ -38,11 +39,11 @@ one_run :: proc(l: ^Live, s: ^Sample) -> bool {
 	if !ok { return false }
 	defer app_end(&app)
 	dt := &app.dt
-	if !dt_wait_for(dt, "New session", STEP_LIMIT) { return false }
+	if !cdp.wait_for(dt, "New session", STEP_LIMIT) { return false }
 	s.first_ms = time.duration_milliseconds(time.since(app.started))
-	if !dt_wait_for(dt, "Clock.py created", STEP_LIMIT) { return false }
+	if !cdp.wait_for(dt, "Clock.py created", STEP_LIMIT) { return false }
 	s.session_ms = time.duration_milliseconds(time.since(app.started))
-	if _, idle := dt_call(dt, "Toolkit.waitIdle", `{"timeout":10000}`); !idle { return false }
+	if _, idle := cdp.call(dt, "Toolkit.waitIdle", `{"timeout":10000}`); !idle { return false }
 	working, private := memory_of(app.process)
 	s.working, s.private = f64(working) / MB, f64(private) / MB
 	return true
@@ -55,21 +56,21 @@ measure_find :: proc(l: ^Live, runs: int) -> int {
 	if !ok { return 1 }
 	defer app_end(&app)
 	dt := &app.dt
-	if !dt_wait_for(dt, "connected", STEP_LIMIT) { return 1 }
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
-	dt_key(dt, "ctrl+p")
-	if !dt_wait_name(dt, "flr0", STEP_LIMIT) { return 1 }
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	if !cdp.wait_for(dt, "connected", STEP_LIMIT) { return 1 }
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	cdp.key(dt, "ctrl+p")
+	if !cdp.wait_name(dt, "flr0", STEP_LIMIT) { return 1 }
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
 	found := make([]f64, runs, context.temp_allocator)
 	for i in 0 ..< runs {
 		begun := time.now()
-		dt_type(dt, "make_logo.p")   // (not the whole name: the field must not be what is found)
-		if !dt_wait_for(dt, "make_logo.ps1", STEP_LIMIT) { return 1 }
+		cdp.type_text(dt, "make_logo.p")   // (not the whole name: the field must not be what is found)
+		if !cdp.wait_for(dt, "make_logo.ps1", STEP_LIMIT) { return 1 }
 		found[i] = time.duration_milliseconds(time.since(begun))
-		dt_key(dt, "ctrl+a")
-		dt_key(dt, "Backspace")
-		if !dt_wait_for(dt, "make_logo.ps1", STEP_LIMIT, gone = true) { return 1 }
-		dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
+		cdp.key(dt, "ctrl+a")
+		cdp.key(dt, "Backspace")
+		if !cdp.wait_for(dt, "make_logo.ps1", STEP_LIMIT, gone = true) { return 1 }
+		cdp.call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
 	}
 	report("a key to the file found", found, "ms")
 	return 0

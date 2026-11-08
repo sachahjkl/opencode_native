@@ -9,6 +9,7 @@ import "core:net"
 import "core:os"
 import "core:strings"
 import "core:time"
+import cdp "gt:cdp"
 
 DEMO_DIR        :: "S:\\demo-clock"
 DEMO_SESSION    :: "ses_e5584daa0ffe0rZ9lqsYByWGPw"
@@ -35,7 +36,7 @@ Live :: struct {
 
 App :: struct {
 	process:  os.Process,
-	dt:       Dt,
+	dt:       cdp.Client,
 	log:      string,
 	settings: string,
 	started:  time.Time,
@@ -184,7 +185,7 @@ launch :: proc(l: ^Live, name: string, args: ..string) -> (app: App, ok: bool) {
 	app.process = p
 	begun := time.now()
 	for time.since(begun) < START_LIMIT {
-		if d, connected := dt_connect(port); connected { app.dt = d; return app, true }
+		if d, connected := cdp.connect(port); connected { app.dt = d; return app, true }
 		if state, _ := os.process_wait(p, 0); state.exited {
 			fmt.eprintfln("live: the program ended at the start, code %d: see %s", state.exit_code, app.log)
 			return
@@ -205,20 +206,20 @@ close_app :: proc(l: ^Live, app: ^App) {
 }
 
 app_end :: proc(app: ^App) {
-	dt_close(&app.dt)
+	cdp.close(&app.dt)
 	_ = os.process_kill(app.process)
 	_, _ = os.process_wait(app.process, 5 * time.Second)
 	if app.settings != "" { _ = os.remove_all(app.settings) }   // (a program in WSL has its own, there)
 }
 
 @(private = "file")
-reconnects :: proc(p: ^Proxy, dt: ^Dt, was: int) -> bool {
+reconnects :: proc(p: ^Proxy, dt: ^cdp.Client, was: int) -> bool {
 	begun := time.now()
 	for proxy_opened(p) <= was {
 		if time.since(begun) > BACK_LIMIT { return false }
 		time.sleep(POLL)
 	}
-	return dt_wait_for(dt, "connected", BACK_LIMIT)
+	return cdp.wait_for(dt, "connected", BACK_LIMIT)
 }
 
 // A shell open, the link cut, then gone mute and given up on. A silence past its limit ends in that same failure of a read
@@ -231,23 +232,23 @@ scenario_link :: proc(l: ^Live) {
 	app, started := launch(l, "link", fmt.tprintf("--session=%s", l.session), fmt.tprintf("--url=http://127.0.0.1:%d", p.port), fmt.tprintf("--password=%s", l.password))
 	if !started { expect(l, false, "the program answers"); return }
 	dt := &app.dt
-	expect(l, dt_wait_for(dt, "connected", STEP_LIMIT), "connected through the proxy")
-	expect(l, !dt_wait_for(dt, "occtools-no-such-text", NEVER_LIMIT), "a text that is not there is not found (else nothing here proves anything)")
-	dt_key(dt, "ctrl+shift+t")
-	expect(l, dt_wait_name(dt, "term_box", STEP_LIMIT), "a shell opens")
+	expect(l, cdp.wait_for(dt, "connected", STEP_LIMIT), "connected through the proxy")
+	expect(l, !cdp.wait_for(dt, "occtools-no-such-text", NEVER_LIMIT), "a text that is not there is not found (else nothing here proves anything)")
+	cdp.key(dt, "ctrl+shift+t")
+	expect(l, cdp.wait_name(dt, "term_box", STEP_LIMIT), "a shell opens")
 
 	was := proxy_opened(p)
 	proxy_drop(p)
 	expect(l, reconnects(p, dt, was), "cut: connected again")
-	expect(l, dt_wait_for(dt, "(lost)", BACK_LIMIT, gone = true), "cut: the shell's tab is not lost")
-	expect(l, !dt_has(dt, "(ended)"), "cut: the shell has not ended")
+	expect(l, cdp.wait_for(dt, "(lost)", BACK_LIMIT, gone = true), "cut: the shell's tab is not lost")
+	expect(l, !cdp.has(dt, "(ended)"), "cut: the shell has not ended")
 
 	was = proxy_opened(p)
 	proxy_mute(p)
 	proxy_drop(p)
 	expect(l, reconnects(p, dt, was), "mute: connected again")
-	expect(l, dt_wait_for(dt, "(lost)", BACK_LIMIT, gone = true), "mute: the shell's tab is not lost")
-	dt_shot(dt, LIVE_DIR + "/link.png")
+	expect(l, cdp.wait_for(dt, "(lost)", BACK_LIMIT, gone = true), "mute: the shell's tab is not lost")
+	cdp.shot(dt, LIVE_DIR + "/link.png")
 	close_app(l, &app)
 }
 
@@ -269,12 +270,12 @@ big_patch :: proc(rows: int) -> string {
 }
 
 @(private = "file")
-frame_p95 :: proc(dt: ^Dt) -> f64 {
-	r, ok := dt_call(dt, "Toolkit.metrics", `{"reset":true}`)
+frame_p95 :: proc(dt: ^cdp.Client) -> f64 {
+	r, ok := cdp.call(dt, "Toolkit.metrics", `{"reset":true}`)
 	if !ok { return -1 }
 	o, _ := r.(json.Object)
 	t, _ := o["totalMs"].(json.Object)
-	return json_num(t["p95"])
+	return cdp.number(t["p95"])
 }
 
 // Scrolled, turned, a text dragged over, closed: a diff no one would read, so that one that is read is nothing.
@@ -288,43 +289,43 @@ scenario_diff :: proc(l: ^Live) {
 	defer close_app(l, &app)
 	dt := &app.dt
 	begun := time.now()
-	expect(l, dt_wait_for(dt, "big.patch", STEP_LIMIT), "the view opens")
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	expect(l, cdp.wait_for(dt, "big.patch", STEP_LIMIT), "the view opens")
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
 	fmt.printfln("        open and at rest, from the start: %d ms", int(time.duration_milliseconds(time.since(app.started))))
 	_ = begun
-	r, _ := dt_call(dt, "Toolkit.state")
+	r, _ := cdp.call(dt, "Toolkit.state")
 	o, _ := r.(json.Object)
-	w, h := json_num(o["width"]), json_num(o["height"])
+	w, h := cdp.number(o["width"]), cdp.number(o["height"])
 	// (speed is measured on what is published only: a dev build's frames say how it was compiled)
 	timed := build_mode_of(l.exe) == "release"
 	if !timed { fmt.printfln("        (%s is no release build: its frames are not measured; build release to measure them)", l.exe) }
 	frame_p95(dt)
 	for _ in 0 ..< 40 {
-		dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseWheel","x":%d,"y":%d,"deltaX":0,"deltaY":1500}}`, int(w / 2), int(h / 2)))
+		cdp.call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseWheel","x":%d,"y":%d,"deltaX":0,"deltaY":1500}}`, int(w / 2), int(h / 2)))
 		time.sleep(POLL / 2)
 	}
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
 	stacked := frame_p95(dt)
 	if timed { expect(l, stacked >= 0 && stacked < DIFF_FRAME_MAX, fmt.tprintf("stacked, scrolled: 95 %% of the frames under %.1f ms", stacked)) }
-	dt_call(dt, "Toolkit.click", `{"text":"Split","index":0,"count":1,"button":"left"}`)
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	cdp.call(dt, "Toolkit.click", `{"text":"Split","index":0,"count":1,"button":"left"}`)
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
 	frame_p95(dt)
 	for _ in 0 ..< 40 {
-		dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseWheel","x":%d,"y":%d,"deltaX":0,"deltaY":-1500}}`, int(w / 2), int(h / 2)))
+		cdp.call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseWheel","x":%d,"y":%d,"deltaX":0,"deltaY":-1500}}`, int(w / 2), int(h / 2)))
 		time.sleep(POLL / 2)
 	}
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
 	split := frame_p95(dt)
 	if timed { expect(l, split >= 0 && split < DIFF_FRAME_MAX, fmt.tprintf("split, scrolled: 95 %% of the frames under %.1f ms", split)) }
 	y := int(h * 0.5)
-	dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseMoved","x":%d,"y":%d}}`, int(w * 0.62), y))
-	dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mousePressed","x":%d,"y":%d,"button":"left","buttons":1,"clickCount":1}}`, int(w * 0.62), y))
-	dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseMoved","x":%d,"y":%d,"buttons":1}}`, int(w * 0.8), y + int(h * 0.15)))
-	dt_call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseReleased","x":%d,"y":%d,"button":"left","buttons":0,"clickCount":1}}`, int(w * 0.8), y + int(h * 0.15)))
-	dt_call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
-	dt_shot(dt, LIVE_DIR + "/diff_selected.png")
-	dt_key(dt, "Escape")
-	expect(l, dt_wait_for(dt, "big.patch", STEP_LIMIT, gone = true), "Escape closes it")
+	cdp.call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseMoved","x":%d,"y":%d}}`, int(w * 0.62), y))
+	cdp.call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mousePressed","x":%d,"y":%d,"button":"left","buttons":1,"clickCount":1}}`, int(w * 0.62), y))
+	cdp.call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseMoved","x":%d,"y":%d,"buttons":1}}`, int(w * 0.8), y + int(h * 0.15)))
+	cdp.call(dt, "Input.dispatchMouseEvent", fmt.tprintf(`{{"type":"mouseReleased","x":%d,"y":%d,"button":"left","buttons":0,"clickCount":1}}`, int(w * 0.8), y + int(h * 0.15)))
+	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
+	cdp.shot(dt, LIVE_DIR + "/diff_selected.png")
+	cdp.key(dt, "Escape")
+	expect(l, cdp.wait_for(dt, "big.patch", STEP_LIMIT, gone = true), "Escape closes it")
 }
 
 @(private = "file")
@@ -332,7 +333,7 @@ scenario_password :: proc(l: ^Live) {
 	fmt.println("=== a wrong password")
 	app, started := launch(l, "password", fmt.tprintf("--url=%s", l.url), "--password=wrong-on-purpose")
 	if !started { expect(l, false, "the program answers"); return }
-	expect(l, dt_wait_for(&app.dt, "auth refused", STEP_LIMIT), "it says so")
+	expect(l, cdp.wait_for(&app.dt, "auth refused", STEP_LIMIT), "it says so")
 	close_app(l, &app)
 }
 
@@ -345,14 +346,14 @@ scenario_prompt :: proc(l: ^Live) {
 	app, started := launch(l, "prompt", fmt.tprintf("--session=%s", l.session))
 	if !started { expect(l, false, "the program answers"); return }
 	dt := &app.dt
-	expect(l, dt_wait_for(dt, "connected", STEP_LIMIT), "connected")
-	dt_key(dt, "ctrl+n")
-	expect(l, dt_wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
+	expect(l, cdp.wait_for(dt, "connected", STEP_LIMIT), "connected")
+	cdp.key(dt, "ctrl+n")
+	expect(l, cdp.wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
 	public_model(dt)   // (the server's default may be down, or private: this tests the program, not that)
-	dt_click_name(dt, "composer")
-	dt_type(dt, "Reply with the single word: ok")
-	dt_key(dt, "Enter")
-	dt_key(dt, "Enter")   // (twice: one session all the same)
+	cdp.click_name(dt, "composer")
+	cdp.type_text(dt, "Reply with the single word: ok")
+	cdp.key(dt, "Enter")
+	cdp.key(dt, "Enter")   // (twice: one session all the same)
 
 	fresh: []string
 	messages := 0
@@ -385,14 +386,14 @@ scenario_browser :: proc(l: ^Live) {
 	app, started := launch(l, "browser", fmt.tprintf("--session=%s", l.session), "--pref", "browser.tools=true", "--search=Python clock")
 	if !started { expect(l, false, "the program answers"); return }
 	dt := &app.dt
-	expect(l, dt_wait_for(dt, "connected", STEP_LIMIT), "connected")
+	expect(l, cdp.wait_for(dt, "connected", STEP_LIMIT), "connected")
 	time.sleep(TOOLS_OFFERED)   // (the socket that offers the tools opens on a thread of its own: nothing says it did)
-	dt_key(dt, "ctrl+n")
-	expect(l, dt_wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
+	cdp.key(dt, "ctrl+n")
+	expect(l, cdp.wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
 	public_model(dt)
-	dt_click_name(dt, "composer")
-	dt_type(dt, BROWSER_ASK + "Then call preview_tabs_list. Then reply with the single word: done")
-	dt_key(dt, "Enter")
+	cdp.click_name(dt, "composer")
+	cdp.type_text(dt, BROWSER_ASK + "Then call preview_tabs_list. Then reply with the single word: done")
+	cdp.key(dt, "Enter")
 
 	fresh: []string
 	begun := time.now()
@@ -404,8 +405,8 @@ scenario_browser :: proc(l: ^Live) {
 	expect(l, len(fresh) == 1, "the prompt made a session")
 	if len(fresh) != 1 { close_app(l, &app); return }
 	// away, at once: what the agent does now, it does in a session that is not shown
-	dt_key(dt, "alt+ArrowLeft")
-	expect(l, dt_wait_for(dt, "UTC flag", STEP_LIMIT), "another session is shown")
+	cdp.key(dt, "alt+ArrowLeft")
+	expect(l, cdp.wait_for(dt, "UTC flag", STEP_LIMIT), "another session is shown")
 
 	body := ""
 	done := false
@@ -418,13 +419,13 @@ scenario_browser :: proc(l: ^Live) {
 	if !strings.contains(body, "focusedTabID") { fmt.printfln("        what it said: %s", tool_words(body)) }
 	expect(l, strings.contains(body, "example.com"), "it opened the page")
 	expect(l, done, "it finished its turn")
-	expect(l, !dt_has(dt, "Example Domain"), "the session shown has not its page")
-	expect(l, !dt_wait_name(dt, "pv_url", NEVER_LIMIT), "nor a browser")
+	expect(l, !cdp.has(dt, "Example Domain"), "the session shown has not its page")
+	expect(l, !cdp.wait_name(dt, "pv_url", NEVER_LIMIT), "nor a browser")
 
-	dt_key(dt, "alt+ArrowRight")
-	expect(l, dt_wait_name(dt, "pv_url", STEP_LIMIT), "back in its session: its browser")
-	expect(l, dt_wait_for(dt, "Example Domain", STEP_LIMIT), "with its page")
-	dt_shot(dt, LIVE_DIR + "/browser_back.png")
+	cdp.key(dt, "alt+ArrowRight")
+	expect(l, cdp.wait_name(dt, "pv_url", STEP_LIMIT), "back in its session: its browser")
+	expect(l, cdp.wait_for(dt, "Example Domain", STEP_LIMIT), "with its page")
+	cdp.shot(dt, LIVE_DIR + "/browser_back.png")
 	close_app(l, &app)
 }
 
@@ -448,15 +449,15 @@ scenario_folders :: proc(l: ^Live) {
 	app, started := launch(l, "folders", fmt.tprintf("--session=%s", l.session), "--pref", "browser.tools=true", "--search=occtools other")
 	if !started { expect(l, false, "the program answers"); return }
 	dt := &app.dt
-	expect(l, dt_wait_for(dt, "connected", STEP_LIMIT), "connected")
-	expect(l, dt_wait_for(dt, "occtools other folder", STEP_LIMIT), "the other folder's session is in the list")
+	expect(l, cdp.wait_for(dt, "connected", STEP_LIMIT), "connected")
+	expect(l, cdp.wait_for(dt, "occtools other folder", STEP_LIMIT), "the other folder's session is in the list")
 	time.sleep(TOOLS_OFFERED)
-	dt_key(dt, "ctrl+n")
-	expect(l, dt_wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
+	cdp.key(dt, "ctrl+n")
+	expect(l, cdp.wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
 	public_model(dt)
-	dt_click_name(dt, "composer")
-	dt_type(dt, BROWSER_ASK + "Then run this shell command: Start-Sleep -Seconds 25. Then call preview_tabs_list. Then reply with the single word: done")
-	dt_key(dt, "Enter")
+	cdp.click_name(dt, "composer")
+	cdp.type_text(dt, BROWSER_ASK + "Then run this shell command: Start-Sleep -Seconds 25. Then call preview_tabs_list. Then reply with the single word: done")
+	cdp.key(dt, "Enter")
 	fresh: []string
 	begun := time.now()
 	for time.since(begun) < TURN_LIMIT && len(fresh) == 0 {
@@ -474,8 +475,8 @@ scenario_folders :: proc(l: ^Live) {
 		time.sleep(POLL)
 	}
 	expect(l, opened, "it opened its page and went on to its command")
-	dt_call(dt, "Toolkit.click", `{"text":"occtools other folder","index":0,"count":1,"button":"left"}`)
-	expect(l, dt_wait_for(dt, "other_folder", STEP_LIMIT), "the other folder is shown while it works")
+	cdp.call(dt, "Toolkit.click", `{"text":"occtools other folder","index":0,"count":1,"button":"left"}`)
+	expect(l, cdp.wait_for(dt, "other_folder", STEP_LIMIT), "the other folder is shown while it works")
 	done := false
 	for time.since(begun) < BROWSER_TURN_LIMIT && !done {
 		status2, text, ok := http_at(l.server, "GET", fmt.tprintf("/api/session/%s/message?%s", fresh[0], location(l)), l.auth)

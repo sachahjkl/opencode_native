@@ -187,7 +187,7 @@ every step is a command of `tools/occtools` (`help` lists them; `AGENTS.md`). Th
 | `native/occ_native` | the Rust library (C functions): ureq + rustls, image decoding (and the text backend on Linux) |
 | `src/bench_test.odin` | the heavy cases in the test's process (a long conversation, hundreds of sessions); timed with `-define:OCC_BENCH=true` ([docs/performance.md](docs/performance.md)) |
 | `site/` | the GitHub Pages site |
-| `tools/` | `occtools`, the project's machinery (`occtools help`): the build, the packages, the signed manifests, the pictures of the README and the site (`occtools shots`, over the DevTools protocol; `--linux-build` builds the Linux one in WSL with `flake.nix`), and what makes the site's pages (`occtools site build site _site`: its changelog, its classic pages, what a page says when it is shared); `doc_check` is in the toolkit |
+| `tools/` | `occtools`, the project's machinery (`occtools help`): the build, the packages, the signed manifests, the pictures of the README and the site (`occtools shots`, over the DevTools protocol; `--linux-build` builds the Linux one in WSL with `flake.nix`), and what makes the site's pages (`occtools site build site _site`: its changelog, its classic pages, what a page says when it is shared, on the toolkit's `site` package; `occtools site check` in a real browser); the DevTools client is the toolkit's `cdp` package, and `doc_check` the toolkit's `tk doc_check --root . --extra ext/gui_toolkit` |
 | `res/`, `assets/` | resources of the exe (icon, version, manifest), the logo, Lucide (`assets/fonts`, ISC) |
 
 ## License
