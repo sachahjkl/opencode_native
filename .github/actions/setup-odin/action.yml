@@ -13,7 +13,7 @@ runs:
       run: |
         $zip = Join-Path $env:RUNNER_TEMP "odin-$env:ODIN_TAG.zip"
         $ProgressPreference = 'SilentlyContinue'
-        Invoke-WebRequest "https://github.com/odin-lang/Odin/releases/download/$env:ODIN_TAG/odin-windows-amd64-$env:ODIN_TAG.zip" -OutFile $zip
+        Invoke-WebRequest "https://github.com/odin-lang/Odin/releases/download/$env:ODIN_TAG/odin-windows-amd64-$env:ODIN_TAG.zip" -OutFile $zip -MaximumRetryCount 8 -RetryIntervalSec 15
         # (.NET, not Get-FileHash: the cmdlet was "not recognized" in a runner's step)
         $h = [Security.Cryptography.SHA256]::Create()
         $s = [IO.File]::OpenRead($zip)
