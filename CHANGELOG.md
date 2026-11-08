@@ -5,6 +5,8 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-11-08
+
 ### Changed
 
 - **Updates: the toolkit's update package.** The checks of a signed manifest and the placement of the new program are gui_toolkit's `update` package, shared with Wren; `src/update` keeps what opencode native is to it (its name, its signing context, its key). Manifests and signatures are the same bytes as before.
@@ -824,7 +826,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.19.1...HEAD
+[0.19.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.19.1
 [0.19.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.19.0
 [0.18.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.4
 [0.18.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.3
