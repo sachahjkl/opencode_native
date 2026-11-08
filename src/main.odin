@@ -547,7 +547,7 @@ WEIGHT_MONO_BOLD :: 700
 WEIGHT_UI_BOLD   :: 600
 WEIGHT_REGULAR   :: 400
 
-// --font-dir=<folder>: faces tried from files, nothing installed (tools/font_proposals.mjs): ui, ui-bold, ui-italic,
+// --font-dir=<folder>: faces tried from files, nothing installed (occtools font_proposals): ui, ui-bold, ui-italic,
 // ui-bold-italic, mono, mono-bold and, for the answers when they are another family than the interface, prose, prose-bold,
 // prose-italic, prose-bold-italic (.ttf). A file that is not there leaves what the preferences gave.
 @(private = "file")

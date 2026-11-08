@@ -1,7 +1,7 @@
 package occtools
 
 // A client of the toolkit's devtools (Chrome DevTools Protocol, the toolkit's devtools package): one connection for a whole run.
-// What ext/gui_toolkit/tools/cdp_client.mjs does, without a process per gesture.
+// What the toolkit's tools/cdp_client.mjs does, without a process per gesture.
 
 import "core:encoding/base64"
 import "core:encoding/json"

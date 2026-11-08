@@ -5,7 +5,7 @@ package occ
 // The tests check what each case must do; with -define:OCC_BENCH=true they also run BENCH_FRAMES frames of each and print
 // the medians of the frame's steps (docs/performance.md: how they are compared).
 //
-//   odin test src -collection:gt=ext/gui_toolkit -o:speed -define:OCC_BENCH=true -define:ODIN_TEST_THREADS=1
+//   odin test src -collection:gt=ext/gui_toolkit/src -o:speed -define:OCC_BENCH=true -define:ODIN_TEST_THREADS=1
 
 import "base:runtime"
 import "core:encoding/json"

@@ -34,7 +34,7 @@ jobs:
           submodules: true   # (occtools signs with the toolkit's update package)
       - uses: actions/configure-pages@v6
       - uses: ./.github/actions/setup-odin-tools
-      - run: mkdir -p build && odin build tools/occtools -collection:gt=ext/gui_toolkit -out:build/occtools
+      - run: mkdir -p build && odin build tools/occtools -collection:gt=ext/gui_toolkit/src -out:build/occtools
       - run: build/occtools site build site _site
       - uses: actions/upload-pages-artifact@v5
         with:

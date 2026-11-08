@@ -1,6 +1,6 @@
 // occtools: the project's machinery, one program: the same steps on Windows and Linux, whatever the shell.
-//   odin build tools/occtools -out:build/occtools.exe
-//   build\occtools help
+//   odin run tools/occtools -collection:gt=ext/gui_toolkit/src -out:build/occtools -- <command>   (build.sh and build.bat: its shortcuts)
+//   odin run tools/occtools -collection:gt=ext/gui_toolkit/src -out:build/occtools -- help
 // What it needs is on the path: git, odin, cargo, curl, tar; gh for what is published.
 package occtools
 
@@ -28,12 +28,18 @@ COMMANDS :: [?]Command{
 	{name = "measure", about = "[find] [--runs n] [--exe file]: the start and the memory of the real program, or a file search; the figures that may be published", run = run_measure},
 	{name = "film", about = "prepare | all | <scene>: the program filmed from inside, its own frames, into build/film", run = run_film},
 	{name = "ship", about = "<version> [--dry-run]: from branch release/<version>: CI, tag, release, master, the site, each after the last one's success", run = run_ship},
+	{name = "release", about = "dist <tag> | publish <tag> <folder>: what the release workflow does: this system's files and signed manifests; the GitHub release and the beta channel", run = run_release},
+	{name = "fonts_check", about = "<program>: every font of assets/fonts is in the program, byte for byte", run = run_fonts_check},
+	{name = "font_proposals", about = "[--only id,id] [--toolkit folder] [--exe file]: typefaces tried in the real client, their pictures (shots --font-dir)", run = run_font_proposals},
+	{name = "wsl_build", about = "[folder]: (Linux) this tree copied to a Linux folder and built there, for shots --linux-build", run = run_wsl_build},
+	{name = "wsl_client", about = "<relay> <program> [arguments]: (Linux) the program on Windows' opencode server, for shots --linux", run = run_wsl_client},
+	{name = "relay", about = "<host> <port>: a TCP connection on stdin and stdout (Windows' 127.0.0.1 for a program in WSL)", run = run_relay},
 	{name = "site", about = "build|changelog|meta <site> <out> | card | check [--site folder] [--shot file.png] [--browser program]: the site's pages from site/ and CHANGELOG.md, what is published; the sharing card; the pages in a real browser, served on this machine", run = run_site},
 }
 
 main :: proc() {
 	if len(os.args) < 2 || os.args[1] == "help" || os.args[1] == "-h" || os.args[1] == "--help" { usage(); return }
-	// (a copy of the tree has no .git: tools/wsl_build.sh builds from one, in the folder it starts in)
+	// (a copy of the tree has no .git: occtools wsl_build builds from one, in the folder it starts in)
 	if !os.exists(ROOT_MARK) {
 		root, ok := capture("git", "rev-parse", "--show-toplevel")
 		if !ok { fmt.eprintln("occtools: not in the repository"); os.exit(EXIT_USAGE) }

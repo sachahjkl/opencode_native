@@ -19,8 +19,6 @@ jobs:
     defaults:
       run:
         shell: pwsh
-    outputs:
-      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -28,32 +26,15 @@ jobs:
 
       - uses: ./.github/actions/setup-odin
 
-      - name: Check the version
-        id: version
-        run: |
-          $tag = '${{ github.ref_name }}'
-          $m = Select-String -Path src\setup.odin -Pattern 'APP_VERSION\s*::\s*"([^"]+)"'
-          $v = $m.Matches[0].Groups[1].Value
-          if (($tag -replace '-beta.*$', '') -ne "v$v") { throw "tag $tag does not match APP_VERSION $v (src/setup.odin)" }
-          "version=$v" >> $env:GITHUB_OUTPUT
-
       - name: Build (build.bat)
         shell: cmd
         run: call build.bat release
 
-      - name: Package
-        run: build/occtools package ${{ steps.version.outputs.version }}
-
-      - name: Sign the update
+      # the tag must be APP_VERSION's; the files and the signed manifests of the channels
+      - name: Package and sign (occtools release dist)
         env:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
-        run: |
-          $v = '${{ steps.version.outputs.version }}'
-          $channels = '${{ github.ref_name }}' -match '-beta' ? @('beta') : @('stable', 'beta')
-          foreach ($c in $channels) {
-            build/occtools update manifest "build/dist/opencode-native-$v-windows-x64.exe" $v $c "build/dist/update-windows-x64-$c.json"
-            if ($LASTEXITCODE) { throw "the $c manifest could not be signed" }
-          }
+        run: build/occtools release dist ${{ github.ref_name }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -74,21 +55,10 @@ jobs:
       - name: Build (build.sh)
         run: ./build.sh release
 
-      # (the version without its -beta.N, as the Windows job checks it)
-      - name: Package
-        run: |
-          v="${GITHUB_REF_NAME#v}"; v="${v%%-beta*}"
-          build/occtools package "$v"
-
-      - name: Sign the update
+      - name: Package and sign (occtools release dist)
         env:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
-        run: |
-          v="${GITHUB_REF_NAME#v}"; v="${v%%-beta*}"
-          case "$GITHUB_REF_NAME" in *-beta*) channels="beta" ;; *) channels="stable beta" ;; esac
-          for c in $channels; do
-            build/occtools update manifest "build/dist/opencode-native-$v-linux-x64" "$v" "$c" "build/dist/update-linux-x64-$c.json"
-          done
+        run: build/occtools release dist ${{ github.ref_name }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -102,33 +72,19 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true   # (occtools reads the toolkit's update package)
+
+      - uses: ./.github/actions/setup-odin-tools
+
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
 
-      - name: Publish
+      - name: Publish (occtools release publish)
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
-          VERSION: ${{ needs.windows.outputs.version }}
-        run: |
-          cd dist
-          rm -f SHA256SUMS.txt
-          sha256sum opencode-native-* > SHA256SUMS.txt
-          cat SHA256SUMS.txt
-          files=(opencode-native-* SHA256SUMS.txt update-windows-x64-* update-linux-x64-*)
-          pre=()
-          case "$TAG" in *-beta*) pre=(--prerelease) ;; esac
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "${files[@]}" --clobber
-          else
-            printf '\n---\n\nAn independent project: not built by the OpenCode team, and not affiliated with them.\n' >> NOTES.md
-          gh release create "$TAG" "${files[@]}" "${pre[@]}" --title "opencode native $VERSION" --notes-file NOTES.md
-          fi
-          # the beta channel's fixed address: the program and its signed manifest
-          beta=(opencode-native-*-windows-x64.exe update-windows-x64-beta.json update-windows-x64-beta.json.sig
-                opencode-native-*-linux-x64 update-linux-x64-beta.json update-linux-x64-beta.json.sig)
-          gh release view channel-beta >/dev/null 2>&1 || gh release create channel-beta --prerelease --title "Beta channel" --notes "What the beta channel of the updater reads."
-          gh release upload channel-beta "${beta[@]}" --clobber
+        run: odin run tools/occtools -collection:gt=ext/gui_toolkit/src -out:build/occtools -- release publish ${{ github.ref_name }} dist

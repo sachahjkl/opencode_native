@@ -138,7 +138,7 @@ TLS is rustls, checked against the system's trust store.
 | `--scale=<factor>` | the interface's scale whatever the screen's (`1`: 100 %; screenshots) |
 | `--size=<w>x<h>` | the window's size in pixels (screenshots) |
 | `--image=<file>` | open the image viewer on a file |
-| `--font-dir=<folder>` | try faces from files, nothing installed (`tools/font_proposals.mjs`) |
+| `--font-dir=<folder>` | try faces from files, nothing installed (`occtools font_proposals`) |
 | `--pref name=value` | set a preference for the run (names in Settings, e.g. `appearance.theme=Nord`) |
 | `--settings[=n]` | open the settings at start (on page n) |
 | `--frames=N` | N frames of a hidden window, then exit (a check that it runs; it says how long the first frame took) |
@@ -163,7 +163,8 @@ since a program on this computer can then type into a session.
 clang, fontconfig's headers and Rust (stable), then `./build.sh`. At run time: Vulkan, libxkbcommon, fontconfig, and
 Wayland or X11; libxcb-cursor for the theme's cursors on X11, an emoji font for color emoji.
 
-Both build `tools/occtools` and let it do the rest (`occtools help`): the Rust library first (nothing when it is up to date; crates pinned by
+Both are shortcuts of `odin run tools/occtools -collection:gt=ext/gui_toolkit/src -out:build/occtools -keep-executable -- build`:
+every step is a command of `tools/occtools` (`help` lists them; `AGENTS.md`). The build makes the Rust library first (nothing when it is up to date; crates pinned by
 `native/Cargo.lock`; on Linux it carries the toolkit's text backend), then the program. The toolkit is the submodule
 `ext/gui_toolkit`; `GT=<folder>` builds against another copy, `OUT=<file>` writes the program elsewhere.
 

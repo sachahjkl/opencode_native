@@ -21,11 +21,11 @@ run_check :: proc(args: []string) -> int {
 	if os.exists(VT_HEADERS) && vt_run(VT_HEADERS, true) != 0 { return 1 }
 	// (one test with a window at a time: testkit/session says so; on Linux the program's own flags)
 	tests := make([dynamic]string, context.temp_allocator)
-	append(&tests, "odin", "test", "src", fmt.tprintf("-collection:gt=%s", GT_DEFAULT), "-out:build/test" + EXE, "-define:ODIN_TEST_THREADS=1")
+	append(&tests, "odin", "test", "src", gt_collection(GT_DEFAULT), "-out:build/test" + EXE, "-define:ODIN_TEST_THREADS=1")
 	when ODIN_OS != .Windows { flags := LINUX_FLAGS; append(&tests, ..flags[:]) }
 	if !run(..tests[:]) { return 1 }
-	if !run("odin", "test", "src/update", fmt.tprintf("-collection:gt=%s", GT_DEFAULT), "-out:build/update_test" + EXE) { return 1 }
-	if !run("odin", "test", "tools/occtools", fmt.tprintf("-collection:gt=%s", GT_DEFAULT), "-out:build/occtools_test" + EXE) { return 1 }
+	if !run("odin", "test", "src/update", gt_collection(GT_DEFAULT), "-out:build/update_test" + EXE) { return 1 }
+	if !run("odin", "test", "tools/occtools", gt_collection(GT_DEFAULT), "-out:build/occtools_test" + EXE) { return 1 }
 	if !run_in({dir = "native/occ_native"}, "cargo", "test", "--release", "--locked", "--target-dir", RUST_TEST_DIR) { return 1 }
 
 	before, had := os.modification_time_by_path(out)

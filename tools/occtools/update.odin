@@ -60,7 +60,7 @@ keygen :: proc(path: string) -> int {
 	return 0
 }
 
-@(private = "file")
+// A manifest of the release file `exe` for `channel`, and its signature, by $UPDATE_SIGNING_KEY (release dist).
 manifest :: proc(exe, version, channel, out: string) -> int {
 	seed, ok := seed_of_env()
 	if !ok { return 1 }

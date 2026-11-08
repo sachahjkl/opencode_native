@@ -10,8 +10,8 @@ package occtools
 //     --session      the session to show (only ever one made for pictures: they are published)
 //     --work-session the one that edits a file and keeps a todo list (made for pictures too)
 //     --font-dir     tries these faces (src/main.odin: fonts_from_dir)
-//     --linux        just linux.png: this Linux build of the program, run in WSL (tools/wsl_client.sh), Windows only
-//     --linux-build  the same from this tree, built in WSL with the flake (tools/wsl_build.sh): no release needed
+//     --linux        just linux.png: this Linux build of the program, run in WSL (occtools wsl_client), Windows only
+//     --linux-build  the same from this tree, built in WSL with the flake (occtools wsl_build): no release needed
 
 import "core:encoding/json"
 import "core:fmt"
@@ -330,10 +330,20 @@ wsl_path :: proc(path: string) -> string {
 	return ok ? strings.trim_space(out) : ""
 }
 
+// A command of this tool in WSL, from this tree, in the flake's shell (bash -l: the login's PATH, where nix is).
+@(private = "file")
+wsl_occtools :: proc(command: string, args: ..string) -> []string {
+	line := fmt.tprintf("nix develop -c odin run tools/occtools %s -out:build/occtools-linux -- %s", gt_collection(GT_DEFAULT), command)
+	for a in args { line = fmt.tprintf("%s '%s'", line, a) }
+	out := make([]string, 7, context.temp_allocator)
+	out[0], out[1], out[2], out[3], out[4], out[5], out[6] = "wsl.exe", "--cd", wsl_path("."), "--exec", "bash", "-lc", line
+	return out
+}
+
 // The program of this tree, built in Linux: the last line of what the build says is where it is.
 @(private = "file")
 wsl_build :: proc() -> (program: string, ok: bool) {
-	out, built := capture("wsl.exe", "--exec", "bash", "-l", wsl_path("tools/wsl_build.sh"))
+	out, built := capture(..wsl_occtools("wsl_build"))
 	if !built { fmt.eprintln(out[max(0, len(out) - 2000):]); return }
 	lines := strings.split_lines(strings.trim_space(out), context.temp_allocator)
 	last := lines[len(lines) - 1]
@@ -348,7 +358,8 @@ start_linux :: proc(s: ^Shots, args: []string) -> (app: App, ok: bool) {
 	defer os.close(log)
 	program := strings.has_prefix(s.linux, "/") ? s.linux : wsl_path(s.linux)
 	cmd := make([dynamic]string, context.temp_allocator)
-	append(&cmd, "wsl.exe", "--exec", "bash", "-l", wsl_path("tools/wsl_client.sh"), program)
+	exe, _ := os.get_executable_path(context.temp_allocator)   // (this tool, for Windows: the relay in WSL runs it)
+	append(&cmd, ..wsl_occtools("wsl_client", wsl_path(exe), program))
 	append(&cmd, ..args)
 	env := env_with({"TOOLKIT_DEVTOOLS", "OC_PORT", "OC_PASSWORD", "WSLENV"}, fmt.tprintf("TOOLKIT_DEVTOOLS=%d", WSL_PORT), fmt.tprintf("OC_PORT=%d", s.live.server.port), fmt.tprintf("OC_PASSWORD=%s", s.live.password), "WSLENV=TOOLKIT_DEVTOOLS:OC_PORT:OC_PASSWORD")
 	p, start_err := os.process_start({command = cmd[:], env = env, stdout = log, stderr = log})

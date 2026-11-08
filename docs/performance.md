@@ -12,7 +12,7 @@ the sessions it shows and the last one once scrolled to it, typing and streaming
 `-define:OCC_BENCH=true` it runs 300 frames of each case on the GPU and prints the medians of the frame's steps
 (`App.times`: the builds, the drawing into the draw lists, the submission):
 
-    odin build src -build-mode:test -collection:gt=ext/gui_toolkit -o:speed -define:OCC_BENCH=true -define:ODIN_TEST_THREADS=1 -out:build/bench.exe
+    odin build src -build-mode:test -collection:gt=ext/gui_toolkit/src -o:speed -define:OCC_BENCH=true -define:ODIN_TEST_THREADS=1 -out:build/bench.exe
     build\bench.exe
 
 | case | what each frame does |
@@ -37,7 +37,7 @@ With `-define:OCC_PROFILE=true` (and `-debug`) the bench also samples its own th
 case the functions samples fell in, those on the stack, and the five last frames of the commonest stacks. The GPU's time of
 each step comes from `render.set_gpu_profile`.
 
-    odin build src -build-mode:test -collection:gt=ext/gui_toolkit -o:speed -debug -define:OCC_BENCH=true -define:OCC_PROFILE=true -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_NAMES=occ.a_long_conversation_builds_what_is_seen -out:build/bench.exe
+    odin build src -build-mode:test -collection:gt=ext/gui_toolkit/src -o:speed -debug -define:OCC_BENCH=true -define:OCC_PROFILE=true -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_NAMES=occ.a_long_conversation_builds_what_is_seen -out:build/bench.exe
 
 An offscreen window has no frame slots: the bench's frames go back to back. Slept through 16 ms between frames, the same work measures
 about twice as long, its caches cold and the clock down: that is the machine, not the frame. On a real screen expect the higher number.

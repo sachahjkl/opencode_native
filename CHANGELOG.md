@@ -5,6 +5,10 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+
+- **Every step is a command of `tools/occtools`**: `release dist` and `release publish` (what the release workflow's scripts did), `fonts_check`, `font_proposals`, `wsl_build`, `wsl_client` and `relay` in place of tools/*.mjs and tools/wsl_*.sh, which are gone; `build.sh` and `build.bat` are shortcuts of `occtools build`. The toolkit's packages are in `ext/gui_toolkit/src` (gui_toolkit 0.101.0). AGENTS.md replaces CLAUDE.md.
+
 ## [0.20.0] - 2026-11-08
 
 ### Added

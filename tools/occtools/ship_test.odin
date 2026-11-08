@@ -42,3 +42,11 @@ a_manifest_says_its_version :: proc(t: ^testing.T) {
 	testing.expect_value(t, manifest_version(`{"channel":"stable","version":"0.15.1","size":3}`), "0.15.1")
 	testing.expect_value(t, manifest_version("<html>"), "")
 }
+
+@(test)
+a_tag_says_its_version_and_whether_it_is_a_beta :: proc(t: ^testing.T) {
+	v, beta := tag_version("v0.20.0")
+	testing.expect(t, v == "0.20.0" && !beta)
+	v, beta = tag_version("v0.21.0-beta.2")
+	testing.expect(t, v == "0.21.0" && beta)
+}

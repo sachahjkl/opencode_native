@@ -231,11 +231,14 @@ odin_is_pinned :: proc(odin: string) -> bool {
 
 // The toolkit: the one asked for, else the submodule, else a copy beside this repository.
 toolkit_folder :: proc(asked: string) -> (gt: string, ok: bool) {
-	if asked != "" { return asked, os.exists(fmt.tprintf("%s/ui", asked)) }
-	if os.exists(GT_DEFAULT + "/ui") { return GT_DEFAULT, true }
-	if os.exists(GT_BESIDE + "/ui") { return GT_BESIDE, true }
+	if asked != "" { return asked, os.exists(fmt.tprintf("%s/src/ui", asked)) }
+	if os.exists(GT_DEFAULT + "/src/ui") { return GT_DEFAULT, true }
+	if os.exists(GT_BESIDE + "/src/ui") { return GT_BESIDE, true }
 	return "", false
 }
+
+// The collection of the toolkit at `gt` (its packages are in its src folder).
+gt_collection :: proc(gt: string) -> string { return fmt.tprintf("-collection:gt=%s/src", gt) }
 
 build_program :: proc(b: Build) -> bool {
 	gt, found := toolkit_folder(b.gt)
@@ -248,7 +251,7 @@ build_program :: proc(b: Build) -> bool {
 	if !make_folder(filepath.dir(out)) { return false }
 
 	cmd := make([dynamic]string, context.temp_allocator)
-	append(&cmd, odin, "build", "src", fmt.tprintf("-collection:gt=%s", gt), fmt.tprintf("-out:%s", out), "-vet")
+	append(&cmd, odin, "build", "src", gt_collection(gt), fmt.tprintf("-out:%s", out), "-vet")
 	when ODIN_OS == .Windows {
 		if !write_version_header() { return false }
 		// (the C runtime linked in: no vcruntime140.dll to ship)
