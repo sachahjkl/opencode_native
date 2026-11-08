@@ -4,6 +4,14 @@ description: Odin dev-2026-11a (pinned by SHA-256) on the PATH, and the MSVC x64
 runs:
   using: composite
   steps:
+    # (the archive kept between runs, keyed by this file, which names the version: GitHub's release downloads may not answer for
+    # an hour, a 504 at each try. Its SHA-256 is checked below, whether it came from the cache or the download)
+    - name: Odin's archive, cached
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}/odin-archive
+        key: odin-archive-${{ runner.os }}-${{ hashFiles('.github/actions/setup-odin/action.yml') }}
+
     - name: Odin dev-2026-11a
       shell: pwsh
       env:
@@ -11,9 +19,11 @@ runs:
         ODIN_TAG: dev-2026-11a
         ODIN_SHA256: 259effedf2997293c8fa4a5e497496f8ebce9f826652d9dd353a9dd2113c31fd
       run: |
-        $zip = Join-Path $env:RUNNER_TEMP "odin-$env:ODIN_TAG.zip"
+        $kept = Join-Path $env:RUNNER_TEMP 'odin-archive'
+        New-Item -ItemType Directory -Force $kept | Out-Null
+        $zip = Join-Path $kept "odin-windows-amd64-$env:ODIN_TAG.zip"
         $ProgressPreference = 'SilentlyContinue'
-        Invoke-WebRequest "https://github.com/odin-lang/Odin/releases/download/$env:ODIN_TAG/odin-windows-amd64-$env:ODIN_TAG.zip" -OutFile $zip -MaximumRetryCount 8 -RetryIntervalSec 15
+        if (-not (Test-Path $zip)) { Invoke-WebRequest "https://github.com/odin-lang/Odin/releases/download/$env:ODIN_TAG/odin-windows-amd64-$env:ODIN_TAG.zip" -OutFile $zip -MaximumRetryCount 8 -RetryIntervalSec 15 }
         # (.NET, not Get-FileHash: the cmdlet was "not recognized" in a runner's step)
         $h = [Security.Cryptography.SHA256]::Create()
         $s = [IO.File]::OpenRead($zip)
