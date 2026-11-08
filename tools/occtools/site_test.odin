@@ -260,3 +260,13 @@ the_download_links_name_the_last_version :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(index, "/releases/download/v{{version}}/opencode-native-{{version}}-windows-x64.exe"), "Windows: the release's file")
 	testing.expect(t, strings.contains(index, "/releases/download/v{{version}}/opencode-native-{{version}}-linux-x64.tar.gz"), "Linux: the release's file")
 }
+
+// A link of the classic pages says its button's text, not its markup.
+@(test)
+a_buttons_text_without_its_markup :: proc(t: ^testing.T) {
+	testing.expect_value(t, plain_label("Source on GitHub"), "Source on GitHub")
+	testing.expect_value(t, plain_label(`<span class="i"><svg viewBox="0 0 24 24"><path d="M3 12"/></svg></span> <span class="t"><span>Download for Windows</span>
+  <span>v1.2.3 · x64 · .exe</span></span>`), "Download for Windows v1.2.3 · x64 · .exe")
+	// a download button: what it does (the file is the download section's)
+	testing.expect_value(t, plain_label(`<span class="get-icon"><svg/></span> <span class="get-text"><span class="get-main" data-x="y">Download for Windows</span> <span class="get-sub">v1.2.3 · x64 · .exe</span></span>`), "Download for Windows")
+}

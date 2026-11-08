@@ -151,3 +151,6 @@ html.lightbox-open { overflow: hidden; }
 .release .rel { margin-left: 0.6rem; font-family: var(--font-body); }
 .release h3 { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0.6rem 0 0.2rem; }
 .release li { overflow-wrap: anywhere; }
+
+/* a download button of the modern page, as a plain link: what it does (the files are named above it) */
+.get-icon, .get-sub { display: none; }

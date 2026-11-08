@@ -839,6 +839,31 @@ action_links :: proc(html: string) -> []Link {
 	return out[:]
 }
 
+// The text of a link's content: its markup gone (a button's logo, the spans of its lines), a space where a tag was, one space
+// between words. A download button says what it does (its get-main): the files are the download section's, as plain links.
+plain_label :: proc(label: string) -> string {
+	html := label
+	MAIN :: `class="get-main"`
+	if at := strings.index(html, MAIN); at >= 0 {
+		open := strings.index_byte(html[at:], '>')
+		close := open < 0 ? -1 : strings.index(html[at + open:], "</span>")
+		if close >= 0 { html = html[at + open + 1:at + open + close] }
+	}
+	b := strings.builder_make(context.temp_allocator)
+	space := false
+	for i := 0; i < len(html); i += 1 {
+		c := html[i]
+		if c == '<' {
+			if close := strings.index_byte(html[i:], '>'); close >= 0 { i += close; space = true; continue }
+		}
+		if c == ' ' || c == '\n' || c == '\t' || c == '\r' { space = true; continue }
+		if space && strings.builder_len(b) > 0 { strings.write_byte(&b, ' ') }
+		space = false
+		strings.write_byte(&b, c)
+	}
+	return strings.to_string(b)
+}
+
 Classic_Frame :: struct {
 	icon, logo, title, tagline: string,
 	nav:                        []Link,
@@ -986,7 +1011,7 @@ make_pages :: proc(index: string, releases: []^Release) -> (pages: []Page, why: 
 <p class="download">`)
 	for link, i in action_links(between(hero, `<div class="actions">`, "</div>")) {
 		if i > 0 { strings.write_string(&home_main, " - ") }
-		put(&home_main, `<a href="`, classic_link(link.href), `">`, link.label, "</a>")
+		put(&home_main, `<a href="`, classic_link(link.href), `">`, plain_label(link.label), "</a>")
 	}
 	put(&home_main, `
 <br><span class="small">`, inner(between(hero, `<p class="small">`, "</p>")), `</span></p>
