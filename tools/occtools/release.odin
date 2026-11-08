@@ -16,6 +16,7 @@ import "core:slice"
 import "core:strings"
 import update "gt:update"
 import occ_update "../../src/update"
+import toolbox "gt:toolbox"
 
 run_release :: proc(args: []string) -> int {
 	switch {
@@ -83,13 +84,13 @@ release_publish :: proc(tag, folder: string) -> int {
 	append(&files, ..programs[:])
 	append(&files, "SHA256SUMS.txt")
 	append(&files, ..manifests[:])
-	in_folder := Run{dir = folder}
-	if _, exists := capture("gh", "release", "view", tag); exists {
+	in_folder := toolbox.Run{dir = folder, echo = true}
+	if _, code := toolbox.capture({"gh", "release", "view", tag}); code == 0 {
 		cmd := make([dynamic]string, context.temp_allocator)
 		append(&cmd, "gh", "release", "upload", tag)
 		append(&cmd, ..files[:])
 		append(&cmd, "--clobber")
-		if !run_in(in_folder, ..cmd[:]) { return 1 }
+		if !toolbox.run(cmd[:], in_folder) { return 1 }
 	} else {
 		notes := fmt.tprintf("%s/NOTES.md", folder)
 		text := read_text(notes)
@@ -99,19 +100,19 @@ release_publish :: proc(tag, folder: string) -> int {
 		append(&cmd, ..files[:])
 		if beta { append(&cmd, "--prerelease") }
 		append(&cmd, "--title", fmt.tprintf("opencode native %s", version), "--notes-file", "NOTES.md")
-		if !run_in(in_folder, ..cmd[:]) { return 1 }
+		if !toolbox.run(cmd[:], in_folder) { return 1 }
 	}
 
 	// the beta channel's fixed address: the programs and their beta manifests
 	beta_files := make([dynamic]string, context.temp_allocator)
 	for name in programs { if !strings.has_suffix(name, ".tar.gz") { append(&beta_files, name) } }
 	for name in manifests { if strings.contains(name, "-beta.json") { append(&beta_files, name) } }
-	if _, exists := capture("gh", "release", "view", BETA_RELEASE); !exists {
+	if _, code := toolbox.capture({"gh", "release", "view", BETA_RELEASE}); code != 0 {
 		if !run("gh", "release", "create", BETA_RELEASE, "--prerelease", "--title", "Beta channel", "--notes", "What the beta channel of the updater reads.") { return 1 }
 	}
 	cmd := make([dynamic]string, context.temp_allocator)
 	append(&cmd, "gh", "release", "upload", BETA_RELEASE)
 	append(&cmd, ..beta_files[:])
 	append(&cmd, "--clobber")
-	return run_in(in_folder, ..cmd[:]) ? 0 : 1
+	return toolbox.run(cmd[:], in_folder) ? 0 : 1
 }

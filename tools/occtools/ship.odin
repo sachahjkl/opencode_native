@@ -4,6 +4,7 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:strings"
 import "core:time"
+import toolbox "gt:toolbox"
 
 RUN_FOUND_TRIES :: 40
 RUN_FOUND_WAIT  :: 3 * time.Second   // (GitHub says nothing of a run for some seconds: the only wait here, and it is theirs)
@@ -67,7 +68,7 @@ manifest_version :: proc(text: string) -> string {
 @(private = "file")
 find_run :: proc(workflow, sha: string) -> string {
 	for _ in 0 ..< RUN_FOUND_TRIES {
-		if list, ok := capture("gh", "run", "list", "--workflow", workflow, "--limit", "10", "--json", "databaseId,headSha"); ok {
+		if list, code := toolbox.capture({"gh", "run", "list", "--workflow", workflow, "--limit", "10", "--json", "databaseId,headSha"}); code == 0 {
 			if id := run_of_sha(list, sha); id != 0 { return fmt.tprint(id) }
 		}
 		time.sleep(RUN_FOUND_WAIT)
@@ -84,7 +85,7 @@ watch :: proc(id: string) -> bool { return run("gh", "run", "watch", id, "--inte
 watch_release :: proc(id: string) -> bool {
 	for try in 1 ..= RELEASE_TRIES {
 		if watch(id) { return true }
-		why, _ := capture("gh", "run", "view", id, "--log-failed")
+		why, _ := toolbox.capture({"gh", "run", "view", id, "--log-failed"})
 		if !strings.contains(why, "error: 50") && !strings.contains(why, "returned error: 5") { return false }
 		if try == RELEASE_TRIES || !run("gh", "run", "rerun", id, "--failed") { return false }
 		time.sleep(RUN_FOUND_WAIT)
@@ -99,12 +100,12 @@ deploy_site :: proc(sha: string) -> bool {
 	if pages != "" && watch(pages) { return true }
 	for try in 2 ..= SITE_TRIES {
 		time.sleep(SITE_WAIT)
-		list, _ := capture("gh", "run", "list", "--workflow", "pages.yml", "--limit", "1", "--json", "databaseId,headSha")
+		list, _ := toolbox.capture({"gh", "run", "list", "--workflow", "pages.yml", "--limit", "1", "--json", "databaseId,headSha"})
 		last := run_of_sha(list, sha)
 		if !run("gh", "workflow", "run", "pages.yml", "--ref", "master") { continue }
 		for _ in 0 ..< RUN_FOUND_TRIES {
 			time.sleep(RUN_FOUND_WAIT)
-			now, _ := capture("gh", "run", "list", "--workflow", "pages.yml", "--limit", "1", "--json", "databaseId,headSha")
+			now, _ := toolbox.capture({"gh", "run", "list", "--workflow", "pages.yml", "--limit", "1", "--json", "databaseId,headSha"})
 			id := run_of_sha(now, sha)
 			if id != 0 && id != last {
 				if watch(fmt.tprint(id)) { return true }
@@ -131,17 +132,17 @@ run_ship :: proc(args: []string) -> int {
 	if version == "" { fmt.eprintln("ship <version> [--dry-run]"); return EXIT_USAGE }
 	tag := fmt.tprintf("v%s", version)
 
-	branch, _ := capture("git", "branch", "--show-current")
+	branch, _ := toolbox.capture({"git", "branch", "--show-current"})
 	branch = strings.trim_space(branch)
 	if why := not_ready(version, branch, read_text("src/setup.odin"), read_text("CHANGELOG.md"), read_text("README.md")); why != "" { return stop(why) }
-	dirty, _ := capture("git", "status", "--porcelain")
+	dirty, _ := toolbox.capture({"git", "status", "--porcelain"})
 	if strings.trim_space(dirty) != "" { return stop("the tree has changes that are not committed") }
 	if !run("git", "fetch", "-q", "origin") { return stop("no answer from origin") }
 	if !run("git", "merge-base", "--is-ancestor", "origin/master", "HEAD") { return stop("origin/master moved: this branch does not follow it") }
-	if _, exists := capture("git", "rev-parse", "-q", "--verify", fmt.tprintf("refs/tags/%s", tag)); exists { return stop("the tag exists") }
-	sha, _ := capture("git", "rev-parse", "HEAD")
+	if _, code := toolbox.capture({"git", "rev-parse", "-q", "--verify", fmt.tprintf("refs/tags/%s", tag)}); code == 0 { return stop("the tag exists") }
+	sha, _ := toolbox.capture({"git", "rev-parse", "HEAD"})
 	sha = strings.trim_space(sha)
-	base, _ := capture("git", "rev-parse", "origin/master")
+	base, _ := toolbox.capture({"git", "rev-parse", "origin/master"})
 	base = strings.trim_space(base)
 	fmt.printfln("ship: %s, commit %s, on master %s", version, sha[:7], base[:7])
 	if dry { fmt.println("ship: ready, nothing done"); return 0 }
@@ -152,7 +153,7 @@ run_ship :: proc(args: []string) -> int {
 	if ci == "" || !watch(ci) { return stop("CI is not green: no tag, master untouched") }
 
 	if !run("git", "fetch", "-q", "origin") { return stop("no answer from origin") }
-	now, _ := capture("git", "rev-parse", "origin/master")
+	now, _ := toolbox.capture({"git", "rev-parse", "origin/master"})
 	if strings.trim_space(now) != base { return stop("origin/master moved during CI: no tag") }
 	if !run("git", "tag", "-a", tag, "-m", fmt.tprintf("opencode native %s", version)) { return stop("no tag") }
 	if !run("git", "push", "-q", "origin", tag) { return stop("the tag was not pushed") }
@@ -169,7 +170,7 @@ run_ship :: proc(args: []string) -> int {
 	ok = run("git", "switch", "-q", "master") && ok
 	ok = run("git", "branch", "-d", branch) && ok
 
-	stable, _ := capture("gh", "release", "download", tag, "--pattern", "update-windows-x64-stable.json", "--output", "-")
+	stable, _ := toolbox.capture({"gh", "release", "download", tag, "--pattern", "update-windows-x64-stable.json", "--output", "-"})
 	served := manifest_version(stable)
 	fmt.printfln("ship: %s published, the stable manifest says %s", version, served)
 	if served != version { return stop("the stable manifest does not say this version") }

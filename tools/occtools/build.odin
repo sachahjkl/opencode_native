@@ -9,7 +9,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:slice"
 import "core:strings"
-import update "gt:update"
+import toolbox "gt:toolbox"
 
 // What the program needs on Linux, built or tested: the text backend is the toolkit's native one, inside the Rust library (no
 // DirectWrite here); wgpu-native is a second Rust library: both carry Rust's standard library, whose few unmangled symbols
@@ -119,7 +119,7 @@ native_stamp :: proc() -> string {
 	slice.sort(files[:])
 	all := strings.builder_make(context.temp_allocator)
 	for f in files { strings.write_string(&all, read_text(f)) }
-	return update.sha256_hex(transmute([]byte)strings.to_string(all), context.temp_allocator)
+	return toolbox.sha256_hex(transmute([]byte)strings.to_string(all), context.temp_allocator)
 }
 
 @(private = "file")
@@ -143,9 +143,9 @@ build_native :: proc(force: bool) -> bool {
 	target_dir := "../" + NATIVE_OUT + "/target"
 	built := false
 	when ODIN_OS == .Windows {
-		built = run_in({dir = NATIVE_DIR}, "cargo", "build", "--release", "--locked", "--target", NATIVE_TARGET, "--target-dir", target_dir)
+		built = toolbox.run({"cargo", "build", "--release", "--locked", "--target", NATIVE_TARGET, "--target-dir", target_dir}, {dir = NATIVE_DIR, echo = true})
 	} else {
-		built = run_in({dir = NATIVE_DIR}, "cargo", "build", "--release", "--locked", "--target-dir", target_dir)
+		built = toolbox.run({"cargo", "build", "--release", "--locked", "--target-dir", target_dir}, {dir = NATIVE_DIR, echo = true})
 	}
 	if !built { return false }
 	if os.copy_file(NATIVE_LIB, NATIVE_BUILT) != nil { fmt.eprintfln("build: no %s", NATIVE_BUILT); return false }
@@ -165,14 +165,7 @@ fetch_zig :: proc() -> (zig: string, ok: bool) {
 	if os.exists(relative) { return absolute, true }
 	archive := VT_OUT + "/zig" + ZIG_ARCHIVE
 	url := fmt.tprintf("https://ziglang.org/download/%s/%s%s", ZIG_VERSION, ZIG_NAME, ZIG_ARCHIVE)
-	if !run("curl", "-fsSL", "-o", archive, url) { return }
-	data, read_err := os.read_entire_file(archive, context.temp_allocator)
-	if read_err != nil { return }
-	if update.sha256_hex(data, context.temp_allocator) != ZIG_SHA256 {
-		fmt.eprintln("build: Zig: the SHA-256 does not match")
-		_ = os.remove(archive)
-		return
-	}
+	if why := toolbox.download_pinned(url, archive, ZIG_SHA256); why != "" { fmt.eprintfln("build: Zig: %s", why); return }
 	if !run("tar", "-xf", archive, "-C", VT_OUT) { return }
 	_ = os.remove(archive)
 	return absolute, true
@@ -194,7 +187,7 @@ build_vt :: proc(force: bool) -> bool {
 	if !run("git", "-C", VT_SOURCE, "fetch", "-q", "--depth", "1", "origin", GHOSTTY_COMMIT) { return false }
 	if !run("git", "-C", VT_SOURCE, "-c", "advice.detachedHead=false", "checkout", "-q", "--force", GHOSTTY_COMMIT) { return false }
 	// (ReleaseFast: a debug build of it is very slow. The target: the ABI of the linker Odin uses)
-	if !run_in({dir = VT_SOURCE}, zig, "build", "-Demit-lib-vt=true", "-Doptimize=ReleaseFast", "-Dtarget=" + VT_TARGET) { return false }
+	if !toolbox.run({zig, "build", "-Demit-lib-vt=true", "-Doptimize=ReleaseFast", "-Dtarget=" + VT_TARGET}, {dir = VT_SOURCE, echo = true}) { return false }
 	made := make([dynamic]string, context.temp_allocator)
 	files_under(VT_SOURCE + "/zig-out/lib", &made)
 	for f in made {
@@ -222,8 +215,8 @@ write_version_header :: proc() -> bool {
 odin_is_pinned :: proc(odin: string) -> bool {
 	if os.get_env("OCC_ANY_ODIN", context.temp_allocator) != "" { return true }
 	want := strings.trim_space(read_text("odin.version"))
-	got, ok := capture(odin, "version")
-	if ok && strings.contains(got, want) { return true }
+	got, code := toolbox.capture({odin, "version"})
+	if code == 0 && strings.contains(got, want) { return true }
 	fmt.eprintfln("This tree needs Odin %s (odin.version); found: %s", want, strings.trim_space(got))
 	fmt.eprintln("Install that release, or set OCC_ANY_ODIN=1 to build anyway.")
 	return false

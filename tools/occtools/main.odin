@@ -7,6 +7,7 @@ package occtools
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import toolbox "gt:toolbox"
 
 EXIT_USAGE :: 2
 ROOT_MARK  :: "odin.version"
@@ -42,8 +43,8 @@ main :: proc() {
 	if len(os.args) < 2 || os.args[1] == "help" || os.args[1] == "-h" || os.args[1] == "--help" { usage(); return }
 	// (a copy of the tree has no .git: occtools wsl_build builds from one, in the folder it starts in)
 	if !os.exists(ROOT_MARK) {
-		root, ok := capture("git", "rev-parse", "--show-toplevel")
-		if !ok { fmt.eprintln("occtools: not in the repository"); os.exit(EXIT_USAGE) }
+		root, code := toolbox.capture({"git", "rev-parse", "--show-toplevel"})
+		if code != 0 { fmt.eprintln("occtools: not in the repository"); os.exit(EXIT_USAGE) }
 		if os.set_working_directory(strings.trim_space(root)) != nil { fmt.eprintfln("occtools: cannot work in %s", root); os.exit(EXIT_USAGE) }
 	}
 	commands := COMMANDS

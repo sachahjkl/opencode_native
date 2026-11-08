@@ -12,6 +12,7 @@ import "core:bytes"
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import toolbox "gt:toolbox"
 
 run_fonts_check :: proc(args: []string) -> int {
 	if len(args) != 1 { fmt.eprintln("fonts_check <program>"); return EXIT_USAGE }
@@ -50,9 +51,9 @@ PROPOSALS :: [?]Proposal{
 fetch_face :: proc(family: string, weight: int, style, file: string) -> (size: int, ok: bool) {
 	if data, err := os.read_entire_file(file, context.temp_allocator); err == nil { return len(data), true }
 	url := fmt.tprintf("https://cdn.jsdelivr.net/fontsource/fonts/%s@latest/latin-%d-%s.ttf", family, weight, style)
-	code, got := capture("curl", "-sSL", "-o", file, "-w", "%{http_code}", url)
+	code, curl_code := toolbox.capture({"curl", "-sSL", "-o", file, "-w", "%{http_code}", url})
 	if strings.trim_space(code) == "404" && style == "italic" { _ = os.remove(file); return 0, true }
-	if !got || strings.trim_space(code) != "200" { _ = os.remove(file); fmt.eprintfln("%s: %s", url, code); return 0, false }
+	if curl_code != 0 || strings.trim_space(code) != "200" { _ = os.remove(file); fmt.eprintfln("%s: %s", url, code); return 0, false }
 	data, err := os.read_entire_file(file, context.temp_allocator)
 	return len(data), err == nil
 }

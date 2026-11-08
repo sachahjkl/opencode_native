@@ -13,6 +13,7 @@ project follows [semantic versioning](https://semver.org).
 - **NixOS: a classic install runs by itself.** nix-build makes a profile of the libraries the program needs (those of `flake.nix`), and the installed copy is patched to use it: no nix-ld. An update of that copy is patched the same way. The line about what nix-ld lacks is gone.
 - **The command line's report** (`--install`, `--status`) reaches the console that started a Windows copy.
 - **`occtools logo [--out folder] [--hint 0|1|2]`** draws the logo and the icon (`assets/logo*.png`, `opencode-native.ico`) on Windows and Linux, with the toolkit's paint package, in place of tools/make_logo.ps1 (GDI+, Windows only), which is gone. The same files, names and sizes; the committed ones stay (the new drawing differs from them by antialiasing only).
+- **occtools runs commands and downloads with the toolkit's `toolbox` package** (`gt:toolbox`, shared with gui_toolkit's tk and Wren's tools): running a command, capturing its output, `env_with`, the SHA-256 of bytes and files. Zig is a pinned download (curl with retries, the file removed when its SHA-256 is wrong). tools/occtools/run.odin keeps only `run`, the shorthand that shows each command before it runs. The commands and their output are the same.
 
 ## [0.20.0] - 2026-11-08
 

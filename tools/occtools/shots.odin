@@ -20,6 +20,7 @@ import "core:os"
 import "core:strings"
 import "core:time"
 import cdp "gt:cdp"
+import toolbox "gt:toolbox"
 
 SHOTS_EXE   :: "build/screenshots" + EXE
 SHOTS_DOCS  :: "docs/screenshots"
@@ -327,8 +328,8 @@ wanted :: proc(p: Picture, only: []string, linux: bool) -> bool {
 wsl_path :: proc(path: string) -> string {
 	absolute, err := os.get_absolute_path(path, context.temp_allocator)
 	if err != nil { return "" }
-	out, ok := capture("wsl.exe", "--exec", "wslpath", "-a", strings.concatenate({absolute}, context.temp_allocator))
-	return ok ? strings.trim_space(out) : ""
+	out, code := toolbox.capture({"wsl.exe", "--exec", "wslpath", "-a", strings.concatenate({absolute}, context.temp_allocator)})
+	return code == 0 ? strings.trim_space(out) : ""
 }
 
 // A command of this tool in WSL, from this tree, in the flake's shell (bash -l: the login's PATH, where nix is).
@@ -344,8 +345,8 @@ wsl_occtools :: proc(command: string, args: ..string) -> []string {
 // The program of this tree, built in Linux: the last line of what the build says is where it is.
 @(private = "file")
 wsl_build :: proc() -> (program: string, ok: bool) {
-	out, built := capture(..wsl_occtools("wsl_build"))
-	if !built { fmt.eprintln(out[max(0, len(out) - 2000):]); return }
+	out, code := toolbox.capture(wsl_occtools("wsl_build"))
+	if code != 0 { fmt.eprintln(out[max(0, len(out) - 2000):]); return }
 	lines := strings.split_lines(strings.trim_space(out), context.temp_allocator)
 	last := lines[len(lines) - 1]
 	return last, strings.has_prefix(last, "/")
@@ -362,7 +363,7 @@ start_linux :: proc(s: ^Shots, args: []string) -> (app: App, ok: bool) {
 	exe, _ := os.get_executable_path(context.temp_allocator)   // (this tool, for Windows: the relay in WSL runs it)
 	append(&cmd, ..wsl_occtools("wsl_client", wsl_path(exe), program))
 	append(&cmd, ..args)
-	env := env_with({"TOOLKIT_DEVTOOLS", "OC_PORT", "OC_PASSWORD", "WSLENV"}, fmt.tprintf("TOOLKIT_DEVTOOLS=%d", WSL_PORT), fmt.tprintf("OC_PORT=%d", s.live.server.port), fmt.tprintf("OC_PASSWORD=%s", s.live.password), "WSLENV=TOOLKIT_DEVTOOLS:OC_PORT:OC_PASSWORD")
+	env := toolbox.env_with({"TOOLKIT_DEVTOOLS", "OC_PORT", "OC_PASSWORD", "WSLENV"}, fmt.tprintf("TOOLKIT_DEVTOOLS=%d", WSL_PORT), fmt.tprintf("OC_PORT=%d", s.live.server.port), fmt.tprintf("OC_PASSWORD=%s", s.live.password), "WSLENV=TOOLKIT_DEVTOOLS:OC_PORT:OC_PASSWORD")
 	p, start_err := os.process_start({command = cmd[:], env = env, stdout = log, stderr = log})
 	if start_err != nil { fmt.eprintfln("shots: WSL does not start: %v", start_err); return }
 	app.process = p

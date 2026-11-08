@@ -8,6 +8,7 @@ import "core:os"
 import "core:strings"
 import update "gt:update"
 import occ_update "../../src/update"
+import toolbox "gt:toolbox"
 
 DIST_DIR  :: "build/dist"
 STAGE_DIR :: "build/stage"
@@ -79,7 +80,7 @@ package_windows :: proc(version: string) -> bool {
 	if os.copy_file(path, program) != nil { return false }
 	data, err := os.read_entire_file(path, context.temp_allocator)
 	if err != nil { return false }
-	sum := update.sha256_hex(data, context.temp_allocator)
+	sum := toolbox.sha256_hex(data, context.temp_allocator)
 	sums := fmt.tprintf("%s  %s", sum, name)
 	if os.write_entire_file(DIST_DIR + "/SHA256SUMS.txt", transmute([]byte)sums) != nil { return false }
 	notes, found := release_notes(read_text("CHANGELOG.md"), version)

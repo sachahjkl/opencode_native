@@ -17,6 +17,9 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 import "core:thread"
+import toolbox "gt:toolbox"
+
+_ :: toolbox   // (the Linux side's)
 
 WSL_BUILD_DEFAULT :: ".cache/opencode-native-build"
 
@@ -30,7 +33,7 @@ run_wsl_build :: proc(args: []string) -> int {
 		here, _ := os.get_working_directory(context.temp_allocator)
 		if !run("rsync", "-a", "--delete", "--exclude", "build", "--exclude", "target", "--exclude", ".git", "--exclude", ".claude",
 			"--exclude", "*.exe", "--exclude", "*.pdb", fmt.tprintf("%s/", here), fmt.tprintf("%s/", dest)) { return 1 }
-		if !run_in({dir = dest}, "odin", "run", "tools/occtools", fmt.tprintf("-collection:gt=%s/src", GT_DEFAULT), "-out:build/occtools", "--", "build") { return 1 }
+		if !toolbox.run({"odin", "run", "tools/occtools", fmt.tprintf("-collection:gt=%s/src", GT_DEFAULT), "-out:build/occtools", "--", "build"}, {dir = dest, echo = true}) { return 1 }
 		fmt.printfln("%s/build/opencode-native", dest)
 		return 0
 	}
@@ -71,7 +74,7 @@ run_wsl_client :: proc(args: []string) -> int {
 		cmd := make([dynamic]string, context.temp_allocator)
 		append(&cmd, program)
 		append(&cmd, ..args[2:])
-		return run_in({env = env_with({"XDG_CONFIG_HOME", "XDG_STATE_HOME", "LD_LIBRARY_PATH", "VK_ICD_FILENAMES"}, ..env[:])}, ..cmd[:]) ? 0 : 1
+		return toolbox.run(cmd[:], {env = toolbox.env_with({"XDG_CONFIG_HOME", "XDG_STATE_HOME", "LD_LIBRARY_PATH", "VK_ICD_FILENAMES"}, ..env[:]), echo = true}) ? 0 : 1
 	}
 }
 

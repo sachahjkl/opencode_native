@@ -10,6 +10,7 @@ import "core:os"
 import "core:strings"
 import "core:time"
 import cdp "gt:cdp"
+import toolbox "gt:toolbox"
 
 DEMO_DIR        :: "S:\\demo-clock"
 DEMO_SESSION    :: "ses_e5584daa0ffe0rZ9lqsYByWGPw"
@@ -177,7 +178,7 @@ launch :: proc(l: ^Live, name: string, args: ..string) -> (app: App, ok: bool) {
 	cmd := make([dynamic]string, context.temp_allocator)
 	append(&cmd, l.exe, "--size=1460x920", "--pref", "browser.tools=false", "--pref", "notify.finished=off")
 	append(&cmd, ..args)
-	env := env_with({"APPDATA", "XDG_CONFIG_HOME", "TOOLKIT_DEVTOOLS", "OPENCODE_NATIVE_NO_SETUP"},
+	env := toolbox.env_with({"APPDATA", "XDG_CONFIG_HOME", "TOOLKIT_DEVTOOLS", "OPENCODE_NATIVE_NO_SETUP"},
 		fmt.tprintf("APPDATA=%s", app.settings), fmt.tprintf("XDG_CONFIG_HOME=%s", app.settings), fmt.tprintf("TOOLKIT_DEVTOOLS=%d", port), "OPENCODE_NATIVE_NO_SETUP=1")
 	app.started = time.now()
 	p, start_err := os.process_start({command = cmd[:], env = env, stdout = log, stderr = log})

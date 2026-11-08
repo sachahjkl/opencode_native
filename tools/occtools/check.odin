@@ -3,6 +3,7 @@ package occtools
 import "core:fmt"
 import "core:os"
 import "core:time"
+import toolbox "gt:toolbox"
 
 EXE :: ".exe" when ODIN_OS == .Windows else ""
 CHECK_OUT :: "build/occ-new" + EXE
@@ -26,7 +27,7 @@ run_check :: proc(args: []string) -> int {
 	if !run(..tests[:]) { return 1 }
 	if !run("odin", "test", "src/update", gt_collection(GT_DEFAULT), "-out:build/update_test" + EXE) { return 1 }
 	if !run("odin", "test", "tools/occtools", gt_collection(GT_DEFAULT), "-out:build/occtools_test" + EXE) { return 1 }
-	if !run_in({dir = "native/occ_native"}, "cargo", "test", "--release", "--locked", "--target-dir", RUST_TEST_DIR) { return 1 }
+	if !toolbox.run({"cargo", "test", "--release", "--locked", "--target-dir", RUST_TEST_DIR}, {dir = "native/occ_native", echo = true}) { return 1 }
 
 	before, had := os.modification_time_by_path(out)
 	if !build_program({gt = GT_DEFAULT, out = out}) { return 1 }
