@@ -5,6 +5,8 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-09
+
 ### Changed
 
 - **Every step is a command of `tools/occtools`**: `release dist` and `release publish` (what the release workflow's scripts did), `fonts_check`, `font_proposals`, `wsl_build`, `wsl_client` and `relay` in place of tools/*.mjs and tools/wsl_*.sh, which are gone; `build.sh` and `build.bat` are shortcuts of `occtools build`. The toolkit's packages are in `ext/gui_toolkit/src` (gui_toolkit 0.101.0). AGENTS.md replaces CLAUDE.md.
@@ -843,7 +845,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.21.0
 [0.20.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.20.0
 [0.19.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.19.1
 [0.19.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.19.0
