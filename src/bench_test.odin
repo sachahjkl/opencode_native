@@ -586,3 +586,25 @@ older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session)
 	find_close(app)
 	app.conn = nil
 }
+
+// The settings' search: what matches in every client page, under its page's title, and nothing else of the pages.
+@(test)
+the_settings_search_shows_what_matches :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	settings_open(app)
+	session.frames(s, 3)
+	testing.expect(t, session.find(s, "set_appearance.glow") != nil, "a page shows its settings")
+	ui.field_set(&app.settings_query, "permission")
+	session.frames(s, 3)
+	testing.expect(t, session.find(s, "set_permission.allow_all") != nil, "the match")
+	testing.expect(t, session.find(s, "set_notify.permission") != nil, "every match")
+	testing.expect(t, session.find(s, "set_appearance.glow") == nil, "nothing else")
+	testing.expect(t, session.find(s, "hint_setup") == nil, "nor what a page says besides its settings")
+	ui.field_set(&app.settings_query, "no setting is called this")
+	session.frames(s, 3)
+	testing.expect(t, session.find_text(s, "No setting matches.") != nil, "nothing matches, and it says so")
+	ui.field_set(&app.settings_query, "")
+	session.frames(s, 3)
+	testing.expect(t, session.find(s, "set_appearance.glow") != nil, "the page again")
+}

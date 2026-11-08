@@ -78,6 +78,9 @@ App :: struct {
 	facts:            Server_Facts,   // what the server said for the settings pages
 	settings_open:    bool,
 	settings_page:    Settings_Page,
+	settings_query:   ui.Text_Field,    // the settings' search: while it has text, the matching settings of every client page
+	settings_search:  config.Search,    // what that text shows, this frame (settings_dialog)
+	setting_hidden:   bool,             // the row being built does not match the search: setting_end has nothing to close
 	seek_subagent:    bool,   // --seek-subagent (tests): scroll to the first sub-agent card
 	sidebar_w:        f32,
 	expanded:         map[u64]bool,   // tool and reasoning parts opened by the user (hash of their id)

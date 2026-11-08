@@ -87,6 +87,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "sidebar.mode", description = "What the sidebar shows: what needs you first across projects (what waits for you, what finished and you have not seen, what runs, the rest), or sessions by project.", kind = .String, default = {s = "inbox"}, choices = {"inbox", "projects"}},
 	{name = "notify.finished", description = "When a session that is not in front of you ends its run: nothing, a toast, or a toast and the taskbar button flashing.", kind = .String, default = {s = "flash"}, choices = {"off", "toast", "flash"}},
 	{name = "notify.permission", description = "Flash the taskbar button when a session asks for a permission and the window is not in front.", kind = .Bool, default = {b = true}},
+	{name = "permission.allow_all", description = "Allow every permission a session asks, once, at once: no card, no toast, no flash. What the server's rules deny stays denied.", kind = .Bool, default = {b = false}},
 	{name = "appearance.throbber", description = "What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing.", kind = .String, default = {s = "board"}, choices = {"board", "orbit", "scanner", "none"}},
 	{name = "session.agent", description = "The agent a new session starts with: the one chosen last.", kind = .String, default = {s = ""}},
 	{name = "session.model", description = "The model a new session starts with: the one chosen last.", kind = .String, default = {s = ""}},
@@ -132,6 +133,7 @@ Prefs :: struct {
 	diff_layout:  Diff_Layout,
 	notify:       string,
 	notify_perm:  bool,
+	allow_all:    bool,   // permission.allow_all: every permission asked is allowed once, at once
 	content_zoom: f32,
 	start:        string,
 	show_fps:     bool,
@@ -193,6 +195,8 @@ prefs_refresh :: proc(app: ^App) {
 	s.diff_layout = diff_layout_of(config.string_of(p, "conversation.diff_layout"))
 	s.notify = config.string_of(p, "notify.finished")
 	s.notify_perm = config.bool_of(p, "notify.permission")
+	s.allow_all = config.bool_of(p, "permission.allow_all")
+	if s.allow_all { permissions_allow_pending(app) }   // (turned on while some wait: they go too)
 	s.content_zoom = f32(config.float_of(p, "appearance.content_zoom"))
 	s.start = config.string_of(p, "general.start")
 	s.show_fps = config.bool_of(p, "advanced.fps")
@@ -528,9 +532,16 @@ settings_open :: proc(app: ^App) {
 	server_facts_load(app)
 }
 
+// The client's pages, the ones the search goes through (the OPENCODE ones show what the server says, not preferences).
+SETTINGS_CLIENT_PAGES :: [?]Settings_Page{.Appearance, .Conversation, .Behaviour, .Updates, .Advanced}
+
+// A search is typed: the page area shows what matches in every client page, and only that.
+settings_searching :: proc(app: ^App) -> bool { return config.searching(&app.settings_search) }
+
 settings_dialog :: proc(app: ^App, em: f32) {
 	if ui.modal_sized("settings", DIALOG_PREFERRED_EM[.Settings] * em, &app.cx.dialogs[.Settings], &app.settings_open, DIALOG_MIN_EM[.Settings] * em) {
 		dialog_backdrop()
+		config.search_begin(&app.settings_search, ui.field_string(&app.settings_query))
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 		if ui.row(id = "###settings_body") {
 			// the pages (their icons alone in a narrow dialog: the page needs the room more)
@@ -538,9 +549,11 @@ settings_dialog :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.px(em * (narrow ? SETTINGS_NAV_ICONS_EM : SETTINGS_NAV_EM)), height = ui.fill(), axis = .Y})
 			if ui.column(id = "###settings_nav") {
 				// (the list scrolls: a short window must not push it out of the dialog; the foot stays)
+				ui.spacer(ui.px(em * 1.1))
+				if !narrow { settings_search_field(app, em) }
 				ui.next({width = ui.fill(), height = ui.fill()})
 				if ui.scroll_y("###settings_nav_list") {
-					ui.spacer(ui.px(em * 1.1))
+					ui.spacer(ui.px(em * 0.6))
 					if !narrow { nav_heading("CLIENT", em) }
 					for page in Settings_Page {
 						info := SETTINGS_PAGES[page]
@@ -548,8 +561,10 @@ settings_dialog :: proc(app: ^App, em: f32) {
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 						if ui.row(id = fmt.tprintf("###nv%d", int(page))) {
 							ui.spacer(ui.px(em * 0.7))
-							if bevel_button(fmt.tprintf("###nav%d", int(page)), narrow ? "" : info.title, info.icon, app.settings_page == page ? .Toggled : .Ghost, ui.fill(), math.round(em * BUTTON_H_EM), left = true).clicked {
+							current := app.settings_page == page && !settings_searching(app)
+							if bevel_button(fmt.tprintf("###nav%d", int(page)), narrow ? "" : info.title, info.icon, current ? .Toggled : .Ghost, ui.fill(), math.round(em * BUTTON_H_EM), left = true).clicked {
 								app.settings_page = page
+								ui.field_set(&app.settings_query, "")   // (a page chosen: the search is done)
 							}
 							ui.spacer(ui.px(em * 0.9))   // (the scroll bar's place)
 						}
@@ -575,22 +590,13 @@ settings_dialog :: proc(app: ^App, em: f32) {
 					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 					if ui.column() {
 						ui.spacer(ui.px(em * 1.1))
-						info := SETTINGS_PAGES[app.settings_page]
-						text("pt", info.title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
-						ui.spacer(ui.px(em * 0.6))
-						switch app.settings_page {
-						case .Appearance:   page_appearance(app, em)
-						case .Conversation: page_conversation(app, em)
-						case .Behaviour:    page_behaviour(app, em)
-						case .Updates:      page_updates(app, em)
-						case .Advanced:     page_advanced(app, em)
-						case .Server:       page_server(app, em)
-						case .Connections:  page_connections(app, em)
-						case .Mcp:          page_mcp(app, em)
-						case .Plugins:      page_plugins(app, em)
-						case .Usage:        page_usage(app, em)
-						case .Permissions:  page_permissions(app, em)
-						case .Catalog:      page_catalog(app, em)
+						if settings_searching(app) {
+							settings_results(app, em)
+						} else {
+							info := SETTINGS_PAGES[app.settings_page]
+							text("pt", info.title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
+							ui.spacer(ui.px(em * 0.6))
+							settings_page_draw(app, app.settings_page, em)
 						}
 						ui.spacer(ui.px(em * 1.5))
 					}
@@ -601,6 +607,57 @@ settings_dialog :: proc(app: ^App, em: f32) {
 		dialog_close(&app.settings_open)
 	}
 }
+
+// The field of the settings' search, above the pages.
+@(private = "file")
+settings_search_field :: proc(app: ^App, em: f32) {
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+	if ui.row(id = "###settings_search") {
+		ui.spacer(ui.px(em * 0.7))
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
+		if well("###settings_search_well", .X, radius = 7) {
+			ui.spacer(ui.px(em * 0.5))
+			glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
+			if ui.tags("bare") {
+				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
+				ui.line_edit("###settings_query", &app.settings_query, "Search settings")
+			}
+		}
+		ui.spacer(ui.px(em * 0.9))
+	}
+}
+
+// What the search finds in every client page, under each page's title (config.Search), the controls live.
+@(private = "file")
+settings_results :: proc(app: ^App, em: f32) {
+	text("pt", "Search", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
+	for page in SETTINGS_CLIENT_PAGES {
+		config.search_page(&app.settings_search, SETTINGS_PAGES[page].title)
+		settings_page_draw(app, page, em)
+	}
+	if app.settings_search.found == 0 {
+		ui.spacer(ui.px(em * 0.6))
+		info_line(app, "###settings_none", "No setting matches.", em, hex(HEX_FAINT))
+	}
+}
+
+@(private = "file")
+settings_page_draw :: proc(app: ^App, page: Settings_Page, em: f32) {
+	switch page {
+	case .Appearance:   page_appearance(app, em)
+	case .Conversation: page_conversation(app, em)
+	case .Behaviour:    page_behaviour(app, em)
+	case .Updates:      page_updates(app, em)
+	case .Advanced:     page_advanced(app, em)
+	case .Server:       page_server(app, em)
+	case .Connections:  page_connections(app, em)
+	case .Mcp:          page_mcp(app, em)
+	case .Plugins:      page_plugins(app, em)
+	case .Usage:        page_usage(app, em)
+	case .Permissions:  page_permissions(app, em)
+	case .Catalog:      page_catalog(app, em)
+	}
+	}
 
 @(private = "file")
 nav_heading :: proc(s: string, em: f32) {
@@ -616,6 +673,9 @@ nav_heading :: proc(s: string, em: f32) {
 @(deferred_none = setting_end)
 setting :: proc(app: ^App, name: string, em: f32) -> bool {
 	p := &app.cfg_prefs
+	show, heading := config.search_shows(&app.settings_search, p, name)
+	if !show { app.setting_hidden = true; return false }
+	if heading != "" { section_draw(heading, em) }   // (a search: the page's title before its first match)
 	r := config.ref_of(p, name)
 	e := config.entry(p, r)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
@@ -644,6 +704,7 @@ setting :: proc(app: ^App, name: string, em: f32) -> bool {
 
 @(private = "file")
 setting_end :: proc() {
+	if the_app.setting_hidden { the_app.setting_hidden = false; return }
 	ui.pop_parent()   // ###line
 	em := ui.font_size()
 	ui.spacer(ui.px(em * 0.5))
@@ -774,10 +835,13 @@ theme_card_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 }
 
 page_appearance :: proc(app: ^App, em: f32) {
-	if setting(app, "appearance.theme", em) {}   // (its title and its words; the cards under them)
-	theme_cards(app, em)
-	if hint_action("###themes_file", "Themes of your own: themes.txt", em) { themes_file_open(app) }
-	ui.spacer(ui.px(em * 0.6))
+	theme := false
+	if setting(app, "appearance.theme", em) { theme = true }   // (its title and its words; the cards under them)
+	if theme {
+		theme_cards(app, em)
+		if hint_action("###themes_file", "Themes of your own: themes.txt", em) { themes_file_open(app) }
+		ui.spacer(ui.px(em * 0.6))
+	}
 	if setting(app, "appearance.mode", em) { pref_choice(app, "appearance.mode", {"System", "Dark", "Light"}, em, em * 16) }
 	if setting(app, "appearance.style", em) { pref_choice(app, "appearance.style", {"Machined", "Flat"}, em, em * 14) }
 	if setting(app, "appearance.font", em) { font_button(app, "appearance.font", em) }
@@ -854,71 +918,80 @@ page_behaviour :: proc(app: ^App, em: f32) {
 	if setting(app, "sidebar.subagents", em) { pref_choice(app, "sidebar.subagents", {"Nested", "Flat", "Hidden"}, em) }
 	if setting(app, "notify.finished", em) { pref_choice(app, "notify.finished", {"Off", "Toast", "Flash"}, em) }
 	if setting(app, "notify.permission", em) { pref_switch(app, "notify.permission", em) }
+	if setting(app, "permission.allow_all", em) { pref_switch(app, "permission.allow_all", em) }
 	if setting(app, "general.start", em) { pref_choice(app, "general.start", {"Home", "Latest session"}, em, em * 14) }
-	ui.spacer(ui.px(em * 0.6))
-	info_line(app, "###hint_setup", "Installation and " + LBL_PIECES + " are in Setup… (title bar menu).", em)
+	if !settings_searching(app) {
+		ui.spacer(ui.px(em * 0.6))
+		info_line(app, "###hint_setup", "Installation and " + LBL_PIECES + " are in Setup… (title bar menu).", em)
+	}
 }
 
 page_updates :: proc(app: ^App, em: f32) {
-	u := &app.updater
-	state := "Up to date, as far as is known"
-	switch _ in u.state {
-	case nil:
-		if u.result != "" { state = u.result }
-	case Update_Checking:    state = "Looking for a new version…"
-	case Update_Ready:       state = fmt.tprintf("Version %s is available", update_version(u))
-	case Update_Downloading: state = fmt.tprintf("Downloading %s…", update_version(u))
-	case Update_Installed:   state = fmt.tprintf("Version %s is installed: restart to use it", update_version(u))
-	}
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well("###upd", radius = 7, base = HEX_FACTS_WELL) {
-		ui.spacer(ui.px(em * 0.4))
-		fact("###u1", "version", APP_VERSION, em)
-		fact("###u2", "channel", app.prefs.update_channel, em)
-		fact("###u3", "state", state, em)
-		ui.spacer(ui.px(em * 0.4))
-	}
-	ui.spacer(ui.px(em * 0.7))
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-	if ui.row(.Center, id = "###upd_b") {
-		if bevel_button("###u_check", "Check now", ICO_REFRESH, .Normal, disabled = update_is_downloading(u)).clicked { update_check(app, true) }
-		ui.spacer(ui.px(em * 0.5))
-		if update_is_ready(u) {
-			if bevel_button("###u_inst", fmt.tprintf("Install %s", update_version(u)), ICO_CHECK, .Accent).clicked { update_install(app) }
+	if !settings_searching(app) {   // (the state and the buttons: a page's, not a setting's)
+		u := &app.updater
+		state := "Up to date, as far as is known"
+		switch _ in u.state {
+		case nil:
+			if u.result != "" { state = u.result }
+		case Update_Checking:    state = "Looking for a new version…"
+		case Update_Ready:       state = fmt.tprintf("Version %s is available", update_version(u))
+		case Update_Downloading: state = fmt.tprintf("Downloading %s…", update_version(u))
+		case Update_Installed:   state = fmt.tprintf("Version %s is installed: restart to use it", update_version(u))
 		}
-		if update_is_installed(u) {
-			if bevel_button("###u_rest", "Restart now", ICO_REFRESH, .Accent).clicked { update_restart(app) }
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+		if well("###upd", radius = 7, base = HEX_FACTS_WELL) {
+			ui.spacer(ui.px(em * 0.4))
+			fact("###u1", "version", APP_VERSION, em)
+			fact("###u2", "channel", app.prefs.update_channel, em)
+			fact("###u3", "state", state, em)
+			ui.spacer(ui.px(em * 0.4))
 		}
+		ui.spacer(ui.px(em * 0.7))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###upd_b") {
+			if bevel_button("###u_check", "Check now", ICO_REFRESH, .Normal, disabled = update_is_downloading(u)).clicked { update_check(app, true) }
+			ui.spacer(ui.px(em * 0.5))
+			if update_is_ready(u) {
+				if bevel_button("###u_inst", fmt.tprintf("Install %s", update_version(u)), ICO_CHECK, .Accent).clicked { update_install(app) }
+			}
+			if update_is_installed(u) {
+				if bevel_button("###u_rest", "Restart now", ICO_REFRESH, .Accent).clicked { update_restart(app) }
+			}
+		}
+		ui.spacer(ui.px(em * 0.9))
 	}
-	ui.spacer(ui.px(em * 0.9))
 	if setting(app, "update.channel", em) { pref_choice(app, "update.channel", {"Stable", "Beta"}, em, em * 14) }
 	if setting(app, "update.auto", em) { pref_switch(app, "update.auto", em) }
-	ui.spacer(ui.px(em * 0.6))
-	info_line(app, "###hint_sig", "Only what is signed with the key built into this program is installed: the channel, the version and the file's checksum are all in the signature.", em)
+	if !settings_searching(app) {
+		ui.spacer(ui.px(em * 0.6))
+		info_line(app, "###hint_sig", "Only what is signed with the key built into this program is installed: the channel, the version and the file's checksum are all in the signature.", em)
+	}
 }
 
 page_advanced :: proc(app: ^App, em: f32) {
 	section("PREVIEW", em)
 	if setting(app, "browser.tools", em) { pref_switch(app, "browser.tools", em) }
 	section("ABOUT", em)
-	info_line(app, "###adv_about", fmt.tprintf("%s %s, a client of the OpenCode server. %s", APP_NAME, APP_VERSION, APP_NOT_THEIRS), em)
+	if !settings_searching(app) { info_line(app, "###adv_about", fmt.tprintf("%s %s, a client of the OpenCode server. %s", APP_NAME, APP_VERSION, APP_NOT_THEIRS), em) }
 	section("SERVER", em)
 	if setting(app, "advanced.experimental", em) { pref_switch(app, "advanced.experimental", em) }
 	section("DIAGNOSTICS", em)
 	if setting(app, "advanced.fps", em) { pref_switch(app, "advanced.fps", em) }
 	if setting(app, "advanced.frame_rate", em) { pref_choice(app, "advanced.frame_rate", {"Screen", "30", "60", "120", "240", "Uncapped"}, em, em * 24) }
-	ui.spacer(ui.px(em * 0.7))
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-	if ui.row(.Center, id = "###adv_b") {
-		if bevel_button("###adv_dir", "Open the settings folder", ICO_FOLDER, .Normal).clicked { _ = platform.open_path(filepath.dir(prefs_path())) }
-		ui.spacer(ui.px(em * 0.4))
-		if bevel_button("###adv_lic", app.cx.show_licence ? "Hide the terminal's licence" : "The terminal's licence", "", .Ghost).clicked { app.cx.show_licence = !app.cx.show_licence }
-	}
-	if app.cx.show_licence {
-		ui.spacer(ui.px(em * 0.5))
-		info_line(app, "###adv_lic_say", "The terminal's emulation is Ghostty's, through libghostty-vt.", em)
-		ui.spacer(ui.px(em * 0.3))
-		code_block("###adv_lic_text", "text", GHOSTTY_LICENSE, version = 1)
+	if !settings_searching(app) {   // (the folder, the licence: not settings)
+		ui.spacer(ui.px(em * 0.7))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###adv_b") {
+			if bevel_button("###adv_dir", "Open the settings folder", ICO_FOLDER, .Normal).clicked { _ = platform.open_path(filepath.dir(prefs_path())) }
+			ui.spacer(ui.px(em * 0.4))
+			if bevel_button("###adv_lic", app.cx.show_licence ? "Hide the terminal's licence" : "The terminal's licence", "", .Ghost).clicked { app.cx.show_licence = !app.cx.show_licence }
+		}
+		if app.cx.show_licence {
+			ui.spacer(ui.px(em * 0.5))
+			info_line(app, "###adv_lic_say", "The terminal's emulation is Ghostty's, through libghostty-vt.", em)
+			ui.spacer(ui.px(em * 0.3))
+			code_block("###adv_lic_text", "text", GHOSTTY_LICENSE, version = 1)
+		}
 	}
 }
 
@@ -935,6 +1008,12 @@ fact :: proc(id, k, v: string, em: f32, col := Color{}) {
 }
 
 section :: proc(s: string, em: f32) {
+	if settings_searching(the_app) { return }   // (a search shows the pages' titles, not their groups)
+	section_draw(s, em)
+}
+
+@(private = "file")
+section_draw :: proc(s: string, em: f32) {
 	ui.spacer(ui.px(em * 0.6))
 	section_label(fmt.tprintf("sec_%s", s), s, em)
 }

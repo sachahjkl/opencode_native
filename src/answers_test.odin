@@ -954,3 +954,22 @@ what_was_shown_stays_while_a_first_page_comes :: proc(t: ^testing.T) {
 	app.chat.loading, app.chat.loaded = false, true
 	testing.expect_value(t, frame_held_ms(app, size), 0)   // (it came: shown at once)
 }
+
+// permission.allow_all: what waits when it is turned on, and what comes after, is allowed once, at once, and each only once.
+@(test)
+allow_all_answers_every_permission_once :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	show(app, "s")
+	bench_event(app, `{"type":"permission.asked","data":{"request":` + PERM_P + `}}`)
+	testing.expect_value(t, bench_count(.Permission_Reply), 0)   // (off: it waits for you)
+	pref_set(app, "permission.allow_all", "true")
+	testing.expect_value(t, bench_count(.Permission_Reply), 1)
+	r := bench_take(t, .Permission_Reply)
+	testing.expect_value(t, r.body, `{"decision":"once"}`)
+	bench_event(app, `{"type":"permission.asked","data":{"request":{"id":"q","sessionID":"other","action":"bash"}}}`)
+	testing.expect_value(t, bench_count(.Permission_Reply), 1)
+	pref_set(app, "permission.allow_all", "true")   // (again: the ones on their way are not asked twice)
+	testing.expect_value(t, bench_count(.Permission_Reply), 1)
+	pref_set(app, "permission.allow_all", "false")
+}

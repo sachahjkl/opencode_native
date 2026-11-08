@@ -5,6 +5,11 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **Search in the settings**: a field above the pages; what is typed shows the matching settings of every client page (name, title, description; a page's title shows all of it), under their page's title, their controls live. Choosing a page ends the search. (gui_toolkit 0.100.0's `config.Search`)
+- **Allow all permissions** (Settings > Behaviour, `permission.allow_all`, off by default): every permission a session asks is allowed once, at once, with no card, toast or flash; turned on, it allows those that wait too. What the server's rules deny stays denied.
+
 ## [0.19.1] - 2026-11-08
 
 ### Changed

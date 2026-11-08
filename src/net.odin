@@ -871,6 +871,11 @@ reply_permission :: proc(app: ^App, p: ^Permission, decision: string) {
 	request(app, .Permission_Reply, "POST", fmt.tprintf("/api/session/%s/permission/%s/reply", p.session, p.id), fmt.tprintf(`{{"decision":%s}}`, jquote(decision)), p.id)
 }
 
+// permission.allow_all: every permission waiting is allowed once (each is answered once: one on its way is left).
+permissions_allow_pending :: proc(app: ^App) {
+	for &p in app.permissions { if !p.replying { reply_permission(app, &p, "once") } }
+}
+
 switch_model :: proc(app: ^App, session: string, m: Model_Info) {
 	request(app, .Session_Choice, "POST", fmt.tprintf("/api/session/%s/model", session),
 		fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s}}}}`, jquote(m.id), jquote(m.provider)), session)

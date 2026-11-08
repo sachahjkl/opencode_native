@@ -11,6 +11,11 @@ import "core:slice"
 import "core:strings"
 import update "gt:update"
 
+// What the program needs on Linux, built or tested: the text backend is the toolkit's native one, inside the Rust library (no
+// DirectWrite here); wgpu-native is a second Rust library: both carry Rust's standard library, whose few unmangled symbols
+// (rust_eh_personality) are the same code.
+LINUX_FLAGS :: [?]string{"-define:FONT_BACKEND=native", "-define:FONT_NATIVE_LINK=false", "-extra-linker-flags:-Wl,--allow-multiple-definition"}
+
 GT_DEFAULT  :: "ext/gui_toolkit"
 GT_BESIDE   :: "../gui_toolkit"
 OUT_DEFAULT :: "build/opencode-native" + EXE
@@ -250,9 +255,8 @@ build_program :: proc(b: Build) -> bool {
 		append(&cmd, "-resource:res/opencode-native.rc", "-extra-linker-flags:/NODEFAULTLIB:vcruntime.lib /DEFAULTLIB:libvcruntime.lib")
 		if b.mode != .Debug { append(&cmd, "-subsystem:windows") }
 	} else {
-		// the text backend is the toolkit's native one, inside the Rust library (no DirectWrite here); wgpu-native is a second Rust
-		// library: both carry Rust's standard library, whose few unmangled symbols (rust_eh_personality) are the same code
-		append(&cmd, "-define:FONT_BACKEND=native", "-define:FONT_NATIVE_LINK=false", "-extra-linker-flags:-Wl,--allow-multiple-definition")
+		flags := LINUX_FLAGS
+		append(&cmd, ..flags[:])
 	}
 	switch b.mode {
 	case .Dev:     append(&cmd, "-o:minimal")

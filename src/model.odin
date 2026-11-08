@@ -450,6 +450,7 @@ permissions_replace :: proc(app: ^App, session: string, list: json.Array, asked_
 		if !listed { permission_free(p); ordered_remove(&app.permissions, i) }
 	}
 	for it in list { permission_add(app, it) }
+	if app.prefs.allow_all { permissions_allow_pending(app) }
 }
 
 // A permission or a form answered, here or elsewhere: a list read before that still has it.
@@ -878,6 +879,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		req := jget(d, "request")
 		if req == nil { req = d }
 		permission_add(app, req)
+		if app.prefs.allow_all { permissions_allow_pending(app); break }   // (allowed at once: nothing to say)
 		if jstr(req, "sessionID") != c.id { ui.toast(.Warn, "A session is waiting for a permission") }
 		if app.prefs.notify_perm && !window_in_front(app) { flash_taskbar(app) }
 	case "permission.replied":
