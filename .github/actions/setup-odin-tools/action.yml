@@ -17,10 +17,17 @@ runs:
       env:
         ODIN_TAG: dev-2026-11a
         ODIN_SHA256: 65c9f6e97d6f8a30930e151f270ce5aeaa98fe8b2ba49fe067394e2af04f7618
+        GH_TOKEN: ${{ github.token }}
       run: |
         archive="$RUNNER_TEMP/odin-archive/odin-linux-amd64-$ODIN_TAG.tar.gz"
         mkdir -p "$RUNNER_TEMP/odin-archive"
-        [ -f "$archive" ] || curl -fsSL --retry 8 --retry-delay 15 --retry-all-errors -o "$archive" "https://github.com/odin-lang/Odin/releases/download/$ODIN_TAG/odin-linux-amd64-$ODIN_TAG.tar.gz"
+        name="odin-linux-amd64-$ODIN_TAG.tar.gz"
+        if [ ! -f "$archive" ] && ! curl -fsSL --retry 3 --retry-delay 10 --retry-all-errors -o "$archive" "https://github.com/odin-lang/Odin/releases/download/$ODIN_TAG/$name"; then
+          # (GitHub's release downloads answered 504 for over an hour while its API served the same file)
+          echo "the release download failed: the same file through GitHub's API"
+          id="$(curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/odin-lang/Odin/releases/tags/$ODIN_TAG" | jq -r --arg n "$name" '.assets[] | select(.name == $n) | .id')"
+          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" -o "$archive" "https://api.github.com/repos/odin-lang/Odin/releases/assets/$id"
+        fi
         echo "$ODIN_SHA256  $archive" | sha256sum -c -
         mkdir -p "$RUNNER_TEMP/odin" && tar -xzf "$archive" -C "$RUNNER_TEMP/odin"
         dir="$(dirname "$(find "$RUNNER_TEMP/odin" -maxdepth 3 -name odin -type f | head -1)")"

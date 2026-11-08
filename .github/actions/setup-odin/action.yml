@@ -18,12 +18,25 @@ runs:
         # odin version: dev-2026-11-nightly:9a69916 (the tag dev-2026-11a is that commit; the archives of dev-2026-11 are the same files)
         ODIN_TAG: dev-2026-11a
         ODIN_SHA256: 259effedf2997293c8fa4a5e497496f8ebce9f826652d9dd353a9dd2113c31fd
+        GH_TOKEN: ${{ github.token }}
       run: |
         $kept = Join-Path $env:RUNNER_TEMP 'odin-archive'
         New-Item -ItemType Directory -Force $kept | Out-Null
         $zip = Join-Path $kept "odin-windows-amd64-$env:ODIN_TAG.zip"
         $ProgressPreference = 'SilentlyContinue'
-        if (-not (Test-Path $zip)) { Invoke-WebRequest "https://github.com/odin-lang/Odin/releases/download/$env:ODIN_TAG/odin-windows-amd64-$env:ODIN_TAG.zip" -OutFile $zip -MaximumRetryCount 8 -RetryIntervalSec 15 }
+        $name = "odin-windows-amd64-$env:ODIN_TAG.zip"
+        if (-not (Test-Path $zip)) {
+          try {
+            Invoke-WebRequest "https://github.com/odin-lang/Odin/releases/download/$env:ODIN_TAG/$name" -OutFile $zip -MaximumRetryCount 3 -RetryIntervalSec 10
+          } catch {
+            # (GitHub's release downloads answered 504 for over an hour while its API served the same file)
+            Write-Host "the release download failed: the same file through GitHub's API"
+            $auth = @{ Authorization = "Bearer $env:GH_TOKEN" }
+            $release = Invoke-RestMethod "https://api.github.com/repos/odin-lang/Odin/releases/tags/$env:ODIN_TAG" -Headers $auth -MaximumRetryCount 5 -RetryIntervalSec 10
+            $id = ($release.assets | Where-Object { $_.name -eq $name }).id
+            Invoke-WebRequest "https://api.github.com/repos/odin-lang/Odin/releases/assets/$id" -Headers ($auth + @{ Accept = 'application/octet-stream' }) -OutFile $zip -MaximumRetryCount 5 -RetryIntervalSec 10
+          }
+        }
         # (.NET, not Get-FileHash: the cmdlet was "not recognized" in a runner's step)
         $h = [Security.Cryptography.SHA256]::Create()
         $s = [IO.File]::OpenRead($zip)
