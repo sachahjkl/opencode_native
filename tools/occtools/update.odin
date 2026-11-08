@@ -63,11 +63,15 @@ keygen :: proc(path: string) -> int {
 manifest :: proc(exe, version, channel, out: string) -> int {
 	seed, ok := seed_of_env()
 	if !ok { return 1 }
+	// the platform is the one whose release name the program has
+	platform := ""
+	for p in update.PLATFORMS { if filepath.base(exe) == update.expected_file_name(version, p, context.temp_allocator) { platform = p } }
+	if platform == "" { fmt.eprintfln("update: %s is not named as the program of a release of %s", exe, version); return 1 }
 	data, err := os.read_entire_file(exe, context.allocator)
 	if err != nil { fmt.eprintfln("update: cannot read %s", exe); return 1 }
 	m := update.Manifest{
-		channel = channel, version = version, platform = update.PLATFORM_WINDOWS_X64,
-		file = update.expected_file_name(version, update.PLATFORM_WINDOWS_X64, context.temp_allocator),
+		channel = channel, version = version, platform = platform,
+		file = update.expected_file_name(version, platform, context.temp_allocator),
 		sha256 = update.sha256_hex(data, context.temp_allocator), published = today(), size = i64(len(data)),
 	}
 	bytes := update.manifest_bytes(m)
@@ -84,7 +88,11 @@ verify :: proc(file, channel: string) -> int {
 	data, e1 := os.read_entire_file(file, context.temp_allocator)
 	sig, e2 := os.read_entire_file(fmt.tprintf("%s.sig", file), context.temp_allocator)
 	if e1 != nil || e2 != nil { fmt.eprintln("update: cannot read the manifest or its signature"); return 1 }
-	m, err := update.verify(data, string(sig), update.UPDATE_PUBLIC_KEY, update.PLATFORM_WINDOWS_X64, channel, context.temp_allocator)
+	// the platform is in the manifest's name: update-<platform>-<channel>.json
+	platform := ""
+	for p in update.PLATFORMS { if strings.has_prefix(filepath.base(file), fmt.tprintf("update-%s-", p)) { platform = p } }
+	if platform == "" { fmt.eprintfln("update: %s is not named update-<platform>-<channel>.json", file); return 1 }
+	m, err := update.verify(data, string(sig), update.UPDATE_PUBLIC_KEY, platform, channel, context.temp_allocator)
 	if err != .None { fmt.eprintln(update.error_text(err)); return 1 }
 	fmt.printfln("good: %s %s %s", m.channel, m.version, m.file)
 	return 0

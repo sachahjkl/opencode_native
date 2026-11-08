@@ -14,7 +14,7 @@ import "gt:draw"
 import "gt:render"
 import "gt:ui"
 
-APP_VERSION :: "0.18.4"
+APP_VERSION :: "0.19.0"
 
 LOGO_PNG :: #load("../assets/logo_256.png")
 
@@ -57,6 +57,10 @@ desktop_cli :: proc() -> (handled: bool, code: int) {
 	case slice.contains(args, "--install"):
 		ok, msg := desktop_install(slice.contains(args, "--desktop"))
 		fmt.println(ok ? fmt.tprintf("installed: %s", msg) : fmt.tprintf("install failed: %s", msg))
+		if os.exists("/etc/NIXOS") {
+			fmt.println(NIXOS_ADVICE)
+			if lacks := nix_ld_missing(); lacks != "" { fmt.printfln("nix-ld lacks %s. Add to your configuration:\n  %s", lacks, NIX_LD_CONFIG) }
+		}
 		return true, ok ? 0 : 1
 	case slice.contains(args, "--uninstall"):
 		quiet := slice.contains(args, "--quiet")
@@ -237,6 +241,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				case .Repair:        state = f.exe_there ? "Installed, but a shortcut or the Settings entry is missing." : "The installed program is missing: what is left of it can be repaired or removed."; col = hex(HEX_RED)
 				case .Other_Copy:    state = fmt.tprintf("A copy is installed (%s): this one runs on its own.", f.version != "" ? f.version : "?")
 				case .Removal_Scheduled: state = "Uninstalled: the program is deleted when this window closes."
+				case .Nix_Package:   state = "Installed by Nix: the Nix package has the menu entry and the icon."; col = hex(HEX_GREEN)
 				}
 				upgrade := setup_is_upgrade(f.state, f.version)
 				if upgrade { state = fmt.tprintf("An older copy is installed (%s): upgrade it to %s?", f.version, APP_VERSION); col = accent() }
@@ -245,6 +250,12 @@ setup_dialog :: proc(app: ^App, em: f32) {
 					lamp("###sl", col, 1, size = em * 0.9)
 					ui.spacer(ui.px(em * 0.45))
 					text("s", state, hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+				}
+				if f.nixos && f.state != .Nix_Package {
+					info_line(app, "###setup_nixos", NIXOS_ADVICE, em)
+					if f.nix_ld != "" {
+						info_line(app, "###setup_nix_ld", fmt.tprintf("nix-ld lacks %s. Add to your configuration: %s", f.nix_ld, NIX_LD_CONFIG), em, hex(HEX_RED))
+					}
 				}
 			}
 			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
@@ -268,10 +279,12 @@ setup_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
 		}
 		ui.spacer(ui.px(em * 0.8))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row() {
-			ui.spacer(ui.px(em * 1.3))
-			if ui.tags("weak") { ui.checkbox("###desk", "Shortcut on the Desktop", &st.desktop) }
+		if f.state != .Nix_Package {
+			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+			if ui.row() {
+				ui.spacer(ui.px(em * 1.3))
+				if ui.tags("weak") { ui.checkbox("###desk", "Shortcut on the Desktop", &st.desktop) }
+			}
 		}
 		if st.note.text != "" {
 			ui.spacer(ui.px(em * 0.5))
@@ -318,10 +331,10 @@ setup_dialog :: proc(app: ^App, em: f32) {
 				if bevel_button("###close", "Close", "", .Normal).clicked { st.open = false }
 				ui.spacer(ui.px(em * 0.5))
 			}
-			if !just_installed && f.state != .Removal_Scheduled {
+			if !just_installed && f.state != .Removal_Scheduled && f.state != .Nix_Package {
 				label := "Install"
 				#partial switch f.state {
-				case .Not_Installed: label = "Install"
+				case .Not_Installed: label = f.nixos ? "Install the classic way" : "Install"
 				case .Other_Copy:    label = setup_is_upgrade(f.state, f.version) ? fmt.tprintf("Upgrade to %s", APP_VERSION) : "Replace installed copy"
 				case .Repair:        label = "Repair"
 				case .This_Copy:     label = "Update shortcuts"

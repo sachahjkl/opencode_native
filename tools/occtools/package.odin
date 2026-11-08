@@ -1,7 +1,7 @@
 package occtools
 
 // The release files of a finished build, in build/dist. On Windows the program, one file, its SHA-256 and the notes of the release;
-// on Linux an archive with the program, the licences and a README.
+// on Linux an archive with the program, the licences and a README, and the program alone (for the updater).
 
 import "core:fmt"
 import "core:os"
@@ -27,6 +27,7 @@ An independent project: not built by the OpenCode team, and not affiliated with 
   ./opencode-native --url=https://host:port --password=...    another server
 
 Needs: Vulkan (mesa-vulkan-drivers or your GPU's driver, libvulkan1), libxkbcommon, fontconfig, and Wayland or X11.
+On NixOS: nix profile install github:sachahjkl/opencode_native (or a classic install, with nix-ld).
 https://github.com/sachahjkl/opencode_native
 `
 
@@ -111,7 +112,10 @@ package_linux :: proc(version: string) -> bool {
 	if os.write_entire_file(fmt.tprintf("%s/README.txt", stage), transmute([]byte)readme) != nil { return false }
 	archive := fmt.tprintf("%s/%s-linux-x64.tar.gz", DIST_DIR, name)
 	if !run("tar", "-C", STAGE_DIR, "-czf", archive, name) { return false }
-	fmt.printfln("packaged %s", archive)
+	// the program alone too: what the updater downloads (update.expected_file_name)
+	alone := fmt.tprintf("%s/%s", DIST_DIR, update.expected_file_name(version, update.PLATFORM_LINUX_X64, context.temp_allocator))
+	if os.copy_file(alone, program) != nil || !run("chmod", "+x", alone) { return false }
+	fmt.printfln("packaged %s, %s", archive, alone)
 	return true
 }
 

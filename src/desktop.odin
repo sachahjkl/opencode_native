@@ -4,6 +4,7 @@ package occ
 
 import "core:os"
 import "core:path/filepath"
+import "core:strings"
 
 APP_NAME      :: "opencode native"
 // (said wherever this program presents itself: their README asks it of a project with "opencode" in its name, and it is the truth)
@@ -16,6 +17,33 @@ Install_State :: enum u8 {
 	Repair,           // this is the installed copy, but a launcher or the system's record of it is missing
 	Other_Copy,       // a copy is installed elsewhere: this one runs standalone (Install replaces that one)
 	Removal_Scheduled,   // uninstalled while it ran: the file goes when this process ends, and nothing else is to be done (Setup says it, nothing on disk does)
+	Nix_Package,      // this copy is a Nix package (it runs from /nix/store): the Nix configuration installs it, its menu entry and its icon
+}
+
+// On NixOS the Nix package is the better install: it has its libraries, and Nix updates it. A classic install works there with
+// nix-ld (the NixOS way to run a program built for other Linux systems), when it has the libraries of NIX_LD_NEEDS.
+NIXOS_ADVICE :: "On NixOS, the Nix package is the better install: nix profile install github:sachahjkl/opencode_native, or add it to your configuration. A classic install needs nix-ld."
+NIX_LD_NEEDS :: [?]string{"libfontconfig.so.1", "libfreetype.so.6", "libvulkan.so.1", "libxkbcommon.so.0", "libwayland-client.so.0", "libxcb.so.1"}
+NIX_LD_CONFIG :: "programs.nix-ld = { enable = true; libraries = with pkgs; [ fontconfig freetype vulkan-loader libxkbcommon wayland libxcb libxcb-cursor ]; };"
+
+// This copy is a Nix package: it runs from the store, and Nix installs and updates it.
+nix_package :: proc() -> bool {
+	when ODIN_OS == .Windows { return false } else { return strings.has_prefix(running_exe(), "/nix/store/") }
+}
+
+// What a classic install on NixOS lacks: "nix-ld" when it is off, else the libraries of NIX_LD_NEEDS that its folders do not have
+// ("": nothing, or not NixOS).
+nix_ld_missing :: proc() -> string {
+	if !os.exists("/etc/NIXOS") { return "" }
+	if os.get_env("NIX_LD", context.temp_allocator) == "" { return "nix-ld" }
+	dirs := strings.split(os.get_env("NIX_LD_LIBRARY_PATH", context.temp_allocator), ":", context.temp_allocator)
+	missing := make([dynamic]string, context.temp_allocator)
+	for lib in NIX_LD_NEEDS {
+		found := false
+		for d in dirs { if d != "" && os.exists(pjoin({d, lib})) { found = true; break } }
+		if !found { append(&missing, lib) }
+	}
+	return strings.join(missing[:], ", ", context.temp_allocator)
 }
 
 // What the facts make of an install, the same on every system. No program but something of it left: to repair, or to remove. A record
@@ -39,6 +67,8 @@ Install_Facts :: struct {
 	desk_lnk:  bool,     // the one on the Desktop
 	record:    bool,     // the system's record (Settings > Apps entry; the icon in the icon theme)
 	version:   string,   // of the installed copy, from its record
+	nixos:     bool,     // the system is NixOS: Setup advises the Nix package (NIXOS_ADVICE)
+	nix_ld:    string,   // what a classic install lacks there (nix_ld_missing)
 }
 
 // A path made of `parts` (temp memory).

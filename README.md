@@ -7,7 +7,7 @@
 <p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.18.4-fab283" alt="version 0.18.4"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.19.0-fab283" alt="version 0.19.0"></a>
 <a href="https://ocn.froment.software/"><img src="https://img.shields.io/badge/site-ocn.froment.software-56b6c2" alt="site"></a>
 </p>
 
@@ -22,7 +22,10 @@ wells, carved grooves, and lamps only where something is live.
     ./build.sh         ->  build/opencode-native         (Linux)
 
 Prebuilt programs for Windows x64 and Linux x64 are attached to the [GitHub releases](https://github.com/sachahjkl/opencode_native/releases);
-the [site](https://ocn.froment.software/) shows them.
+the [site](https://ocn.froment.software/) shows them. On NixOS, install the Nix package instead (`flake.nix` packages the
+release, with its menu entry and its icon):
+
+    nix profile install github:sachahjkl/opencode_native
 
 ## Screenshots
 
@@ -33,7 +36,7 @@ the [site](https://ocn.froment.software/) shows them.
 | ![The command palette, commands listed](docs/screenshots/palette.png) | ![An edit shown as a diff](docs/screenshots/diff.png) |
 | **The palette** (Ctrl+K): commands, sessions, agents, models, switches | **A diff** for what edits a file: line numbers, what changed in a line |
 | ![The tray under the composer, the todo list](docs/screenshots/activity.png) | ![Settings: updates](docs/screenshots/updates.png) |
-| **What runs in the background** (Down from the composer, Ctrl+J) | **Updates** (Windows): signed, stable or beta |
+| **What runs in the background** (Down from the composer, Ctrl+J) | **Updates**: signed, stable or beta |
 | ![The conversation of a sub-agent: where it comes from, the way back](docs/screenshots/subagent-session.png) | ![The model picker, searched as one types](docs/screenshots/picker.png) |
 | **A sub-agent's own conversation**: the breadcrumb, Back | **The model picker**: subsequence search ("sonnet"), the matched letters lit |
 | ![Session statistics](docs/screenshots/statistics.png) | ![Settings: the themes, each in its own colours](docs/screenshots/settings.png) |
@@ -83,7 +86,7 @@ the [site](https://ocn.froment.software/) shows them.
   todo list; Enter opens, Delete stops.
 - **The Preview panel** (Ctrl+Shift+B, Windows): a browser for each session, with tabs, beside the conversation, in a dock; agents drive it through the MCP server
   `preview` the client hosts.
-- **Updates** (Windows): channels `stable` and `beta`, signed manifests, nothing installed without you ([docs/updates.md](docs/updates.md)).
+- **Updates** (Windows, Linux): channels `stable` and `beta`, signed manifests, nothing installed without you ([docs/updates.md](docs/updates.md)).
 - **Back and Forward**, as in a browser: buttons in the title bar, Alt+Left and Alt+Right, the side buttons of the mouse. The view goes
   back to the very place it was read. The logo goes home.
 - **What an agent asks**: its questions and any form of the server over the composer, one question at a time, in tabs, then a review.
@@ -105,7 +108,7 @@ the [site](https://ocn.froment.software/) shows them.
   saved permissions (revoke), providers, models, agents, skills, commands, the configuration files.
 - **Desktop integration** without administrator rights: Setup installs the running copy for the user, and opens by itself to offer an upgrade when a newer copy starts over an older install. On Windows: a
   Start menu shortcut with its AppUserModelID, a Settings > Apps entry, an uninstaller. On Linux: `~/.local/share`, an
-  entry in the applications menu and its icon.
+  entry in the applications menu and its icon. On NixOS, Setup advises the Nix package, and still makes a classic install on request (it runs with nix-ld: Setup says which libraries nix-ld lacks).
 
 ## The server
 

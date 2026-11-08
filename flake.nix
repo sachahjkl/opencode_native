@@ -43,11 +43,64 @@
 
       # What the client opens at run time (dlopen): nothing is in a standard path on NixOS.
       runtime = with pkgs; [
-        vulkan-loader mesa libxkbcommon wayland libx11 libxcb libxcursor libxrandr libxi libxext xcb-util-cursor fontconfig freetype dbus
+        vulkan-loader mesa libxkbcommon wayland libx11 libxcb libxcursor libxrandr libxi libxext libxcb-cursor fontconfig freetype dbus
       ];
+
+      # The latest Linux release, as published: the tag and the hash of its SHA256SUMS.txt.
+      # The Vulkan driver is the system's (/run/opengl-driver): mesa is not in its RUNPATH.
+      version = "0.18.4";
+      opencode-native = pkgs.stdenv.mkDerivation {
+        pname = "opencode-native";
+        inherit version;
+        src = pkgs.fetchurl {
+          url = "https://github.com/sachahjkl/opencode_native/releases/download/v${version}/opencode-native-${version}-linux-x64.tar.gz";
+          sha256 = "7793c6f6eedfd5f513695232a454dc4b572285aceea56dbd5326f86ed183beb1";
+        };
+        nativeBuildInputs = [ pkgs.autoPatchelfHook pkgs.copyDesktopItems ];
+        buildInputs = [ pkgs.fontconfig pkgs.freetype pkgs.stdenv.cc.cc.lib ];
+        # the libraries it opens with dlopen go in its RUNPATH: no LD_LIBRARY_PATH, which the shells of its terminals would inherit
+        runtimeDependencies = pkgs.lib.remove pkgs.mesa runtime;
+        dontBuild = true;
+        dontStrip = true;
+        desktopItems = [
+          (pkgs.makeDesktopItem {
+            name = "opencode-native";
+            desktopName = "opencode native";
+            genericName = "opencode client";
+            comment = "A native desktop client for the opencode server. Not affiliated with the OpenCode team.";
+            exec = "opencode-native %U";
+            icon = "opencode-native";
+            categories = [ "Development" ];
+            startupWMClass = "opencode-native";
+          })
+        ];
+        installPhase = ''
+          runHook preInstall
+          install -Dm755 opencode-native $out/bin/opencode-native
+          install -Dm644 ${./assets/logo_256.png} $out/share/icons/hicolor/256x256/apps/opencode-native.png
+          install -Dm644 -t $out/share/doc/opencode-native README.txt *LICENSE*
+          runHook postInstall
+        '';
+        meta = {
+          description = "A native desktop client for the opencode server";
+          homepage = "https://github.com/sachahjkl/opencode_native";
+          license = pkgs.lib.licenses.mit;
+          platforms = [ system ];
+          mainProgram = "opencode-native";
+          sourceProvenance = [ pkgs.lib.sourceTypes.binaryNativeCode ];
+        };
+      };
     in
     {
-      packages.${system}.odin = odin;
+      packages.${system} = {
+        inherit odin opencode-native;
+        default = opencode-native;
+      };
+
+      apps.${system}.default = {
+        type = "app";
+        program = pkgs.lib.getExe opencode-native;
+      };
 
       devShells.${system}.default = pkgs.mkShell {
         packages = [ odin ] ++ (with pkgs; [ clang lld cargo rustc nodejs rsync socat ]);

@@ -5,6 +5,8 @@
 //   ~/.local/share/icons/hicolor/256x256/apps/opencode-native.png   its icon
 // `--install [--desktop]`, `--uninstall`, `--status` do it without a window; the Setup dialog (setup.odin) does it with one.
 // A running program's file can be replaced or deleted on Linux: no renaming, no deferred removal.
+// On NixOS (/etc/NIXOS) Setup advises the Nix package of flake.nix (NIXOS_ADVICE). A classic install is still made on request: it
+// runs with nix-ld, and Setup says which of its libraries nix-ld lacks.
 package occ
 
 import "core:fmt"
@@ -69,6 +71,10 @@ install_facts :: proc() -> (f: Install_Facts) {
 	}
 	f.exe_there = os.exists(f.exe)
 	f.state = install_state_of(f.exe_there, same_path(f.exe, f.running), f.start_lnk, f.record, f.version)
+	f.nixos = os.exists("/etc/NIXOS")
+	f.nix_ld = nix_ld_missing()
+	// (a copy installed in the data directory keeps its state: Setup can remove it)
+	if nix_package() && f.state == .Not_Installed { f.state = .Nix_Package }
 	return
 }
 

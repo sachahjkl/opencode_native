@@ -2,7 +2,7 @@ name: Release
 
 # A version tag vX.Y.Z (or vX.Y.Z-beta.N: a pre-release) builds the program for Windows and for Linux and publishes both with the
 # release (made from the CHANGELOG's section of that version when it does not exist yet; its assets replaced when it does), with
-# one SHA256SUMS.txt. The tag must match APP_VERSION (src/setup.odin). The Windows program goes with the signed manifests of its
+# one SHA256SUMS.txt. The tag must match APP_VERSION (src/setup.odin). Each program goes with the signed manifests of its
 # channels (docs/updates.md): a beta reaches the beta channel, a release both; the rolling release channel-beta is where that
 # channel reads.
 on:
@@ -74,8 +74,21 @@ jobs:
       - name: Build (build.sh)
         run: ./build.sh release
 
+      # (the version without its -beta.N, as the Windows job checks it)
       - name: Package
-        run: build/occtools package "${GITHUB_REF_NAME#v}"
+        run: |
+          v="${GITHUB_REF_NAME#v}"; v="${v%%-beta*}"
+          build/occtools package "$v"
+
+      - name: Sign the update
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"; v="${v%%-beta*}"
+          case "$GITHUB_REF_NAME" in *-beta*) channels="beta" ;; *) channels="stable beta" ;; esac
+          for c in $channels; do
+            build/occtools update manifest "build/dist/opencode-native-$v-linux-x64" "$v" "$c" "build/dist/update-linux-x64-$c.json"
+          done
 
       - uses: actions/upload-artifact@v7
         with:
@@ -105,7 +118,7 @@ jobs:
           rm -f SHA256SUMS.txt
           sha256sum opencode-native-* > SHA256SUMS.txt
           cat SHA256SUMS.txt
-          files=(opencode-native-* SHA256SUMS.txt update-windows-x64-*)
+          files=(opencode-native-* SHA256SUMS.txt update-windows-x64-* update-linux-x64-*)
           pre=()
           case "$TAG" in *-beta*) pre=(--prerelease) ;; esac
           if gh release view "$TAG" >/dev/null 2>&1; then
@@ -115,6 +128,7 @@ jobs:
           gh release create "$TAG" "${files[@]}" "${pre[@]}" --title "opencode native $VERSION" --notes-file NOTES.md
           fi
           # the beta channel's fixed address: the program and its signed manifest
-          beta=(opencode-native-*-windows-x64.exe update-windows-x64-beta.json update-windows-x64-beta.json.sig)
+          beta=(opencode-native-*-windows-x64.exe update-windows-x64-beta.json update-windows-x64-beta.json.sig
+                opencode-native-*-linux-x64 update-linux-x64-beta.json update-linux-x64-beta.json.sig)
           gh release view channel-beta >/dev/null 2>&1 || gh release create channel-beta --prerelease --title "Beta channel" --notes "What the beta channel of the updater reads."
           gh release upload channel-beta "${beta[@]}" --clobber

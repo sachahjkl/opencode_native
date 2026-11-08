@@ -4,6 +4,7 @@
 //   update-windows-x64-stable.json       {"schema":1,"product":"opencode-native","channel":"stable","version":"0.11.0","platform":"windows-x64",
 //                                         "file":"opencode-native-0.11.0-windows-x64.exe","size":8877760,"sha256":"<64 hex>","published":"2026-11-05"}
 //   update-windows-x64-stable.json.sig   base64url (no padding) of the Ed25519 signature of SIGN_CONTEXT + the manifest's bytes
+//   update-linux-x64-stable.json         the same for Linux: its file is the program alone, opencode-native-0.11.0-linux-x64
 //
 // The public half of the key is built into the program (public_key.odin), the private half is in the release workflow's secrets
 // and in secrets/production.yaml. The channel is in what is signed: a beta's manifest served on the stable channel is refused.
@@ -31,6 +32,10 @@ SIGN_CONTEXT :: "opencode-native-update-v1\n"   // what a signature covers befor
 SCHEMA :: 1
 PRODUCT :: "opencode-native"
 PLATFORM_WINDOWS_X64 :: "windows-x64"
+PLATFORM_LINUX_X64   :: "linux-x64"
+PLATFORMS            :: [?]string{PLATFORM_WINDOWS_X64, PLATFORM_LINUX_X64}
+// the platform of this program
+PLATFORM :: PLATFORM_WINDOWS_X64 when ODIN_OS == .Windows else PLATFORM_LINUX_X64
 
 MAX_MANIFEST :: 16 * 1024            // bytes of a manifest: a real one is about 300
 MAX_SIGNATURE_TEXT :: 256            // an Ed25519 signature is 86 characters of base64url
@@ -40,7 +45,7 @@ MAX_BINARY :: 256 << 20              // 256 MiB: what the HTTP client reads at m
 Manifest :: struct {
 	channel:   string,   // stable, beta: what it was published for
 	version:   string,   // X.Y.Z: digits only (a channel says what is a pre-release)
-	platform:  string,   // windows-x64
+	platform:  string,   // windows-x64, linux-x64
 	file:      string,   // the name of the release asset, exactly expected_file_name(version, platform)
 	sha256:    string,   // 64 lowercase hex digits of the file
 	published: string,   // a date, for people
@@ -103,9 +108,16 @@ manifest_destroy :: proc(m: ^Manifest, allocator := context.allocator) {
 ////////////////////////////////
 // Names and versions
 
-// The name of the release asset of `version` on `platform`: the one a manifest may name.
+// The name of the release asset of `version` on `platform`: the one a manifest may name. (Linux: the program alone, beside the archive.)
 expected_file_name :: proc(version, platform: string, allocator := context.allocator) -> string {
-	return fmt.aprintf("opencode-native-%s-%s.exe", version, platform, allocator = allocator)
+	ext := platform == PLATFORM_WINDOWS_X64 ? ".exe" : ""
+	return fmt.aprintf("opencode-native-%s-%s%s", version, platform, ext, allocator = allocator)
+}
+
+// Whether `data` starts as a program of `platform`: PE on Windows, ELF on Linux.
+is_program :: proc(data: []byte, platform: string) -> bool {
+	magic := platform == PLATFORM_WINDOWS_X64 ? "MZ" : "\x7fELF"
+	return len(data) >= len(magic) && string(data[:len(magic)]) == magic
 }
 
 // X.Y.Z, three numbers of digits only (at most six each, no sign, no suffix). Never a pre-release or a build label.

@@ -1,7 +1,7 @@
 // Updates, from Wren: a release publishes a signed manifest per channel (src/update, docs/updates.md), and this checks it,
 // downloads the program it names, checks that against the signature, and puts it in place of the running one. A running
-// program on Windows can be renamed, not overwritten: it goes aside as .old and is removed at the next start. Nothing here
-// waits on the interface's thread. Windows only for now: elsewhere a new version is said, and installed by hand.
+// program on Windows can be renamed, not overwritten: it goes aside as .old and is removed at the next start. On Linux the new file
+// is renamed over it. Nothing here waits on the interface's thread. A Nix package is never updated here: Nix updates it.
 package occ
 
 import "core:fmt"
@@ -111,7 +111,7 @@ update_says_missing :: proc(status: int, reached: bool) -> bool { return reached
 check_job :: proc(j: ^Update_Job) {
 	h: Http
 	if !http_init(&h, j.base, "", "") { j.err = strings.clone("the HTTP client failed to start"); return }
-	name := fmt.tprintf("update-%s-%s.json", update.PLATFORM_WINDOWS_X64, j.channel)
+	name := fmt.tprintf("update-%s-%s.json", update.PLATFORM, j.channel)
 	manifest, m_ok, missing := fetch(&h, fmt.tprintf("%s%s", j.path, name))
 	if !m_ok {
 		if missing { j.nothing_new = true } else { j.err = strings.clone("the server could not be read") }   // (missing: no release on this channel yet)
@@ -121,7 +121,7 @@ check_job :: proc(j: ^Update_Job) {
 	sig, s_ok, _ := fetch(&h, fmt.tprintf("%s%s.sig", j.path, name))
 	if !s_ok { j.err = strings.clone("the update has no signature: refused"); return }
 	defer delete(sig)
-	m, err := update.check_release(transmute([]byte)manifest, sig, update.UPDATE_PUBLIC_KEY, update.PLATFORM_WINDOWS_X64, j.channel, APP_VERSION, "")
+	m, err := update.check_release(transmute([]byte)manifest, sig, update.UPDATE_PUBLIC_KEY, update.PLATFORM, j.channel, APP_VERSION, "")
 	#partial switch err {
 	case .None:      j.found = m
 	case .Not_Newer: j.nothing_new = true
@@ -129,13 +129,19 @@ check_job :: proc(j: ^Update_Job) {
 	}
 }
 
-// `exe` becomes the program of `data`: written beside it, read back, then swapped by two renames.
+// `exe` becomes the program of `data`: written beside it, read back, then swapped by two renames (Windows) or one (Linux).
 update_place :: proc(exe: string, data: []byte, m: update.Manifest) -> string {
-	if len(data) < 2 || data[0] != 'M' || data[1] != 'Z' { return "the download is not a program" }
+	if !update.is_program(data, update.PLATFORM) { return "the download is not a program" }
 	next := fmt.tprintf("%s.update", exe)
 	if os.write_entire_file(next, data) != nil { return "the update could not be written beside the program" }
 	back, err := os.read_entire_file(next, context.temp_allocator)
 	if err != nil || update.check_binary(m, back) != .None { _ = os.remove(next); return "the update was not written whole" }
+	when ODIN_OS != .Windows {
+		// (the running program keeps its open file: the name goes to the new one at once)
+		_ = os.chmod(next, os.Permissions_Default_File | {.Execute_User, .Execute_Group, .Execute_Other})
+		if os.rename(next, exe) != nil { _ = os.remove(next); return "the update could not be put in place" }
+		return ""
+	}
 	old := fmt.tprintf("%s.old", exe)
 	_ = os.remove(old)
 	if os.rename(exe, old) != nil { _ = os.remove(next); return "the running program could not be moved aside" }
@@ -241,7 +247,7 @@ update_job_start :: proc(app: ^App, j: ^Update_Job) {
 // running takes the asking over, and says what it finds.
 update_check :: proc(app: ^App, asked: bool) {
 	u := &app.updater
-	if ODIN_OS != .Windows { if asked { ui.toast(.Warn, "Updates install by hand on this system") }; return }
+	if nix_package() { if asked { ui.toast(.Warn, "Nix updates this copy: update the Nix package") }; return }
 	switch &v in u.state {
 	case Update_Checking:
 		v.asked = v.asked || asked

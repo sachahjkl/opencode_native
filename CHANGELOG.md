@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-08
+
+### Added
+
+- **Updates on Linux**: an installed copy checks, downloads and puts in place a new version as on Windows (signed manifests `update-linux-x64-<channel>.json`; the release has the program alone beside its archive).
+- **NixOS**: `flake.nix` packages the release (`nix profile install github:sachahjkl/opencode_native`), with its menu entry and its icon; the libraries it opens are in its RUNPATH. On NixOS, Setup advises that package, and still makes a classic install on request: it says which libraries nix-ld lacks for it. A Nix package never updates itself.
+
 ## [0.18.4] - 2026-11-07
 
 ### Fixed
@@ -809,7 +816,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.18.4...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.19.0
 [0.18.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.4
 [0.18.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.3
 [0.18.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.2

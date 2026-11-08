@@ -1,14 +1,16 @@
 # Updates
 
 From Wren's, with real channels. The client looks for a new version at start (`update.auto`) or from the palette ("Check
-for updates"); nothing is installed before the user says so. Windows only for now: on Linux a new version is installed by hand.
+for updates"); nothing is installed before the user says so. Windows and Linux. A Nix package (a program that runs from
+`/nix/store`) never updates itself: Nix updates it.
 
 | Channel | Reads | Gets |
 |---|---|---|
 | `stable` | `releases/latest/download/` | releases `vX.Y.Z` |
 | `beta` | `releases/download/channel-beta/` (a rolling pre-release) | betas `vX.Y.Z-beta.N`, and every release |
 
-Each channel publishes `update-windows-x64-<channel>.json`, its `.sig` and the program. The check (`src/update`, tested in
+Each channel publishes `update-<platform>-<channel>.json` (`windows-x64`, `linux-x64`), its `.sig` and the program: on Linux the
+program alone, `opencode-native-<version>-linux-x64`, beside the archive. The check (`src/update`, tested in
 `src/update/update_test.odin`) refuses, in this order: a signature that is not the built-in key's (`SIGN_CONTEXT` + the
 manifest's bytes, Ed25519; the manifest is read only once it is signed), another channel (it is in what is signed: a beta's
 manifest served to stable is refused), another platform, a version that is not strictly newer, a file name that is not the
@@ -17,7 +19,8 @@ read from, not what is trusted.
 
 Putting it in place (`updater.odin`, `update_place`): written beside the program as `.update`, read back and checked, then the
 running program renamed to `.old` and the new one to its name. If the second rename fails the first is undone. `.old` is
-removed at the next start.
+removed at the next start. On Linux the new file is made executable and renamed over the program: the running process keeps
+its open file.
 
 ## The key
 
