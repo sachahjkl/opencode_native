@@ -5,6 +5,8 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-08
+
 ### Added
 
 - **Search in the settings**: a field above the pages; what is typed shows the matching settings of every client page (name, title, description; a page's title shows all of it), under their page's title, their controls live. Choosing a page ends the search. (gui_toolkit 0.100.0's `config.Search`)
@@ -831,7 +833,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.19.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.20.0
 [0.19.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.19.1
 [0.19.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.19.0
 [0.18.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.18.4
