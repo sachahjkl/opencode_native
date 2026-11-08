@@ -29,7 +29,7 @@ An independent project: not built by the OpenCode team, and not affiliated with 
   ./opencode-native --url=https://host:port --password=...    another server
 
 Needs: Vulkan (mesa-vulkan-drivers or your GPU's driver, libvulkan1), libxkbcommon, fontconfig, and Wayland or X11.
-On NixOS: nix profile install github:sachahjkl/opencode_native (or start it once with nix-ld or steam-run and --install:
+On NixOS: nix profile add git+https://github.com/sachahjkl/opencode_native (or start it once with nix-ld or steam-run and --install:
 the installed copy gets its libraries from nix-build and runs by itself).
 https://github.com/sachahjkl/opencode_native
 `

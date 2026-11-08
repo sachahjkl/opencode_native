@@ -72,7 +72,7 @@ Install_State :: enum u8 {
 
 // On NixOS the Nix package is the better install: Nix updates it. A classic install makes its copy run by itself: nix-build
 // makes a profile of its libraries, and patchelf points the copy at it (the toolkit's NixOS adaptation).
-NIXOS_ADVICE :: "On NixOS, the Nix package is the better install: nix profile install github:sachahjkl/opencode_native, or add it to your configuration. A classic install builds the libraries it needs with nix-build."
+NIXOS_ADVICE :: "On NixOS, the Nix package is the better install: nix profile add git+https://github.com/sachahjkl/opencode_native, or add it to your configuration. A classic install builds the libraries it needs with nix-build."
 
 // This copy is a Nix package: it runs from the store, and Nix installs and updates it.
 nix_package :: proc() -> bool { return desktop.in_nix_store(process.executable_path()) }

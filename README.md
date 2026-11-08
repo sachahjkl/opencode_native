@@ -22,10 +22,13 @@ wells, carved grooves, and lamps only where something is live.
     ./build.sh         ->  build/opencode-native         (Linux)
 
 Prebuilt programs for Windows x64 and Linux x64 are attached to the [GitHub releases](https://github.com/sachahjkl/opencode_native/releases);
-the [site](https://ocn.froment.software/) shows them. On NixOS, install the Nix package instead (`flake.nix` packages the
-release, with its menu entry and its icon):
+the [site](https://ocn.froment.software/) shows them. On NixOS, install the Nix package instead (`flake.nix` builds it
+from the sources, with its menu entry and its icon); `nix profile upgrade opencode_native` updates it:
 
-    nix profile install github:sachahjkl/opencode_native
+    nix profile add git+https://github.com/sachahjkl/opencode_native
+
+The address is `git+https://`, not `github:`: the build needs the gui_toolkit submodule, and GitHub's archives, which
+`github:` fetches, never hold submodules.
 
 ## Screenshots
 
