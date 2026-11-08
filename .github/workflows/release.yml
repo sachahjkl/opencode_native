@@ -87,4 +87,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: odin run tools/occtools -collection:gt=ext/gui_toolkit/src -out:build/occtools -- release publish ${{ github.ref_name }} dist
+        run: mkdir -p build && odin run tools/occtools -collection:gt=ext/gui_toolkit/src -out:build/occtools -- release publish ${{ github.ref_name }} dist
