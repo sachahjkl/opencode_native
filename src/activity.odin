@@ -859,9 +859,10 @@ todo_row :: proc(app: ^App, t: Todo, k: int, em: f32) {
 		}
 		ui.spacer(ui.px(em * 0.25))
 		col := t.status == "in_progress" ? hex(HEX_TEXT) : t.status == "pending" ? hex(HEX_TEXT_SOFT) : hex(HEX_FAINT)
-		runs := [1]ui.Rich_Run{{text = t.content, style = {color = col}}}
+		runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
+		ui.rich_links(t.content, {color = col}, &runs)
 		ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}})
-		ui.rich_paragraph("###c", runs[:])
+		link_clicked(ui.rich_paragraph("###c", runs[:]))
 		ui.spacer(ui.px(em * 0.6))
 	}
 	ui.spacer(ui.px(em * 0.15))

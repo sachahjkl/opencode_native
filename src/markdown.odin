@@ -41,6 +41,13 @@ inline_runs :: proc(text: string, base: ui.Rich_Style, out: ^[dynamic]ui.Rich_Ru
 	for i < len(text) {
 		c := text[i]
 		switch {
+		case ui.web_address_len(text, i) > 0:   // a bare web address: a link (before the emphasis marks: "_" is common in them)
+			n := ui.web_address_len(text, i)
+			flush(out, text[start:i], st)
+			l := st
+			l.link, l.underline, l.color = text[i:i + n], true, {}
+			flush(out, text[i:i + n], l)
+			i += n; start = i
 		case strings.has_prefix(text[i:], "**") || strings.has_prefix(text[i:], "__"):
 			flush(out, text[start:i], st); st.bold = !st.bold; i += 2; start = i
 		case strings.has_prefix(text[i:], "~~"):
@@ -57,6 +64,9 @@ inline_runs :: proc(text: string, base: ui.Rich_Style, out: ^[dynamic]ui.Rich_Ru
 			cs.code = true
 			if code_size > 0 { cs.size = code_size }
 			cs.color = hex(HEX_INLINE_CODE)
+			if inner := text[i + 1:i + 1 + e]; ui.web_address_len(inner, 0) == len(inner) {   // `https://...`: a link still
+				cs.link, cs.underline, cs.color = inner, true, {}
+			}
 			flush(out, text[i + 1:i + 1 + e], cs)
 			i += e + 2; start = i
 		case c == '[':
@@ -66,7 +76,7 @@ inline_runs :: proc(text: string, base: ui.Rich_Style, out: ^[dynamic]ui.Rich_Ru
 			flush(out, text[start:i], st)
 			l := st
 			l.link = text[i + close_b + 2:i + close_b + close_p]
-			l.underline = true
+			l.underline, l.color = true, {}   // (the theme's link colour)
 			flush(out, text[i + 1:i + close_b], l)
 			i += close_b + close_p + 1; start = i
 		case:
@@ -248,7 +258,6 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 	}
 }
 
-@(private = "file")
 link_clicked :: proc(res: ui.Rich_Result) {
 	if res.link_clicked >= 0 { link_open(res.link) }
 }
@@ -387,7 +396,7 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 						if ui.column(id = "###v") {   // (the room around the words is the spacers': measured so)
 							ui.spacer(ui.px(math.round(em * TABLE_CELL_PAD_Y_EM)))
 							ui.next({width = ui.fill(), font = the_app.font, font_size = cell_size, flags = {.Selectable}, text_align = al, text_pad = 0})
-							ui.rich_paragraph("###p", runs[:], version = src_version(c, c, cell_size))
+							link_clicked(ui.rich_paragraph("###p", runs[:], version = src_version(c, c, cell_size)))
 							ui.spacer(ui.px(math.round(em * TABLE_CELL_PAD_Y_EM)))
 						}
 						ui.spacer(ui.px(pad))

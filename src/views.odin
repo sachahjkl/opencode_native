@@ -1100,9 +1100,10 @@ user_message :: proc(app: ^App, m: ^Message, em: f32) {
 					text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}
 				ui.spacer(ui.px(em * 0.35))
-				runs := [1]ui.Rich_Run{{text = m.text, style = {color = hex(HEX_USER_TEXT)}}}
+				runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
+				ui.rich_links(m.text, {color = hex(HEX_USER_TEXT)}, &runs)
 				ui.next({width = ui.fill(), flags = {.Selectable}})
-				ui.rich_paragraph("###text", runs[:])
+				link_clicked(ui.rich_paragraph("###text", runs[:]))
 				if len(m.images) > 0 {
 					ui.spacer(ui.px(em * 0.6))
 					sc := ui.scale()
@@ -1396,11 +1397,12 @@ mono_text :: proc(body: string, extra: int, em, pad: f32, color := Color{}, flus
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###r") {
 		ui.spacer(ui.px(em * pad))
-		runs := [1]ui.Rich_Run{{text = body, style = {font = the_app.mono, color = color.a > 0 ? color : hex(HEX_TOOL_OUTPUT)}}}
+		runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
+		ui.rich_links(body, {font = the_app.mono, color = color.a > 0 ? color : hex(HEX_TOOL_OUTPUT)}, &runs)
 		m := ui.Style_Mod{width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}}
 		if flush { m.text_pad = 0 }   // (its text starts at the pad, as a key above it)
 		ui.next(m)
-		ui.rich_paragraph("###t", runs[:])
+		link_clicked(ui.rich_paragraph("###t", runs[:]))
 		ui.spacer(ui.px(em * pad))
 	}
 	if extra > 0 {
@@ -1455,9 +1457,10 @@ reasoning_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if rail_row(fmt.tprintf("###rb_%s", pid), with_alpha(hex(HEX_WEAK), 0.4)) {
 			ui.spacer(ui.px(em * 0.9))
-			runs := [1]ui.Rich_Run{{text = string(p.text[:]), style = {italic = true, color = hex(HEX_REASONING_TEXT)}}}
+			runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
+			ui.rich_links(string(p.text[:]), {italic = true, color = hex(HEX_REASONING_TEXT)}, &runs)
 			ui.next({width = ui.fill(), font_size = math.round(em * FS_LABEL), flags = {.Selectable}})
-			ui.rich_paragraph("###t", runs[:])
+			link_clicked(ui.rich_paragraph("###t", runs[:]))
 		}
 	}
 	ui.spacer(ui.px(em * 0.5))

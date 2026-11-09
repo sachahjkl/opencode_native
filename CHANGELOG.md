@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-09
+
+### Added
+
+- **Web addresses are links everywhere**: an `http://` or `https://` address written as it is, or alone in inline code, is in the link colour, underlined, and opens on a click. This holds in replies, your messages, tool output, reasoning, to-dos, headings and table cells. Markdown links take the link colour too.
+
 ### Changed
 - **The themes and the machined look are gui_toolkit's** (0.117.0): the same themes, in their dark and light versions, and
   the same reliefs, now shared with the toolkit's other programs. Six themes come with it: Midnight, Graphite, Amber,
@@ -1005,7 +1011,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.27.0
 [0.26.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.26.0
 [0.25.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.25.2
 [0.25.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.25.1
