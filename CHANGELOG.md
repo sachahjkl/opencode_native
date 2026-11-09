@@ -5,6 +5,8 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.24.6] - 2026-11-09
+
 ### Added
 
 - **Push a command to the background from the conversation**: under a shell call that holds the turn, "push to background"; once there, the call says "in background" with an orange lamp while its command runs, then "finished in background". The activity tray's row of such a command says "in background" too.
@@ -939,7 +941,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.5...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.6...HEAD
+[0.24.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.6
 [0.24.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.5
 [0.24.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.4
 [0.24.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.3
