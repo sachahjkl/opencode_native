@@ -7,7 +7,11 @@ project follows [semantic versioning](https://semver.org).
 
 ### Changed
 
-- **Setup is gui_toolkit's** (gui_toolkit 0.126.0): opencode native's Setup dialog moved into the toolkit's `setup` package, shared with Papier. The same install, the same answer kept in settings.txt. A path in the dialog shows whole under the pointer, and a click or its button copies it. Linux: Setup no longer offers a copy of the menu entry on the Desktop; Uninstall still removes the one an earlier version wrote.
+- **Setup is gui_toolkit's** (gui_toolkit 0.127.0): opencode native's Setup dialog moved into the toolkit's `setup` package, shared with Papier, in opencode's look (its blurred backdrop, its buttons, its close cross). The same install, the same answer kept in settings.txt. The dialog can be resized from its edges and its corner. A path in it shows whole under the pointer, and a click or its button copies it.
+
+### Fixed
+
+- **An accent or a danger button in a dialog keeps its colours**: opencode's colours of what floats came ahead of the buttons' and gave them the dialog's background (a white label on white).
 
 ## [0.30.0] - 2026-11-09
 

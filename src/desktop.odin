@@ -74,7 +74,33 @@ setup_config :: proc() -> setup.Config {
 	return setup.Config{
 		identity = identity(), version = APP_VERSION, install_folder = INSTALL_FOLDER, icons = desktop_icons(),
 		note = APP_NOT_THEIRS, prepare = setup_prepare,
+		// (the dialog in opencode's look: its blurred backdrop, its buttons, its close cross)
+		backdrop = proc(_: rawptr) { dialog_backdrop() },
+		button = setup_button,
+		close = proc(_: string, _: f32, _: rawptr) -> bool {
+			open := true
+			dialog_close(&open)
+			return !open
+		},
 	}
+}
+
+// A button of the Setup dialog as opencode's: a bevel of its kind, with the icon of what it does.
+@(private = "file")
+setup_button :: proc(id, label: string, kind: setup.Button_Kind, em: f32, _: rawptr) -> bool {
+	icon := ""
+	switch id {
+	case "###setup_uninstall": icon = ICO_DELETE
+	case "###setup_install":   icon = ICO_CHECK
+	case "###setup_launch":    icon = ICO_RIGHT
+	}
+	k := Btn_Kind.Normal
+	switch kind {
+	case .Normal: k = .Normal
+	case .Accent: k = .Accent
+	case .Danger: k = .Danger
+	}
+	return bevel_button(id, label, icon, k).clicked
 }
 
 // Called by both Install and Uninstall before the packages write or remove: the record of Setup up to 0.20.0 goes, so that

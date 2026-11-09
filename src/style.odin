@@ -92,24 +92,31 @@ theme_setup :: proc(t: ^ui.Theme) {
 	ui.theme_add(t, "bare input border", CLEAR)
 	ui.theme_add(t, "code_bg", hex(HEX_CODE_BG))
 	ui.theme_add(t, "link", hex(HEX_BLUE))
-	ui.theme_add(t, "floating background", hex(HEX_FLOATING_BG))
-	ui.theme_add(t, "floating border", hex(HEX_FLOATING_BORDER))
 	ui.theme_add(t, "floating scrim background", CLEAR)   // (dialog_backdrop paints it; "floating background" made it opaque)
 	ui.theme_add(t, "selection", with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
 	ui.theme_add(t, "selection text", hex(HEX_BRIGHT))   // (over the selection, whatever the text's own colour: a faint one was lost on it)
 	ui.apply_palette(t, themed_palette())
+	floating_colours(t)
 	t.glow = the_app != nil && the_app.prefs.glow ? 1 : 0
+}
+
+// What floats (dialogs, popovers) in opencode's colours: set on the palette's own entries, after it. An entry of ours ahead of
+// the palette's matched as many tags as a button's and won: an accent or danger button in a dialog took the dialog's background
+// under its own text (a white label on white).
+@(private = "file")
+floating_colours :: proc(t: ^ui.Theme) {
+	ui.theme_set(t, "floating background", hex(HEX_FLOATING_BG))
+	ui.theme_set(t, "floating border", hex(HEX_FLOATING_BORDER))
 }
 
 // The theme shown, in the toolkit's theme: its palette and our entries made of opencode's colours (a theme was chosen).
 theme_refresh :: proc(t: ^ui.Theme) {
 	ui.theme_set(t, "code_bg", hex(HEX_CODE_BG))
 	ui.theme_set(t, "link", hex(HEX_BLUE))
-	ui.theme_set(t, "floating background", hex(HEX_FLOATING_BG))
-	ui.theme_set(t, "floating border", hex(HEX_FLOATING_BORDER))
 	ui.theme_set(t, "selection", with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
 	ui.theme_set(t, "selection text", hex(HEX_BRIGHT))
 	ui.apply_palette(t, themed_palette())
+	floating_colours(t)
 	t.glow = the_app != nil && the_app.prefs.glow ? 1 : 0
 }
 

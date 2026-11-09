@@ -139,7 +139,7 @@ TLS is rustls, checked against the system's trust store.
 | `--server=<name>` | a saved server at start |
 | `--session=<id>` | open that session at start |
 | `--search=<text>` | the sidebar's search, filled at start |
-| `--install [--desktop]` | install this copy for the user, or repair the install (Windows: `%LOCALAPPDATA%\Programs\opencode-native`, Start menu, Settings > Apps; Linux: `~/.local/share/opencode-native`, the applications menu, the icon); `--desktop` adds a shortcut on the Desktop (Windows) |
+| `--install [--desktop]` | install this copy for the user, or repair the install (Windows: `%LOCALAPPDATA%\Programs\opencode-native`, Start menu, Settings > Apps; Linux: `~/.local/share/opencode-native`, the applications menu, the icon); `--desktop` adds a shortcut on the Desktop |
 | `--uninstall [--quiet]` | remove it (it asks first unless `--quiet`); the files of a copy that runs go when it ends |
 | `--status` | prints the state and the installed program; exit code 0 installed, 2 needs repair, 1 not installed |
 | `--setup` | open Setup at start |
