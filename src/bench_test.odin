@@ -728,3 +728,35 @@ a_form_s_long_lines_stay_in_its_card :: proc(t: ^testing.T) {
 	inside(t, card, session.find(s, "form_rv1"), "a long answer")
 	forms_clear(app)
 }
+
+// Under the pointer, a table's copy button is over its rows (the last of the table's boxes: built before them, the rows hid it and took
+// its clicks), and a click on it copies the table.
+@(test)
+a_table_s_copy_button_is_over_its_rows :: proc(t: ^testing.T) {
+	app, s := bench_app(t)
+	// up from the bottom until a table's rows are in sight (the conversation builds what is seen)
+	table_in_sight :: proc(s: ^session.Session, app: ^App) -> ^ui.Box {
+		for i := 0; ; i += 1 {
+			b := session.find(s, "rows", i)
+			if b == nil { return nil }
+			// (a table's, in the conversation: the sidebar's list is "rows" too)
+			if b.rect.min.x > app.sidebar_w && b.rect.min.y > 0 && b.rect.max.y < f32(BENCH_SIZE.y) && b.rect.max.x > b.rect.min.x { return b }
+		}
+	}
+	rows := table_in_sight(s, app)
+	mid := [2]f32{app.sidebar_w + (f32(BENCH_SIZE.x) - app.sidebar_w) * 0.5, f32(BENCH_SIZE.y) * 0.5}
+	for k := 0; rows == nil && k < 60; k += 1 {
+		session.event(s, {kind = .Scroll, pos = mid, delta = {0, 3}})
+		session.wait_idle(s)   // (the scroll glides: where the table is, once it stands)
+		rows = table_in_sight(s, app)
+	}
+	if !testing.expect(t, rows != nil, "a table in sight") { return }
+	session.move(s, session.center(rows))
+	session.wait_idle(s)
+	copy := session.find(s, "tcopy")
+	if !testing.expect(t, copy != nil, "its copy button, under the pointer") { return }
+	testing.expect(t, copy.parent != nil && copy.parent.last == copy, "the last of the table's boxes: over its rows")
+	session.click_at(s, session.center(copy))
+	session.frames(s, 2)
+	testing.expect(t, session.find_text(s, "Table copied") != nil, "a click on it copies the table")
+}

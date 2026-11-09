@@ -336,13 +336,13 @@ bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Nor
 }
 
 // A round, icon-only ghost button (the glyph only lights up under the pointer).
-glyph_button :: proc(id: string, icon: string, size: f32 = 0, color := Color{}) -> ui.Signal {
+glyph_button :: proc(id: string, icon: string, size: f32 = 0, color := Color{}, kind := Btn_Kind.Ghost) -> ui.Signal {
 	em := ui.font_size()
 	sz := size > 0 ? size : math.round(em * GLYPH_BUTTON_EM)
 	ui.next({width = ui.px(sz), height = ui.px(sz), axis = .X, cross = .Center})
 	b := ui.build_box({.Clickable, .Focusable}, id)
 	d := ui.frame_new(Bevel_Draw)
-	d^ = {kind = .Ghost, radius = GLYPH_BUTTON_RADIUS}
+	d^ = {kind = kind, radius = GLYPH_BUTTON_RADIUS}
 	b.custom = bevel_box_draw
 	b.custom_user = d
 	sig := ui.signal(b)

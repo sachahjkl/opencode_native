@@ -356,25 +356,6 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 	overflow := room > 0 && total > room - 2 * edge
 	hs: ^ui.Box
 	if well(id, radius = 6, base = HEX_TABLE_WELL) {
-		// under the pointer, a copy button in its corner: the table as HTML (a plain grid, any program's own style) and as its
-		// Markdown text
-		table_box := ui.parent_box()
-		over := draw.rect_contains(table_box.rect, ui.mouse_pos())   // (its cells are no buttons: the pointer anywhere on it)
-		if tw := table_box.rect.max.x - table_box.rect.min.x; tw > 1 && over {
-			sz := math.round(em * 1.6)
-			m := math.round(em * 0.25)
-			ui.next({fixed_x = tw - sz - m, fixed_y = m, width = ui.px(sz), height = ui.px(sz), axis = .X})
-			if ui.row(id = "###tcopy") {
-				ui.a11y({role = .Button, name = "Copy the table"})
-				sig := glyph_button("###copy", lucide.COPY, sz)
-				if sig.clicked {
-					html := table_html(cells, aligns)
-					_ = platform.clipboard_set(the_app.win, {text = strings.join(lines, "\n", context.temp_allocator), html = html})
-					ui.toast(.Good, "Table copied")
-				}
-				if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Copy the table (pastes as a table)") } }
-			}
-		}
 		ui.spacer(ui.px(em * 0.3))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###in") {
@@ -412,6 +393,30 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 		}
 		if overflow { table_scroll_bar(hs, total, em) }
 		ui.spacer(ui.px(em * 0.3))
+		table_copy_button(cells, aligns, lines, em)
+	}
+}
+
+// Under the pointer, a copy button in the table's top right corner: the table as HTML (a plain grid, any program's own style) and
+// as its Markdown text. Built last, over the rows (built before them, the rows hid it and took its clicks), on a face of its own
+// (over the header's last words).
+@(private = "file")
+table_copy_button :: proc(cells: [][][dynamic]ui.Rich_Run, aligns: []ui.Text_Align, lines: []string, em: f32) {
+	table_box := ui.parent_box()
+	over := draw.rect_contains(table_box.rect, ui.mouse_pos())   // (its cells are no buttons: the pointer anywhere on it)
+	tw := table_box.rect.max.x - table_box.rect.min.x
+	if tw <= 1 || !over { return }
+	sz := math.round(em * 1.6)
+	m := math.round(em * 0.25)
+	ui.next({fixed_x = tw - sz - m, fixed_y = m, width = ui.px(sz), height = ui.px(sz), axis = .X})
+	if ui.row(id = "###tcopy") {
+		ui.a11y({role = .Button, name = "Copy the table"})
+		sig := glyph_button("###copy", lucide.COPY, sz, kind = .Normal)
+		if sig.clicked {
+			_ = platform.clipboard_set(the_app.win, {text = strings.join(lines, "\n", context.temp_allocator), html = table_html(cells, aligns)})
+			ui.toast(.Good, "Table copied")
+		}
+		if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Copy the table (pastes as a table)") } }
 	}
 }
 

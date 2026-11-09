@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.32.1] - 2026-11-09
+
+### Fixed
+
+- **A table's copy button can be seen and clicked**: in the table's top right corner under the pointer, on a face of its own. It was built before the rows, which hid it and took its clicks. It puts the table on the clipboard as a grid (pastes as a table in a document, a mail, a sheet) and as its Markdown text.
+
 ## [0.32.0] - 2026-11-09
 
 ### Changed
@@ -1088,7 +1094,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.32.1...HEAD
+[0.32.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.32.1
 [0.32.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.32.0
 [0.31.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.31.1
 [0.31.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.31.0
