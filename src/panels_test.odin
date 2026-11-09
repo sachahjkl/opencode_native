@@ -1,7 +1,7 @@
 package occ
 
 // The bench of the panels and of what is around them (answers_test.odin has the bench itself): shells as tabs of the dock, the page and its
-// agents, the updater, the Setup dialog. What needs a window, a socket or a web view is not here: their logic is, in what those call.
+// agents, the updater. What needs a window, a socket or a web view is not here: their logic is, in what those call.
 
 import "base:runtime"
 import "core:fmt"
@@ -1082,69 +1082,6 @@ an_install_goes_to_the_folder_of_its_offer :: proc(t: ^testing.T) {
 update_channel_seen :: proc(app: ^App, channel: string) {
 	app.prefs.update_channel = channel
 	update_channel_follow(app)
-}
-
-////////////////////////////////
-// Setup
-
-@(test)
-an_uninstall_of_the_running_copy_offers_nothing_more :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	setup_uninstalled(app, true, true, "")
-	testing.expect_value(t, app.setup.facts.state, Install_State.Removal_Scheduled)
-	testing.expect(t, app.setup.note.good, "it went well")
-	setup_refresh(app)
-	testing.expect_value(t, app.setup.facts.state, Install_State.Removal_Scheduled)
-}
-
-@(test)
-an_uninstall_forgets_the_copy_just_installed :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	app.setup.installed = strings.clone("C:/gone/opencode-native.exe")
-	setup_uninstalled(app, true, false, "")
-	testing.expect_value(t, app.setup.installed, "")
-	testing.expect(t, app.setup.facts.state != .Removal_Scheduled, "it is gone already")
-}
-
-@(test)
-an_uninstall_that_failed_says_so_and_keeps_the_rest :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	app.setup.installed = strings.clone("C:/there/opencode-native.exe")
-	setup_uninstalled(app, false, false, "in use")
-	testing.expect_value(t, app.setup.note.text, "in use")
-	testing.expect(t, !app.setup.note.good, "bad news, in one piece")
-	testing.expect(t, app.setup.installed != "", "the copy is still there")
-}
-
-@(test)
-the_state_of_an_install_is_the_same_everywhere :: proc(t: ^testing.T) {
-	testing.expect_value(t, install_state_of({}), Install_State.Not_Installed)
-	testing.expect_value(t, install_state_of({start_lnk = true}), Install_State.Repair)   // (a shortcut to nothing)
-	testing.expect_value(t, install_state_of({record = true}), Install_State.Repair)
-	testing.expect_value(t, install_state_of({manifest = true}), Install_State.Repair)   // (a manifest whose program is gone)
-	whole := Install_Facts{exe_there = true, start_lnk = true, record = true, manifest = true}
-	testing.expect_value(t, install_state_of(whole), Install_State.Other_Copy)
-	this := whole
-	this.running_it = true
-	testing.expect_value(t, install_state_of(this), Install_State.This_Copy)
-	no_launcher := this
-	no_launcher.start_lnk = false
-	testing.expect_value(t, install_state_of(no_launcher), Install_State.Repair)
-	no_record := this
-	no_record.record = false
-	testing.expect_value(t, install_state_of(no_record), Install_State.Repair)
-	a_file_gone := this
-	a_file_gone.missing = 1
-	testing.expect_value(t, install_state_of(a_file_gone), Install_State.Repair)
-	// an install of Setup before 0.21 (no manifest): Repair rewrites it, from the installed copy or from another one
-	earlier := this
-	earlier.manifest = false
-	testing.expect_value(t, install_state_of(earlier), Install_State.Repair)
-	earlier.running_it = false
-	testing.expect_value(t, install_state_of(earlier), Install_State.Repair)
 }
 
 ////////////////////////////////

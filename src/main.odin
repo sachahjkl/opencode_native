@@ -20,6 +20,7 @@ import "gt:font"
 import "gt:host"
 import "gt:platform"
 import "gt:render"
+import setup "gt:setup"
 import "gt:ui"
 
 // A face of the fonts. (Inside App, `font` names the face of the interface, from host.Shared: not the package.)
@@ -105,7 +106,7 @@ App :: struct {
 	view_grown:     bool,                    // the viewer's grips were dragged since it opened: its picture may pass its pixels (viewer_frame)
 	view_start:       Image_Ref,             // --image=<file>: opened in the viewer once it is decoded (its data owned)
 	devtools:         ^devtools.Server,   // TOOLKIT_DEVTOOLS=<port>: driven over the Chrome DevTools Protocol (the toolkit's tk cdp, or gt:cdp in occtools)
-	setup:            Setup_UI,
+	setup:            setup.Dialog,
 	quit:             bool,
 	last_tick:        time.Tick,
 	frame_times:      Frame_Times,   // the last frame's steps

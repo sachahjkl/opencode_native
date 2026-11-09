@@ -117,8 +117,8 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
   version and the files placed: the uninstall removes exactly these. On NixOS, Setup advises the Nix package, and still makes a
   classic install on request: nix-build makes a profile of the libraries it needs, and the installed copy runs with it.
   A copy that runs from the Nix store is never offered an install or an update. An install made by Setup 0.20.0 or
-  earlier shows as one to repair: Repair (or Uninstall) handles it in one click. The `desktop` package of gui_toolkit does
-  the work.
+  earlier shows as one to repair: Repair (or Uninstall) handles it in one click. The `setup` and `desktop` packages of
+  gui_toolkit do the work.
 
 ## The server
 
@@ -139,7 +139,7 @@ TLS is rustls, checked against the system's trust store.
 | `--server=<name>` | a saved server at start |
 | `--session=<id>` | open that session at start |
 | `--search=<text>` | the sidebar's search, filled at start |
-| `--install [--desktop]` | install this copy for the user, or repair the install (Windows: `%LOCALAPPDATA%\Programs\opencode-native`, Start menu, Settings > Apps; Linux: `~/.local/share/opencode-native`, the applications menu, the icon); `--desktop` adds a shortcut on the Desktop |
+| `--install [--desktop]` | install this copy for the user, or repair the install (Windows: `%LOCALAPPDATA%\Programs\opencode-native`, Start menu, Settings > Apps; Linux: `~/.local/share/opencode-native`, the applications menu, the icon); `--desktop` adds a shortcut on the Desktop (Windows) |
 | `--uninstall [--quiet]` | remove it (it asks first unless `--quiet`); the files of a copy that runs go when it ends |
 | `--status` | prints the state and the installed program; exit code 0 installed, 2 needs repair, 1 not installed |
 | `--setup` | open Setup at start |
@@ -193,7 +193,7 @@ every step is a command of `tools/occtools` (`help` lists them; `AGENTS.md`). Th
 | `src/settings.odin` | preferences (`gt:config`) and the settings dialog, with the server's pages |
 | `src/stats.odin` | the statistics of a session and of its project |
 | `src/style.odin` | the palette, the icons, the machined surfaces |
-| `src/setup.odin`, `src/desktop*.odin`, `src/os_*.odin` | version, Setup dialog, install / uninstall; what each system is asked |
+| `src/setup.odin`, `src/desktop*.odin`, `src/os_*.odin` | version, Setup (gui_toolkit's `setup`: its Config, the user's answer); what each system is asked |
 | `native/occ_native` | the Rust library (C functions): ureq + rustls, image decoding (and the text backend on Linux) |
 | `src/bench_test.odin` | the heavy cases in the test's process (a long conversation, hundreds of sessions); timed with `-define:OCC_BENCH=true` ([docs/performance.md](docs/performance.md)) |
 | `site/` | the GitHub Pages site |

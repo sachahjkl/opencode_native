@@ -3,6 +3,7 @@ package occ
 import "core:os"
 import "core:strings"
 import "core:testing"
+import setup "gt:setup"
 
 _ :: os        // (the tests of Windows)
 _ :: strings
@@ -108,30 +109,26 @@ passwords_in_the_file :: proc(t: ^testing.T) {
 	testing.expect(t, !clear2)
 }
 
+// The user's answer in settings.txt: closed without one, not again for this version; an earlier "standalone" or
+// "installed" stays, unless an upgrade was declined.
 @(test)
-versions_compare_by_number :: proc(t: ^testing.T) {
-	testing.expect(t, version_older("0.5.6", "0.6.0"))
-	testing.expect(t, version_older("0.9.0", "0.10.0"))
-	testing.expect(t, version_older("0.6", "0.6.1"))
-	testing.expect(t, !version_older("0.6.0", "0.6.0"))
-	testing.expect(t, !version_older("0.6.0", "0.6"))
-	testing.expect(t, !version_older("0.7.0", "0.6.9"))
-	testing.expect(t, !version_older("", "0.6.0"), "no version read: nothing to offer")
-	testing.expect(t, !version_older("x", "0.6.0"))
-}
-
-@(test)
-setup_opens_for_an_older_install :: proc(t: ^testing.T) {
-	testing.expect(t, setup_wanted(.Other_Copy, "0.0.1", ""), "older")
-	testing.expect(t, setup_wanted(.Other_Copy, "0.0.1", "standalone"), "what was said for no install is not an answer to this")
-	testing.expect(t, setup_wanted(.Other_Copy, "0.0.1", "installed"))
-	testing.expect(t, !setup_wanted(.Other_Copy, "0.0.1", "dismissed:" + APP_VERSION), "declined for this version")
-	testing.expect(t, setup_wanted(.Other_Copy, "0.0.1", "dismissed:0.0.0"), "declined for another one")
-	testing.expect(t, !setup_wanted(.Other_Copy, APP_VERSION, ""), "the same version")
-	testing.expect(t, !setup_wanted(.Other_Copy, "99.0.0", ""), "a newer one")
-	testing.expect(t, !setup_wanted(.This_Copy, "0.0.1", ""), "this is the installed copy")
-	testing.expect(t, setup_wanted(.Not_Installed, "", ""))
-	testing.expect(t, !setup_wanted(.Not_Installed, "", "standalone"))
+setup_keeps_the_users_answer :: proc(t: ^testing.T) {
+	none := setup.Facts{state = .Not_Installed}
+	older := setup.Facts{state = .Other_Copy, version = "0.0.1"}
+	dismissed := "dismissed:" + APP_VERSION
+	expect :: proc(t: ^testing.T, ev: setup.Event, f: setup.Facts, saved, want: string, changed: bool, loc := #caller_location) {
+		c, ch := setup_choice(ev, f, saved)
+		testing.expect_value(t, c, want, loc = loc)
+		testing.expect_value(t, ch, changed, loc = loc)
+	}
+	expect(t, .Installed, none, "", "installed", true)
+	expect(t, .Kept_Standalone, none, "", "standalone", true)
+	expect(t, .Dismissed, none, "", dismissed, true)
+	expect(t, .Dismissed, none, "standalone", "standalone", false)
+	expect(t, .Dismissed, none, "installed", "installed", false)
+	expect(t, .Dismissed, older, "standalone", dismissed, true)   // (an upgrade declined: for this version)
+	expect(t, .Uninstalled, none, "installed", "installed", false)
+	expect(t, .None, none, "", "", false)
 }
 
 @(test)

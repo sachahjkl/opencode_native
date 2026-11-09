@@ -4,9 +4,11 @@ package occ
 import "core:fmt"
 import "core:os"
 import "core:testing"
+import setup "gt:setup"
 
-// Setup up to 0.20.0 wrote these files itself (desktop_linux.odin of that version): the toolkit's integration finds them,
-// Setup shows the install as one to repair, and its uninstall removes all of it.
+// Setup up to 0.20.0 wrote these files itself (desktop_linux.odin of that version): the toolkit's setup finds them and
+// shows the install as one to repair, and its uninstall, with opencode native's part (the version file, the copy on the
+// Desktop), removes all of it.
 @(test)
 an_install_of_the_earlier_setup_is_seen_and_removed :: proc(t: ^testing.T) {
 	tmp, _ := os.temp_dir(context.temp_allocator)
@@ -42,21 +44,22 @@ an_install_of_the_earlier_setup_is_seen_and_removed :: proc(t: ^testing.T) {
 	}
 	_ = os.chmod(exe, os.Permissions_Default_File | {.Execute_User})
 
-	f := install_facts()
+	cfg := setup_config()
+	f := setup.facts(cfg)
 	testing.expect_value(t, f.dir, dir)
 	testing.expect(t, f.exe_there, "the program")
 	testing.expect(t, !f.running_it)
 	testing.expect(t, f.start_lnk, "the menu entry runs it")
-	testing.expect(t, f.desk_lnk, "the copy on the Desktop runs it")
 	testing.expect(t, f.record, "the icon")
 	testing.expect(t, !f.manifest, "the earlier Setup kept a version file")
-	testing.expect_value(t, f.state, Install_State.Repair)
+	testing.expect_value(t, f.state, setup.State.Repair)
 
-	ok, leftovers, msg := desktop_uninstall()
+	ok, leftovers, msg := setup.uninstall(cfg)
 	testing.expect(t, ok, msg)
+	desktop_copy_remove()
 	testing.expect_value(t, len(leftovers), 0)
 	delete(leftovers)
 	for f in files { testing.expectf(t, !os.exists(f[0]), "%s is gone", f[0]) }
 	testing.expect(t, !os.exists(dir), "the install folder is gone")
-	testing.expect_value(t, install_facts().state, Install_State.Not_Installed)
+	testing.expect_value(t, setup.facts(cfg).state, setup.State.Not_Installed)
 }

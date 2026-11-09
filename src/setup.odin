@@ -1,20 +1,18 @@
-// The version, the client's own preferences, the command line of the desktop integration, and the Setup dialog:
-// install this copy for the user (Start menu, Settings > Apps), repair, or uninstall (desktop.odin does the work, with the
-// toolkit's desktop package).
+// The version, the client's own preferences, the command line of the desktop integration, and the Setup dialog: the
+// toolkit's (gt:setup), with opencode native's Config (desktop.odin setup_config), its logo, and the user's answer kept in
+// settings.txt.
 package occ
 
 import "core:fmt"
 import "core:image/png"
-import "core:math"
 import "core:os"
 import "core:path/filepath"
 import "core:slice"
-import "core:strconv"
 import "core:strings"
 import desktop "gt:desktop"
 import "gt:draw"
-import process "gt:process"
 import "gt:render"
+import setup "gt:setup"
 import "gt:ui"
 
 APP_VERSION :: "0.30.0"
@@ -58,20 +56,21 @@ desktop_cli :: proc() -> (handled: bool, code: int) {
 	args := os.args[1:]
 	switch {
 	case slice.contains(args, "--install"):
-		ok, msg := desktop_install(slice.contains(args, "--desktop"))
+		ok, msg := setup.install(setup_config(), slice.contains(args, "--desktop"))
 		say(ok ? "installed: %s\n" : "install failed: %s\n", msg)
 		if desktop.is_nixos() { say("%s\n", NIXOS_ADVICE) }
 		return true, ok ? 0 : 1
 	case slice.contains(args, "--uninstall"):
 		quiet := slice.contains(args, "--quiet")
 		if !quiet && message_box("Remove opencode native from this computer?\n\n" + LBL_PIECES + " and the program are removed. Nothing on the opencode server changes.", true) != 6 { return true, 1 }
-		ok, leftovers, msg := desktop_uninstall()
+		ok, leftovers, msg := setup.uninstall(setup_config())
+		if ok { desktop_copy_remove() }
 		// (this process ends now: what it holds goes after it)
-		if len(leftovers) > 0 && !desktop_remove_later(leftovers[:]) { ok, msg = false, "cannot schedule the removal of the program" }
+		if len(leftovers) > 0 && !setup.remove_later(setup_config(), leftovers[:]) { ok, msg = false, "cannot schedule the removal of the program" }
 		if !quiet { message_box(ok ? "opencode native was removed." : fmt.tprintf("The removal failed: %s", msg), false) }
 		return true, ok ? 0 : 1
 	case slice.contains(args, "--status"):
-		f := install_facts()
+		f := setup.facts(setup_config())
 		say("%v %s\n", f.state, f.exe)
 		return true, f.state == .This_Copy || f.state == .Other_Copy ? 0 : f.state == .Repair ? 2 : 1
 	}
@@ -84,7 +83,8 @@ desktop_cli :: proc() -> (handled: bool, code: int) {
 
 Logo :: struct {
 	tex:  render.Texture,
-	tint: u32,   // the accent it was painted in
+	size: [2]f32,   // of the picture, in pixels
+	tint: u32,      // the accent it was painted in
 }
 
 // The edge of the bolt takes the accent. All the rest of the picture is grey, so what has a colour is that edge, its soft pixels included:
@@ -104,6 +104,7 @@ logo_load :: proc(app: ^App) {
 	img, err := png.load_from_bytes(LOGO_PNG, {.alpha_add_if_missing}, context.temp_allocator)
 	if err != nil || img == nil || img.channels != 4 || img.depth != 8 { return }
 	if app.logo.tex == 0 { app.logo.tex = render.create_texture_rgba(&app.r, img.width, img.height) }
+	app.logo.size = {f32(img.width), f32(img.height)}
 	logo_tint_pixels(img.pixels[:], app.prefs.accent_hex)
 	app.logo.tint = app.prefs.accent_hex
 	render.update_texture_rgba(&app.r, app.logo.tex, 0, 0, img.width, img.height, img.pixels[:])
@@ -116,9 +117,15 @@ logo_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	draw.image(dc, app.logo.tex, b.rect)
 }
 
+// Paints the logo again when another accent was chosen.
+@(private = "file")
+logo_follow_accent :: proc(app: ^App) {
+	if app.logo.tex != 0 && app.logo.tint != app.prefs.accent_hex { logo_load(app) }
+}
+
 // The logo in a square of `size` (frame pixels).
 logo_box :: proc(app: ^App, id: string, size: f32) {
-	if app.logo.tex != 0 && app.logo.tint != app.prefs.accent_hex { logo_load(app) }   // (another accent was chosen)
+	logo_follow_accent(app)
 	ui.next({width = ui.px(size), height = ui.px(size)})
 	b := ui.build_box({}, id)
 	b.custom = logo_draw
@@ -126,259 +133,46 @@ logo_box :: proc(app: ^App, id: string, size: f32) {
 }
 
 ////////////////////////////////
-// The Setup dialog
-
-// The result of the last action: its words and how it went are one thing.
-Setup_Note :: struct { text: string, good: bool }   // (text owned, "": none)
-
-Setup_UI :: struct {
-	open:      bool,
-	facts:     Install_Facts,
-	desktop:   bool,
-	note:      Setup_Note,
-	installed: string,   // an install just made: the copy to start (owned)
-	removal_scheduled: bool,   // this copy was uninstalled while it runs: nothing is left to do but close
-	leftovers: [dynamic]string,   // ... and its files, deleted once this process has ended (setup_finish; owned)
-}
-
-// At the end of the process: the deletion of what an uninstall left because this process held it. It is scheduled here, not
-// at the click: the system's helper waits a few minutes at most for the process, and the window can stay open longer.
-setup_finish :: proc(app: ^App) {
-	st := &app.setup
-	if len(st.leftovers) > 0 { _ = desktop_remove_later(st.leftovers[:]) }
-	for l in st.leftovers { delete(l) }
-	delete(st.leftovers)
-	st.leftovers = nil
-}
+// The Setup dialog (gt:setup). The user's answer is kept in settings.txt under "setup".
 
 setup_open :: proc(app: ^App) {
-	app.setup.open = true
-	setup_refresh(app)
-	app.setup.desktop = app.setup.facts.desk_lnk
+	setup.open(&app.setup, setup_config())
 }
 
-setup_refresh :: proc(app: ^App) {
-	f := install_facts()
-	f.dir = strings.clone(f.dir)
-	f.exe = strings.clone(f.exe)
-	f.running = strings.clone(f.running)
-	f.version = strings.clone(f.version)
-	delete(app.setup.facts.dir); delete(app.setup.facts.exe); delete(app.setup.facts.running); delete(app.setup.facts.version)
-	if app.setup.removal_scheduled { f.state = .Removal_Scheduled }   // (the file is still there: what the disk says would offer a Repair)
-	app.setup.facts = f
-}
-
-@(private = "file")
-set_message :: proc(app: ^App, good: bool, msg: string) {
-	delete(app.setup.note.text)
-	app.setup.note = {strings.clone(msg), good}
-}
-
-// How an uninstall ended. The copy just installed is gone with it: nothing to open any more, and Install is on offer again.
-setup_uninstalled :: proc(app: ^App, ok, deferred: bool, msg: string) {
-	st := &app.setup
-	if !ok {
-		set_message(app, false, msg)
-		setup_refresh(app)
-		return
-	}
-	delete(st.installed)
-	st.installed = ""
-	st.removal_scheduled = deferred
-	set_message(app, true, deferred ? "Removed. The program is deleted when this window closes." : "Removed.")
-	setup_refresh(app)
-}
-
-// "0.5.6" before "0.6.0", number by number (a version that does not read as one is not older: nothing to offer).
-version_older :: proc(a, b: string) -> bool {
-	if a == "" || b == "" { return false }
-	aa, bb := a, b
-	for {
-		x, x_ok := strings.split_iterator(&aa, ".")
-		y, y_ok := strings.split_iterator(&bb, ".")
-		if !x_ok && !y_ok { return false }
-		xn, xp := strconv.parse_int(x_ok ? x : "0")
-		yn, yp := strconv.parse_int(y_ok ? y : "0")
-		if !xp || !yp { return false }
-		if xn != yn { return xn < yn }
-	}
-}
-
-// An older copy is installed and this one could replace it.
-setup_is_upgrade :: proc(state: Install_State, installed: string) -> bool {
-	return state == .Other_Copy && version_older(installed, APP_VERSION)
-}
-
-// Whether a start opens the dialog: an older install to upgrade, unless the dialog was closed for this version; no install or one
-// to repair, unless the user also said "standalone" for good.
-setup_wanted :: proc(state: Install_State, installed, choice: string) -> bool {
-	if choice == fmt.tprintf("dismissed:%s", APP_VERSION) { return false }
-	if setup_is_upgrade(state, installed) { return true }
-	return choice != "standalone" && (state == .Not_Installed || state == .Repair)
-}
-
+// At a start: the dialog when there is something to do, unless the user answered already.
 setup_offer_at_start :: proc(app: ^App) {
 	if os.get_env("OPENCODE_NATIVE_NO_SETUP", context.temp_allocator) != "" { return }
-	f := install_facts()
-	if f.from_nix { return }   // (Nix installs and updates this copy: there is nothing to offer it)
-	if setup_wanted(f.state, f.version, settings_get("setup")) { setup_open(app) }
+	cfg := setup_config()
+	if setup.wanted(setup.facts(cfg), APP_VERSION, settings_get("setup")) { setup.open(&app.setup, cfg) }
 }
 
-SETUP_DIALOG_TOP :: 0.18   // of the window's height
-SETUP_MARGIN_EM  :: 1.5
-HEX_SETUP_WELL   :: 0x0a0a0aff
-
 setup_dialog :: proc(app: ^App, em: f32) {
-	st := &app.setup
-	was_open := st.open
-	if ui.modal("setup", em * 36, &st.open, SETUP_DIALOG_TOP) {
-		dialog_backdrop()
-		f := &st.facts
-		ui.spacer(ui.px(em * 1.3))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row() {
-			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
-			logo_box(app, "###setup_logo", math.round(em * 4.2))
-			ui.spacer(ui.px(em * 1.1))
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-			if ui.column() {
-				ui.spacer(ui.px(em * 0.4))
-				text("t", "opencode native", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_DISPLAY), height = ui.px(em * 2)})
-				text("v", fmt.tprintf("version %s  ·  Froment Software", APP_VERSION), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.3)})
-				info_line(app, "###setup_not_theirs", APP_NOT_THEIRS, em, hex(HEX_FAINT))
-				ui.spacer(ui.px(em * 0.7))
-				col := hex(HEX_YELLOW)
-				state := ""
-				switch f.state {
-				case .Not_Installed: state = "Not installed: this copy runs on its own."
-				case .This_Copy:     state = "Installed: this is the installed copy."; col = hex(HEX_GREEN)
-				case .Repair:
-					col = hex(HEX_RED)
-					switch {
-					case !f.exe_there:  state = "The installed program is missing: what is left of it can be repaired or removed."
-					case !f.manifest && f.running_it: state = "Installed by an earlier Setup: Repair writes the record this version keeps."; col = accent()
-					case !f.manifest:   state = "A copy is installed by an earlier Setup: Repair puts this copy in its place."; col = accent()
-					case:               state = "Installed, but " + LBL_PIECES_MISSING + " is missing."
-					}
-				case .Other_Copy:    state = fmt.tprintf("A copy is installed (%s): this one runs on its own.", f.version != "" ? f.version : "?")
-				case .Removal_Scheduled: state = "Uninstalled: the program is deleted when this window closes."
-				case .Nix_Package:   state = "Installed by Nix: the Nix package has the menu entry and the icon."; col = hex(HEX_GREEN)
-				}
-				upgrade := setup_is_upgrade(f.state, f.version) && !f.from_nix
-				if upgrade { state = fmt.tprintf("An older copy is installed (%s): upgrade it to %s?", f.version, APP_VERSION); col = accent() }
-				ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
-				if ui.row(.Center) {
-					lamp("###sl", col, 1, size = em * 0.9)
-					ui.spacer(ui.px(em * 0.45))
-					text("s", state, hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
-				}
-				if f.nixos && f.state != .Nix_Package { info_line(app, "###setup_nixos", NIXOS_ADVICE, em) }
-			}
-			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
-		}
-		ui.spacer(ui.px(em))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row() {
-			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-			if well("###where", radius = 8, base = HEX_SETUP_WELL) {
-				ui.spacer(ui.px(em * 0.6))
-				line :: proc(id, k, v: string, em: f32) {
-					kv_row(id, k, v, em, {h = 1.5, key_w = 7.5, key_fs = FS_SMALL, val_fs = FS_SMALL, pad_l = 0.8, pad_r = 0.8, val = HEX_TEXT_SOFT})
-				}
-				line("###l1", "program", f.exe, em)
-				line("###l2", LBL_MENU, f.start_lnk ? LBL_MENU_ITEM : "-", em)
-				line("###l3", LBL_RECORD, f.record ? LBL_RECORD_IT : "-", em)
-				line("###l4", "this copy", f.running, em)
-				ui.spacer(ui.px(em * 0.6))
-			}
-			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
-		}
-		ui.spacer(ui.px(em * 0.8))
-		if !f.from_nix {
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-			if ui.row() {
-				ui.spacer(ui.px(em * 1.3))
-				if ui.tags("weak") { ui.checkbox("###desk", "Shortcut on the Desktop", &st.desktop) }
-			}
-		}
-		if st.note.text != "" {
-			ui.spacer(ui.px(em * 0.5))
-			ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
-			if ui.row(.Center) {
-				ui.spacer(ui.px(em * SETUP_MARGIN_EM))
-				glyph(st.note.good ? ICO_CHECK : ICO_WARN, st.note.good ? hex(HEX_GREEN) : hex(HEX_RED), math.round(em * ICON_REGULAR))
-				ui.spacer(ui.px(em * 0.3))
-				text("m", st.note.text, st.note.good ? hex(HEX_GREEN) : hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
-			}
-		}
-		ui.spacer(ui.px(em * 1.1))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-		if ui.row(.Center) {
-			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
-			if f.state == .This_Copy || f.state == .Repair || f.state == .Other_Copy {
-				if bevel_button("###uninstall", "Uninstall", ICO_DELETE, .Danger).clicked {
-					ok, leftovers, msg := desktop_uninstall()
-					for l in leftovers { append(&st.leftovers, l) }
-					delete(leftovers)
-					setup_uninstalled(app, ok, len(st.leftovers) > 0, msg)
-				}
-			}
-			ui.spacer(ui.fill())
-			// just installed: what is left to do is to start that copy (four buttons overflowed the dialog)
-			just_installed := st.installed != "" && f.state != .This_Copy
-			if f.state == .Removal_Scheduled {
-				if bevel_button("###close", "Close", "", .Normal).clicked { st.open = false }
-				ui.spacer(ui.px(em * 0.5))
-			} else if just_installed {
-				if bevel_button("###close", "Close", "", .Normal).clicked { st.open = false }
-				ui.spacer(ui.px(em * 0.5))
-				if bevel_button("###launch", "Open installed copy", ICO_RIGHT, .Accent).clicked {
-					if launch(st.installed) { app.quit = true }
-				}
-			} else if setup_is_upgrade(f.state, f.version) {
-				if bevel_button("###notnow", "Not now", "", .Normal).clicked { st.open = false }
-				ui.spacer(ui.px(em * 0.5))
-			} else if f.state == .Not_Installed || f.state == .Other_Copy {
-				if bevel_button("###standalone", "Keep standalone", "", .Normal).clicked {
-					settings_set("setup", "standalone")
-					st.open = false
-				}
-				ui.spacer(ui.px(em * 0.5))
-			} else {
-				if bevel_button("###close", "Close", "", .Normal).clicked { st.open = false }
-				ui.spacer(ui.px(em * 0.5))
-			}
-			if !just_installed && f.state != .Removal_Scheduled && !f.from_nix {
-				label := "Install"
-				#partial switch f.state {
-				case .Not_Installed: label = f.nixos ? "Install the classic way" : "Install"
-				case .Other_Copy:    label = setup_is_upgrade(f.state, f.version) ? fmt.tprintf("Upgrade to %s", APP_VERSION) : "Replace installed copy"
-				case .Repair:        label = "Repair"
-				case .This_Copy:     label = "Update shortcuts"
-				}
-				if bevel_button("###install", label, ICO_CHECK, .Accent).clicked {
-					ok, msg := desktop_install(st.desktop)
-					if ok {
-						settings_set("setup", "installed")
-						running_installed := desktop.same_path(process.executable_path(), msg)
-						set_message(app, true, running_installed ? "Done: everything is in place." : "Installed. Start it from " + LBL_START + ", or now:")
-						if !running_installed {
-							delete(st.installed)
-							st.installed = strings.clone(msg)
-						}
-					} else { set_message(app, false, msg) }
-					setup_refresh(app)
-				}
-			}
-			ui.spacer(ui.px(em * SETUP_MARGIN_EM))
-		}
-		ui.spacer(ui.px(em * 1.3))
-		dialog_close(&st.open)
+	logo_follow_accent(app)
+	logo: Maybe(setup.Logo)
+	if app.logo.tex != 0 { logo = setup.Logo{app.logo.tex, app.logo.size} }
+	ev := setup.dialog(&app.setup, setup_config(), em, logo)
+	if choice, changed := setup_choice(ev, app.setup.facts, settings_get("setup")); changed { settings_set("setup", choice) }
+	#partial switch ev {
+	case .Uninstalled: desktop_copy_remove()
+	case .Launched:    app.quit = true   // (the installed copy runs)
 	}
-	// closed without an answer: not again for this version (an upgrade declined too, whatever was said about an earlier one)
-	if was_open && !st.open {
-		c := settings_get("setup")
-		if st.facts.state != .Removal_Scheduled && (setup_is_upgrade(st.facts.state, st.facts.version) || (c != "standalone" && c != "installed")) { settings_set("setup", fmt.tprintf("dismissed:%s", APP_VERSION)) }
+}
+
+// What an event of the dialog leaves as the user's answer. Closed without one, the dialog is not offered again for this
+// version; an earlier "standalone" or "installed" stays then, unless what was declined is an upgrade.
+setup_choice :: proc(ev: setup.Event, f: setup.Facts, saved: string) -> (choice: string, changed: bool) {
+	#partial switch ev {
+	case .Installed:       return setup.CHOICE_INSTALLED, true
+	case .Kept_Standalone: return setup.CHOICE_STANDALONE, true
+	case .Dismissed:
+		if !setup.is_upgrade(f, APP_VERSION) && (saved == setup.CHOICE_STANDALONE || saved == setup.CHOICE_INSTALLED) { return saved, false }
+		return setup.choice_dismissed(APP_VERSION), true
 	}
+	return saved, false
+}
+
+// At the end of the process: what an uninstall left because this process held it goes then.
+setup_finish :: proc(app: ^App) {
+	setup.finish(&app.setup, setup_config())
+	setup.destroy(&app.setup)
 }
