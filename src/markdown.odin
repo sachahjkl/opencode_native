@@ -17,6 +17,7 @@ TABLE_COL_STRICTNESS :: 0.4   // the share of its width a column keeps when the 
 HEX_INLINE_CODE      :: 0xe5c07bff
 HEX_CODE_TEXT        :: 0xd4d4d4ff
 HEX_TABLE_WELL       :: 0x090909ff
+TABLE_STRIPE_ALPHA   :: 0.045   // every other row: the theme's text, this faint
 
 // A name for a piece of the source (where its bytes lie, how far, at which size): the rich layout cache finds the block by
 // it instead of hashing its text at every frame. A message's text only grows: a block keeps its bytes until they move,
@@ -355,10 +356,19 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 		}
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+	// (every other row tinted with the theme's text, faintly: light on a dark theme, dark on a light one; the header is told by
+	// its words and its rule. The rows stand off the well's edge, rounded a little: their tint does not cover its rim.)
+	stripe := with_alpha(hex(HEX_TEXT), TABLE_STRIPE_ALPHA)
+	edge := 2 * px1()
 	if well(id, radius = 6, base = HEX_TABLE_WELL) {
 		ui.spacer(ui.px(em * 0.3))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+		if ui.row(id = "###in") {
+		ui.spacer(ui.px(edge))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+		if ui.column(id = "###rows") {
 		for r, ri in rows {
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, bg = ri > 0 && ri % 2 == 0 ? Color{1, 1, 1, 0.01} : {}})   // (the header is told by its words and its rule: a tint of its own was a second rounded box in the well)
+			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, bg = ri > 0 && ri % 2 == 0 ? stripe : {}, radius = math.round(em * 0.25)})
 			if ui.row(flags = {.Draw_Background}, id = fmt.tprintf("###tr%d", ri)) {
 				for ci in 0 ..< ncol {
 					c := ci < len(r) ? r[ci] : ""
@@ -379,6 +389,9 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 				}
 			}
 			if ri == 0 { ui.next({width = ui.fill(), height = ui.px(2), bg = with_alpha(accent(), 0.35)}); ui.build_box({.Draw_Background}, "###hl") }
+		}
+		}
+		ui.spacer(ui.px(edge))
 		}
 		ui.spacer(ui.px(em * 0.3))
 	}

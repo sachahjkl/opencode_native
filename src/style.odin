@@ -43,6 +43,9 @@ LAMP_WAITS      :: 0xff4b4bff   // red: it waits for the person (a permission, a
 // A session's lamp, wherever it shows (the sidebar, the home page, the line over the composer): one lamp, lit and glowing a
 // little, only its colour says the state (LAMP_*).
 session_lamp :: proc(id: string, color: u32, em: f32) { lamp(id, draw.hex(color), size = em * 0.85) }
+
+// The same lamp switched off: its colour (how a session that is over ended), no light around it.
+session_lamp_off :: proc(id: string, color: Color, em: f32) { lamp(id, color, size = em * 0.85, halo = false) }
 HEX_CODE_BG         :: 0x202020ff
 HEX_FLOATING_BG     :: 0x181818ff   // menus, popovers
 HEX_FLOATING_BORDER :: 0x333333ff
@@ -495,25 +498,25 @@ well :: proc(id: string, axis := ui.Axis.Y, radius: f32 = 7, base: u32 = HEX_WEL
 }
 
 @(private = "file")
-Lamp_Draw :: struct { color: Color, lit: f32, pulse: bool }
+Lamp_Draw :: struct { color: Color, lit: f32, pulse: bool, halo: bool }
 
 @(private = "file")
 lamp_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Lamp_Draw)(user)
-	glow: f32 = -1
-	if d.pulse { glow = PULSE_LIT_MIN + PULSE_LIT_SPAN * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * PULSE_RATE)) }   // (lit as a steady one; its halo breathes)
+	glow: f32 = d.halo ? -1 : 0   // (no halo: the same lamp, unlit around)
+	if d.pulse && d.halo { glow = PULSE_LIT_MIN + PULSE_LIT_SPAN * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * PULSE_RATE)) }   // (lit as a steady one; its halo breathes)
 	sz := min(b.rect.max.x - b.rect.min.x, b.rect.max.y - b.rect.min.y)
 	draw_lamp(dc, draw.rect_center(b.rect), math.round(sz * 0.62), d.color, d.lit, glow)
 }
 
 // A status lamp in a box of `size` (em fraction of the font size by default).
-lamp :: proc(id: string, color: Color, lit: f32 = 1, pulse := false, size: f32 = 0) {
+lamp :: proc(id: string, color: Color, lit: f32 = 1, pulse := false, size: f32 = 0, halo := true) {
 	em := ui.font_size()
 	sz := size > 0 ? size : math.round(em * 1.1)
 	ui.next({width = ui.px(sz), height = ui.px(sz)})
 	b := ui.build_box({}, id)
 	d := ui.frame_new(Lamp_Draw)
-	d^ = {color = color, lit = lit, pulse = pulse}
+	d^ = {color = color, lit = lit, pulse = pulse, halo = halo}
 	b.custom = lamp_box_draw
 	b.custom_user = d
 }

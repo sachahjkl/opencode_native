@@ -491,9 +491,9 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			} else if session_in_background(app, s.id) {   // (at rest, its commands still running: steady)
 				session_lamp("###bg", LAMP_BACKGROUND, em)
 				ui.spacer(ui.px(em * 0.35))
-			} else if session_unseen(app, s) {   // (over and not seen: how it ended, unlit)
+			} else if session_unseen(app, s) {   // (over and not seen: how it ended, the lamp without its light)
 				st, _ := state_of_word(s.outcome)
-				pip("###unseen", sub_state_color(st), em * 1.15)
+				session_lamp_off("###unseen", sub_state_color(st), em)
 				ui.spacer(ui.px(em * 0.35))
 			}
 			title := s.title != "" ? s.title : "Untitled"

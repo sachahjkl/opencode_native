@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.24.7] - 2026-11-09
+
+### Fixed
+
+- **A session that is over has the same lamp as the others, without its light**: it was a pip, a dab of colour in a hole, which looked like another thing altogether.
+- **A table's rows alternate in every theme**: every other row is tinted with the theme's text, faintly (it was white at 1 %, which no light theme showed), and the rows stand off the table's rim, rounded a little, instead of covering it on the left and the right.
+
 ## [0.24.6] - 2026-11-09
 
 ### Added
@@ -941,7 +948,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.6...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.7...HEAD
+[0.24.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.7
 [0.24.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.6
 [0.24.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.5
 [0.24.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.4
