@@ -5,6 +5,8 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-09
+
 ### Added
 
 - **Attach files**: a paperclip in the composer's bar (and `Attach files` in the command palette) opens the system's dialog, several files at once; files dropped on the window are attached too. An image, a PDF or a text file goes with the prompt as a data URL, so a server on another machine gets it; another file goes in the text as its path, as before.
@@ -853,7 +855,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.22.0
 [0.21.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.21.0
 [0.20.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.20.0
 [0.19.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.19.1
