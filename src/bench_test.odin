@@ -869,3 +869,60 @@ a_long_part_opens_below_its_header :: proc(t: ^testing.T) {
 		testing.expectf(t, abs(h.rect.min.y - y) <= 1, "%s closed: stays at %v (now %v)", name, y, h.rect.min.y)
 	}
 }
+
+// Seven long thoughts in a row, between shells (a run that thinks at length).
+@(private = "file")
+seven_thoughts_page :: proc() -> string {
+	para := strings.repeat("I'm working out the kernel design now, with a rough budget of lines, so I want it tight and every part to earn its place. ", 4, context.temp_allocator)
+	long := strings.builder_make(context.temp_allocator)
+	for _ in 0 ..< 14 { strings.write_string(&long, para); strings.write_string(&long, "\n\n") }
+	t := BENCH_EPOCH_MS
+	parts := strings.builder_make(context.temp_allocator)
+	for k in 0 ..< 7 {
+		if k > 0 { strings.write_byte(&parts, ',') }
+		fmt.sbprintf(&parts, `{{"type":"reasoning","text":%s}},{{"type":"tool","id":"call_%d","name":"shell","state":{{"status":"completed","input":{{"command":"cat docs/%d.md"}},"content":[{{"type":"text","text":"ok"}}]}},"time":{{"created":%f,"completed":%f}}}}`,
+			jquote(strings.to_string(long)), k, k, t + 21, t + 22)
+	}
+	b := strings.builder_make(context.temp_allocator)
+	fmt.sbprintf(&b, `{{"data":[`)
+	fmt.sbprintf(&b, `{{"id":"sv_2_a","type":"assistant","agent":"build","model":{{"id":"m","providerID":"p"}},"time":{{"created":%f}},"content":[%s]}},`, t + 20, strings.to_string(parts))   // (not completed: the run goes on)
+	fmt.sbprintf(&b, `{{"id":"sv_2_u","type":"user","text":"Design it.","time":{{"created":%f}}}}`, t + 10)
+	strings.write_string(&b, `],"cursor":{"next":""}}`)
+	return strings.to_string(b)
+}
+
+// A thought opened while the run goes on: the message still grows below (a thought streams in) and the header opened stays where it was.
+@(test)
+a_thought_opened_while_the_run_goes_on_stays :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	v, err := json.parse_string(seven_thoughts_page(), allocator = context.temp_allocator)
+	testing.expect(t, err == nil)
+	chat_load(app, v, false)
+	app.chat.busy = true
+	app.busy[app.chat.id] = true
+	app.snap_bottom = true
+	session.wait_idle(s)
+	chat := session.find(s, "chat")
+	if !testing.expect(t, chat != nil, "the conversation") { return }
+	mid := [2]f32{(chat.rect.min.x + chat.rect.max.x) * 0.5, (chat.rect.min.y + chat.rect.max.y) * 0.5}
+	name := "rh_sv_2_a_8"
+	for _ in 0 ..< 200 {
+		h := session.find(s, name)
+		if h != nil && h.rect.min.y > chat.rect.min.y + 40 && h.rect.min.y < mid.y { break }
+		session.wheel(s, mid, {0, -1})
+		session.frames(s, 3)
+	}
+	h := session.find(s, name)
+	if !testing.expect(t, h != nil, "the thought reached") { return }
+	y := h.rect.min.y
+	session.click(s, name)
+	session.frames(s, 3)
+	for i in 0 ..< 20 {
+		bench_event(app, fmt.tprintf(`{{"type":"session.reasoning.delta","data":{{"sessionID":"%s","assistantMessageID":"sv_2_a","ordinal":14,"delta":"more of the thought, word after word, line %d.\n\n"}}}}`, app.chat.id, i))
+		session.frames(s, 2)
+		h = session.find(s, name)
+		if !testing.expectf(t, h != nil, "delta %d: the thought opened still shown", i) { return }
+		if !testing.expectf(t, abs(h.rect.min.y - y) <= 1, "delta %d: stays at %v (now %v)", i, y, h.rect.min.y) { return }
+	}
+}
