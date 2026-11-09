@@ -9,7 +9,8 @@ project follows [semantic versioning](https://semver.org).
 
 ### Fixed
 
-- **A pulsing lamp is as bright as a steady one**: only its halo breathes. The whole lamp dimmed to half and back, so the green of a session at work looked duller than the orange beside it.
+- **A session's lamp is one lamp**, the same wherever it shows (the sidebar, the home page, the line over the composer): lit, glowing a little, only its colour telling the state (green, orange, red). The green one pulsed, dimming to half and back, so it looked duller than the orange beside it; and those pages no longer redraw at every frame for it.
+- **A pulsing lamp elsewhere (a tool's state) stays lit**: only its halo breathes.
 
 ## [0.24.4] - 2026-11-09
 

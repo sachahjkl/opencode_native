@@ -649,7 +649,6 @@ activity_strip :: proc(app: ^App, em: f32) {
 	open_todos := len(a.todos) > 0 && done < len(a.todos)
 	if agents + shells == 0 && !open_todos && !a.open { return }
 	running := agents + shells > 0
-	if running { animate(app) }
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * BUTTON_COMPACT_H_EM)), axis = .X, cross = .Center})
 	ui.a11y({role = .Button, name = "Activity"})
 	b := ui.build_box({.Clickable, .Focusable}, "###act_strip")
@@ -663,7 +662,7 @@ activity_strip :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.5))
 		if running {   // (the sidebar's lamps: green while it works, orange when only commands run on)
 			working := app.chat.busy || agents > 0
-			lamp("###l", draw.hex(working ? LAMP_WORKING : LAMP_BACKGROUND), 1, pulse = working, size = em * CARD_MARK_EM)
+			session_lamp("###l", working ? LAMP_WORKING : LAMP_BACKGROUND, em)
 			ui.spacer(ui.px(em * 0.35))
 		}
 		if agents > 0 {
