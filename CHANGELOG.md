@@ -5,10 +5,19 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-09
+
 ### Changed
 
+- **The command palette can be resized** from its edges and its corner, as the dialogs are, and keeps its size; its top stays where it is.
 - **Setup works on a thread of its own and follows the disk** (gui_toolkit 0.131.0): reading the install, Install and Uninstall no longer freeze the window, and while the dialog is open an install changed or removed elsewhere shows at once. Uninstall asks for a second click.
 - **The Setup dialog is laid out dense** (gui_toolkit 0.132.0): a title bar, a header with the state as a badge, the install location, the options as a grid of boxes, a box of what the disk says, then the buttons.
+
+### Fixed
+
+- **A switch in the palette shows its title** ("Permission › Allow all"), not the setting's name; typing the name still finds it.
+- **A question's long options and the review's answers stay in their card**: they go on to the next lines instead of running past its edge.
+- **DevTools' screenshots** work again once a dialog has opened (gui_toolkit 0.133.0).
 
 ## [0.31.1] - 2026-11-09
 
@@ -1079,7 +1088,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.31.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.32.0
 [0.31.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.31.1
 [0.31.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.31.0
 [0.30.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.30.0

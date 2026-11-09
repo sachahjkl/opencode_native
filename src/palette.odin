@@ -42,6 +42,7 @@ Palette :: struct {
 	sel:     int,
 	reveal:  bool,
 	mouse:   Vec2,
+	view_h:  f32,                // the list's height at the last frame: a page of Page Up / Down
 	usage:   map[string]Usage,   // by "kind:id" (keys owned)
 	file:    string,
 }
@@ -150,7 +151,7 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 		if want(only, ':') {
 			for d in PREF_DEFS {
 				if d.kind != .Bool { continue }
-				append(&items, Pal_Item{kind = .Switch, id = d.name, title = d.name, detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, on = config.bool_of(&app.cfg_prefs, d.name)})
+				append(&items, Pal_Item{kind = .Switch, id = d.name, title = switch_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, on = config.bool_of(&app.cfg_prefs, d.name)})
 			}
 		}
 	}
@@ -193,6 +194,11 @@ palette_dialog :: proc(app: ^App, em: f32) {
 	hits := make([dynamic]Pal_Hit, context.temp_allocator)
 	for &it, i in items {
 		score, ranges, ok := ui.fuzzy_score(needle, it.title)
+		if !ok && it.kind == .Switch {
+			// a switch is found by its name too ("permission.allow_all"), its title then shown without marks
+			score, _, ok = ui.fuzzy_score(needle, it.id)
+			ranges = nil
+		}
 		if !ok { continue }
 		s := f64(score)
 		if u, known := p.usage[usage_key(&it)]; known { s += usage_now(u, now) * USAGE_SCORE }
@@ -203,8 +209,10 @@ palette_dialog :: proc(app: ^App, em: f32) {
 	if n > 0 {
 		if ui.key_press(.Down) { p.sel = (p.sel + 1) % n; p.reveal = true }
 		if ui.key_press(.Up) { p.sel = (p.sel + n - 1) % n; p.reveal = true }
-		if ui.key_press(.Page_Down) { p.sel = min(p.sel + PALETTE_ROWS, n - 1); p.reveal = true }
-		if ui.key_press(.Page_Up) { p.sel = max(p.sel - PALETTE_ROWS, 0); p.reveal = true }
+		// (a page: the rows the list showed at the last frame, as large as the person made the palette)
+		page := max(int(p.view_h / math.round(em * 2.1)), 1)
+		if ui.key_press(.Page_Down) { p.sel = min(p.sel + page, n - 1); p.reveal = true }
+		if ui.key_press(.Page_Up) { p.sel = max(p.sel - page, 0); p.reveal = true }
 	}
 	p.sel = clamp(p.sel, 0, max(n - 1, 0))
 	mouse := ui.mouse_pos()
@@ -212,7 +220,8 @@ palette_dialog :: proc(app: ^App, em: f32) {
 	p.mouse = mouse
 	chosen := -1
 	row_h := math.round(em * 2.1)
-	if ui.modal("palette", math.round(em * PALETTE_W_EM), &p.open, PALETTE_TOP) {
+	// (resizable, its size kept as the dialogs' are; its top held where a palette is)
+	if ui.modal_sized("palette", DIALOG_PREFERRED_EM[.Palette] * em, &app.cx.dialogs[.Palette], &p.open, DIALOG_MIN_EM[.Palette] * em, top = PALETTE_TOP) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em * 0.6))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
@@ -236,10 +245,13 @@ palette_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.6))
 		}
 		ui.spacer(ui.px(em * 0.45))
-		view_h := f32(clamp(n, 1, PALETTE_ROWS)) * row_h
-		ui.next({width = ui.fill(), height = ui.px(view_h)})
+		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###pal_list") {
 			lb := ui.parent_box()
+			// (its height: the last frame's, as the dialog's size and the window make it)
+			view_h := lb.rect.max.y - lb.rect.min.y
+			if view_h < row_h { view_h = f32(PALETTE_ROWS) * row_h }
+			p.view_h = view_h
 			if p.reveal {
 				top := f32(p.sel) * row_h
 				lb.view_target.y = ui.view_reveal_offset(lb.view_target.y, top, top + row_h, view_h)
@@ -297,4 +309,12 @@ palette_dialog :: proc(app: ^App, em: f32) {
 	}
 	p.fresh = false
 	if chosen >= 0 { palette_choose(app, &items[chosen]) }
+}
+
+// A switch's title as the settings say it ("Notify › Permission", temp memory); the name is still found by what is typed
+// (palette_view).
+switch_title :: proc(d: config.Def) -> string {
+	group := d.category
+	if group == "" { group = d.name[:max(strings.index_byte(d.name, '.'), 0)] }
+	return fmt.tprintf("%s › %s", config.category_title(group), config.title_of(d))
 }

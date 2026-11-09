@@ -422,7 +422,7 @@ form_page :: proc(app: ^App, f: ^Form_Req, pages: []int, reviewing, wizard: bool
 				ui.spacer(ui.px(em))
 				a := field_answer(fd)
 				name := fd.title != "" ? fd.title : fd.description != "" ? fd.description : fmt.tprintf("Question %d", k + 1)
-				if bevel_button(fmt.tprintf("###form_rv%d", k), label_safe(fmt.tprintf("%s:  %s", name, a != "" ? a : "no answer")), "", .Ghost, ui.fill(), math.round(em * BUTTON_H_EM), left = true).clicked { f.page = k }
+				if bevel_button(fmt.tprintf("###form_rv%d", k), label_safe(fmt.tprintf("%s:  %s", name, a != "" ? a : "no answer")), "", .Ghost, ui.fill(), math.round(em * BUTTON_H_EM), left = true, wrap = true).clicked { f.page = k }
 				ui.spacer(ui.px(em))
 			}
 			ui.spacer(ui.px(em * 0.15))
@@ -465,7 +465,8 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 		if fd.url != "" && bevel_button("###open", "Open", lucide.GLOBE, .Normal).clicked { _ = platform.open_url(fd.url) }
 	case "multiselect":
 		for o, k in fd.options {
-			ui.checkbox(fmt.tprintf("###form_o%d", k), label_safe(option_label(o)), &fd.picks[k])
+			ui.next({width = ui.fill()})
+			ui.checkbox(fmt.tprintf("###form_o%d", k), label_safe(option_label(o)), &fd.picks[k], wrap = true)
 			ui.spacer(ui.px(em * 0.15))
 		}
 		if fd.custom { form_line(fd, em, "Something else", done) }

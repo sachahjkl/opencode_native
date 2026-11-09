@@ -696,3 +696,35 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 	session.frames(s, 3)
 	testing.expect(t, !app.view_open, "Escape closes it")
 }
+
+// A question's long options and the review's long answers stay in the card: they go on to the next lines (they ran past its edge).
+@(test)
+a_form_s_long_lines_stay_in_its_card :: proc(t: ^testing.T) {
+	app, s := bench_app(t)
+	LONG :: "Format d'unité, description des fonctions, convention d'appel, chargeur. C'est le trou de recherche déjà identifié, et il reste ouvert"
+	v, err := json.parse_string(fmt.tprintf(`{{"id":"frm_w","sessionID":"%s","question":true,"fields":[
+		{{"key":"a","type":"multiselect","title":"À creuser","options":[{{"value":"u","label":"Contrat entre unités","description":"%s"}},{{"value":"m","label":"Machines","description":"%s"}}]}},
+		{{"key":"b","type":"string","title":"Review","description":"%s"}}
+	]}}`, BENCH_CHAT_ID, LONG, LONG, LONG), allocator = context.temp_allocator)
+	testing.expect_value(t, err, json.Error.None)
+	form_add(app, v)
+	session.frames(s, 3)
+	card := session.find(s, "form_frm_w")
+	if !testing.expect(t, card != nil, "the card") { return }
+	inside :: proc(t: ^testing.T, card, b: ^ui.Box, what: string, loc := #caller_location) {
+		if !testing.expectf(t, b != nil, "%s", what, loc = loc) { return }
+		testing.expectf(t, b.rect.max.x <= card.rect.max.x + 0.5, "%s: in the card (%v past %v)", what, b.rect.max.x, card.rect.max.x, loc = loc)
+		for c := b.first; c != nil; c = c.next {
+			testing.expectf(t, c.rect.max.x <= card.rect.max.x + 0.5, "%s: its parts in the card (%v past %v)", what, c.rect.max.x, card.rect.max.x, loc = loc)
+		}
+	}
+	inside(t, card, session.find(s, "form_o0"), "a long option")
+	f := app.cx.forms[0]
+	ui.field_set(&f.fields[1].text, LONG)
+	f.fields[0].picks[0] = true
+	f.page = 2   // (the review)
+	session.frames(s, 3)
+	inside(t, card, session.find(s, "form_rv0"), "the first answer")
+	inside(t, card, session.find(s, "form_rv1"), "a long answer")
+	forms_clear(app)
+}
