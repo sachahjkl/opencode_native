@@ -661,8 +661,9 @@ activity_strip :: proc(app: ^App, em: f32) {
 	if ui.parent(b) {
 		note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
 		ui.spacer(ui.px(em * 0.5))
-		if running {
-			lamp("###l", hex(HEX_YELLOW), 1, pulse = true, size = em * CARD_MARK_EM)
+		if running {   // (the sidebar's lamps: green while it works, orange when only commands run on)
+			working := app.chat.busy || agents > 0
+			lamp("###l", draw.hex(working ? LAMP_WORKING : LAMP_BACKGROUND), 1, pulse = working, size = em * CARD_MARK_EM)
 			ui.spacer(ui.px(em * 0.35))
 		}
 		if agents > 0 {

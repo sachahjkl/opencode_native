@@ -34,6 +34,11 @@ HEX_CYAN    :: 0x56b6c2ff
 // The look's own colours, shared by several files
 HEX_PALETTE_BG      :: 0x0c0c0cff
 HEX_ON_ACCENT       :: 0x1c120bff   // text on an accent button
+
+// A session's lamp, as a traffic light: the same in every theme (draw.hex, never hex()), they are signals, not decoration.
+LAMP_WORKING    :: 0x35d46aff   // green, pulsing: it works
+LAMP_BACKGROUND :: 0xff9a1fff   // orange, steady: at rest, its commands still running
+LAMP_WAITS      :: 0xff4b4bff   // red, pulsing: it waits for the person (a permission, a question)
 HEX_CODE_BG         :: 0x202020ff
 HEX_FLOATING_BG     :: 0x181818ff   // menus, popovers
 HEX_FLOATING_BORDER :: 0x333333ff
