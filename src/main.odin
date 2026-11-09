@@ -254,6 +254,7 @@ main_window_adopt :: proc(app: ^App) {
 	h := &app.window
 	h.after_input = FRAMES_AFTER_INPUT
 	h.background = hex(HEX_BG0)
+	h.partial_redraw = true   // each frame repaints only what changed
 	h.dragging = main_dragging
 	h.before_input = proc(h: ^host.Host) {
 		app := (^App)(h.user)

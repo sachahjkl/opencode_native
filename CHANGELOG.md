@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-09
+
+### Changed
+
+- **Each frame repaints only what changed** (gui_toolkit 0.118.0, automatic partial redraw): while an agent writes, a frame draws about 0.2 % of the window's pixels, a hover or a scroll a few percent. A dialog over a blurred backdrop is still drawn whole.
+
 ## [0.25.2] - 2026-11-09
 
 ### Fixed
@@ -993,7 +999,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.25.2...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.26.0
 [0.25.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.25.2
 [0.25.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.25.1
 [0.25.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.25.0
