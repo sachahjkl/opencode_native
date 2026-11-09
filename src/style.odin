@@ -118,6 +118,7 @@ flat_edge :: proc(face: Color, hot: f32) -> Color { return draw.mix(hex(HEX_LINE
 // The icons: Lucide on every system (assets/fonts/lucide.ttf, embedded: ISC licence, assets/fonts/LUCIDE-LICENSE.txt),
 // so they look the same everywhere and nothing depends on the fonts installed.
 ICO_ADD      :: "\ue13d"   // plus
+ICO_ATTACH   :: "\ue12d"   // paperclip
 ICO_SEND     :: "\ue4f2"   // send-horizontal
 ICO_STOP     :: "\ue167"   // square
 ICO_SEARCH   :: "\ue151"   // search

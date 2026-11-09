@@ -333,6 +333,7 @@ main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
 		if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() }
 		if e.kind == .Scroll { app.cx.wheeled = true }
 		if e.kind == .Scroll || e.kind == .Key_Press { nav_restore_clear(app) }   // (the reader goes elsewhere: the view is theirs)
+		attach_drop_event(app, e)
 		// the side buttons of the mouse, as in a browser
 		if e.kind == .Mouse_Press && !overlay_open(app) {
 			if e.button == .Back { if c := command_find("nav.back"); command_enabled(app, c) { command_run(app, c) } }
@@ -689,6 +690,7 @@ main :: proc() {
 	}
 	if !render.init_window(&app.r, app.win, app.win.size, transparent = true) { fmt.eprintln("opencode-native: no renderer"); os.exit(1) }
 	if !slice.contains(os.args, "--no-fixed-surface") { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
+	_ = platform.drop_target_enable(app.win, true)   // (files dropped on the window are attached: attach_drop)
 	app_init(app, prefs_path())
 	app.cx.web_host = web_host_system()
 	if app.servers_in_clear { servers_save(app) }

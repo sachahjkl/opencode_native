@@ -1655,6 +1655,7 @@ composer_panels :: proc(app: ^App, em: f32) {
 		if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(tip) } }
 		ui.spacer(ui.px(em * 0.4))
 	}
+	panel(app, "###attach_btn", ICO_ATTACH, "Attach files", "Attach files: images, PDF, text  (or paste, or drop them here)", "composer.attach", false, size, em)
 	if preview_available() { panel(app, "###preview_btn", ICO_GLOBE, "Preview panel", "Preview panel  (Ctrl+Shift+B)", "view.preview", app.preview.open, size, em) }
 	panel(app, "###terminal_btn", ICO_TERMINAL, "Terminal", "Terminal  (Ctrl+Shift+T)", "view.terminal", app.cx.terms.open, size, em)
 }

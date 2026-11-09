@@ -5,6 +5,14 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **Attach files**: a paperclip in the composer's bar (and `Attach files` in the command palette) opens the system's dialog, several files at once; files dropped on the window are attached too. An image, a PDF or a text file goes with the prompt as a data URL, so a server on another machine gets it; another file goes in the text as its path, as before.
+
+### Fixed
+
+- **Paste on Linux**: an image copied in another program (a screenshot, a browser's "Copy image") is attached (gui_toolkit's PNG codec on Linux, which nothing gave before), and a pasted text or PDF file is attached instead of its path.
+
 ## [0.21.0] - 2026-11-09
 
 ### Changed

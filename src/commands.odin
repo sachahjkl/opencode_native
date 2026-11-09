@@ -64,6 +64,7 @@ COMMANDS := [?]Command{
 	{id = "session.move", title = "Move the session to a folder", group = "Session", icon = ICO_FOLDER, run = proc(app: ^App) { session_move_pick(app, app.chat.id) }, enabled = has_session},
 	{id = "session.export", title = "Export the session", group = "Session", icon = ICO_DOC, run = proc(app: ^App) { session_export(app, app.chat.id) }, enabled = has_session},
 	{id = "session.export_redacted", title = "Export the session without its text", group = "Session", icon = ICO_DOC, run = proc(app: ^App) { session_export(app, app.chat.id, redacted = true) }, enabled = has_session},
+	{id = "composer.attach", title = "Attach files", group = "Session", icon = ICO_ATTACH, run = attach_pick},
 	{id = "session.import", title = "Import a session", group = "Session", icon = ICO_DOC, run = session_import_pick},
 	{id = "session.copy_id", title = "Copy the session ID", group = "Session", icon = ICO_COPY, run = proc(app: ^App) { clip_set(app.chat.id) }, enabled = has_session},
 

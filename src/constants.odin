@@ -102,7 +102,7 @@ QUOTE_CHIP_W_EM :: 11
 
 ATTACH_THUMB_H_PX :: 84
 ATTACH_THUMB_W_PX :: 160
-ATTACH_MAX_BYTES  :: 20 * 1024 * 1024   // of one image
+ATTACH_MAX_BYTES  :: 20 * 1024 * 1024   // of one attached file
 
 ////////////////////////////////
 // The home page

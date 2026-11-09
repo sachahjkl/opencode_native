@@ -550,3 +550,14 @@ a_model_says_what_it_is :: proc(t: ^testing.T) {
 	testing.expect_value(t, free[0], Model_Fact{"Price", "free"})
 	testing.expect_value(t, len(model_facts({})), 0)   // (nothing said, nothing invented)
 }
+
+// What a file goes as: an image or a PDF by its extension, text when it is UTF-8 without a NUL, else nothing (its path).
+@(test)
+an_attached_file_goes_as_its_type :: proc(t: ^testing.T) {
+	testing.expect_value(t, attach_mime("/a/shot.PNG", nil), "image/png")
+	testing.expect_value(t, attach_mime("/a/paper.pdf", transmute([]u8)string("%PDF-1.7\x00")), "application/pdf")
+	testing.expect_value(t, attach_mime("/a/notes.md", transmute([]u8)string("# Notes, été\n")), "text/plain")
+	testing.expect_value(t, attach_mime("/a/Makefile", transmute([]u8)string("all:\n\tcc x.c\n")), "text/plain")
+	testing.expect_value(t, attach_mime("/a/prog", transmute([]u8)string("\x7fELF\x02\x01\x00")), "")
+	testing.expect_value(t, attach_mime("/a/latin1.txt", []u8{'c', 0xe9}), "")
+}

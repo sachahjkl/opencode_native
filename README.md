@@ -75,7 +75,8 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
   result), the result line where it came back, a strip of the running ones above the composer, a header menu of all of
   them; drill down into one and back (breadcrumb, Alt+Left).
 - **The composer**: Enter or Ctrl+Enter to send (a setting), the agent and the model of the session in pickers searched
-  as one types (subsequence matching, the matched letters lit, the keyboard or the wheel), Stop while it runs.
+  as one types (subsequence matching, the matched letters lit, the keyboard or the wheel), Stop while it runs. Files
+  go with a prompt by the paperclip, a paste or a drop on the window: images, PDF and text files are attached.
 - **Several servers**: this computer's (found by itself), others added from the status bar's server menu (a name, an
   address, a password), `--url`; switch from the menu. Another computer's server is named in the title bar.
 - **Find in the conversation** (Ctrl+F): every match of the text shown lit, the current one brighter and scrolled into
