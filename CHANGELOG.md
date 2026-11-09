@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+- **The themes and the machined look are gui_toolkit's** (0.117.0): the same themes, in their dark and light versions, and
+  the same reliefs, now shared with the toolkit's other programs. Six themes come with it: Midnight, Graphite, Amber,
+  Everforest, Aero and Bootstrap. The toolkit's own widgets (its fields, separators, segmented controls) take the machined
+  look too. Nothing else changes: opencode's colours move to a theme as before, and themes.txt reads as before.
+
 ## [0.25.2] - 2026-11-09
 
 ### Fixed

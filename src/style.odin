@@ -65,7 +65,7 @@ HEX_PLATE_BOTTOM    :: 0x141414ff
 OPENCODE_PALETTE :: ui.Palette{
 	bg = HEX_PALETTE_BG, panel = HEX_BG2, panel2 = HEX_BG3, text = HEX_TEXT, weak = HEX_WEAK, border = HEX_LINE,
 	accent = HEX_PEACH, accent_text = HEX_ON_ACCENT, good = HEX_GREEN, warn = HEX_YELLOW, bad = HEX_RED, dark = true,
-	finish = .Gradient, bar = HEX_BG1,
+	finish = .Machined, bar = HEX_BG1, well = HEX_WELL,
 }
 
 // One of opencode's colours (a HEX_ constant), as the theme shown has it (theme.odin).
@@ -98,6 +98,7 @@ theme_setup :: proc(t: ^ui.Theme) {
 	ui.theme_add(t, "selection", with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
 	ui.theme_add(t, "selection text", hex(HEX_BRIGHT))   // (over the selection, whatever the text's own colour: a faint one was lost on it)
 	ui.apply_palette(t, themed_palette())
+	t.glow = the_app != nil && the_app.prefs.glow ? 1 : 0
 }
 
 // The theme shown, in the toolkit's theme: its palette and our entries made of opencode's colours (a theme was chosen).
@@ -109,19 +110,21 @@ theme_refresh :: proc(t: ^ui.Theme) {
 	ui.theme_set(t, "selection", with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
 	ui.theme_set(t, "selection text", hex(HEX_BRIGHT))
 	ui.apply_palette(t, themed_palette())
+	t.glow = the_app != nil && the_app.prefs.glow ? 1 : 0
 }
 
 // opencode's palette for the toolkit, as the theme shown has it; flat in the flat style.
 themed_palette :: proc() -> ui.Palette {
 	p := OPENCODE_PALETTE
 	for c in ([]^u32{&p.bg, &p.panel, &p.panel2, &p.text, &p.weak, &p.border, &p.accent, &p.accent_text, &p.good, &p.warn, &p.bad, &p.bar}) { c^ = themed(c^) }
-	if flat() { p.finish = .Flat }
+	if the_app != nil && the_app.prefs.flat { p.finish = .Flat }   // (a light version: apply_palette makes it flat)
 	p.dark = !theme_light()   // (the toolkit's own marks, the window's buttons among them, light on dark or dark on light)
 	return p
 }
 
-// The flat style: surfaces plain, edges as thin lines, no reliefs nor halos (appearance.style).
-flat :: proc() -> bool { return the_app != nil && (the_app.prefs.flat || the_app.cx.theme.light) }   // (a light version: flat, its reliefs are made for the dark)
+// The flat style: surfaces plain, edges as thin lines, no reliefs nor halos (appearance.style, or a light version: the
+// reliefs are made for the dark). The toolkit's theme says it: its finish is machined or not.
+flat :: proc() -> bool { return !ui.machined() }
 
 // The thin edge of a flat surface of this face: the theme's line, lit a little under the pointer.
 flat_edge :: proc(face: Color, hot: f32) -> Color { return draw.mix(hex(HEX_LINE), lighten(hex(HEX_LINE), 0.25), hot) }
@@ -226,38 +229,13 @@ corners :: proc() -> f32 {
 ////////////////////////////////
 // Primitives (frame pixels)
 
-// A raised, machined surface: soft drop shadow, a dark outer edge, a vertical gradient, a lit inner rim along the top
-// and a shaded one along the bottom (the "ridge"). Pressed, it sinks: flat darker face and an inner shadow from above.
+// The primitives of the machined look are the toolkit's (ui.machined_*: docs/themes.md); they draw their flat form when
+// the finish is not machined (appearance.style flat, or a light version). These give them opencode's corners
+// (appearance.rounding).
+
+// A raised, machined surface; pressed, it sinks. `glow`: a halo of that colour under the pointer.
 draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, hot, pressed: f32, glow: Color = CLEAR) {
-	radius := radius_asked * corners()
-	s := ui.scale()
-	p := px1()
-	rr := radii4(radius)
-	face := lighten(base, 0.06 * hot)
-	if flat() {   // a plain face, its edge a thin line; under the pointer a step toward the text, held a step further
-		face = draw.mix(base, hex(HEX_TEXT), FLAT_HOT * hot)
-		draw.rect(dc, r, pressed < 0.5 ? face : draw.mix(base, hex(HEX_TEXT), FLAT_PRESSED), radius)
-		draw.rect(dc, r, flat_edge(face, hot), radius, p)
-		return
-	}
-	if pressed < 0.5 {
-		draw.box_shadow(dc, draw.rect_shift(r, {0, 1.5 * s}), rr, 2.2 * s, {0, 0, 0, 0.65})
-		if glow.a > 0 && hot > FADE_VISIBLE && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 2.5 * s, with_alpha(glow, 0.2 * hot)) }   // (under the pointer only, and tight: a wide halo reached the carved edge above)
-		top := lighten(face, 0.10)
-		bot := darken(face, 0.16)
-		draw.rect_corners(dc, r, {top, bot, top, bot}, rr)
-		// rim: light along the top, dark along the bottom
-		inner := draw.rect_pad(r, -p)
-		draw.rect_corners(dc, inner, {{1, 1, 1, 0.16}, {1, 1, 1, 0.03}, {1, 1, 1, 0.16}, {1, 1, 1, 0.03}}, radii4(max(0, radius - p)), p)
-		draw.rect(dc, {{r.min.x + radius * 0.8, r.max.y - 2 * p}, {r.max.x - radius * 0.8, r.max.y - p}}, {0, 0, 0, 0.25})
-	} else {
-		sunk := darken(face, 0.22)
-		draw.rect(dc, r, sunk, radius)
-		draw.inset_shadow(dc, r, rr, draw.rect_shift(draw.rect_pad(r, -1 * s), {0, 2 * s}), radii4(radius), 2.5 * s, {0, 0, 0, 0.8})
-		// the lip of the hole catches the light below
-		draw.rect(dc, {{r.min.x + radius * 0.7, r.max.y}, {r.max.x - radius * 0.7, r.max.y + p}}, {1, 1, 1, 0.06})
-	}
-	draw.rect(dc, r, {0, 0, 0, 0.85}, radius, p)
+	ui.machined_bevel(dc, r, radius_asked * corners(), base, hot, pressed, glow)
 }
 
 // Words that say what can be done are also what does it: quiet like a hint, lit under the pointer. True when clicked.
@@ -279,84 +257,20 @@ hint_action :: proc(id, label: string, em: f32, face: font.Font_Id = 0, icon := 
 	return sig.clicked
 }
 
-// A sunken well (fields, code, the composer): darker face, inner shadow from above, a lit lip under the bottom edge;
-// `focus` lights a glowing accent ring around it.
+// A sunken well (fields, code, the composer); `focus` lights a ring of `accent` around it.
 draw_well :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, focus: f32 = 0, accent := Color{}) {
-	radius := radius_asked * corners()
-	s := ui.scale()
-	p := px1()
-	rr := radii4(radius)
-	if flat() {   // a plain face; its edge a thin line, the accent's under the focus
-		draw.rect(dc, r, base, radius)
-		draw.rect(dc, r, draw.mix(flat_edge(base, 0), with_alpha(accent, 0.9), focus), radius, p)
-		return
-	}
-	if focus > FADE_VISIBLE && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 4 * s, with_alpha(accent, 0.12 * focus)) }
-	draw.rect(dc, r, base, radius)
-	draw.inset_shadow(dc, r, rr, draw.rect_shift(draw.rect_pad(r, -0.5 * s), {0, 2.5 * s}), rr, 3.5 * s, {0, 0, 0, 0.85})
-	draw.rect(dc, {{r.min.x + radius * 0.6, r.max.y}, {r.max.x - radius * 0.6, r.max.y + p}}, {1, 1, 1, 0.07})
-	edge := focus > FADE_VISIBLE ? draw.mix(Color{0, 0, 0, 0.9}, with_alpha(accent, 0.85), focus) : Color{0, 0, 0, 0.9}
-	draw.rect(dc, r, edge, radius, p)
-	// the rim of the opening, lit: without it a dark well on a dark panel has no visible edge (the accent replaces it
-	// under the focus)
-	if focus < 0.99 { draw.rect(dc, draw.rect_pad(r, p), {1, 1, 1, 0.1 * (1 - focus)}, radius + p, p) }
+	ui.machined_well(dc, r, radius_asked * corners(), base, focus, accent)
 }
 
-// A carved line: a dark cut with the light catching its lower edge.
-draw_groove :: proc(dc: ^draw.Context, a, b: Vec2, vertical := false) {
-	p := px1()
-	if flat() {   // a line
-		draw.rect(dc, vertical ? Rect{a, {a.x + p, b.y}} : Rect{a, {b.x, a.y + p}}, hex(HEX_LINE))
-		return
-	}
-	if vertical {
-		draw.rect(dc, {a, {a.x + p, b.y}}, {0, 0, 0, 0.9})
-		draw.rect(dc, {{a.x + p, a.y}, {a.x + 2 * p, b.y}}, {1, 1, 1, 0.05})
-	} else {
-		draw.rect(dc, {a, {b.x, a.y + p}}, {0, 0, 0, 0.9})
-		draw.rect(dc, {{a.x, a.y + p}, {b.x, a.y + 2 * p}}, {1, 1, 1, 0.05})
-	}
-}
+// A carved line.
+draw_groove :: proc(dc: ^draw.Context, a, b: Vec2, vertical := false) { ui.machined_groove(dc, a, b, vertical) }
 
-// A status lamp: a glass bead with a halo when lit.
-// `glow`: how much light it gives around it (a pulse: its halo breathes, the lamp itself stays lit); <0: as `lit`.
-draw_lamp :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color, lit: f32 = 1, glow: f32 = -1) {
-	halo := glow >= 0 ? glow : lit
-	s := ui.scale()
-	prev := draw.set_circular_corners(dc, true)
-	defer draw.set_circular_corners(dc, prev)
-	r := Rect{c - d * 0.5, c + d * 0.5}
-	rr := radii4(d * 0.5)
-	if flat() {   // a dot, its halo a ring that breathes
-		if halo > FADE_VISIBLE && glow >= 0 { draw.rect(dc, draw.rect_pad(r, d * 0.08), with_alpha(col, 0.35 * halo), d * 0.5) }
-		draw.rect(dc, draw.rect_pad(r, -d * 0.12), draw.mix(darken(col, 0.45), col, lit), d * 0.5)
-		return
-	}
-	if halo > FADE_VISIBLE && the_app.prefs.glow { draw.box_shadow(dc, r, rr, d * 0.45, with_alpha(col, 0.4 * halo)) }
-	draw.rect(dc, draw.rect_pad(r, 1 * s), {0, 0, 0, 0.8}, d * 0.5 + s)
-	body := draw.mix(darken(col, 0.3), col, lit)   // (dimmed, not browned: the colour stays clean through a pulse)
-	draw.rect_corners(dc, r, {lighten(body, 0.25), darken(body, 0.2), lighten(body, 0.25), darken(body, 0.2)}, rr)
-	hl := Rect{{c.x - d * 0.26, c.y - d * 0.36}, {c.x + d * 0.10, c.y - d * 0.10}}
-	draw.rect(dc, hl, {1, 1, 1, 0.22 + 0.2 * lit}, d * 0.18, 0, d * 0.12)
-}
+// A status lamp: a glass bead with a halo when lit (`glow`: its halo; < 0: as `lit`).
+draw_lamp :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color, lit: f32 = 1, glow: f32 = -1) { ui.machined_lamp(dc, c, d, col, lit, glow) }
 
-// A pip: a small hole drilled in the surface with a dab of colour at its bottom, unlit. What is over (done, failed,
-// stopped) shows as a pip; only what is live gets a glowing lamp, so the lamps stay rare enough to mean something.
-draw_pip :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color) {
-	prev := draw.set_circular_corners(dc, true)
-	defer draw.set_circular_corners(dc, prev)
-	p := px1()
-	r := Rect{c - d * 0.5, c + d * 0.5}
-	if flat() {   // a small dot
-		in_f := draw.rect_pad(r, -max(p, math.round(d * 0.25)))
-		draw.rect(dc, in_f, with_alpha(col, col.a * 0.8), (in_f.max.x - in_f.min.x) * 0.5)
-		return
-	}
-	draw.rect(dc, r, {0, 0, 0, 0.75}, d * 0.5)
-	draw.rect(dc, {{r.min.x, r.max.y - p}, {r.max.x, r.max.y + p}}, {1, 1, 1, 0.05}, d * 0.5)   // the lit lower lip
-	in_r := draw.rect_pad(r, -max(p, math.round(d * 0.22)))
-	draw.rect(dc, in_r, with_alpha(col, col.a * 0.8), (in_r.max.x - in_r.min.x) * 0.5)
-}
+// A pip: what is over (done, failed, stopped); only what is live gets a glowing lamp, so the lamps stay rare enough to mean
+// something.
+draw_pip :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color) { ui.machined_pip(dc, c, d, col) }
 
 ////////////////////////////////
 // Boxes painted by those primitives
@@ -624,24 +538,7 @@ Plate_Draw :: struct { radius: f32, top, bottom: Color, border: Color, shadow: f
 @(private = "file")
 plate_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Plate_Draw)(user)
-	s := ui.scale()
-	p := px1()
-	r := b.rect
-	rad := d.radius * s * corners()
-	rr := radii4(rad)
-	if flat() {   // one colour, a thin edge
-		face := draw.mix(d.top, d.bottom, 0.5)
-		draw.rect(dc, r, face, rad)
-		draw.rect(dc, r, d.border.a > 0 ? flat_edge(face, 0) : CLEAR, rad, p)
-		return
-	}
-	if d.shadow > 0 { draw.box_shadow(dc, draw.rect_shift(r, {0, 2 * s}), rr, d.shadow * s, {0, 0, 0, 0.6}) }
-	if d.glow.a > 0 && the_app.prefs.glow { draw.box_shadow(dc, r, rr, 6 * s, with_alpha(d.glow, d.glow.a * 0.5)) }
-	draw.rect_corners(dc, r, {d.top, d.bottom, d.top, d.bottom}, rr)
-	if d.rim > 0 {
-		draw.rect_corners(dc, draw.rect_pad(r, -p), {{1, 1, 1, d.rim}, {1, 1, 1, 0}, {1, 1, 1, d.rim}, {1, 1, 1, 0}}, radii4(max(0, rad - p)), p)
-	}
-	if d.border.a > 0 { draw.rect(dc, r, d.border, rad, p) }
+	ui.machined_plate(dc, b.rect, d.radius * ui.scale() * corners(), d.top, d.bottom, d.shadow, d.rim, d.border, d.glow)
 }
 
 // `if plate("###id", ...) { ... }`: a raised panel (cards, the user's prompt, popover bodies): gradient face, lit rim,

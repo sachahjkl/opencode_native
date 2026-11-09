@@ -311,9 +311,7 @@ SESSION_BADGE_ALPHA    :: 0.2    // its colour behind its letter
 SESSION_BADGE_HEX := [?]u32{HEX_PEACH, HEX_BLUE, HEX_PURPLE, HEX_GREEN, HEX_YELLOW, HEX_RED, HEX_CYAN, HEX_ROSE}   // what a session's id picks from
 THEME_CARD_H_EM   :: 3.6   // a theme's card in the settings (settings.odin theme_cards)
 THEME_CARD_RADIUS :: 8     // its corners, logical px
-FLAT_PRESSED :: 0.12   // a flat button held: this far toward the text (style.odin draw_bevel)
 COMPOSER_FIT_SLACK_EM :: 3   // the composer's toolbar gives back what it left out once this much wider than where it went past (views.odin composer_fit)
-FLAT_HOT     :: 0.06   // a flat button under the pointer: this far toward the text (style.odin draw_bevel)
 THEMES_FILE  :: "themes.txt"   // the user's themes, beside the preferences (theme.odin)
 ITEM_HOVER_TINT    :: 0.05   // a row under the pointer: the text's
 TODO_SCAN_PAGES :: 10   // older pages read at most for a session's last todo list (activity.odin todos_scan_load)

@@ -99,7 +99,7 @@ themes_of_ones_own :: proc(t: ^testing.T) {
 	testing.expect_value(t, all[mine].dark.steps[2], nord.dark.steps[2])   // (from Nord)
 	testing.expect_value(t, all[mine].dark.hues[5], nord.dark.hues[5])     // ("nope": not a colour)
 	testing.expect_value(t, all[mine].light.texts[2], 0x101010ff)
-	testing.expect(t, all[mine].has_light, "a light version")
+	testing.expect(t, all[mine].versions == .Both, "a light version")
 	monokai := theme_index(app, "Monokai")
 	testing.expect(t, monokai >= app.cx.theme.own && all[monokai].dark.steps[1] == 0x000000ff, "Monokai is the user's now")
 	n := 0

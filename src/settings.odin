@@ -774,7 +774,7 @@ pref_slider :: proc(app: ^App, name: string, lo, hi, step: f32, format: string, 
 }
 
 @(private = "file")
-Theme_Card :: struct { cols: ^Theme_Colors, chosen: bool }
+Theme_Card :: struct { cols: ^ui.Theme_Colors, chosen: bool }
 
 // The themes, three to a row, each in its own colours: its surface, its name in its text, its colours as dots, a ring of its
 // accent around the one shown.
@@ -794,7 +794,8 @@ theme_cards :: proc(app: ^App, em: f32) {
 				ui.a11y({role = .Radio_Button, name = def.name, toggled = i == cur ? .True : .False})
 				b := ui.build_box({.Clickable, .Focusable}, fmt.tprintf("###th%d", i))
 				d := ui.frame_new(Theme_Card)
-				cols := app.cx.theme.light && def.has_light ? &def.light : &def.dark   // (in the version shown)
+				cols := ui.frame_new(ui.Theme_Colors)
+				cols^, _ = ui.theme_version(def^, app.cx.theme.light)   // (in the version shown)
 				d^ = {cols, i == cur}
 				b.custom, b.custom_user = theme_card_draw, d
 				if ui.signal(b).clicked && i != cur { pref_set(app, "appearance.theme", def.name) }
