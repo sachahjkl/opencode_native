@@ -1511,6 +1511,7 @@ composer :: proc(app: ^App, em: f32) {
 	// (the tray's keys with the focus nowhere too: a click on one of its rows leaves it there)
 	if app.activity.open && !app.picker.open && (app.composer_focused || ui.focus_key() == 0) { activity_keys(app) }
 	if keys { mention_keys(app) }
+	if keys { slash_keys(app) }
 	if keys { history_track(app) }
 	// (wherever the focus is: this Escape must not stop the run)
 	if queue_editing(app) && !overlay_open(app) && !history_browsing(app) && !mention_takes_escape(app) && ui.key_press(.Escape) { queue_edit_end(app, .Cancel) }
@@ -1524,6 +1525,7 @@ composer :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.45))
 		queue_edit_banner(app, em)
 		mention_list(app, em)
+		slash_list(app, em)
 		attachments_row(app, em)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###edrow") {
@@ -1552,6 +1554,7 @@ composer :: proc(app: ^App, em: f32) {
 				res := ui.text_edit("###composer", &app.composer, "Ask anything…", wrap = true, auto_height = true, min_lines = 2, max_lines = COMPOSER_MAX_LINES)
 				app.composer_focused = res.focused
 				mention_track(app)
+				slash_track(app)
 				if app.cx.focus_composer { ui.set_focus(res.box.key); app.cx.focus_composer = false }
 				ctx_check(app, res.box, .Composer)
 				if res.committed { submit, other = true, !app.prefs.ctrl_enter }

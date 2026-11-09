@@ -224,26 +224,28 @@ mention_keys :: proc(app: ^App) {
 	if ui.key_press(.Tab) || ui.key_press(.Return) { mention_choose(app, m.sel) }
 }
 
-// Escape belongs to the list while it is there, not to the run.
-mention_takes_escape :: proc(app: ^App) -> bool { return mention_shown(app) && app.composer_focused }
+// Escape belongs to a list over the composer (the `@` mentions, the `/` commands) while it is there, not to the run.
+mention_takes_escape :: proc(app: ^App) -> bool { return (mention_shown(app) || slash_shown(app)) && app.composer_focused }
+
+// A row of a list over the composer (the `@` mentions, the `/` commands).
+Completion_Row :: struct { icon, label, detail: string }
 
 @(private = "file")
-Mention_Row_Draw :: struct { selected: bool }
+Completion_Row_Draw :: struct { selected: bool }
 
-// Over the text of the composer, in its well.
-mention_list :: proc(app: ^App, em: f32) {
-	m := &app.cx.mentions
-	if !mention_shown(app) { return }
+// The rows over the text of the composer, in its well, `sel` lit. The row clicked (-1: none), and the list's box.
+completion_list :: proc(app: ^App, id: string, rows: []Completion_Row, sel: int, em: f32) -> (clicked: int, list: ui.Key) {
+	clicked = -1
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if ui.column(id = "###mention_list") {
-		m.list = ui.parent_box().key
-		for &h, k in m.hits {
+	if ui.column(id = id) {
+		list = ui.parent_box().key
+		for &r, k in rows {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center, cursor = .Hand})
-			row := ui.build_box({.Clickable}, fmt.tprintf("###mention_%d", k))
-			d := ui.frame_new(Mention_Row_Draw)
-			d.selected = k == m.sel
+			row := ui.build_box({.Clickable}, fmt.tprintf("###row_%d", k))
+			d := ui.frame_new(Completion_Row_Draw)
+			d.selected = k == sel
 			row.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-				if (^Mention_Row_Draw)(user).selected {
+				if (^Completion_Row_Draw)(user).selected {
 					s := ui.scale()
 					r := draw.rect_pad(b.rect, -1 * s)
 					r.min.x += 6 * s
@@ -252,19 +254,31 @@ mention_list :: proc(app: ^App, em: f32) {
 				}
 			}
 			row.custom_user = d
-			if ui.signal(row).clicked { mention_choose(app, k); break }
+			if ui.signal(row).clicked { clicked = k }
 			if ui.parent(row) {
 				ui.spacer(ui.px(em * 0.9))
-				glyph(h.kind == .File ? ICO_DOC : ICO_ROBOT, hex(HEX_FAINT), math.round(em * ICON_SMALL), em * 1.1)
+				glyph(r.icon, hex(HEX_FAINT), math.round(em * ICON_SMALL), em * 1.1)
 				ui.spacer(ui.px(em * 0.3))
-				text("n", h.label, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
-				if h.detail != "" {
+				text("n", r.label, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+				if r.detail != "" {
 					ui.spacer(ui.px(em * 0.8))
-					text("d", ellipsize(h.detail, MENTION_DETAIL_CHARS), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)})
+					text("d", ellipsize(r.detail, MENTION_DETAIL_CHARS), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)})
 				}
 			}
 		}
 	}
+	return
+}
+
+// Over the text of the composer, in its well.
+mention_list :: proc(app: ^App, em: f32) {
+	m := &app.cx.mentions
+	if !mention_shown(app) { return }
+	rows := make([]Completion_Row, len(m.hits), context.temp_allocator)
+	for h, k in m.hits { rows[k] = {h.kind == .File ? ICO_DOC : ICO_ROBOT, h.label, h.detail} }
+	clicked: int
+	clicked, m.list = completion_list(app, "###mention_list", rows, m.sel, em)
+	if clicked >= 0 { mention_choose(app, clicked) }
 }
 
 // Where a mention stands, as the server counts: in UTF-16 units, as JavaScript does.
@@ -294,6 +308,8 @@ mentions_destroy :: proc(app: ^App) {
 	delete(m.chosen); delete(m.hits); delete(m.query); delete(m.dir); delete(m.folder); delete(m.read.message)
 	virtual.arena_destroy(&m.arena)
 	m^ = {}
+	delete(app.cx.slash_pick.query)   // (the other list over the composer: slash.odin)
+	app.cx.slash_pick = {}
 }
 
 // What the server proposed, and what was chosen of it: a file's uri on the server left says nothing on the next one, and must not go with a

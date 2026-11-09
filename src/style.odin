@@ -387,12 +387,14 @@ dialog_close :: proc(open: ^bool) {
 }
 
 // A machined push button: an icon (Lucide glyph) and/or a label. `width`: its width (text size by default).
-bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Normal, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false, quiet := false) -> ui.Signal {
+// `wrap`: a label longer than the button's width goes on more lines and the button grows to hold them (it is `height`
+// tall on one line); else it is one line, as wide as its text.
+bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Normal, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false, quiet := false, wrap := false) -> ui.Signal {
 	em := ui.font_size()
 	h := height > 0 ? height : math.round(em * BUTTON_H_EM)
 	fg := kind == .Accent ? hex(HEX_ON_ACCENT) : kind == .Danger ? WHITE : hex(HEX_TEXT)
 	if disabled { fg = hex(HEX_FAINT) }
-	ui.next({width = width.? or_else ui.children_sum(), height = ui.px(h), axis = .X, cross = .Center})
+	ui.next({width = width.? or_else ui.children_sum(), height = wrap ? ui.children_sum() : ui.px(h), axis = .X, cross = .Center})
 	flags: ui.Box_Flags = {.Clickable, .Focusable}
 	if disabled { flags = {} }
 	b := ui.build_box(flags, id)
@@ -410,11 +412,22 @@ bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Nor
 			ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###ico", icon))
 			if label != "" { ui.spacer(ui.px(em * 0.4)) }
 		}
-		if label != "" {
+		if label != "" && wrap {
+			// (the lines between margins that make one line `h` tall)
+			fs := quiet ? math.round(em * FS_NOTE) : em
+			margin := max(math.round((h - math.ceil(font.metrics(&the_app.fonts, the_app.font, fs).line_height)) * 0.5), 0)
+			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+			if ui.column() {
+				ui.spacer(ui.px(margin))
+				ui.next({width = ui.fill(), fg = fg, text_pad = 0, font_size = fs})
+				ui.paragraph(fmt.tprintf("%s###txt", label_safe(label)))
+				ui.spacer(ui.px(margin))
+			}
+		} else if label != "" {
 			ui.next({width = ui.text_size(0), height = ui.pct(1), fg = fg, text_pad = 0, font_size = quiet ? math.round(em * FS_NOTE) : em})
 			ui.build_box({.Draw_Text}, fmt.tprintf("%s###txt", label_safe(label)))
 		}
-		if _, fixed := width.?; fixed { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(pad)) }
+		if _, fixed := width.?; fixed && !wrap { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(pad)) }
 	}
 	if disabled { sig.clicked = false }
 	return sig

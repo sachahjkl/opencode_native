@@ -561,3 +561,26 @@ an_attached_file_goes_as_its_type :: proc(t: ^testing.T) {
 	testing.expect_value(t, attach_mime("/a/prog", transmute([]u8)string("\x7fELF\x02\x01\x00")), "")
 	testing.expect_value(t, attach_mime("/a/latin1.txt", []u8{'c', 0xe9}), "")
 }
+
+// `/` at the start of the composer proposes the server's commands that match what follows it, best first.
+@(test)
+a_slash_proposes_the_commands :: proc(t: ^testing.T) {
+	q, ok := slash_word("/rev", 4)
+	testing.expect(t, ok && q == "rev")
+	_, ok = slash_word("/review this", 12)
+	testing.expect(t, !ok, "past the command's word")
+	_, ok = slash_word("see /review", 11)
+	testing.expect(t, !ok, "only at the start")
+	q, ok = slash_word("/", 1)
+	testing.expect(t, ok && q == "", "the `/` alone lists them all")
+
+	context.allocator = runtime.heap_allocator()
+	app := new(App)
+	defer free(app)
+	slash_load(app, []Slash{{strings.clone("init"), strings.clone("")}, {strings.clone("review"), strings.clone("")}, {strings.clone("compact"), strings.clone("")}})
+	defer { slash_forget(app); delete(app.cx.slash) }
+	hits := slash_matches(app, "rv")
+	testing.expect_value(t, len(hits), 1)
+	if len(hits) == 1 { testing.expect_value(t, app.cx.slash[hits[0]].name, "review") }
+	testing.expect_value(t, len(slash_matches(app, "")), 3)
+}

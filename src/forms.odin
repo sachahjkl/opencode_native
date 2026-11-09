@@ -470,7 +470,7 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 		if fd.custom { form_line(fd, em, "Something else", done) }
 	case:
 		for o, k in fd.options {
-			if bevel_button(fmt.tprintf("###form_o%d", k), label_safe(option_label(o)), "", fd.choice == k ? .Toggled : .Normal, ui.fill(), h, left = true).clicked {
+			if bevel_button(fmt.tprintf("###form_o%d", k), label_safe(option_label(o)), "", fd.choice == k ? .Toggled : .Normal, ui.fill(), h, left = true, wrap = true).clicked {
 				fd.choice = k
 				ui.field_set(&fd.text, "")
 				done^ = true

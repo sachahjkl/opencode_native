@@ -198,6 +198,7 @@ App_Context :: struct {
 	plugins:        Plugins,
 	integrations:   Integrations,         // the Connections page (integrations.odin)
 	mentions:       Mentions,             // @ in the composer (files.odin)
+	slash_pick:     Slash_Pick,           // / in the composer (slash.odin)
 	files:          Files,                // the dialog of the folder's files
 	changes:        Changes,              // what a session changed, or would undo (session_tools.odin)
 	forms:          [dynamic]^Form_Req,   // what agents ask and wait for (forms.odin), of every session
