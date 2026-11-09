@@ -5,6 +5,17 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-09
+
+### Added
+
+- **The palette finds every setting**, not only the switches: a switch still flips there; another setting (a choice, a number, a text) opens the settings on it. "animation" finds Appearance › Animations. The `:` prefix is now "settings".
+
+### Fixed
+
+- **A running sub-agent's card opens its session**: the server names that session only when the call ends, so Open and the double click did nothing while it ran. The card now finds it among the children of the session shown.
+- **The program's own preferences** (layouts, last choices) are hidden from the settings and the palette (gui_toolkit 0.137.0, `Def.hidden`).
+
 ## [0.32.2] - 2026-11-09
 
 ### Fixed
@@ -1100,7 +1111,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.32.2...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.33.0
 [0.32.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.32.2
 [0.32.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.32.1
 [0.32.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.32.0

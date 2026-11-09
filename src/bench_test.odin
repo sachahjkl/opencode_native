@@ -761,6 +761,26 @@ a_table_s_copy_button_is_over_its_rows :: proc(t: ^testing.T) {
 	testing.expect(t, session.find_text(s, "Table copied") != nil, "a click on it copies the table")
 }
 
+// Every setting the palette lists (not a hidden one) is on a settings page: the search the palette gives the settings shows it, with
+// its control. A hidden one is on none.
+@(test)
+every_setting_of_the_palette_is_on_a_page :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	settings_open(app)
+	for d in PREF_DEFS {
+		ui.field_set(&app.settings_query, setting_query(d.name))
+		session.frames(s, 2)
+		found := session.find(s, fmt.tprintf("set_%s", d.name)) != nil
+		if d.hidden {
+			testing.expectf(t, !found, "%s is hidden: on no page", d.name)
+		} else {
+			testing.expectf(t, found, "%s: the settings show it when the palette opens them on it (%q)", d.name, setting_query(d.name))
+		}
+	}
+	ui.field_set(&app.settings_query, "")
+}
+
 // A form's tabs: each as wide as its title, on a next line when they do not fit; none over another, every title in its tab (shared
 // out equally, a long title ran over the next tab).
 @(test)

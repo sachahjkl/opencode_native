@@ -1,7 +1,7 @@
 // The command palette (Ctrl+K): one field that reaches everything. What the program does (commands.odin), the sessions, the
-// agents, the models, the server's own commands and the preferences that are switches. A first character narrows it:
-// > commands, @ sessions, / the server's commands, # models, : switches. What was chosen before comes first (it fades with
-// a half-life of two weeks, palette_usage.txt beside the preferences).
+// agents, the models, the server's own commands and the settings (a switch flips; the others open the settings on themselves).
+// A first character narrows it: > commands, @ sessions, / the server's commands, # models, : settings. What was chosen before
+// comes first (it fades with a half-life of two weeks, palette_usage.txt beside the preferences).
 package occ
 
 import "core:fmt"
@@ -15,7 +15,7 @@ import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
 
-Pal_Kind :: enum u8 { Command, Session, Agent, Model, Slash, Switch }
+Pal_Kind :: enum u8 { Command, Session, Agent, Model, Slash, Switch, Setting }
 
 Pal_Item :: struct {
 	kind:   Pal_Kind,
@@ -149,9 +149,14 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 			}
 		}
 		if want(only, ':') {
+			// every setting of the settings' pages: a switch flips here, the others open the settings on themselves
 			for d in PREF_DEFS {
-				if d.kind != .Bool { continue }
-				append(&items, Pal_Item{kind = .Switch, id = d.name, title = switch_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, on = config.bool_of(&app.cfg_prefs, d.name)})
+				if d.hidden { continue }
+				if d.kind != .Bool {
+					append(&items, Pal_Item{kind = .Setting, id = d.name, title = setting_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL})
+					continue
+				}
+				append(&items, Pal_Item{kind = .Switch, id = d.name, title = setting_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, on = config.bool_of(&app.cfg_prefs, d.name)})
 			}
 		}
 	}
@@ -173,6 +178,10 @@ palette_choose :: proc(app: ^App, it: ^Pal_Item) {
 		app.cx.focus_composer = true
 	case .Switch:
 		pref_set(app, it.id, it.on ? "false" : "true")
+	case .Setting:
+		// the settings, searching for it: it shows alone, with its control
+		settings_open(app)
+		ui.field_set(&app.settings_query, setting_query(it.id))
 	}
 }
 
@@ -194,7 +203,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 	hits := make([dynamic]Pal_Hit, context.temp_allocator)
 	for &it, i in items {
 		score, ranges, ok := ui.fuzzy_score(needle, it.title)
-		if !ok && it.kind == .Switch {
+		if !ok && (it.kind == .Switch || it.kind == .Setting) {
 			// a switch is found by its name too ("permission.allow_all"), its title then shown without marks
 			score, _, ok = ui.fuzzy_score(needle, it.id)
 			ranges = nil
@@ -302,7 +311,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###pal_foot") {
 			ui.spacer(ui.px(em * 1))
-			text("h", "> commands    @ sessions    / server    # models    : switches", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+			text("h", "> commands    @ sessions    / server    # models    : settings", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			text("k", "Enter run", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 1))
 		}
@@ -311,10 +320,16 @@ palette_dialog :: proc(app: ^App, em: f32) {
 	if chosen >= 0 { palette_choose(app, &items[chosen]) }
 }
 
-// A switch's title as the settings say it ("Notify › Permission", temp memory); the name is still found by what is typed
+// A setting's title as the settings say it ("Notify › Permission", temp memory); the name is still found by what is typed
 // (palette_view).
-switch_title :: proc(d: config.Def) -> string {
+setting_title :: proc(d: config.Def) -> string {
 	group := d.category
 	if group == "" { group = d.name[:max(strings.index_byte(d.name, '.'), 0)] }
 	return fmt.tprintf("%s › %s", config.category_title(group), config.title_of(d))
+}
+
+// What the settings' search is given to show one setting: its title (the search reads the titles and the descriptions).
+setting_query :: proc(name: string) -> string {
+	for d in PREF_DEFS { if d.name == name { return config.title_of(d) } }
+	return name
 }

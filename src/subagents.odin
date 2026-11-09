@@ -385,7 +385,7 @@ card_head_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 // A sub-agent's call: a calm plate of the neutral steps, the only colour its state's, on its mark. One that runs is raised
 // and carries a pulsing lamp; one that is over is flat and dim, one line until it is opened.
 subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
-	v := sub_view(app, p.sub_session, p)
+	v := sub_view(app, p.sub_session != "" ? p.sub_session : sub_session_guess(&app.chat, p), p)
 	part_id := p.tool_id != "" ? p.tool_id : pid
 	open := part_open(app, part_id)
 	running := v.state == .Running || v.state == .Starting
@@ -401,6 +401,32 @@ subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 	}
 	ui.spacer(ui.px(em * 0.6))
 }
+
+// The session of a sub-agent call whose own the server has not said yet: it says it when the call ends, so a running card could not
+// be opened. The child of the shown session with the call's description as its title (and its agent), not another call's, the
+// first one made after the call started. "": none.
+sub_session_guess :: proc(c: ^Chat, p: ^Part) -> string {
+	if p.sub_desc == "" { return "" }
+	best: ^Session_Info
+	for &s in c.children {
+		if s.title != p.sub_desc || (p.sub_agent != "" && s.agent != "" && s.agent != p.sub_agent) { continue }
+		if p.started_ms > 0 && s.created + SUB_GUESS_SLACK_MS < p.started_ms { continue }   // (made before the call: another one's)
+		if sub_session_claimed(c, s.id) { continue }
+		if best == nil || s.created < best.created { best = &s }
+	}
+	return best != nil ? best.id : ""
+}
+
+// Whether a call of the conversation names this session as its own already.
+@(private = "file")
+sub_session_claimed :: proc(c: ^Chat, sid: string) -> bool {
+	for &m in c.messages {
+		for &p in m.parts { if p.sub_session == sid { return true } }
+	}
+	return false
+}
+
+SUB_GUESS_SLACK_MS :: 5000   // a child made this much before the call's start is still its (the two clocks are the server's, a step apart)
 
 // The clickable header of a card: its first line and, unless it is folded and over, the quiet line and a preview.
 @(private = "file")
