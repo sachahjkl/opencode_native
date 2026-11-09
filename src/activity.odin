@@ -33,6 +33,7 @@ Peek :: struct { text: string, read_ms: f64 }   // the end of a sub-agent's work
 
 Activity :: struct {
 	open:       bool,
+	open_in:    map[string]bool,    // each session's: whether its tray was open (keys owned; activity_reset gives it back)
 	sel:        int,
 	opened:     string,             // the row opened with Enter (owned)
 	poll_ms:    f64,
@@ -69,6 +70,7 @@ activity_reset :: proc(app: ^App) {
 	for k, p in a.peeks { delete(k); delete(p.text) }
 	clear(&a.peeks)
 	a.sel, a.reveal = 0, false
+	a.open = a.open_in[app.chat.id] or_else false   // (the tray is each session's: open where it was left open)
 	a.poll_ms = 0
 	todos_clear(a)
 	a.todos_sig = 0
@@ -93,15 +95,40 @@ activity_forget :: proc(app: ^App) {
 	delete(a.opened); delete(a.dir)
 	a.opened, a.dir = "", ""
 	a.open = false
+	for k in a.open_in { delete(k) }   // (that server's sessions)
+	clear(&a.open_in)
 }
 
 activity_open :: proc(app: ^App) {
 	a := &app.activity
 	a.open, a.sel, a.reveal, a.by_keys = true, 0, true, true
 	a.poll_ms = 0   // (read now)
+	activity_keep_open(app)
 }
 
-activity_close :: proc(app: ^App) { app.activity.open = false }
+activity_close :: proc(app: ^App) {
+	if !app.activity.open { return }
+	app.activity.open = false
+	activity_keep_open(app)
+}
+
+// The session shown's tray, open or not, for when it is shown again.
+@(private = "file")
+activity_keep_open :: proc(app: ^App) {
+	m := &app.activity.open_in
+	id := app.chat.id
+	if !app.activity.open {
+		if key, ok := map_key_of(m, id); ok { delete_key(m, id); delete(key) }
+		return
+	}
+	if id not_in m^ { m[strings.clone(id)] = true }
+}
+
+@(private = "file")
+map_key_of :: proc(m: ^map[string]bool, id: string) -> (string, bool) {
+	for k in m^ { if k == id { return k, true } }
+	return "", false
+}
 
 activity_toggle :: proc(app: ^App) { if app.activity.open { activity_close(app) } else { activity_open(app) } }
 

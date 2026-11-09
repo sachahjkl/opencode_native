@@ -1116,3 +1116,24 @@ a_sent_prompt_leaves_no_draft :: proc(t: ^testing.T) {
 	testing.expect(t, app.cx.due[.Drafts].due_ms != 0, "a save is due")
 	testing.expect(t, !strings.contains(drafts_json(app), "hello"), drafts_json(app))
 }
+
+// The tray of what runs is each session's: open in one, closed in another, as each was left.
+@(test)
+the_tray_is_each_sessions :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	defer drafts_destroy(app)
+	show(app, "a")
+	activity_open(app)
+	show(app, "b")
+	testing.expect(t, !app.activity.open, "closed in another session")
+	show(app, "a")
+	testing.expect(t, app.activity.open, "open again where it was left open")
+	activity_close(app)
+	show(app, "b")
+	show(app, "a")
+	testing.expect(t, !app.activity.open, "closed where it was closed")
+	activity_forget(app)
+	delete(app.activity.open_in)
+	app.activity.open_in = nil
+}

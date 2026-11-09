@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.24.10] - 2026-11-09
+
+### Changed
+
+- **The tray of what runs ("details") is each session's**: open in a session where it was left open, closed in the others; it was one for all.
+
 ## [0.24.9] - 2026-11-09
 
 ### Changed
@@ -965,7 +971,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.9...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.10...HEAD
+[0.24.10]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.10
 [0.24.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.9
 [0.24.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.8
 [0.24.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.7
