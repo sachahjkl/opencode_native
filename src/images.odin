@@ -350,6 +350,7 @@ image_view_open :: proc(app: ^App, ref: Image_Ref) {
 	app.view_open = true
 	app.view_zoom, app.view_pan = 1, {}
 	app.view_resize_from = {}
+	app.view_grown = false
 }
 
 IMAGE_NAME_CHARS :: 80
@@ -367,20 +368,23 @@ VIEW_PAN_KEY     :: 0.1   // of the view, an arrow key
 
 // Where the viewer is, from the image alone: the panel hugs the picture, so all the black around it is outside the viewer.
 Viewer_Frame :: struct {
-	full:    [2]f32,   // the picture at the scale 1: the most `room` gives it, never beyond its pixels times the interface's scale
+	full:    [2]f32,   // the picture at the scale 1: the most `room` gives it
 	picture: [2]f32,   // its box: `full` times the scale chosen, whole pixels
 	panel:   [2]f32,   // the dialog: the picture and the chrome, never narrower than the bar needs (nor than the room)
 	fit:     f32,      // frame pixels per image pixel, at the zoom 1
 }
 
 // `image`: its pixels; `room`: what the window gives the dialog; `chrome`: what the dialog takes beside the picture; `scale`: the size the
-// person chose (conversation.image_viewer_size).
-viewer_frame :: proc(image, room, chrome: [2]f32, ui_scale, scale, min_w: f32) -> Viewer_Frame {
+// person chose (conversation.image_viewer_size), a share of the room. A picture opens no larger than its pixels times the interface's
+// scale (a small one is not blown up); `grown`: the person dragged the viewer's grips since it opened, and it takes what they ask, up to
+// the room.
+viewer_frame :: proc(image, room, chrome: [2]f32, ui_scale, scale, min_w: f32, grown := false) -> Viewer_Frame {
 	inner := [2]f32{max(1, room.x - chrome.x), max(1, room.y - chrome.y)}
-	most := min(inner.x / image.x, inner.y / image.y, ui_scale)
+	most := min(inner.x / image.x, inner.y / image.y)
 	f: Viewer_Frame
 	f.full = image * most
 	f.fit = most * clamp(scale, VIEWER_SCALE_MIN, 1)
+	if !grown { f.fit = min(f.fit, ui_scale) }
 	f.picture = {max(1, math.round(image.x * f.fit)), max(1, math.round(image.y * f.fit))}
 	f.panel = {max(f.picture.x + chrome.x, min(min_w, room.x)), f.picture.y + chrome.y}
 	return f
@@ -451,7 +455,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 	pad, bar := math.round(em * VIEWER_PAD_EM), math.round(em * VIEWER_BAR_EM)
 	chrome := [2]f32{2 * pad, pad + bar}
 	room := app.state.window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
-	f := viewer_frame({f32(e.w), f32(e.h)}, room, chrome, sc, app.prefs.viewer_scale, math.round(em * VIEWER_MIN_W_EM))
+	f := viewer_frame({f32(e.w), f32(e.h)}, room, chrome, sc, app.prefs.viewer_scale, math.round(em * VIEWER_MIN_W_EM), app.view_grown)
 	view := f.picture
 	max_zoom := max(1, VIEW_NATIVE_MAX * sc / f.fit)
 	// (the dialog's size in logical pixels, as modal_sized keeps it: its grips write it)
@@ -536,8 +540,11 @@ viewer_resized :: proc(app: ^App, size, asked: [2]f32, f: Viewer_Frame) {
 	case size == {}:
 		app.prefs.viewer_scale = 1
 		app.view_resize_from = {}
+		app.view_grown = false
 	case size != asked:
-		if app.view_resize_from == {} { app.view_resize_from = {asked.x, asked.y, app.prefs.viewer_scale} }
+		// (from the size shown: a picture held to its pixels shows less than the share saved)
+		if app.view_resize_from == {} { app.view_resize_from = {asked.x, asked.y, f.picture.x / f.full.x} }
+		app.view_grown = true
 		from := app.view_resize_from
 		app.prefs.viewer_scale = viewer_scale_of((size - from.xy) * sc, f.full, from.z)
 	}

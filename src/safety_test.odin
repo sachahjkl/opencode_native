@@ -162,6 +162,13 @@ the_viewer_hugs_the_picture :: proc(t: ^testing.T) {
 	testing.expect_value(t, f.picture, [2]f32{237, 118})    // (no smaller than VIEWER_SCALE_MIN)
 	f = viewer_frame({40, 40}, {200, 900}, chrome, 1, 1, 300)
 	testing.expect_value(t, f.panel, [2]f32{200, 98})       // never wider than the room
+	// a small picture opens at its pixels; once the person drags the grips, it takes the size asked, up to the room
+	f = viewer_frame({100, 50}, room, chrome, 1, 1, 300)
+	testing.expect_value(t, f.picture, [2]f32{100, 50})
+	f = viewer_frame({100, 50}, room, chrome, 1, 1, 300, grown = true)
+	testing.expect_value(t, f.picture, [2]f32{1184, 592})
+	f = viewer_frame({100, 50}, room, chrome, 1, 0.5, 300, grown = true)
+	testing.expect_value(t, f.picture, [2]f32{592, 296})
 }
 
 @(test)

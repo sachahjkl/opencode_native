@@ -102,6 +102,7 @@ App :: struct {
 	view_pan:         [2]f32,                // of the picture's centre from the view's, frame pixels
 	view_grab:        [2]f32,                // view_pan when the drag began
 	view_resize_from: [3]f32,                // a grip of the viewer held: the dialog's size (logical pixels) and scale at its press ({}: none)
+	view_grown:     bool,                    // the viewer's grips were dragged since it opened: its picture may pass its pixels (viewer_frame)
 	view_start:       Image_Ref,             // --image=<file>: opened in the viewer once it is decoded (its data owned)
 	devtools:         ^devtools.Server,   // TOOLKIT_DEVTOOLS=<port>: driven over the Chrome DevTools Protocol (the toolkit's tk cdp, or gt:cdp in occtools)
 	setup:            Setup_UI,

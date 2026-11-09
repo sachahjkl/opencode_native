@@ -630,7 +630,7 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		app.view_ref = image_ref_clone(image_ref("not decoded here", .Bytes, "image/png", "picture.png"))
 		app.view_key = 0x5eed
 		app.images[app.view_key] = {state = .Ready, tex = tex, w = W, h = H, used = app.frame_no}
-		app.view_open, app.view_zoom, app.view_pan = true, 1, {}
+		app.view_open, app.view_zoom, app.view_pan, app.view_grown = true, 1, {}, false
 	}
 	open(app, tex)
 	session.frames(s, 3)
@@ -651,22 +651,31 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 	session.frames(s, 2)
 	session.click_at(s, view.rect.min + 5)
 	testing.expect(t, !app.view_open, "a press beside the picture closes it")
-	// smaller, then its corner: the size follows the pointer and is kept
-	pref_set(app, "conversation.image_viewer_size", "0.5")
+	// its corner, outward: the picture grows past its pixels, as far as the pointer goes, and the size is kept (a share of the room)
 	open(app, tex)
 	session.frames(s, 3)
 	view, panel = session.find(s, "view"), session.find(s, "modal_image_view")
-	testing.expect_value(t, view.rect.max - view.rect.min, [2]f32{W, H} * ui.scale() * 0.5)
+	before := view.rect.max - view.rect.min
+	testing.expect_value(t, before, [2]f32{W, H} * ui.scale())
 	corner := panel.rect.max - 3
 	session.press(s, corner)
 	session.move(s, corner + {25, 0})
 	session.move(s, corner + {50, 0})
 	session.release(s, corner + {50, 0})
 	session.frames(s, 2)
-	kept := config.float_of(&app.cfg_prefs, "conversation.image_viewer_size")
-	testing.expectf(t, abs(kept - (0.5 + 100 / (W * f64(ui.scale())))) < 0.01, "the corner moved 50 px: both sides 100 px, kept: %v", kept)
 	view = session.find(s, "view")
-	testing.expectf(t, abs((view.rect.max.x - view.rect.min.x) / (view.rect.max.y - view.rect.min.y) - 2) < 0.02, "its shape kept: %v", view.rect)
+	after := view.rect.max - view.rect.min
+	testing.expectf(t, abs(after.x - (before.x + 100)) < 2, "the corner moved 50 px: both sides 100 px, past its pixels: %v", after)
+	testing.expectf(t, abs(after.x / after.y - 2) < 0.02, "its shape kept: %v", after)
+	room := app.state.window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
+	full := viewer_frame({W, H}, room, {2 * pad, pad + bar}, ui.scale(), 1, math.round(em * VIEWER_MIN_W_EM)).full
+	kept := config.float_of(&app.cfg_prefs, "conversation.image_viewer_size")
+	testing.expectf(t, abs(kept - f64(after.x / full.x)) < 0.01, "kept as a share of the room: %v", kept)
+	// opened again: a picture that fits opens at its pixels, whatever the share kept
+	open(app, tex)
+	session.frames(s, 3)
+	view = session.find(s, "view")
+	testing.expect_value(t, view.rect.max - view.rect.min, before)
 	// a copy: the file's pixels, whole, on the clipboard
 	small := []u8{255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 255, 9, 8, 7, 0, 1, 2, 3, 4, 200, 100, 50, 255}
 	file := png.encode(small, 3, 2, .Fast, context.temp_allocator)
