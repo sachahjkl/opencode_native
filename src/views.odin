@@ -7,6 +7,7 @@ import "core:unicode"
 import "core:unicode/utf8"
 import "core:hash"
 import "core:math"
+import "core:slice"
 import "core:strings"
 import "core:time"
 import "gt:draw"
@@ -1604,6 +1605,7 @@ composer :: proc(app: ^App, em: f32) {
 			if model == "" { model = "default model" }
 			msig := bevel_button("###model", model, lucide.CPU, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "model")
 			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(&app.picker, "model", msig.box.rect) } }
+			variant_button(app, em)
 			ui.spacer(ui.fill())
 			held := composer_held(app)
 			if app.column_w > em * COMPOSER_HINT_MIN_EM && fit < 1 {   // (room for it beside the agent and model buttons)
@@ -1715,10 +1717,25 @@ choose_agent :: proc(app: ^App, agent: string) {
 	choice_remember(app)
 }
 
+// (the variant stays when the new model has it too: "high" on one model is "high" on the next)
 choose_model :: proc(app: ^App, m: Model_Info) {
 	c := &app.chat
-	if c.id != "" { switch_model(app, c.id, m) }
-	c.chose_model, c.chose_provider = strings.clone(m.id, c.alloc), strings.clone(m.provider, c.alloc)
+	variant := shown_variant(app)
+	if !slice.contains(model_variants(app, m.id, m.provider), variant) { variant = "" }
+	variant = strings.clone(variant, c.alloc)
+	if c.id != "" { switch_model(app, c.id, m.id, m.provider, variant) }
+	c.chose_model, c.chose_provider, c.chose_variant = strings.clone(m.id, c.alloc), strings.clone(m.provider, c.alloc), variant
+	choice_remember(app)
+}
+
+// How hard the model shown thinks, picked in the composer's menu ("": the model's default). It goes with the model.
+choose_variant :: proc(app: ^App, variant: string) {
+	c := &app.chat
+	model, provider := shown_model(app)
+	if model == "" { return }   // (the server's default model: its variants are not known)
+	model, provider = strings.clone(model, c.alloc), strings.clone(provider, c.alloc)
+	if c.id != "" { switch_model(app, c.id, model, provider, variant) }
+	c.chose_model, c.chose_provider, c.chose_variant = model, provider, strings.clone(variant, c.alloc)
 	choice_remember(app)
 }
 
@@ -1731,6 +1748,7 @@ choice_remember :: proc(app: ^App) {
 	pref_set(app, "session.agent", agent)
 	pref_set(app, "session.model", model)
 	pref_set(app, "session.provider", provider)
+	pref_set(app, "session.variant", strings.clone(shown_variant(app), context.temp_allocator))
 }
 
 // The caret is on the first line the composer shows, wrapped or not (as last drawn).
@@ -1868,4 +1886,25 @@ ellipsize :: proc(s: string, n: int) -> string {
 		count += 1
 	}
 	return s
+}
+
+// How hard the model thinks: a button beside the model's that opens the menu of its variants. None when the model has none.
+@(private = "file")
+variant_button :: proc(app: ^App, em: f32) {
+	model, provider := shown_model(app)
+	variants := model_variants(app, model, provider)
+	if len(variants) == 0 { return }
+	current := shown_variant(app)
+	ui.spacer(ui.px(em * 0.2))
+	ui.a11y({role = .Button, name = "Thinking"})
+	sig := bevel_button("###variant", current != "" ? current : "default", lucide.GAUGE, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true)
+	key := ui.key_from_string(0, "variant_menu")
+	if sig.clicked { ui.ctx_menu_open_rect(key, sig.box.rect, sig.box.key) }
+	if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("How hard the model thinks") } }
+	if ui.ctx_menu(key, em * 12) {
+		if ui.menu_item("default###v_default", "", current == "").clicked { choose_variant(app, "") }
+		for v, i in variants {
+			if ui.menu_item(fmt.tprintf("%s###v%d", label_safe(v), i), "", v == current).clicked { choose_variant(app, v) }
+		}
+	}
 }

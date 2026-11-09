@@ -1137,3 +1137,42 @@ the_tray_is_each_sessions :: proc(t: ^testing.T) {
 	delete(app.activity.open_in)
 	app.activity.open_in = nil
 }
+
+// How hard the model thinks (its variant): read from what the session used, picked in the composer, sent with the model, kept
+// across a change of model that has it too, remembered for a new session.
+@(test)
+the_thinking_level_goes_with_the_model :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	append(&app.models, Model_Info{id = strings.clone("opus"), provider = strings.clone("p"), efforts = strings.clone("low, high")},
+		Model_Info{id = strings.clone("m2"), provider = strings.clone("p"), efforts = strings.clone("high")})
+	show(app, "s")
+	load_messages(app, "s")
+	bench_answer(app, bench_take(t, .Messages), 200, page(`{"id":"a1","type":"assistant","agent":"build","model":{"id":"opus","providerID":"p","variant":"high"},"time":{"created":1,"completed":2},"content":[]}`))
+	testing.expect_value(t, shown_variant(app), "high")
+	load_messages(app, "s")
+	bench_answer(app, bench_take(t, .Messages), 200, page(`{"id":"a2","type":"assistant","agent":"build","model":{"id":"opus","providerID":"p","variant":"default"},"time":{"created":1,"completed":2},"content":[]}`))
+	testing.expect_value(t, shown_variant(app), "")   // ("default": none)
+
+	choose_variant(app, "low")
+	r := bench_take(t, .Session_Choice)
+	testing.expect_value(t, r.body, `{"model":{"id":"opus","providerID":"p","variant":"low"}}`)
+	testing.expect_value(t, shown_variant(app), "low")
+	testing.expect_value(t, config.string_of(&app.cfg_prefs, "session.variant"), "low")
+
+	choose_model(app, app.models[1])   // (m2 has no "low": its default)
+	testing.expect_value(t, bench_take(t, .Session_Choice).body, `{"model":{"id":"m2","providerID":"p"}}`)
+	testing.expect_value(t, shown_variant(app), "")
+	choose_variant(app, "high")
+	_ = bench_take(t, .Session_Choice)
+	choose_model(app, app.models[0])   // (opus has "high": it stays)
+	testing.expect_value(t, bench_take(t, .Session_Choice).body, `{"model":{"id":"opus","providerID":"p","variant":"high"}}`)
+
+	// a new session starts with it
+	show(app, "")
+	ui.area_set(&app.composer, "go")
+	submit_prompt(app)
+	bench_answer(app, bench_take(t, .Created), 200, `{"data":{"id":"new"}}`)
+	if bench_count(.Session_Agent) > 0 { bench_answer(app, bench_take(t, .Session_Agent), 200, "") }
+	testing.expect_value(t, bench_take(t, .Session_Model).body, `{"model":{"id":"opus","providerID":"p","variant":"high"}}`)
+}

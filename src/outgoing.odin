@@ -189,10 +189,10 @@ outgoing_setup :: proc(app: ^App, out: u64, next: Out_Stage) {
 	}
 	if next <= .Model {
 		if model := config.string_of(p, "session.model"); model != "" {
-			provider := config.string_of(p, "session.provider")
+			provider, variant := config.string_of(p, "session.provider"), config.string_of(p, "session.variant")
 			o.stage = .Model
-			request(app, .Session_Model, "POST", fmt.tprintf("/api/session/%s/model", o.session), fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s}}}}`, jquote(model), jquote(provider)), o.session, out = o.id)
-			if shown { c.chose_model, c.chose_provider = strings.clone(model, c.alloc), strings.clone(provider, c.alloc) }
+			request(app, .Session_Model, "POST", fmt.tprintf("/api/session/%s/model", o.session), model_body(model, provider, variant), o.session, out = o.id)
+			if shown { c.chose_model, c.chose_provider, c.chose_variant = strings.clone(model, c.alloc), strings.clone(provider, c.alloc), strings.clone(variant, c.alloc) }
 			return
 		}
 	}

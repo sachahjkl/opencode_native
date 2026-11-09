@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-10
+
+### Added
+
+- **How hard the model thinks**: a button beside the model in the composer opens the menu of the model's variants (low, medium, high...). The choice goes to the session with the model, stays when another model has the same variant, and a new session starts with the last one.
+
 ### Changed
 
 - **The source's short name is `ocn`**, not `occ`: the Odin package, the tool (`tools/ocntools`, `build/ocntools`), the Rust library (`native/ocn_native`, its `ocn_*` functions) and the defines (`-define:OCN_BENCH`, `-define:OCN_PROFILE`).
@@ -1115,7 +1121,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.33.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.34.0
 [0.33.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.33.0
 [0.32.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.32.2
 [0.32.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.32.1

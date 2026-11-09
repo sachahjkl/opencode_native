@@ -3,6 +3,7 @@
 package ocn
 
 import "core:encoding/json"
+import "core:fmt"
 import "core:mem"
 import "core:mem/virtual"
 import "core:slice"
@@ -12,6 +13,7 @@ import "gt:ui"
 
 Session_Info :: struct {
 	id, title, parent, directory, agent, model, provider, outcome, project: string,
+	variant:         string,   // how hard its model thinks ("": the model's default)
 	created, updated, idle: f64,
 	viewed:          f64,   // the last end of a run someone looked at (idle later than this: not seen, sidebar.odin)
 	cost:            f64,
@@ -63,6 +65,7 @@ Message :: struct {
 	created:   f64,
 	completed: f64,
 	agent, model, provider, finish: string,
+	variant:   string,        // how hard the model thought ("": its default)
 	text:      string,        // user, synthetic, shell
 	shell_id:  string,        // shell: its command on the server
 	parts:     [dynamic]Part,
@@ -97,8 +100,8 @@ Chat :: struct {
 	busy:      bool,
 	cost:      f64,
 	tokens_in, tokens_out, cache_read: f64,
-	model, provider, agent: string,        // what it used last, as read and as streamed
-	chose_agent, chose_model, chose_provider: string,   // what the reader picked for it: goes before that (shown_agent, shown_model)
+	model, provider, agent, variant: string,   // what it used last, as read and as streamed
+	chose_agent, chose_model, chose_provider, chose_variant: string,   // what the reader picked for it: goes before that (shown_agent, shown_model)
 	seq:       Seq,                        // the stream's clock at the event being applied (Message.touched)
 	// the session itself (GET /api/session/:id), its parent, its sub-agents
 	self:         Session_Info,
@@ -187,6 +190,34 @@ shown_model :: proc(app: ^App) -> (model, provider: string) {
 	return c.model, c.provider
 }
 
+// How hard the model shown thinks: what the reader picked with the model, else what the session uses ("": the model's default).
+shown_variant :: proc(app: ^App) -> string {
+	c := &app.chat
+	if c.chose_model != "" { return c.chose_variant }
+	if c.id == "" { return config.string_of(&app.cfg_prefs, "session.variant") }
+	return c.variant
+}
+
+// The variant of a model reference ({"model": {"id", "providerID", "variant"}}): the server says "default" for none.
+variant_of :: proc(v: json.Value) -> string {
+	s := jstr(v, "model", "variant")
+	return s == "default" ? "" : s
+}
+
+// The variants of a model (how hard it can think: "low", "high"...), temp memory; none when it has none or is not known.
+model_variants :: proc(app: ^App, model, provider: string) -> []string {
+	for m in app.models {
+		if m.id == model && m.provider == provider && m.efforts != "" { return strings.split(m.efforts, ", ", context.temp_allocator) }
+	}
+	return nil
+}
+
+// The body that gives a session its model ("" variant: the model's default).
+model_body :: proc(model, provider, variant: string) -> string {
+	if variant == "" { return fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s}}}}`, jquote(model), jquote(provider)) }
+	return fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s,"variant":%s}}}}`, jquote(model), jquote(provider), jquote(variant))
+}
+
 open_chat :: proc(app: ^App, session_id: string) {
 	if session_id == app.chat.id { return }
 	id := strings.clone(session_id, context.temp_allocator)   // (it may live in the arena chat_reset drops)
@@ -202,6 +233,7 @@ open_chat :: proc(app: ^App, session_id: string) {
 	if s := find_session(app, id); s != nil {
 		app.chat.model = strings.clone(s.model, app.chat.alloc)
 		app.chat.provider = strings.clone(s.provider, app.chat.alloc)
+		app.chat.variant = strings.clone(s.variant, app.chat.alloc)
 		app.chat.agent = strings.clone(s.agent, app.chat.alloc)
 		app.chat.cost = s.cost
 		app.chat.tokens_in, app.chat.tokens_out, app.chat.cache_read = s.tokens_in, s.tokens_out, s.cache_read
@@ -234,6 +266,7 @@ session_from_json :: proc(it: json.Value, a: mem.Allocator) -> Session_Info {
 		parent = strings.clone(jstr(it, "parentID"), a), directory = strings.clone(jstr(it, "location", "directory"), a),
 		agent = strings.clone(jstr(it, "agent"), a), model = strings.clone(jstr(it, "model", "id"), a),
 		provider = strings.clone(jstr(it, "model", "providerID"), a), outcome = strings.clone(jstr(it, "outcome"), a),
+		variant = strings.clone(variant_of(it), a),
 		project = strings.clone(jstr(it, "projectID"), a),
 		created = jnum(it, "time", "created"), updated = jnum(it, "time", "updated"), idle = jnum(it, "time", "idle"), viewed = jnum(it, "time", "viewed"),
 		cost = jnum(it, "cost"), tokens_in = jnum(it, "tokens", "input"), tokens_out = jnum(it, "tokens", "output"),
@@ -554,7 +587,7 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(Seq)) {
 	}
 	for m in c.messages {
 		if m.kind == .Assistant && m.model != "" {
-			c.model, c.provider, c.agent = m.model, m.provider, m.agent
+			c.model, c.provider, c.agent, c.variant = m.model, m.provider, m.agent, m.variant
 		}
 	}
 }
@@ -610,6 +643,7 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 		m.agent = strings.clone(jstr(it, "agent"), a)
 		m.model = strings.clone(jstr(it, "model", "id"), a)
 		m.provider = strings.clone(jstr(it, "model", "providerID"), a)
+		m.variant = strings.clone(variant_of(it), a)
 		m.finish = strings.clone(jstr(it, "finish"), a)
 		m.cost = jnum(it, "cost")
 		m.tokens_in = jnum(it, "tokens", "input")
@@ -955,9 +989,10 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		m.agent = strings.clone(jstr(d, "agent"), a)
 		m.model = strings.clone(jstr(d, "model", "id"), a)
 		m.provider = strings.clone(jstr(d, "model", "providerID"), a)
+		m.variant = strings.clone(variant_of(d), a)
 		m.created = jnum(d, "started")
 		m.streaming = true
-		c.model, c.provider, c.agent = m.model, m.provider, m.agent
+		c.model, c.provider, c.agent, c.variant = m.model, m.provider, m.agent, m.variant
 	case "session.text.started", "session.reasoning.started":
 		_ = text_part(c, assistant(c, mid), kind == "session.text.started" ? .Text : .Reasoning, int(jnum(d, "ordinal")))
 	case "session.text.delta", "session.reasoning.delta":

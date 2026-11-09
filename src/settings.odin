@@ -95,6 +95,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "session.agent", description = "The agent a new session starts with: the one chosen last.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "session.model", description = "The model a new session starts with: the one chosen last.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "session.provider", description = "The provider of that model.", kind = .String, default = {s = ""}, hidden = true},
+	{name = "session.variant", description = "How hard that model thinks (one of its variants; empty: its default).", kind = .String, default = {s = ""}, hidden = true},
 	{name = "browser.tools", description = "Let the agents drive the Preview panel (open pages, read them, click, run scripts): the browser tools, while this window is open.", kind = .Bool, default = {b = true}},
 	{name = "layout.dock", description = "Where the panels are, as the dock writes it.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "layout.dialogs", description = "The sizes the dialogs were given (settings, statistics, shortcuts), in logical pixels.", kind = .String, default = {s = ""}, hidden = true},

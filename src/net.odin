@@ -711,7 +711,7 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 	case .Session_Choice:
 		// (the session did not take it: what is shown goes back to what it uses)
 		if r.gen == app.chat.gen && r.tag == app.chat.id {
-			if strings.has_suffix(r.path, "/agent") { app.chat.chose_agent = "" } else { app.chat.chose_model, app.chat.chose_provider = "", "" }
+			if strings.has_suffix(r.path, "/agent") { app.chat.chose_agent = "" } else { app.chat.chose_model, app.chat.chose_provider, app.chat.chose_variant = "", "", "" }
 		}
 	case .Created, .Prompt:
 		outgoing_answered(app, r, false)
@@ -900,9 +900,8 @@ permissions_allow_pending :: proc(app: ^App) {
 	for &p in app.permissions { if !p.replying { reply_permission(app, &p, "once") } }
 }
 
-switch_model :: proc(app: ^App, session: string, m: Model_Info) {
-	request(app, .Session_Choice, "POST", fmt.tprintf("/api/session/%s/model", session),
-		fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s}}}}`, jquote(m.id), jquote(m.provider)), session)
+switch_model :: proc(app: ^App, session, model, provider, variant: string) {
+	request(app, .Session_Choice, "POST", fmt.tprintf("/api/session/%s/model", session), model_body(model, provider, variant), session)
 }
 
 switch_agent :: proc(app: ^App, session, agent: string) {

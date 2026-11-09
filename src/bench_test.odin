@@ -822,3 +822,50 @@ a_form_s_tabs_do_not_overlap :: proc(t: ^testing.T) {
 	testing.expect(t, len(rows) > 1, "too many for one line: a second one")
 	forms_clear(app)
 }
+
+// A long conversation part opened in the middle of the view: its header stays where it was on screen, and what it shows
+// grows below it (the view does not jump to the top).
+@(private = "file")
+long_parts_page :: proc() -> string {
+	lines := strings.builder_make(context.temp_allocator)
+	for i in 0 ..< 400 { fmt.sbprintf(&lines, "line %d of a long output, long enough to wrap maybe once or twice in the column\n", i) }
+	long := strings.to_string(lines)
+	t := BENCH_EPOCH_MS
+	b := strings.builder_make(context.temp_allocator)
+	fmt.sbprintf(&b, `{{"data":[`)
+	fmt.sbprintf(&b, `{{"id":"lp_3_a","type":"assistant","agent":"build","model":{{"id":"m","providerID":"p"}},"finish":"stop","time":{{"created":%f,"completed":%f}},"content":[{{"type":"text","text":"Done."}}]}},`, t + 40, t + 41)
+	fmt.sbprintf(&b, `{{"id":"lp_3_u","type":"user","text":"And then?","time":{{"created":%f}}}},`, t + 30)
+	fmt.sbprintf(&b, `{{"id":"lp_2_a","type":"assistant","agent":"build","model":{{"id":"m","providerID":"p"}},"finish":"stop","time":{{"created":%f,"completed":%f}},"content":[{{"type":"reasoning","text":%s}},{{"type":"tool","id":"call_sh","name":"shell","state":{{"status":"completed","input":{{"command":"make all"}},"content":[{{"type":"text","text":%s}}]}},"time":{{"created":%f,"completed":%f}}}},{{"type":"text","text":"It built."}}]}},`,
+		t + 20, t + 25, jquote(long), jquote(long), t + 21, t + 22)
+	fmt.sbprintf(&b, `{{"id":"lp_2_u","type":"user","text":"Build it.","time":{{"created":%f}}}},`, t + 10)
+	fmt.sbprintf(&b, `{{"id":"lp_1_a","type":"assistant","agent":"build","model":{{"id":"m","providerID":"p"}},"finish":"stop","time":{{"created":%f,"completed":%f}},"content":[{{"type":"text","text":%s}}]}},`, t + 5, t + 6, jquote(strings.repeat("A paragraph above, to have something to scroll back to. ", 80, context.temp_allocator)))
+	fmt.sbprintf(&b, `{{"id":"lp_1_u","type":"user","text":"Hello.","time":{{"created":%f}}}}`, t)
+	strings.write_string(&b, `],"cursor":{"next":""}}`)
+	return strings.to_string(b)
+}
+
+@(test)
+a_long_part_opens_below_its_header :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	v, err := json.parse_string(long_parts_page(), allocator = context.temp_allocator)
+	testing.expect(t, err == nil)
+	chat_load(app, v, false)
+	app.snap_bottom = true
+	session.wait_idle(s)
+	for name in ([]string{"rh_lp_2_a_0", "head"}) {
+		h := session.find(s, name)
+		if !testing.expectf(t, h != nil, "%s shows", name) { return }
+		y := h.rect.min.y
+		session.click(s, name)
+		session.wait_idle(s)
+		h = session.find(s, name)
+		if !testing.expectf(t, h != nil, "%s opened: still shown", name) { return }
+		testing.expectf(t, abs(h.rect.min.y - y) <= 1, "%s opened: stays at %v (now %v)", name, y, h.rect.min.y)
+		session.click(s, name)   // (closed again: the next one where it was)
+		session.wait_idle(s)
+		h = session.find(s, name)
+		if !testing.expectf(t, h != nil, "%s closed: still shown", name) { return }
+		testing.expectf(t, abs(h.rect.min.y - y) <= 1, "%s closed: stays at %v (now %v)", name, y, h.rect.min.y)
+	}
+}
