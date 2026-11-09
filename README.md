@@ -69,7 +69,8 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
   showing the ones on their way if you get there first; Page Up and Page Down scroll it from anywhere, the arrows, Home and
   End when no field has the keyboard.
 - **Images**: those attached to prompts and those tools hand back (screenshots, images read) as thumbnails, opened in
-  a viewer that zooms where the pointer is and moves by a drag or the arrows, within limits; projects' logos in the sidebar, the title bar and the header. PNG, JPEG, WebP, GIF and BMP, decoded off the
+  a viewer as large as the picture (resized by its edges, its size kept) that zooms where the pointer is and moves by a drag
+  or the arrows, within limits, and copies the image (right click, Ctrl+C); projects' logos in the sidebar, the title bar and the header. PNG, JPEG, WebP, GIF and BMP, decoded off the
   interface's thread.
 - **Sub-agents**: a card for each launch (its agent, state, live activity, duration, model, tokens, cost, prompt and
   result), the result line where it came back, a strip of the running ones above the composer, a header menu of all of

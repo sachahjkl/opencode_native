@@ -82,6 +82,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "conversation.follow", description = "Follow new messages to the bottom while you are there.", kind = .Bool, default = {b = true}},
 	{name = "conversation.usage", description = "Tokens and cost under each answer.", kind = .Bool, default = {b = true}},
 	{name = "conversation.while_running", description = "What Enter does while a turn runs: send the message into the turn, or queue it for the end of the turn. Ctrl+Enter does the other.", kind = .String, default = {s = "steer"}, choices = {"queue", "steer"}},
+	{name = "conversation.image_viewer_size", description = "The size of the image viewer, as a share of the most the window gives a picture. Drag the viewer's edges or corners to change it.", kind = .Float, default = {f = 1}, bounded = true, min = VIEWER_SCALE_MIN, max = 1},
 	{name = "conversation.clock", description = "Times of messages in 24-hour or 12-hour form.", kind = .String, default = {s = "24h"}, choices = {"24h", "12h"}},
 	{name = "composer.send", description = "The key that sends: Enter (Shift+Enter breaks the line) or Ctrl+Enter (Enter breaks the line).", kind = .String, default = {s = "enter"}, choices = {"enter", "ctrl+enter"}},
 	{name = "sidebar.subagents", description = "Sub-agent sessions: under their parent, in the list with the others, or not shown.", kind = .String, default = {s = "nested"}, choices = {"nested", "flat", "hidden"}},
@@ -136,6 +137,7 @@ Prefs :: struct {
 	notify_perm:  bool,
 	allow_all:    bool,   // permission.allow_all: every permission asked is allowed once, at once
 	content_zoom: f32,
+	viewer_scale: f32,   // conversation.image_viewer_size (images.odin: viewer_frame)
 	start:        string,
 	show_fps:     bool,
 	target_hz:    f64,    // advanced.frame_rate: the most frames a second, above the screen too (0: the screen's)
@@ -199,6 +201,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.allow_all = config.bool_of(p, "permission.allow_all")
 	if s.allow_all { permissions_allow_pending(app) }   // (turned on while some wait: they go too)
 	s.content_zoom = f32(config.float_of(p, "appearance.content_zoom"))
+	s.viewer_scale = f32(config.float_of(p, "conversation.image_viewer_size"))
 	s.start = config.string_of(p, "general.start")
 	s.show_fps = config.bool_of(p, "advanced.fps")
 	rate := config.string_of(p, "advanced.frame_rate")
@@ -910,6 +913,7 @@ page_conversation :: proc(app: ^App, em: f32) {
 	if setting(app, "conversation.follow", em) { pref_switch(app, "conversation.follow", em) }
 	if setting(app, "conversation.usage", em) { pref_switch(app, "conversation.usage", em) }
 	if setting(app, "conversation.while_running", em) { pref_choice(app, "conversation.while_running", {"Queue", "Send now"}, em) }
+	if setting(app, "conversation.image_viewer_size", em) { pref_slider(app, "conversation.image_viewer_size", VIEWER_SCALE_MIN, 1, 0.05, "%.2f", em) }
 	if setting(app, "conversation.clock", em) { pref_choice(app, "conversation.clock", {"24 h", "12 h"}, em) }
 }
 

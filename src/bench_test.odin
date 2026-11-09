@@ -10,13 +10,16 @@ package occ
 import "base:runtime"
 import "core:encoding/json"
 import "core:fmt"
+import "core:math"
 import "core:slice"
 import "core:strings"
 import "core:testing"
 import "core:time"
+import "gt:config"
 import "gt:draw"
 import "gt:font"
 import "gt:platform"
+import "gt:png"
 import "gt:render"
 import "gt:ui"
 import session "gt:testkit/session"
@@ -607,4 +610,79 @@ the_settings_search_shows_what_matches :: proc(t: ^testing.T) {
 	ui.field_set(&app.settings_query, "")
 	session.frames(s, 3)
 	testing.expect(t, session.find(s, "set_appearance.glow") != nil, "the page again")
+}
+
+// The viewer, in the real interface: exactly around its picture, a press beside the picture closes it, a press on it does not, its corner
+// sets the size it keeps, and its menu copies the image.
+@(test)
+the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	W, H :: 400, 200
+	pixels := make([]u8, W * H * 4, context.temp_allocator)
+	for i in 0 ..< W * H { pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 2], pixels[i * 4 + 3] = u8(i % W), 120, u8(i / W), 255 }
+	tex := render.create_texture_rgba(&app.r, W, H)
+	render.update_texture_rgba(&app.r, tex, 0, 0, W, H, pixels)
+	open :: proc(app: ^App, tex: render.Texture) {
+		// (as image_view_open, its decode not asked: the picture is given)
+		image_ref_delete(&app.view_ref)
+		app.view_ref = image_ref_clone(image_ref("not decoded here", .Bytes, "image/png", "picture.png"))
+		app.view_key = 0x5eed
+		app.images[app.view_key] = {state = .Ready, tex = tex, w = W, h = H, used = app.frame_no}
+		app.view_open, app.view_zoom, app.view_pan = true, 1, {}
+	}
+	open(app, tex)
+	session.frames(s, 3)
+	view, panel := session.find(s, "view"), session.find(s, "modal_image_view")
+	testing.expect(t, view != nil && panel != nil, "the viewer")
+	if view == nil || panel == nil { return }
+	em := ui.font_size()
+	pad, bar := math.round(em * VIEWER_PAD_EM), math.round(em * VIEWER_BAR_EM)
+	vs := view.rect.max - view.rect.min
+	ps := panel.rect.max - panel.rect.min
+	testing.expect_value(t, vs, [2]f32{W, H} * ui.scale())   // (the window has room: its pixels)
+	testing.expect_value(t, ps.y, vs.y + pad + bar)
+	testing.expect_value(t, ps.x, max(vs.x + 2 * pad, math.round(em * VIEWER_MIN_W_EM)))
+	// a press on the picture keeps it; zoomed out, a press beside the picture closes it
+	session.click_at(s, view.rect.min + 5)
+	testing.expect(t, app.view_open, "a press on the picture")
+	app.view_zoom = 0.5
+	session.frames(s, 2)
+	session.click_at(s, view.rect.min + 5)
+	testing.expect(t, !app.view_open, "a press beside the picture closes it")
+	// smaller, then its corner: the size follows the pointer and is kept
+	pref_set(app, "conversation.image_viewer_size", "0.5")
+	open(app, tex)
+	session.frames(s, 3)
+	view, panel = session.find(s, "view"), session.find(s, "modal_image_view")
+	testing.expect_value(t, view.rect.max - view.rect.min, [2]f32{W, H} * ui.scale() * 0.5)
+	corner := panel.rect.max - 3
+	session.press(s, corner)
+	session.move(s, corner + {25, 0})
+	session.move(s, corner + {50, 0})
+	session.release(s, corner + {50, 0})
+	session.frames(s, 2)
+	kept := config.float_of(&app.cfg_prefs, "conversation.image_viewer_size")
+	testing.expectf(t, abs(kept - (0.5 + 100 / (W * f64(ui.scale())))) < 0.01, "the corner moved 50 px: both sides 100 px, kept: %v", kept)
+	view = session.find(s, "view")
+	testing.expectf(t, abs((view.rect.max.x - view.rect.min.x) / (view.rect.max.y - view.rect.min.y) - 2) < 0.02, "its shape kept: %v", view.rect)
+	// a copy: the file's pixels, whole, on the clipboard
+	small := []u8{255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 255, 9, 8, 7, 0, 1, 2, 3, 4, 200, 100, 50, 255}
+	file := png.encode(small, 3, 2, .Fast, context.temp_allocator)
+	image_copy(app, image_ref(string(file), .Bytes, "image/png", "small.png"))
+	session.wait_until(s, proc(s: ^session.Session) -> bool {
+		img, ok := platform.clipboard_get_image(s.win, context.temp_allocator)
+		return ok && img.size == {3, 2}
+	}, "the copied image")
+	img, _ := platform.clipboard_get_image(app.win, context.temp_allocator)
+	testing.expect(t, slice.equal(img.rgba, small), "its pixels, as they were (alpha too)")
+	// its menu
+	session.click_at(s, session.center(view), .Right)
+	session.frames(s, 2)
+	testing.expect(t, session.find_text(s, "Copy image") != nil, "Copy image")
+	session.event(s, {kind = .Key_Press, key = .Escape})
+	session.frames(s, 2)
+	session.event(s, {kind = .Key_Press, key = .Escape})
+	session.frames(s, 3)
+	testing.expect(t, !app.view_open, "Escape closes it")
 }

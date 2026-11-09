@@ -4,7 +4,7 @@
 // textures together hold no more than IMAGE_BUDGET_BYTES, the ones shown longest ago going first; a few decoders work at a
 // time, and an image no longer shown when its turn comes is not decoded. (A 2048-pixel texture for every thumbnail of a
 // long conversation held a gigabyte; a find that built them all decoded them all at once.) Thumbnails open the viewer,
-// which fits the image to the window.
+// a dialog exactly around the image fitted to the window, at the size the person chose; both copy the image (image_copy).
 package occ
 
 import "core:fmt"
@@ -15,7 +15,9 @@ import "core:path/filepath"
 import "core:strings"
 import "core:sync"
 import "core:thread"
+import "gt:config"
 import "gt:draw"
+import "gt:platform"
 import "gt:render"
 import "gt:ui"
 
@@ -38,6 +40,19 @@ image_ref :: proc(data: string, encoding: Image_Encoding, mime, name: string) ->
 	n := len(b)
 	k := hash.fnv64a(b[:min(n, IMAGE_KEY_SAMPLE_BYTES)]) ~ hash.fnv64a(b[max(0, n - IMAGE_KEY_SAMPLE_BYTES):]) * 31 ~ u64(n) * HASH_MIX_A
 	return {key = k | 1, data = data, encoding = encoding, mime = mime, name = name}
+}
+
+// A copy that owns its data, mime and name (image_ref_delete frees them).
+image_ref_clone :: proc(ref: Image_Ref) -> Image_Ref {
+	if ref.key == 0 { return {} }
+	return {key = ref.key, data = strings.clone(ref.data), encoding = ref.encoding, mime = strings.clone(ref.mime), name = strings.clone(ref.name)}
+}
+
+image_ref_delete :: proc(ref: ^Image_Ref) {
+	delete(ref.data)
+	delete(ref.mime)
+	delete(ref.name)
+	ref^ = {}
 }
 
 Image_State :: enum u8 { Pending, Ready, Failed }
@@ -63,6 +78,7 @@ Decode_Job :: struct {
 	encoding: Image_Encoding,
 	max_dim:  u32,
 	mips:     bool,   // the whole image (the viewer: shown much smaller than it is); a thumbnail is decoded at its size, sharper without
+	copy:     bool,   // for the clipboard (image_copy): its pixels at full size, no texture
 	// the answer
 	w, h:     u32,
 	out:      Occ_Buf,
@@ -121,22 +137,45 @@ images_pump :: proc(app: ^App) {
 			continue
 		}
 		app.cx.image_decoding += 1
-		thread.create_and_start_with_poly_data(job, proc(job: ^Decode_Job) {
-			r := occ_image_decode(raw_data(job.data), len(job.data), i32(job.encoding), job.max_dim, &job.w, &job.h, &job.out)
-			job.ok = r == 0
-			if !ui.post(&job.app.state, image_decoded, job) { occ_buf_free(job.out); delete(job.data); free(job) }
-		}, self_cleanup = true)
+		thread.create_and_start_with_poly_data(job, image_decode_run, self_cleanup = true)
 	}
 }
 
-// On the interface's thread: the pixels become a texture.
+// On a thread of its own: the decode, its answer posted to the interface's thread.
+@(private = "file")
+image_decode_run :: proc(job: ^Decode_Job) {
+	r := occ_image_decode(raw_data(job.data), len(job.data), i32(job.encoding), job.max_dim, &job.w, &job.h, &job.out)
+	job.ok = r == 0
+	if !ui.post(&job.app.state, image_decoded, job) { occ_buf_free(job.out); delete(job.data); free(job) }
+}
+
+// The image's pixels on the system's clipboard, at the size of its file. (The textures are scaled down, and the GPU's are not read
+// back: the data is decoded again whole, on a thread, outside the queue of what is shown.)
+image_copy :: proc(app: ^App, ref: Image_Ref) {
+	if ref.key == 0 || ref.data == "" { return }
+	job := new(Decode_Job)
+	job^ = {app = app, data = strings.clone(ref.data), encoding = ref.encoding, max_dim = 0, copy = true}
+	sync.atomic_add(&app.pending, 1)
+	thread.create_and_start_with_poly_data(job, image_decode_run, self_cleanup = true)
+}
+
+// On the interface's thread: the pixels become a texture, or go to the clipboard.
 @(private = "file")
 image_decoded :: proc(data: rawptr, word: u64) {
 	app := the_app
 	job := (^Decode_Job)(data)
 	defer { occ_buf_free(job.out); delete(job.data); free(job) }
-	defer images_pump(app)
 	sync.atomic_sub(&app.pending, 1)
+	if job.copy {
+		pixels := platform.Clipboard_Image{rgba = job.out.ptr[:job.out.len], size = {int(job.w), int(job.h)}}
+		switch {
+		case !job.ok || job.w == 0 || job.h == 0: ui.toast(.Bad, "The image could not be copied: it is unreadable")
+		case !platform.clipboard_set_image(app.win, pixels): ui.toast(.Bad, "The image could not be copied")
+		case: ui.toast(.Good, "Image copied")
+		}
+		return
+	}
+	defer images_pump(app)
 	app.cx.image_decoding -= 1
 	e, ok := &app.images[job.key]
 	if !ok { return }
@@ -239,6 +278,8 @@ image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) ->
 	b.custom_user = d
 	sig := ui.signal(b)
 	if sig.clicked && state == .Ready { image_view_open(app, ref) }
+	// (before the message's: the innermost takes the right press)
+	if state != .Failed { ctx_check(app, b, .Image, image = ref) }
 	if state == .Failed {
 		if ui.parent(b) {
 			em := ui.font_size()
@@ -302,24 +343,63 @@ image_view_wait :: proc(app: ^App) {
 
 // The viewer, on the whole image (decoded now if the thumbnail's was all there was: it waits for it).
 image_view_open :: proc(app: ^App, ref: Image_Ref) {
-	delete(app.view_name)
 	_ = image_get(app, ref, 0)
 	app.view_key = (ref.key ~ u64(image_dim(app, 0)) * HASH_MIX_B) | 1
-	app.view_name = strings.clone(ref.name)
+	image_ref_delete(&app.view_ref)
+	app.view_ref = image_ref_clone(ref)
 	app.view_open = true
 	app.view_zoom, app.view_pan = 1, {}
+	app.view_resize_from = {}
 }
 
-VIEWER_FILL      :: 0.9   // of the window
-VIEWER_CHROME_EM :: 4     // what the viewer takes around the picture, in height
 IMAGE_NAME_CHARS :: 80
 HEX_VIEWER_NAME  :: 0xe0e0e0ff
 HEX_VIEWER_WELL  :: 0x070707ff
+VIEWER_PAD_EM    :: 0.5   // around the picture (the edges' grips are there)
+VIEWER_BAR_EM    :: 2.6   // the name, the size and the buttons, under the picture
+VIEWER_MIN_W_EM  :: 26    // what the bar needs: a small picture gets room on its sides
+VIEWER_SCALE_MIN :: 0.2   // the smallest viewer, of the most the window gives a picture (conversation.image_viewer_size)
 VIEW_ZOOM_MIN    :: 0.5   // times what fits
 VIEW_NATIVE_MAX  :: 8     // times the image's pixels at the interface's scale
 VIEW_ZOOM_STEP   :: 1.25  // a notch of the wheel, a press of + or -
 VIEW_DOUBLE_CLICK :: 2    // what a double click goes to, when what fits is already its pixels
 VIEW_PAN_KEY     :: 0.1   // of the view, an arrow key
+
+// Where the viewer is, from the image alone: the panel hugs the picture, so all the black around it is outside the viewer.
+Viewer_Frame :: struct {
+	full:    [2]f32,   // the picture at the scale 1: the most `room` gives it, never beyond its pixels times the interface's scale
+	picture: [2]f32,   // its box: `full` times the scale chosen, whole pixels
+	panel:   [2]f32,   // the dialog: the picture and the chrome, never narrower than the bar needs (nor than the room)
+	fit:     f32,      // frame pixels per image pixel, at the zoom 1
+}
+
+// `image`: its pixels; `room`: what the window gives the dialog; `chrome`: what the dialog takes beside the picture; `scale`: the size the
+// person chose (conversation.image_viewer_size).
+viewer_frame :: proc(image, room, chrome: [2]f32, ui_scale, scale, min_w: f32) -> Viewer_Frame {
+	inner := [2]f32{max(1, room.x - chrome.x), max(1, room.y - chrome.y)}
+	most := min(inner.x / image.x, inner.y / image.y, ui_scale)
+	f: Viewer_Frame
+	f.full = image * most
+	f.fit = most * clamp(scale, VIEWER_SCALE_MIN, 1)
+	f.picture = {max(1, math.round(image.x * f.fit)), max(1, math.round(image.y * f.fit))}
+	f.panel = {max(f.picture.x + chrome.x, min(min_w, room.x)), f.picture.y + chrome.y}
+	return f
+}
+
+// The scale an edge or a corner dragged by `delta` (frame pixels, the dialog's size since the press) asks for, from `from`: by the side
+// that moved most, the other follows the picture's shape.
+viewer_scale_of :: proc(delta, full: [2]f32, from: f32) -> f32 {
+	a := abs(delta.x) >= abs(delta.y) ? 0 : 1
+	return clamp(from + delta[a] / full[a], VIEWER_SCALE_MIN, 1)
+}
+
+// Whether `p` (from the view's corner) misses the picture: `picture` its size, its centre `pan` from the view's, clipped by the view.
+viewer_outside :: proc(p, view, picture, pan: [2]f32) -> bool {
+	c := view * 0.5 + pan
+	lo := [2]f32{max(0, c.x - picture.x * 0.5), max(0, c.y - picture.y * 0.5)}
+	hi := [2]f32{min(view.x, c.x + picture.x * 0.5), min(view.y, c.y + picture.y * 0.5)}
+	return !(p.x >= lo.x && p.x < hi.x && p.y >= lo.y && p.y < hi.y)
+}
 
 @(private = "file")
 View_Draw :: struct { tex: render.Texture, size, pan: [2]f32 }
@@ -328,7 +408,7 @@ View_Draw :: struct { tex: render.Texture, size, pan: [2]f32 }
 view_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^View_Draw)(user)
 	r := b.rect
-	draw_well(dc, r, 4 * ui.scale(), hex(HEX_VIEWER_WELL))
+	draw_well(dc, r, 0, hex(HEX_VIEWER_WELL))
 	c := (r.min + r.max) * 0.5 + d.pan
 	draw.push_clip(dc, r)
 	lo, hi := c - d.size * 0.5, c + d.size * 0.5
@@ -367,65 +447,103 @@ image_viewer :: proc(app: ^App, em: f32) {
 		}
 		return
 	}
-	win := app.state.window_size
 	sc := ui.scale()
-	view := [2]f32{math.round(win.x * VIEWER_FILL - em * 2), math.round(win.y * VIEWER_FILL - em * VIEWER_CHROME_EM)}
-	// fits the view, never enlarged beyond its pixels times the scale; then the reader's zoom
-	fit := min(view.x / f32(e.w), view.y / f32(e.h), sc)
-	max_zoom := max(1, VIEW_NATIVE_MAX * sc / fit)
-	if ui.modal("image_view", view.x + em * 2, &app.view_open, max(0.02, (win.y - view.y - em * 5) * 0.5 / win.y)) {
+	pad, bar := math.round(em * VIEWER_PAD_EM), math.round(em * VIEWER_BAR_EM)
+	chrome := [2]f32{2 * pad, pad + bar}
+	room := app.state.window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
+	f := viewer_frame({f32(e.w), f32(e.h)}, room, chrome, sc, app.prefs.viewer_scale, math.round(em * VIEWER_MIN_W_EM))
+	view := f.picture
+	max_zoom := max(1, VIEW_NATIVE_MAX * sc / f.fit)
+	// (the dialog's size in logical pixels, as modal_sized keeps it: its grips write it)
+	asked := f.panel / sc
+	size := asked
+	closing := false
+	if ui.modal_sized("image_view", viewer_frame({f32(e.w), f32(e.h)}, room, chrome, sc, 1, math.round(em * VIEWER_MIN_W_EM)).panel, &size, &app.view_open) {
 		dialog_backdrop()
-		ui.spacer(ui.px(em))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row() {
-			ui.spacer(ui.px(em))
-			picture := [2]f32{f32(e.w), f32(e.h)} * fit * app.view_zoom
-			pannable := picture.x > view.x || picture.y > view.y
-			ui.next({width = ui.px(view.x), height = ui.px(view.y), cursor = pannable ? (ui.active_key() != 0 ? .Grabbing : .Grab) : .Arrow})
-			ui.a11y({role = .Image, name = app.view_name != "" ? app.view_name : "Image"})
-			b := ui.build_box({.Clickable, .Scroll_Self}, "###view")
-			sig := ui.signal(b)
-			if sig.scrolled.y != 0 {
-				view_zoom_to(app, app.view_zoom * math.pow(f32(VIEW_ZOOM_STEP), -sig.scrolled.y), max_zoom, sig.mouse - view * 0.5)
+		// a press around the picture closes the viewer, as one outside the dialog does (the buttons and the grips are over it)
+		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
+		around := ui.build_box({.Clickable}, "###view_around")
+		if ui.signal(around).pressed { closing = true }
+		if ui.parent(around) {
+			ui.spacer(ui.px(pad))
+			ui.next({width = ui.fill(), height = ui.px(view.y), axis = .X})
+			if ui.row() {
+				ui.spacer(ui.fill())
+				picture := [2]f32{f32(e.w), f32(e.h)} * f.fit * app.view_zoom
+				pannable := picture.x > view.x || picture.y > view.y
+				ui.next({width = ui.px(view.x), height = ui.px(view.y), cursor = pannable ? (ui.active_key() != 0 ? .Grabbing : .Grab) : .Arrow})
+				ui.a11y({role = .Image, name = app.view_ref.name != "" ? app.view_ref.name : "Image"})
+				b := ui.build_box({.Clickable, .Scroll_Self}, "###view")
+				sig := ui.signal(b)
+				if sig.pressed && viewer_outside(sig.mouse, view, picture, app.view_pan) { closing = true }
+				if ui.mouse_pressed(.Right) && rect_contains(b.rect, ui.mouse_pos()) && !app.cx.ctx_taken { ctx_open(app, .Image, image = app.view_ref) }
+				if sig.scrolled.y != 0 {
+					view_zoom_to(app, app.view_zoom * math.pow(f32(VIEW_ZOOM_STEP), -sig.scrolled.y), max_zoom, sig.mouse - view * 0.5)
+				}
+				if sig.pointer_pressed { app.view_grab = app.view_pan }
+				if sig.dragging { app.view_pan = app.view_grab + sig.drag_delta }
+				if sig.double_clicked {
+					native := sc / f.fit
+					view_zoom_to(app, app.view_zoom != 1 ? 1 : (native > 1 ? native : VIEW_DOUBLE_CLICK), max_zoom, sig.mouse - view * 0.5)
+				}
+				if ui.key_press(.C, {.Ctrl}) { image_copy(app, app.view_ref) }
+				if ui.key_press(.Equal) || ui.key_press(.Num_Add) { view_zoom_to(app, app.view_zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
+				if ui.key_press(.Minus) || ui.key_press(.Num_Subtract) { view_zoom_to(app, app.view_zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
+				if ui.key_press(.N0) { app.view_zoom, app.view_pan = 1, {} }
+				if ui.key_press(.Left) { app.view_pan.x += view.x * VIEW_PAN_KEY }
+				if ui.key_press(.Right) { app.view_pan.x -= view.x * VIEW_PAN_KEY }
+				if ui.key_press(.Up) { app.view_pan.y += view.y * VIEW_PAN_KEY }
+				if ui.key_press(.Down) { app.view_pan.y -= view.y * VIEW_PAN_KEY }
+				picture = [2]f32{f32(e.w), f32(e.h)} * f.fit * app.view_zoom
+				app.view_pan = view_pan_clamp(app.view_pan, picture, view)
+				d := ui.frame_new(View_Draw)
+				d^ = {e.tex, picture, app.view_pan}
+				b.custom = view_draw
+				b.custom_user = d
+				ui.spacer(ui.fill())
 			}
-			if sig.pointer_pressed { app.view_grab = app.view_pan }
-			if sig.dragging { app.view_pan = app.view_grab + sig.drag_delta }
-			if sig.double_clicked {
-				native := sc / fit
-				view_zoom_to(app, app.view_zoom != 1 ? 1 : (native > 1 ? native : VIEW_DOUBLE_CLICK), max_zoom, sig.mouse - view * 0.5)
+			ui.next({width = ui.fill(), height = ui.px(bar), axis = .X, cross = .Center})
+			if ui.row(.Center) {
+				ui.spacer(ui.px(em))
+				name := app.view_ref.name != "" ? app.view_ref.name : "image"
+				text("n", ellipsize(name, IMAGE_NAME_CHARS), hex(HEX_VIEWER_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+				ui.spacer(ui.px(em * 0.6))
+				text("d", fmt.tprintf("%d × %d  ·  %.0f %%", e.w, e.h, f.fit * app.view_zoom / sc * 100), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+				ui.spacer(ui.px(em * 0.8))
+				bh := math.round(em * BUTTON_SMALL_H_EM)
+				if bevel_button("###zoom_out", "−", "", .Normal, height = bh).clicked { view_zoom_to(app, app.view_zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
+				ui.spacer(ui.px(em * 0.3))
+				if bevel_button("###zoom_in", "+", "", .Normal, height = bh).clicked { view_zoom_to(app, app.view_zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
+				ui.spacer(ui.px(em * 0.3))
+				if bevel_button("###zoom_fit", "Fit", "", .Normal, height = bh).clicked { app.view_zoom, app.view_pan = 1, {} }
+				ui.spacer(ui.px(em * 0.8))
+				if bevel_button("###close", "Close", ICO_CANCEL, .Normal, height = bh).clicked { app.view_open = false }
+				ui.spacer(ui.px(em))
 			}
-			if ui.key_press(.Equal) || ui.key_press(.Num_Add) { view_zoom_to(app, app.view_zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
-			if ui.key_press(.Minus) || ui.key_press(.Num_Subtract) { view_zoom_to(app, app.view_zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
-			if ui.key_press(.N0) { app.view_zoom, app.view_pan = 1, {} }
-			if ui.key_press(.Left) { app.view_pan.x += view.x * VIEW_PAN_KEY }
-			if ui.key_press(.Right) { app.view_pan.x -= view.x * VIEW_PAN_KEY }
-			if ui.key_press(.Up) { app.view_pan.y += view.y * VIEW_PAN_KEY }
-			if ui.key_press(.Down) { app.view_pan.y -= view.y * VIEW_PAN_KEY }
-			picture = [2]f32{f32(e.w), f32(e.h)} * fit * app.view_zoom
-			app.view_pan = view_pan_clamp(app.view_pan, picture, view)
-			d := ui.frame_new(View_Draw)
-			d^ = {e.tex, picture, app.view_pan}
-			b.custom = view_draw
-			b.custom_user = d
-			ui.spacer(ui.px(em))
 		}
-		ui.next({width = ui.fill(), height = ui.px(em * 2.6), axis = .X, cross = .Center})
-		if ui.row(.Center) {
-			ui.spacer(ui.px(em))
-			name := app.view_name != "" ? app.view_name : "image"
-			text("n", ellipsize(name, IMAGE_NAME_CHARS), hex(HEX_VIEWER_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
-			text("d", fmt.tprintf("%d × %d  ·  %.0f %%", e.w, e.h, fit * app.view_zoom / sc * 100), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
-			ui.spacer(ui.px(em * 0.8))
-			bh := math.round(em * BUTTON_SMALL_H_EM)
-			if bevel_button("###zoom_out", "−", "", .Normal, height = bh).clicked { view_zoom_to(app, app.view_zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
-			ui.spacer(ui.px(em * 0.3))
-			if bevel_button("###zoom_in", "+", "", .Normal, height = bh).clicked { view_zoom_to(app, app.view_zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
-			ui.spacer(ui.px(em * 0.3))
-			if bevel_button("###zoom_fit", "Fit", "", .Normal, height = bh).clicked { app.view_zoom, app.view_pan = 1, {} }
-			ui.spacer(ui.px(em * 0.8))
-			if bevel_button("###close", "Close", ICO_CANCEL, .Normal, height = bh).clicked { app.view_open = false }
-			ui.spacer(ui.px(em))
-		}
-		ui.spacer(ui.px(em * 0.4))
+	}
+	// (a press that closes the menu over the viewer is the menu's)
+	if closing && !ui.ctx_menu_any_open() { app.view_open = false }
+	viewer_resized(app, size, asked, f)
+}
+
+// The grips of the dialog moved (or a double click on one sent it back to its size): the picture takes the new size, its shape kept, and
+// the size chosen is saved once the pointer lets go.
+@(private = "file")
+viewer_resized :: proc(app: ^App, size, asked: [2]f32, f: Viewer_Frame) {
+	sc := ui.scale()
+	switch {
+	case size == {}:
+		app.prefs.viewer_scale = 1
+		app.view_resize_from = {}
+	case size != asked:
+		if app.view_resize_from == {} { app.view_resize_from = {asked.x, asked.y, app.prefs.viewer_scale} }
+		from := app.view_resize_from
+		app.prefs.viewer_scale = viewer_scale_of((size - from.xy) * sc, f.full, from.z)
+	}
+	if ui.active_key() != 0 { return }
+	app.view_resize_from = {}
+	if abs(f64(app.prefs.viewer_scale) - config.float_of(&app.cfg_prefs, "conversation.image_viewer_size")) > SLIDER_EPSILON {
+		pref_set(app, "conversation.image_viewer_size", fmt.tprintf("%.3f", app.prefs.viewer_scale))
 	}
 }

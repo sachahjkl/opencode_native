@@ -9,21 +9,28 @@ import "core:math"
 import "core:strings"
 import "gt:ui"
 
-Ctx_Kind :: enum u8 { None, Message, Tool, Composer }
+Ctx_Kind :: enum u8 { None, Message, Tool, Composer, Image }
 
 Ctx_Target :: struct {
 	kind:   Ctx_Kind,
 	msg:    string,     // the message (owned)
 	part:   int,        // its tool call
+	image:  Image_Ref,  // the image (owned: the message that holds it can be read again before the menu is used)
 }
 
 // A right press in `b` opens the menu of `kind`, unless something over it or inside it took the press.
-ctx_check :: proc(app: ^App, b: ^ui.Box, kind: Ctx_Kind, msg := "", part := 0) {
+ctx_check :: proc(app: ^App, b: ^ui.Box, kind: Ctx_Kind, msg := "", part := 0, image := Image_Ref{}) {
 	if app.cx.ctx_taken || !ui.mouse_pressed(.Right) || b == nil || overlay_open(app) { return }
 	if !rect_contains(b.rect, ui.mouse_pos()) { return }
+	ctx_open(app, kind, msg, part, image)
+}
+
+// The menu of `kind`, where the pointer is (a dialog opens its own: ctx_check leaves what is under a dialog alone).
+ctx_open :: proc(app: ^App, kind: Ctx_Kind, msg := "", part := 0, image := Image_Ref{}) {
 	app.cx.ctx_taken = true
 	delete(app.cx.ctx.msg)
-	app.cx.ctx = {kind = kind, msg = strings.clone(msg), part = part}
+	image_ref_delete(&app.cx.ctx.image)
+	app.cx.ctx = {kind = kind, msg = strings.clone(msg), part = part, image = image_ref_clone(image)}
 	ui.ctx_menu_open(ui.key_from_string(0, CTX_MENU_KEY), ui.mouse_pos())
 }
 
@@ -197,6 +204,12 @@ context_menu :: proc(app: ^App, em: f32) {
 			if m := find_msg(app, app.cx.ctx.msg); m != nil { message_menu(app, m) }
 		case .Tool:
 			if m := find_msg(app, app.cx.ctx.msg); m != nil && app.cx.ctx.part < len(m.parts) { tool_menu(app, m, &m.parts[app.cx.ctx.part]) }
+		case .Image:
+			image := app.cx.ctx.image
+			if ui.menu_item("Copy image", app.view_open ? "Ctrl+C" : "", icon = ICO_COPY).clicked { image_copy(app, image) }
+			if !app.view_open {
+				if ui.menu_item("Open in the viewer").clicked { image_view_open(app, image) }
+			}
 		}
 	}
 }

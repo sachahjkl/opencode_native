@@ -9,6 +9,12 @@ project follows [semantic versioning](https://semver.org).
 
 - **Push a command to the background from the conversation**: under a shell call that holds the turn, "push to background"; once there, the call says "in background" with an orange lamp while its command runs, then "finished in background". The activity tray's row of such a command says "in background" too.
 - **What is typed in a session's composer is kept on disk** (drafts.json, beside the preferences), a second after the typing stops and when the program closes: after a crash or a restart, each session's text comes back. Only the text: attachments and mentioned files live as long as the program.
+- **Copy an image**: a right click on an image of the conversation, or in the viewer, offers "Copy image"; Ctrl+C in the viewer does the same. The image goes to the clipboard at the size of its file (as PNG on Linux), for any other program to paste.
+- **The viewer keeps the size you give it**: drag its edges or corners (a double click on one goes back to the largest). The size is kept for every image and across restarts (Settings, Conversation, Image viewer size).
+
+### Changed
+
+- **The viewer is exactly as large as its picture**: no black around it, and a press anywhere outside the picture closes it.
 
 ## [0.24.5] - 2026-11-09
 

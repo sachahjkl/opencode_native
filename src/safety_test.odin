@@ -140,3 +140,49 @@ the_viewer_stays_within_its_limits :: proc(t: ^testing.T) {
 	testing.expect_value(t, view_pan_clamp({500, -500}, {400, 300}, {200, 200}), [2]f32{100, -50})
 	testing.expect_value(t, view_pan_clamp({10, 10}, {400, 300}, {200, 200}), [2]f32{10, 10})
 }
+
+// The viewer is the picture and its chrome, nothing more: the black around a picture smaller than the dialog was taken for the outside,
+// and a click there did not close it.
+@(test)
+the_viewer_hugs_the_picture :: proc(t: ^testing.T) {
+	room, chrome := [2]f32{1200, 900}, [2]f32{16, 58}
+	f := viewer_frame({1000, 500}, room, chrome, 1, 1, 300)
+	testing.expect_value(t, f.picture, [2]f32{1000, 500})   // (never beyond its pixels)
+	testing.expect_value(t, f.panel, [2]f32{1016, 558})
+	f = viewer_frame({1000, 500}, room, chrome, 2, 1, 300)
+	testing.expect_value(t, f.picture, [2]f32{1184, 592})   // as wide as the room: its height follows
+	testing.expect_value(t, f.panel, [2]f32{1200, 650})
+	f = viewer_frame({400, 2000}, room, chrome, 1, 1, 300)
+	testing.expect_value(t, f.picture, [2]f32{168, 842})    // as tall as the room
+	testing.expect_value(t, f.panel, [2]f32{300, 900})      // (the bar's width: room on the picture's sides)
+	f = viewer_frame({1000, 500}, room, chrome, 2, 0.5, 300)
+	testing.expect_value(t, f.picture, [2]f32{592, 296})    // the size chosen, of the most the room gives
+	testing.expect_value(t, f.full, [2]f32{1184, 592})
+	f = viewer_frame({1000, 500}, room, chrome, 2, 0, 300)
+	testing.expect_value(t, f.picture, [2]f32{237, 118})    // (no smaller than VIEWER_SCALE_MIN)
+	f = viewer_frame({40, 40}, {200, 900}, chrome, 1, 1, 300)
+	testing.expect_value(t, f.panel, [2]f32{200, 98})       // never wider than the room
+}
+
+@(test)
+a_grip_of_the_viewer_sets_its_scale :: proc(t: ^testing.T) {
+	near :: proc(a, b: f32) -> bool { return abs(a - b) < 1e-5 }
+	full := [2]f32{1000, 500}
+	testing.expect(t, near(viewer_scale_of({100, 0}, full, 0.5), 0.6), "an edge to the right")
+	testing.expect(t, near(viewer_scale_of({0, -100}, full, 0.5), 0.3), "the bottom edge up")
+	testing.expect(t, near(viewer_scale_of({100, 60}, full, 0.5), 0.6), "a corner: the side that moved most")
+	testing.expect(t, near(viewer_scale_of({-2000, 0}, full, 0.5), VIEWER_SCALE_MIN), "no smaller than its least")
+	testing.expect(t, near(viewer_scale_of({2000, 0}, full, 0.5), 1), "no larger than the room")
+}
+
+@(test)
+a_press_outside_the_picture_misses_it :: proc(t: ^testing.T) {
+	view := [2]f32{400, 200}
+	testing.expect(t, !viewer_outside({10, 10}, view, view, {}), "the picture fills the view")
+	testing.expect(t, viewer_outside({10, 10}, view, {200, 100}, {}), "zoomed out: the black around it")
+	testing.expect(t, !viewer_outside({200, 100}, view, {200, 100}, {}), "its middle")
+	testing.expect(t, viewer_outside({150, 60}, view, {200, 100}, {100, 0}), "moved right: what it left")
+	testing.expect(t, !viewer_outside({210, 60}, view, {200, 100}, {100, 0}), "moved right: where it went")
+	testing.expect(t, !viewer_outside({0, 0}, view, {800, 400}, {100, 0}), "zoomed in: everywhere in the view")
+	testing.expect(t, viewer_outside({-1, 0}, view, {800, 400}, {100, 0}), "but not beyond it")
+}
