@@ -238,7 +238,7 @@ preview_tab_close :: proc(app: ^App, p: ^Preview, t: ^Preview_Tab) {
 
 // The palette's and the keys'. (The panel closed: opening it is what was asked, with a tab of its own if it had others.)
 preview_tab_new :: proc(app: ^App) {
-	if !preview_available() { ui.toast(.Warn, "The Preview panel needs the WebView2 runtime"); return }
+	if !preview_available() { preview_missing(); return }
 	p := &app.preview
 	had := len(p.tabs) > 0
 	if !p.open { preview_show(app) }

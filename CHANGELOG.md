@@ -11,6 +11,7 @@ project follows [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- **The Preview panel on Linux**: asked for (Ctrl+Shift+B, the palette), it says there is none on Linux and that agents can use your own browser with OpenCode Browse; a click opens its page. It said that the WebView2 runtime was missing.
 - **The activity tray is the session's**: it showed every shell command of the session's folder, those of other sessions too; it shows those of the session and its sub-agents (each command says its session in `metadata.sessionID`).
 
 ## [0.22.0] - 2026-11-09

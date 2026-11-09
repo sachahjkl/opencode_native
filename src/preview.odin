@@ -220,8 +220,20 @@ preview_available :: proc() -> bool {
 	return available
 }
 
+// The Preview panel needs a web view the window can hold: WebView2 on Windows. Linux has none that a Wayland window can
+// hold, so agents there use the user's own browser through OpenCode Browse: the toast opens its page.
+BROWSE_URL :: "https://opencode.ai/extensions/browse"
+
+preview_missing :: proc() {
+	when ODIN_OS == .Linux {
+		ui.toast_action(.Info, proc(_: rawptr) { _ = platform.open_url(BROWSE_URL) }, nil, "No Preview panel on Linux: let agents use your own browser with OpenCode Browse. Click to see it")
+	} else {
+		ui.toast(.Warn, "The Preview panel needs the WebView2 runtime")
+	}
+}
+
 preview_toggle :: proc(app: ^App) {
-	if !preview_available() { ui.toast(.Warn, "The Preview panel needs the WebView2 runtime"); return }
+	if !preview_available() { preview_missing(); return }
 	if app.preview.open { panel_close(app, u32(Panel.Preview)) } else { preview_show(app) }
 }
 
