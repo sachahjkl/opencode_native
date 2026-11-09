@@ -294,11 +294,10 @@ REFRESH_DEBOUNCE_MS  :: 1200
 FACTS_DEBOUNCE_MS    :: 700
 CHILDREN_DEBOUNCE_MS :: 800
 
-// A coverage per colour stripe sharpens text most at few pixels per letter: that is where it is automatic, if the system smooths
-// that way. (The window may go from one screen to another. Smoothing along the rows alone, DirectWrite's Natural, is not an answer to
-// anything here: without the smoothing across, these faces, which have no hinting, come out hard and stepped.)
+// Automatic: text is smoothed per colour stripe when the system smooths it that way, at any scale, as the system's own text is.
+// (Smoothing along the rows alone, DirectWrite's Natural, is not an answer to anything here: without the smoothing across, these
+// faces, which have no hinting, come out hard and stepped.)
 text_mode_follow :: proc(app: ^App) {
-	scale := app.scale > 0 ? app.scale : app.win.dpi_scale
 	stripes: font.Subpixel_Text
 	switch config.string_of(&app.cfg_prefs, "appearance.text_smoothing") {
 	case "rgb":  stripes = .Rgb
@@ -306,7 +305,7 @@ text_mode_follow :: proc(app: ^App) {
 	case "grey": stripes = .Off
 	case:
 		if !app.cx.system_stripes_read { app.cx.system_stripes, app.cx.system_stripes_read = font.system_subpixel_text(), true }
-		if scale < TEXT_SMOOTH_SCALE { stripes = app.cx.system_stripes }
+		stripes = app.cx.system_stripes
 	}
 	if app.fonts.settings.subpixel_text == stripes { return }
 	settings := app.fonts.settings
