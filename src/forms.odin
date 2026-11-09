@@ -372,17 +372,21 @@ form_card :: proc(app: ^App, f: ^Form_Req, others: int, em: f32) {
 // The questions and the review as tabs: any of them at any time, those answered ticked.
 @(private = "file")
 form_tabs :: proc(f: ^Form_Req, pages: []int, em: f32) {
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-	if ui.row(.Center, id = "###tabs") {
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+	if ui.row(id = "###tabs") {
 		ui.spacer(ui.px(em))
 		h := math.round(em * BUTTON_COMPACT_H_EM)
-		for p, k in pages {
-			fd := &f.fields[p]
-			name := fd.title != "" ? fd.title : fmt.tprintf("Question %d", k + 1)
-			if bevel_button(fmt.tprintf("###form_tab%d", k), label_safe(name), field_answer(fd) != "" ? lucide.CHECK : "", f.page == k ? .Toggled : .Ghost, ui.fill(), h).clicked { f.page = k }
-			ui.spacer(ui.px(em * 0.25))
+		// each tab as wide as its title, onto a next line when they do not fit (shared out equally, a long title ran over the
+		// next tab)
+		ui.next({width = ui.fill()})
+		if ui.flow({em * 0.25, em * 0.25}, "###tabs_flow") {
+			for p, k in pages {
+				fd := &f.fields[p]
+				name := fd.title != "" ? fd.title : fmt.tprintf("Question %d", k + 1)
+				if bevel_button(fmt.tprintf("###form_tab%d", k), label_safe(name), field_answer(fd) != "" ? lucide.CHECK : "", f.page == k ? .Toggled : .Ghost, height = h).clicked { f.page = k }
+			}
+			if bevel_button("###form_tab_review", "Review", "", f.page == len(pages) ? .Toggled : .Ghost, height = h).clicked { f.page = len(pages) }
 		}
-		if bevel_button("###form_tab_review", "Review", "", f.page == len(pages) ? .Toggled : .Ghost, ui.fill(), h).clicked { f.page = len(pages) }
 		ui.spacer(ui.px(em))
 	}
 	ui.spacer(ui.px(em * 0.5))

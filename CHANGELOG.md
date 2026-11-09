@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.32.2] - 2026-11-09
+
+### Fixed
+
+- **A form's tabs no longer overlap**: each is as wide as its title, and those that do not fit go on to a next line. They shared the width out equally, and a long title ran over the next tab.
+
 ## [0.32.1] - 2026-11-09
 
 ### Fixed
@@ -1094,7 +1100,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.32.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.32.2...HEAD
+[0.32.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.32.2
 [0.32.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.32.1
 [0.32.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.32.0
 [0.31.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.31.1

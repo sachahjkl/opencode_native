@@ -760,3 +760,45 @@ a_table_s_copy_button_is_over_its_rows :: proc(t: ^testing.T) {
 	session.frames(s, 2)
 	testing.expect(t, session.find_text(s, "Table copied") != nil, "a click on it copies the table")
 }
+
+// A form's tabs: each as wide as its title, on a next line when they do not fit; none over another, every title in its tab (shared
+// out equally, a long title ran over the next tab).
+@(test)
+a_form_s_tabs_do_not_overlap :: proc(t: ^testing.T) {
+	app, s := bench_app(t)
+	titles := []string{"WebGPU implementation", "Linker", "Debug info", "Contract details", "Kernel operation limit", "Next step",
+		"A question whose title is much longer than any tab should ever be, to make the tabs go onto a second line"}
+	b := strings.builder_make(context.temp_allocator)
+	fmt.sbprintf(&b, `{{"id":"frm_t","sessionID":"%s","question":true,"fields":[`, BENCH_CHAT_ID)
+	for title, i in titles {
+		if i > 0 { strings.write_string(&b, ",") }
+		fmt.sbprintf(&b, `{{"key":"k%d","type":"string","title":"%s","options":[{{"value":"a","label":"A"}}]}}`, i, title)
+	}
+	strings.write_string(&b, "]}")
+	v, err := json.parse_string(strings.to_string(b), allocator = context.temp_allocator)
+	testing.expect_value(t, err, json.Error.None)
+	form_add(app, v)
+	session.frames(s, 3)
+	card := session.find(s, "form_frm_t")
+	if !testing.expect(t, card != nil, "the card") { return }
+	tabs := make([dynamic]^ui.Box, context.temp_allocator)
+	for i in 0 ..< len(titles) { if tb := session.find(s, fmt.tprintf("form_tab%d", i)); tb != nil { append(&tabs, tb) } }
+	if tb := session.find(s, "form_tab_review"); tb != nil { append(&tabs, tb) }
+	testing.expect_value(t, len(tabs), len(titles) + 1)
+	rows := map[f32]bool{}
+	defer delete(rows)
+	for a, i in tabs {
+		rows[a.rect.min.y] = true
+		testing.expectf(t, a.rect.max.x <= card.rect.max.x + 0.5, "tab %d in the card", i)
+		for c := a.first; c != nil; c = c.next {
+			testing.expectf(t, c.rect.max.x <= a.rect.max.x + 0.5, "tab %d: its title in it (%v past %v)", i, c.rect.max.x, a.rect.max.x)
+		}
+		for b2, j in tabs {
+			if j <= i { continue }
+			over := a.rect.min.x < b2.rect.max.x - 0.5 && b2.rect.min.x < a.rect.max.x - 0.5 && a.rect.min.y < b2.rect.max.y - 0.5 && b2.rect.min.y < a.rect.max.y - 0.5
+			testing.expectf(t, !over, "tabs %d and %d do not overlap (%v, %v)", i, j, a.rect, b2.rect)
+		}
+	}
+	testing.expect(t, len(rows) > 1, "too many for one line: a second one")
+	forms_clear(app)
+}
