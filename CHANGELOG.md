@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.28.1] - 2026-11-09
+
+### Changed
+
+- **A dialog's resize grip sits in a square corner** (gui_toolkit 0.121.0): its bottom right corner is cut by a bevel in the border colour, darker on a light theme and lighter on a dark one, its dots clear of the edge.
+- **Partial redraw costs less**: comparing a frame with the last one is linear (about 0.4 ms for 10,000 boxes, was 2 ms or more), and a drag image no longer makes every frame whole.
+
 ## [0.28.0] - 2026-11-09
 
 ### Changed
@@ -1019,7 +1026,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.28.1...HEAD
+[0.28.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.28.1
 [0.28.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.28.0
 [0.27.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.27.0
 [0.26.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.26.0
