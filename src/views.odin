@@ -1568,14 +1568,20 @@ composer :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###tools") {
 			ui.spacer(ui.px(em * 0.6))
+			// what goes with the prompt, then who answers it and with what
+			ui.a11y({role = .Button, name = "Attach files"})
+			att := bevel_button("###attach", "", ICO_ATTACH, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true)
+			if att.clicked { attach_pick(app) }
+			if ui.hovered_for(att, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Attach files: images, PDF, text  (or paste, or drop them here)") } }
+			ui.spacer(ui.px(em * 0.1))
 			agent := shown_agent(app)
 			if agent == "" { agent = "build" }
-			asig := bevel_button("###agent", agent, ICO_ROBOT, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM))
+			asig := bevel_button("###agent", agent, ICO_ROBOT, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "agent")
 			if asig.clicked { if app.picker.open && app.picker.id == "agent" { app.picker.open = false } else { picker_open(&app.picker, "agent", asig.box.rect) } }
 			ui.spacer(ui.px(em * 0.4))
 			model, _ := shown_model(app)
 			if model == "" { model = "default model" }
-			msig := bevel_button("###model", model, ICO_CHIP, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM))
+			msig := bevel_button("###model", model, ICO_CHIP, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "model")
 			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(&app.picker, "model", msig.box.rect) } }
 			ui.spacer(ui.fill())
 			held := composer_held(app)
@@ -1599,13 +1605,6 @@ composer :: proc(app: ^App, em: f32) {
 			}
 			ui.spacer(ui.px(em * 0.8))
 			composer_panels(app, em)
-			if foreground_command(app) {
-				ui.a11y({role = .Button, name = "Push to the background"})
-				bg := glyph_button("###bg_btn", ICO_BACKGROUND, math.round(em * BUTTON_H_EM))
-				if bg.clicked { background_session(app, app.chat.id) }
-				if ui.hovered_for(bg, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Push the running command to the background: the session goes on") } }
-				ui.spacer(ui.px(em * 0.4))
-			}
 			if app.chat.busy {
 				if bevel_button("###stop2", "", ICO_STOP, .Danger, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM)).clicked { interrupt_session(app, app.chat.id) }
 				ui.spacer(ui.px(em * 0.4))
@@ -1665,7 +1664,6 @@ composer_panels :: proc(app: ^App, em: f32) {
 		if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(tip) } }
 		ui.spacer(ui.px(em * 0.4))
 	}
-	panel(app, "###attach_btn", ICO_ATTACH, "Attach files", "Attach files: images, PDF, text  (or paste, or drop them here)", "composer.attach", false, size, em)
 	if preview_available() { panel(app, "###preview_btn", ICO_GLOBE, "Preview panel", "Preview panel  (Ctrl+Shift+B)", "view.preview", app.preview.open, size, em) }
 	panel(app, "###terminal_btn", ICO_TERMINAL, "Terminal", "Terminal  (Ctrl+Shift+T)", "view.terminal", app.cx.terms.open, size, em)
 }

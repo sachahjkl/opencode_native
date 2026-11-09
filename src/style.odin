@@ -249,7 +249,7 @@ draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, h
 }
 
 // Words that say what can be done are also what does it: quiet like a hint, lit under the pointer. True when clicked.
-hint_action :: proc(id, label: string, em: f32, face: font.Font_Id = 0) -> bool {
+hint_action :: proc(id, label: string, em: f32, face: font.Font_Id = 0, icon := "") -> bool {
 	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * 1.4)), axis = .X, cross = .Center, cursor = .Hand})
 	ui.a11y({role = .Button, name = label})
 	b := ui.build_box({.Clickable, .Focusable}, id)
@@ -257,7 +257,12 @@ hint_action :: proc(id, label: string, em: f32, face: font.Font_Id = 0) -> bool 
 	if ui.parent(b) {
 		m := ui.Style_Mod{font_size = math.round(em * (face != 0 ? FS_CAPTION : FS_SMALL))}
 		if face != 0 { m.font = face }
-		text("t", label, sig.hovering ? hex(HEX_BRIGHT) : hex(HEX_FAINT), m)
+		col := sig.hovering ? hex(HEX_BRIGHT) : hex(HEX_FAINT)
+		if icon != "" {
+			glyph(icon, col, math.round(em * ICON_SMALL))
+			ui.spacer(ui.px(em * 0.3))
+		}
+		text("t", label, col, m)
 	}
 	return sig.clicked
 }
@@ -344,20 +349,21 @@ draw_pip :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color) {
 Btn_Kind :: enum u8 { Normal, Accent, Danger, Ghost, Toggled }
 
 @(private = "file")
-Bevel_Draw :: struct { kind: Btn_Kind, radius: f32 }
+Bevel_Draw :: struct { kind: Btn_Kind, radius: f32, lit: bool }   // lit: drawn as under the pointer (its menu is open)
 
 @(private = "file")
 bevel_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Bevel_Draw)(user)
 	held := b.active_t * b.hot_t
+	hot := d.lit ? 1 : b.hot_t
 	rad := d.radius * ui.scale()
 	switch d.kind {
-	case .Normal:  draw_bevel(dc, b.rect, rad, hex(HEX_BTN_FACE), b.hot_t, held)
-	case .Accent:  draw_bevel(dc, b.rect, rad, accent(), b.hot_t, held, accent())
-	case .Danger:  draw_bevel(dc, b.rect, rad, hex(HEX_BTN_DANGER), b.hot_t, held, hex(HEX_RED))
-	case .Toggled: draw_bevel(dc, b.rect, rad, hex(HEX_BTN_FACE), b.hot_t, 1)
+	case .Normal:  draw_bevel(dc, b.rect, rad, hex(HEX_BTN_FACE), hot, held)
+	case .Accent:  draw_bevel(dc, b.rect, rad, accent(), hot, held, accent())
+	case .Danger:  draw_bevel(dc, b.rect, rad, hex(HEX_BTN_DANGER), hot, held, hex(HEX_RED))
+	case .Toggled: draw_bevel(dc, b.rect, rad, hex(HEX_BTN_FACE), hot, 1)
 	case .Ghost:
-		if b.hot_t > FADE_VISIBLE || held > FADE_VISIBLE { draw_bevel(dc, b.rect, rad, hex(HEX_BTN_GHOST), b.hot_t, held) }
+		if hot > FADE_VISIBLE || held > FADE_VISIBLE { draw_bevel(dc, b.rect, rad, hex(HEX_BTN_GHOST), hot, held) }
 	}
 }
 
@@ -387,9 +393,10 @@ dialog_close :: proc(open: ^bool) {
 }
 
 // A machined push button: an icon (Lucide glyph) and/or a label. `width`: its width (text size by default).
+// `lit`: shown as under the pointer, as long as what it opened is open (a menu, a picker).
 // `wrap`: a label longer than the button's width goes on more lines and the button grows to hold them (it is `height`
 // tall on one line); else it is one line, as wide as its text.
-bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Normal, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false, quiet := false, wrap := false) -> ui.Signal {
+bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Normal, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false, quiet := false, wrap := false, lit := false) -> ui.Signal {
 	em := ui.font_size()
 	h := height > 0 ? height : math.round(em * BUTTON_H_EM)
 	fg := kind == .Accent ? hex(HEX_ON_ACCENT) : kind == .Danger ? WHITE : hex(HEX_TEXT)
@@ -399,11 +406,11 @@ bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Nor
 	if disabled { flags = {} }
 	b := ui.build_box(flags, id)
 	d := ui.frame_new(Bevel_Draw)
-	d^ = {kind = disabled ? .Ghost : kind, radius = BUTTON_RADIUS}
+	d^ = {kind = disabled ? .Ghost : kind, radius = BUTTON_RADIUS, lit = lit && !disabled}
 	b.custom = bevel_box_draw
 	b.custom_user = d
 	sig := ui.signal(b)
-	if quiet && !disabled { fg = sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK) }   // (a secondary action: lit only under the pointer)
+	if quiet && !disabled { fg = sig.hovering || lit ? hex(HEX_TEXT) : hex(HEX_WEAK) }   // (a secondary action: lit only under the pointer)
 	if ui.parent(b) {
 		pad := label != "" ? em * 0.75 : em * 0.55
 		if _, fixed := width.?; fixed && !left { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(left ? em * 0.8 : pad)) }

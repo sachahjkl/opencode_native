@@ -662,6 +662,11 @@ activity_strip :: proc(app: ^App, em: f32) {
 			if doing != "" { text("d", doing, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill()) }
 		}
 		if !open_todos || doing == "" { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(em * 0.8)) }
+		// (a command that holds the turn: it can go on in the background while the session does)
+		if foreground_command(app) {
+			if hint_action("###bg", "push to background", em, app.mono, ICO_BACKGROUND) { background_session(app, app.chat.id) }
+			ui.spacer(ui.px(em * 1.2))
+		}
 		text("k", a.open ? "Esc  close" : "↓  details", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		ui.spacer(ui.px(em * 0.5))
 	}

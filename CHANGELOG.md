@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-11-09
+
+### Changed
+
+- **The composer's bar**: the paperclip comes first, before the agent and the model, and the three are quiet buttons (their text pale, lit under the pointer); a button whose picker is open stays lit while it is.
+- **Push to the background** is a link on the line over the composer ("push to background"), while a command holds the turn; it was a button in the composer's bar.
+
 ## [0.24.1] - 2026-11-09
 
 ### Added
@@ -888,7 +895,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.2...HEAD
+[0.24.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.2
 [0.24.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.1
 [0.24.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.0
 [0.23.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.23.1
