@@ -5,6 +5,10 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+
+- **Setup works on a thread of its own and follows the disk** (gui_toolkit 0.131.0): reading the install, Install and Uninstall no longer freeze the window, and while the dialog is open an install changed or removed elsewhere shows at once. Uninstall asks for a second click.
+
 ## [0.31.1] - 2026-11-09
 
 ### Changed

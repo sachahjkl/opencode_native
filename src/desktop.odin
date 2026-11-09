@@ -107,7 +107,7 @@ setup_button :: proc(id, label: string, kind: setup.Button_Kind, em: f32, _: raw
 // Called by both Install and Uninstall before the packages write or remove: the record of Setup up to 0.20.0 goes, so that
 // an install is in today's form and an uninstall leaves an empty folder (which the package then removes).
 @(private = "file")
-setup_prepare :: proc(o: ^desktop.Options, _: rawptr) {
+setup_prepare :: proc(o: ^desktop.Options, _: []bool, _: rawptr) {
 	if o.install_dir != "" { _ = os.remove(pjoin({o.install_dir, LEGACY_RECORD})) }
 }
 
