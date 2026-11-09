@@ -172,7 +172,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.mode = config.string_of(p, "appearance.mode")
 	theme_load(app)
 	theme_set(app, theme_index(app, config.string_of(p, "appearance.theme")), theme_wants_light(s.mode))
-	theme_titles(app)
+	theme_windows(app)
 	s.accent_hex = themed(HEX_PEACH)
 	s.accent = hex(HEX_PEACH)
 	s.font_size = f32(config.int_of(p, "appearance.font_size"))

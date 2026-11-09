@@ -211,11 +211,15 @@ theme_set :: proc(app: ^App, asked: int, light_asked: bool) {
 	clear(&ts.cache)
 }
 
-// The windows' title bars, as the version shown: the system draws them dark or light.
-theme_titles :: proc(app: ^App) {
+// The windows as the version shown: the title bars the system draws dark or light, and the ground each frame is cleared to.
+theme_windows :: proc(app: ^App) {
 	dark := !app.cx.theme.light
 	if app.win != nil { platform.set_dark_title(app.win, dark) }
 	for d in app.cx.detached { if d.win != nil { platform.set_dark_title(d.win, dark) } }
+	// what each frame is cleared to: the theme's ground, which shows where nothing is drawn (it stayed the first theme's: a light line
+	// under the title bar once the theme went dark)
+	app.window.background = hex(HEX_BG0)
+	for d in app.cx.detached { d.window.background = hex(HEX_BG0) }
 }
 
 // Whether what is shown is a light version (its surfaces are flat: the machined reliefs are made for the dark).

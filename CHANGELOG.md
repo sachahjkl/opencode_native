@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.25.2] - 2026-11-09
+
+### Fixed
+
+- **A light line no longer stays under the title bar when the theme goes dark** (or the other way): what each frame is cleared to followed the theme the window opened with, and showed where nothing is drawn, under the title bar's groove.
+
 ## [0.25.1] - 2026-11-09
 
 ### Fixed
@@ -987,7 +993,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.25.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.25.2...HEAD
+[0.25.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.25.2
 [0.25.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.25.1
 [0.25.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.25.0
 [0.24.10]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.10
