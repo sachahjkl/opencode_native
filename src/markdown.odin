@@ -5,6 +5,7 @@ package occ
 import "core:fmt"
 import "core:math"
 import "core:strings"
+import "gt:draw"
 import "gt:platform"
 import "gt:ui"
 
@@ -13,7 +14,9 @@ HASH_MIX_A :: 0x9e3779b97f4a7c15
 HASH_MIX_B :: 0xc2b2ae3d27d4eb4f
 
 HEADING_LEVEL_MAX    :: 6
-TABLE_COL_STRICTNESS :: 0.4   // the share of its width a column keeps when the table is wider than the room
+TABLE_COL_MAX_EM     :: 28    // a table's column is no wider (its words wrap past it); a table wider than its place scrolls sideways
+TABLE_FADE_EM        :: 2     // the fade at a side of a table that scrolls, where it hides more
+TABLE_BAR_PX         :: 4     // the bar under a table that scrolls sideways, at a scale of 1
 HEX_INLINE_CODE      :: 0xe5c07bff
 HEX_CODE_TEXT        :: 0xd4d4d4ff
 HEX_TABLE_WELL       :: 0x090909ff
@@ -326,46 +329,49 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 			}
 		}
 	}
-	// the room: the place the table had in the last layout (none yet: the widths as they are, shrunk if they must)
-	strict := f32(TABLE_COL_STRICTNESS)
-	room := ui.parent_box().rect.max.x - ui.parent_box().rect.min.x
-	want, low: f32
-	for ci in 0 ..< ncol { want += widths[ci]; low += least[ci] }
-	if room > 0 && want > room {
-		if low >= room {
-			copy(widths, least)   // (not even its words fit: the words, the table wider than its place)
-		} else {
-			left := room - low
-			whole := make([]bool, ncol, context.temp_allocator)
-			for {   // the column that lacks the least, whole, while the others can still have their words
-				pick, lack := -1, f32(0)
-				for ci in 0 ..< ncol {
-					if whole[ci] { continue }
-					if l := widths[ci] - least[ci]; pick < 0 || l < lack { pick, lack = ci, l }
-				}
-				if pick < 0 || lack > left { break }
-				whole[pick] = true
-				left -= lack
-			}
-			rest: f32   // what the others lack, together
-			for ci in 0 ..< ncol { if !whole[ci] { rest += widths[ci] - least[ci] } }
-			for ci in 0 ..< ncol {
-				if !whole[ci] { widths[ci] = math.floor(least[ci] + (rest > 0 ? left * (widths[ci] - least[ci]) / rest : 0)) }
-			}
-			strict = 1
-		}
+	// each column as wide as its widest cell on one line, no wider than TABLE_COL_MAX_EM (past that its words wrap in it); never
+	// squeezed under that: a table wider than its place scrolls sideways in its frame
+	col_max := math.round(em * TABLE_COL_MAX_EM)
+	total: f32
+	for ci in 0 ..< ncol {
+		widths[ci] = min(widths[ci], max(col_max, least[ci] < col_max ? least[ci] : col_max))
+		total += widths[ci]
 	}
+	room := ui.parent_box().rect.max.x - ui.parent_box().rect.min.x   // (the place it had in the last layout: none yet, it fits)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	// (every other row tinted with the theme's text, faintly: light on a dark theme, dark on a light one; the header is told by
 	// its words and its rule. The rows stand off the well's edge, rounded a little: their tint does not cover its rim.)
 	stripe := with_alpha(hex(HEX_TEXT), TABLE_STRIPE_ALPHA)
 	edge := 2 * px1()
+	overflow := room > 0 && total > room - 2 * edge
+	hs: ^ui.Box
 	if well(id, radius = 6, base = HEX_TABLE_WELL) {
+		// under the pointer, a copy button in its corner: the table as HTML (a plain grid, any program's own style) and as its
+		// Markdown text
+		table_box := ui.parent_box()
+		over := draw.rect_contains(table_box.rect, ui.mouse_pos())   // (its cells are no buttons: the pointer anywhere on it)
+		if tw := table_box.rect.max.x - table_box.rect.min.x; tw > 1 && over {
+			sz := math.round(em * 1.6)
+			m := math.round(em * 0.25)
+			ui.next({fixed_x = tw - sz - m, fixed_y = m, width = ui.px(sz), height = ui.px(sz), axis = .X})
+			if ui.row(id = "###tcopy") {
+				ui.a11y({role = .Button, name = "Copy the table"})
+				sig := glyph_button("###copy", ICO_COPY, sz)
+				if sig.clicked {
+					html := table_html(cells, aligns)
+					_ = platform.clipboard_set(the_app.win, {text = strings.join(lines, "\n", context.temp_allocator), html = html})
+					ui.toast(.Good, "Table copied")
+				}
+				if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Copy the table (pastes as a table)") } }
+			}
+		}
 		ui.spacer(ui.px(em * 0.3))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###in") {
 		ui.spacer(ui.px(edge))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+		// (sideways: the rows in a box that scrolls; a fade on the side that hides more, and a bar under them, say so)
+		hs = table_scroller(id, overflow, total, em)
+		ui.next({width = overflow ? ui.px(total, 1) : ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column(id = "###rows") {
 		for r, ri in rows {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, bg = ri > 0 && ri % 2 == 0 ? stripe : {}, radius = math.round(em * 0.25)})
@@ -374,7 +380,7 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 					c := ci < len(r) ? r[ci] : ""
 					runs := cells[ri][ci]
 					al := ci < len(aligns) ? aligns[ci] : ui.Text_Align.Left
-					ui.next({width = ui.px(widths[ci], strict), height = ui.children_sum(), axis = .X})
+					ui.next({width = ui.px(widths[ci], 1), height = ui.children_sum(), axis = .X})
 					if ui.row(id = fmt.tprintf("###tc%d", ci)) {
 						ui.spacer(ui.px(pad))
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
@@ -391,10 +397,107 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 			if ri == 0 { ui.next({width = ui.fill(), height = ui.px(2), bg = with_alpha(accent(), 0.35)}); ui.build_box({.Draw_Background}, "###hl") }
 		}
 		}
+		ui.pop_parent()   // (table_scroller's box)
 		ui.spacer(ui.px(edge))
 		}
+		if overflow { table_scroll_bar(hs, total, em) }
 		ui.spacer(ui.px(em * 0.3))
 	}
+}
+
+// The box a table's rows scroll sideways in (its parent until the caller pops it): the width it has, its content `total` wide
+// when `overflow`. Its edge fades where it hides columns (by the last frame's offset).
+@(private = "file")
+table_scroller :: proc(id: string, overflow: bool, total, em: f32) -> ^ui.Box {
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+	hs := ui.build_box(overflow ? {.View_Scroll_X, .Clip} : {}, "###hs")
+	if overflow {
+		w := hs.rect.max.x - hs.rect.min.x
+		limit := max(total - w, 0)
+		fade := math.round(em * TABLE_FADE_EM)
+		hs.edge_fade = {hs.view_off.x > 0.5 ? fade : 0, 0, hs.view_off.x < limit - 0.5 ? fade : 0, 0}
+		_ = ui.signal(hs)   // (the wheel sideways, or Shift+wheel, scrolls it in its signal)
+	} else {
+		hs.view_off, hs.view_target = {}, {}
+	}
+	ui.push_parent(hs)
+	return hs
+}
+
+// Under a table that scrolls sideways: a thin track and where the view is on it. A press or a drag on it takes the view there.
+@(private = "file")
+table_scroll_bar :: proc(hs: ^ui.Box, total, em: f32) {
+	h := math.round(TABLE_BAR_PX * ui.scale())
+	ui.next({width = ui.fill(), height = ui.px(h + math.round(em * 0.5)), cursor = .Hand})
+	bar := ui.build_box({.Clickable}, "###hbar")
+	sig := ui.signal(bar)
+	w := hs.rect.max.x - hs.rect.min.x
+	if w <= 0 || total <= w { return }
+	limit := total - w
+	track := Rect{{bar.rect.min.x + em * 0.6, bar.rect.min.y + em * 0.15}, {bar.rect.max.x - em * 0.6, bar.rect.min.y + em * 0.15 + h}}
+	tw := track.max.x - track.min.x
+	thumb := max(tw * w / total, em * 2)
+	if (sig.pressed || sig.dragging) && tw > thumb {
+		t := clamp((ui.mouse_pos().x - track.min.x - thumb * 0.5) / (tw - thumb), 0, 1)
+		hs.view_target.x = t * limit
+	}
+	d := ui.frame_new(Table_Bar_Draw)
+	d^ = {track = track, at = track.min.x + (tw - thumb) * clamp(hs.view_off.x / limit, 0, 1), thumb = thumb, hot = sig.hovering || sig.dragging}
+	bar.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		d := (^Table_Bar_Draw)(user)
+		r := (d.track.max.y - d.track.min.y) * 0.5
+		draw.rect(dc, d.track, with_alpha(hex(HEX_TEXT), 0.08), r)
+		draw.rect(dc, {{d.at, d.track.min.y}, {d.at + d.thumb, d.track.max.y}}, with_alpha(hex(HEX_TEXT), d.hot ? 0.45 : 0.28), r)
+	}
+	bar.custom_user = d
+}
+
+@(private = "file")
+Table_Bar_Draw :: struct { track: Rect, at, thumb: f32, hot: bool }
+
+// A table as HTML for the clipboard: a plain grid that takes the style of the program it is pasted in (its fonts, its colours),
+// with a thin grey rule around each cell, a little room in them, the header row bold, each column aligned as written; what is
+// bold, italic or code in a cell stays so. The first row is the header. Pure.
+table_html :: proc(cells: [][][dynamic]ui.Rich_Run, aligns: []ui.Text_Align) -> string {
+	esc :: proc(b: ^strings.Builder, s: string) {
+		for r in s {
+			switch r {
+			case '&': strings.write_string(b, "&amp;")
+			case '<': strings.write_string(b, "&lt;")
+			case '>': strings.write_string(b, "&gt;")
+			case '"': strings.write_string(b, "&quot;")
+			case:     strings.write_rune(b, r)
+			}
+		}
+	}
+	b := strings.builder_make(context.temp_allocator)
+	strings.write_string(&b, `<table style="border-collapse:collapse">`)
+	for row, ri in cells {
+		if ri == 0 { strings.write_string(&b, "<thead>") }
+		if ri == 1 { strings.write_string(&b, "<tbody>") }
+		strings.write_string(&b, "<tr>")
+		tag := ri == 0 ? "th" : "td"
+		for runs, ci in row {
+			al := ci < len(aligns) ? aligns[ci] : ui.Text_Align.Left
+			side := al == .Center ? "center" : al == .Right ? "right" : "left"
+			fmt.sbprintf(&b, `<%s style="border:1px solid #bbb;padding:4px 8px;text-align:%s">`, tag, side)
+			for run in runs {
+				if run.style.code { strings.write_string(&b, "<code>") }
+				if run.style.bold && ri > 0 { strings.write_string(&b, "<b>") }
+				if run.style.italic { strings.write_string(&b, "<i>") }
+				esc(&b, run.text)
+				if run.style.italic { strings.write_string(&b, "</i>") }
+				if run.style.bold && ri > 0 { strings.write_string(&b, "</b>") }
+				if run.style.code { strings.write_string(&b, "</code>") }
+			}
+			fmt.sbprintf(&b, "</%s>", tag)
+		}
+		strings.write_string(&b, "</tr>")
+		if ri == 0 { strings.write_string(&b, "</thead>") }
+	}
+	if len(cells) > 1 { strings.write_string(&b, "</tbody>") }
+	strings.write_string(&b, "</table>")
+	return strings.to_string(b)
 }
 
 // Code in a sunken well, under a header with its language and a copy button.

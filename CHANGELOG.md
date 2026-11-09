@@ -5,6 +5,16 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-11-09
+
+### Added
+
+- **Copy a table**: under the pointer, a copy button in a table's corner puts it on the clipboard as a plain HTML grid (a thin grey rule around each cell, no colour and no font: the program it is pasted in gives its own; bold and code kept) and as its Markdown text.
+
+### Changed
+
+- **A table wider than its place scrolls sideways** in its frame, its columns at their natural width (no wider than 28 em: their words wrap past it); they were squeezed until a word broke letter by letter. A fade on the side that hides columns and a bar under the table say it scrolls; the bar takes a press or a drag, Shift+wheel and a sideways wheel scroll it, and an up-and-down wheel over it still scrolls the conversation (gui_toolkit 0.115.0).
+
 ## [0.24.10] - 2026-11-09
 
 ### Changed
@@ -971,7 +981,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.10...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.25.0
 [0.24.10]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.10
 [0.24.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.9
 [0.24.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.8
