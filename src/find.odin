@@ -89,9 +89,15 @@ find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	// a conversation just opened is still loading and jumping to its bottom: its matches move under the reader
 	if f.index < 0 && (app.chat.loading || ui.now_ms() - app.opened_ms < FIND_SETTLE_MS) { return }
 	if f.index < 0 && sb != nil {
-		// the first match from the top of the view down, like a browser
-		f.index = 0
+		// (the first match from the top of the view down; when none is under it, the view is past the last one (at the bottom of
+		// a conversation): the nearest above it, not the conversation's first, a whole conversation away)
+		f.index = -1
 		for m in ms { if m.rect.min.y >= sb.view_off.y { f.index = m.index; break } }
+		if f.index < 0 {
+			low := min(f32)
+			for m in ms { if m.rect.min.y > low { low, f.index = m.rect.min.y, m.index } }
+			f.index = max(f.index, 0)
+		}
 		f.reveal = true
 	}
 	f.index = min(f.index, n - 1)

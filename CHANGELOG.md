@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-11-09
+
+### Fixed
+
+- **A search at the bottom of a conversation stays there**: under the last match (the view past it), the current match is the nearest above, not the conversation's first, which took the view all the way to the top. A test that passed or failed by the speed of that glide now always passes.
+
 ## [0.25.0] - 2026-11-09
 
 ### Added
@@ -981,7 +987,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.25.1...HEAD
+[0.25.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.25.1
 [0.25.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.25.0
 [0.24.10]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.10
 [0.24.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.9

@@ -486,6 +486,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	session.frames(s, 3)
 	found := ui.find_count()
 	testing.expect(t, found > 1, "the sweep read the whole conversation")
+	testing.expect_value(t, app.find.index, found - 1)   // (searched from the bottom, under its last match: that one, not the first, a conversation away)
 	testing.expect(t, session.find(s, "msg_msg_0_a") == nil, "after the sweep, only what is near the view is built")
 	// the first match, far from anything built: the view goes there, and it is lit with its index of the sweep
 	app.find.index = found - 1
