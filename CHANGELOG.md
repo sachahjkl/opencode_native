@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-09
+
+### Changed
+
+- **Up and Down in the composer go through the prompts of the session shown only**: another session's prompts no longer come in, and a new session has no history. The file `history.jsonl` is no longer read or written; you can delete it.
+- **The site links to gui_toolkit at gt.sacha.house.**
+
 ## [0.27.0] - 2026-11-09
 
 ### Added
@@ -13,7 +20,6 @@ project follows [semantic versioning](https://semver.org).
 
 ### Changed
 
-- **Up and Down in the composer go through the prompts of the session shown only**: another session's prompts no longer come in, and a new session has no history. The file `history.jsonl` is no longer read or written; you can delete it.
 - **The themes and the machined look are gui_toolkit's** (0.117.0): the same themes, in their dark and light versions, and
   the same reliefs, now shared with the toolkit's other programs. Six themes come with it: Midnight, Graphite, Amber,
   Everforest, Aero and Bootstrap. The toolkit's own widgets (its fields, separators, segmented controls) take the machined
@@ -1013,7 +1019,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.28.0
 [0.27.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.27.0
 [0.26.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.26.0
 [0.25.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.25.2
