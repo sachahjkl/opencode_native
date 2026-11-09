@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-09
+
+### Fixed
+
+- **The window on Linux moves and resizes**: dragging the title bar moves it, its edges and corners resize it (with the resize cursor), a double click on the title bar maximizes or restores it, a right click opens the compositor's window menu. Where the system draws no frame around it, it has a 1-pixel outline. (gui_toolkit 0.108.0)
+
 ## [0.23.1] - 2026-11-09
 
 ### Fixed
@@ -872,7 +878,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.23.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.0
 [0.23.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.23.1
 [0.23.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.23.0
 [0.22.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.22.0
