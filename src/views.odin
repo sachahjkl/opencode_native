@@ -1596,6 +1596,13 @@ composer :: proc(app: ^App, em: f32) {
 			}
 			ui.spacer(ui.px(em * 0.8))
 			composer_panels(app, em)
+			if foreground_command(app) {
+				ui.a11y({role = .Button, name = "Push to the background"})
+				bg := glyph_button("###bg_btn", ICO_BACKGROUND, math.round(em * BUTTON_H_EM))
+				if bg.clicked { background_session(app, app.chat.id) }
+				if ui.hovered_for(bg, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Push the running command to the background: the session goes on") } }
+				ui.spacer(ui.px(em * 0.4))
+			}
 			if app.chat.busy {
 				if bevel_button("###stop2", "", ICO_STOP, .Danger, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM)).clicked { interrupt_session(app, app.chat.id) }
 				ui.spacer(ui.px(em * 0.4))

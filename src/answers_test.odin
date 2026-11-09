@@ -973,3 +973,25 @@ allow_all_answers_every_permission_once :: proc(t: ^testing.T) {
 	testing.expect_value(t, bench_count(.Permission_Reply), 1)
 	pref_set(app, "permission.allow_all", "false")
 }
+
+// The tray is the session's: a folder's commands of another session stay out; those it pushed back say so.
+@(test)
+the_tray_shows_the_sessions_commands_only :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	show(app, "s")
+	app.activity.dir = strings.clone("/w")
+	shells, _ := json.parse_string(`{"data":[
+		{"id":"a","status":"running","command":"ours","cwd":"/w","metadata":{"sessionID":"s"},"time":{"started":1}},
+		{"id":"b","status":"running","command":"theirs","cwd":"/w","metadata":{"sessionID":"other"},"time":{"started":1}},
+		{"id":"c","status":"running","command":"nobody's","cwd":"/w","metadata":{},"time":{"started":1}}]}`, allocator = context.temp_allocator)
+	activity_shells_load(app, shells, "/w")
+	testing.expect_value(t, len(app.activity.jobs), 3)
+	ours := map[string]bool{}
+	defer delete(ours)
+	for &j in app.activity.jobs { ours[j.id] = job_ours(app, &j) }
+	testing.expect(t, ours["a"] && !ours["b"] && ours["c"], "the session's and the unclaimed")
+	jobs, _ := json.parse_string(`{"data":[{"kind":"shell","id":"a","sessionID":"s","status":"running","shellID":"a","command":"ours","time":{"started":1}}]}`, allocator = context.temp_allocator)
+	activity_jobs_load(app, jobs, "s")
+	for &j in app.activity.jobs { testing.expect_value(t, j.background, j.id == "a") }
+}

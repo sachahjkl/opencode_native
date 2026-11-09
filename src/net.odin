@@ -215,6 +215,7 @@ Req_Kind :: enum u8 {
 	// what runs behind the conversation (activity.odin); a server without them says nothing about it
 	Shell_List,     // GET /api/shell: the commands running in a folder
 	Shell_One,      // GET /api/shell/:id: how one ended
+	Job_List,       // GET /api/experimental/job: which of the session's commands run in the background
 	Shell_Output,   // GET /api/shell/:id/output: what it printed since
 	Peek,           // GET /api/session/:child/message: the end of a sub-agent's work
 	Slash,          // GET /api/command: the server's commands (the palette, "/name" in the composer)
@@ -420,6 +421,7 @@ Req_Facts :: struct { json: bool, life: Req_Life }
 	.Action           = {},
 	.Prompt           = {},
 	.Shell_List       = {json = true, life = .Chat_Gen},
+	.Job_List         = {json = true, life = .Chat_Gen},
 	.Shell_One        = {json = true, life = .Chat_Gen},
 	.Shell_Output     = {json = true, life = .Chat_Gen},
 	.Peek             = {json = true, life = .Chat_Gen},
@@ -643,6 +645,7 @@ answer :: proc(app: ^App, r: ^Request) {
 	case .Output_State:  output_view_state_load(app, v, r.tag)
 	case .Context:       context_load(app, r.tag, v)
 	case .Shell_List:   activity_shells_load(app, v, r.tag)
+	case .Job_List:     activity_jobs_load(app, v, r.tag)
 	case .Shell_One:    activity_shell_load(app, v, r.tag)
 	case .Shell_Output: activity_output_load(app, v, r.tag)
 	case .Peek:         activity_peek_load(app, v, r.tag)
@@ -737,7 +740,7 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 	case .Pty_Size:
 		term_size_answered(app, r.tag)   // (the grid has its size; a server that refuses it says nothing worth a toast at each step of a drag)
 		return true
-	case .Shell_List, .Shell_One, .Shell_Output, .Peek:
+	case .Shell_List, .Shell_One, .Shell_Output, .Peek, .Job_List:
 		// (what runs behind the conversation: a server without it says nothing about it)
 		activity_request_failed(app, r)
 		return true

@@ -5,6 +5,14 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **Push to the background**: a shell command that holds the session's turn goes to the background and the session goes on (`POST /api/session/:id/background`): a button beside Stop while such a command runs, `Background` on its row of the activity tray, and the command palette's "Push the running command to the background".
+
+### Fixed
+
+- **The activity tray is the session's**: it showed every shell command of the session's folder, those of other sessions too; it shows those of the session and its sub-agents (each command says its session in `metadata.sessionID`).
+
 ## [0.22.0] - 2026-11-09
 
 ### Added

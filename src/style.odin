@@ -119,6 +119,7 @@ flat_edge :: proc(face: Color, hot: f32) -> Color { return draw.mix(hex(HEX_LINE
 // so they look the same everywhere and nothing depends on the fonts installed.
 ICO_ADD      :: "\ue13d"   // plus
 ICO_ATTACH   :: "\ue12d"   // paperclip
+ICO_BACKGROUND :: "\ue4f3"   // send-to-back
 ICO_SEND     :: "\ue4f2"   // send-horizontal
 ICO_STOP     :: "\ue167"   // square
 ICO_SEARCH   :: "\ue151"   // search

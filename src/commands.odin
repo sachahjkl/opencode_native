@@ -45,6 +45,7 @@ COMMANDS := [?]Command{
 	{id = "nav.composer", title = "Focus the composer", group = "Go to", icon = ICO_EDIT, keys = "Ctrl+L", key = .L, mods = {.Ctrl}, run = proc(app: ^App) { app.cx.focus_composer = true }},
 
 	{id = "session.new", title = "New session", group = "Session", icon = ICO_ADD, keys = "Ctrl+N", key = .N, mods = {.Ctrl}, run = new_session},
+	{id = "session.background", title = "Push the running command to the background", group = "Session", icon = ICO_BACKGROUND, run = proc(app: ^App) { background_session(app, app.chat.id) }, enabled = foreground_command},
 	{id = "session.stop", title = "Stop the run", group = "Session", icon = ICO_STOP, keys = "Ctrl+Esc", key = .Escape, mods = {.Ctrl}, run = proc(app: ^App) { interrupt_session(app, app.chat.id) }, enabled = is_busy},
 	{id = "session.activity", title = "What runs in the background", group = "Session", icon = ICO_TERMINAL, keys = "Ctrl+J", key = .J, mods = {.Ctrl}, run = activity_toggle, enabled = has_session},
 	{id = "session.quote", title = "Quote what is selected", group = "Session", icon = ICO_EDIT, keys = "Ctrl+Q", key = .Q, mods = {.Ctrl}, run = quote_selection, enabled = proc(app: ^App) -> bool { return ui.has_selection(&app.state) }},

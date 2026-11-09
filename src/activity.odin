@@ -1,4 +1,5 @@
-// What runs behind the conversation, at a glance: the session's sub-agents, the shell commands of its folder, its todo list.
+// What runs behind the conversation, at a glance: the session's sub-agents, the shell commands it and its sub-agents run
+// (the server lists a folder's: each says its session in metadata.sessionID), its todo list.
 // A line over the composer says how many; Down from the composer (or a click on that line) opens the tray under it: a row
 // each, with the tail of what it prints, so that one can watch them without going into them. The focus stays in the
 // composer: while the tray is open the arrows, Enter, Delete and Escape are the tray's, and typing closes it.
@@ -15,6 +16,8 @@ Job_Status :: enum u8 { Exited, Running, Killed, Timeout }
 
 Shell_Job :: struct {
 	id, command, cwd: string,           // (owned)
+	session:       string,              // the session that runs it, metadata.sessionID ("": none says; owned)
+	background:    bool,                // a background job of its session (else it holds its session's turn)
 	status:        Job_Status,
 	exit:          int,
 	has_exit:      bool,
@@ -74,7 +77,7 @@ activity_reset :: proc(app: ^App) {
 
 @(private = "file")
 job_free :: proc(j: ^Shell_Job) {
-	delete(j.id); delete(j.command); delete(j.cwd); delete(j.tail)
+	delete(j.id); delete(j.command); delete(j.cwd); delete(j.session); delete(j.tail)
 }
 
 @(private = "file")
@@ -155,6 +158,9 @@ activity_read :: proc(app: ^App) {
 	if !flying(app, .Shell_List, dir) {
 		request(app, .Shell_List, "GET", q != "" ? fmt.tprintf("/api/shell?%s", q) : "/api/shell", tag = dir)
 	}
+	if app.chat.id != "" && !flying(app, .Job_List, app.chat.id) {
+		request(app, .Job_List, "GET", fmt.tprintf("/api/experimental/job?sessionID=%s&kind=shell&status=running&descendants=true", app.chat.id), tag = app.chat.id)
+	}
 	for &j in a.jobs { if j.status == .Running { job_read(app, &j) } }
 	if !a.open { return }
 	for &s in app.chat.children {
@@ -202,6 +208,30 @@ job_fill :: proc(j: ^Shell_Job, it: json.Value) {
 	}
 }
 
+// Whether a command of this session belongs in its tray: the session's own, its sub-agents', or one no session claims.
+job_ours :: proc(app: ^App, j: ^Shell_Job) -> bool {
+	if j.session == "" || j.session == app.chat.id { return true }
+	for &s in app.chat.children { if s.id == j.session { return true } }
+	return false
+}
+
+// The answer to GET /api/experimental/job: the session's commands that run in the background (the others hold a turn).
+activity_jobs_load :: proc(app: ^App, v: json.Value, session: string) {
+	if session != app.chat.id { return }
+	for &j in app.activity.jobs { j.background = false }
+	for it in jarr(v, "data") {
+		if j := job_find(&app.activity, jstr(it, "shellID")); j != nil { j.background = true }
+	}
+}
+
+// A command that holds its session's turn goes to the background: the session goes on, the command with it
+// (POST /api/session/:id/background moves every such tool of the session; one already there is left alone).
+background_session :: proc(app: ^App, session: string) {
+	if session == "" { return }
+	request(app, .Action, "POST", fmt.tprintf("/api/session/%s/background", session), tag = session)
+	activity_poke(app)
+}
+
 // The answer to GET /api/shell: the commands running now. One that is no longer there has ended: read how.
 activity_shells_load :: proc(app: ^App, v: json.Value, dir: string) {
 	a := &app.activity
@@ -212,7 +242,7 @@ activity_shells_load :: proc(app: ^App, v: json.Value, dir: string) {
 		if id == "" { continue }
 		j := job_find(a, id)
 		if j == nil {
-			append(&a.jobs, Shell_Job{id = strings.clone(id), command = strings.clone(jstr(it, "command")), cwd = strings.clone(jstr(it, "cwd"))})
+			append(&a.jobs, Shell_Job{id = strings.clone(id), command = strings.clone(jstr(it, "command")), cwd = strings.clone(jstr(it, "cwd")), session = strings.clone(jstr(it, "metadata", "sessionID"))})
 			j = &a.jobs[len(a.jobs) - 1]
 			job_read(app, j)
 		}
@@ -438,12 +468,35 @@ job_word :: proc(j: ^Shell_Job) -> string {
 
 // A running call of a shell tool whose command is not in the list of the server's commands.
 @(private = "file")
+shell_call_running :: proc(p: ^Part) -> bool {
+	return p.kind == .Tool && p.status == .Running && (strings.contains(p.tool_name, "shell") || strings.contains(p.tool_name, "bash"))
+}
+
+// Whether a shell call of the session shown runs in the foreground, holding its turn: what the composer's Background
+// button and session.background act on.
+foreground_command :: proc(app: ^App) -> bool {
+	if !app.chat.busy { return false }
+	c := &app.chat
+	for &m in c.messages[max(0, len(c.messages) - ACT_PEEK_LINES):] {
+		for &p in m.parts {
+			if !shell_call_running(&p) { continue }
+			v, _ := json.parse_string(p.input, allocator = context.temp_allocator)
+			command := jstr(v, "command")
+			background := false
+			for &j in app.activity.jobs { if j.command == command && j.background { background = true } }
+			if !background { return true }
+		}
+	}
+	return false
+}
+
+@(private = "file")
 tool_rows :: proc(app: ^App, rows: ^[dynamic]Act_Row) {
 	c := &app.chat
 	first := max(0, len(c.messages) - ACT_PEEK_LINES)
 	for &m in c.messages[first:] {
 		for &p in m.parts {
-			if p.kind != .Tool || p.status != .Running || !(strings.contains(p.tool_name, "shell") || strings.contains(p.tool_name, "bash")) { continue }
+			if !shell_call_running(&p) { continue }
 			v, _ := json.parse_string(p.input, allocator = context.temp_allocator)
 			command := jstr(v, "command")
 			listed := false
@@ -468,11 +521,12 @@ activity_rows :: proc(app: ^App) -> []Act_Row {
 	}
 	for &s in app.chat.children { if app.busy[s.id] or_else false { agent(app, &rows, &s) } }
 	#reverse for &j in a.jobs {
+		if !job_ours(app, &j) { continue }
 		if j.status == .Running { append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = base_name(j.cwd), preview = string(j.tail[:]), state = .Running, started = j.started}) }
 	}
 	tool_rows(app, &rows)
 	#reverse for &j in a.jobs {
-		if j.status == .Running { continue }
+		if j.status == .Running || !job_ours(app, &j) { continue }
 		what := j.has_exit ? fmt.tprintf("exit %d", j.exit) : job_word(&j)
 		append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = what, preview = string(j.tail[:]), state = job_state(&j), started = j.started, ended = j.ended})
 	}
@@ -673,6 +727,14 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 				ui.spacer(ui.px(em * 0.4))
 			}
 			if selected || sig.hovering {
+				if running && (r.kind == .Shell || r.kind == .Tool) {
+					session := app.chat.id
+					if r.kind == .Shell { j := job_find(a, r.id); session = j != nil && !j.background ? j.session : "" }
+					if session != "" {
+						if bevel_button("###bg", "Background", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true).clicked { background_session(app, session) }
+						ui.spacer(ui.px(em * 0.2))
+					}
+				}
 				if running {
 					if bevel_button("###stop", "Stop", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true).clicked { row_stop(app, r) }
 					ui.spacer(ui.px(em * 0.2))
