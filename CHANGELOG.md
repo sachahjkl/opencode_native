@@ -5,6 +5,8 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-09
+
 ### Changed
 
 - **Setup is gui_toolkit's** (gui_toolkit 0.127.0): opencode native's Setup dialog moved into the toolkit's `setup` package, shared with Papier, in opencode's look (its blurred backdrop, its buttons, its close cross). The same install, the same answer kept in settings.txt. The dialog can be resized from its edges and its corner. A path in it shows whole under the pointer, and a click or its button copies it.
@@ -1066,7 +1068,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.31.0
 [0.30.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.30.0
 [0.29.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.29.0
 [0.28.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.28.2
