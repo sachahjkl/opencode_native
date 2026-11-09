@@ -220,6 +220,7 @@ Req_Kind :: enum u8 {
 	Shell_Output,   // GET /api/shell/:id/output: what it printed since
 	Peek,           // GET /api/session/:child/message: the end of a sub-agent's work
 	Goal,           // POST /api/rpc/opencode.goal/get: the session's goal (goal.odin)
+	Pair,           // POST /api/pair: a code that pairs a device (pair.odin)
 	Slash,          // GET /api/command: the server's commands (the palette, "/name" in the composer)
 	Forked,         // POST /api/session/:id/fork: the new session
 	Session_Agent,  // a new session takes the agent chosen last (outgoing.odin outgoing_setup)
@@ -430,6 +431,7 @@ Req_Facts :: struct { json: bool, life: Req_Life }
 	.Peek             = {json = true, life = .Chat_Gen},
 	.Slash            = {json = true},
 	.Goal             = {json = true, life = .Chat_Gen},
+	.Pair             = {json = true},   // (the server's, whatever is shown)
 	.Forked           = {json = true},
 	.Session_Agent    = {},
 	.Session_Model    = {},
@@ -570,7 +572,11 @@ answer :: proc(app: ^App, r: ^Request) {
 		nav_restore_check(app)
 	case .Agents:      agents_load(app, v)
 	case .Models:      models_load(app, v)
-	case .Info:        delete(app.server_version); app.server_version = strings.clone(jstr(v, "version"))
+	case .Info:
+		delete(app.server_version); app.server_version = strings.clone(jstr(v, "version"))
+		server_urls_clear(app)
+		for u in jarr(v, "urls") { if s, ok := u.(json.String); ok && s != "" { append(&app.server_urls, strings.clone(string(s))) } }
+	case .Pair:        pair_load(app, jstr(v, "code"), jnum(v, "expires_in"))
 	case .Permissions: permissions_replace(app, r.tag, jarr(v, "data"), r.asked_at)
 	case .Permission_Reply:
 		waits_gone(app, r.tag)
@@ -715,7 +721,10 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 	case .Older:
 		older_failed(app, r)
 	case .Todo_Scan:
-		if r.tag == app.activity.scan.session { app.activity.scan.busy, app.activity.scan.over = false, true }   // (not again: the list stays as the pages read say)
+		if r.tag == app.activity.scan.session {
+			app.activity.scan.busy, app.activity.scan.over = false, true   // (not again: the list stays as the pages read say)
+			app.activity.todos_sig = 0
+		}
 	case .Form_Reply, .Form_Dismiss:
 		if fr := form_find(app, r.tag); fr != nil { fr.sending = false }
 	case .Permission_Reply:
@@ -746,6 +755,9 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 	case .Pty_Size:
 		term_size_answered(app, r.tag)   // (the grid has its size; a server that refuses it says nothing worth a toast at each step of a drag)
 		return true
+	case .Pair:
+		pair_failed(app, message)
+		return true   // (the dialog says it, with its Try again)
 	case .Goal, .Background:
 		return true   // (a server without the goal plugin: no line over the composer, nothing to say)
 	case .Shell_List, .Shell_One, .Shell_Output, .Peek, .Job_List:

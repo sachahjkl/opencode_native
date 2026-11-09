@@ -87,8 +87,8 @@ PREF_DEFS := [?]config.Def{
 	{name = "composer.send", description = "The key that sends: Enter (Shift+Enter breaks the line) or Ctrl+Enter (Enter breaks the line).", kind = .String, default = {s = "enter"}, choices = {"enter", "ctrl+enter"}},
 	{name = "sidebar.subagents", description = "Sub-agent sessions: under their parent, in the list with the others, or not shown.", kind = .String, default = {s = "nested"}, choices = {"nested", "flat", "hidden"}},
 	{name = "sidebar.mode", description = "What the sidebar shows: what needs you first across projects (what waits for you, what finished and you have not seen, what runs, the rest), or sessions by project.", kind = .String, default = {s = "inbox"}, choices = {"inbox", "projects"}},
-	{name = "notify.finished", description = "When a session that is not in front of you ends its run: nothing, a toast, or a toast and the taskbar button flashing.", kind = .String, default = {s = "flash"}, choices = {"off", "toast", "flash"}},
-	{name = "notify.permission", description = "Flash the taskbar button when a session asks for a permission and the window is not in front.", kind = .Bool, default = {b = true}},
+	{name = "notify.finished", description = "When a session that is not in front of you ends its run: nothing, a toast, a toast and the taskbar button flashing, or a notification of the system (a click on it opens the session).", kind = .String, default = {s = "system"}, choices = {"off", "toast", "flash", "system"}},
+	{name = "notify.permission", description = "When a session asks for a permission or a question and the window is not in front: the taskbar button flashes, and with notifications of the system, one says it.", kind = .Bool, default = {b = true}},
 	{name = "permission.allow_all", description = "Allow every permission a session asks, once, at once: no card, no toast, no flash. What the server's rules deny stays denied.", kind = .Bool, default = {b = false}},
 	{name = "appearance.throbber", description = "What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing.", kind = .String, default = {s = "board"}, choices = {"board", "orbit", "scanner", "none"}},
 	{name = "session.agent", description = "The agent a new session starts with: the one chosen last.", kind = .String, default = {s = ""}},
@@ -283,12 +283,52 @@ notify_finished :: proc(app: ^App, sid, outcome: string) {
 	if find_child(&app.chat, sid) != nil && front { return }   // (its card and the strip say it)
 	title := sid
 	if s := find_session(app, sid); s != nil { title = s.title } else if sid == app.chat.id && app.chat.have_self { title = app.chat.self.title }
+	word := outcome == "failed" ? "Failed" : outcome == "interrupted" ? "Stopped" : "Done"
+	// (in front, the toast says it: a notification of the system is for a window you are not looking at)
+	if mode == "system" && !front && notify_system(app, sid, word, title) { return }
 	switch outcome {
-	case "failed":      ui.toast(.Bad, "Failed: %s", ellipsize(title, TOAST_TITLE_CHARS))
-	case "interrupted": ui.toast(.Warn, "Stopped: %s", ellipsize(title, TOAST_TITLE_CHARS))
-	case:               ui.toast(.Good, "Done: %s", ellipsize(title, TOAST_TITLE_CHARS))
+	case "failed":      ui.toast(.Bad, "%s: %s", word, ellipsize(title, TOAST_TITLE_CHARS))
+	case "interrupted": ui.toast(.Warn, "%s: %s", word, ellipsize(title, TOAST_TITLE_CHARS))
+	case:               ui.toast(.Good, "%s: %s", word, ellipsize(title, TOAST_TITLE_CHARS))
 	}
-	if mode == "flash" && !front { flash_taskbar(app) }
+	if mode != "toast" && !front { flash_taskbar(app) }
+}
+
+// A session waits for you (a permission, a question) while the window is not in front.
+notify_waiting :: proc(app: ^App, sid, what: string) {
+	if !app.prefs.notify_perm || window_in_front(app) { return }
+	flash_taskbar(app)
+	if app.prefs.notify != "system" { return }
+	title := sid
+	if s := find_session(app, sid); s != nil { title = s.title }
+	notify_system(app, sid, what, title)
+}
+
+// A notification of the system: what happened, and the session's title. A click on it brings the window and opens the session
+// (main_input). False: the system shows none.
+@(private = "file")
+notify_system :: proc(app: ^App, sid, what, title: string) -> bool {
+	if app.win == nil || !platform.notify_supported() { return false }
+	id, ok := platform.notify(app.win, {title = fmt.tprintf("%s: %s", what, title), body = APP_NAME})
+	if !ok { return false }
+	app.cx.notified[id] = strings.clone(sid)
+	return true
+}
+
+// What a notification of the system came back with: a click opens its session, in front.
+notify_event :: proc(app: ^App, e: platform.Event) {
+	#partial switch e.kind {
+	case .Notification_Click, .Notification_Action:
+		sid, ok := app.cx.notified[e.notification.id]
+		if !ok { return }
+		platform.raise_window(app.win)
+		if sid != "" && sid != app.chat.id { open_root(app, sid) }
+	case .Notification_Closed:
+		if e.notification.id in app.cx.notified {
+			_, sid := delete_key(&app.cx.notified, e.notification.id)
+			delete(sid)
+		}
+	}
 }
 
 ////////////////////////////////
@@ -922,7 +962,7 @@ page_behaviour :: proc(app: ^App, em: f32) {
 	if setting(app, "composer.send", em) { pref_choice(app, "composer.send", {"Enter", "Ctrl+Enter"}, em, em * 14) }
 	if setting(app, "sidebar.mode", em) { pref_choice(app, "sidebar.mode", {SIDEBAR_MODES[.Inbox].label, SIDEBAR_MODES[.Projects].label}, em, em * 14) }
 	if setting(app, "sidebar.subagents", em) { pref_choice(app, "sidebar.subagents", {"Nested", "Flat", "Hidden"}, em) }
-	if setting(app, "notify.finished", em) { pref_choice(app, "notify.finished", {"Off", "Toast", "Flash"}, em) }
+	if setting(app, "notify.finished", em) { pref_choice(app, "notify.finished", {"Off", "Toast", "Flash", "System"}, em) }
 	if setting(app, "notify.permission", em) { pref_switch(app, "notify.permission", em) }
 	if setting(app, "permission.allow_all", em) { pref_switch(app, "permission.allow_all", em) }
 	if setting(app, "general.start", em) { pref_choice(app, "general.start", {"Home", "Latest session"}, em, em * 14) }

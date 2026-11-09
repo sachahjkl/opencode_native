@@ -33,6 +33,7 @@ COMMANDS := [?]Command{
 		if app.chat.id != "" { load_messages(app, app.chat.id) }
 	}},
 	{id = "app.add_server", title = "Add a server…", group = "General", icon = ICO_PLUG, run = proc(app: ^App) { server_edit_open(app, -1) }},
+	{id = "app.pair", title = "Pair a device…", group = "General", icon = ICO_GLOBE, run = pair_open, enabled = online},
 	{id = "app.setup", title = "Setup and about", group = "General", icon = ICO_BULB, run = setup_open},
 	{id = "app.update", title = "Check for updates", group = "General", icon = ICO_REFRESH, run = update_check_now},
 	{id = "app.update_install", title = "Install the update", group = "General", icon = ICO_REFRESH, run = update_install, enabled = proc(app: ^App) -> bool { return update_is_ready(&app.updater) }},
@@ -118,7 +119,7 @@ commands_keys :: proc(app: ^App) {
 
 // A dialog, a picker or a menu is over the window: the one list of them. What reads the keyboard behind them asks here.
 overlay_open :: proc(app: ^App) -> bool {
-	return changes_shown(&app.cx.changes) || app.cx.diff_full.open || app.cx.outputs.shown != nil || app.cx.files.open || app.cx.schedules.open || app.cx.artifacts.open || app.settings_open || app.delete_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.rename.open || len(app.state.menus) > 0
+	return changes_shown(&app.cx.changes) || app.cx.diff_full.open || app.cx.outputs.shown != nil || app.cx.files.open || app.cx.schedules.open || app.cx.artifacts.open || app.settings_open || app.delete_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.pair.open || app.rename.open || len(app.state.menus) > 0
 }
 
 content_zoom_set :: proc(app: ^App, z: f32) {
@@ -184,7 +185,7 @@ help_dialog :: proc(app: ^App, em: f32) {
 				}
 				ui.spacer(ui.px(em * 0.4))
 				section_label("gc", "COMPOSER", em)
-				row(app, "###hc1", "Up / Down", "Go through what you sent", em)
+				row(app, "###hc1", "Up / Down", "Go through what you sent in this session", em)
 				row(app, "###hc2", "Down", "On the last line: what runs in the background", em)
 				row(app, "###hc3", "Ctrl+V", "Paste text, an image or files", em)
 				row(app, "###hc4", "Middle click", "Scroll by the pointer", em)

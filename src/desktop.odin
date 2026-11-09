@@ -217,8 +217,10 @@ desktop_updated :: proc(exe, version: string) -> (ok: bool, msg: string) {
 // Wayland app_id and X11 WM_CLASS, by which the desktop finds opencode-native.desktop, for the icon and the name in a task
 // bar (Linux). Before the first window.
 set_app_id :: proc() {
-	desktop.set_process_identity(identity())
+	id := identity()
+	desktop.set_process_identity(id)
 	platform.set_app_id(APP_SLUG)
+	platform.notify_set_app({name = APP_NAME, aumid = id.aumid})   // (notifications of the system: under this name, grouped with its windows)
 }
 
 // Starts the installed copy (after an install from a downloaded copy).

@@ -908,7 +908,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		permission_add(app, req)
 		if app.prefs.allow_all { permissions_allow_pending(app); break }   // (allowed at once: nothing to say)
 		if jstr(req, "sessionID") != c.id { ui.toast(.Warn, "A session is waiting for a permission") }
-		if app.prefs.notify_perm && !window_in_front(app) { flash_taskbar(app) }
+		notify_waiting(app, jstr(req, "sessionID"), "Permission asked")
 	case "permission.replied":
 		id := jstr(d, "id")
 		if id == "" { id = jstr(d, "requestID") }
@@ -918,7 +918,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		form := jget(d, "form")
 		form_add(app, form)
 		if s := jstr(form, "sessionID"); s != c.id && !is_child(c, s) { ui.toast(.Warn, "A session is asking you something") }
-		if app.prefs.notify_perm && !window_in_front(app) { flash_taskbar(app) }
+		notify_waiting(app, jstr(form, "sessionID"), "Question")
 	case "form.replied", "form.cancelled":
 		waits_gone(app, jstr(d, "id"))
 		form_remove(app, jstr(d, "id"))

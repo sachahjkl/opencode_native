@@ -277,6 +277,7 @@ server_known_end :: proc(app: ^App) {
 	agents_clear(app)
 	models_clear(app)
 	delete(app.server_version)
+	server_urls_clear(app)
 	delete(app.busy)
 	delete(app.agents)
 	delete(app.models)

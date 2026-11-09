@@ -42,6 +42,8 @@ Activity :: struct {
 	jobs:       [dynamic]Shell_Job,
 	peeks:      map[string]Peek,    // by session (keys owned)
 	todos:      [dynamic]Todo,      // (strings owned)
+	todos_known: map[string][dynamic]Todo,   // each session's last list (keys and strings owned): shown at once when it comes back,
+	                                         // while its pages are read again (it came a moment late, and the conversation moved up)
 	todos_sig:  u64,
 	scan:       Todo_Scan,          // the last list, from pages not read yet (todos_scan)
 	dir:        string,             // the folder the commands were read for (owned)
@@ -73,8 +75,33 @@ activity_reset :: proc(app: ^App) {
 	a.open = a.open_in[app.chat.id] or_else false   // (the tray is each session's: open where it was left open)
 	a.poll_ms = 0
 	todos_clear(a)
+	todos_from_known(a, app.chat.id)
 	a.todos_sig = 0
 	todo_scan_reset(&a.scan)
+}
+
+// The list last known for `session`, as the session's while its pages are read again.
+@(private = "file")
+todos_from_known :: proc(a: ^Activity, session: string) {
+	known, ok := a.todos_known[session]
+	if !ok { return }
+	for t in known { append(&a.todos, Todo{strings.clone(t.content), strings.clone(t.status)}) }
+}
+
+// The session's list is now `a.todos` (none: forgotten).
+@(private = "file")
+todos_remember :: proc(a: ^Activity, session: string) {
+	if session == "" { return }
+	if session in a.todos_known {
+		key, known := delete_key(&a.todos_known, session)
+		delete(key)
+		for t in known { delete(t.content); delete(t.status) }
+		delete(known)
+	}
+	if len(a.todos) == 0 { return }
+	list := make([dynamic]Todo, 0, len(a.todos))
+	for t in a.todos { append(&list, Todo{strings.clone(t.content), strings.clone(t.status)}) }
+	a.todos_known[strings.clone(session)] = list
 }
 
 @(private = "file")
@@ -425,7 +452,11 @@ todos_scan_load :: proc(app: ^App, r: ^Request, v: json.Value) {
 		return
 	}
 	next := jstr(v, "cursor", "next")
-	if next == "" || sc.pages >= TODO_SCAN_PAGES { sc.over = true; return }
+	if next == "" || sc.pages >= TODO_SCAN_PAGES {
+		sc.over = true
+		a.todos_sig = 0   // (read again: none, the list last known goes)
+		return
+	}
 	sc.busy = true
 	request(app, .Todo_Scan, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", sc.session, app.prefs.page_size, url_escape(next)), tag = sc.session)
 }
@@ -449,11 +480,13 @@ todos_update :: proc(app: ^App) {
 			if list == nil { continue }
 			todos_clear(a)
 			for t in list { append(&a.todos, Todo{strings.clone(jstr(t, "content")), strings.clone(jstr(t, "status"))}) }
+			todos_remember(a, c.id)
 			return
 		}
 	}
+	// none in the pages read: the older ones may have it (until they are read, the list last known stays)
+	if !c.loaded { a.todos_sig = 0; return }   // (again once they are: their signature may not change)
 	todos_clear(a)
-	// none in the pages read: the older ones may have it
 	sc := &a.scan
 	if sc.session != c.id || sc.gen != c.gen {
 		todo_scan_reset(sc)
@@ -461,8 +494,13 @@ todos_update :: proc(app: ^App) {
 	}
 	if sc.found {
 		for t in sc.todos { append(&a.todos, Todo{strings.clone(t.content), strings.clone(t.status)}) }
-	} else if !sc.over && !sc.busy && c.loaded && c.id != "" {
-		if c.older == "" { sc.over = true; return }
+		todos_remember(a, c.id)
+	} else if sc.over {
+		todos_remember(a, c.id)   // (none: forgotten)
+	} else {
+		todos_from_known(a, c.id)
+		if sc.busy || c.id == "" { return }
+		if c.older == "" { sc.over = true; todos_clear(a); todos_remember(a, c.id); return }
 		sc.busy = true
 		request(app, .Todo_Scan, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", c.id, app.prefs.page_size, url_escape(c.older)), tag = c.id)
 	}

@@ -323,3 +323,5 @@ READABLE_QUIET   :: 3.0    // what is glanced at: a folder, an age
 CHOSEN_LIGHTNESS :: 0.045  // what is chosen in a list: this much off the raised step's lightness (style.odin chosen_ground)
 CHOSEN_CHROMA    :: 0.035  // ... and this much of the accent's colour
 CHOSEN_LIGHTNESS_LIGHT :: 0.07   // ... in a light version: this much darker than the sidebar's ground, in its hue and chroma
+
+TEXT_HINT_PPEM :: 40   // text up to this many pixels per em is hinted vertically (main.odin fonts_init: Slug only)

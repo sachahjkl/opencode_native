@@ -127,6 +127,8 @@ Chat_View_State :: struct {
 Server_Known :: struct {
 	link:            Conn_State,
 	server_version:  string,
+	server_urls:     [dynamic]string,   // where the server is reached (GET /api/info `urls`, owned): pairing (pair.odin)
+	pair:            Pair,              // the dialog that pairs a device (pair.odin)
 	sessions:        [dynamic]Session_Info,
 	sess_arena:      virtual.Arena,
 	sessions_loaded: bool,
@@ -141,6 +143,7 @@ Server_Known :: struct {
 
 // What the window keeps from one frame to the next that belongs to no panel: what is due, what is open, where things are.
 App_Context :: struct {
+	notified:            map[platform.Notification_Id]string,   // the notifications of the system shown, their sessions (owned: settings.odin notify_event)
 	column_drag_from:    f32,                  // the conversation's width when a handle of it was pressed (views.odin column_handles)
 	composer_fit:        struct { level: int, at: [2]f32 },   // what the composer's toolbar leaves out, and at which widths (views.odin composer_fit)
 	theme:               Theme_State,          // the themes, the one shown, its colours (theme.odin)
@@ -340,6 +343,7 @@ main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
 		if e.kind == .Scroll { app.cx.wheeled = true }
 		if e.kind == .Scroll || e.kind == .Key_Press { nav_restore_clear(app) }   // (the reader goes elsewhere: the view is theirs)
 		attach_drop_event(app, e)
+		notify_event(app, e)
 		// the side buttons of the mouse, as in a browser
 		if e.kind == .Mouse_Press && !overlay_open(app) {
 			if e.button == .Back { if c := command_find("nav.back"); command_enabled(app, c) { command_run(app, c) } }
@@ -648,7 +652,11 @@ app_init :: proc(app: ^App, prefs_file: string) {
 
 // The fonts, before the renderer: they load while the graphics device is made (render.preload_device).
 fonts_init :: proc(app: ^App) -> bool {
-	font.init(&app.fonts)
+	settings := font.DEFAULT_SETTINGS
+	// small text drawn from outlines (Slug) has its baseline and x-height on whole pixels: unhinted, round and flat letters stood
+	// at slightly different heights and a line seemed to bounce
+	settings.slug_hint_ppem = TEXT_HINT_PPEM
+	font.init(&app.fonts, settings)
 	return load_fonts(app)
 }
 

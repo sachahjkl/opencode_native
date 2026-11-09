@@ -5,6 +5,22 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-11-09
+
+### Added
+
+- **Pair a device** (command palette): the server's pairing code as a large QR code of the first address another device can reach (the tunnel, a network address), each address's link with a Copy button, and the time the code has left; New code makes another. A server that listens on this computer only says how to open it (`opencode service set hostname 0.0.0.0`).
+- **Notifications of the system** (Settings › Behaviour, "System", now the default): a session that ends its run while the window is not in front says so in a notification of the system (Linux: the desktop's notifications; Windows: a toast); a click on it brings the window and opens the session. With "Flash the taskbar" on, a permission or a question asked while you are elsewhere says it the same way.
+
+### Changed
+
+- **Text in colour stripes is a touch bolder** (Linux, gui_toolkit's Slug): 0.2 pixels across, so RGB text no longer reads thinner than grey text; its baseline and x-height do not move.
+- **Small text is hinted vertically** (Linux, Slug, up to 40 pixels per em): round and flat letters stand on the same baseline, a line no longer seems to bounce.
+
+### Fixed
+
+- **Switching sessions no longer moves the conversation**: the todo line over the composer came a moment after the session (its pages read again) and pushed everything up by its height; each session's last list now shows at once.
+
 ## [0.29.0] - 2026-11-09
 
 ### Changed
@@ -1042,7 +1058,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.30.0
 [0.29.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.29.0
 [0.28.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.28.2
 [0.28.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.28.1

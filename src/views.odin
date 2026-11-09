@@ -71,6 +71,7 @@ build_ui :: proc(app: ^App) {
 	image_viewer(app, em)
 	rename_dialog(app, em)
 	help_dialog(app, em)
+	pair_dialog(app, em)
 	integrations_watch(app)
 	schedules_dialog(app, em)
 	artifacts_dialog(app, em)
