@@ -11,6 +11,7 @@ import "core:math"
 import "core:strings"
 import "gt:draw"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Job_Status :: enum u8 { Exited, Running, Killed, Timeout }
 
@@ -753,13 +754,13 @@ activity_strip :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.8))
 		}
 		if shells > 0 {
-			glyph(ICO_TERMINAL, hex(HEX_WEAK), math.round(em * ICON_SMALL))
+			glyph(lucide.SQUARE_TERMINAL, hex(HEX_WEAK), math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.25))
 			text("s", count_of(shells, "command"), hex(HEX_TEXT_SOFT), note)
 			ui.spacer(ui.px(em * 0.8))
 		}
 		if open_todos {
-			glyph(ICO_LIST, hex(HEX_WEAK), math.round(em * ICON_SMALL))
+			glyph(lucide.LIST, hex(HEX_WEAK), math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.25))
 			text("t", fmt.tprintf("%d/%d", done, len(a.todos)), hex(HEX_TEXT_SOFT), note)
 			ui.spacer(ui.px(em * 0.45))
@@ -768,7 +769,7 @@ activity_strip :: proc(app: ^App, em: f32) {
 		if !open_todos || doing == "" { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(em * 0.8)) }
 		// (a command that holds the turn: it can go on in the background while the session does)
 		if foreground_command(app) {
-			if hint_action("###bg", "push to background", em, app.mono, ICO_BACKGROUND) { background_session(app, app.chat.id) }
+			if hint_action("###bg", "push to background", em, app.mono, lucide.SEND_TO_BACK) { background_session(app, app.chat.id) }
 			ui.spacer(ui.px(em * 1.2))
 		}
 		text("k", a.open ? "Esc  close" : "↓  details", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
@@ -887,12 +888,12 @@ todo_row :: proc(app: ^App, t: Todo, k: int, em: f32) {
 		ui.next({width = ui.px(em * 1.2), height = ui.px(math.round(em * TODO_MARK_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###m") {
 			switch t.status {
-			case "completed": glyph(ICO_CHECK, hex(HEX_GREEN), math.round(em * ICON_SMALL), em * 1.1)
-			case "cancelled": glyph(ICO_CANCEL, hex(HEX_FAINT), math.round(em * ICON_SMALL), em * 1.1)
+			case "completed": glyph(lucide.CHECK, hex(HEX_GREEN), math.round(em * ICON_SMALL), em * 1.1)
+			case "cancelled": glyph(lucide.X, hex(HEX_FAINT), math.round(em * ICON_SMALL), em * 1.1)
 			case "in_progress":
 				state_mark("###s", hex(HEX_YELLOW), true, size = em * 0.8)
 				animate(app)
-			case: glyph(ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
+			case: glyph(lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
 			}
 		}
 		ui.spacer(ui.px(em * 0.25))

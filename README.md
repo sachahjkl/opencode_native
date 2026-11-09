@@ -202,5 +202,5 @@ every step is a command of `tools/occtools` (`help` lists them; `AGENTS.md`). Th
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Hanken Grotesk, Newsreader and DM Mono: SIL Open Font License, see `assets/fonts/*-LICENSE.txt`. Lucide's icons: ISC, see [assets/fonts/LUCIDE-LICENSE.txt](assets/fonts/LUCIDE-LICENSE.txt).
+MIT, see [LICENSE](LICENSE). Hanken Grotesk, Newsreader and DM Mono: SIL Open Font License, see `assets/fonts/*-LICENSE.txt`. Lucide's icons (gui_toolkit's `lucide`): ISC, see `ext/gui_toolkit/src/lucide/LICENSE.txt`.
 opencode is a project of its own ([opencode.ai](https://opencode.ai)). This client is not built by the OpenCode team and is not affiliated with them in any way. Its logo is its own.

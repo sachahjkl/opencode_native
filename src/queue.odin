@@ -18,6 +18,7 @@ import "core:fmt"
 import "core:math"
 import "core:strings"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Delivery :: enum u8 { Steer, Queue }
 
@@ -390,9 +391,9 @@ queue_row :: proc(app: ^App, it: ^Queue_Item, n: int, em: f32) {
 			ui.spacer(ui.px(em * 0.7))
 			text("b", it.act == .Sending ? "sending…" : it.act == .Removing ? "removing…" : "changing…", hex(HEX_FAINT), note)
 		case:
-			if !it.skills && queue_action("###edit", "Edit", ICO_EDIT, wide, em) { queue_edit(app, id) }
-			if it.delivery == .Queue && queue_action("###now", "Send now", ICO_SEND, wide, em) { queue_send_now(app, id) }
-			if queue_action("###rm", "Remove", ICO_CANCEL, wide, em) { queue_remove(app, id) }
+			if !it.skills && queue_action("###edit", "Edit", lucide.PENCIL, wide, em) { queue_edit(app, id) }
+			if it.delivery == .Queue && queue_action("###now", "Send now", lucide.SEND_HORIZONTAL, wide, em) { queue_send_now(app, id) }
+			if queue_action("###rm", "Remove", lucide.X, wide, em) { queue_remove(app, id) }
 		}
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
 	}
@@ -459,7 +460,7 @@ queue_edit_banner :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * QUEUE_ROW_H_EM)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###q_banner") {
 		ui.spacer(ui.px(em * 0.85))
-		glyph(ICO_EDIT, accent(), math.round(em * ICON_SMALL), em * 1.1)
+		glyph(lucide.PENCIL, accent(), math.round(em * ICON_SMALL), em * 1.1)
 		ui.spacer(ui.px(em * 0.25))
 		text("t", "Editing a pending message", accent(), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		if len(q.items) > 1 && q.items[len(q.items) - 1].id != q.edit.id && app.column_w > em * QUEUE_WORDS_MIN_EM {

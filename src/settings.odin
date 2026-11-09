@@ -18,6 +18,7 @@ import "gt:draw"
 import "gt:font"
 import "gt:platform"
 import "gt:ui"
+import lucide "gt:lucide"
 
 ////////////////////////////////
 // The preferences
@@ -557,18 +558,18 @@ dialogs_track :: proc(app: ^App) {
 Settings_Page :: enum u8 { Appearance, Conversation, Behaviour, Updates, Advanced, Server, Connections, Mcp, Plugins, Usage, Permissions, Catalog }
 
 SETTINGS_PAGES := [Settings_Page]struct { title, icon: string, opencode: bool }{
-	.Appearance   = {"Appearance", ICO_PALETTE, false},
-	.Conversation = {"Conversation", ICO_CHAT, false},
-	.Behaviour    = {"Behaviour", ICO_SLIDERS, false},
-	.Updates      = {"Updates", ICO_REFRESH, false},
-	.Advanced     = {"Advanced", ICO_TOOL, false},
-	.Server       = {"Server & shell", ICO_TERMINAL, true},
-	.Connections  = {"Connections", ICO_PERSON, true},
-	.Mcp          = {"MCP servers", ICO_PLUG, true},
-	.Plugins      = {"Plugins", ICO_BOLT, true},
-	.Usage        = {"Usage & limits", ICO_GAUGE, true},
-	.Permissions  = {"Permissions", ICO_SHIELD, true},
-	.Catalog      = {"Providers & skills", ICO_LIST, true},
+	.Appearance   = {"Appearance", lucide.PALETTE, false},
+	.Conversation = {"Conversation", lucide.MESSAGE_SQUARE, false},
+	.Behaviour    = {"Behaviour", lucide.SLIDERS_HORIZONTAL, false},
+	.Updates      = {"Updates", lucide.REFRESH_CW, false},
+	.Advanced     = {"Advanced", lucide.WRENCH, false},
+	.Server       = {"Server & shell", lucide.SQUARE_TERMINAL, true},
+	.Connections  = {"Connections", lucide.USER, true},
+	.Mcp          = {"MCP servers", lucide.PLUG, true},
+	.Plugins      = {"Plugins", lucide.ZAP, true},
+	.Usage        = {"Usage & limits", lucide.GAUGE, true},
+	.Permissions  = {"Permissions", lucide.SHIELD, true},
+	.Catalog      = {"Providers & skills", lucide.LIST, true},
 }
 
 settings_open :: proc(app: ^App) {
@@ -661,7 +662,7 @@ settings_search_field :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 		if well("###settings_search_well", .X, radius = 7) {
 			ui.spacer(ui.px(em * 0.5))
-			glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
+			glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 				ui.line_edit("###settings_query", &app.settings_query, "Search settings")
@@ -736,7 +737,7 @@ setting :: proc(app: ^App, name: string, em: f32) -> bool {
 	ui.spacer(ui.px(em * 0.8))
 	if !config.is_default(p, r) {
 		ui.a11y({name = "Reset to default"})
-		if glyph_button("###reset", ICO_REFRESH, math.round(em * 1.6)).clicked {
+		if glyph_button("###reset", lucide.REFRESH_CW, math.round(em * 1.6)).clicked {
 			config.reset(p, name)
 			prefs_save(app)
 			prefs_refresh(app)
@@ -995,13 +996,13 @@ page_updates :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###upd_b") {
-			if bevel_button("###u_check", "Check now", ICO_REFRESH, .Normal, disabled = update_is_downloading(u)).clicked { update_check(app, true) }
+			if bevel_button("###u_check", "Check now", lucide.REFRESH_CW, .Normal, disabled = update_is_downloading(u)).clicked { update_check(app, true) }
 			ui.spacer(ui.px(em * 0.5))
 			if update_is_ready(u) {
-				if bevel_button("###u_inst", fmt.tprintf("Install %s", update_version(u)), ICO_CHECK, .Accent).clicked { update_install(app) }
+				if bevel_button("###u_inst", fmt.tprintf("Install %s", update_version(u)), lucide.CHECK, .Accent).clicked { update_install(app) }
 			}
 			if update_is_installed(u) {
-				if bevel_button("###u_rest", "Restart now", ICO_REFRESH, .Accent).clicked { update_restart(app) }
+				if bevel_button("###u_rest", "Restart now", lucide.REFRESH_CW, .Accent).clicked { update_restart(app) }
 			}
 		}
 		ui.spacer(ui.px(em * 0.9))
@@ -1028,7 +1029,7 @@ page_advanced :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###adv_b") {
-			if bevel_button("###adv_dir", "Open the settings folder", ICO_FOLDER, .Normal).clicked { _ = platform.open_path(filepath.dir(prefs_path())) }
+			if bevel_button("###adv_dir", "Open the settings folder", lucide.FOLDER, .Normal).clicked { _ = platform.open_path(filepath.dir(prefs_path())) }
 			ui.spacer(ui.px(em * 0.4))
 			if bevel_button("###adv_lic", app.cx.show_licence ? "Hide the terminal's licence" : "The terminal's licence", "", .Ghost).clicked { app.cx.show_licence = !app.cx.show_licence }
 		}
@@ -1100,7 +1101,7 @@ page_server :: proc(app: ^App, em: f32) {
 		for s, i in f.shells {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###sh%d", i)) {
-				if bevel_button(fmt.tprintf("###shb%d", i), s.name, ICO_TERMINAL, sel == i ? .Accent : .Normal, ui.px(em * 9), math.round(em * BUTTON_COMPACT_H_EM), disabled = !s.ok).clicked { shell_set(app, s) }
+				if bevel_button(fmt.tprintf("###shb%d", i), s.name, lucide.SQUARE_TERMINAL, sel == i ? .Accent : .Normal, ui.px(em * 9), math.round(em * BUTTON_COMPACT_H_EM), disabled = !s.ok).clicked { shell_set(app, s) }
 				ui.spacer(ui.px(em * 0.7))
 				text("p", s.path, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			}
@@ -1120,9 +1121,9 @@ page_server :: proc(app: ^App, em: f32) {
 			}
 			// (only this computer's server speaks of this computer's files)
 			if app.servers[app.server].local && config_file_shaped(c.path) && os.is_file(c.path) {
-				if bevel_button("###open", "Open", ICO_DOC, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_path(c.path) }
+				if bevel_button("###open", "Open", lucide.FILE, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_path(c.path) }
 				ui.spacer(ui.px(em * 0.3))
-				if bevel_button("###dir", "", ICO_FOLDER, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_path(filepath.dir(c.path)) }
+				if bevel_button("###dir", "", lucide.FOLDER, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_path(filepath.dir(c.path)) }
 			}
 		}
 		ui.spacer(ui.px(em * 0.4))
@@ -1190,7 +1191,7 @@ page_usage :: proc(app: ^App, em: f32) {
 		if ui.row(.Center, id = "###ws") {
 			text("w", fmt.tprintf("Workspace “%s”", f.workspace), hex(HEX_WORKSPACE_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			if f.usage_url != "" {
-				if bevel_button("###web", "Usage on opencode.ai", ICO_GLOBE, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { link_open(f.usage_url) }
+				if bevel_button("###web", "Usage on opencode.ai", lucide.GLOBE, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { link_open(f.usage_url) }
 			}
 		}
 	}
@@ -1263,7 +1264,7 @@ page_permissions :: proc(app: ^App, em: f32) {
 				text("a", s.action, hex(HEX_SETTING_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
 				ui.spacer(ui.px(em * 0.5))
 				text("r", s.resource, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
-				if bevel_button("###rv", "Revoke", ICO_DELETE, .Danger, height = math.round(em * BUTTON_SMALL_H_EM), disabled = saved_revoking(f, s.id)).clicked { saved_revoke(app, s.id) }
+				if bevel_button("###rv", "Revoke", lucide.TRASH_2, .Danger, height = math.round(em * BUTTON_SMALL_H_EM), disabled = saved_revoking(f, s.id)).clicked { saved_revoke(app, s.id) }
 			}
 		}
 	}

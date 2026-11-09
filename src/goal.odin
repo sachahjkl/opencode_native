@@ -10,6 +10,7 @@ import "core:fmt"
 import "core:math"
 import "core:strings"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Goal_Status :: enum u8 { Active, Paused, Complete }
 
@@ -68,7 +69,7 @@ goal_strip :: proc(app: ^App, em: f32) {
 		switch g.status {
 		case .Active:   lamp("###gl", hex(HEX_YELLOW), 1, pulse = true, size = em * CARD_MARK_EM)
 		case .Paused:   lamp("###gl", hex(HEX_FAINT), 1, size = em * CARD_MARK_EM)
-		case .Complete: glyph(ICO_CHECK, hex(HEX_GREEN), math.round(em * ICON_SMALL))
+		case .Complete: glyph(lucide.CHECK, hex(HEX_GREEN), math.round(em * ICON_SMALL))
 		}
 		ui.spacer(ui.px(em * 0.35))
 		word := g.status == .Active ? "goal" : g.status == .Paused ? "goal paused" : "goal met"
@@ -81,17 +82,17 @@ goal_strip :: proc(app: ^App, em: f32) {
 		}
 		ui.spacer(ui.px(em * 1.0))
 		switch g.status {
-		case .Active:   if hint_action("###g_pause", "pause", em, app.mono, ICO_STOP) { goal_command(app, "pause") }
-		case .Paused:   if hint_action("###g_resume", "resume", em, app.mono, ICO_SEND) { goal_command(app, "resume") }
+		case .Active:   if hint_action("###g_pause", "pause", em, app.mono, lucide.SQUARE) { goal_command(app, "pause") }
+		case .Paused:   if hint_action("###g_resume", "resume", em, app.mono, lucide.SEND_HORIZONTAL) { goal_command(app, "resume") }
 		case .Complete:
 		}
 		ui.spacer(ui.px(em * 0.9))
-		if hint_action("###g_change", "change", em, app.mono, ICO_EDIT) {
+		if hint_action("###g_change", "change", em, app.mono, lucide.PENCIL) {
 			ui.area_set(&app.composer, fmt.tprintf("/goal %s", g.objective))
 			app.cx.focus_composer = true
 		}
 		ui.spacer(ui.px(em * 0.9))
-		if hint_action("###g_clear", "clear", em, app.mono, ICO_CANCEL) { goal_command(app, "clear") }
+		if hint_action("###g_clear", "clear", em, app.mono, lucide.X) { goal_command(app, "clear") }
 		ui.spacer(ui.px(em * 0.5))
 	}
 }

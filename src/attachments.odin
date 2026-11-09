@@ -13,6 +13,7 @@ import "core:strings"
 import "core:unicode/utf8"
 import "gt:platform"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Attachment :: struct {
 	name: string,      // (owned)
@@ -178,7 +179,7 @@ attachments_row :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.8))
 				text("n", fmt.tprintf("%s  %s", a.name, kfmt(f64(a.size))), hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.2))
-				if glyph_button("###x", ICO_CANCEL, math.round(em * 1.3)).clicked { gone = i }
+				if glyph_button("###x", lucide.X, math.round(em * 1.3)).clicked { gone = i }
 			}
 		}
 	}

@@ -11,6 +11,7 @@ import "core:strconv"
 import "core:strings"
 import "gt:platform"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Form_Option :: struct { value, label, description: string }
 Form_When   :: struct { key, op, value: string }
@@ -322,7 +323,7 @@ form_card :: proc(app: ^App, f: ^Form_Req, others: int, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###head") {
 			ui.spacer(ui.px(em))
-			glyph(ICO_BULB, accent(), math.round(em * ICON_LARGE), em * 1.6)
+			glyph(lucide.LIGHTBULB, accent(), math.round(em * ICON_LARGE), em * 1.6)
 			ui.spacer(ui.px(em * 0.5))
 			title := f.question ? (sub ? "A sub-agent asks" : "The agent asks") : (f.title != "" ? f.title : "The agent asks")
 			text("t", title, accent(), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
@@ -351,13 +352,13 @@ form_card :: proc(app: ^App, f: ^Form_Req, others: int, em: f32) {
 			if bevel_button("###form_dismiss", "Dismiss", "", .Ghost, disabled = f.sending).clicked { dismiss = true }
 			ui.spacer(ui.fill())
 			if wizard && f.page > 0 {
-				if bevel_button("###form_prev", "Back", ICO_BACK, .Normal).clicked { f.page -= 1 }
+				if bevel_button("###form_prev", "Back", lucide.ARROW_LEFT, .Normal).clicked { f.page -= 1 }
 				ui.spacer(ui.px(em * 0.4))
 			}
 			if wizard && !reviewing {
-				if bevel_button("###form_next", f.page == len(pages) - 1 ? "Review" : "Next", ICO_FORWARD, .Accent).clicked { next = true }
+				if bevel_button("###form_next", f.page == len(pages) - 1 ? "Review" : "Next", lucide.ARROW_RIGHT, .Accent).clicked { next = true }
 			} else {
-				if bevel_button("###form_send", "Send", ICO_CHECK, .Accent, disabled = f.sending).clicked { send = true }
+				if bevel_button("###form_send", "Send", lucide.CHECK, .Accent, disabled = f.sending).clicked { send = true }
 			}
 			ui.spacer(ui.px(em))
 		}
@@ -378,7 +379,7 @@ form_tabs :: proc(f: ^Form_Req, pages: []int, em: f32) {
 		for p, k in pages {
 			fd := &f.fields[p]
 			name := fd.title != "" ? fd.title : fmt.tprintf("Question %d", k + 1)
-			if bevel_button(fmt.tprintf("###form_tab%d", k), label_safe(name), field_answer(fd) != "" ? ICO_CHECK : "", f.page == k ? .Toggled : .Ghost, ui.fill(), h).clicked { f.page = k }
+			if bevel_button(fmt.tprintf("###form_tab%d", k), label_safe(name), field_answer(fd) != "" ? lucide.CHECK : "", f.page == k ? .Toggled : .Ghost, ui.fill(), h).clicked { f.page = k }
 			ui.spacer(ui.px(em * 0.25))
 		}
 		if bevel_button("###form_tab_review", "Review", "", f.page == len(pages) ? .Toggled : .Ghost, ui.fill(), h).clicked { f.page = len(pages) }
@@ -461,7 +462,7 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 	case "boolean":
 		ui.toggle("###on", "", &fd.on)
 	case "external":
-		if fd.url != "" && bevel_button("###open", "Open", ICO_GLOBE, .Normal).clicked { _ = platform.open_url(fd.url) }
+		if fd.url != "" && bevel_button("###open", "Open", lucide.GLOBE, .Normal).clicked { _ = platform.open_url(fd.url) }
 	case "multiselect":
 		for o, k in fd.options {
 			ui.checkbox(fmt.tprintf("###form_o%d", k), label_safe(option_label(o)), &fd.picks[k])

@@ -13,6 +13,7 @@ import "core:strings"
 import "gt:config"
 import "gt:draw"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Pal_Kind :: enum u8 { Command, Session, Agent, Model, Slash, Switch }
 
@@ -126,30 +127,30 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 		for &s in app.sessions {
 			if s.parent != "" { continue }
 			if !searching && only == 0 && shown == PALETTE_SESSIONS { break }
-			append(&items, Pal_Item{kind = .Session, id = s.id, title = s.title != "" ? s.title : "Untitled", detail = base_name(s.directory), icon = ICO_CHAT})
+			append(&items, Pal_Item{kind = .Session, id = s.id, title = s.title != "" ? s.title : "Untitled", detail = base_name(s.directory), icon = lucide.MESSAGE_SQUARE})
 			shown += 1
 		}
 	}
 	if searching || only != 0 {
 		if want(only, '/') {
-			for s in app.cx.slash { append(&items, Pal_Item{kind = .Slash, id = s.name, title = fmt.tprintf("/%s", s.name), detail = s.description, icon = ICO_TERMINAL}) }
+			for s in app.cx.slash { append(&items, Pal_Item{kind = .Slash, id = s.name, title = fmt.tprintf("/%s", s.name), detail = s.description, icon = lucide.SQUARE_TERMINAL}) }
 		}
 		if want(only, '@') {
 			for a in app.agents {
 				if a.mode == "subagent" { continue }
-				append(&items, Pal_Item{kind = .Agent, id = a.id, title = fmt.tprintf("Agent: %s", a.name != "" ? a.name : a.id), detail = a.description, icon = ICO_ROBOT, toggle = true, on = a.id == shown_agent(app)})
+				append(&items, Pal_Item{kind = .Agent, id = a.id, title = fmt.tprintf("Agent: %s", a.name != "" ? a.name : a.id), detail = a.description, icon = lucide.BOT, toggle = true, on = a.id == shown_agent(app)})
 			}
 		}
 		if want(only, '#') {
 			shown, shown_provider := shown_model(app)
 			for m, i in app.models {
-				append(&items, Pal_Item{kind = .Model, id = fmt.tprintf("%s/%s", m.provider, m.id), title = m.name != "" ? m.name : m.id, detail = m.provider, icon = ICO_CHIP, index = i, toggle = true, on = m.id == shown && m.provider == shown_provider})
+				append(&items, Pal_Item{kind = .Model, id = fmt.tprintf("%s/%s", m.provider, m.id), title = m.name != "" ? m.name : m.id, detail = m.provider, icon = lucide.CPU, index = i, toggle = true, on = m.id == shown && m.provider == shown_provider})
 			}
 		}
 		if want(only, ':') {
 			for d in PREF_DEFS {
 				if d.kind != .Bool { continue }
-				append(&items, Pal_Item{kind = .Switch, id = d.name, title = d.name, detail = ellipsize(d.description, 60), icon = ICO_SLIDERS, toggle = true, on = config.bool_of(&app.cfg_prefs, d.name)})
+				append(&items, Pal_Item{kind = .Switch, id = d.name, title = d.name, detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, on = config.bool_of(&app.cfg_prefs, d.name)})
 			}
 		}
 	}
@@ -220,7 +221,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
 			if well("###pal_well", .X, radius = 8, focus = 1) {
 				ui.spacer(ui.px(em * 0.6))
-				glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
+				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 				if ui.tags("bare") {
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.35, font_size = math.round(em * FS_BODY)})
 					res := ui.line_edit("###pal_field", &p.field, "Search commands, sessions, agents, models…")
@@ -278,7 +279,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 					ui.spacer(ui.px(em * 0.7))
 					if it.detail != "" { text("d", it.detail, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill()) } else { ui.spacer(ui.fill()) }
 					ui.spacer(ui.px(em * 0.5))
-					if it.toggle && it.on { glyph(ICO_CHECK, accent(), math.round(em * ICON_SMALL)); ui.spacer(ui.px(em * 0.4)) }
+					if it.toggle && it.on { glyph(lucide.CHECK, accent(), math.round(em * ICON_SMALL)); ui.spacer(ui.px(em * 0.4)) }
 					if it.keys != "" {
 						text("k", it.keys, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 					}

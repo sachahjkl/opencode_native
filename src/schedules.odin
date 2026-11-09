@@ -13,6 +13,7 @@ import "core:path/filepath"
 import "core:strings"
 import "gt:platform"
 import "gt:ui"
+import lucide "gt:lucide"
 
 ////////////////////////////////
 // Schedules
@@ -291,7 +292,7 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, w, em: f32) {
 		text("x", schedule_next(it, now), hex(it.status == .Active ? HEX_TEXT_SOFT : HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.px(em * 0.6))
 		if it.id == s.removing {
-			if bevel_button("###sc_yes", "Delete", ICO_DELETE, .Danger, height = small).clicked {
+			if bevel_button("###sc_yes", "Delete", lucide.TRASH_2, .Danger, height = small).clicked {
 				request(app, .Schedule_Done, "DELETE", fmt.tprintf("/api/experimental/schedule/%s", url_escape(it.id)))
 				set_text(&s.removing, "")
 			}
@@ -306,7 +307,7 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, w, em: f32) {
 				ui.spacer(ui.px(em * 0.3))
 			}
 			ui.a11y({role = .Button, name = "Delete"})
-			if bevel_button("###sc_del", words ? "Delete" : "", ICO_DELETE, .Ghost, height = small).clicked { set_text(&s.removing, it.id) }
+			if bevel_button("###sc_del", words ? "Delete" : "", lucide.TRASH_2, .Ghost, height = small).clicked { set_text(&s.removing, it.id) }
 		}
 	}
 }
@@ -343,7 +344,7 @@ schedule_form :: proc(app: ^App, w, em: f32) {
 		if field_line("###sc_value", &s.value, WHEN_MODES[s.mode].hint, em, unit = WHEN_MODES[s.mode].unit).committed { go = true }
 		ui.spacer(ui.px(em * 0.5))
 		making := s.making.state == .Loading
-		if bevel_button("###sc_go", making ? "Planning…" : "Plan it", ICO_CHECK, .Accent, height = math.round(em * FIELD_H_EM), disabled = making).clicked { go = true }
+		if bevel_button("###sc_go", making ? "Planning…" : "Plan it", lucide.CHECK, .Accent, height = math.round(em * FIELD_H_EM), disabled = making).clicked { go = true }
 	}
 	if s.problem != "" || remote_failed(&s.making) {
 		ui.spacer(ui.px(em * 0.4))
@@ -528,7 +529,7 @@ artifacts_dialog :: proc(app: ^App, em: f32) {
 						row := ui.build_box({.Clickable}, fmt.tprintf("###arr%d", i))
 						if ui.signal(row).clicked { artifact_show(app, it.id) }
 						if ui.parent(row) {
-							glyph(ICO_DOC, hex(it.id == a.shown ? HEX_BRIGHT : HEX_FAINT), math.round(em * ICON_SMALL), em * 1.1)
+							glyph(lucide.FILE, hex(it.id == a.shown ? HEX_BRIGHT : HEX_FAINT), math.round(em * ICON_SMALL), em * 1.1)
 							ui.spacer(ui.px(em * 0.3))
 							text("n", it.title, hex(it.id == a.shown ? HEX_BRIGHT : HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 						}
@@ -557,7 +558,7 @@ artifact_right :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###ar_bar") {
 		text("p", it.provider, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)}, ui.fill())
 		if it.id == a.removing {
-			if bevel_button("###ar_yes", "Delete", ICO_DELETE, .Danger, height = small).clicked {
+			if bevel_button("###ar_yes", "Delete", lucide.TRASH_2, .Danger, height = small).clicked {
 				q := location_query(a.dir)
 				request(app, .Artifact_Done, "DELETE", fmt.tprintf("/api/experimental/artifacts/%s%s%s", url_escape(it.id), q != "" ? "?" : "", q))
 				set_text(&a.removing, ""); set_text(&a.shown, "")
@@ -569,10 +570,10 @@ artifact_right :: proc(app: ^App, em: f32) {
 			if bevel_button("###ar_no", "Keep", "", .Normal, height = small).clicked { set_text(&a.removing, "") }
 		} else {
 			ui.a11y({role = .Button, name = "Open in the browser"})
-			if bevel_button("###ar_open", words ? "Open in the browser" : "", ICO_GLOBE, .Accent, height = small, disabled = !artifact_can_open(a, it)).clicked { artifact_view(a, it) }
+			if bevel_button("###ar_open", words ? "Open in the browser" : "", lucide.GLOBE, .Accent, height = small, disabled = !artifact_can_open(a, it)).clicked { artifact_view(a, it) }
 			ui.spacer(ui.px(em * 0.3))
 			ui.a11y({role = .Button, name = "Delete"})
-			if bevel_button("###ar_del", words ? "Delete" : "", ICO_DELETE, .Ghost, height = small).clicked { set_text(&a.removing, it.id) }
+			if bevel_button("###ar_del", words ? "Delete" : "", lucide.TRASH_2, .Ghost, height = small).clicked { set_text(&a.removing, it.id) }
 		}
 	}
 	ui.spacer(ui.px(em * 0.4))
@@ -682,7 +683,7 @@ page_plugins :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###pl_bar") {
 		small := math.round(em * BUTTON_COMPACT_H_EM)
 		checking := p.check.state == .Loading
-		if bevel_button("###pl_check", checking ? "Checking…" : "Check for updates", ICO_REFRESH, .Normal, height = small, disabled = checking).clicked {
+		if bevel_button("###pl_check", checking ? "Checking…" : "Check for updates", lucide.REFRESH_CW, .Normal, height = small, disabled = checking).clicked {
 			remote_begin(&p.check)
 			request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", remote = &p.check)
 		}
@@ -701,7 +702,7 @@ plugin_row :: proc(app: ^App, it: ^Plugin, i: int, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###plr%d", i)) {
 		color: u32 = it.failed ? HEX_RED : it.outdated ? HEX_YELLOW : HEX_FAINT
-		glyph(it.failed ? ICO_WARN : ICO_PLUG, hex(color), math.round(em * ICON_SMALL), em * 1.2)
+		glyph(it.failed ? lucide.TRIANGLE_ALERT : lucide.PLUG, hex(color), math.round(em * ICON_SMALL), em * 1.2)
 		ui.spacer(ui.px(em * 0.3))
 		name := it.id != "" ? it.id : it.target != "" ? it.target : it.kind
 		text("n", name, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())

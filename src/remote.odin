@@ -9,6 +9,7 @@ import "core:mem"
 import "core:mem/virtual"
 import "core:strings"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Load_State :: enum u8 { Idle, Loading, Ready, Refused, Failed }
 
@@ -66,7 +67,7 @@ read_shown :: proc(app: ^App, id: string, x: ^Remote, em: f32, ask: proc(app: ^A
 	info_line(app, id, words, em, hex(color))
 	if again {
 		ui.spacer(ui.px(em * 0.4))
-		if bevel_button(fmt.tprintf("%s_again", id), "Try again", ICO_REFRESH, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { ask(app) }
+		if bevel_button(fmt.tprintf("%s_again", id), "Try again", lucide.REFRESH_CW, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { ask(app) }
 	}
 	return false
 }

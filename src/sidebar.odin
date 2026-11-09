@@ -8,6 +8,7 @@ import "core:hash"
 import "core:math"
 import "core:strings"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Sidebar_Mode :: enum u8 { Inbox, Projects }
 
@@ -229,7 +230,7 @@ inbox_header :: proc(app: ^App, sec: ^Side_Section, folded: bool, em: f32) {
 	if hs.clicked { app.folded[sec.key] = !folded }
 	if ui.parent(hdr) {
 		ui.spacer(ui.px(em * 0.8))
-		glyph(folded ? ICO_RIGHT : ICO_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
+		glyph(folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
 		ui.spacer(ui.px(em * 0.2))
 		text("n", strings.to_upper(sec.title, context.temp_allocator), hs.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.px(em * 0.4))

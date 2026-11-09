@@ -20,6 +20,7 @@ import "gt:draw"
 import "gt:platform"
 import "gt:render"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Image_Encoding :: enum i32 { Bytes = 0, Base64 = 1, Data_Url = 2 }
 
@@ -521,7 +522,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.3))
 				if bevel_button("###zoom_fit", "Fit", "", .Normal, height = bh).clicked { app.view_zoom, app.view_pan = 1, {} }
 				ui.spacer(ui.px(em * 0.8))
-				if bevel_button("###close", "Close", ICO_CANCEL, .Normal, height = bh).clicked { app.view_open = false }
+				if bevel_button("###close", "Close", lucide.X, .Normal, height = bh).clicked { app.view_open = false }
 				ui.spacer(ui.px(em))
 			}
 		}

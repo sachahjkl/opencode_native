@@ -27,6 +27,7 @@ import "gt:draw"
 import "gt:font"
 import "gt:platform"
 import "gt:ui"
+import lucide "gt:lucide"
 
 // In the program, which is one file: the licence asks to go with the code.
 GHOSTTY_LICENSE :: #load("../assets/GHOSTTY-LICENSE.txt", string)
@@ -1016,12 +1017,12 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 		text("w", words, hex(t.link == .Closed ? HEX_WEAK : HEX_YELLOW), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		h := math.round(em * BUTTON_COMPACT_H_EM)
 		if t.link == .Closed {
-			if bevel_button("###term_restart", "Restart", ICO_REFRESH, .Normal, height = h, disabled = s.made.state == .Loading).clicked { term_restart(app, t) }
+			if bevel_button("###term_restart", "Restart", lucide.REFRESH_CW, .Normal, height = h, disabled = s.made.state == .Loading).clicked { term_restart(app, t) }
 		} else if t.given_up {
-			if bevel_button("###term_again", "Reconnect", ICO_REFRESH, .Normal, height = h).clicked { term_reconnect(app, t) }
+			if bevel_button("###term_again", "Reconnect", lucide.REFRESH_CW, .Normal, height = h).clicked { term_reconnect(app, t) }
 		}
 		ui.spacer(ui.px(em * 0.3))
-		if bevel_button("###term_close", "Close", ICO_CANCEL, .Ghost, height = h).clicked { s.close_due = t.panel }
+		if bevel_button("###term_close", "Close", lucide.X, .Ghost, height = h).clicked { s.close_due = t.panel }
 		ui.spacer(ui.px(em * 0.6))
 	}
 }
@@ -1050,7 +1051,7 @@ terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
 // What a right click on a shell's grid offers: its selection, what the clipboard holds, the whole screen; a command's output, all of it.
 @(private = "file")
 term_menu :: proc(app: ^App, t: ^Term) {
-	if ui.menu_item("Copy", t.read_only ? "Ctrl+C" : "Ctrl+Shift+C", icon = ICO_COPY, enabled = t.has_selection).clicked {
+	if ui.menu_item("Copy", t.read_only ? "Ctrl+C" : "Ctrl+Shift+C", icon = lucide.COPY, enabled = t.has_selection).clicked {
 		clip_set(term_selection_text(t))
 	}
 	if !t.read_only && ui.menu_item("Paste", "Ctrl+Shift+V").clicked { term_paste(app, t) }
@@ -1091,7 +1092,7 @@ terminal_strip_end :: proc(app: ^App, d: ^ui.Dock, leaf: i32, em: f32) {
 	}
 	if any == nil && !stand_in { return }
 	ui.a11y({role = .Button, name = "New terminal"})
-	if glyph_button("###term_new", ICO_ADD, math.round(em * TERM_NEW_EM)).clicked {
+	if glyph_button("###term_new", lucide.PLUS, math.round(em * TERM_NEW_EM)).clicked {
 		if any != nil { s.last_panel = any.panel }   // (in this stack, whichever had the keyboard)
 		term_create(app)
 	}

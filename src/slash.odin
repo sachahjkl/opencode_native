@@ -6,6 +6,7 @@ package occ
 import "core:slice"
 import "core:strings"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Slash_Pick :: struct {
 	open:      bool,
@@ -99,7 +100,7 @@ slash_list :: proc(app: ^App, em: f32) {
 	if !slash_shown(app) { return }
 	hits := slash_matches(app, p.query)
 	rows := make([]Completion_Row, len(hits), context.temp_allocator)
-	for at, k in hits { rows[k] = {ICO_TERMINAL, strings.concatenate({"/", app.cx.slash[at].name}, context.temp_allocator), app.cx.slash[at].description} }
+	for at, k in hits { rows[k] = {lucide.SQUARE_TERMINAL, strings.concatenate({"/", app.cx.slash[at].name}, context.temp_allocator), app.cx.slash[at].description} }
 	clicked: int
 	clicked, p.list = completion_list(app, "###slash_list", rows, p.sel, em)
 	if clicked >= 0 { slash_choose(app, hits[clicked]) }

@@ -8,6 +8,7 @@ import "core:strings"
 import "gt:draw"
 import "gt:platform"
 import "gt:ui"
+import lucide "gt:lucide"
 
 // Odd 64-bit constants that spread the bits of what they multiply.
 HASH_MIX_A :: 0x9e3779b97f4a7c15
@@ -365,7 +366,7 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 			ui.next({fixed_x = tw - sz - m, fixed_y = m, width = ui.px(sz), height = ui.px(sz), axis = .X})
 			if ui.row(id = "###tcopy") {
 				ui.a11y({role = .Button, name = "Copy the table"})
-				sig := glyph_button("###copy", ICO_COPY, sz)
+				sig := glyph_button("###copy", lucide.COPY, sz)
 				if sig.clicked {
 					html := table_html(cells, aligns)
 					_ = platform.clipboard_set(the_app.win, {text = strings.join(lines, "\n", context.temp_allocator), html = html})
@@ -518,11 +519,11 @@ code_block :: proc(id: string, lang: string, code: string, table := false, versi
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###hdr") {
 				ui.spacer(ui.px(em * 0.7))
-				glyph(ICO_CODE, hex(HEX_FAINT), math.round(em * ICON_SMALL), em)
+				glyph(lucide.CODE, hex(HEX_FAINT), math.round(em * ICON_SMALL), em)
 				ui.spacer(ui.px(em * 0.3))
 				text("lang", lang != "" ? lang : "text", hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.fill())
-				if glyph_button("###copy", ICO_COPY, math.round(em * 1.6)).clicked {
+				if glyph_button("###copy", lucide.COPY, math.round(em * 1.6)).clicked {
 					platform.set_clipboard(the_app.win, code)
 					ui.toast(.Good, "Copied")
 				}

@@ -22,6 +22,7 @@ import "gt:platform"
 import "gt:render"
 import setup "gt:setup"
 import "gt:ui"
+import lucide "gt:lucide"
 
 // A face of the fonts. (Inside App, `font` names the face of the interface, from host.Shared: not the package.)
 Face_Id :: font.Font_Id
@@ -508,13 +509,12 @@ Own_Faces :: struct { ui, prose, mono: [4]font.Font_Id, mono_bold: font.Font_Id 
 PROSE_OWN_SCALE  :: 1.08   // Newsreader's small letters are low: larger than the text around it, to read as large
 PROSE_LINE_RATIO :: 1.36   // of the answers' size: the height of their lines
 
-LUCIDE_TTF :: #load("../assets/fonts/lucide.ttf")
 
 // The fonts that do not change: the icons (Lucide, embedded) and the toolkit's own glyphs. The faces of the text come
 // from the preferences (fonts_apply).
 load_fonts :: proc(app: ^App) -> bool {
 	ok: bool
-	if app.icons, ok = font.load_embedded(&app.fonts, LUCIDE_TTF); !ok { return false }
+	if app.icons, ok = font.load_embedded(&app.fonts, lucide.DATA); !ok { return false }
 	app.tk_icons, _ = font.load_embedded(&app.fonts, ui.ICON_FONT_DATA)
 	app.font, ok = font.load_embedded(&app.fonts, font.FALLBACK_UI_DATA)   // (until the preferences are read)
 	app.mono, _ = font.load_embedded(&app.fonts, font.FALLBACK_MONO_DATA)

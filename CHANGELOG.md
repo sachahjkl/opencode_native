@@ -5,6 +5,10 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+
+- **The icons are gui_toolkit's** (gui_toolkit 0.128.0): the Lucide font and the names of its icons come from the toolkit's `lucide` package, shared with Wren, instead of a copy of the font and constants of opencode native's own. The same icons.
+
 ## [0.31.0] - 2026-11-09
 
 ### Changed

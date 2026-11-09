@@ -15,6 +15,7 @@ import "core:strings"
 import "gt:draw"
 import "gt:platform"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Output_View :: struct {
 	term:     ^Term,           // (not in the terminal's list: no tab, no socket)
@@ -333,13 +334,13 @@ output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
 		}
 		ui.spacer(ui.px(em * 0.8))
 		h := math.round(em * BUTTON_SMALL_H_EM)
-		if bevel_button("###out_copy", "Copy", ICO_COPY, .Ghost, height = h, disabled = len(v.raw) == 0, quiet = true).clicked {
+		if bevel_button("###out_copy", "Copy", lucide.COPY, .Ghost, height = h, disabled = len(v.raw) == 0, quiet = true).clicked {
 			clip_set(plain_output(string(v.raw[:])))
 			ui.toast(.Good, "Output copied")
 		}
 		if !in_window {
 			ui.spacer(ui.px(em * 0.2))
-			if bevel_button("###out_win", "Window", ICO_WINDOW, .Ghost, height = h, quiet = true).clicked { app.cx.outputs.window = v }
+			if bevel_button("###out_win", "Window", lucide.APP_WINDOW, .Ghost, height = h, quiet = true).clicked { app.cx.outputs.window = v }
 		}
 		if !in_window || v.seen_end {
 			ui.spacer(ui.px(em * 0.2))

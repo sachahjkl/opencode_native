@@ -8,6 +8,7 @@ import "core:fmt"
 import "core:math"
 import "core:strings"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Ctx_Kind :: enum u8 { None, Message, Tool, Composer, Image }
 
@@ -81,7 +82,7 @@ fork_from :: proc(app: ^App, m: ^Message) {
 
 @(private = "file")
 fork_item :: proc(app: ^App, m: ^Message) {
-	if ui.menu_item(m.streaming ? "Fork before this answer" : "Fork from here", icon = ICO_COPY).clicked { fork_from(app, m) }
+	if ui.menu_item(m.streaming ? "Fork before this answer" : "Fork from here", icon = lucide.COPY).clicked { fork_from(app, m) }
 }
 
 @(private = "file")
@@ -139,54 +140,54 @@ message_menu :: proc(app: ^App, m: ^Message) {
 	}
 	switch m.kind {
 	case .User:
-		if ui.menu_item("Copy", "", icon = ICO_COPY).clicked { copied(m.text, "Prompt") }
-		if ui.menu_item("Edit in the composer", icon = ICO_EDIT).clicked {
+		if ui.menu_item("Copy", "", icon = lucide.COPY).clicked { copied(m.text, "Prompt") }
+		if ui.menu_item("Edit in the composer", icon = lucide.PENCIL).clicked {
 			ui.area_set(&app.composer, m.text)
 			app.cx.focus_composer = true
 		}
 		ui.menu_separator()
 		fork_item(app, m)
-		if ui.menu_item("What this prompt changed", icon = ICO_DOC).clicked { changes_open(app, app.chat.id, m.id) }
-		if ui.menu_item("Go back to here…", icon = ICO_UNDO, enabled = !app.chat.busy).clicked { revert_stage(app, app.chat.id, m.id, m.text) }
+		if ui.menu_item("What this prompt changed", icon = lucide.FILE).clicked { changes_open(app, app.chat.id, m.id) }
+		if ui.menu_item("Go back to here…", icon = lucide.UNDO_2, enabled = !app.chat.busy).clicked { revert_stage(app, app.chat.id, m.id, m.text) }
 	case .Assistant:
 		t := answer_text(m)
-		if ui.menu_item("Copy the answer", icon = ICO_COPY, enabled = t != "").clicked { copied(t, "Answer") }
+		if ui.menu_item("Copy the answer", icon = lucide.COPY, enabled = t != "").clicked { copied(t, "Answer") }
 		if url := first_url(t); url != "" {
-			if ui.menu_item("Open the link", icon = ICO_GLOBE).clicked { preview_open(app, url) }
+			if ui.menu_item("Open the link", icon = lucide.GLOBE).clicked { preview_open(app, url) }
 		}
 		ui.menu_separator()
 		fork_item(app, m)
 	case .Synthetic, .Shell:
-		if ui.menu_item("Copy", icon = ICO_COPY, enabled = m.text != "").clicked { copied(m.text, "Text") }
-		if m.shell_id != "" { if ui.menu_item("Inspect the output", icon = ICO_TERMINAL).clicked { output_view_open_shell(app, m.shell_id, m.text, chat_dir(app)) } }
+		if ui.menu_item("Copy", icon = lucide.COPY, enabled = m.text != "").clicked { copied(m.text, "Text") }
+		if m.shell_id != "" { if ui.menu_item("Inspect the output", icon = lucide.SQUARE_TERMINAL).clicked { output_view_open_shell(app, m.shell_id, m.text, chat_dir(app)) } }
 		ui.menu_separator()
 		fork_item(app, m)
 	case .Compaction, .Idle, .Other:
-		if ui.menu_item("Copy", icon = ICO_COPY, enabled = m.text != "").clicked { copied(m.text, "Text") }
+		if ui.menu_item("Copy", icon = lucide.COPY, enabled = m.text != "").clicked { copied(m.text, "Text") }
 	}
 }
 
 // (`m` holds the call: most of an answer at work is its tool calls, and a press on one comes here.)
 @(private = "file")
 tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
-	if ui.menu_item("Copy the output", icon = ICO_COPY, enabled = p.output != "").clicked { copied(p.output, "Output") }
-	if p.patch != "" { if ui.menu_item("Copy the diff", icon = ICO_COPY).clicked { copied(p.patch, "Diff") } }
+	if ui.menu_item("Copy the output", icon = lucide.COPY, enabled = p.output != "").clicked { copied(p.output, "Output") }
+	if p.patch != "" { if ui.menu_item("Copy the diff", icon = lucide.COPY).clicked { copied(p.patch, "Diff") } }
 	if c := input_field(p, "command"); c != "" {
-		if ui.menu_item("Copy the command", icon = ICO_TERMINAL).clicked { copied(c, "Command") }
+		if ui.menu_item("Copy the command", icon = lucide.SQUARE_TERMINAL).clicked { copied(c, "Command") }
 	}
 	if tool_kind(p.tool_name) == .Shell && output_view_can(p) {
-		if ui.menu_item("Inspect the output", icon = ICO_TERMINAL).clicked { output_view_open_part(app, p) }
+		if ui.menu_item("Inspect the output", icon = lucide.SQUARE_TERMINAL).clicked { output_view_open_part(app, p) }
 	}
 	path := input_field(p, "filePath")
 	if path == "" { path = input_field(p, "path") }
 	if path != "" {
-		if ui.menu_item("Copy the path", icon = ICO_DOC).clicked { copied(path, "Path") }
-		if ui.menu_item("Show in the folder", icon = ICO_FOLDER).clicked { reveal_path(path) }
+		if ui.menu_item("Copy the path", icon = lucide.FILE).clicked { copied(path, "Path") }
+		if ui.menu_item("Show in the folder", icon = lucide.FOLDER).clicked { reveal_path(path) }
 	}
 	if ui.menu_item("Copy the input", enabled = p.input != "").clicked { copied(p.input, "Input") }
 	if url := first_url(p.output); url != "" {
 		ui.menu_separator()
-		if ui.menu_item("Open the link", icon = ICO_GLOBE).clicked { preview_open(app, url) }
+		if ui.menu_item("Open the link", icon = lucide.GLOBE).clicked { preview_open(app, url) }
 	}
 	ui.menu_separator()
 	fork_item(app, m)
@@ -206,7 +207,7 @@ context_menu :: proc(app: ^App, em: f32) {
 			if m := find_msg(app, app.cx.ctx.msg); m != nil && app.cx.ctx.part < len(m.parts) { tool_menu(app, m, &m.parts[app.cx.ctx.part]) }
 		case .Image:
 			image := app.cx.ctx.image
-			if ui.menu_item("Copy image", app.view_open ? "Ctrl+C" : "", icon = ICO_COPY).clicked { image_copy(app, image) }
+			if ui.menu_item("Copy image", app.view_open ? "Ctrl+C" : "", icon = lucide.COPY).clicked { image_copy(app, image) }
 			if !app.view_open {
 				if ui.menu_item("Open in the viewer").clicked { image_view_open(app, image) }
 			}
@@ -371,7 +372,7 @@ rename_dialog :: proc(app: ^App, em: f32) {
 					ui.spacer(ui.fill())
 					if bevel_button("###c", "Cancel", "", .Normal).clicked { r.open = false }
 					ui.spacer(ui.px(em * 0.5))
-					if bevel_button("###ok", "Rename", ICO_CHECK, .Accent).clicked { rename_commit(app) }
+					if bevel_button("###ok", "Rename", lucide.CHECK, .Accent).clicked { rename_commit(app) }
 				}
 				ui.spacer(ui.px(em))
 			}

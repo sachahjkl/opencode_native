@@ -14,6 +14,7 @@ import "gt:config"
 import "gt:draw"
 import "gt:platform"
 import "gt:ui"
+import lucide "gt:lucide"
 
 // (Panel.Terminal: while there is no shell. The shells are panels too, from TERM_PANEL_BASE.)
 Panel :: enum u32 { Conversation = 1, Preview, Terminal, Stats }
@@ -116,7 +117,7 @@ strip_end :: proc(user: rawptr, d: ^ui.Dock, leaf: i32) {
 	em := ui.font_size()
 	if p := panel_in_front(app, leaf); p != 0 {
 		ui.a11y({role = .Button, name = "Open in a window"})
-		if glyph_button("###panel_win", ICO_WINDOW, math.round(em * TERM_NEW_EM)).clicked { panel_detach(app, p) }
+		if glyph_button("###panel_win", lucide.APP_WINDOW, math.round(em * TERM_NEW_EM)).clicked { panel_detach(app, p) }
 	}
 	terminal_strip_end(app, d, leaf, em)
 }
@@ -423,7 +424,7 @@ preview_strip :: proc(app: ^App, p: ^Preview, em: f32) {
 				ui.spacer(ui.px(em * 0.6))
 				text("t", ellipsize(title, PREVIEW_TAB_TITLE_MOST), col, ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 				ui.a11y({role = .Button, name = "Close this tab"})
-				if glyph_button("###pv_tab_x", ICO_CANCEL, math.round(em * GLYPH_BUTTON_EM * 0.75)).clicked { p.due_close = t }
+				if glyph_button("###pv_tab_x", lucide.X, math.round(em * GLYPH_BUTTON_EM * 0.75)).clicked { p.due_close = t }
 				ui.spacer(ui.px(em * 0.25))
 			}
 		}
@@ -463,9 +464,9 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 	if ui.row(.Center, id = "###pv_bar") {
 		ui.spacer(ui.px(em * 0.4))
 		size := math.round(em * GLYPH_BUTTON_EM)
-		if glyph_button("###pv_back", ICO_BACK, size).clicked { web_act(t, .Back) }
-		if glyph_button("###pv_fwd", ICO_RIGHT, size).clicked { web_act(t, .Forward) }
-		if glyph_button("###pv_reload", preview_loading(t) ? ICO_CANCEL : ICO_REFRESH, size).clicked { web_act(t, preview_loading(t) ? .Stop : .Reload) }
+		if glyph_button("###pv_back", lucide.ARROW_LEFT, size).clicked { web_act(t, .Back) }
+		if glyph_button("###pv_fwd", lucide.CHEVRON_RIGHT, size).clicked { web_act(t, .Forward) }
+		if glyph_button("###pv_reload", preview_loading(t) ? lucide.X : lucide.REFRESH_CW, size).clicked { web_act(t, preview_loading(t) ? .Stop : .Reload) }
 		ui.spacer(ui.px(em * 0.35))
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), axis = .X, cross = .Center})
 		if well("###pv_addr", .X, radius = 6) {
@@ -480,8 +481,8 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 		}
 		ui.spacer(ui.px(em * 0.35))
 		ui.a11y({role = .Button, name = "New browser tab"})
-		if glyph_button("###pv_new", ICO_ADD, size).clicked { p.due_new = true }
-		if glyph_button("###pv_out", ICO_GLOBE, size).clicked && t.url != "" { _ = platform.open_url(t.url) }
+		if glyph_button("###pv_new", lucide.PLUS, size).clicked { p.due_new = true }
+		if glyph_button("###pv_out", lucide.GLOBE, size).clicked && t.url != "" { _ = platform.open_url(t.url) }
 		ui.spacer(ui.px(em * 0.4))
 	}
 	edge_line("###pv_edge")
@@ -516,7 +517,7 @@ preview_panel :: proc(app: ^App, em: f32) {
 				text("m", msg, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 				if failed {
 					ui.spacer(ui.px(em * 0.5))
-					if bevel_button("###pv_again", "Try again", ICO_REFRESH, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { web_start(app, t) }
+					if bevel_button("###pv_again", "Try again", lucide.REFRESH_CW, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { web_start(app, t) }
 				}
 				ui.spacer(ui.fill())
 			}

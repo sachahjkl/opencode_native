@@ -12,6 +12,7 @@ import process "gt:process"
 import "gt:ui"
 import occ_update "update"
 import update "gt:update"
+import lucide "gt:lucide"
 
 // A version on offer: signed, and of the channel and the folder it was found in, whatever the preference says since. (owned)
 Update_Offer :: struct {
@@ -299,7 +300,7 @@ update_pill :: proc(app: ^App, em: f32) {
 	case Update_Checking:    return
 	case nil:                return
 	}
-	if pill_button("###update", label, accent(), ICO_REFRESH).clicked {
+	if pill_button("###update", label, accent(), lucide.REFRESH_CW).clicked {
 		if update_is_ready(u) { update_install(app) } else if update_is_installed(u) { update_restart(app) }
 	}
 	ui.spacer(ui.px(em * 0.6))

@@ -14,6 +14,7 @@ import "core:slice"
 import "core:strings"
 import "gt:draw"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Tool_Count :: struct { name: string, calls, failed: int, p50: f64 }
 Model_Count :: struct { name: string, steps: int, tokens_in, tokens_out, cost: f64 }
@@ -597,7 +598,7 @@ context_line :: proc(app: ^App, id, name, size, key: string, indent: f32, shade:
 	if ui.parent(b) {
 		ui.spacer(ui.px(em * (0.2 + indent)))
 		if opens {
-			glyph(context_open(app, key) ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em)
+			glyph(context_open(app, key) ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em)
 		} else {
 			ui.spacer(ui.px(em))
 		}

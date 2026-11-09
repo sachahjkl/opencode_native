@@ -12,6 +12,7 @@ import "core:time"
 import "gt:draw"
 import "gt:font"
 import "gt:ui"
+import lucide "gt:lucide"
 
 
 TOAST_TOP_EM          :: 5.5
@@ -197,7 +198,7 @@ title_bar :: proc(app: ^App, em: f32) {
 		b.custom = bar_draw
 		b.custom_user = d
 		ui.spacer(ui.px(em * 0.4))
-		msig := glyph_button("###appmenu", ICO_MENU, math.round(h * 0.78))
+		msig := glyph_button("###appmenu", lucide.MENU, math.round(h * 0.78))
 		menu_key := ui.key_from_string(0, "app_menu")
 		if msig.clicked { ui.ctx_menu_open_rect(menu_key, msig.box.rect, msig.box.key) }
 		app_menu(app, menu_key, em)
@@ -208,8 +209,8 @@ title_bar :: proc(app: ^App, em: f32) {
 			if sig.clicked { nav_step(app, d) }
 			if can && ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(tip) } }
 		}
-		nav_button(app, "###nav_back", ICO_BACK, "Back  (Alt+Left)", -1, math.round(h * 0.78))
-		nav_button(app, "###nav_fwd", ICO_FORWARD, "Forward  (Alt+Right)", 1, math.round(h * 0.78))
+		nav_button(app, "###nav_back", lucide.ARROW_LEFT, "Back  (Alt+Left)", -1, math.round(h * 0.78))
+		nav_button(app, "###nav_fwd", lucide.ARROW_RIGHT, "Forward  (Alt+Right)", 1, math.round(h * 0.78))
 		ui.spacer(ui.px(em * 0.4))
 		// the logo and the wordmark ("open" dim, "code" bright, "native" in the accent, in the mono face) go home, as on any site
 		ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .X, cross = .Center, cursor = .Hand})
@@ -230,7 +231,7 @@ title_bar :: proc(app: ^App, em: f32) {
 		side_line("###tg", b.last, em * 0.9)
 		ui.spacer(ui.px(em * 1.3))
 		if !app.servers[app.server].local {   // another computer's server: its name first
-			glyph(ICO_GLOBE, hex(HEX_CYAN), math.round(em * ICON_SMALL))
+			glyph(lucide.GLOBE, hex(HEX_CYAN), math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.3))
 			text("srv", server_name(app), hex(HEX_CYAN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			if app.chat.id != "" { text("srvsep", "  /  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}) }
@@ -293,9 +294,9 @@ sidebar :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###side_top") {
 			pad_row(em)
-			if bevel_button("###new", "New session", ICO_ADD, .Accent, ui.fill()).clicked { new_session(app) }
+			if bevel_button("###new", "New session", lucide.PLUS, .Accent, ui.fill()).clicked { new_session(app) }
 			ui.spacer(ui.px(em * 0.45))
-			if bevel_button("###refresh", "", ICO_REFRESH, .Normal).clicked { refresh_sessions(app) }
+			if bevel_button("###refresh", "", lucide.REFRESH_CW, .Normal).clicked { refresh_sessions(app) }
 			pad_row(em)
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -306,7 +307,7 @@ sidebar :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 			if well("###search_well", .X, radius = 7) {
 				ui.spacer(ui.px(em * 0.5))
-				glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
+				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 					ui.line_edit("###search", &app.search, "Search sessions")
@@ -396,10 +397,10 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 	if hs.clicked { app.folded[gkey] = !folded }
 	if ui.parent(hdr) {
 		ui.spacer(ui.px(em * 0.8))
-		glyph(folded ? ICO_RIGHT : ICO_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
+		glyph(folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
 		// the project's logo, else a folder
 		logo := len(gr.items) > 0 ? project_logo(app, app.sessions[gr.items[0]].project) : nil
-		if !logo_of(app, "###glogo", logo, math.round(em * 1.25)) { glyph(ICO_FOLDER, accent(), math.round(em * ICON_REGULAR)) }
+		if !logo_of(app, "###glogo", logo, math.round(em * 1.25)) { glyph(lucide.FOLDER, accent(), math.round(em * ICON_REGULAR)) }
 		ui.spacer(ui.px(em * 0.35))
 		name := gr.dir != "" ? base_name(gr.dir) : "(no folder)"
 		text("n", strings.to_upper(name, context.temp_allocator), hs.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
@@ -410,7 +411,7 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 		// it: the header is no longer the box under the pointer), shown while the header is hot (Hot_Within keeps it
 		// hot over its button)
 		plus_col := hdr.hot_t > FADE_VISIBLE ? hex(HEX_WEAK) : Color{0, 0, 0, 0.001}
-		if glyph_button("###gadd", ICO_ADD, math.round(em * 1.5), plus_col).clicked {
+		if glyph_button("###gadd", lucide.PLUS, math.round(em * 1.5), plus_col).clicked {
 			new_session(app)
 			delete(app.chat.new_dir, app.chat.alloc)
 			app.chat.new_dir = strings.clone(gr.dir, app.chat.alloc)
@@ -600,7 +601,7 @@ delete_dialog :: proc(app: ^App, em: f32) {
 					ui.spacer(ui.fill())
 					if bevel_button("###cancel", "Cancel", "", .Normal).clicked { app.delete_open = false }
 					ui.spacer(ui.px(em * 0.6))
-					if bevel_button("###confirm", "Delete", ICO_DELETE, .Danger).clicked {
+					if bevel_button("###confirm", "Delete", lucide.TRASH_2, .Danger).clicked {
 						delete_session(app, app.delete_id)
 						if app.delete_id == app.chat.id { new_session(app) }
 						nav_forget(app, app.delete_id)
@@ -810,7 +811,7 @@ go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
 	}
 	if ui.parent(b) {
 		ui.spacer(ui.fill())
-		glyph(ICO_DOWN, with_alpha(hex(HEX_TEXT_SOFT), t), math.round(em * ICON_SMALL))
+		glyph(lucide.CHEVRON_DOWN, with_alpha(hex(HEX_TEXT_SOFT), t), math.round(em * ICON_SMALL))
 		ui.spacer(ui.px(em * 0.3))
 		text("t", "Latest", with_alpha(hex(HEX_TEXT_SOFT), t), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.fill())
@@ -854,7 +855,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		if s == nil && app.chat.have_self { s = &app.chat.self }   // (a sub-agent, or an old session: not in the sidebar's list)
 		if back := back_target(app); back != "" {
 			// the way back up: to the session drilled down from, or the parent
-			if bevel_button("###back", "", ICO_BACK, .Normal, ui.px(math.round(em * BUTTON_H_EM)), math.round(em * BUTTON_H_EM)).clicked { go_back(app) }
+			if bevel_button("###back", "", lucide.ARROW_LEFT, .Normal, ui.px(math.round(em * BUTTON_H_EM)), math.round(em * BUTTON_H_EM)).clicked { go_back(app) }
 			ui.spacer(ui.px(em * 0.7))
 		}
 		if logo_of(app, "###hlogo", project_logo(app, chat_project(app)), math.round(em * 2.3)) { ui.spacer(ui.px(em * 0.7)) }
@@ -903,7 +904,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		// (narrow, as a panel of the dock: the title first, the figures are in the statistics)
 		narrow := editing || app.cx.docked_w > 0 && app.cx.docked_w < em * HEADER_FIGURES_MIN_EM
 		if !narrow && c.tokens_in + c.tokens_out > 0 {
-			if pill_button("###tok", fmt.tprintf("%s in · %s out", kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, ICO_BOLT).clicked { stats_toggle(app) }
+			if pill_button("###tok", fmt.tprintf("%s in · %s out", kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, lucide.ZAP).clicked { stats_toggle(app) }
 			ui.spacer(ui.px(em * 0.4))
 		}
 		if !narrow && c.cost > 0 {
@@ -912,7 +913,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		}
 		if c.busy {
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###stop", "Stop", ICO_STOP, .Danger, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { interrupt_session(app, c.id) }
+			if bevel_button("###stop", "Stop", lucide.SQUARE, .Danger, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { interrupt_session(app, c.id) }
 		}
 		ui.spacer(ui.px(em * 1.2))
 	}
@@ -1011,7 +1012,7 @@ chat_failed :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###read_retry") {
 		ui.spacer(ui.fill())
-		if bevel_button("###retry", "Try again", ICO_REFRESH, .Normal, disabled = !online(app)).clicked { chat_read(app) }
+		if bevel_button("###retry", "Try again", lucide.REFRESH_CW, .Normal, disabled = !online(app)).clicked { chat_read(app) }
 		ui.spacer(ui.fill())
 	}
 }
@@ -1025,9 +1026,9 @@ message :: proc(app: ^App, c: ^Chat, m: ^Message, i: int, em: f32) {
 		next := i + 1 < len(c.messages) ? &c.messages[i + 1] : nil
 		assistant_message(app, m, em, continues(prev, m), next != nil && continues(m, next) ? next : nil, prev)
 	case .Synthetic:
-		if m.sub_child != "" { subagent_result(app, m, em) } else { note_line(app, m, em, ICO_BOLT, m.text != "" ? first_line(m.text) : "synthetic message") }
-	case .Shell:       note_line(app, m, em, ICO_TERMINAL, fmt.tprintf("$ %s", m.text))
-	case .Compaction:  note_line(app, m, em, ICO_LIST, "Conversation compacted")
+		if m.sub_child != "" { subagent_result(app, m, em) } else { note_line(app, m, em, lucide.ZAP, m.text != "" ? first_line(m.text) : "synthetic message") }
+	case .Shell:       note_line(app, m, em, lucide.SQUARE_TERMINAL, fmt.tprintf("$ %s", m.text))
+	case .Compaction:  note_line(app, m, em, lucide.LIST, "Conversation compacted")
 	case .Idle:        if i < len(c.messages) - 1 { turn_end(app, m, em) }
 	case .Other:
 	}
@@ -1094,7 +1095,7 @@ user_message :: proc(app: ^App, m: ^Message, em: f32) {
 			if ui.column() {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 				if ui.row(.Center, id = "###who") {
-					glyph(ICO_PERSON, accent(), math.round(em * ICON_SMALL), em * 1.1)
+					glyph(lucide.USER, accent(), math.round(em * ICON_SMALL), em * 1.1)
 					ui.spacer(ui.px(em * 0.2))
 					text("you", "You", accent(), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 					ui.spacer(ui.fill())
@@ -1232,15 +1233,15 @@ head_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 
 tool_icon :: proc(name: string) -> string {
 	switch {
-	case strings.contains(name, "bash") || strings.contains(name, "shell") || strings.contains(name, "pty"): return ICO_TERMINAL
-	case name == "read" || name == "view":                                                             return ICO_DOC
-	case strings.contains(name, "edit") || name == "write" || strings.contains(name, "patch"):           return ICO_EDIT
-	case name == "glob" || name == "grep" || name == "list" || strings.contains(name, "search") || name == "find": return ICO_SEARCH
-	case strings.contains(name, "web") || strings.contains(name, "fetch") || strings.contains(name, "browser"): return ICO_GLOBE
-	case name == "task" || strings.contains(name, "agent"):                                              return ICO_ROBOT
-	case strings.contains(name, "todo"):                                                                 return ICO_LIST
+	case strings.contains(name, "bash") || strings.contains(name, "shell") || strings.contains(name, "pty"): return lucide.SQUARE_TERMINAL
+	case name == "read" || name == "view":                                                             return lucide.FILE
+	case strings.contains(name, "edit") || name == "write" || strings.contains(name, "patch"):           return lucide.PENCIL
+	case name == "glob" || name == "grep" || name == "list" || strings.contains(name, "search") || name == "find": return lucide.SEARCH
+	case strings.contains(name, "web") || strings.contains(name, "fetch") || strings.contains(name, "browser"): return lucide.GLOBE
+	case name == "task" || strings.contains(name, "agent"):                                              return lucide.BOT
+	case strings.contains(name, "todo"):                                                                 return lucide.LIST
 	}
-	return ICO_TOOL
+	return lucide.WRENCH
 }
 
 status_color :: proc(s: Tool_Status) -> Color {
@@ -1325,7 +1326,7 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 				if p.removed > 0 { text("rm", fmt.tprintf("−%d", p.removed), hex(HEX_RED), st); ui.spacer(ui.px(em * 0.3)) }
 				ui.spacer(ui.px(em * 0.2))
 			}
-			glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY))
+			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY))
 			ui.spacer(ui.px(em * 0.6))
 		}
 		// a shell call: it can go to the background while it holds the turn, and says so once it is there
@@ -1336,7 +1337,7 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 				if bg {
 					if bg_running { session_lamp("###bgl", LAMP_BACKGROUND, em); ui.spacer(ui.px(em * 0.35)) }
 					text("bgt", bg_running ? "in background" : "finished in background", hex(bg_running ? HEX_TEXT_SOFT : HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-				} else if hint_action("###bgpush", "push to background", em, app.mono, ICO_BACKGROUND) {
+				} else if hint_action("###bgpush", "push to background", em, app.mono, lucide.SEND_TO_BACK) {
 					background_session(app, app.chat.id)
 				}
 			}
@@ -1443,7 +1444,7 @@ reasoning_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 	if hs.clicked { part_toggle(app, pid, hb) }
 	if ui.parent(hb) {
 		ui.spacer(ui.px(em * 0.2))
-		glyph(ICO_BULB, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
+		glyph(lucide.LIGHTBULB, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 		ui.spacer(ui.px(em * 0.3))
 		// (a run over says no more about this part: it thought)
 		text("t", p.done || !app.chat.busy ? "Thought" : "Thinking…", hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
@@ -1451,7 +1452,7 @@ reasoning_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 		if !open {
 			text("pv", preview_text(string(p.text[:])), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		} else { ui.spacer(ui.fill()) }
-		glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY))
+		glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY))
 		ui.spacer(ui.px(em * 0.4))
 	}
 	if open {
@@ -1497,7 +1498,7 @@ permission_card :: proc(app: ^App, p: ^Permission, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###r") {
 			ui.spacer(ui.px(em))
-			glyph(ICO_SHIELD, hex(HEX_YELLOW), math.round(em * ICON_LARGE), em * 1.6)
+			glyph(lucide.SHIELD, hex(HEX_YELLOW), math.round(em * ICON_LARGE), em * 1.6)
 			ui.spacer(ui.px(em * 0.5))
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
@@ -1506,11 +1507,11 @@ permission_card :: proc(app: ^App, p: ^Permission, em: f32) {
 				text("d", detail, hex(HEX_PERM_DETAIL), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.4)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
-			if bevel_button("###once", "Allow once", ICO_CHECK, .Accent, disabled = p.replying).clicked { reply_permission(app, p, "once") }
+			if bevel_button("###once", "Allow once", lucide.CHECK, .Accent, disabled = p.replying).clicked { reply_permission(app, p, "once") }
 			ui.spacer(ui.px(em * 0.4))
 			if bevel_button("###always", "Always", "", .Normal, disabled = p.replying).clicked { reply_permission(app, p, "always") }
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###reject", "Reject", ICO_CANCEL, .Danger, disabled = p.replying).clicked { reply_permission(app, p, "reject") }
+			if bevel_button("###reject", "Reject", lucide.X, .Danger, disabled = p.replying).clicked { reply_permission(app, p, "reject") }
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -1590,18 +1591,18 @@ composer :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.6))
 			// what goes with the prompt, then who answers it and with what
 			ui.a11y({role = .Button, name = "Attach files"})
-			att := bevel_button("###attach", "", ICO_ATTACH, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true)
+			att := bevel_button("###attach", "", lucide.PAPERCLIP, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true)
 			if att.clicked { attach_pick(app) }
 			if ui.hovered_for(att, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Attach files: images, PDF, text  (or paste, or drop them here)") } }
 			ui.spacer(ui.px(em * 0.1))
 			agent := shown_agent(app)
 			if agent == "" { agent = "build" }
-			asig := bevel_button("###agent", agent, ICO_ROBOT, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "agent")
+			asig := bevel_button("###agent", agent, lucide.BOT, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "agent")
 			if asig.clicked { if app.picker.open && app.picker.id == "agent" { app.picker.open = false } else { picker_open(&app.picker, "agent", asig.box.rect) } }
 			ui.spacer(ui.px(em * 0.4))
 			model, _ := shown_model(app)
 			if model == "" { model = "default model" }
-			msig := bevel_button("###model", model, ICO_CHIP, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "model")
+			msig := bevel_button("###model", model, lucide.CPU, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "model")
 			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(&app.picker, "model", msig.box.rect) } }
 			ui.spacer(ui.fill())
 			held := composer_held(app)
@@ -1626,18 +1627,18 @@ composer :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.8))
 			composer_panels(app, em)
 			if app.chat.busy {
-				if bevel_button("###stop2", "", ICO_STOP, .Danger, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM)).clicked { interrupt_session(app, app.chat.id) }
+				if bevel_button("###stop2", "", lucide.SQUARE, .Danger, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM)).clicked { interrupt_session(app, app.chat.id) }
 				ui.spacer(ui.px(em * 0.4))
 			}
 			empty := len(strings.trim_space(ui.area_string(&app.composer))) == 0 && len(app.cx.attachments) == 0
 			// (what it does, while that is not what it usually does)
-			send_label, send_icon := "", ICO_SEND
+			send_label, send_icon := "", lucide.SEND_HORIZONTAL
 			if queue_editing(app) {
-				send_label, send_icon = "Save", ICO_CHECK
+				send_label, send_icon = "Save", lucide.CHECK
 			} else {
 				switch composer_send_as(app) {
 				case .Idle:
-				case .Queue: send_label, send_icon = "Queue", ICO_LIST
+				case .Queue: send_label, send_icon = "Queue", lucide.LIST
 				case .Steer: send_label = "Send now"
 				}
 			}
@@ -1684,8 +1685,8 @@ composer_panels :: proc(app: ^App, em: f32) {
 		if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(tip) } }
 		ui.spacer(ui.px(em * 0.4))
 	}
-	if preview_available() { panel(app, "###preview_btn", ICO_GLOBE, "Preview panel", "Preview panel  (Ctrl+Shift+B)", "view.preview", app.preview.open, size, em) }
-	panel(app, "###terminal_btn", ICO_TERMINAL, "Terminal", "Terminal  (Ctrl+Shift+T)", "view.terminal", app.cx.terms.open, size, em)
+	if preview_available() { panel(app, "###preview_btn", lucide.GLOBE, "Preview panel", "Preview panel  (Ctrl+Shift+B)", "view.preview", app.preview.open, size, em) }
+	panel(app, "###terminal_btn", lucide.SQUARE_TERMINAL, "Terminal", "Terminal  (Ctrl+Shift+T)", "view.terminal", app.cx.terms.open, size, em)
 }
 
 composer_pickers :: proc(app: ^App, agent: string, em: f32) {
@@ -1827,7 +1828,7 @@ status_bar :: proc(app: ^App, em: f32) {
 			}
 			text("st", fmt.tprintf("%s  %s", state, server_base(app)), up ? hex(HEX_WEAK) : col, small)
 			ui.spacer(ui.px(em * 0.35))
-			glyph(ICO_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY))
+			glyph(lucide.CHEVRON_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY))
 			ui.spacer(ui.px(em * 0.45))
 		}
 		server_menu(app, skey, em)

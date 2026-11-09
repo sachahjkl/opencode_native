@@ -8,6 +8,7 @@ import "core:strings"
 import "gt:draw"
 import "gt:font"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Color :: draw.Color
 Rect :: draw.Rect
@@ -137,48 +138,6 @@ flat :: proc() -> bool { return !ui.machined() }
 flat_edge :: proc(face: Color, hot: f32) -> Color { return draw.mix(hex(HEX_LINE), lighten(hex(HEX_LINE), 0.25), hot) }
 
 
-// The icons: Lucide on every system (assets/fonts/lucide.ttf, embedded: ISC licence, assets/fonts/LUCIDE-LICENSE.txt),
-// so they look the same everywhere and nothing depends on the fonts installed.
-ICO_ADD      :: "\ue13d"   // plus
-ICO_ATTACH   :: "\ue12d"   // paperclip
-ICO_BACKGROUND :: "\ue4f3"   // send-to-back
-ICO_SEND     :: "\ue4f2"   // send-horizontal
-ICO_STOP     :: "\ue167"   // square
-ICO_SEARCH   :: "\ue151"   // search
-ICO_FOLDER   :: "\ue0d7"   // folder
-ICO_DOWN     :: "\ue06d"   // chevron-down
-ICO_UP       :: "\ue070"   // chevron-up
-ICO_RIGHT    :: "\ue06f"   // chevron-right
-ICO_CHAT     :: "\ue117"   // message-square
-ICO_DELETE   :: "\ue18e"   // trash-2
-ICO_REFRESH  :: "\ue145"   // refresh-cw
-ICO_COPY     :: "\ue09e"   // copy
-ICO_CODE     :: "\ue093"   // code
-ICO_ROBOT    :: "\ue1bb"   // bot
-ICO_EDIT     :: "\ue1f9"   // pencil
-ICO_DOC      :: "\ue0c0"   // file
-ICO_TERMINAL :: "\ue20a"   // square-terminal
-ICO_GLOBE    :: "\ue0e8"   // globe
-ICO_WINDOW   :: "\ue426"   // app-window
-ICO_BULB     :: "\ue1c2"   // lightbulb
-ICO_CANCEL   :: "\ue1b2"   // x
-ICO_CHECK    :: "\ue06c"   // check
-ICO_WARN     :: "\ue193"   // triangle-alert
-ICO_SHIELD   :: "\ue158"   // shield
-ICO_BOLT     :: "\ue1b4"   // zap
-ICO_LIST     :: "\ue106"   // list
-ICO_TOOL     :: "\ue1b1"   // wrench
-ICO_PERSON   :: "\ue19f"   // user
-ICO_MENU     :: "\ue115"   // menu
-ICO_CHIP     :: "\ue0a9"   // cpu
-ICO_HISTORY  :: "\ue1f5"   // history
-ICO_PALETTE  :: "\ue1dd"   // palette
-ICO_SLIDERS  :: "\ue29a"   // sliders-horizontal
-ICO_PLUG     :: "\ue37f"   // plug
-ICO_GAUGE    :: "\ue1bf"   // gauge
-ICO_UNDO     :: "\ue2a1"   // undo-2
-ICO_BACK     :: "\ue048"   // arrow-left
-ICO_FORWARD  :: "\ue049"   // arrow-right
 
 // Sizes shared by several files (_EM: in font sizes, _PX: in logical pixels).
 BUTTON_H_EM         :: 2.1
@@ -323,7 +282,7 @@ dialog_close :: proc(open: ^bool) {
 	sig := ui.signal(b)
 	if ui.parent(b) {
 		ui.next({width = ui.fill(), height = ui.fill(), font = the_app.icons, font_size = math.round(em * ICON_REGULAR), fg = sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), text_align = .Center, text_pad = 0})
-		ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###g", ICO_CANCEL))
+		ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###g", lucide.X))
 	}
 	if sig.clicked { open^ = false }
 }

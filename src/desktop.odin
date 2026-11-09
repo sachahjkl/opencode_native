@@ -23,6 +23,7 @@ import desktop "gt:desktop"
 import "gt:platform"
 import process "gt:process"
 import setup "gt:setup"
+import lucide "gt:lucide"
 
 APP_NAME      :: "opencode native"
 // (said wherever this program presents itself: their README asks it of a project with "opencode" in its name, and it is the truth)
@@ -90,9 +91,9 @@ setup_config :: proc() -> setup.Config {
 setup_button :: proc(id, label: string, kind: setup.Button_Kind, em: f32, _: rawptr) -> bool {
 	icon := ""
 	switch id {
-	case "###setup_uninstall": icon = ICO_DELETE
-	case "###setup_install":   icon = ICO_CHECK
-	case "###setup_launch":    icon = ICO_RIGHT
+	case "###setup_uninstall": icon = lucide.TRASH_2
+	case "###setup_install":   icon = lucide.CHECK
+	case "###setup_launch":    icon = lucide.CHEVRON_RIGHT
 	}
 	k := Btn_Kind.Normal
 	switch kind {

@@ -11,6 +11,7 @@ import "core:strings"
 import "core:time"
 import "gt:draw"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Pick_Item :: struct {
 	label:   string,   // what is matched and shown
@@ -215,7 +216,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 			if well("###psw", .X, radius = 7, focus = 1) {
 				ui.spacer(ui.px(em * 0.5))
-				glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
+				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 					res := ui.line_edit("###pf", &p.field, fmt.tprintf("Search %s", title))
@@ -266,7 +267,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 				if row.hit < 0 {
 					if ui.parent(rb) {
 						ui.spacer(ui.px(em * 0.6))
-						glyph(picker_unfolded(p, row.group) ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_SMALL))
+						glyph(picker_unfolded(p, row.group) ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 						ui.spacer(ui.px(em * 0.35))
 						text("g", row.group, sel ? hex(HEX_BRIGHT) : hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
 						ui.spacer(ui.fill())
@@ -301,7 +302,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 						text("d", it.detail, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 						ui.spacer(ui.px(em * 0.5))
 					}
-					if it.current { glyph(ICO_CHECK, accent(), math.round(em * ICON_SMALL)) } else { ui.spacer(ui.px(math.round(em * 0.75))) }
+					if it.current { glyph(lucide.CHECK, accent(), math.round(em * ICON_SMALL)) } else { ui.spacer(ui.px(math.round(em * 0.75))) }
 					ui.spacer(ui.px(em * 0.75))
 				}
 			}

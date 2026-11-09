@@ -20,6 +20,7 @@ import "core:os"
 import "core:strings"
 import "gt:platform"
 import "gt:ui"
+import lucide "gt:lucide"
 
 session_move_pick :: proc(app: ^App, id: string) {
 	r := platform.pick_folder_dialog({owner = app.win, title = "Move the session to", remember_id = "session_move"})
@@ -445,7 +446,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 						head := ui.build_box({.Clickable}, "###fh")
 						if ui.signal(head).clicked { f.open = !f.open }
 						if ui.parent(head) {
-							glyph(f.open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_SMALL))
+							glyph(f.open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 							ui.spacer(ui.px(em * 0.3))
 							text("n", f.file, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 							if f.status != "" && f.status != "modified" {
@@ -479,7 +480,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 				ui.spacer(ui.fill())
 				if bevel_button("###ch_cancel", "Cancel", "", .Normal).clicked { open^ = false }
 				ui.spacer(ui.px(em * 0.5))
-				if bevel_button("###ch_go", "Go back", ICO_UNDO, .Danger, disabled = staging).clicked { revert_commit(app) }
+				if bevel_button("###ch_go", "Go back", lucide.UNDO_2, .Danger, disabled = staging).clicked { revert_commit(app) }
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			}
 		}

@@ -12,6 +12,7 @@ import "core:strings"
 import "core:sync"
 import "core:thread"
 import "gt:ui"
+import lucide "gt:lucide"
 
 Server :: struct {
 	name:     string,
@@ -346,7 +347,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center) {
 			pad(em)
-			glyph(ICO_GLOBE, accent(), math.round(em * ICON_LARGE))
+			glyph(lucide.GLOBE, accent(), math.round(em * ICON_LARGE))
 			ui.spacer(ui.px(em * 0.5))
 			text("t", e.index >= 0 ? "Edit the server" : "Add a server", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 1.8)})
 		}
@@ -400,7 +401,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 		if ui.row(.Center) {
 			pad(em)
 			if e.index >= 0 {
-				if bevel_button("###rm", "Remove", ICO_DELETE, .Danger).clicked {
+				if bevel_button("###rm", "Remove", lucide.TRASH_2, .Danger).clicked {
 					server_remove(app, e.index)
 					e.open = false
 				}
@@ -409,7 +410,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 			if taken { text("tk", "That name is taken", hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
 			if bevel_button("###cancel", "Cancel", "", .Normal).clicked { e.open = false }
 			ui.spacer(ui.px(em * 0.5))
-			if bevel_button("###ok", e.index >= 0 ? "Save and connect" : "Add and connect", ICO_CHECK, .Accent, disabled = !valid).clicked { save = true }
+			if bevel_button("###ok", e.index >= 0 ? "Save and connect" : "Add and connect", lucide.CHECK, .Accent, disabled = !valid).clicked { save = true }
 			pad(em)
 		}
 		if save && valid {

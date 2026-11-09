@@ -10,6 +10,7 @@ import "core:math"
 import "core:strings"
 import "gt:draw"
 import "gt:ui"
+import lucide "gt:lucide"
 
 HEX_SUB_CANCELLED    :: 0xb08a5aff
 HEX_CARD_OFF_TOP     :: 0x111111ff
@@ -450,7 +451,7 @@ card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: b
 			if bevel_button("###open", "Open", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true).clicked { drill_down(app, v.id) }
 			ui.spacer(ui.px(em * 0.2))
 		}
-		glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
+		glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
 		ui.spacer(ui.px(em * 0.5))
 	}
 	if meta != "" {
@@ -598,7 +599,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 				if bevel_button("###open", "Open", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true).clicked { drill_down(app, m.sub_child) }
 				ui.spacer(ui.px(em * 0.2))
 			}
-			glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
+			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
 			ui.spacer(ui.px(em * 0.5))
 		}
 		if open && m.text != "" {
@@ -639,7 +640,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###r1") {
 			ui.spacer(ui.px(em))
-			glyph(ICO_ROBOT, hex(HEX_FAINT), math.round(em * ICON_LARGE), em * 1.8)
+			glyph(lucide.BOT, hex(HEX_FAINT), math.round(em * ICON_LARGE), em * 1.8)
 			ui.spacer(ui.px(em * 0.4))
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
@@ -664,7 +665,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 				text("f", facts, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
-			if bevel_button("###back", "Return to main session", ICO_BACK, .Normal).clicked { go_back(app) }
+			if bevel_button("###back", "Return to main session", lucide.ARROW_LEFT, .Normal).clicked { go_back(app) }
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -694,7 +695,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 		animate(app)
 		lamp("###sub_lamp", hex(HEX_YELLOW), 1, pulse = true, size = em * 1.0)
 		ui.spacer(ui.px(em * 0.3))
-		sig = bevel_button("###subs", fmt.tprintf("%d active", len(active)), ICO_ROBOT, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM))
+		sig = bevel_button("###subs", fmt.tprintf("%d active", len(active)), lucide.BOT, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM))
 		ui.spacer(ui.px(em * 0.3))
 		text("of", fmt.tprintf("/ %d", len(c.children)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 	} else {
@@ -740,7 +741,7 @@ glyph_label_button :: proc(app: ^App, id, label: string, em: f32) -> ui.Signal {
 	sig := ui.signal(b)
 	if ui.parent(b) {
 		ui.spacer(ui.px(em * 0.5))
-		glyph(ICO_ROBOT, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
+		glyph(lucide.BOT, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 		ui.spacer(ui.px(em * 0.2))
 		text("t", label, sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		ui.spacer(ui.px(em * 0.6))
@@ -814,10 +815,10 @@ sub_toggle :: proc(app: ^App, id: string, n: int, running: int, em: f32) -> bool
 			text("r", fmt.tprintf("%d", running), hex(HEX_YELLOW), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 			text("n", fmt.tprintf("/%d", n), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)})
 		} else {
-			glyph(ICO_ROBOT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
+			glyph(lucide.BOT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
 			text("n", fmt.tprintf("%d", n), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
-		glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
+		glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
 		ui.spacer(ui.px(em * 0.2))
 	}
 	return open

@@ -12,6 +12,7 @@ import "core:strings"
 import "core:unicode/utf8"
 import "gt:draw"
 import "gt:ui"
+import lucide "gt:lucide"
 
 // What a request says of the folder: the session's, or the one about to get a session; "": the server's own.
 @(private = "file")
@@ -275,7 +276,7 @@ mention_list :: proc(app: ^App, em: f32) {
 	m := &app.cx.mentions
 	if !mention_shown(app) { return }
 	rows := make([]Completion_Row, len(m.hits), context.temp_allocator)
-	for h, k in m.hits { rows[k] = {h.kind == .File ? ICO_DOC : ICO_ROBOT, h.label, h.detail} }
+	for h, k in m.hits { rows[k] = {h.kind == .File ? lucide.FILE : lucide.BOT, h.label, h.detail} }
 	clicked: int
 	clicked, m.list = completion_list(app, "###mention_list", rows, m.sel, em)
 	if clicked >= 0 { mention_choose(app, clicked) }
@@ -524,7 +525,7 @@ files_left :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
 	if well("###fl_well", .X, radius = 8, focus = 1) {
 		ui.spacer(ui.px(em * 0.6))
-		glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
+		glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.35, font_size = math.round(em * FS_BODY)})
 			res := ui.line_edit("###fl_find", &f.field, "Find a file")
@@ -538,12 +539,12 @@ files_left :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.fill()})
 	if ui.scroll_y("###fl_rows") {
 		if f.at != "" && !f.searching {
-			if file_row(app, "###fl_up", "..", ICO_FOLDER, false, em) { files_up(app); return }
+			if file_row(app, "###fl_up", "..", lucide.FOLDER, false, em) { files_up(app); return }
 		}
 		if !read_shown(app, "###fl_read", &f.read, em, files_list) { return }
 		if len(f.rows) == 0 { info_line(app, "###fl_none", f.searching ? "Nothing matches." : "This folder is empty.", em) }
 		for r, i in f.rows {
-			if !file_row(app, fmt.tprintf("###flr%d", i), r.name, r.directory ? ICO_FOLDER : ICO_DOC, i == f.sel, em) { continue }
+			if !file_row(app, fmt.tprintf("###flr%d", i), r.name, r.directory ? lucide.FOLDER : lucide.FILE, i == f.sel, em) { continue }
 			f.sel = i
 			if !file_pick(app, r) { return }
 		}
@@ -575,11 +576,11 @@ files_right :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###fl_bar") {
 		text("p", f.file, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 		ui.spacer(ui.px(em * 0.5))
-		if bevel_button("###fl_copy", "Copy path", ICO_COPY, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
+		if bevel_button("###fl_copy", "Copy path", lucide.COPY, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
 			clip_set(fmt.tprintf("%s/%s", strings.trim_right(f.dir, `\/`), f.file))
 		}
 		ui.spacer(ui.px(em * 0.4))
-		if bevel_button("###fl_mention", "Mention in the prompt", ICO_EDIT, .Accent, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
+		if bevel_button("###fl_mention", "Mention in the prompt", lucide.PENCIL, .Accent, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
 			a := &app.composer
 			a.mark = a.cursor
 			mention_put(app, .File, f.file, file_uri(f.dir, f.file), filepath.base(f.file))

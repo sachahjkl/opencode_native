@@ -8,6 +8,7 @@ import "core:strings"
 import "gt:draw"
 import "gt:platform"
 import "gt:ui"
+import lucide "gt:lucide"
 
 @(private = "file")
 home_row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
@@ -33,7 +34,7 @@ home_session :: proc(app: ^App, s: ^Session_Info, em, now: f64, busy: bool) {
 		if busy {
 			session_lamp("###l", LAMP_WORKING, e)
 		} else if !logo_of(app, "###lg", project_logo(app, s.project), math.round(e * 1.25)) {
-			glyph(ICO_CHAT, hex(HEX_FAINT), math.round(e * ICON_SMALL), e * 1.25)
+			glyph(lucide.MESSAGE_SQUARE, hex(HEX_FAINT), math.round(e * ICON_SMALL), e * 1.25)
 		}
 		ui.spacer(ui.px(e * 0.55))
 		text("t", s.title != "" ? s.title : "Untitled", hex(HEX_TEXT_SOFT), ui.Style_Mod{font_size = math.round(e * FS_LABEL)}, ui.fill())
@@ -94,12 +95,12 @@ home :: proc(app: ^App, em: f32) {
 		for d, i in folders {
 			kind := Btn_Kind.Normal
 			if d == app.chat.new_dir { kind = .Toggled }
-			if bevel_button(fmt.tprintf("###hf%d", i), base_name(d), ICO_FOLDER, kind, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
+			if bevel_button(fmt.tprintf("###hf%d", i), base_name(d), lucide.FOLDER, kind, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
 				app.chat.new_dir = strings.clone(d, app.chat.alloc)
 				app.cx.focus_composer = true
 			}
 		}
-		if bevel_button("###hf_other", "Other folder…", ICO_ADD, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { home_pick_folder(app) }
+		if bevel_button("###hf_other", "Other folder…", lucide.PLUS, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { home_pick_folder(app) }
 	}
 	ui.spacer(ui.px(em * 1.1))
 
