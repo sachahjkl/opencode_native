@@ -312,17 +312,20 @@ draw_groove :: proc(dc: ^draw.Context, a, b: Vec2, vertical := false) {
 }
 
 // A status lamp: a glass bead with a halo when lit.
-draw_lamp :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color, lit: f32 = 1) {
+// `glow`: how much light it gives around it (a pulse: its halo breathes, the lamp itself stays lit); <0: as `lit`.
+draw_lamp :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color, lit: f32 = 1, glow: f32 = -1) {
+	halo := glow >= 0 ? glow : lit
 	s := ui.scale()
 	prev := draw.set_circular_corners(dc, true)
 	defer draw.set_circular_corners(dc, prev)
 	r := Rect{c - d * 0.5, c + d * 0.5}
 	rr := radii4(d * 0.5)
-	if flat() {   // a dot, dimmed as it pulses
+	if flat() {   // a dot, its halo a ring that breathes
+		if halo > FADE_VISIBLE && glow >= 0 { draw.rect(dc, draw.rect_pad(r, d * 0.08), with_alpha(col, 0.35 * halo), d * 0.5) }
 		draw.rect(dc, draw.rect_pad(r, -d * 0.12), draw.mix(darken(col, 0.45), col, lit), d * 0.5)
 		return
 	}
-	if lit > FADE_VISIBLE && the_app.prefs.glow { draw.box_shadow(dc, r, rr, d * 0.45, with_alpha(col, 0.4 * lit)) }
+	if halo > FADE_VISIBLE && the_app.prefs.glow { draw.box_shadow(dc, r, rr, d * 0.45, with_alpha(col, 0.4 * halo)) }
 	draw.rect(dc, draw.rect_pad(r, 1 * s), {0, 0, 0, 0.8}, d * 0.5 + s)
 	body := draw.mix(darken(col, 0.3), col, lit)   // (dimmed, not browned: the colour stays clean through a pulse)
 	draw.rect_corners(dc, r, {lighten(body, 0.25), darken(body, 0.2), lighten(body, 0.25), darken(body, 0.2)}, rr)
@@ -493,10 +496,10 @@ Lamp_Draw :: struct { color: Color, lit: f32, pulse: bool }
 @(private = "file")
 lamp_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Lamp_Draw)(user)
-	lit := d.lit
-	if d.pulse { lit = PULSE_LIT_MIN + PULSE_LIT_SPAN * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * PULSE_RATE)) }
+	glow: f32 = -1
+	if d.pulse { glow = PULSE_LIT_MIN + PULSE_LIT_SPAN * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * PULSE_RATE)) }   // (lit as a steady one; its halo breathes)
 	sz := min(b.rect.max.x - b.rect.min.x, b.rect.max.y - b.rect.min.y)
-	draw_lamp(dc, draw.rect_center(b.rect), math.round(sz * 0.62), d.color, lit)
+	draw_lamp(dc, draw.rect_center(b.rect), math.round(sz * 0.62), d.color, d.lit, glow)
 }
 
 // A status lamp in a box of `size` (em fraction of the font size by default).

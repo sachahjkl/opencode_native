@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.24.5] - 2026-11-09
+
+### Fixed
+
+- **A pulsing lamp is as bright as a steady one**: only its halo breathes. The whole lamp dimmed to half and back, so the green of a session at work looked duller than the orange beside it.
+
 ## [0.24.4] - 2026-11-09
 
 ### Changed
@@ -921,7 +927,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.4...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.5...HEAD
+[0.24.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.5
 [0.24.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.4
 [0.24.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.3
 [0.24.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.2
