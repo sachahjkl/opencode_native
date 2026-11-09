@@ -22,6 +22,16 @@ drafts_path :: proc() -> string { return pjoin({filepath.dir(prefs_path()), "dra
 // The composer changed: the texts go to disk in a moment.
 drafts_save_soon :: proc(app: ^App) { deferred_ask(&app.cx.due[.Drafts], DRAFTS_SAVE_MS, DRAFTS_SAVE_MOST_MS) }
 
+// Each frame the composer is built: what it holds against what it held, so that whatever changed it (a key, a prompt sent and
+// the composer emptied, a prompt that came back) reaches the disk. (A sent prompt left on disk came back at the next start.)
+drafts_track :: proc(app: ^App) {
+	text := ui.area_string(&app.composer)
+	if text == app.cx.drafts_seen { return }
+	delete(app.cx.drafts_seen)
+	app.cx.drafts_seen = strings.clone(text)
+	drafts_save_soon(app)
+}
+
 // Every session's text, the one shown from the composer, as JSON: {"<session id>": "<text>", ...} ("" is the home page).
 drafts_json :: proc(app: ^App) -> string {
 	b := strings.builder_make(context.temp_allocator)
@@ -146,4 +156,6 @@ drafts_destroy :: proc(app: ^App) {
 	}
 	delete(app.cx.drafts)
 	app.cx.drafts = nil
+	delete(app.cx.drafts_seen)
+	app.cx.drafts_seen = ""
 }

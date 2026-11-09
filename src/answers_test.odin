@@ -1100,3 +1100,19 @@ the_drafts_survive_a_restart :: proc(t: ^testing.T) {
 	show(again, "a")
 	testing.expect_value(t, ui.area_string(&again.composer), "for a")
 }
+
+// A prompt sent empties the composer without a key: the disk hears of it too, and the text does not come back at the next start.
+@(test)
+a_sent_prompt_leaves_no_draft :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	defer drafts_destroy(app)
+	show(app, "a")
+	ui.area_set(&app.composer, "hello")
+	drafts_track(app)
+	app.cx.due[.Drafts] = {}
+	ui.area_set(&app.composer, "")   // (as submit_prompt does)
+	drafts_track(app)
+	testing.expect(t, app.cx.due[.Drafts].due_ms != 0, "a save is due")
+	testing.expect(t, !strings.contains(drafts_json(app), "hello"), drafts_json(app))
+}

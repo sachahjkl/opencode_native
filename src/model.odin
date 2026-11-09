@@ -140,12 +140,24 @@ chat_reset :: proc(c: ^Chat) {
 	c.alloc = virtual.arena_allocator(&c.arena)
 }
 
+// The session shown, kept for the next start (general.start = "last"): its id, or LAST_SESSION_HOME for the home page. Not
+// before the first list is read (the start's own chat_home would say "home"), nor in a test (no preferences file).
+LAST_SESSION_KEY  :: "last_session"
+LAST_SESSION_HOME :: "home"
+
+last_session_keep :: proc(app: ^App) {
+	if app.prefs_file == "" || !app.opened_first { return }
+	id := app.chat.id != "" ? app.chat.id : LAST_SESSION_HOME
+	if settings_get(LAST_SESSION_KEY) != id { settings_set(LAST_SESSION_KEY, id) }
+}
+
 // The home page, whichever way one gets there: nothing to load.
 chat_home :: proc(app: ^App) {
 	draft_leave(app)
 	chat_reset(&app.chat)
 	app.chat.loaded = true
 	draft_enter(app)
+	last_session_keep(app)
 	queue_switch(app)
 }
 
@@ -183,6 +195,7 @@ open_chat :: proc(app: ^App, session_id: string) {
 	chat_reset(&app.chat)
 	app.chat.id = strings.clone(id, app.chat.alloc)
 	draft_enter(app)
+	last_session_keep(app)
 	app.chat.loading = true
 	app.view = {opened_ms = ui.now_ms(), stick_bottom = true}
 	app.chat.busy = app.busy[id] or_else false
@@ -319,9 +332,14 @@ sessions_load :: proc(app: ^App, v: json.Value) {
 	}
 	if app.chat.id == "" && len(app.sessions) > 0 && !app.opened_first {
 		app.opened_first = true
-		if app.start_session != "" {   // --session=<id>
+		last := settings_get(LAST_SESSION_KEY)
+		switch {
+		case app.start_session != "":   // --session=<id>
 			open_root(app, app.start_session)
-		} else if app.prefs.start == "last" {
+		case app.prefs.start != "last" || last == LAST_SESSION_HOME:
+		case last != "" && find_session(app, last) != nil:   // the one shown when the window closed (still there)
+			open_root(app, last)
+		case:
 			for s in app.sessions { if s.parent == "" { open_chat(app, s.id); break } }
 		}
 	}

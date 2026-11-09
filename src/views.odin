@@ -1574,7 +1574,8 @@ composer :: proc(app: ^App, em: f32) {
 				ctx_check(app, res.box, .Composer)
 				if res.committed { submit, other = true, !app.prefs.ctrl_enter }
 				if down && app.composer.cursor == caret0 { activity_open(app) }
-				if res.changed { activity_close(app); drafts_save_soon(app) }   // (typing: what is written is what matters now; kept on disk a moment later)
+				if res.changed { activity_close(app) }   // (typing: what is written is what matters now)
+				drafts_track(app)   // (kept on disk a moment after it changes, however: typed, sent, put back)
 			}
 			ui.spacer(ui.px(em * 0.35))
 		}

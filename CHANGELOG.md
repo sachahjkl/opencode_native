@@ -5,6 +5,16 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.24.9] - 2026-11-09
+
+### Changed
+
+- **The window opens on the session it showed when it closed** (`general.start` = "last", now the default): the session, or the home page if that was it; the latest session when it showed none yet or that one is gone.
+
+### Fixed
+
+- **A prompt sent no longer comes back as a draft at the next start**: the composer's text goes to disk whenever it changes, not only when a key changes it (sending empties it without a key).
+
 ## [0.24.8] - 2026-11-09
 
 ### Changed
@@ -955,7 +965,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.8...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.9...HEAD
+[0.24.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.9
 [0.24.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.8
 [0.24.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.7
 [0.24.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.6
