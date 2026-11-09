@@ -156,6 +156,7 @@ detached_build :: proc(h: ^host.Host, size: draw.Vec2) {
 detached_hooks :: proc(d: ^Detached) {
 	h := &d.window
 	h.background = hex(HEX_BG0)
+	h.partial_redraw = true   // each frame repaints only what changed
 	h.still = proc(h: ^host.Host, events: []platform.Event) -> bool {
 		d := (^Detached)(h.user)
 		d.had_input = len(events) > 0
