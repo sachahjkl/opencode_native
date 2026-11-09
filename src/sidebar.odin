@@ -1,7 +1,7 @@
 // What the sidebar lists, and in what order. A mode is a way of dealing the sessions into sections: an entry of Sidebar_Mode, its
 // word and label below, a case of sidebar_sections. Everything else (the search, the rows, the headers, folding, what holds the order
 // under the pointer) is the same for all of them. The rows themselves are in views.odin.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:hash"

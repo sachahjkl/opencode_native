@@ -1,5 +1,5 @@
 // What the client asks of Linux itself: the local time's offset (libc), a question on the terminal.
-package occ
+package ocn
 
 import "core:c"
 import "core:fmt"

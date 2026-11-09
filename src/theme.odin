@@ -4,7 +4,7 @@
 // lines, its texts), a colour to the theme's colour of the nearest hue, mixed as much with the theme's grey as it was with opencode's.
 // OpenCode dark is opencode's: it moves nothing. The themes: OpenCode, then the toolkit's; themes of the user's own come from
 // themes.txt, beside the preferences (theme_load).
-package occ
+package ocn
 
 import "core:os"
 import "core:path/filepath"

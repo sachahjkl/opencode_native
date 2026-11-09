@@ -31,10 +31,10 @@ jobs:
         run: call build.bat release
 
       # the tag must be APP_VERSION's; the files and the signed manifests of the channels
-      - name: Package and sign (occtools release dist)
+      - name: Package and sign (ocntools release dist)
         env:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
-        run: build/occtools release dist ${{ github.ref_name }}
+        run: build/ocntools release dist ${{ github.ref_name }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -55,10 +55,10 @@ jobs:
       - name: Build (build.sh)
         run: ./build.sh release
 
-      - name: Package and sign (occtools release dist)
+      - name: Package and sign (ocntools release dist)
         env:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
-        run: build/occtools release dist ${{ github.ref_name }}
+        run: build/ocntools release dist ${{ github.ref_name }}
 
       - uses: actions/upload-artifact@v7
         with:
@@ -74,7 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          submodules: true   # (occtools reads the toolkit's update package)
+          submodules: true   # (ocntools reads the toolkit's update package)
 
       - uses: ./.github/actions/setup-odin-tools
 
@@ -83,8 +83,8 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Publish (occtools release publish)
+      - name: Publish (ocntools release publish)
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: mkdir -p build && odin run tools/occtools -collection:gt=ext/gui_toolkit/src -out:build/occtools -- release publish ${{ github.ref_name }} dist
+        run: mkdir -p build && odin run tools/ocntools -collection:gt=ext/gui_toolkit/src -out:build/ocntools -- release publish ${{ github.ref_name }} dist

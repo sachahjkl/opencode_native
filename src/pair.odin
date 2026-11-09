@@ -2,7 +2,7 @@
 // once (POST /api/pair), and its link `<server address>/auth/connect/<code>` signs a browser in to the web app (or gives a client
 // a token). The dialog shows the link of each address the server is reached at (GET /api/info `urls`), large as a QR code for the
 // first one another device can reach (not a loopback address: a tunnel, a network address), and how long the code lasts.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:math"

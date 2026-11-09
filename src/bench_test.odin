@@ -1,11 +1,11 @@
-package occ
+package ocn
 
 // The program on its heavy cases, in the test's process: the App made as main makes it, on an offscreen window
 // (testkit/session drives it: its input, its clock), with a long conversation and many sessions made up here, no server.
-// The tests check what each case must do; with -define:OCC_BENCH=true they also run BENCH_FRAMES frames of each and print
+// The tests check what each case must do; with -define:OCN_BENCH=true they also run BENCH_FRAMES frames of each and print
 // the medians of the frame's steps (docs/performance.md: how they are compared).
 //
-//   odin test src -collection:gt=ext/gui_toolkit/src -o:speed -define:OCC_BENCH=true -define:ODIN_TEST_THREADS=1
+//   odin test src -collection:gt=ext/gui_toolkit/src -o:speed -define:OCN_BENCH=true -define:ODIN_TEST_THREADS=1
 
 import "base:runtime"
 import "core:encoding/json"
@@ -24,14 +24,14 @@ import "gt:render"
 import "gt:ui"
 import session "gt:testkit/session"
 
-OCC_BENCH :: #config(OCC_BENCH, false)
+OCN_BENCH :: #config(OCN_BENCH, false)
 
 BENCH_SIZE        :: [2]int{1600, 1000}
-BENCH_TURNS       :: #config(OCC_BENCH_TURNS, 150)     // a user's prompt and the agent's answer each (tool calls, reasoning, Markdown)
+BENCH_TURNS       :: #config(OCN_BENCH_TURNS, 150)     // a user's prompt and the agent's answer each (tool calls, reasoning, Markdown)
 BENCH_SESSIONS    :: 400
 BENCH_PROJECTS    :: 12
 BENCH_TOOLS       :: 4       // tool calls per answer
-BENCH_FRAMES      :: 300 when OCC_BENCH else 12   // frames per case
+BENCH_FRAMES      :: 300 when OCN_BENCH else 12   // frames per case
 BENCH_WHEEL       :: 3       // notches per frame, up
 BENCH_PARAGRAPH_DELTAS :: 8   // a paragraph's deltas: then the model starts another
 BENCH_DELTA       :: "Each `delta` adds a few words to the answer, **as a model streams**. "
@@ -147,7 +147,7 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	testing.expect(t, app.win != nil)
 	// (the bench on the GPU, as the program; the checks on WARP: no GPU needed)
 	testing.expect(t, fonts_init(app))
-	testing.expect(t, render.init_offscreen(&app.r, app.win.size, warp = !OCC_BENCH))
+	testing.expect(t, render.init_offscreen(&app.r, app.win.size, warp = !OCN_BENCH))
 	app_init(app, "")
 	main_window_adopt(app)
 	app.last_tick = time.tick_now()
@@ -172,7 +172,7 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 @(private = "file")
 output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 	v := output_view_open_shell(app, "sh_1", "cargo build", "C:/code/project_0")
-	output_view_feed(v, "\x1b[32mCompiling\x1b[0m occ\n")
+	output_view_feed(v, "\x1b[32mCompiling\x1b[0m ocn\n")
 	v.over, v.seen_end, v.status, v.has_exit = true, true, .Exited, true
 	session.frames(s, 3)
 	testing.expect(t, session.find(s, "out_bar") != nil, "the bar")
@@ -275,7 +275,7 @@ median :: proc(v: []f64) -> f64 {
 
 @(private = "file")
 bench_report :: proc(c: ^Bench_Case) {
-	when OCC_BENCH {
+	when OCN_BENCH {
 		fmt.printfln("bench %-10s frame %6.3f ms  build %6.3f  draw %6.3f  render %6.3f  gpu %6.3f  boxes %d  (builds/frame %.2f, %d frames)",
 			c.name, median(c.total[:]), median(c.build[:]), median(c.draw[:]), median(c.render[:]), median(c.gpu[:]), c.boxes, f64(c.builds) / f64(len(c.total)), len(c.total))
 		if p, ok := render.gpu_profile(&the_app.r); ok {
@@ -345,7 +345,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	testing.expect(t, app.rename.at == .None, "a click elsewhere: kept")
 	bottom_boxes := ui.boxes_built(&app.state)
 
-	when OCC_BENCH { render.set_gpu_profile(&app.r, true) }
+	when OCN_BENCH { render.set_gpu_profile(&app.r, true) }
 	idle := Bench_Case{name = "idle"}
 	profile_begin()
 	for _ in 0 ..< BENCH_FRAMES { bench_frame(s, &idle) }
@@ -476,7 +476,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	}
 	for len(finding.total) < BENCH_FRAMES { bench_frame(s, &finding) }
 	bench_report(&finding)
-	when OCC_BENCH {
+	when OCN_BENCH {
 		sweep: f64   // (the one frame that builds everything)
 		for v in finding.total { sweep = max(sweep, v) }
 		fmt.printfln("find: its sweep %.1f ms", sweep)

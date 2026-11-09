@@ -1,4 +1,4 @@
-package occ
+package ocn
 
 import "base:runtime"
 import "core:encoding/json"

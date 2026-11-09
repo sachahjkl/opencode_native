@@ -3,7 +3,7 @@
 // model's window (GET /api/session/:id/context, read again when a step ends: the server gives the messages, not their sizes, so sizes are
 // estimated from their text and scaled to what the last step really sent); its pace; what the loaded messages did (tools, models); its
 // sub-agents; and the project's totals from the server (GET /api/experimental/session/stats?project=..&tools=detail).
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

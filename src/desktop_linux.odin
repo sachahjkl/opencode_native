@@ -2,7 +2,7 @@
 // to 0.30 wrote ($XDG_DESKTOP_DIR/opencode-native.desktop, else ~/Desktop): the toolkit's setup has no such part, so an
 // uninstall removes it here. It is ours when it carries the identity's marker or runs the installed copy (as Setup before
 // 0.21 wrote it), and only then is it removed.
-package occ
+package ocn
 
 import "core:os"
 import desktop "gt:desktop"

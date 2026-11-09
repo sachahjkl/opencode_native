@@ -1,7 +1,7 @@
 // Find in the conversation (Ctrl+F): a bar over the top-right corner of the conversation, the toolkit's find in page
 // (gt:ui find.odin) on the text the conversation shows. Enter / F3 go to the next match, Shift+Enter / Shift+F3 to the
 // previous one, Escape closes. The current match is scrolled into view.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:math"

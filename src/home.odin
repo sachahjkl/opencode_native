@@ -1,6 +1,6 @@
 // The first page: what runs now, where one was, a folder to start in. The composer under it starts a session in the folder
 // chosen; a click on a session opens it.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:math"

@@ -1,4 +1,4 @@
-package occ
+package ocn
 
 // A command's output as a terminal shows it, with nothing to type into: colours, what a progress bar redraws, the scrollback, a selection. A
 // dialog, or a window of its own for a large or a second screen. A command that runs is followed; when it ends the view says so and offers to

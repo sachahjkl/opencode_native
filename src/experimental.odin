@@ -3,7 +3,7 @@
 // longer has is not added, and one left in the file is ignored by it (it says so by dropping the key). What the person set is left alone,
 // a false too. The API writes no such option, so the file is what changes: comments stay, the file is read back before it replaces the old
 // one, and the server sees it by itself. A server elsewhere: its file is not here, and the dialogs say what it answers.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:os"

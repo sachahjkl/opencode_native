@@ -1,6 +1,6 @@
 // The window: an integrated title bar, the sessions on the left (grouped by project folder), the conversation and its
 // composer on the right, a status bar along the bottom.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:unicode"

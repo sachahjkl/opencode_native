@@ -1,5 +1,5 @@
 name: Odin for the tools
-description: Odin dev-2026-11a (pinned by SHA-256, as in setup-odin-linux) on the PATH, for what only needs core, such as tools/occtools; no wgpu-native and no libraries of the program
+description: Odin dev-2026-11a (pinned by SHA-256, as in setup-odin-linux) on the PATH, for what only needs core, such as tools/ocntools; no wgpu-native and no libraries of the program
 
 runs:
   using: composite

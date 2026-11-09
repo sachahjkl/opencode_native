@@ -1,7 +1,7 @@
 // Two small machines the rest leans on. A Remote: what is read from the server and how that reading ended, whichever way it
 // ended (net.odin answer settles it, nobody else), and read_shown, how a dialog says so. A Deferred: something to do a little after the last thing that asked for it,
 // with a real deadline that wakes the window.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:math"

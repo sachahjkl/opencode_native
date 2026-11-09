@@ -1,8 +1,8 @@
 // What opencode native is to the toolkit's update package (gt:update, docs/updates.md): its name in the manifests and the release's
-// file names, what its signatures cover, and the public half of its update key (occtools update keygen; the private half is in
+// file names, what its signatures cover, and the public half of its update key (ocntools update keygen; the private half is in
 // secrets/production.yaml and the release workflow's secret UPDATE_SIGNING_KEY). The program checks with it (updater.odin), the
-// release tool signs with it (occtools update).
-package occ_update
+// release tool signs with it (ocntools update).
+package ocn_update
 
 import update "gt:update"
 

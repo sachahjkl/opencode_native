@@ -1,4 +1,4 @@
-package occ
+package ocn
 
 // What a review set out to break, and did: each case as it was shown, so that it stays mended. (The file of what is reviewed: a test that
 // belongs to a feature lives with it.)
@@ -269,7 +269,7 @@ FAKE_SOCKET :: Ws_Ops{
 		return 0
 	},
 	// All that happens on the interface's thread during one read.
-	read = proc "c" (w: rawptr, out: ^Occ_Buf) -> i32 {
+	read = proc "c" (w: rawptr, out: ^Ocn_Buf) -> i32 {
 		context = fake.ctx
 		app, l := fake.app, fake.l
 		fake.reads += 1

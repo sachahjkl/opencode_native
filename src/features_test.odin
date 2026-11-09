@@ -1,4 +1,4 @@
-package occ
+package ocn
 
 // What the newer parts decide by themselves, without a window: a diff, the end of a command's output, an address, the links
 // of a text, the history's steps.

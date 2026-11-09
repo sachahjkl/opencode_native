@@ -1,7 +1,7 @@
 // The link to the opencode server: where it is (service.json), requests on worker threads, the event stream on a
 // thread of its own. Every answer reaches the interface through ui.post: it runs on the interface's thread, in
 // begin_build, and wakes the window.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"
@@ -1000,7 +1000,7 @@ dialogs_reread :: proc(app: ^App) {
 }
 
 // The stream ended, or could not start: `status` is what its response said (0: no response; 200: it was up, and it dropped or
-// stayed silent past the limit of native/occ_native).
+// stayed silent past the limit of native/ocn_native).
 stream_down :: proc(app: ^App, status: int) {
 	app.link = status == 401 ? .Auth_Refused : .Retrying
 }

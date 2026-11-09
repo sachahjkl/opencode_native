@@ -1,6 +1,6 @@
 // libghostty-vt, the terminal emulation of Ghostty: the types of its C API that the Terminal panel uses. Its numbers and its calls are in
-// vt_gen.odin, made from its headers by occtools vt. The layouts here are written by hand: vt_test.odin reads through them on the real library.
-package occ
+// vt_gen.odin, made from its headers by ocntools vt. The layouts here are written by hand: vt_test.odin reads through them on the real library.
+package ocn
 
 Vt_Terminal :: distinct rawptr
 Vt_State    :: distinct rawptr

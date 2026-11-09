@@ -1,7 +1,7 @@
 // What an agent asks the person: a form of the server (the `question` tool makes one, with metadata.kind = "question"; a plugin may
 // too). A card over the composer, with what is asked and the ways to answer it, until it is answered or dismissed. The run waits for
 // it, so it must not go unseen: a sub-agent's shows in the conversation of its parent, and the sidebar lights the session that waits.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

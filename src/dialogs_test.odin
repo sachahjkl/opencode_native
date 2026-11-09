@@ -1,4 +1,4 @@
-package occ
+package ocn
 
 // The dialogs and what the server offers beside the conversation, on the bench of the answers (answers_test.odin): requests kept,
 // answered by the test in the order it wants. Each case is a defect that once happened or could: what it checks fails without its fix.

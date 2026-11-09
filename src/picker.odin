@@ -2,7 +2,7 @@
 // characters lit), driven by the keyboard (Up / Down / Page Up / Page Down / Enter / Escape) or the pointer. The model
 // and the agent of the composer use it. Items of groups (a model's provider) are under a header that folds while nothing is
 // typed, to look through them by hand (Left and Right fold and unfold); typing goes through them all, by how well they match.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:math"

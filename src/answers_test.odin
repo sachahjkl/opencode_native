@@ -1,4 +1,4 @@
-package occ
+package ocn
 
 // The bench of the answers: requests are kept instead of sent (net.odin request), and each is answered by the test, with the status
 // and the body it wants, in the order it wants, through what the program runs for a real one (answer). No thread, no server: each

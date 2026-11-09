@@ -1,4 +1,4 @@
-package occ
+package ocn
 
 // A browser per session, of one tab or several, on a host that keeps what it is asked instead of asking a web view (Web_Host): which view, which address, shown
 // or not. No window, no real page, nothing waited for: what a view says is said by the test, through what a real one calls.

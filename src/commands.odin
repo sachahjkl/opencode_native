@@ -1,7 +1,7 @@
 // Everything the program can be asked to do, in one table: the keyboard, the palette (palette.odin) and the help read it, so
 // that a key shown is a key that works. A command runs after the frame (command_run): it may drop what the boxes of this
 // frame still read.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:math"

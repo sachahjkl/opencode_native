@@ -1,7 +1,7 @@
 // The passwords on Linux: in the Secret Service (org.freedesktop.secrets, over the session bus), or where there is none in
 // the servers' file, which only the user can read (servers_save writes it so). A locked keyring asks for a prompt this
 // client does not show: it counts as none for a new password, and what is already in it waits, kept (Server.stored).
-package occ
+package ocn
 
 import "core:strings"
 import "core:time"

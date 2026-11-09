@@ -1,10 +1,10 @@
 # The client's Rust code: one workspace, one static library linked into opencode-native.exe
-# (occtools build -> build\native\occ_native.lib). A program links one Rust static library at most (each carries
+# (ocntools build -> build\native\ocn_native.lib). A program links one Rust static library at most (each carries
 # Rust's standard library): another Rust library (the toolkit's text backend or accessibility adapter) would join this
 # one as a dependency of the assembly crate, never as a second .lib.
 [workspace]
 resolver = "2"
-members = ["occ_native"]
+members = ["ocn_native"]
 
 [profile.release]
 opt-level = 3

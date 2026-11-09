@@ -1,7 +1,7 @@
 // What a tool call shows when it is open, by what the tool does: a diff for what edits a file (the server's own patch, else
 // one made here with core:diff from the call's input), the lines of a file with their numbers, matches under their file,
 // a command and what it printed, a checklist. The rest shows its input as keys and values, never as raw JSON.
-package occ
+package ocn
 
 import "core:diff"
 import "core:encoding/json"

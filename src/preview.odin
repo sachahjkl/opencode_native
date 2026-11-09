@@ -5,7 +5,7 @@
 // the system's, over everything the toolkit draws in its place: it steps aside while a dialog or a menu is open.
 // Each session has its own browser, of one tab or several, inside this one panel (preview_views.odin): what is here is the session shown's,
 // and what it does to the page it does to its front tab, unless it is given another.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:math"

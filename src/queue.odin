@@ -11,7 +11,7 @@
 // stays in place until Enter, so that Cancel changes nothing. If it is delivered meanwhile, what was typed stays in the composer.
 //
 // A run interrupted leaves what is queued parked: nothing here sends it. It stays in the list, which says so, with Send now.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

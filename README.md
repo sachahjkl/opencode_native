@@ -148,7 +148,7 @@ TLS is rustls, checked against the system's trust store.
 | `--scale=<factor>` | the interface's scale whatever the screen's (`1`: 100 %; screenshots) |
 | `--size=<w>x<h>` | the window's size in pixels (screenshots) |
 | `--image=<file>` | open the image viewer on a file |
-| `--font-dir=<folder>` | try faces from files, nothing installed (`occtools font_proposals`) |
+| `--font-dir=<folder>` | try faces from files, nothing installed (`ocntools font_proposals`) |
 | `--pref name=value` | set a preference for the run (names in Settings, e.g. `appearance.theme=Nord`) |
 | `--settings[=n]` | open the settings at start (on page n) |
 | `--frames=N` | N frames of a hidden window, then exit (a check that it runs; it says how long the first frame took) |
@@ -173,8 +173,8 @@ since a program on this computer can then type into a session.
 clang, fontconfig's headers and Rust (stable), then `./build.sh`. At run time: Vulkan, libxkbcommon, fontconfig, and
 Wayland or X11; libxcb-cursor for the theme's cursors on X11, an emoji font for color emoji.
 
-Both are shortcuts of `odin run tools/occtools -collection:gt=ext/gui_toolkit/src -out:build/occtools -keep-executable -- build`:
-every step is a command of `tools/occtools` (`help` lists them; `AGENTS.md`). The build makes the Rust library first (nothing when it is up to date; crates pinned by
+Both are shortcuts of `odin run tools/ocntools -collection:gt=ext/gui_toolkit/src -out:build/ocntools -keep-executable -- build`:
+every step is a command of `tools/ocntools` (`help` lists them; `AGENTS.md`). The build makes the Rust library first (nothing when it is up to date; crates pinned by
 `native/Cargo.lock`; on Linux it carries the toolkit's text backend), then the program. The toolkit is the submodule
 `ext/gui_toolkit`; `GT=<folder>` builds against another copy, `OUT=<file>` writes the program elsewhere.
 
@@ -194,10 +194,10 @@ every step is a command of `tools/occtools` (`help` lists them; `AGENTS.md`). Th
 | `src/stats.odin` | the statistics of a session and of its project |
 | `src/style.odin` | the palette, the icons, the machined surfaces |
 | `src/setup.odin`, `src/desktop*.odin`, `src/os_*.odin` | version, Setup (gui_toolkit's `setup`: its Config, the user's answer); what each system is asked |
-| `native/occ_native` | the Rust library (C functions): ureq + rustls, image decoding (and the text backend on Linux) |
-| `src/bench_test.odin` | the heavy cases in the test's process (a long conversation, hundreds of sessions); timed with `-define:OCC_BENCH=true` ([docs/performance.md](docs/performance.md)) |
+| `native/ocn_native` | the Rust library (C functions): ureq + rustls, image decoding (and the text backend on Linux) |
+| `src/bench_test.odin` | the heavy cases in the test's process (a long conversation, hundreds of sessions); timed with `-define:OCN_BENCH=true` ([docs/performance.md](docs/performance.md)) |
 | `site/` | the GitHub Pages site |
-| `tools/` | `occtools`, the project's machinery (`occtools help`): the build, the packages, the signed manifests, the pictures of the README and the site (`occtools shots`, over the DevTools protocol; `--linux-build` builds the Linux one in WSL with `flake.nix`), and what makes the site's pages (`occtools site build site _site`: its changelog, its classic pages, what a page says when it is shared, on the toolkit's `site` package; `occtools site check` in a real browser), the logo and the icon of `assets/` (`occtools logo`, the toolkit's paint package); the DevTools client is the toolkit's `cdp` package, and `doc_check` the toolkit's `tk doc_check --root . --extra ext/gui_toolkit` |
+| `tools/` | `ocntools`, the project's machinery (`ocntools help`): the build, the packages, the signed manifests, the pictures of the README and the site (`ocntools shots`, over the DevTools protocol; `--linux-build` builds the Linux one in WSL with `flake.nix`), and what makes the site's pages (`ocntools site build site _site`: its changelog, its classic pages, what a page says when it is shared, on the toolkit's `site` package; `ocntools site check` in a real browser), the logo and the icon of `assets/` (`ocntools logo`, the toolkit's paint package); the DevTools client is the toolkit's `cdp` package, and `doc_check` the toolkit's `tk doc_check --root . --extra ext/gui_toolkit` |
 | `res/`, `assets/` | resources of the exe (icon, version, manifest), the logo, Lucide (`assets/fonts`, ISC) |
 
 ## License

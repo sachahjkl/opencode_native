@@ -1,7 +1,7 @@
 // The version, the client's own preferences, the command line of the desktop integration, and the Setup dialog: the
 // toolkit's (gt:setup), with opencode native's Config (desktop.odin setup_config), its logo, and the user's answer kept in
 // settings.txt.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:image/png"

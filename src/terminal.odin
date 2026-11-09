@@ -12,7 +12,7 @@
 // copy and paste. A shell outlives the program and a lost socket: it is found again when the panel opens, its output replayed by the
 // server, and a socket that drops is opened again where it stopped. A shell lives on one server: Term.server is the connection everything
 // about it goes by, and leaving that server leaves its shells running there (terminals_forget).
-package occ
+package ocn
 
 import "base:runtime"
 import "core:encoding/json"
@@ -218,7 +218,7 @@ term_flush :: proc(ws: rawptr, c: ^Term_Conn) {
 	copy(data, c.out[:])
 	clear(&c.out)
 	sync.unlock(&c.lock)
-	if len(data) > 0 { _ = occ_ws_send(ws, raw_data(data), len(data)) }
+	if len(data) > 0 { _ = ocn_ws_send(ws, raw_data(data), len(data)) }
 	free_all(context.temp_allocator)
 }
 
@@ -286,14 +286,14 @@ term_thread :: proc(job: ^Term_Thread) {
 	tries := 0
 	for !sync.atomic_load(&c.stop) {
 		path := fmt.aprintf("%s%scursor=%d", job.path, strings.contains(job.path, "?") ? "&" : "?", c.cursor)
-		ws := occ_ws_open(job.http.client, raw_data(path), len(path))
+		ws := ocn_ws_open(job.http.client, raw_data(path), len(path))
 		delete(path)
 		if ws != nil {
 			began := time.tick_now()
-			occ_ws_read_timeout(ws, TERM_READ_MS)
+			ocn_ws_read_timeout(ws, TERM_READ_MS)
 			term_post(job, {is_link = true, link = .Attached})
 			term_read(job, ws)
-			occ_ws_free(ws)
+			ocn_ws_free(ws)
 			if time.duration_milliseconds(time.tick_since(began)) >= TERM_STABLE_MS { tries = 0 }
 		}
 		if sync.atomic_load(&c.stop) { break }

@@ -1,4 +1,4 @@
-package occ
+package ocn
 
 import "core:math"
 import "gt:draw"

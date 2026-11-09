@@ -1,7 +1,7 @@
 // The composer's history: Up and Down go through the prompts of the session shown, newest first. Another session's prompts
 // are not part of it. What was being typed is kept and comes back past the newest one, or on Escape. Editing what is shown
 // leaves the history: it is a new prompt.
-package occ
+package ocn
 
 import "core:strings"
 import "gt:ui"

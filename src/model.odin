@@ -1,6 +1,6 @@
 // What the client knows: the sessions, the open conversation (its messages and their parts), agents, models and the
 // pending permission requests. Loaded from the API, then kept current by the event stream.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:mem"

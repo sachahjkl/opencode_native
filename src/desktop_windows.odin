@@ -1,7 +1,7 @@
 // Windows: the words of this system. The toolkit's desktop and setup packages do the rest: the shortcuts with the
 // AppUserModelID, the Settings > Apps record (which also says where the copy is), the deferred deletion of the running
 // copy's file.
-package occ
+package ocn
 
 import desktop "gt:desktop"
 

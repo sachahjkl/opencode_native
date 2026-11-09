@@ -28,6 +28,6 @@ Ed25519, its own pair. Public half: `PRODUCT.public_key` in `src/update/product.
 and the repository's secret `UPDATE_SIGNING_KEY`, which the release workflow signs with. Changing the key orphans every copy
 already out: they would refuse what the new key signs.
 
-    occtools update keygen <file outside the repository>
-    occtools update manifest <exe> <version> <channel> <out.json>   (key: $UPDATE_SIGNING_KEY)
-    occtools update verify <file.json> <channel>
+    ocntools update keygen <file outside the repository>
+    ocntools update manifest <exe> <version> <channel> <out.json>   (key: $UPDATE_SIGNING_KEY)
+    ocntools update verify <file.json> <channel>

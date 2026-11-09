@@ -1,6 +1,6 @@
-package occ
+package ocn
 
-// A sampling profiler for the bench (-define:OCC_PROFILE=true, Windows, with -debug for the names): a thread that stops the
+// A sampling profiler for the bench (-define:OCN_PROFILE=true, Windows, with -debug for the names): a thread that stops the
 // bench's thread every millisecond and walks its stack (RtlVirtualUnwind), named by DbgHelp at the end. For each case: the
 // functions the samples were in (self), and those on the stack (total). docs/performance.md says how to run it.
 
@@ -12,7 +12,7 @@ import "core:thread"
 import "core:time"
 import win "core:sys/windows"
 
-OCC_PROFILE :: #config(OCC_PROFILE, false)
+OCN_PROFILE :: #config(OCN_PROFILE, false)
 
 CONTEXT_WANTED :: 0x00100003   // CONTEXT_AMD64 | CONTROL | INTEGER
 PROFILE_DEPTH :: 48
@@ -43,7 +43,7 @@ _uses :: proc() {   // (-vet: what only the sampler uses, when it is left out)
 	_ = strings.contains
 }
 
-when OCC_PROFILE {
+when OCN_PROFILE {
 	foreign import dbghelp "system:Dbghelp.lib"
 	foreign import ntdll_lib "system:ntdll.lib"
 
@@ -123,7 +123,7 @@ when OCC_PROFILE {
 		rows := make([dynamic]Row, context.temp_allocator)
 		for k, n in by_name {
 			skip := false
-			for noise in ([]string{"thread::", "testing::", "Rtl", "BaseThread", "tk_session", "bench_frame", "a_long_conversation", "WaitForSingle", "NtWait", "occ::frame"}) {
+			for noise in ([]string{"thread::", "testing::", "Rtl", "BaseThread", "tk_session", "bench_frame", "a_long_conversation", "WaitForSingle", "NtWait", "ocn::frame"}) {
 				if strings.contains(k, noise) { skip = true }
 			}
 			if !skip { append(&rows, Row{k, n}) }
@@ -134,7 +134,7 @@ when OCC_PROFILE {
 	}
 }
 
-when OCC_PROFILE {
+when OCN_PROFILE {
 	@(private = "file")
 	print_chains :: proc(p: ^Profile) {
 		by := make(map[string]int, allocator = context.temp_allocator)
@@ -158,7 +158,7 @@ when OCC_PROFILE {
 
 // Samples the calling thread until profile_end.
 profile_begin :: proc() {
-	when OCC_PROFILE {
+	when OCN_PROFILE {
 		@(static) symbols: bool
 		if !symbols { symbols = true; SymSetOptions(0x2); SymInitialize(win.GetCurrentProcess(), nil, true) }
 		p := &profile
@@ -181,7 +181,7 @@ profile_begin :: proc() {
 }
 
 profile_end :: proc(name: string) {
-	when OCC_PROFILE {
+	when OCN_PROFILE {
 		p := &profile
 		sync.atomic_store(&p.stop, true)
 		thread.join(p.sampler)

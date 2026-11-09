@@ -1,4 +1,4 @@
-package occ_update
+package ocn_update
 
 import "core:testing"
 import update "gt:update"

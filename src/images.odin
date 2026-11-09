@@ -5,7 +5,7 @@
 // time, and an image no longer shown when its turn comes is not decoded. (A 2048-pixel texture for every thumbnail of a
 // long conversation held a gigabyte; a find that built them all decoded them all at once.) Thumbnails open the viewer,
 // a dialog exactly around the image fitted to the window, at the size the person chose; both copy the image (image_copy).
-package occ
+package ocn
 
 import "core:fmt"
 import "core:hash"
@@ -82,7 +82,7 @@ Decode_Job :: struct {
 	copy:     bool,   // for the clipboard (image_copy): its pixels at full size, no texture
 	// the answer
 	w, h:     u32,
-	out:      Occ_Buf,
+	out:      Ocn_Buf,
 	ok:       bool,
 }
 
@@ -145,9 +145,9 @@ images_pump :: proc(app: ^App) {
 // On a thread of its own: the decode, its answer posted to the interface's thread.
 @(private = "file")
 image_decode_run :: proc(job: ^Decode_Job) {
-	r := occ_image_decode(raw_data(job.data), len(job.data), i32(job.encoding), job.max_dim, &job.w, &job.h, &job.out)
+	r := ocn_image_decode(raw_data(job.data), len(job.data), i32(job.encoding), job.max_dim, &job.w, &job.h, &job.out)
 	job.ok = r == 0
-	if !ui.post(&job.app.state, image_decoded, job) { occ_buf_free(job.out); delete(job.data); free(job) }
+	if !ui.post(&job.app.state, image_decoded, job) { ocn_buf_free(job.out); delete(job.data); free(job) }
 }
 
 // The image's pixels on the system's clipboard, at the size of its file. (The textures are scaled down, and the GPU's are not read
@@ -165,7 +165,7 @@ image_copy :: proc(app: ^App, ref: Image_Ref) {
 image_decoded :: proc(data: rawptr, word: u64) {
 	app := the_app
 	job := (^Decode_Job)(data)
-	defer { occ_buf_free(job.out); delete(job.data); free(job) }
+	defer { ocn_buf_free(job.out); delete(job.data); free(job) }
 	sync.atomic_sub(&app.pending, 1)
 	if job.copy {
 		pixels := platform.Clipboard_Image{rgba = job.out.ptr[:job.out.len], size = {int(job.w), int(job.h)}}

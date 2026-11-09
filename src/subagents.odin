@@ -2,7 +2,7 @@
 // what is known of one (its call, its session, its result, what it does now), the card that shows it in the parent's
 // conversation, the line of its result, drilling down into it and back, the banner of a sub-agent's own conversation,
 // the menu of a session's sub-agents, and their tree in the sidebar.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:hash"

@@ -2,7 +2,7 @@
 // agents, the models, the server's own commands and the settings (a switch flips; the others open the settings on themselves).
 // A first character narrows it: > commands, @ sessions, / the server's commands, # models, : settings. What was chosen before
 // comes first (it fades with a half-life of two weeks, palette_usage.txt beside the preferences).
-package occ
+package ocn
 
 import "core:fmt"
 import "core:math"

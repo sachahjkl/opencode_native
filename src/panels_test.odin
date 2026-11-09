@@ -1,4 +1,4 @@
-package occ
+package ocn
 
 // The bench of the panels and of what is around them (answers_test.odin has the bench itself): shells as tabs of the dock, the page and its
 // agents, the updater. What needs a window, a socket or a web view is not here: their logic is, in what those call.
@@ -1185,7 +1185,7 @@ the_same_name_keeps_its_password :: proc(t: ^testing.T) {
 an_empty_file_ends_the_wait :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	path := filepath.join({os.get_env("TEMP", context.temp_allocator), "occ_empty_image_test.png"}, context.temp_allocator) or_else ""
+	path := filepath.join({os.get_env("TEMP", context.temp_allocator), "ocn_empty_image_test.png"}, context.temp_allocator) or_else ""
 	testing.expect(t, os.write_entire_file(path, []u8{}) == nil, "the file")
 	defer os.remove(path)
 	image_view_start(app, path)

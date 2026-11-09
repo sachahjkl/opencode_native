@@ -13,7 +13,7 @@
 //
 // A client's tools are its folder's. The link follows the session shown, unless a session of the folder it is in is at work: it stays there for
 // that agent, and another takes what is shown, until the agent is done (browser_links_follow).
-package occ
+package ocn
 
 import "core:encoding/base64"
 import "core:encoding/json"
@@ -96,8 +96,8 @@ BROWSER_TOOLS :: `[` +
 	`]`
 
 // Every element that matters, numbered in the page itself: a ref stays good until the page changes.
-SNAPSHOT_JS :: `(()=>{let n=0,out=[];document.querySelectorAll('a,button,input,textarea,select,summary,label,h1,h2,h3,[role],[onclick],[contenteditable]').forEach(e=>{const r=e.getBoundingClientRect();if(!r.width||!r.height)return;const ref='e'+(++n);e.setAttribute('data-occ-ref',ref);const t=(e.innerText||e.value||e.getAttribute('aria-label')||e.placeholder||e.alt||'').trim().replace(/\s+/g,' ').slice(0,120);out.push('['+ref+'] '+(e.getAttribute('role')||e.tagName.toLowerCase())+(e.type?' '+e.type:'')+' "'+t+'"'+(e.href?' -> '+e.href:''))});return document.title+'\n'+location.href+'\n\n'+out.join('\n')+'\n\n'+((document.body&&document.body.innerText)||'').slice(0,12000)})()`
-CONSOLE_HOOK_JS :: `(()=>{if(window.__occ_log)return;window.__occ_log=[];const add=(l,a)=>{window.__occ_log.push(l+': '+[...a].map(String).join(' '));if(window.__occ_log.length>200)window.__occ_log.shift()};for(const l of ['log','info','warn','error']){const f=console[l];console[l]=(...a)=>{add(l,a);f.apply(console,a)}}addEventListener('error',e=>add('uncaught',[e.message,e.filename+':'+e.lineno]));addEventListener('unhandledrejection',e=>add('unhandled',[e.reason]))})()`
+SNAPSHOT_JS :: `(()=>{let n=0,out=[];document.querySelectorAll('a,button,input,textarea,select,summary,label,h1,h2,h3,[role],[onclick],[contenteditable]').forEach(e=>{const r=e.getBoundingClientRect();if(!r.width||!r.height)return;const ref='e'+(++n);e.setAttribute('data-ocn-ref',ref);const t=(e.innerText||e.value||e.getAttribute('aria-label')||e.placeholder||e.alt||'').trim().replace(/\s+/g,' ').slice(0,120);out.push('['+ref+'] '+(e.getAttribute('role')||e.tagName.toLowerCase())+(e.type?' '+e.type:'')+' "'+t+'"'+(e.href?' -> '+e.href:''))});return document.title+'\n'+location.href+'\n\n'+out.join('\n')+'\n\n'+((document.body&&document.body.innerText)||'').slice(0,12000)})()`
+CONSOLE_HOOK_JS :: `(()=>{if(window.__ocn_log)return;window.__ocn_log=[];const add=(l,a)=>{window.__ocn_log.push(l+': '+[...a].map(String).join(' '));if(window.__ocn_log.length>200)window.__ocn_log.shift()};for(const l of ['log','info','warn','error']){const f=console[l];console[l]=(...a)=>{add(l,a);f.apply(console,a)}}addEventListener('error',e=>add('uncaught',[e.message,e.filename+':'+e.lineno]));addEventListener('unhandledrejection',e=>add('unhandled',[e.reason]))})()`
 
 ////////////////////////////////
 // The link, on its thread
@@ -371,7 +371,7 @@ run_script :: proc(app: ^App, t: ^Preview_Tab, to: Browser_To, id, code: string)
 // `ref` and the words of a script: quoted for the page, whatever they hold.
 @(private = "file")
 element_js :: proc(ref, body: string) -> string {
-	return fmt.tprintf(`(()=>{{const e=document.querySelector('[data-occ-ref="'+%s+'"]');if(!e)return 'no element with that ref: take a new snapshot';%s}})()`, jquote(ref), body)
+	return fmt.tprintf(`(()=>{{const e=document.querySelector('[data-ocn-ref="'+%s+'"]');if(!e)return 'no element with that ref: take a new snapshot';%s}})()`, jquote(ref), body)
 }
 
 // A step of the page's history, when it has one to take: a step that cannot happen would be waited for until the call's limit.
@@ -469,7 +469,7 @@ tool_call :: proc(app: ^App, to: Browser_To, id, name: string, args: json.Value,
 	case "evaluate":
 		run_script(app, t, to, id, jstr(args, "expression"))
 	case "console":
-		run_script(app, t, to, id, `(window.__occ_log||[]).join('\n')||'(nothing logged)'`)
+		run_script(app, t, to, id, `(window.__ocn_log||[]).join('\n')||'(nothing logged)'`)
 	case "screenshot":
 		// (a page out of sight is not painted: what would come back is nothing, or an old picture)
 		if !preview_tab_shown(app, t) {

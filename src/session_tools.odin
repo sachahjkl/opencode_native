@@ -10,7 +10,7 @@
 // staged; then committing or cancelling until the server has answered. Each request has its ticket: a late answer of one state never
 // reaches another. A stage nobody waits for any more is cancelled by the one who knows it: the state, or net.odin answer_left once the
 // server was left.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

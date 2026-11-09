@@ -2,7 +2,7 @@
 // PDF or a text file goes as a data URL, so a server on another machine gets it too; an image shows as a thumbnail over
 // the composer, every one as its name. Another file (a program, an archive) goes in the text as its path, which the agent
 // can read on its own machine.
-package occ
+package ocn
 
 import "core:encoding/base64"
 import "core:fmt"

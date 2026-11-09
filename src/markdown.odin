@@ -1,6 +1,6 @@
 // Markdown of the replies, the subset models write: headings, paragraphs, lists, quotes, rules, tables, fenced code,
 // and inline **bold**, *italic*, `code`, ~~strike~~, [links](url). Each block is a rich_paragraph (selectable).
-package occ
+package ocn
 
 import "core:fmt"
 import "core:math"

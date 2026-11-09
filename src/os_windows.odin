@@ -1,5 +1,5 @@
 // What the client asks of Windows itself: the local time's offset, the taskbar button flashing, a message box.
-package occ
+package ocn
 
 import "core:encoding/base64"
 import "core:strings"

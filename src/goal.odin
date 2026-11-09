@@ -3,7 +3,7 @@
 // it stands (active, paused, met), the rounds, and what can be done to it (pause or resume, change, clear), each one the
 // `/goal` command. It is read when the session is shown (POST /api/rpc/opencode.goal/get) and follows the stream's
 // rpc.opencode.goal.changed.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

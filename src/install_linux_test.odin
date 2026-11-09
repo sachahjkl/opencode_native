@@ -1,5 +1,5 @@
 #+build linux
-package occ
+package ocn
 
 import "core:fmt"
 import "core:os"

@@ -7,7 +7,7 @@
 //
 // What fails comes back to the composer of the session it was for. If that session is not the one shown, it waits for it, here
 // (outgoing_return); it never lands in another session's composer. A first prompt belongs to the home page.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

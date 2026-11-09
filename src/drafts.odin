@@ -5,7 +5,7 @@
 // The texts are kept on disk too (drafts.json, beside the preferences), a second after the typing stops (at most every
 // DRAFTS_SAVE_MOST_MS while it goes on), and when the program closes: a crash loses that second at most. Only the texts:
 // an attachment is an image's data, and a mention's file is the server's; they live as long as the program.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

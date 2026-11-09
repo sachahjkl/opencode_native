@@ -14,7 +14,7 @@
 // The identity's names and marks are those Setup used before the package (0.20.0 and earlier): an install it made is found
 // and removed. Its record was a `version` file in the install folder (Linux) or the registry key alone (Windows), not the
 // manifest: such an install reads as Repair, which rewrites it in today's form (LEGACY_RECORD).
-package occ
+package ocn
 
 import "core:fmt"
 import "core:os"

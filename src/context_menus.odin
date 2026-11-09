@@ -1,7 +1,7 @@
 // The menus of a right click: on a message, a tool call, a link's message, the composer, a session. A right press is looked
 // at where each thing is built, the innermost first (the first to take it keeps it); the menu is built once, at the end of the
 // build, for what was noted.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

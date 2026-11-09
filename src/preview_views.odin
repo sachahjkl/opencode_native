@@ -3,7 +3,7 @@
 // `cx.previews`, parked, by session. Only the front tab of the session shown is visible; every other page is alive and hidden. A web view is
 // made when a tab first needs one, so a session that never opens the browser costs nothing. Whatever a view says reaches its own tab: a
 // parked page goes on loading, and an agent can go on driving it.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:strings"

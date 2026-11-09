@@ -50,7 +50,7 @@
       '';
     };
 
-    # Ghostty's terminal emulation (libghostty-vt), as tools/occtools/build.odin builds it: the commit of its tag vt-1.0.0.
+    # Ghostty's terminal emulation (libghostty-vt), as tools/ocntools/build.odin builds it: the commit of its tag vt-1.0.0.
     ghosttyCommit = "0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec";
     ghosttySrc = pkgs.fetchFromGitHub {
       owner = "ghostty-org";
@@ -114,7 +114,7 @@
     in
       builtins.head (builtins.match ''APP_VERSION :: "([^"]+)".*'' line);
 
-    # The client, built from this tree as the release is: occtools build release.
+    # The client, built from this tree as the release is: ocntools build release.
     opencode-native = pkgs.stdenv.mkDerivation {
       pname = "opencode-native";
       inherit version;
@@ -153,7 +153,7 @@
         directory = "$cargoDeps"
         EOF
         export CARGO_NET_OFFLINE=true
-        # libghostty-vt, built above: the stamp occtools writes when it builds it, so it does not fetch Zig and Ghostty
+        # libghostty-vt, built above: the stamp ocntools writes when it builds it, so it does not fetch Zig and Ghostty
         mkdir -p build/vt
         cp ${libghosttyVt}/lib/libghostty-vt.a build/vt/libghostty-vt.a
         echo "${ghosttyCommit} 0.17.0 linux" > build/vt/STAMP
@@ -162,7 +162,7 @@
 
       buildPhase = ''
         runHook preBuild
-        odin run tools/occtools -collection:gt=ext/gui_toolkit/src -out:build/occtools -- build release
+        odin run tools/ocntools -collection:gt=ext/gui_toolkit/src -out:build/ocntools -- build release
         runHook postBuild
       '';
 
@@ -230,7 +230,7 @@
     devShells.${system}.default = pkgs.mkShell {
       packages = [odin zig] ++ (with pkgs; [clang lld cargo rustc rsync socat git curl]) ++ preCommit.enabledPackages;
       buildInputs = [pkgs.fontconfig];
-      # the system's Vulkan drivers where it has them; under WSL, occtools wsl_client says which
+      # the system's Vulkan drivers where it has them; under WSL, ocntools wsl_client says which
       MESA_ICD_DIR = "${pkgs.mesa}/share/vulkan/icd.d";
       # (nix develop clears LD_LIBRARY_PATH if set as an attribute)
       shellHook =

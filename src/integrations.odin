@@ -3,7 +3,7 @@
 //
 // A key goes from its field to the server and is forgotten. The list of credentials says theirs too: only the ids and which is active are
 // read from it, nothing else is ever copied here.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

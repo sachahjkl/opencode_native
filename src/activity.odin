@@ -3,7 +3,7 @@
 // A line over the composer says how many; Down from the composer (or a click on that line) opens the tray under it: a row
 // each, with the tail of what it prints, so that one can watch them without going into them. The focus stays in the
 // composer: while the tray is open the arrows, Enter, Delete and Escape are the tray's, and typing closes it.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

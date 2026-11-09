@@ -1,4 +1,4 @@
-package occ
+package ocn
 
 import "core:os"
 import "core:path/filepath"
@@ -79,7 +79,7 @@ every_theme_reads :: proc(t: ^testing.T) {
 // themes.txt: a theme from another, a few colours of its own; a theme of the program's name is the user's; what is not a colour is left.
 @(test)
 themes_of_ones_own :: proc(t: ^testing.T) {
-	dir := filepath.join({os.get_env("TEMP", context.temp_allocator), "occ_theme_test"}, context.temp_allocator) or_else ""
+	dir := filepath.join({os.get_env("TEMP", context.temp_allocator), "ocn_theme_test"}, context.temp_allocator) or_else ""
 	_ = os.make_directory(dir)
 	defer os.remove_all(dir)
 	app := new(App)

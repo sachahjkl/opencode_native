@@ -1,7 +1,7 @@
 // The files of a session's folder, read from the server, which may be on another machine: `@` in the composer names one (or a sub-agent)
 // for the prompt, the dialog browses them and shows one. A file named goes with the prompt as a file:// uri, which the server reads and
 // inlines; the text keeps its `@path`, and the server is told where it stands in it.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

@@ -2,7 +2,7 @@
 // later), the artifacts of a folder (pages an agent published) and the plugins. Schedules and artifacts are experimental on the server,
 // off unless its configuration turns them on: the dialogs say what it answers then. A plugin's GUI bundle is CommonJS for the Electron
 // app: there is nothing here to run it.
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

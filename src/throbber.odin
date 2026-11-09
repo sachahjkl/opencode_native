@@ -1,7 +1,7 @@
 // What says that a run goes on. By default a word from a split-flap board: it says what the agent does now (reading, editing,
 // thinking), its letters fall in place when it changes, and one flips from time to time. It moves by steps, at a pace of its
 // own: nothing glides, so no frame late can show. appearance.throbber chooses another one.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:math"

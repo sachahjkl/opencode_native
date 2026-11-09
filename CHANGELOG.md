@@ -5,6 +5,10 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+
+- **The source's short name is `ocn`**, not `occ`: the Odin package, the tool (`tools/ocntools`, `build/ocntools`), the Rust library (`native/ocn_native`, its `ocn_*` functions) and the defines (`-define:OCN_BENCH`, `-define:OCN_PROFILE`).
+
 ## [0.33.0] - 2026-11-09
 
 ### Added

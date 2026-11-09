@@ -1,5 +1,5 @@
-// Made by occtools vt from the headers of libghostty-vt at 0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec: not to be edited. What it holds: tools/occtools/vt.odin.
-package occ
+// Made by ocntools vt from the headers of libghostty-vt at 0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec: not to be edited. What it holds: tools/ocntools/vt.odin.
+package ocn
 
 when ODIN_OS == .Windows {
 	foreign import ghostty_vt { "../build/vt/ghostty-vt-static.lib", "system:ntdll.lib" }

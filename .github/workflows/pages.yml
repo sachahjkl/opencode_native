@@ -1,4 +1,4 @@
-# Publishes site/ (plain HTML and CSS) to GitHub Pages, with the pages occtools makes of it: `occtools site build`, SITE_URL says where.
+# Publishes site/ (plain HTML and CSS) to GitHub Pages, with the pages ocntools makes of it: `ocntools site build`, SITE_URL says where.
 # Pages use the "GitHub Actions" source (set once: gh api -X POST repos/sachahjkl/opencode_native/pages -f build_type=workflow).
 name: Pages
 
@@ -8,7 +8,7 @@ on:
     paths:
       - "site/**"
       - "CHANGELOG.md"
-      - "tools/occtools/**"
+      - "tools/ocntools/**"
       - ".github/actions/setup-odin-tools/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
@@ -31,11 +31,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          submodules: true   # (occtools signs with the toolkit's update package)
+          submodules: true   # (ocntools signs with the toolkit's update package)
       - uses: actions/configure-pages@v6
       - uses: ./.github/actions/setup-odin-tools
-      - run: mkdir -p build && odin build tools/occtools -collection:gt=ext/gui_toolkit/src -out:build/occtools
-      - run: build/occtools site build site _site
+      - run: mkdir -p build && odin build tools/ocntools -collection:gt=ext/gui_toolkit/src -out:build/ocntools
+      - run: build/ocntools site build site _site
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site

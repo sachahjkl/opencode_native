@@ -1,7 +1,7 @@
 // Updates: a release publishes a signed manifest per platform and channel (docs/updates.md), and this checks it, downloads the
 // program it names and puts it in place of the running one, with the toolkit's update package (gt:update) and this program's
 // product (src/update). Nothing here waits on the interface's thread. A Nix package is never updated here: Nix updates it.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:os"
@@ -10,7 +10,7 @@ import "core:thread"
 import "gt:config"
 import process "gt:process"
 import "gt:ui"
-import occ_update "update"
+import ocn_update "update"
 import update "gt:update"
 import lucide "gt:lucide"
 
@@ -123,7 +123,7 @@ check_job :: proc(j: ^Update_Job) {
 	sig, s_ok, _ := fetch(&h, fmt.tprintf("%s%s.sig", j.path, name))
 	if !s_ok { j.err = strings.clone("the update has no signature: refused"); return }
 	defer delete(sig)
-	m, err := update.check_release(occ_update.PRODUCT, transmute([]byte)manifest, sig, update.PLATFORM, j.channel, APP_VERSION, "")
+	m, err := update.check_release(ocn_update.PRODUCT, transmute([]byte)manifest, sig, update.PLATFORM, j.channel, APP_VERSION, "")
 	#partial switch err {
 	case .None:      j.found = m
 	case .Not_Newer: j.nothing_new = true

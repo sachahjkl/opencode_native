@@ -1,6 +1,6 @@
 // The look: opencode's dark palette (near-black steps, warm peach accent) with machined surfaces drawn by hand —
 // bevelled and ridged buttons, sunken wells, carved grooves, glowing status lamps.
-package occ
+package ocn
 
 import "core:fmt"
 import "core:math"

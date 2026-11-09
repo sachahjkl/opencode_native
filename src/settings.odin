@@ -1,7 +1,7 @@
 // Settings: the client's own preferences (the toolkit's typed registry, gt:config: named, bounded, documented, saved to
 // %APPDATA%\opencode-native\prefs.txt, applied at once) and what the opencode server lets one see and change (its shell,
 // its MCP servers, its saved permissions, its usage, its providers, agents, skills, commands, its configuration files).
-package occ
+package ocn
 
 import "core:encoding/json"
 import "core:fmt"

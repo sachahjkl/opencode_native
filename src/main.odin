@@ -2,7 +2,7 @@
 //   build.bat            -> build\opencode-native.exe
 //   opencode-native.exe [--url=http://127.0.0.1:4096] [--password=...]
 // Without arguments it finds this computer's opencode server (~/.local/state/opencode/service.json, else ~/.config/opencode/service.json).
-package occ
+package ocn
 
 import "core:fmt"
 import "core:mem/virtual"
@@ -106,7 +106,7 @@ App :: struct {
 	view_resize_from: [3]f32,                // a grip of the viewer held: the dialog's size (logical pixels) and scale at its press ({}: none)
 	view_grown:     bool,                    // the viewer's grips were dragged since it opened: its picture may pass its pixels (viewer_frame)
 	view_start:       Image_Ref,             // --image=<file>: opened in the viewer once it is decoded (its data owned)
-	devtools:         ^devtools.Server,   // TOOLKIT_DEVTOOLS=<port>: driven over the Chrome DevTools Protocol (the toolkit's tk cdp, or gt:cdp in occtools)
+	devtools:         ^devtools.Server,   // TOOLKIT_DEVTOOLS=<port>: driven over the Chrome DevTools Protocol (the toolkit's tk cdp, or gt:cdp in ocntools)
 	setup:            setup.Dialog,
 	quit:             bool,
 	last_tick:        time.Tick,
@@ -560,7 +560,7 @@ WEIGHT_MONO_BOLD :: 700
 WEIGHT_UI_BOLD   :: 600
 WEIGHT_REGULAR   :: 400
 
-// --font-dir=<folder>: faces tried from files, nothing installed (occtools font_proposals): ui, ui-bold, ui-italic,
+// --font-dir=<folder>: faces tried from files, nothing installed (ocntools font_proposals): ui, ui-bold, ui-italic,
 // ui-bold-italic, mono, mono-bold and, for the answers when they are another family than the interface, prose, prose-bold,
 // prose-italic, prose-bold-italic (.ttf). A file that is not there leaves what the preferences gave.
 @(private = "file")
@@ -695,7 +695,7 @@ main :: proc() {
 	app.win = platform.open_window(APP_NAME, {WINDOW_W, WINDOW_H}, transparent = true, integrated_title = true)
 	if app.win == nil { fmt.eprintln("opencode-native: no window"); os.exit(1) }
 	if !fonts_init(app) { fmt.eprintln("opencode-native: no UI font"); os.exit(1) }
-	for a in os.args[1:] {   // --size=<w>x<h>: the window's size in pixels, whichever screen it opens on (occtools shots)
+	for a in os.args[1:] {   // --size=<w>x<h>: the window's size in pixels, whichever screen it opens on (ocntools shots)
 		if !strings.has_prefix(a, "--size=") { continue }
 		wh := strings.split(a[len("--size="):], "x", context.temp_allocator)
 		if len(wh) != 2 { continue }

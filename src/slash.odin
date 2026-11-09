@@ -1,7 +1,7 @@
 // The server's commands, proposed as one types: `/` at the start of the composer opens a list of those whose name matches
 // what follows it (subsequence matching, the best first). Up and Down choose, Tab or Enter puts `/name ` in the composer,
 // Escape closes it for this word. Enter on a name typed in full sends it, as before (slash_send).
-package occ
+package ocn
 
 import "core:slice"
 import "core:strings"

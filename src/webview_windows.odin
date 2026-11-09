@@ -1,6 +1,6 @@
-// The web views of the Preview panel on Windows: WebView2, by the client's Rust library (native/occ_native/src/webview.rs). Their
+// The web views of the Preview panel on Windows: WebView2, by the client's Rust library (native/ocn_native/src/webview.rs). Their
 // profile is a folder of its own beside the preferences, one for every view: what an agent does in a page does not touch the user's browser.
-package occ
+package ocn
 
 import "base:runtime"
 import "core:path/filepath"
@@ -59,19 +59,19 @@ system_open :: proc(app: ^App, v: ^Web_View, parent: ^platform.Window) -> rawptr
 		composition_below_children(app)
 	}
 	folder := pjoin({filepath.dir(prefs_path()), "webview"})
-	return occ_webview_new(hwnd_of(parent), raw_data(folder), len(folder), on_web, v)
+	return ocn_webview_new(hwnd_of(parent), raw_data(folder), len(folder), on_web, v)
 }
 
 web_host_system :: proc() -> Web_Host {
 	return {
 		open = system_open,
-		close = proc(native: rawptr) { occ_webview_free(native) },
-		parent = proc(native: rawptr, w: ^platform.Window) { occ_webview_parent(native, hwnd_of(w)) },
-		navigate = proc(native: rawptr, url: string) { occ_webview_navigate(native, raw_data(url), len(url)) },
-		act = proc(native: rawptr, what: Web_Act) { occ_webview_act(native, i32(what)) },
-		can = proc(native: rawptr, what: Web_Act) -> bool { return occ_webview_can(native, i32(what)) != 0 },
-		script = proc(native: rawptr, code: string, id: u64) { occ_webview_script(native, raw_data(code), len(code), id) },
-		capture = proc(native: rawptr, id: u64) { occ_webview_capture(native, id) },
-		place = proc(native: rawptr, x, y, w, h: int, visible: bool) { occ_webview_place(native, i32(x), i32(y), i32(w), i32(h), visible ? 1 : 0) },
+		close = proc(native: rawptr) { ocn_webview_free(native) },
+		parent = proc(native: rawptr, w: ^platform.Window) { ocn_webview_parent(native, hwnd_of(w)) },
+		navigate = proc(native: rawptr, url: string) { ocn_webview_navigate(native, raw_data(url), len(url)) },
+		act = proc(native: rawptr, what: Web_Act) { ocn_webview_act(native, i32(what)) },
+		can = proc(native: rawptr, what: Web_Act) -> bool { return ocn_webview_can(native, i32(what)) != 0 },
+		script = proc(native: rawptr, code: string, id: u64) { ocn_webview_script(native, raw_data(code), len(code), id) },
+		capture = proc(native: rawptr, id: u64) { ocn_webview_capture(native, id) },
+		place = proc(native: rawptr, x, y, w, h: int, visible: bool) { ocn_webview_place(native, i32(x), i32(y), i32(w), i32(h), visible ? 1 : 0) },
 	}
 }

@@ -1,4 +1,4 @@
-package occ
+package ocn
 
 import "core:os"
 import "core:strings"

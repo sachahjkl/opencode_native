@@ -1,4 +1,4 @@
-package occ
+package ocn
 
 // The sidebar's modes, what is not seen, what holds the rows under the pointer, and where a fork stops.
 
