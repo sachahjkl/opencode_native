@@ -8,6 +8,7 @@ project follows [semantic versioning](https://semver.org).
 ### Changed
 
 - **Setup works on a thread of its own and follows the disk** (gui_toolkit 0.131.0): reading the install, Install and Uninstall no longer freeze the window, and while the dialog is open an install changed or removed elsewhere shows at once. Uninstall asks for a second click.
+- **The Setup dialog is laid out dense** (gui_toolkit 0.132.0): a title bar, a header with the state as a badge, the install location, the options as a grid of boxes, a box of what the disk says, then the buttons.
 
 ## [0.31.1] - 2026-11-09
 
