@@ -5,6 +5,8 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-09
+
 ### Added
 
 - **Push to the background**: a shell command that holds the session's turn goes to the background and the session goes on (`POST /api/session/:id/background`): a button beside Stop while such a command runs, `Background` on its row of the activity tray, and the command palette's "Push the running command to the background".
@@ -864,7 +866,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.23.0
 [0.22.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.22.0
 [0.21.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.21.0
 [0.20.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.20.0
