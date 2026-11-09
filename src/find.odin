@@ -120,11 +120,12 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 	n := ui.find_count()
 	w := math.round(em * 24)
 	ui.next({fixed_x = right - w, fixed_y = top, width = ui.px(w), height = ui.children_sum(), axis = .X, cross = .Center})
-	if plate("###findbar", radius = 8, shadow = 8) {
-		ui.spacer(ui.px(em * 0.4))
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
-		if well("###fw", .X, radius = 6, focus = 1) {
-			ui.spacer(ui.px(em * 0.5))
+	// One box: the field and its buttons in a single well, its focus ring around all of it. (The plate under it is only its shadow:
+	// the same size and the same corners, all of it covered; a well inside a plate showed the plate's edge beside it.)
+	if plate("###findbar", radius = FIND_RADIUS, shadow = 8, rim = 0, border = CLEAR) {
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), axis = .X, cross = .Center})
+		if well("###fw", .X, radius = FIND_RADIUS, focus = 1) {
+			ui.spacer(ui.px(em * 0.6))
 			glyph(ICO_SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
@@ -137,15 +138,16 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 			pending := ui.find_pending()   // (read so far, and how far: "no match" would be a lie before the end; nothing while the needle rests)
 			count := needle == "" ? "" : pending ? (ui.find_progress() < 1 ? fmt.tprintf("%d…  %d %%", n, int(ui.find_progress() * 100)) : "") : n == 0 ? "no match" : fmt.tprintf("%d / %d", max(f.index, 0) + 1, n)
 			text("fc", count, n == 0 && !pending ? hex(HEX_RED) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)})
-			ui.spacer(ui.px(em * 0.5))
+			ui.spacer(ui.px(em * 0.4))
+			if glyph_button("###fprev", ICO_UP, math.round(em * GLYPH_BUTTON_EM)).clicked { find_step(app, -1) }
+			if glyph_button("###fnext", ICO_DOWN, math.round(em * GLYPH_BUTTON_EM)).clicked { find_step(app, 1) }
+			if glyph_button("###fclose", ICO_CANCEL, math.round(em * GLYPH_BUTTON_EM)).clicked { find_close(app) }
+			ui.spacer(ui.px(em * 0.3))
 		}
-		ui.spacer(ui.px(em * 0.3))
-		if glyph_button("###fprev", ICO_UP, math.round(em * GLYPH_BUTTON_EM)).clicked { find_step(app, -1) }
-		if glyph_button("###fnext", ICO_DOWN, math.round(em * GLYPH_BUTTON_EM)).clicked { find_step(app, 1) }
-		if glyph_button("###fclose", ICO_CANCEL, math.round(em * GLYPH_BUTTON_EM)).clicked { find_close(app) }
-		ui.spacer(ui.px(em * 0.3))
 	}
 }
+
+FIND_RADIUS :: 7
 
 // The keys that work anywhere in the window.
 find_keys :: proc(app: ^App) {

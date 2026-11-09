@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.24.8] - 2026-11-09
+
+### Changed
+
+- **The find bar is one box**: the field, its count and its buttons in a single well, its focus ring around all of it. It was a field inside a plate, whose rounded edge showed beside the field on the left.
+- **A sub-agent's card holds its prompt and its result as they are**, under their titles: each was a box of its own inside the card (and the result's code blocks a third one inside that).
+
 ## [0.24.7] - 2026-11-09
 
 ### Fixed
@@ -948,7 +955,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.7...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.8...HEAD
+[0.24.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.8
 [0.24.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.7
 [0.24.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.6
 [0.24.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.5

@@ -493,23 +493,14 @@ card_body :: proc(app: ^App, v: ^Sub_View, pid: string, running: bool, em: f32) 
 			}
 			if v.prompt != "" {
 				section_label("pr", "PROMPT", em)
-				mono_well("###prompt", v.prompt, em, PROMPT_LINES_MAX, hex(HEX_TEXT_SOFT))
+				body, extra := mono_cut(v.prompt, PROMPT_LINES_MAX)   // (the card is its frame: no box of its own inside it)
+				mono_text(body, extra, em, 0, hex(HEX_TEXT_SOFT), flush = true)
 				ui.spacer(ui.px(em * 0.6))
 			}
 			if v.result != "" {
 				section_label("re", v.state == .Failed ? "ERROR" : "RESULT", em)
-				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-				if well("###result", radius = 7, base = HEX_FACTS_WELL) {
-					ui.spacer(ui.px(em * 0.7))
-					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-					if ui.row() {
-						ui.spacer(ui.px(em * 0.9))
-						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-						if ui.column() { markdown(fmt.tprintf("%s_res", pid), v.result, hex(HEX_CARD_RESULT), math.round(em * FS_LABEL)) }
-						ui.spacer(ui.px(em * 0.9))
-					}
-					ui.spacer(ui.px(em * 0.7))
-				}
+				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})   // (as the prompt: in the card, no box of its own)
+				if ui.column(id = "###result") { markdown(fmt.tprintf("%s_res", pid), v.result, hex(HEX_CARD_RESULT), math.round(em * FS_LABEL)) }
 				ui.spacer(ui.px(em * 0.4))
 			} else if running {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
