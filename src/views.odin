@@ -1326,6 +1326,19 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 			glyph(open ? ICO_DOWN : ICO_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY))
 			ui.spacer(ui.px(em * 0.6))
 		}
+		// a shell call: it can go to the background while it holds the turn, and says so once it is there
+		if bg, bg_running := part_background(app, p); bg || (running && tool_kind(p.tool_name) == .Shell) {
+			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
+			if ui.row(.Center, id = "###bgrow") {
+				ui.spacer(ui.px(em * 0.5))
+				if bg {
+					if bg_running { session_lamp("###bgl", LAMP_BACKGROUND, em); ui.spacer(ui.px(em * 0.35)) }
+					text("bgt", bg_running ? "in background" : "finished in background", hex(bg_running ? HEX_TEXT_SOFT : HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				} else if hint_action("###bgpush", "push to background", em, app.mono, ICO_BACKGROUND) {
+					background_session(app, app.chat.id)
+				}
+			}
+		}
 		show_error := p.status == .Error && p.output != ""
 		// (what changed in a file shows even folded, as images do: a screenshot, a diff are what one looks for)
 		show_diff := edits && !open && p.status != .Error && p.patch != ""
@@ -1561,7 +1574,7 @@ composer :: proc(app: ^App, em: f32) {
 				ctx_check(app, res.box, .Composer)
 				if res.committed { submit, other = true, !app.prefs.ctrl_enter }
 				if down && app.composer.cursor == caret0 { activity_open(app) }
-				if res.changed { activity_close(app) }   // (typing: what is written is what matters now)
+				if res.changed { activity_close(app); drafts_save_soon(app) }   // (typing: what is written is what matters now; kept on disk a moment later)
 			}
 			ui.spacer(ui.px(em * 0.35))
 		}

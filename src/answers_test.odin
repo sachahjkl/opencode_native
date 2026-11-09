@@ -1059,3 +1059,44 @@ the_sessions_with_commands_in_the_background :: proc(t: ^testing.T) {
 	delete(app.cx.background)
 	app.cx.background = nil
 }
+
+// A shell call of the conversation that went to the background says so, and whether its command still runs there.
+@(test)
+a_shell_call_in_the_background :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	fg := Part{kind = .Tool, tool_name = "shell", status = .Running, input = `{"command":"sleep 9"}`}
+	bg, running := part_background(app, &fg)
+	testing.expect(t, !bg && !running, "in the foreground")
+	moved := Part{kind = .Tool, tool_name = "shell", status = .Done, input = `{"command":"sleep 9"}`, output = "Command moved to the background (shell ID: sh_42).\nOutput is streaming to: x"}
+	append(&app.activity.jobs, Shell_Job{id = strings.clone("sh_42"), status = .Running, background = true})
+	bg, running = part_background(app, &moved)
+	testing.expect(t, bg && running, "in the background, running")
+	app.activity.jobs[0].status = .Exited
+	bg, running = part_background(app, &moved)
+	testing.expect(t, bg && !running, "in the background, finished")
+	read := Part{kind = .Tool, tool_name = "read", status = .Done, output = "(shell ID: sh_42)"}
+	bg, _ = part_background(app, &read)
+	testing.expect(t, !bg, "only a shell call")
+}
+
+// The composer's texts go to disk as JSON and come back from it, each in its session; empty ones are not kept.
+@(test)
+the_drafts_survive_a_restart :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	defer drafts_destroy(app)
+	show(app, "a")
+	ui.area_set(&app.composer, "for a")
+	show(app, "b")
+	ui.area_set(&app.composer, "   ")
+	saved := strings.clone(drafts_json(app), context.temp_allocator)
+	testing.expect(t, strings.contains(saved, `"a":"for a"`), saved)
+	testing.expect(t, !strings.contains(saved, `"b"`), "an empty text is not kept")
+
+	again := bench_new()
+	defer drafts_destroy(again)
+	drafts_load_json(again, saved)
+	show(again, "a")
+	testing.expect_value(t, ui.area_string(&again.composer), "for a")
+}

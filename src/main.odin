@@ -459,6 +459,7 @@ due_run :: proc(app: ^App, k: Due) {
 	case .Restore:   nav_restore_clear(app)
 	case .Term_Size: terms_size_due(app)
 	case .Side_Wake: app.settle = max(app.settle, FRAMES_AFTER_INPUT)   // (the build sees the pointer has rested)
+	case .Drafts:    drafts_save(app)
 	}
 }
 
@@ -695,6 +696,7 @@ main :: proc() {
 	if !slice.contains(os.args, "--no-fixed-surface") { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
 	_ = platform.drop_target_enable(app.win, true)   // (files dropped on the window are attached: attach_drop)
 	app_init(app, prefs_path())
+	drafts_load(app)   // (what was typed before, in each session: the home page's comes back now)
 	app.cx.web_host = web_host_system()
 	if app.servers_in_clear { servers_save(app) }
 	platform.set_dark_title(app.win, !app.cx.theme.light)
@@ -746,6 +748,7 @@ main :: proc() {
 		frame(app)   // (what it still owes goes down there: host_frame)
 	}
 	threads_stop(app)
+	if app.cx.due[.Drafts].due_ms != 0 { drafts_save(app) }   // (what was typed in the last second)
 	ui.post_close(&app.state)
 	setup_finish(app)
 	os.exit(0)

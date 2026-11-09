@@ -253,6 +253,24 @@ background_session :: proc(app: ^App, session: string) {
 	activity_poke(app)
 }
 
+// Whether a shell call of the conversation went to the background, and whether its command still runs there. Its command is
+// the server's shell its metadata names, or the one its result names ("... moved to the background (shell ID: sh_...)").
+part_background :: proc(app: ^App, p: ^Part) -> (background, running: bool) {
+	if tool_kind(p.tool_name) != .Shell { return }
+	id := p.shell_id
+	if at := strings.index(p.output, "(shell ID: "); at >= 0 {
+		rest := p.output[at + len("(shell ID: "):]
+		if end := strings.index_byte(rest, ')'); end > 0 { id, background = rest[:end], true }
+	}
+	if v, err := json.parse_string(p.input, allocator = context.temp_allocator); err == nil {
+		if b, ok := jget(v, "background").(json.Boolean); ok && bool(b) { background = true }
+	}
+	j := id != "" ? job_find(&app.activity, id) : nil
+	if j != nil && j.background { background = true }
+	running = background && j != nil && j.status == .Running
+	return
+}
+
 // The answer to GET /api/shell: the commands running now. One that is no longer there has ended: read how.
 activity_shells_load :: proc(app: ^App, v: json.Value, dir: string) {
 	a := &app.activity
@@ -543,7 +561,7 @@ activity_rows :: proc(app: ^App) -> []Act_Row {
 	for &s in app.chat.children { if app.busy[s.id] or_else false { agent(app, &rows, &s) } }
 	#reverse for &j in a.jobs {
 		if !job_ours(app, &j) { continue }
-		if j.status == .Running { append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = base_name(j.cwd), preview = string(j.tail[:]), state = .Running, started = j.started}) }
+		if j.status == .Running { append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = j.background ? fmt.tprintf("in background · %s", base_name(j.cwd)) : base_name(j.cwd), preview = string(j.tail[:]), state = .Running, started = j.started}) }
 	}
 	tool_rows(app, &rows)
 	#reverse for &j in a.jobs {

@@ -5,6 +5,11 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **Push a command to the background from the conversation**: under a shell call that holds the turn, "push to background"; once there, the call says "in background" with an orange lamp while its command runs, then "finished in background". The activity tray's row of such a command says "in background" too.
+- **What is typed in a session's composer is kept on disk** (drafts.json, beside the preferences), a second after the typing stops and when the program closes: after a crash or a restart, each session's text comes back. Only the text: attachments and mentioned files live as long as the program.
+
 ## [0.24.5] - 2026-11-09
 
 ### Fixed

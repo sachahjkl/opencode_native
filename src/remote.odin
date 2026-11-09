@@ -125,7 +125,7 @@ Deferred :: struct { due_ms, latest_ms: f64 }   // (0: nothing asked)
 
 // What the program puts off. Each is run (due_run: a new one does not compile until it says what it does) and wakes a window at rest, from one
 // list.
-Due :: enum u8 { Refresh, Facts, Children, Context, Restore, Term_Size, Side_Wake }
+Due :: enum u8 { Refresh, Facts, Children, Context, Restore, Term_Size, Side_Wake, Drafts }
 
 deferred_ask :: proc(d: ^Deferred, wait_ms: f64, most_ms: f64 = 0) {
 	now := ui.now_ms()
