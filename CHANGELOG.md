@@ -5,6 +5,8 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.31.1] - 2026-11-09
+
 ### Changed
 
 - **The icons are gui_toolkit's** (gui_toolkit 0.128.0): the Lucide font and the names of its icons come from the toolkit's `lucide` package, shared with Wren, instead of a copy of the font and constants of opencode native's own. The same icons.
@@ -1072,7 +1074,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.31.1...HEAD
+[0.31.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.31.1
 [0.31.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.31.0
 [0.30.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.30.0
 [0.29.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.29.0
