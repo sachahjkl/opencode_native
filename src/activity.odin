@@ -224,6 +224,27 @@ activity_jobs_load :: proc(app: ^App, v: json.Value, session: string) {
 	}
 }
 
+// Which sessions still run commands in the background, all of them at once: the sidebar's lamp says it of a session at rest.
+background_read :: proc(app: ^App) {
+	if flying(app, .Background, "") { return }
+	request(app, .Background, "GET", "/api/experimental/job?kind=shell&status=running")
+}
+
+// The answer: those sessions, and the sessions above them (a sub-agent's command keeps its parent's lamp on).
+background_load :: proc(app: ^App, v: json.Value) {
+	bg := &app.cx.background
+	for k in bg { delete(k) }
+	clear(bg)
+	mark :: proc(bg: ^map[string]bool, id: string) { if id != "" && id not_in bg^ { bg[strings.clone(id)] = true } }
+	for it in jarr(v, "data") {
+		id := jstr(it, "sessionID")
+		mark(bg, id)
+		for s := find_session(app, id); s != nil && s.parent != ""; s = find_session(app, s.parent) { mark(bg, s.parent) }
+	}
+}
+
+session_in_background :: proc(app: ^App, id: string) -> bool { return app.cx.background[id] or_else false }
+
 // A command that holds its session's turn goes to the background: the session goes on, the command with it
 // (POST /api/session/:id/background moves every such tool of the session; one already there is left alone).
 background_session :: proc(app: ^App, session: string) {

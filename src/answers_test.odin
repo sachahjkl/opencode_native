@@ -997,3 +997,65 @@ the_tray_shows_the_sessions_commands_only :: proc(t: ^testing.T) {
 	activity_jobs_load(app, jobs, "s")
 	for &j in app.activity.jobs { testing.expect_value(t, j.background, j.id == "a") }
 }
+
+// The composer is each session's: what is typed in one comes back with it, and another starts from its own.
+@(test)
+the_composer_is_each_sessions :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	defer drafts_destroy(app)
+	show(app, "a")
+	ui.area_set(&app.composer, "for a")
+	show(app, "b")
+	testing.expect_value(t, ui.area_string(&app.composer), "")
+	ui.area_set(&app.composer, "for b")
+	show(app, "a")
+	testing.expect_value(t, ui.area_string(&app.composer), "for a")
+	show(app, "b")
+	testing.expect_value(t, ui.area_string(&app.composer), "for b")
+	chat_home(app)
+	testing.expect_value(t, ui.area_string(&app.composer), "")
+	show(app, "a")
+	testing.expect_value(t, ui.area_string(&app.composer), "for a")
+	testing.expect_value(t, len(app.cx.drafts), 1)   // (b's; a's is in the composer, the home page's was empty)
+}
+
+// The session's goal: read when shown, followed by the stream, gone when cleared; another session's says nothing here.
+@(test)
+the_goal_shows_over_the_composer :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	defer drafts_destroy(app)
+	open_chat(app, "s")
+	r := bench_take(t, .Goal)
+	testing.expect(t, strings.contains(r.body, `"sessionID":"s"`))
+	bench_answer(app, r, 200, `{"output":{"id":"g","objective":"ship it","status":"active","rounds":2,"maxRounds":10,"boot":"b","updatedAt":1}}`)
+	testing.expect(t, app.chat.has_goal)
+	testing.expect_value(t, app.chat.goal.objective, "ship it")
+	testing.expect_value(t, app.chat.goal.rounds, 2)
+	bench_event(app, `{"type":"rpc.opencode.goal.changed","data":{"sessionID":"other","goal":null}}`)
+	testing.expect(t, app.chat.has_goal, "another session's goal")
+	bench_event(app, `{"type":"rpc.opencode.goal.changed","data":{"sessionID":"s","goal":{"id":"g","objective":"ship it","status":"paused","rounds":3,"maxRounds":10,"boot":"b","updatedAt":2}}}`)
+	testing.expect_value(t, app.chat.goal.status, Goal_Status.Paused)
+	bench_event(app, `{"type":"rpc.opencode.goal.changed","data":{"sessionID":"s","goal":null}}`)
+	testing.expect(t, !app.chat.has_goal, "cleared")
+}
+
+// A session at rest whose commands still run in the background says so; a sub-agent's command lights its parent too.
+@(test)
+the_sessions_with_commands_in_the_background :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	append(&app.sessions, Session_Info{id = "root"}, Session_Info{id = "child", parent = "root"}, Session_Info{id = "other"})
+	defer clear(&app.sessions)
+	v, _ := json.parse_string(`{"data":[{"kind":"shell","id":"j","sessionID":"child","status":"running","shellID":"j","command":"sleep 9","time":{"started":1}}]}`, allocator = context.temp_allocator)
+	background_load(app, v)
+	testing.expect(t, session_in_background(app, "child"))
+	testing.expect(t, session_in_background(app, "root"), "its parent")
+	testing.expect(t, !session_in_background(app, "other"))
+	none, _ := json.parse_string(`{"data":[]}`, allocator = context.temp_allocator)
+	background_load(app, none)
+	testing.expect(t, !session_in_background(app, "root"), "all ended")
+	delete(app.cx.background)
+	app.cx.background = nil
+}

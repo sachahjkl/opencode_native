@@ -11,6 +11,7 @@ import "core:path/filepath"
 import "core:strconv"
 import "core:strings"
 import "core:time"
+import "gt:draw"
 import "gt:platform"
 import "gt:ui"
 
@@ -58,11 +59,54 @@ themes_builtin :: proc() -> []Theme_Def {
 	if len(made) > 0 { return made[:] }
 	append(&made,
 		black_theme("OpenCode", HEX_PEACH, 0xc8622aff),
-		black_theme("Ink", 0x6aa8ffff, 0x2f6fdbff),
-		black_theme("Orchid", 0xb294f0ff, 0x7c4dd8ff),
-		black_theme("Moss", 0x8fd694ff, 0x2f8a3aff),
-		black_theme("Lagoon", 0x5ccbd6ff, 0x12838fff),
-		black_theme("Rose", 0xf28ba8ff, 0xc83e6aff),
+		// silver on near black; in the light version graphite on white (silver would vanish there)
+		Theme_Def{"Silver",
+			{{0x050506ff, 0x08090aff, 0x0d0e10ff, 0x131417ff, 0x1b1c20ff, 0x2a2c31ff}, {0x5d6067ff, 0x8e9198ff, 0xe6e7eaff, 0xffffffff},
+				{0xc9ced6ff, 0x8fa9c9ff, 0xa99bc4ff, 0x9cc4a3ff, 0xd9c48fff, 0xd98a8aff, 0x95c3c8ff, 0xc9a0b4ff}},
+			{{0xe6e7eaff, 0xf7f7f8ff, 0xeff0f2ff, 0xffffffff, 0xffffffff, 0xd6d8dcff}, {0xa3a6adff, 0x6b6e75ff, 0x1b1c20ff, 0x000000ff},
+				{0x4a4f58ff, 0x3d6a9eff, 0x6b56a3ff, 0x3d7f4bff, 0x9a7615ff, 0xb23a3aff, 0x2f7c86ff, 0xa64a72ff}}, true},
+		// total black, white its only colour; in the light version white paper and black
+		Theme_Def{"Void",
+			{{0x000000ff, 0x030303ff, 0x070707ff, 0x0d0d0dff, 0x141414ff, 0x222222ff}, {0x4a4a4aff, 0x7a7a7aff, 0xd8d8d8ff, 0xffffffff},
+				{0xf0f0f0ff, 0x8a9bb0ff, 0x9e94b3ff, 0x8fb39aff, 0xc9b98aff, 0xc98585ff, 0x8fb8bcff, 0xbd98aaff}},
+			{{0xeeeeeeff, 0xffffffff, 0xf8f8f8ff, 0xffffffff, 0xffffffff, 0xe2e2e2ff}, {0xa0a0a0ff, 0x6a6a6aff, 0x111111ff, 0x000000ff},
+				{0x111111ff, 0x3a5f8cff, 0x5f4f8fff, 0x3a7346ff, 0x8a6a12ff, 0xa83434ff, 0x2c6f78ff, 0x974468ff}}, true},
+		// warm black and champagne gold; in the light version ivory and bronze
+		Theme_Def{"Champagne",
+			{{0x080706ff, 0x0b0a08ff, 0x100f0cff, 0x161511ff, 0x1e1c17ff, 0x302d26ff}, {0x6b6558ff, 0x9a9384ff, 0xebe5d6ff, 0xfffaf0ff},
+				{0xd8c08aff, 0x93a6b8ff, 0xb3a0bfff, 0xa7bf95ff, 0xe0c27aff, 0xd98f7eff, 0x9cbfb5ff, 0xd4a3a0ff}},
+			{{0xebe5d6ff, 0xfbf8f1ff, 0xf3eee3ff, 0xfffdf8ff, 0xffffffff, 0xddd5c3ff}, {0xa39b88ff, 0x726b5cff, 0x24211bff, 0x0b0a08ff},
+				{0x8a6d2fff, 0x3f6485ff, 0x6e5487ff, 0x50733aff, 0x9a7415ff, 0xa8452fff, 0x3e7a6cff, 0x9c5560ff}}, true},
+		// blue black and ice; in the light version cold white and steel blue
+		Theme_Def{"Glacier",
+			{{0x04070aff, 0x06090dff, 0x0a0f14ff, 0x10161dff, 0x172029ff, 0x25303bff}, {0x56636fff, 0x8796a3ff, 0xe3ecf2ff, 0xffffffff},
+				{0xa8d8f0ff, 0x86b4e0ff, 0xa9a3d9ff, 0x8fcbb0ff, 0xdcc98aff, 0xe0898fff, 0x8fd3d8ff, 0xc9a3c4ff}},
+			{{0xe4ebf0ff, 0xf7fafcff, 0xeef3f7ff, 0xffffffff, 0xffffffff, 0xd3dde5ff}, {0x9aa7b2ff, 0x617080ff, 0x16202aff, 0x04070aff},
+				{0x2b6c8fff, 0x2f64a3ff, 0x5a52a3ff, 0x2f7d5cff, 0x8c7516ff, 0xb23d4aff, 0x237a85ff, 0x8f4f86ff}}, true},
+		// green black and jade; in the light version pale green white and deep jade
+		Theme_Def{"Jade",
+			{{0x040705ff, 0x060a08ff, 0x0a100cff, 0x0f1712ff, 0x162019ff, 0x243228ff}, {0x5a6b60ff, 0x8a9c90ff, 0xe2ece5ff, 0xffffffff},
+				{0x7fd1a8ff, 0x8fb0c9ff, 0xaa9fc9ff, 0x8fd18fff, 0xd6c98aff, 0xd98c8cff, 0x86cfc4ff, 0xc9a0b8ff}},
+			{{0xe2ebe5ff, 0xf6faf7ff, 0xedf3efff, 0xffffffff, 0xffffffff, 0xd0dcd4ff}, {0x96a69bff, 0x5d6f63ff, 0x14201aff, 0x040705ff},
+				{0x2f7a57ff, 0x3a6a8fff, 0x5f5596ff, 0x2f7a3aff, 0x86731aff, 0xa9403fff, 0x22756cff, 0x8f4f72ff}}, true},
+		// wine black and rose gold; in the light version rosy white and garnet
+		Theme_Def{"Bordeaux",
+			{{0x090506ff, 0x0c0708ff, 0x120b0cff, 0x191012ff, 0x221619ff, 0x362429ff}, {0x6e5a5eff, 0x9e878bff, 0xf0e4e5ff, 0xfff7f8ff},
+				{0xe3a6a1ff, 0x98a8c4ff, 0xbca0c9ff, 0xa3c49aff, 0xe0c084ff, 0xe5807fff, 0x98c4c0ff, 0xe39fb7ff}},
+			{{0xefe3e2ff, 0xfcf6f5ff, 0xf6eeedff, 0xfffbfaff, 0xffffffff, 0xe3d3d2ff}, {0xa8939aff, 0x7a6267ff, 0x2a1a1eff, 0x0c0708ff},
+				{0x9a4a52ff, 0x456691ff, 0x734f8fff, 0x4f7a3fff, 0x93711aff, 0xb03838ff, 0x3a7570ff, 0xa34468ff}}, true},
+		// Rosé Pine, and Rosé Pine Dawn
+		Theme_Def{"Rosé Pine",
+			{{0x13111eff, 0x191724ff, 0x1f1d2eff, 0x26233aff, 0x2a273fff, 0x403d52ff}, {0x6e6a86ff, 0x908caaff, 0xe0def4ff, 0xf5f3ffff},
+				{0xebbcbaff, 0x9ccfd8ff, 0xc4a7e7ff, 0x8fbf9fff, 0xf6c177ff, 0xeb6f92ff, 0x9ccfd8ff, 0xebbcbaff}},
+			{{0xf2e9e1ff, 0xfaf4edff, 0xf4ede6ff, 0xfffaf3ff, 0xfffdf9ff, 0xdfdad9ff}, {0x9893a5ff, 0x797593ff, 0x575279ff, 0x26233aff},
+				{0xd7827eff, 0x286983ff, 0x907aa9ff, 0x4f8a5cff, 0xea9d34ff, 0xb4637aff, 0x56949fff, 0xd7827eff}}, true},
+		// Kanagawa (wave), and Kanagawa Lotus
+		Theme_Def{"Kanagawa",
+			{{0x16161dff, 0x1a1a22ff, 0x1f1f28ff, 0x2a2a37ff, 0x363646ff, 0x54546dff}, {0x727169ff, 0x938aa9ff, 0xdcd7baff, 0xf2ecd0ff},
+				{0x7e9cd8ff, 0x7fb4caff, 0x957fb8ff, 0x98bb6cff, 0xe6c384ff, 0xe46876ff, 0x7aa89fff, 0xd27e99ff}},
+			{{0xdcd5acff, 0xf2ecbcff, 0xeae3b4ff, 0xf6f1c8ff, 0xfaf6d6ff, 0xd5cea3ff}, {0x8a8980ff, 0x716e61ff, 0x545464ff, 0x1f1f28ff},
+				{0x4d699bff, 0x4d699bff, 0x624c83ff, 0x6f894eff, 0xa07e1bff, 0xc84053ff, 0x597b75ff, 0xb35b79ff}}, true},
 		Theme_Def{"Monokai",
 			{{0x161713ff, 0x1c1d19ff, 0x22231eff, 0x272822ff, 0x30312aff, 0x3e3d32ff}, {0x75715eff, 0x9d9a8aff, 0xf8f8f2ff, 0xffffffff},
 				{0xfd971fff, 0x66d9efff, 0xae81ffff, 0xa6e22eff, 0xe6db74ff, 0xf92672ff, 0x78dce8ff, 0xff6188ff}},
@@ -182,7 +226,7 @@ themed :: proc(c: u32) -> u32 {
 	app := the_app
 	if app == nil || app.cx.theme.identity || app.cx.theme.colors == {} { return c }
 	if v, ok := app.cx.theme.cache[c]; ok { return v }
-	v := theme_color(&app.cx.theme.colors, c)
+	v := c == HEX_ON_ACCENT ? on_accent(&app.cx.theme.colors) : theme_color(&app.cx.theme.colors, c)
 	app.cx.theme.cache[c] = v
 	return v
 }
@@ -224,6 +268,16 @@ theme_color :: proc(t: ^Theme_Colors, c: u32) -> u32 {
 	out := rgb3(t.hues[best]) * best_k
 	if best_k < 1 { out += theme_grey(t, best_grey) * (1 - best_k) }
 	return pack3(out, a)
+}
+
+// The text on an accent button: of the theme's darkest and brightest, the one that stands out more on its accent (a pale
+// accent wants the dark one, a deep one the bright one, whatever the version).
+@(private = "file")
+on_accent :: proc(t: ^Theme_Colors) -> u32 {
+	accent := draw.hex(t.hues[0])
+	dark, bright := t.steps[1], t.texts[3]
+	if !(draw.hex(dark).r + draw.hex(dark).g + draw.hex(dark).b < draw.hex(bright).r + draw.hex(bright).g + draw.hex(bright).b) { dark, bright = bright, dark }
+	return ui.contrast(draw.hex(dark), accent) >= ui.contrast(draw.hex(bright), accent) ? dark : bright
 }
 
 THEME_GREY_SPREAD :: 3     // channels this close: a grey

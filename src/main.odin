@@ -199,6 +199,8 @@ App_Context :: struct {
 	integrations:   Integrations,         // the Connections page (integrations.odin)
 	mentions:       Mentions,             // @ in the composer (files.odin)
 	slash_pick:     Slash_Pick,           // / in the composer (slash.odin)
+	background:     map[string]bool,      // the sessions with commands running in the background, and their parents (activity.odin; keys owned)
+	drafts:         map[string]Draft,     // each session's composer while another is shown (drafts.odin; keys owned)
 	files:          Files,                // the dialog of the folder's files
 	changes:        Changes,              // what a session changed, or would undo (session_tools.odin)
 	forms:          [dynamic]^Form_Req,   // what agents ask and wait for (forms.odin), of every session

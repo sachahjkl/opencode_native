@@ -7,7 +7,7 @@
 <p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.24.2-fab283" alt="version 0.24.2"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.24.3-fab283" alt="version 0.24.3"></a>
 <a href="https://ocn.froment.software/"><img src="https://img.shields.io/badge/site-ocn.froment.software-56b6c2" alt="site"></a>
 </p>
 
@@ -43,7 +43,7 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 | ![The conversation of a sub-agent: where it comes from, the way back](docs/screenshots/subagent-session.png) | ![The model picker, searched as one types](docs/screenshots/picker.png) |
 | **A sub-agent's own conversation**: the breadcrumb, Back | **The model picker**: subsequence search ("sonnet"), the matched letters lit |
 | ![Session statistics](docs/screenshots/statistics.png) | ![Settings: the themes, each in its own colours](docs/screenshots/settings.png) |
-| **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Themes**: seventeen, dark and light or as the system, machined or flat, and your own in themes.txt |
+| **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Themes**: twenty, dark and light or as the system, machined or flat, and your own in themes.txt |
 | ![Gruvbox, light](docs/screenshots/theme-gruvbox-light.png) | ![Nord, flat](docs/screenshots/theme-nord-flat.png) |
 | **Gruvbox**, its light version | **Nord** in the flat style: plain surfaces, thin lines |
 | ![Retro: a black that holds, colours that pop](docs/screenshots/theme-retro.png) | ![The conversation](docs/screenshots/conversation.png) |

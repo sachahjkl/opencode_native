@@ -107,6 +107,8 @@ Chat :: struct {
 	children:     [dynamic]Session_Info,   // sessions whose parent is this one (newest first; in children_arena: read often)
 	children_arena: virtual.Arena,
 	live:         map[string]Sub_Live,     // keyed by child session id (keys and strings in the arena)
+	goal:         Goal,                    // its /goal (goal.odin; strings in the arena)
+	has_goal:     bool,
 }
 
 Agent_Info :: struct { id, name, description, mode: string }
@@ -140,8 +142,10 @@ chat_reset :: proc(c: ^Chat) {
 
 // The home page, whichever way one gets there: nothing to load.
 chat_home :: proc(app: ^App) {
+	draft_leave(app)
 	chat_reset(&app.chat)
 	app.chat.loaded = true
+	draft_enter(app)
 	queue_switch(app)
 }
 
@@ -175,8 +179,10 @@ open_chat :: proc(app: ^App, session_id: string) {
 	if session_id == app.chat.id { return }
 	id := strings.clone(session_id, context.temp_allocator)   // (it may live in the arena chat_reset drops)
 	nav_visit(app, app.chat.id, id)
+	draft_leave(app)
 	chat_reset(&app.chat)
 	app.chat.id = strings.clone(id, app.chat.alloc)
+	draft_enter(app)
 	app.chat.loading = true
 	app.view = {opened_ms = ui.now_ms(), stick_bottom = true}
 	app.chat.busy = app.busy[id] or_else false
@@ -197,7 +203,7 @@ open_chat :: proc(app: ^App, session_id: string) {
 chat_shown_changed :: proc(app: ^App) {
 	activity_reset(app)
 	find_chat_changed(app)
-	if app.chat.id != "" { chat_read(app) }
+	if app.chat.id != "" { chat_read(app); goal_read(app) }
 	outgoing_return(app)
 }
 
@@ -848,6 +854,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		refresh_soon(app)   // (what is seen is the server's to say: its list has the last word)
 	case "shell.created", "shell.exited", "shell.deleted":
 		activity_poke(app)
+		background_read(app)
 	case "project.updated", "project.created":
 		request(app, .Projects, "GET", "/api/project")   // (a new logo)
 	case "session.created", "session.renamed", "session.deleted", "session.updated", "session.archived", "session.moved", "session.metadata.updated":
@@ -863,6 +870,8 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		if kind == "session.moved" && mine { request(app, .Self, "GET", strings.concatenate({"/api/session/", sid}, context.temp_allocator), tag = sid) }
 		refresh_soon(app)
 		children_soon(app)
+	case GOAL_EVENT:
+		goal_set(app, sid, jget(d, "goal"))
 	case "artifact.updated":
 		artifacts_changed(app)
 	case "plugin.updated":

@@ -1055,8 +1055,10 @@ what_is_proposed_is_of_the_folder_shown :: proc(t: ^testing.T) {
 	testing.expect(t, mention_shown(app))
 
 	show(app, "b")
+	defer drafts_destroy(app)
 	described(app, t, "b", "D:/b", "p")
 	testing.expect(t, !mention_shown(app), "nothing of the other folder can be chosen")
+	typed(app, "@a")   // (the composer is the session's: the word is typed again here)
 	mention_track(app)
 	testing.expect_value(t, len(m.hits), 0)
 	testing.expect_value(t, m.dir, "")

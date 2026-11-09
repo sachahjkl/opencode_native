@@ -490,6 +490,9 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				lamp("###busy", accent(), pulse = true, size = em * 0.85)
 				animate(app)
 				ui.spacer(ui.px(em * 0.35))
+			} else if session_in_background(app, s.id) {   // (at rest, its commands still running: another colour, steady)
+				lamp("###bg", hex(HEX_BLUE), size = em * 0.85)
+				ui.spacer(ui.px(em * 0.35))
 			} else if session_unseen(app, s) {   // (over and not seen: how it ended, unlit)
 				st, _ := state_of_word(s.outcome)
 				pip("###unseen", sub_state_color(st), em * 1.15)
@@ -1458,6 +1461,7 @@ dock :: proc(app: ^App, em: f32, side, col: f32) {
 		ui.spacer(ui.px(side))
 		ui.next({width = ui.px(col), height = ui.children_sum(), axis = .Y})
 		if ui.column(id = "###dockcol") {
+			goal_strip(app, em)
 			activity_strip(app, em)
 			for &p in app.permissions {
 				if p.session == app.chat.id { permission_card(app, &p, em) }

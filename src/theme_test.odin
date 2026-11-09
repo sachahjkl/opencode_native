@@ -69,6 +69,8 @@ every_theme_reads :: proc(t: ^testing.T) {
 			quiet := ui.readable(hex(HEX_WEAK), g, READABLE_QUIET)
 			testing.expectf(t, ui.contrast(title, g) >= READABLE_TEXT, "%s (light %v): the title of the session shown, %.2f", def.name, light, ui.contrast(title, g))
 			testing.expectf(t, ui.contrast(quiet, g) >= READABLE_QUIET, "%s (light %v): its folder and its age, %.2f", def.name, light, ui.contrast(quiet, g))
+			// an accent button's label (Send, New session) on the accent
+			testing.expectf(t, ui.contrast(hex(HEX_ON_ACCENT), hex(HEX_PEACH)) >= READABLE_QUIET, "%s (light %v): a label on the accent, %.2f", def.name, light, ui.contrast(hex(HEX_ON_ACCENT), hex(HEX_PEACH)))
 		}
 	}
 }

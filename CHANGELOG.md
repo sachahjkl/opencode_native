@@ -5,6 +5,26 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.24.3] - 2026-11-09
+
+### Added
+
+- **Themes of their own**: Silver (silver on near black; graphite on white), Void (all black, white its only colour; black on white paper), Champagne (warm black and champagne gold; ivory and bronze), Glacier (blue black and ice; cold white and steel blue), Jade (green black and jade), Bordeaux (wine black and rose gold), Rosé Pine (and Dawn) and Kanagawa (and Lotus), each with a dark and a light version.
+- **The session's goal over the composer** (`/goal`, the server's goal plugin): its objective, whether it is active, paused or met, its round, and links to pause or resume it, change it or clear it. It follows the server's `rpc.opencode.goal.changed`.
+- **The sidebar tells a session at rest whose commands still run in the background**: a steady blue lamp, beside the pulsing one of a session at work.
+
+### Changed
+
+- **The composer is each session's**: what is typed in one (its text, attachments and mentions) waits there while another is shown and comes back with it; the home page has its own.
+
+### Removed
+
+- **The colour variants** Ink, Orchid, Moss, Lagoon and Rose (OpenCode's black with another accent): the new themes take their place. A preference that names one shows OpenCode.
+
+### Fixed
+
+- **An accent button's label in the light versions** takes, of the theme's darkest and brightest colours, the one that stands out on its accent: in nine themes, OpenCode's among them, it read at a contrast of 2.2 to 2.9.
+
 ## [0.24.2] - 2026-11-09
 
 ### Changed
@@ -895,7 +915,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.2...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.24.3...HEAD
+[0.24.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.3
 [0.24.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.2
 [0.24.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.1
 [0.24.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.24.0

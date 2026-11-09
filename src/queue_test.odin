@@ -527,7 +527,10 @@ leaving_a_session_or_a_server_cancels_the_edit :: proc(t: ^testing.T) {
 	queue_edit(app, "i")
 	show(app, "other")
 	testing.expect(t, !queue_editing(app))
+	testing.expect_value(t, ui.area_string(&app.composer), "")   // (the draft is the session's: it waits there)
+	show(app, "s")
 	testing.expect_value(t, ui.area_string(&app.composer), "a draft")
+	defer drafts_destroy(app)
 
 	running(app, "s")
 	enqueued(app, "i", "later", "queue")

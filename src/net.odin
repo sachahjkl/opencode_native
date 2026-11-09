@@ -216,8 +216,10 @@ Req_Kind :: enum u8 {
 	Shell_List,     // GET /api/shell: the commands running in a folder
 	Shell_One,      // GET /api/shell/:id: how one ended
 	Job_List,       // GET /api/experimental/job: which of the session's commands run in the background
+	Background,     // GET /api/experimental/job: every session's commands running in the background (the sidebar's lamps)
 	Shell_Output,   // GET /api/shell/:id/output: what it printed since
 	Peek,           // GET /api/session/:child/message: the end of a sub-agent's work
+	Goal,           // POST /api/rpc/opencode.goal/get: the session's goal (goal.odin)
 	Slash,          // GET /api/command: the server's commands (the palette, "/name" in the composer)
 	Forked,         // POST /api/session/:id/fork: the new session
 	Session_Agent,  // a new session takes the agent chosen last (outgoing.odin outgoing_setup)
@@ -422,10 +424,12 @@ Req_Facts :: struct { json: bool, life: Req_Life }
 	.Prompt           = {},
 	.Shell_List       = {json = true, life = .Chat_Gen},
 	.Job_List         = {json = true, life = .Chat_Gen},
+	.Background       = {json = true},
 	.Shell_One        = {json = true, life = .Chat_Gen},
 	.Shell_Output     = {json = true, life = .Chat_Gen},
 	.Peek             = {json = true, life = .Chat_Gen},
 	.Slash            = {json = true},
+	.Goal             = {json = true, life = .Chat_Gen},
 	.Forked           = {json = true},
 	.Session_Agent    = {},
 	.Session_Model    = {},
@@ -646,9 +650,11 @@ answer :: proc(app: ^App, r: ^Request) {
 	case .Context:       context_load(app, r.tag, v)
 	case .Shell_List:   activity_shells_load(app, v, r.tag)
 	case .Job_List:     activity_jobs_load(app, v, r.tag)
+	case .Background:   background_load(app, v)
 	case .Shell_One:    activity_shell_load(app, v, r.tag)
 	case .Shell_Output: activity_output_load(app, v, r.tag)
 	case .Peek:         activity_peek_load(app, v, r.tag)
+	case .Goal:         goal_set(app, r.tag, jget(v, "output"))
 	case .Slash:
 		list := make([dynamic]Slash, context.temp_allocator)
 		for it in jarr(v, "data") { append(&list, Slash{strings.clone(jstr(it, "name")), strings.clone(jstr(it, "description"))}) }
@@ -740,6 +746,8 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 	case .Pty_Size:
 		term_size_answered(app, r.tag)   // (the grid has its size; a server that refuses it says nothing worth a toast at each step of a drag)
 		return true
+	case .Goal, .Background:
+		return true   // (a server without the goal plugin: no line over the composer, nothing to say)
 	case .Shell_List, .Shell_One, .Shell_Output, .Peek, .Job_List:
 		// (what runs behind the conversation: a server without it says nothing about it)
 		activity_request_failed(app, r)
@@ -794,6 +802,7 @@ SESSIONS_LIMIT :: "200"   // most sessions read at a time (text of the query)
 refresh_sessions :: proc(app: ^App) {
 	request(app, .Sessions, "GET", "/api/session?limit=" + SESSIONS_LIMIT + "&order=desc")
 	request(app, .Active, "GET", "/api/session/active")
+	background_read(app)
 }
 
 // A new reading replaces the one on its way: what it brings is the newer one.
