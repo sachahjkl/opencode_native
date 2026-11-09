@@ -57,18 +57,20 @@ the_first_link_of_a_text_ends_where_it_ends :: proc(t: ^testing.T) {
 	testing.expect_value(t, first_url("no link here"), "")
 }
 
+// Up goes through the prompts of the session shown, newest first, each once; another session's are not there. Down past the
+// newest one gives back what was being typed.
 @(test)
-the_history_comes_back_to_what_was_typed :: proc(t: ^testing.T) {
+the_history_is_the_sessions_own :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()   // (the App keeps what it made, as the program does, till it ends)
 	app := new(App)
 	defer free(app)
 	chat_reset(&app.chat)
-	history_init(app, "")
-	history_add(app, "first")
-	history_add(app, "second")
-	history_add(app, "second")   // (twice in a row: once)
-	testing.expect_value(t, len(app.history.sent), 2)
+	app.chat.id = "ses_a"
+	append(&app.chat.messages, Message{id = "m1", kind = .User, text = "first"}, Message{id = "m2", kind = .Assistant},
+		Message{id = "m3", kind = .User, text = " second "}, Message{id = "m4", kind = .User, text = "second"})
 	ui.area_set(&app.composer, "a draft")
+	history_step(app, -1)   // (nothing newer than what is typed)
+	testing.expect(t, !history_browsing(app))
 	history_step(app, 1)
 	testing.expect_value(t, ui.area_string(&app.composer), "second")
 	history_step(app, 1)
@@ -79,6 +81,20 @@ the_history_comes_back_to_what_was_typed :: proc(t: ^testing.T) {
 	history_step(app, -1)
 	testing.expect_value(t, ui.area_string(&app.composer), "a draft")
 	testing.expect(t, !history_browsing(app))
+
+	// another session: only its own prompts, and none at all for a new one
+	chat_reset(&app.chat)
+	app.chat.id = "ses_b"
+	append(&app.chat.messages, Message{id = "m9", kind = .User, text = "other"})
+	history_step(app, 1)
+	testing.expect_value(t, ui.area_string(&app.composer), "other")
+	history_step(app, 1)
+	testing.expect_value(t, ui.area_string(&app.composer), "other")
+	history_leave(app, true)
+	chat_reset(&app.chat)
+	history_step(app, 1)
+	testing.expect(t, !history_browsing(app))
+	testing.expect_value(t, ui.area_string(&app.composer), "a draft")
 }
 
 @(test)

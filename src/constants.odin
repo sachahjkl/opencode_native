@@ -71,7 +71,6 @@ HEX_ACT_WELL         :: 0x0a0a0aff
 ////////////////////////////////
 // The composer's history
 
-HISTORY_MAX :: 400   // prompts kept in the file
 
 ////////////////////////////////
 // The command palette

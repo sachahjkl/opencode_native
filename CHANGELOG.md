@@ -12,6 +12,8 @@ project follows [semantic versioning](https://semver.org).
 - **Web addresses are links everywhere**: an `http://` or `https://` address written as it is, or alone in inline code, is in the link colour, underlined, and opens on a click. This holds in replies, your messages, tool output, reasoning, to-dos, headings and table cells. Markdown links take the link colour too.
 
 ### Changed
+
+- **Up and Down in the composer go through the prompts of the session shown only**: another session's prompts no longer come in, and a new session has no history. The file `history.jsonl` is no longer read or written; you can delete it.
 - **The themes and the machined look are gui_toolkit's** (0.117.0): the same themes, in their dark and light versions, and
   the same reliefs, now shared with the toolkit's other programs. Six themes come with it: Midnight, Graphite, Amber,
   Everforest, Aero and Bootstrap. The toolkit's own widgets (its fields, separators, segmented controls) take the machined

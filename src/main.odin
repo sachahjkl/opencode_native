@@ -45,7 +45,7 @@ App :: struct {
 	conn:           ^Conn,             // its connection
 	server_edit:    Server_Edit,
 	picker:         Picker,            // the composer's agent or model picker (picker.odin)
-	history:        History,           // what was sent, Up and Down in the composer (history.odin)
+	history:        History,           // Up and Down in the composer: the session's prompts (history.odin)
 	activity:       Activity,          // what runs behind the conversation (activity.odin)
 	palette:        Palette,           // Ctrl+K (palette.odin)
 	throbber:       Throbber,          // what says a run goes on (throbber.odin)
@@ -642,7 +642,6 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	ui.set_toast_position(&app.state, .Top_Right)
 	ui.set_autoscroll_enabled(&app.state, true)   // a click of the wheel scrolls by the pointer, as in the browsers
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
-	history_init(app, prefs_file != "" ? pjoin({filepath.dir(prefs_file), "history.jsonl"}) : "")
 	palette_init(app, prefs_file != "" ? pjoin({filepath.dir(prefs_file), "palette_usage.txt"}) : "")
 	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
 }

@@ -12,7 +12,6 @@ import "gt:ui"
 
 @(private = "file")
 show :: proc(app: ^App, id: string) {
-	app.history.at = -1   // (as the program starts: not going through the history)
 	open_chat(app, id)
 	bench_clear(app)
 }

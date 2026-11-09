@@ -1608,7 +1608,7 @@ composer :: proc(app: ^App, em: f32) {
 				if held {
 					text("hint", "starting the session…", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				} else if history_browsing(app) {
-					text("hint", fmt.tprintf("history %d/%d   ·   ", app.history.at + 1, len(app.history.view)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					text("hint", fmt.tprintf("history %d/%d   ·   ", app.history.at, len(app.history.view)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 					if hint_action("###hist_back", "Esc  back to your text", em, app.mono) { history_leave(app, true) }
 				} else if queue_editing(app) {
 					if hint_action("###h_save", app.prefs.ctrl_enter ? "Ctrl+Enter  save" : "Enter  save", em, app.mono) { submit = true }
@@ -1775,7 +1775,6 @@ submit_prompt :: proc(app: ^App, other := false) {
 	t := strings.clone(strings.trim_space(ui.area_string(&app.composer)), context.temp_allocator)
 	if (t == "" && len(app.cx.attachments) == 0) || !online(app) || composer_held(app) { return }
 	history_leave(app, false)
-	if t != "" { history_add(app, t) }
 	if queue_editing(app) { queue_edit_commit(app, t); return }
 	as := composer_send_as(app, other)
 	fields := send_as_fields(as)
