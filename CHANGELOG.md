@@ -5,6 +5,10 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The line over the composer counts the session's commands only**: the tray showed the session's, but the line still counted every command of its folder (0.23.0).
+
 ## [0.23.0] - 2026-11-09
 
 ### Added

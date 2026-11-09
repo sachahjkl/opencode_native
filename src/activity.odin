@@ -541,10 +541,9 @@ activity_rows :: proc(app: ^App) -> []Act_Row {
 }
 
 // How much runs: what the line over the composer says, and whether it has anything to say.
-@(private = "file")
 activity_counts :: proc(app: ^App) -> (agents, shells: int) {
 	agents = len(active_children(app))
-	for &j in app.activity.jobs { if j.status == .Running { shells += 1 } }
+	for &j in app.activity.jobs { if j.status == .Running && job_ours(app, &j) { shells += 1 } }
 	return
 }
 

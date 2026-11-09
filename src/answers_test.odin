@@ -991,6 +991,8 @@ the_tray_shows_the_sessions_commands_only :: proc(t: ^testing.T) {
 	defer delete(ours)
 	for &j in app.activity.jobs { ours[j.id] = job_ours(app, &j) }
 	testing.expect(t, ours["a"] && !ours["b"] && ours["c"], "the session's and the unclaimed")
+	_, shells_counted := activity_counts(app)
+	testing.expect_value(t, shells_counted, 2)   // (the line over the composer counts the same ones)
 	jobs, _ := json.parse_string(`{"data":[{"kind":"shell","id":"a","sessionID":"s","status":"running","shellID":"a","command":"ours","time":{"started":1}}]}`, allocator = context.temp_allocator)
 	activity_jobs_load(app, jobs, "s")
 	for &j in app.activity.jobs { testing.expect_value(t, j.background, j.id == "a") }
