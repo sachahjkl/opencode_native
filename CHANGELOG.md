@@ -5,6 +5,8 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-11-09
+
 ### Fixed
 
 - **The line over the composer counts the session's commands only**: the tray showed the session's, but the line still counted every command of its folder (0.23.0).
@@ -870,7 +872,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.23.1...HEAD
+[0.23.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.23.1
 [0.23.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.23.0
 [0.22.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.22.0
 [0.21.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.21.0
