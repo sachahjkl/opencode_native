@@ -926,3 +926,29 @@ a_thought_opened_while_the_run_goes_on_stays :: proc(t: ^testing.T) {
 		if !testing.expectf(t, abs(h.rect.min.y - y) <= 1, "delta %d: stays at %v (now %v)", i, y, h.rect.min.y) { return }
 	}
 }
+
+// A paused goal says why under its objective (the server's reason), cut at the strip's width, all of it under the pointer.
+@(test)
+a_paused_goal_says_why :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	reason := "The session failed: You've hit your 5-hour limit, which resets at 11:00. Upgrade your plan or wait for the limit to reset before you resume the goal, which keeps its rounds."
+	v, err := json.parse_string(fmt.tprintf(`{{"objective":"Booted OS with a REPL","status":"paused","reason":%s,"rounds":3,"maxRounds":50}}`, jquote(reason)), allocator = context.temp_allocator)
+	testing.expect(t, err == nil)
+	goal_set(app, app.chat.id, v)
+	session.frames(s, 3)
+	strip, why := session.find(s, "goal_strip"), session.find(s, "why")
+	if !testing.expect(t, strip != nil && why != nil, "the strip and its reason") { return }
+	o := session.find(s, "o")
+	testing.expect(t, o != nil && why.rect.min.y >= o.rect.max.y - 0.5, "under the objective")
+	testing.expect(t, why.rect.max.x <= strip.rect.max.x + 0.5, "in the strip")
+	em := ui.font_size()
+	testing.expectf(t, strip.rect.max.y - strip.rect.min.y < em * 4, "two lines tall, no more: %v", strip.rect)
+	tools := session.find(s, "tools")
+	testing.expect(t, tools != nil && tools.rect.max.y <= f32(BENCH_SIZE.y) && tools.rect.min.y >= strip.rect.max.y, "the composer under it, in the window")
+	session.hover(s, "why")
+	session.advance(s, f64(TOOLTIP_DELAY_S) * 1000 + 100)
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "tooltip_text") != nil, "all of it under the pointer")
+	goal_set(app, app.chat.id, nil)
+}

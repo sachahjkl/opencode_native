@@ -1176,3 +1176,56 @@ the_thinking_level_goes_with_the_model :: proc(t: ^testing.T) {
 	if bench_count(.Session_Agent) > 0 { bench_answer(app, bench_take(t, .Session_Agent), 200, "") }
 	testing.expect_value(t, bench_take(t, .Session_Model).body, `{"model":{"id":"opus","providerID":"p","variant":"high"}}`)
 }
+
+// "/goal ..." sent before the server's commands are read (none yet: the stream not back, a server just left) waits for them and
+// goes as the command, not as a prompt. A name the server has not, or commands that could not be read: a prompt, as written.
+@(test)
+a_slash_command_waits_for_the_commands :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	show(app, "s")
+	testing.expect(t, !app.cx.have_slash, "no commands read")
+	COMMANDS :: `{"data":[{"name":"goal","description":"Work on an objective until it is met"}]}`
+
+	ui.area_set(&app.composer, "/goal ship the kernel")
+	attach(app, "a.png")
+	submit_prompt(app)
+	testing.expect_value(t, bench_count(.Prompt), 0)
+	testing.expect_value(t, ui.area_string(&app.composer), "")
+	bench_answer(app, bench_take(t, .Slash), 200, COMMANDS)
+	r := bench_take(t, .Prompt)
+	testing.expect_value(t, r.path, "/api/session/s/command")
+	testing.expect_value(t, r.body, `{"name":"goal","text":"ship the kernel"}`)
+	testing.expect_value(t, len(app.cx.attachments), 1)   // (a command does not take it: back in the composer)
+	bench_answer(app, r, 200, "")
+
+	// a name the server has not: a prompt
+	slash_forget(app)
+	ui.area_set(&app.composer, "/nothing here")
+	submit_prompt(app)
+	bench_answer(app, bench_take(t, .Slash), 200, COMMANDS)
+	r = bench_take(t, .Prompt)
+	testing.expect_value(t, r.path, "/api/session/s/prompt")
+	testing.expect(t, strings.has_prefix(r.body, `{"text":"/nothing here"`), r.body)
+	bench_answer(app, r, 200, "")
+
+	// the commands could not be read: a prompt all the same, nothing lost
+	slash_forget(app)
+	ui.area_set(&app.composer, "/goal pause")
+	submit_prompt(app)
+	bench_lost(app, bench_take(t, .Slash))
+	r = bench_take(t, .Prompt)
+	testing.expect_value(t, r.path, "/api/session/s/prompt")
+	testing.expect(t, strings.has_prefix(r.body, `{"text":"/goal pause"`), r.body)
+	bench_answer(app, r, 200, "")
+
+	// not read then: asked again, and once read the next one goes at once
+	ui.area_set(&app.composer, "/goal resume")
+	submit_prompt(app)
+	bench_answer(app, bench_take(t, .Slash), 200, COMMANDS)
+	bench_answer(app, bench_take(t, .Prompt), 200, "")
+	ui.area_set(&app.composer, "/goal clear")
+	submit_prompt(app)
+	testing.expect_value(t, bench_count(.Slash), 0)
+	testing.expect_value(t, bench_take(t, .Prompt).body, `{"name":"goal","text":"clear"}`)
+}

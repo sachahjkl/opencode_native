@@ -665,6 +665,7 @@ answer :: proc(app: ^App, r: ^Request) {
 		list := make([dynamic]Slash, context.temp_allocator)
 		for it in jarr(v, "data") { append(&list, Slash{strings.clone(jstr(it, "name")), strings.clone(jstr(it, "description"))}) }
 		slash_load(app, list[:])
+		outgoing_catalog(app)
 	case .Session_Viewed:   // (session.viewed says it, to every client)
 	case .Forked:
 		if id := jstr(v, "data", "id"); id != "" {
@@ -787,6 +788,9 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 	case .Schedules, .Artifacts, .Artifact_Read, .Plugins, .Integrations, .Credentials, .Files_List, .File_Read, .Stats, .Context, .Changes_Range,
 	     .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands:
 		return true
+	case .Slash:
+		outgoing_catalog(app)   // (what waited for the commands goes as a prompt: nothing is lost)
+		return false
 	case .Schedule_Made:
 		return app.cx.schedules.open   // ("Invalid duration": under the form, with what was typed)
 	case .Session_Viewed:
@@ -795,7 +799,7 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 		if r.status == 409 { session_import_conflict(app, r.tag); return true }
 	// nothing waits on them here: the toast says it, what they would have changed stays
 	case .Sessions, .Agents, .Models, .Info, .Permissions, .Active, .Self, .Parent, .Children, .Projects,
-	     .Action, .Slash, .Forked, .Session_Moved, .Session_Export,
+	     .Action, .Forked, .Session_Moved, .Session_Export,
 	     .Schedule_Done, .Artifact_Done, .Credential_Done, .Plugins_Check, .Forms, .Inbox_Take:
 	}
 	return false

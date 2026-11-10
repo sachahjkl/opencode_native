@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.34.1] - 2026-11-10
+
+### Fixed
+
+- **A paused goal says why**: the server's reason ("The session failed: You've hit your 5-hour limit…") shows under the objective, cut at the strip's width, all of it under the pointer. The strip said only "goal paused".
+- **A `/command` sent before the server's commands are read goes as that command**: it waits for them (they are asked for), and `/goal …` no longer lands in the conversation as a message. A name the server has not, or commands that cannot be read, still go as a prompt, as written.
+
 ## [0.34.0] - 2026-11-10
 
 ### Added
@@ -1121,7 +1128,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.34.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.34.1...HEAD
+[0.34.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.34.1
 [0.34.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.34.0
 [0.33.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.33.0
 [0.32.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.32.2

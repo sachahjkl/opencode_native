@@ -1776,16 +1776,27 @@ prompt_restore :: proc(app: ^App, text: string) {
 	ui.area_set(&app.composer, strings.trim_space(typed) == "" ? text : fmt.tprintf("%s\n%s", text, typed))
 }
 
-// "/name what follows", when the server has a command of that name.
+// "/name what follows", when the server has a command of that name. The server's commands not read yet: it waits for them
+// (outgoing_slash_wait), and goes as a prompt if the name is not one.
 slash_send :: proc(app: ^App, t: string, fields := "") -> bool {
-	if !strings.has_prefix(t, "/") { return false }
-	name, rest := t[1:], ""
+	name, rest, ok := slash_split(t)
+	if !ok { return false }
+	if !app.cx.have_slash { outgoing_slash_wait(app, t, fields); return true }
+	if !slash_known(app, name) { return false }
+	outgoing_command(app, t, name, rest, fields)
+	return true
+}
+
+// "/name what follows" as its name and what follows; ok: it starts with "/".
+slash_split :: proc(t: string) -> (name, rest: string, ok: bool) {
+	if !strings.has_prefix(t, "/") { return }
+	name = t[1:]
 	if i := strings.index_any(name, " \n"); i >= 0 { name, rest = name[:i], strings.trim_space(name[i:]) }
-	for s in app.cx.slash {
-		if s.name != name { continue }
-		outgoing_command(app, t, name, rest, fields)
-		return true
-	}
+	return name, rest, true
+}
+
+slash_known :: proc(app: ^App, name: string) -> bool {
+	for s in app.cx.slash { if s.name == name { return true } }
 	return false
 }
 

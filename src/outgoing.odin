@@ -19,6 +19,7 @@ Out_Stage :: enum u8 {
 	Creating,   // POST /api/session on its way
 	Agent,      // the new session takes the agent ...
 	Model,      // ... and the model
+	Catalog,    // "/name ...": waits for the server's commands, which say whether it is one (outgoing_catalog)
 	Taking,     // the pending message it replaces leaves the inbox first (queue.odin)
 	Sending,    // the prompt's own POST on its way
 	Returned,   // it failed: waits for the composer of its session
@@ -131,9 +132,45 @@ outgoing_replaced :: proc(app: ^App, out: u64, go: bool) {
 // "/name what follows": its text comes back if it fails, what is attached stays in the composer (a command does not take it).
 outgoing_command :: proc(app: ^App, text, name, rest: string, fields := "") {
 	o := outgoing_new(app, .Sending, app.chat.id, text)
-	o.path = fmt.aprintf("/api/session/%s/command", app.chat.id)
-	o.body = fmt.aprintf(`{{"name":%s,"text":%s%s}}`, jquote(name), jquote(rest), fields)
+	command_set(o, name, rest, fields)
 	outgoing_send(app, o)
+}
+
+@(private = "file")
+command_set :: proc(o: ^Outgoing, name, rest, fields: string) {
+	delete(o.path); delete(o.body)
+	o.path = fmt.aprintf("/api/session/%s/command", o.session)
+	o.body = fmt.aprintf(`{{"name":%s,"text":%s%s}}`, jquote(name), jquote(rest), fields)
+}
+
+// "/name what follows" before the server's commands are read (they are read again when the stream comes back, dropped when a
+// server leaves): it waits for them, they are asked for. What is attached goes with it, as with a prompt.
+outgoing_slash_wait :: proc(app: ^App, text, fields: string) {
+	o := outgoing_new(app, .Catalog, app.chat.id, text)
+	o.fields = fields
+	outgoing_takes_composer(app, o)
+	if !flying(app, .Slash, "") { request(app, .Slash, "GET", "/api/command") }
+}
+
+// The commands are read, or could not be: what waited for them goes. A name the server has is a command (what was attached
+// comes back to the composer of its session: a command does not take it); any other, a prompt, as it was written.
+outgoing_catalog :: proc(app: ^App) {
+	waiting := make([dynamic]^Outgoing, context.temp_allocator)
+	for o in app.cx.outgoing { if o.stage == .Catalog { append(&waiting, o) } }
+	for o in waiting {
+		name, rest, ok := slash_split(o.text)
+		if !ok || !slash_known(app, name) { outgoing_send(app, o); continue }
+		command_set(o, name, rest, o.fields)
+		if len(o.files) > 0 || len(o.mentions) > 0 {
+			back := outgoing_new(app, .Returned, o.session, "")
+			append(&back.files, ..o.files[:])
+			append(&back.mentions, ..o.mentions[:])
+			clear(&o.files)
+			clear(&o.mentions)
+		}
+		outgoing_send(app, o)
+	}
+	outgoing_return(app)
 }
 
 // A prompt out of the inbox (net.odin inbox_send): `body` goes as it is, what it says is what would come back.
