@@ -595,6 +595,27 @@ older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session)
 	app.conn = nil
 }
 
+// The menus' icons are Lucide's characters, drawn in its face: the app menu has one on each item.
+@(test)
+the_menus_have_their_icons :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		session.click(s, "appmenu")
+		session.frames(s, 3)
+		icons := 0
+		for i := 0; ; i += 1 {
+			b := session.find(s, "ico", i)
+			if b == nil { break }
+			testing.expectf(t, b.font == app.icons, "an icon in Lucide's face (%v, not %v)", b.font, app.icons)
+			icons += 1
+		}
+		testing.expectf(t, icons >= 12, "an icon on each item: %d", icons)
+		session.event(s, {kind = .Key_Press, key = .Escape})
+		session.frames(s, 2)
+	})
+}
+
 // A slider of the settings dragged and let go: the preference takes the value it was let go at, and keeps it.
 @(test)
 a_slider_keeps_the_value_it_is_let_go_at :: proc(t: ^testing.T) {

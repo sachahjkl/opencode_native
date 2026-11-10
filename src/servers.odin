@@ -329,12 +329,12 @@ server_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 	if ui.ctx_menu(key, em * 26) {
 		for s, i in app.servers {
 			label := fmt.tprintf("%s   %s###srv%d", label_safe(s.name), label_safe(s.url), i)
-			if ui.menu_item(label, "", i == app.server).clicked && i != app.server { server_connect(app, i) }
+			if ui.menu_item(label, "", i == app.server, icon = lucide.SERVER).clicked && i != app.server { server_connect(app, i) }
 		}
 		ui.menu_separator()
-		if ui.menu_item("Add a server…").clicked { server_edit_open(app, -1) }
+		if ui.menu_item("Add a server…", icon = lucide.PLUG).clicked { server_edit_open(app, -1) }
 		cur := app.server >= 0 && app.server < len(app.servers) ? app.servers[app.server] : Server{local = true}
-		if ui.menu_item("Edit this server…", enabled = !cur.local && !cur.argv).clicked { server_edit_open(app, app.server) }
+		if ui.menu_item("Edit this server…", icon = lucide.PENCIL, enabled = !cur.local && !cur.argv).clicked { server_edit_open(app, app.server) }
 	}
 }
 

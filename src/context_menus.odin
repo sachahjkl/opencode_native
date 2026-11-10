@@ -110,20 +110,20 @@ first_url :: proc(s: string) -> string {
 composer_menu :: proc(app: ^App) {
 	a := &app.composer
 	lo, hi := min(a.cursor, a.mark), max(a.cursor, a.mark)
-	if ui.menu_item("Undo", "Ctrl+Z", enabled = len(a.undo) > 0).clicked { ui.area_undo(a) }
-	if ui.menu_item("Redo", "Ctrl+Y", enabled = len(a.redo) > 0).clicked { ui.area_redo(a) }
+	if ui.menu_item("Undo", "Ctrl+Z", icon = lucide.UNDO_2, enabled = len(a.undo) > 0).clicked { ui.area_undo(a) }
+	if ui.menu_item("Redo", "Ctrl+Y", icon = lucide.REDO_2, enabled = len(a.redo) > 0).clicked { ui.area_redo(a) }
 	ui.menu_separator()
-	if ui.menu_item("Cut", "Ctrl+X", enabled = hi > lo).clicked {
+	if ui.menu_item("Cut", "Ctrl+X", icon = lucide.SCISSORS, enabled = hi > lo).clicked {
 		clip_set(string(a.buf[lo:hi]))
 		area_insert(a, "")
 	}
-	if ui.menu_item("Copy", "Ctrl+C", enabled = hi > lo).clicked { clip_set(string(a.buf[lo:hi])) }
-	if ui.menu_item("Paste", "Ctrl+V").clicked {
+	if ui.menu_item("Copy", "Ctrl+C", icon = lucide.COPY, enabled = hi > lo).clicked { clip_set(string(a.buf[lo:hi])) }
+	if ui.menu_item("Paste", "Ctrl+V", icon = lucide.CLIPBOARD_PASTE).clicked {
 		if !attach_paste(app) { area_insert(a, clip_get()) }
 		app.cx.focus_composer = true
 	}
 	ui.menu_separator()
-	if ui.menu_item("Select all", "Ctrl+A", enabled = len(a.buf) > 0).clicked {
+	if ui.menu_item("Select all", "Ctrl+A", icon = lucide.TEXT_CURSOR_INPUT, enabled = len(a.buf) > 0).clicked {
 		a.mark, a.cursor = 0, len(a.buf)
 		app.cx.focus_composer = true
 	}
@@ -133,9 +133,9 @@ composer_menu :: proc(app: ^App) {
 message_menu :: proc(app: ^App, m: ^Message) {
 	if ui.has_selection(&app.state) {
 		sel := ui.selected_text(&app.state, context.temp_allocator)
-		if ui.menu_item("Quote", "").clicked { quote_text(app, sel, false) }
-		if ui.menu_item("Quote with a comment", "Ctrl+Q").clicked { quote_text(app, sel, true) }
-		if ui.menu_item("Copy the selection", "Ctrl+C").clicked { copied(sel, "Selection") }
+		if ui.menu_item("Quote", "", icon = lucide.QUOTE).clicked { quote_text(app, sel, false) }
+		if ui.menu_item("Quote with a comment", "Ctrl+Q", icon = lucide.MESSAGE_SQUARE_QUOTE).clicked { quote_text(app, sel, true) }
+		if ui.menu_item("Copy the selection", "Ctrl+C", icon = lucide.COPY).clicked { copied(sel, "Selection") }
 		ui.menu_separator()
 	}
 	switch m.kind {
@@ -184,7 +184,7 @@ tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
 		if ui.menu_item("Copy the path", icon = lucide.FILE).clicked { copied(path, "Path") }
 		if ui.menu_item("Show in the folder", icon = lucide.FOLDER).clicked { reveal_path(path) }
 	}
-	if ui.menu_item("Copy the input", enabled = p.input != "").clicked { copied(p.input, "Input") }
+	if ui.menu_item("Copy the input", icon = lucide.COPY, enabled = p.input != "").clicked { copied(p.input, "Input") }
 	if url := first_url(p.output); url != "" {
 		ui.menu_separator()
 		if ui.menu_item("Open the link", icon = lucide.GLOBE).clicked { preview_open(app, url) }
@@ -209,7 +209,7 @@ context_menu :: proc(app: ^App, em: f32) {
 			image := app.cx.ctx.image
 			if ui.menu_item("Copy image", app.view_open ? "Ctrl+C" : "", icon = lucide.COPY).clicked { image_copy(app, image) }
 			if !app.view_open {
-				if ui.menu_item("Open in the viewer").clicked { image_view_open(app, image) }
+				if ui.menu_item("Open in the viewer", icon = lucide.ZOOM_IN).clicked { image_view_open(app, image) }
 			}
 		case .Diagram:
 			code := app.cx.ctx.msg

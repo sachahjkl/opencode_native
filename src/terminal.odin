@@ -1113,11 +1113,11 @@ term_menu :: proc(app: ^App, t: ^Term) {
 	if ui.menu_item("Copy", t.read_only ? "Ctrl+C" : "Ctrl+Shift+C", icon = lucide.COPY, enabled = term_has_selection(t)).clicked {
 		clip_set(term_selection_text(t))
 	}
-	if !t.read_only && ui.menu_item("Paste", "Ctrl+Shift+V").clicked { term_paste(app, t) }
-	if ui.menu_item("Select all", enabled = t.vt != nil).clicked { term_select_all(t) }
+	if !t.read_only && ui.menu_item("Paste", "Ctrl+Shift+V", icon = lucide.CLIPBOARD_PASTE).clicked { term_paste(app, t) }
+	if ui.menu_item("Select all", icon = lucide.TEXT_CURSOR_INPUT, enabled = t.vt != nil).clicked { term_select_all(t) }
 	if v := output_view_of_term(app, t); v != nil {
 		ui.menu_separator()
-		if ui.menu_item("Copy all the output", enabled = len(v.raw) > 0).clicked { clip_set(plain_output(string(v.raw[:]))) }
+		if ui.menu_item("Copy all the output", icon = lucide.COPY, enabled = len(v.raw) > 0).clicked { clip_set(plain_output(string(v.raw[:]))) }
 	}
 }
 

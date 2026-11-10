@@ -93,27 +93,27 @@ build_ui :: proc(app: ^App) {
 
 app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 	if ui.ctx_menu(key) {   // (as wide as its longest item)
-		if ui.menu_item("Command palette…", "Ctrl+K").clicked { palette_toggle(app) }
+		if ui.menu_item("Command palette…", "Ctrl+K", icon = lucide.COMMAND).clicked { palette_toggle(app) }
 		ui.menu_separator()
-		if ui.menu_item("Home", "Ctrl+H").clicked { command_run(app, command_find("nav.home")) }
-		if ui.menu_item("New session", "Ctrl+N").clicked { command_run(app, command_find("session.new")) }
-		if ui.menu_item("Refresh", "F5").clicked {
+		if ui.menu_item("Home", "Ctrl+H", icon = lucide.HOME).clicked { command_run(app, command_find("nav.home")) }
+		if ui.menu_item("New session", "Ctrl+N", icon = lucide.PLUS).clicked { command_run(app, command_find("session.new")) }
+		if ui.menu_item("Refresh", "F5", icon = lucide.REFRESH_CW).clicked {
 			refresh_sessions(app)
 			if app.chat.id != "" { load_messages(app, app.chat.id) }
 		}
-		if ui.menu_item("Settings…", "Ctrl+,").clicked { settings_open(app) }
-		if ui.menu_item("Add a server…").clicked { server_edit_open(app, -1) }
-		if ui.menu_item("Statistics panel", "Ctrl+I", app.stats_open, enabled = app.chat.id != "").clicked { stats_toggle(app) }
+		if ui.menu_item("Settings…", "Ctrl+,", icon = lucide.SLIDERS_HORIZONTAL).clicked { settings_open(app) }
+		if ui.menu_item("Add a server…", icon = lucide.PLUG).clicked { server_edit_open(app, -1) }
+		if ui.menu_item("Statistics panel", "Ctrl+I", app.stats_open, icon = lucide.GAUGE, enabled = app.chat.id != "").clicked { stats_toggle(app) }
 		if preview_available() {
-			if ui.menu_item("Preview panel", "Ctrl+Shift+B", app.preview.open).clicked { command_run(app, command_find("view.preview")) }
+			if ui.menu_item("Preview panel", "Ctrl+Shift+B", app.preview.open, icon = lucide.GLOBE).clicked { command_run(app, command_find("view.preview")) }
 		}
-		if ui.menu_item("Keyboard shortcuts", "F1").clicked { app.cx.help_open = true }
-		if ui.menu_item("Sub-agent sessions in the list", "", app.prefs.subagents == "flat").clicked { pref_set(app, "sidebar.subagents", app.prefs.subagents == "flat" ? "nested" : "flat") }
+		if ui.menu_item("Keyboard shortcuts", "F1", icon = lucide.KEYBOARD).clicked { app.cx.help_open = true }
+		if ui.menu_item("Sub-agent sessions in the list", "", app.prefs.subagents == "flat", icon = lucide.BOT).clicked { pref_set(app, "sidebar.subagents", app.prefs.subagents == "flat" ? "nested" : "flat") }
 		ui.menu_separator()
-		if ui.menu_item("Setup…").clicked { setup_open(app) }
-		if ui.menu_item("About opencode native").clicked { setup_open(app) }
+		if ui.menu_item("Setup…", icon = lucide.WRENCH).clicked { setup_open(app) }
+		if ui.menu_item("About opencode native", icon = lucide.INFO).clicked { setup_open(app) }
 		ui.menu_separator()
-		if ui.menu_item("Quit", "Alt+F4").clicked { app.quit = true }
+		if ui.menu_item("Quit", "Alt+F4", icon = lucide.LOG_OUT).clicked { app.quit = true }
 	}
 }
 
@@ -558,25 +558,25 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 session_menu :: proc(app: ^App, em: f32) {
 	key := ui.key_from_string(0, "session_menu")
 	if ui.ctx_menu(key, em * 17) {
-		if ui.menu_item("Open").clicked { open_root(app, app.menu_session) }
-		if ui.menu_item("Rename…", "F2").clicked { rename_open(app, app.menu_session) }
-		if ui.menu_item("Fork").clicked { fork_session(app, app.menu_session, "") }
-		if ui.menu_item("Move to a folder…").clicked { session_move_pick(app, app.menu_session) }
+		if ui.menu_item("Open", icon = lucide.EXTERNAL_LINK).clicked { open_root(app, app.menu_session) }
+		if ui.menu_item("Rename…", "F2", icon = lucide.PENCIL).clicked { rename_open(app, app.menu_session) }
+		if ui.menu_item("Fork", icon = lucide.GIT_FORK).clicked { fork_session(app, app.menu_session, "") }
+		if ui.menu_item("Move to a folder…", icon = lucide.FOLDER_INPUT).clicked { session_move_pick(app, app.menu_session) }
 		archived := session_is_archived(app, app.menu_session)
-		if ui.menu_item(archived ? "Unarchive" : "Archive").clicked { session_archive(app, app.menu_session, !archived) }
-		if ui.menu_item("What it changed").clicked { changes_open(app, app.menu_session) }
-		if !app.cx.no_schedules && ui.menu_item("Schedules").clicked { schedules_open(app, app.menu_session) }
-		if ui.menu_item("Export…").clicked { session_export(app, app.menu_session) }
-		if ui.menu_item("Export without the text…").clicked { session_export(app, app.menu_session, redacted = true) }
+		if ui.menu_item(archived ? "Unarchive" : "Archive", icon = archived ? lucide.ARCHIVE_RESTORE : lucide.ARCHIVE).clicked { session_archive(app, app.menu_session, !archived) }
+		if ui.menu_item("What it changed", icon = lucide.FILE_DIFF).clicked { changes_open(app, app.menu_session) }
+		if !app.cx.no_schedules && ui.menu_item("Schedules", icon = lucide.CALENDAR_CLOCK).clicked { schedules_open(app, app.menu_session) }
+		if ui.menu_item("Export…", icon = lucide.DOWNLOAD).clicked { session_export(app, app.menu_session) }
+		if ui.menu_item("Export without the text…", icon = lucide.FILE_DOWN).clicked { session_export(app, app.menu_session, redacted = true) }
 		ui.menu_separator()
-		if ui.menu_item("Copy session ID").clicked { clip_set(app.menu_session) }
+		if ui.menu_item("Copy session ID", icon = lucide.HASH).clicked { clip_set(app.menu_session) }
 		if s := find_session(app, app.menu_session); s != nil {
-			if ui.menu_item("Copy folder path").clicked { clip_set(s.directory) }
-			if ui.menu_item("Show the folder").clicked { reveal_path(s.directory) }
-			if ui.menu_item("Open a terminal here").clicked { terminal_open(s.directory) }
+			if ui.menu_item("Copy folder path", icon = lucide.CLIPBOARD_COPY).clicked { clip_set(s.directory) }
+			if ui.menu_item("Show the folder", icon = lucide.FOLDER_OPEN).clicked { reveal_path(s.directory) }
+			if ui.menu_item("Open a terminal here", icon = lucide.TERMINAL).clicked { terminal_open(s.directory) }
 		}
 		ui.menu_separator()
-		if ui.menu_item("Delete…").clicked {
+		if ui.menu_item("Delete…", icon = lucide.TRASH_2).clicked {
 			delete(app.delete_id)
 			app.delete_id = strings.clone(app.menu_session)
 			app.delete_open = true

@@ -651,7 +651,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	logo_load(app)
 	theme_setup(&app.theme)
 	ui.init(&app.state, &app.fonts, &app.theme)
-	app.state.icon_font = app.tk_icons
+	app.state.icon_font = app.icons   // (Lucide: the menus' icons are its characters)
 	ui.set_toast_position(&app.state, .Top_Right)
 	ui.set_autoscroll_enabled(&app.state, true)   // a click of the wheel scrolls by the pointer, as in the browsers
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
