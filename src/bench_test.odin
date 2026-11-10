@@ -592,6 +592,33 @@ older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session)
 	app.conn = nil
 }
 
+// A slider of the settings dragged and let go: the preference takes the value it was let go at, and keeps it.
+@(test)
+a_slider_keeps_the_value_it_is_let_go_at :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	settings_open(app)
+	ui.field_set(&app.settings_query, "conversation width")
+	session.frames(s, 3)
+	sl := session.find(s, "sl")
+	if !testing.expect(t, sl != nil, "the slider") { return }
+	before := config.int_of(&app.cfg_prefs, "conversation.width")
+	from := session.center(sl)
+	to := from + {(sl.rect.max.x - sl.rect.min.x) * 0.3, 0}
+	session.press(s, from)
+	session.move(s, from + {10, 0})
+	session.move(s, to)
+	session.release(s, to)
+	session.frames(s, 3)
+	after := config.int_of(&app.cfg_prefs, "conversation.width")
+	testing.expectf(t, after > before + 20, "dragged right: %v, from %v", after, before)
+	session.frames(s, 3)
+	testing.expect_value(t, config.int_of(&app.cfg_prefs, "conversation.width"), after)
+	ui.field_set(&app.settings_query, "")
+	app.settings_open = false
+	pref_set(app, "conversation.width", fmt.tprintf("%v", before))
+}
+
 // The settings' search: what matches in every client page, under its page's title, and nothing else of the pages.
 @(test)
 the_settings_search_shows_what_matches :: proc(t: ^testing.T) {

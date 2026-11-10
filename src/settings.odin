@@ -803,11 +803,18 @@ slider_idle :: proc(v, lo, hi, step: f32) -> f32 {
 pref_slider :: proc(app: ^App, name: string, lo, hi, step: f32, format: string, em: f32) {
 	p := &app.cfg_prefs
 	d := config.entry(p, config.ref_of(p, name)).def
-	v := d.kind == .Int ? f32(config.int_of(p, name)) : f32(config.float_of(p, name))
+	held := app.slider_held == name
+	v := held ? app.slider_held_value : (d.kind == .Int ? f32(config.int_of(p, name)) : f32(config.float_of(p, name)))
 	ui.next({width = ui.px(em * 15), height = ui.px(math.round(em * 2))})
 	ui.a11y({name = config.title_of(d)})
 	idle := slider_idle(v, lo, hi, step)
 	sig := ui.slider("###sl", &v, lo, hi, step, format)
+	// while the button is down the value is the app's (the preference is read again at each frame); at the release it is written
+	if sig.pointer_pressed || sig.dragging {
+		app.slider_held, app.slider_held_value = name, v
+	} else if held {
+		app.slider_held = ""
+	}
 	// written when the drag ends (or at each key step): the file is not rewritten at the pointer's rate, nor by the focus alone
 	if (sig.released || (sig.focused && !sig.dragging && abs(v - idle) > SLIDER_EPSILON)) && (d.kind == .Int ? i64(math.round(v)) != config.int_of(p, name) : abs(f64(v) - config.float_of(p, name)) > SLIDER_EPSILON) {
 		pref_set(app, name, d.kind == .Int ? fmt.tprintf("%d", i64(math.round(v))) : fmt.tprintf("%.2f", v))

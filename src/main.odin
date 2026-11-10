@@ -80,6 +80,10 @@ App :: struct {
 	facts:            Server_Facts,   // what the server said for the settings pages
 	settings_open:    bool,
 	settings_page:    Settings_Page,
+	// the settings' slider held (its preference, a constant name; "": none) and where it is: ui.slider moves its value only
+	// while the button is down, so the value is kept here between frames and written at the release
+	slider_held:       string,
+	slider_held_value: f32,
 	settings_query:   ui.Text_Field,    // the settings' search: while it has text, the matching settings of every client page
 	settings_search:  config.Search,    // what that text shows, this frame (settings_dialog)
 	setting_hidden:   bool,             // the row being built does not match the search: setting_end has nothing to close
