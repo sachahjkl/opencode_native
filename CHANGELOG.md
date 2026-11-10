@@ -5,6 +5,17 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-11-11
+
+### Added
+
+- **The artifacts a session made are in its conversation**: a card after the message it was made in, with its title; a click (or Show) opens the artifacts of the folder on it. An agent that makes one inside the code of `execute` left no trace of it before.
+
+### Fixed
+
+- **A Mermaid gantt chart in `dateFormat X`** (seconds since 1970, as a model writes the timing of its calls) was "not a diagram"; a gantt chart's section names sat on the edge of their band (gui_toolkit 0.170.0).
+- `ocntools build` rebuilds the program's Rust library when the toolkit's Rust code it takes changes (a new toolkit's diagrams were not in it).
+
 ## [0.42.0] - 2026-11-11
 
 ### Added
@@ -1232,7 +1243,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.42.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.0
 [0.42.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.42.0
 [0.41.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.41.1
 [0.41.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.41.0
