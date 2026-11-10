@@ -237,6 +237,7 @@ Req_Kind :: enum u8 {
 	Schedule_Done,  // DELETE, POST .../pause, /resume
 	Artifacts,      // GET /api/experimental/artifacts
 	Artifact_Read,  // GET .../:id
+	Chat_Artifacts, // GET /api/experimental/artifacts: those of the session shown (tag: its id)
 	Artifact_Done,  // DELETE
 	Plugins,        // GET /api/plugin
 	Plugins_Check,  // POST /api/plugin/check: the same list, looked up again
@@ -447,6 +448,7 @@ Req_Facts :: struct { json: bool, life: Req_Life }
 	.Schedule_Done    = {},
 	.Artifacts        = {json = true},
 	.Artifact_Read    = {json = true},
+	.Chat_Artifacts   = {json = true},
 	.Artifact_Done    = {},
 	.Plugins          = {json = true},
 	.Plugins_Check    = {json = true},
@@ -622,6 +624,7 @@ answer :: proc(app: ^App, r: ^Request) {
 	case .Schedule_Made: schedule_made(app)
 	case .Schedule_Done: schedule_changed(app)
 	case .Artifacts:     artifacts_load(app, v)
+	case .Chat_Artifacts: chat_artifacts_load(app, r.tag, v)
 	case .Artifact_Read: artifact_loaded(app, v)
 	case .Artifact_Done: artifacts_changed(app)
 	case .Plugins:       plugins_load(app, v)
@@ -785,6 +788,8 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 		mention_failed(app)   // (what was proposed is not what is typed any more)
 		return refused        // (a server without one, a folder gone: nothing to say)
 	// (a dialog's reading: read_shown says it where it would have been, in the server's words: "set experimental.schedules in config")
+	case .Chat_Artifacts:
+		return true   // (no cards: a server without artifacts says nothing worth a toast)
 	case .Schedules, .Artifacts, .Artifact_Read, .Plugins, .Integrations, .Credentials, .Files_List, .File_Read, .Stats, .Context, .Changes_Range,
 	     .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands:
 		return true
@@ -838,6 +843,7 @@ chat_read :: proc(app: ^App) {
 	load_children(app)
 	session_waits_load(app, id)
 	queue_read(app)
+	chat_artifacts_ask(app)
 }
 
 // How near, in screens: the page is there before the reader, unless they scroll fast (then messages() shows it coming).

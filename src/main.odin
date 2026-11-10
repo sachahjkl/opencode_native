@@ -200,6 +200,7 @@ App_Context :: struct {
 	outputs:        Output_Views,         // commands' output, read as a terminal shows it (output_view.odin)
 	schedules:      Schedules,            // schedules.odin
 	artifacts:      Artifacts,
+	chat_arts:      Chat_Artifacts,   // the artifacts the session shown made: cards in its conversation (schedules.odin)
 	diff_full:      Diff_Full,            // diff_full.odin
 	detached:       [dynamic]^Detached,   // detached.odin
 	web_host:       Web_Host,             // what makes web views (preview_views.odin)

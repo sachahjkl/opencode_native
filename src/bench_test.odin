@@ -616,6 +616,34 @@ the_menus_have_their_icons :: proc(t: ^testing.T) {
 	})
 }
 
+// An artifact the session made is a card after the message it was made in (the last one, here); a click shows it.
+@(test)
+an_artifact_of_the_session_is_a_card :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		last := app.chat.messages[len(app.chat.messages) - 1]
+		page := fmt.tprintf(`{{"data":[{{"id":"art_1","sessionID":"%s","title":"Essai d'outils","entry":"index.html","url":"/api/x/art_1/view/","time":{{"created":%f}}}},{{"id":"art_other","sessionID":"ses_2","title":"Not this one","time":{{"created":%f}}}}]}}`, app.chat.id, last.created + 1, last.created + 1)
+		v, err := json.parse_string(page, allocator = context.temp_allocator)
+		testing.expect(t, err == nil)
+		chat_artifacts_load(app, app.chat.id, v)
+		chat_artifacts_load(app, "ses_2", v)   // (an answer for a session not shown: not its)
+		app.snap_bottom = true
+		session.wait_idle(s)
+		card := session.find(s, "art_art_1")
+		if !testing.expect(t, card != nil, "the card") { return }
+		testing.expect(t, session.find(s, "art_art_other") == nil, "another session's is not shown")
+		testing.expect(t, session.find_text(s, "Essai d'outils") != nil, "its title")
+		item := session.find(s, last.lazy_id[3:])
+		testing.expect(t, item != nil && card.rect.min.y >= item.rect.min.y && card.rect.max.y <= item.rect.max.y, "in the last message's item")
+		session.save_png(s, "artifact_card.png")
+		session.click(s, "art_art_1")
+		session.frames(s, 2)
+		testing.expect(t, app.cx.artifacts.open && app.cx.artifacts.shown == "art_1", "a click shows it")
+		app.cx.artifacts.open = false
+	})
+}
+
 // A slider of the settings dragged and let go: the preference takes the value it was let go at, and keeps it.
 @(test)
 a_slider_keeps_the_value_it_is_let_go_at :: proc(t: ^testing.T) {

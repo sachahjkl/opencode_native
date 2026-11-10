@@ -985,6 +985,10 @@ messages :: proc(app: ^App, em: f32) {
 				}
 				message(app, c, &m, i, em)
 				ctx_check(app, ui.parent_box(), .Message, m.id)
+				// (what was made while this message was the last: up to the next one; before the first message, at the first)
+				from := i == 0 ? 0 : m.created
+				to := i + 1 < len(c.messages) ? c.messages[i + 1].created : max(f64)
+				for a in chat_artifacts_between(app, from, to) { artifact_card(app, a, em) }
 			}
 		}
 		if restore { nav_restore_held(app, ui.lazy_pinned(lz)) }

@@ -438,7 +438,75 @@ artifact_read :: proc(app: ^App) {
 artifacts_changed :: proc(app: ^App) {
 	a := &app.cx.artifacts
 	if a.open { artifacts_ask(app) }
+	chat_artifacts_ask(app)
 }
+
+// The artifacts of the session shown, as cards in its conversation after the message they were made in (an agent makes
+// one through a tool, or inside the code of `execute`: the conversation said nothing of it).
+Chat_Artifact :: struct { id, title: string, created: f64 }
+
+Chat_Artifacts :: struct {
+	of:    string,   // the session they are of (owned)
+	list:  [dynamic]Chat_Artifact,
+	arena: virtual.Arena,
+}
+
+chat_artifacts_ask :: proc(app: ^App) {
+	if app.chat.id == "" || app.cx.no_artifacts { return }
+	q := location_query(chat_dir(app))
+	request(app, .Chat_Artifacts, "GET", fmt.tprintf("/api/experimental/artifacts%s%s", q != "" ? "?" : "", q), tag = app.chat.id)
+}
+
+// (`of`: the session asked about; another one shown since, the answer is not its)
+chat_artifacts_load :: proc(app: ^App, of: string, v: json.Value) {
+	if of != app.chat.id { return }
+	c := &app.cx.chat_arts
+	al := arena_renew(&c.arena)
+	clear(&c.list)
+	c.of = strings.clone(of, al)
+	for it in jarr(v, "data") {
+		if jstr(it, "sessionID") != of { continue }
+		append(&c.list, Chat_Artifact{strings.clone(jstr(it, "id"), al), strings.clone(jstr(it, "title"), al), jnum(it, "time", "created")})
+	}
+}
+
+// The artifacts made from `from` (ms) up to `to` (excluded) of the session shown.
+chat_artifacts_between :: proc(app: ^App, from, to: f64) -> []Chat_Artifact {
+	c := &app.cx.chat_arts
+	if c.of != app.chat.id { return nil }
+	out := make([dynamic]Chat_Artifact, context.temp_allocator)
+	for a in c.list { if a.created >= from && a.created < to { append(&out, a) } }
+	return out[:]
+}
+
+// An artifact's card: what it is, its name; a click shows it (the artifacts of the folder, it chosen).
+artifact_card :: proc(app: ^App, a: Chat_Artifact, em: f32) {
+	ui.spacer(ui.px(em * 0.5))
+	ui.next({width = ui.fill(), height = ui.children_sum(), cursor = .Hand})
+	if well(fmt.tprintf("###art_%s", a.id), radius = 6, flags = {.Clickable}) {
+		card := ui.parent_box()
+		ui.a11y({role = .Button, name = fmt.tprintf("Artifact %s: show it", a.title)})
+		show := ui.signal(card).clicked
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * ARTIFACT_CARD_H_EM)), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###line") {
+			ui.spacer(ui.px(em * 0.8))
+			glyph(lucide.APP_WINDOW, accent(), math.round(em * ICON_REGULAR), em * 1.4)
+			ui.spacer(ui.px(em * 0.5))
+			text("k", "Artifact", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+			ui.spacer(ui.px(em * 0.6))
+			text("n", ellipsize(a.title != "" ? a.title : a.id, ARTIFACT_TITLE_CHARS), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+			if bevel_button("###show", "Show", lucide.EYE, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { show = true }
+			ui.spacer(ui.px(em * 0.6))
+		}
+		if show {
+			artifacts_open(app)
+			artifact_show(app, a.id)
+		}
+	}
+}
+
+ARTIFACT_CARD_H_EM :: 2.6
+ARTIFACT_TITLE_CHARS :: 90
 
 @(private = "file")
 artifact_files_clear :: proc(a: ^Artifacts) {
