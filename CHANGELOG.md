@@ -5,9 +5,11 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-11-10
+
 ### Added
 
-- **Mermaid diagrams**: a ```mermaid block in an answer is drawn as its diagram (flowchart, sequence, class, state, ER, gantt, pie, mindmap, timeline, git graph...), in the interface's fonts, at the size of the text around it and never wider than the column, in the theme's lightness. Its header's button shows its text and back. While the block is still being written, or when its text is no diagram (the header says why), its text shows. The diagram is laid out by mermaid-svg, built into the program's Rust library, and drawn by the toolkit (gui_toolkit's svg and mermaid packages): no browser.
+- **Mermaid diagrams**: a ```mermaid block in an answer is drawn as its diagram (flowchart, sequence, class, state, ER, gantt, pie, mindmap, timeline, git graph...), in the interface's fonts, at the size of the text around it and never wider than the column, in the theme's lightness. Its header's button shows its text and back. While the block is still being written, or when its text is no diagram (the header says why), its text shows. The diagram is laid out by mermaid-svg, built into the program's Rust library, and drawn by the toolkit (gui_toolkit 0.149.0's svg and mermaid packages): no browser.
 
 ## [0.38.2] - 2026-11-10
 
@@ -1193,7 +1195,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.38.2...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.39.0...HEAD
+[0.39.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.39.0
 [0.38.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.38.2
 [0.38.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.38.1
 [0.38.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.38.0
