@@ -23,6 +23,7 @@ GT_BESIDE   :: "../gui_toolkit"
 OUT_DEFAULT :: "build/opencode-native" + EXE
 
 NATIVE_DIR :: "native"
+GT_NATIVE_DIR :: GT_DEFAULT + "/native"   // the toolkit's crates ocn_native takes by path (gt_mermaid)
 NATIVE_OUT :: "build/native"
 VT_OUT     :: "build/vt"
 VT_SOURCE  :: VT_OUT + "/ghostty"
@@ -100,12 +101,15 @@ files_under :: proc(dir: string, out: ^[dynamic]string) {
 native_stamp :: proc() -> string {
 	files := make([dynamic]string, context.temp_allocator)
 	append(&files, NATIVE_DIR + "/Cargo.toml", NATIVE_DIR + "/Cargo.lock")
-	entries, _ := os.read_all_directory_by_path(NATIVE_DIR, context.temp_allocator)
-	for e in entries {
-		manifest := fmt.tprintf("%s/Cargo.toml", e.fullpath)
-		if e.type != .Directory || !os.exists(manifest) { continue }
-		append(&files, manifest)
-		files_under(fmt.tprintf("%s/src", e.fullpath), &files)
+	// (its crates, and the toolkit's it takes by path: a new toolkit's gt_mermaid is a new library)
+	for dir in ([]string{NATIVE_DIR, GT_NATIVE_DIR}) {
+		entries, _ := os.read_all_directory_by_path(dir, context.temp_allocator)
+		for e in entries {
+			manifest := fmt.tprintf("%s/Cargo.toml", e.fullpath)
+			if e.type != .Directory || !os.exists(manifest) { continue }
+			append(&files, manifest)
+			files_under(fmt.tprintf("%s/src", e.fullpath), &files)
+		}
 	}
 	slice.sort(files[:])
 	all := strings.builder_make(context.temp_allocator)
