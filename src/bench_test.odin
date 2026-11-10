@@ -1116,8 +1116,8 @@ the_window_opens_where_it_was :: proc(t: ^testing.T) {
 	platform.set_placement(app.win, {{0, 0, 800, 600}, false})
 	placement_restore(app)
 	testing.expect_value(t, platform.get_placement(app.win), platform.Placement{{-1700, 120, 1400, 900}, false})
-	// maximized, on the same monitor
-	platform.set_placement(app.win, {{-1700, 120, 1400, 900}, true})
+	// maximized there (as by its title bar: set_placement on Windows keeps it for show_window)
+	platform.toggle_maximize(app.win)
 	app.cx.placement_ms = -PLACEMENT_CHECK_MS   // (looked at long ago)
 	placement_track(app)
 	testing.expect_value(t, config.string_of(&app.cfg_prefs, "window.placement"), "-1700 120 1400 900 maximized")
