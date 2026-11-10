@@ -1002,3 +1002,29 @@ typing_with_nothing_focused_goes_to_the_composer :: proc(t: ^testing.T) {
 	testing.expect_value(t, ui.area_string(&app.composer), "")
 	palette_toggle(app)
 }
+
+// A password's field has an eye: it shows the password and hides it again; the dialog opened again hides it.
+@(test)
+a_password_can_be_shown :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	server_edit_open(app, -1)
+	session.frames(s, 3)
+	ui.field_set(&app.server_edit.password, "hunter2")
+	session.frames(s, 2)
+	eye := session.find(s, "reveal")
+	if !testing.expect(t, eye != nil, "the password's eye") { return }
+	shown :: proc(s: ^session.Session) -> string {   // (what the field draws: the eye is its child)
+		eye := session.find(s, "reveal")
+		return eye != nil && eye.parent != nil ? (^ui.Line_Edit_Draw)(eye.parent.custom_user).text : ""
+	}
+	testing.expect_value(t, shown(s), "•••••••")
+	session.click(s, "reveal")
+	testing.expect(t, app.server_edit.password_shown, "shown")
+	testing.expect_value(t, shown(s), "hunter2")
+	app.server_edit.open = false
+	session.frames(s, 2)
+	server_edit_open(app, -1)
+	testing.expect(t, !app.server_edit.password_shown, "opened again: hidden")
+	app.server_edit.open = false
+}

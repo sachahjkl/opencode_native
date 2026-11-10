@@ -64,6 +64,7 @@ Integrations :: struct {
 	sending:  Remote,            // what Sending and Finishing wait for: its ticket ties the answer to this attempt
 	poll:     Remote,            // the status of a login under way
 	key, label, code: ui.Text_Field,
+	key_shown: bool,             // the key's eye: shown as text
 	failed:   string,            // why it did not work (owned)
 	renaming: string,            // the connection whose label is edited (owned)
 	rename:   ui.Text_Field,
@@ -199,6 +200,7 @@ waiting_free :: proc(w: Connect_Waiting) { delete(w.attempt); delete(w.url); del
 connect_reset :: proc(app: ^App) {
 	n := &app.cx.integrations
 	ui.field_set(&n.key, "")
+	n.key_shown = false
 	ui.field_set(&n.code, "")
 	ui.field_set(&n.label, "")
 	if it := integration_find(n, n.shown); it != nil {
@@ -384,14 +386,14 @@ integrations_watch :: proc(app: ^App) {
 }
 
 @(private = "file")
-line :: proc(id: string, f: ^ui.Text_Field, hint: string, em: f32, secret := false) -> ui.Edit_Result {
+line :: proc(id: string, f: ^ui.Text_Field, hint: string, em: f32, secret := false, reveal: ^bool = nil) -> ui.Edit_Result {
 	res: ui.Edit_Result
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
 	if well(fmt.tprintf("%s_w", id), .X, radius = 6) {
 		ui.spacer(ui.px(em * 0.5))
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-			res = ui.line_edit(id, f, hint, secret = secret)
+			res = ui.line_edit(id, f, hint, secret = secret, reveal = reveal)
 		}
 		ui.spacer(ui.px(em * 0.5))
 	}
@@ -568,7 +570,7 @@ connect_fill :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int, e
 		}
 	}
 	if m.kind == .Key {
-		if line("###int_key", &n.key, "The key", em, secret = true).committed { go = true }
+		if line("###int_key", &n.key, "The key", em, secret = true, reveal = &n.key_shown).committed { go = true }
 		ui.spacer(ui.px(em * 0.4))
 	}
 	if line("###int_label", &n.label, "A name for it (optional)", em).committed { go = true }

@@ -305,11 +305,13 @@ Server_Edit :: struct {
 	name:     ui.Text_Field,
 	url:      ui.Text_Field,
 	password: ui.Text_Field,
+	password_shown: bool,   // the password's eye: shown as text
 }
 
 server_edit_open :: proc(app: ^App, i: int) {
 	e := &app.server_edit
 	e.open = true
+	e.password_shown = false   // (each time it opens, hidden)
 	e.index = i
 	if i >= 0 {
 		s := app.servers[i]
@@ -352,7 +354,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 			text("t", e.index >= 0 ? "Edit the server" : "Add a server", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 1.8)})
 		}
 		ui.spacer(ui.px(em * 0.9))
-		field :: proc(id, label, hint: string, f: ^ui.Text_Field, em: f32, secret := false) -> ui.Edit_Result {
+		field :: proc(id, label, hint: string, f: ^ui.Text_Field, em: f32, secret := false, reveal: ^bool = nil) -> ui.Edit_Result {
 			res: ui.Edit_Result
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = id) {
@@ -362,7 +364,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 				if well("###w", .X, radius = 7) {
 					if ui.tags("bare") {
 						ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.5})
-						res = ui.line_edit("###e", f, hint, secret = secret)
+						res = ui.line_edit("###e", f, hint, secret = secret, reveal = reveal)
 					}
 				}
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
@@ -372,7 +374,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 		}
 		r1 := field("###fn", "Name", "Work laptop", &e.name, em)
 		r2 := field("###fu", "Address", "http://host:4096", &e.url, em)
-		r3 := field("###fp", "Password", "none", &e.password, em, secret = true)
+		r3 := field("###fp", "Password", "none", &e.password, em, secret = true, reveal = &e.password_shown)
 		if ui.tags("weak") {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row() {

@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.37.1] - 2026-11-10
+
+### Added
+
+- **A password can be shown**: the server's password and an integration's key have an eye at the end of their field, which shows what was typed and hides it again (gui_toolkit 0.144.0). Each time the dialog opens, it is hidden.
+
 ## [0.37.0] - 2026-11-10
 
 ### Added
@@ -1161,7 +1167,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.37.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.37.1...HEAD
+[0.37.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.37.1
 [0.37.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.37.0
 [0.36.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.36.0
 [0.35.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.35.0
