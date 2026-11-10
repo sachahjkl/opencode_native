@@ -9,6 +9,7 @@ project follows [semantic versioning](https://semver.org).
 
 ### Fixed
 
+- **A session archived from the sidebar leaves its section at once**: archived (or brought back) from its row's menu, it stayed where it was while the pointer moved over the list, until the mode was switched. The list held under the pointer is for what changes by itself; what the person just did shows at once.
 - **A slider of the settings keeps the value it is let go at**: dragged and let go, it went back, and the value was never written (the text size, the zooms, the conversation's width...). The value is kept while the button is down and written at the release (as gui_toolkit 0.156.0's prefs_page).
 - **Setup, run from Nix, beside what an earlier install left**: an icon left in `~/.local/share/icons` made it say "To repair", in red. A copy of the Nix store is now the Nix package's: the dialog says an earlier install left files, and offers only "Remove what is left" (gui_toolkit 0.163.0). `--status` says 0 for a Nix package.
 - From gui_toolkit 0.156.0 to 0.163.0: typing a letter to the composer no longer takes a shortcut's letter (Alt+P), and an input method's text right after a shortcut comes through again.

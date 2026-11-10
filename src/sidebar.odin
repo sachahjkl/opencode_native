@@ -130,6 +130,9 @@ sidebar_sections :: proc(app: ^App, rows: []int, mode: Sidebar_Mode) -> []Side_S
 // Archives a session, or brings it back: at once here, the server's list then says it as it stands.
 session_archive :: proc(app: ^App, id: string, archive: bool) {
 	if s := find_session(app, id); s != nil { s.archived = archive ? max(now_epoch_ms(), 1) : 0 }
+	// (the list held under the pointer is for what changes by itself: what the person just did shows at once, the hold
+	// taken again from the sections as they are now)
+	sidebar_hold_end(app)
 	request(app, .Action, "PATCH", fmt.tprintf("/api/session/%s", id), archive ? `{"archived":true}` : `{"archived":false}`, id)
 	refresh_sessions(app)
 }

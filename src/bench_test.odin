@@ -1085,6 +1085,33 @@ an_archived_session_is_put_away :: proc(t: ^testing.T) {
 	ui.field_set(&app.search, "")
 }
 
+// Archived from the list, the pointer still on it: the row leaves its section at once (the list held under the pointer is
+// for what changes by itself, not for what the person just did).
+@(test)
+a_session_archived_under_the_pointer_leaves_at_once :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	ui.field_set(&app.search, `"Session 2 about"`)
+	session.frames(s, 2)
+	row := session.find(s, "ls_ses_2")
+	if !testing.expect(t, row != nil, "listed") { return }
+	at := session.center(row)
+	session.move(s, at)
+	session.move(s, at + {2, 0})
+	session.frames(s, 2)
+	testing.expect(t, app.cx.side_hold.on, "the list is held under the pointer")
+	session_archive(app, "ses_2", true)
+	session.move(s, at + {4, 0})   // (the pointer moves on over the list: the hold goes on)
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "ls_ses_2") == nil, "out of its section at once; Archived is folded")
+	testing.expect(t, session.find_text(s, "ARCHIVED") != nil, "the Archived section")
+	session_archive(app, "ses_2", false)
+	session.move(s, at + {6, 0})
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "ls_ses_2") != nil, "brought back: at once too")
+	ui.field_set(&app.search, "")
+}
+
 // Past the time the limit resets, the goal is still paused (the server waits for a word): the line says the limit reset, and
 // offers to resume it. Before, it says when, and offers nothing.
 @(test)
