@@ -1078,3 +1078,26 @@ a_goal_paused_past_its_reset_offers_to_resume :: proc(t: ^testing.T) {
 	testing.expect(t, session.find(s, "gw_resume") == nil, "not yet: nothing offered")
 	goal_set(app, app.chat.id, nil)
 }
+
+// Escape in the composer while a turn runs stops it, and the composer keeps the keyboard; with nothing running, it lets go of it.
+@(test)
+escape_stops_the_run_and_the_composer_keeps_the_keyboard :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	app.chat.busy = true
+	app.busy[app.chat.id] = true
+	session.click(s, "composer")
+	session.type_text(s, "wait, ")
+	testing.expect_value(t, session.focused_name(s), "composer")
+	session.key(s, .Escape)
+	session.frames(s, 2)
+	testing.expect_value(t, session.focused_name(s), "composer")   // (still writing)
+	session.type_text(s, "no")
+	testing.expect_value(t, ui.area_string(&app.composer), "wait, no")
+	app.chat.busy = false
+	delete_key(&app.busy, app.chat.id)
+	session.key(s, .Escape)
+	session.frames(s, 2)
+	testing.expect(t, session.focused_name(s) != "composer", "nothing runs: it lets go")
+	ui.area_set(&app.composer, "")
+}

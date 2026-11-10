@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.38.1] - 2026-11-10
+
+### Fixed
+
+- **Escape in the composer stops the run and keeps the keyboard there**: the editor took Escape first and let go of the keyboard, and the run went on until a second Escape. With nothing running, Escape still lets go of it.
+
 ## [0.38.0] - 2026-11-10
 
 ### Added
@@ -1177,7 +1183,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.38.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.38.1...HEAD
+[0.38.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.38.1
 [0.38.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.38.0
 [0.37.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.37.1
 [0.37.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.37.0

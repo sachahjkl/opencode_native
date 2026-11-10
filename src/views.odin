@@ -1604,6 +1604,11 @@ composer :: proc(app: ^App, em: f32) {
 						down = ui.key_pressed_peek(.Down)
 					}
 				}
+				// Escape while a turn runs stops it, and the composer keeps the keyboard (one goes on writing what made one stop it);
+				// the editor would have let go of it. With nothing running, Escape lets go of it, as everywhere.
+				if app.composer_focused && app.chat.busy && !overlay_open(app) && !mention_takes_escape(app) && !history_browsing(app) && !queue_editing(app) && ui.key_press(.Escape) {
+					interrupt_session(app, app.chat.id)
+				}
 				// typed with nothing focused (a click in the conversation took the keyboard away): the composer takes it. Not a
 				// space (a focused button's), nor while a dialog is over the window or a box (the terminal) has the keyboard.
 				if !overlay_open(app) && ui.focus_key() == 0 && typed_word(app) { ui.type_to_field(ui.key_from_string(ui.parent_box().key, "###composer")) }
