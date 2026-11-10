@@ -23,6 +23,8 @@ run_check :: proc(args: []string) -> int {
 	// (one test with a window at a time: testkit/session says so; on Linux the program's own flags)
 	tests := make([dynamic]string, context.temp_allocator)
 	append(&tests, "odin", "test", "src", gt_collection(GT_DEFAULT), "-out:build/test" + EXE, "-define:ODIN_TEST_THREADS=1")
+	native_flags := NATIVE_FLAGS
+	append(&tests, ..native_flags[:])
 	when ODIN_OS != .Windows { flags := LINUX_FLAGS; append(&tests, ..flags[:]) }
 	if !run(..tests[:]) { return 1 }
 	if !run("odin", "test", "src/update", gt_collection(GT_DEFAULT), "-out:build/update_test" + EXE) { return 1 }

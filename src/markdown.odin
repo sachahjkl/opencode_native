@@ -100,6 +100,7 @@ Block :: struct {
 	marker: string,   // "3." of a numbered item
 	lang:   string,
 	lines:  [dynamic]string,
+	closed: bool,     // a code block whose closing fence came (one still being written is not)
 }
 
 @(private = "file")
@@ -124,7 +125,7 @@ parse_blocks :: proc(src: string) -> [dynamic]Block {
 		line := strings.trim_right(raw, "\r")
 		t := strings.trim_space(line)
 		if in_code {
-			if strings.has_prefix(t, fence) && strings.trim_left(t, "`~") == "" { in_code = false; cur = nil; continue }
+			if strings.has_prefix(t, fence) && strings.trim_left(t, "`~") == "" { cur.closed = true; in_code = false; cur = nil; continue }
 			append(&cur.lines, line)
 			continue
 		}
@@ -217,7 +218,9 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 		case .Rule:
 			groove(bid)
 		case .Code:
-			code_block(bid, bl.lang, strings.join(bl.lines[:], "\n", context.temp_allocator), version = len(bl.lines) > 0 ? src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], em) : 0)
+			code := strings.join(bl.lines[:], "\n", context.temp_allocator)
+			version := len(bl.lines) > 0 ? src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], em) : 0
+			if bl.lang == "mermaid" { mermaid_block(bid, code, bl.closed, version) } else { code_block(bid, bl.lang, code, version = version) }
 		case .Table:
 			table_block(bid, bl.lines[:], color, fs)
 		case .Heading:

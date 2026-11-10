@@ -32,7 +32,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: build/native
-          key: native-${{ hashFiles('native/Cargo.toml', 'native/Cargo.lock', 'native/**/Cargo.toml', 'native/**/src/**', 'tools/ocntools/build.odin') }}
+          key: native-${{ hashFiles('native/Cargo.toml', 'native/Cargo.lock', 'native/**/Cargo.toml', 'native/**/src/**', 'ext/gui_toolkit/native/mermaid/**', 'tools/ocntools/build.odin') }}
 
       # (Ghostty and Zig, pinned in the script: nothing to do unless it changes)
       - uses: actions/cache@v6
@@ -47,7 +47,7 @@ jobs:
         run: call build.bat
 
       - name: Tests
-        run: odin test src -collection:gt=ext/gui_toolkit/src -out:build/test.exe -define:ODIN_TEST_THREADS=1   # (one test with a window at a time)
+        run: odin test src -collection:gt=ext/gui_toolkit/src -out:build/test.exe -define:ODIN_TEST_THREADS=1 -define:MERMAID_NATIVE_LINK=false   # (one test with a window at a time)
 
       - uses: actions/upload-artifact@v7
         with:

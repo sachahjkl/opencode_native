@@ -15,6 +15,8 @@ import toolbox "gt:toolbox"
 // DirectWrite here); wgpu-native is a second Rust library: both carry Rust's standard library, whose few unmangled symbols
 // (rust_eh_personality) are the same code.
 LINUX_FLAGS :: [?]string{"-define:FONT_BACKEND=native", "-define:FONT_NATIVE_LINK=false", "-extra-linker-flags:-Wl,--allow-multiple-definition"}
+// On every system: the toolkit's Mermaid diagrams are built into native/ocn_native (gt_mermaid), not linked on their own.
+NATIVE_FLAGS :: [?]string{"-define:MERMAID_NATIVE_LINK=false"}
 
 GT_DEFAULT  :: "ext/gui_toolkit"
 GT_BESIDE   :: "../gui_toolkit"
@@ -233,6 +235,8 @@ build_program :: proc(b: Build) -> bool {
 
 	cmd := make([dynamic]string, context.temp_allocator)
 	append(&cmd, odin, "build", "src", gt_collection(gt), fmt.tprintf("-out:%s", out), "-vet")
+	native_flags := NATIVE_FLAGS
+	append(&cmd, ..native_flags[:])
 	when ODIN_OS == .Windows {
 		if !write_version_header() { return false }
 		// (the C runtime linked in: no vcruntime140.dll to ship)

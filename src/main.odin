@@ -224,6 +224,7 @@ App_Context :: struct {
 	commands_due:   [dynamic]^Command, // to run after this frame, in order (commands.odin)
 	slash:          [dynamic]Slash,    // the server's commands
 	have_slash:     bool,
+	diagrams:       map[u64]Diagram,   // the Mermaid diagrams laid out (diagrams.odin)
 	placement_seen: string,   // the window's placement as last kept (window.placement), and when it was looked at
 	placement_ms:   f64,
 	attachments:    [dynamic]Attachment,   // what goes with the prompt (attachments.odin)

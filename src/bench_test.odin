@@ -1127,3 +1127,44 @@ the_window_opens_where_it_was :: proc(t: ^testing.T) {
 	placement_track(app)
 	testing.expect(t, app.cx.placement_seen == before, "the same: kept as it was")
 }
+
+// A ```mermaid block is drawn as its diagram, the header's button shows its text and back; one still being written shows its text,
+// and a text that is no diagram says why.
+@(private = "file")
+mermaid_page :: proc() -> string {
+	t := BENCH_EPOCH_MS
+	answer :: proc(id, text: string, at: f64) -> string {
+		return fmt.tprintf(`{{"id":"%s","type":"assistant","agent":"build","model":{{"id":"m","providerID":"p"}},"finish":"stop","time":{{"created":%f,"completed":%f}},"content":[{{"type":"text","text":%s}}]}}`, id, at, at + 1, jquote(text))
+	}
+	b := strings.builder_make(context.temp_allocator)
+	fmt.sbprintf(&b, `{{"data":[%s,%s,%s,`, answer("mm_3", "Still writing:\n\n```mermaid\nflowchart LR\n  X --> Y\n", t + 30), answer("mm_2", "Not one:\n\n```mermaid\nthis is no diagram\n```\n", t + 20), answer("mm_1", "Here:\n\n```mermaid\nflowchart LR\n  A[Open the session] --> B{Busy?}\n  B -->|yes| C[Steer]\n  B -->|no| D[Send]\n```\n", t + 10))
+	fmt.sbprintf(&b, `{{"id":"mm_u","type":"user","text":"Draw it","time":{{"created":%f}}}}],"cursor":{{"next":""}}}}`, t)
+	return strings.to_string(b)
+}
+
+@(test)
+a_mermaid_block_is_a_diagram :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	v, err := json.parse_string(mermaid_page(), allocator = context.temp_allocator)
+	testing.expect(t, err == nil)
+	chat_load(app, v, false)
+	app.snap_bottom = true
+	session.wait_idle(s)
+	diagrams := 0
+	for i := 0; session.find(s, "diagram", i) != nil; i += 1 { diagrams += 1 }
+	testing.expect_value(t, diagrams, 1)   // (the closed one that is a diagram)
+	d := session.find(s, "diagram")
+	if !testing.expect(t, d != nil, "drawn") { return }
+	testing.expect(t, d.rect.max.x - d.rect.min.x > 200 && d.rect.max.y - d.rect.min.y > 40, "at a readable size")
+	testing.expect(t, session.find_text(s, "not a diagram", 0) != nil || session.find(s, "why") != nil, "the one that is not says why")
+	session.save_png(s, "mermaid.png")
+	// its text, and back
+	session.click(s, "as_text")
+	session.wait_idle(s)
+	testing.expect(t, session.find(s, "diagram") == nil, "its text instead")
+	session.click(s, "as_text")
+	session.wait_idle(s)
+	testing.expect(t, session.find(s, "diagram") != nil, "the diagram again")
+	diagrams_free(app)
+}

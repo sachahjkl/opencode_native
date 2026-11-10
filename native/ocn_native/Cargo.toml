@@ -28,6 +28,11 @@ webview2-com = "=0.39.1"
 windows = { version = "=0.62.2", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }
 windows-core = "=0.62.2"
 
+# The toolkit's Mermaid diagrams (mermaid-svg: a diagram's text to SVG, drawn by the toolkit's svg package), built into this
+# library on every system (its gt_mermaid_* functions stay exported; the build passes -define:MERMAID_NATIVE_LINK=false).
+[dependencies.gt_mermaid]
+path = "../../ext/gui_toolkit/native/mermaid"
+
 # Linux: the toolkit's native text backend (Fontations, HarfRust, ICU4X; there is no DirectWrite) built into this library,
 # the program's only Rust one (its gt_* functions stay exported; build.sh builds with -define:FONT_BACKEND=native
 # -define:FONT_NATIVE_LINK=false). Its crates are pinned by its own Cargo.toml and by ../Cargo.lock.

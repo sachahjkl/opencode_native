@@ -5,6 +5,10 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **Mermaid diagrams**: a ```mermaid block in an answer is drawn as its diagram (flowchart, sequence, class, state, ER, gantt, pie, mindmap, timeline, git graph...), in the interface's fonts, at the size of the text around it and never wider than the column, in the theme's lightness. Its header's button shows its text and back. While the block is still being written, or when its text is no diagram (the header says why), its text shows. The diagram is laid out by mermaid-svg, built into the program's Rust library, and drawn by the toolkit (gui_toolkit's svg and mermaid packages): no browser.
+
 ## [0.38.2] - 2026-11-10
 
 ### Fixed
