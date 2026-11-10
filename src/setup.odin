@@ -15,7 +15,7 @@ import "gt:render"
 import setup "gt:setup"
 import "gt:ui"
 
-APP_VERSION :: "0.41.0"
+APP_VERSION :: "0.41.1"
 
 LOGO_PNG :: #load("../assets/logo_256.png")
 
@@ -72,7 +72,11 @@ desktop_cli :: proc() -> (handled: bool, code: int) {
 	case slice.contains(args, "--status"):
 		f := setup.facts(setup_config())
 		say("%v %s\n", f.state, f.exe)
-		return true, f.state == .This_Copy || f.state == .Other_Copy ? 0 : f.state == .Repair ? 2 : 1
+		#partial switch f.state {
+		case .This_Copy, .Other_Copy, .Nix_Package: return true, 0   // (a Nix package is installed: by Nix)
+		case .Repair:                               return true, 2
+		}
+		return true, 1
 	}
 	return false, 0
 }

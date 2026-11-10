@@ -7,7 +7,7 @@
 <p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.41.0-fab283" alt="version 0.41.0"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.41.1-fab283" alt="version 0.41.1"></a>
 <a href="https://ocn.froment.software/"><img src="https://img.shields.io/badge/site-ocn.froment.software-56b6c2" alt="site"></a>
 </p>
 
@@ -141,7 +141,7 @@ TLS is rustls, checked against the system's trust store.
 | `--search=<text>` | the sidebar's search, filled at start |
 | `--install [--desktop]` | install this copy for the user, or repair the install (Windows: `%LOCALAPPDATA%\Programs\opencode-native`, Start menu, Settings > Apps; Linux: `~/.local/share/opencode-native`, the applications menu, the icon); `--desktop` adds a shortcut on the Desktop |
 | `--uninstall [--quiet]` | remove it (it asks first unless `--quiet`); the files of a copy that runs go when it ends |
-| `--status` | prints the state and the installed program; exit code 0 installed, 2 needs repair, 1 not installed |
+| `--status` | prints the state and the installed program; exit code 0 installed (a Nix package too), 2 needs repair, 1 not installed |
 | `--setup` | open Setup at start |
 | `--add-server` | open the dialog that adds a server at start |
 | `--find=<text>` | open the find bar (Ctrl+F) with that text |
