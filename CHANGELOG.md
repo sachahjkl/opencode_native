@@ -13,7 +13,7 @@ project follows [semantic versioning](https://semver.org).
 - **A numbered list past 9 keeps its numbers whole**: "10." showed as "1…". A list's numbers take the width of its widest, and the text of its items stays in one column. A marker now sits on the baseline of its item's text (it was set higher, in another face).
 - **A slider of the settings keeps the value it is let go at**: dragged and let go, it went back, and the value was never written (the text size, the zooms, the conversation's width...). The value is kept while the button is down and written at the release (as gui_toolkit 0.156.0's prefs_page).
 - **Setup, run from Nix, beside what an earlier install left**: an icon left in `~/.local/share/icons` made it say "To repair", in red. A copy of the Nix store is now the Nix package's: the dialog says an earlier install left files, and offers only "Remove what is left" (gui_toolkit 0.163.0). `--status` says 0 for a Nix package.
-- From gui_toolkit 0.156.0 to 0.163.0: typing a letter to the composer no longer takes a shortcut's letter (Alt+P), and an input method's text right after a shortcut comes through again.
+- From gui_toolkit 0.156.0 to 0.167.0: typing a letter to the composer no longer takes a shortcut's letter (Alt+P), and an input method's text right after a shortcut comes through again.
 
 ## [0.41.0] - 2026-11-10
 
