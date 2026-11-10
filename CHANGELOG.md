@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-11-10
+
+### Added
+
+- **A diagram opens in the viewer**: a click on a Mermaid diagram, or its header's zoom button, opens it in the image viewer, at the size the window gives it. The wheel zooms where the pointer is, a drag moves it, + − and 0 too; it is drawn as paths at every zoom, so its lines and words stay sharp.
+- **Copy as PNG**: the copy button of a diagram, and its right-click menu, give "Copy as PNG" (the picture, at twice its size in the conversation, on the colour of code) and "Copy the text". In the viewer, Ctrl+C copies the picture. The picture is made on the CPU (gui_toolkit 0.153.0, `svg.raster`).
+
 ## [0.39.0] - 2026-11-10
 
 ### Added
@@ -1195,7 +1202,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.39.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.40.0...HEAD
+[0.40.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.40.0
 [0.39.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.39.0
 [0.38.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.38.2
 [0.38.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.38.1
