@@ -927,7 +927,8 @@ a_thought_opened_while_the_run_goes_on_stays :: proc(t: ^testing.T) {
 	}
 }
 
-// A paused goal says why under its objective (the server's reason), cut at the strip's width, all of it under the pointer.
+// A paused goal says why (the server's reason) at the end of the conversation, across it, all of it; the strip over the composer
+// stays one line.
 @(test)
 a_paused_goal_says_why :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
@@ -936,19 +937,41 @@ a_paused_goal_says_why :: proc(t: ^testing.T) {
 	v, err := json.parse_string(fmt.tprintf(`{{"objective":"Booted OS with a REPL","status":"paused","reason":%s,"rounds":3,"maxRounds":50}}`, jquote(reason)), allocator = context.temp_allocator)
 	testing.expect(t, err == nil)
 	goal_set(app, app.chat.id, v)
-	session.frames(s, 3)
-	strip, why := session.find(s, "goal_strip"), session.find(s, "why")
-	if !testing.expect(t, strip != nil && why != nil, "the strip and its reason") { return }
-	o := session.find(s, "o")
-	testing.expect(t, o != nil && why.rect.min.y >= o.rect.max.y - 0.5, "under the objective")
-	testing.expect(t, why.rect.max.x <= strip.rect.max.x + 0.5, "in the strip")
+	app.snap_bottom = true
+	session.wait_idle(s)
+	strip, line, why := session.find(s, "goal_strip"), session.find(s, "goal_why"), session.find(s, "goal_reason")
+	if !testing.expect(t, strip != nil && line != nil && why != nil, "the strip, the line and the reason") { return }
 	em := ui.font_size()
-	testing.expectf(t, strip.rect.max.y - strip.rect.min.y < em * 4, "two lines tall, no more: %v", strip.rect)
-	tools := session.find(s, "tools")
-	testing.expect(t, tools != nil && tools.rect.max.y <= f32(BENCH_SIZE.y) && tools.rect.min.y >= strip.rect.max.y, "the composer under it, in the window")
-	session.hover(s, "why")
-	session.advance(s, f64(TOOLTIP_DELAY_S) * 1000 + 100)
+	testing.expectf(t, strip.rect.max.y - strip.rect.min.y < em * 2.5, "the strip: one line (%v)", strip.rect)
+	testing.expect(t, why.rect.min.y >= line.rect.max.y - 0.5 && why.rect.max.y <= strip.rect.min.y, "the reason under its line, over the strip")
+	testing.expect(t, why.rect.max.y - why.rect.min.y > em * 1.5, "all of it, on more than one line")
+	testing.expect(t, strings.contains(why.text, "keeps its rounds"), "to its end")
+	active, _ := json.parse_string(fmt.tprintf(`{{"objective":"Booted OS with a REPL","status":"active","reason":%s}}`, jquote(reason)), allocator = context.temp_allocator)
+	goal_set(app, app.chat.id, active)
 	session.frames(s, 2)
-	testing.expect(t, session.find(s, "tooltip_text") != nil, "all of it under the pointer")
+	testing.expect(t, session.find(s, "goal_reason") == nil, "it goes when the goal goes on")
 	goal_set(app, app.chat.id, nil)
+}
+
+// What the session changed (its model, its agent, its folder) shows across the conversation, what it was and what it is; the
+// composer says what it uses now.
+@(test)
+a_session_s_changes_show_across :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	ts := BENCH_EPOCH_MS + 1e9
+	page := fmt.tprintf(`{{"data":[{{"id":"sw_l","type":"location-switched","location":{{"directory":"/home/sacha/Projects/kernel"}},"previous":{{"location":{{"directory":"/home/sacha/Projects/old"}}}},"time":{{"created":%f}}}},{{"id":"sw_a","type":"agent-switched","agent":"plan","previous":"build","time":{{"created":%f}}}},{{"id":"sw_m","type":"model-switched","model":{{"id":"claude-fable-5-2","providerID":"claude-agent","variant":"high"}},"previous":{{"id":"opus","providerID":"claude-agent","variant":"default"}},"time":{{"created":%f}}}}],"cursor":{{"next":""}}}}`, ts + 3, ts + 2, ts + 1)
+	v, err := json.parse_string(page, allocator = context.temp_allocator)
+	testing.expect(t, err == nil)
+	chat_load(app, v, false)
+	app.snap_bottom = true
+	session.wait_idle(s)
+	for id in ([]string{"sw_sw_m", "sw_sw_a", "sw_sw_l"}) { testing.expectf(t, session.find(s, id) != nil, "%s across the conversation", id) }
+	testing.expect(t, session.find_text(s, "claude-fable-5-2 · high") != nil, "the model now, with its variant")
+	testing.expect(t, session.find_text(s, "opus") != nil, "the model before")
+	testing.expect(t, session.find_text(s, "/home/sacha/Projects/kernel") != nil, "the folder now")
+	model, _ := shown_model(app)
+	testing.expect_value(t, model, "claude-fable-5-2")
+	testing.expect_value(t, shown_variant(app), "high")
+	testing.expect_value(t, shown_agent(app), "plan")
 }

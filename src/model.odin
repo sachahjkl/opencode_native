@@ -56,7 +56,10 @@ Part :: struct {
 	added, removed: int,
 }
 
-Msg_Kind :: enum u8 { User, Assistant, Synthetic, Shell, Compaction, Idle, Other }
+Msg_Kind :: enum u8 { User, Assistant, Synthetic, Shell, Compaction, Idle, Switch, Other }
+
+// What a .Switch message says the session changed (the server's agent-switched, model-switched, location-switched).
+Switch_What :: enum u8 { Agent, Model, Location }
 
 Message :: struct {
 	id:        string,
@@ -66,7 +69,9 @@ Message :: struct {
 	completed: f64,
 	agent, model, provider, finish: string,
 	variant:   string,        // how hard the model thought ("": its default)
-	text:      string,        // user, synthetic, shell
+	text:      string,        // user, synthetic, shell; a switch: what it is now ("opus · high", a folder)
+	previous:  string,        // a switch: what it was ("": not said)
+	switched:  Switch_What,
 	shell_id:  string,        // shell: its command on the server
 	parts:     [dynamic]Part,
 	tokens_in, tokens_out, reasoning, cache_read: f64,
@@ -210,6 +215,12 @@ model_variants :: proc(app: ^App, model, provider: string) -> []string {
 		if m.id == model && m.provider == provider && m.efforts != "" { return strings.split(m.efforts, ", ", context.temp_allocator) }
 	}
 	return nil
+}
+
+// A model as a switch line says it: "opus", "opus · high" (temp memory).
+model_word :: proc(model, variant: string) -> string {
+	if model == "" { return "" }
+	return variant != "" ? fmt.tprintf("%s · %s", model, variant) : model
 }
 
 // The body that gives a session its model ("" variant: the model's default).
@@ -585,10 +596,13 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(Seq)) {
 		if kept > 0 { inject_at(&page, 0, ..c.messages[:kept]) } else { c.older = cursor }
 		c.messages = page
 	}
+	// (what it uses: the last answer's, or what was chosen since)
 	for m in c.messages {
 		if m.kind == .Assistant && m.model != "" {
 			c.model, c.provider, c.agent, c.variant = m.model, m.provider, m.agent, m.variant
 		}
+		if m.kind == .Switch && m.switched == .Model && m.model != "" { c.model, c.provider, c.variant = m.model, m.provider, m.variant }
+		if m.kind == .Switch && m.switched == .Agent && m.agent != "" { c.agent = m.agent }
 	}
 }
 
@@ -711,6 +725,22 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 	case "idle":
 		m.kind = .Idle
 		m.finish = strings.clone(jstr(it, "outcome"), a)
+	case "agent-switched":
+		m.kind, m.switched = .Switch, .Agent
+		m.agent = strings.clone(jstr(it, "agent"), a)
+		m.text, m.previous = m.agent, strings.clone(jstr(it, "previous"), a)
+	case "model-switched":
+		m.kind, m.switched = .Switch, .Model
+		m.model, m.provider = strings.clone(jstr(it, "model", "id"), a), strings.clone(jstr(it, "model", "providerID"), a)
+		m.variant = strings.clone(variant_of(it), a)
+		m.text = strings.clone(model_word(m.model, m.variant), a)
+		if prev := jget(it, "previous"); prev != nil {
+			m.previous = strings.clone(model_word(jstr(prev, "id"), jstr(prev, "variant") == "default" ? "" : jstr(prev, "variant")), a)
+		}
+	case "location-switched":
+		m.kind, m.switched = .Switch, .Location
+		m.text = strings.clone(jstr(it, "location", "directory"), a)
+		m.previous = strings.clone(jstr(it, "previous", "location", "directory"), a)
 	case:
 		m.kind = .Other
 		m.text = strings.clone(jstr(it, "type"), a)
@@ -924,6 +954,16 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		children_soon(app)
 	case GOAL_EVENT:
 		goal_set(app, sid, jget(d, "goal"))
+	case "session.agent.selected", "session.model.selected":
+		// (from here or elsewhere: the composer says it now, the page read again brings its line into the conversation)
+		if !mine { return }
+		if kind == "session.agent.selected" {
+			c.agent = strings.clone(jstr(d, "agent"), a)
+		} else {
+			c.model, c.provider = strings.clone(jstr(d, "model", "id"), a), strings.clone(jstr(d, "model", "providerID"), a)
+			c.variant = strings.clone(variant_of(d), a)
+		}
+		refresh_soon(app)
 	case "artifact.updated":
 		artifacts_changed(app)
 	case "plugin.updated":

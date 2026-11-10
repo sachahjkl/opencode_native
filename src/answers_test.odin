@@ -1229,3 +1229,22 @@ a_slash_command_waits_for_the_commands :: proc(t: ^testing.T) {
 	testing.expect_value(t, bench_count(.Slash), 0)
 	testing.expect_value(t, bench_take(t, .Prompt).body, `{"name":"goal","text":"clear"}`)
 }
+
+// The model or the agent chosen, here or elsewhere (session.model.selected, session.agent.selected): the composer says it at
+// once, and the page is read again for its line in the conversation. Another session's says nothing here.
+@(test)
+a_choice_made_elsewhere_shows_at_once :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	show(app, "s")
+	app.cx.due[.Refresh] = {}
+	bench_event(app, `{"type":"session.model.selected","data":{"sessionID":"other","model":{"id":"x","providerID":"p"}}}`)
+	testing.expect_value(t, app.cx.due[.Refresh].due_ms, 0)
+	bench_event(app, `{"type":"session.model.selected","data":{"sessionID":"s","model":{"id":"claude-fable-5-2","providerID":"claude-agent","variant":"high"}}}`)
+	bench_event(app, `{"type":"session.agent.selected","data":{"sessionID":"s","agent":"plan"}}`)
+	model, _ := shown_model(app)
+	testing.expect_value(t, model, "claude-fable-5-2")
+	testing.expect_value(t, shown_variant(app), "high")
+	testing.expect_value(t, shown_agent(app), "plan")
+	testing.expect(t, app.cx.due[.Refresh].due_ms > 0, "the page read again")
+}

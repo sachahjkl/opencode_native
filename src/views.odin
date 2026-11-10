@@ -988,6 +988,7 @@ messages :: proc(app: ^App, em: f32) {
 	}
 	// The line of a run stands in the room the end of the conversation keeps anyway: the height is the same with it and without it, so
 	// the bottom does not move when a run starts or ends. (It came on top of that room, and took four lines for one word.)
+	goal_reason_line(app, em)
 	foot := math.round(em * CHAT_FOOT_EM)
 	if c.busy {
 		line := math.round(em * WORKING_LINE_EM)
@@ -1031,6 +1032,7 @@ message :: proc(app: ^App, c: ^Chat, m: ^Message, i: int, em: f32) {
 	case .Shell:       note_line(app, m, em, lucide.SQUARE_TERMINAL, fmt.tprintf("$ %s", m.text))
 	case .Compaction:  note_line(app, m, em, lucide.LIST, "Conversation compacted")
 	case .Idle:        if i < len(c.messages) - 1 { turn_end(app, m, em) }
+	case .Switch:      switch_line(app, m, em)
 	case .Other:
 	}
 }
@@ -1064,6 +1066,34 @@ note_line :: proc(app: ^App, m: ^Message, em: f32, icon: string, s: string) {
 		text("t", s, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 	}
 	ui.spacer(ui.px(em * 0.6))
+}
+
+// What the session changed (its model, its agent, its folder), across the conversation as the end of a turn is: what it was, what it is.
+switch_line :: proc(app: ^App, m: ^Message, em: f32) {
+	icon, word: string
+	switch m.switched {
+	case .Agent:    icon, word = lucide.BOT, "agent"
+	case .Model:    icon, word = lucide.CPU, "model"
+	case .Location: icon, word = lucide.FOLDER, "folder"
+	}
+	small := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
+	ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
+	if ui.row(.Center, id = fmt.tprintf("###sw_%s", m.id)) {
+		groove(across = true)
+		ui.spacer(ui.px(em * 0.6))
+		glyph(icon, hex(HEX_FAINT), math.round(em * ICON_SMALL))
+		ui.spacer(ui.px(em * 0.35))
+		text("w", word, hex(HEX_FAINT), small)
+		ui.spacer(ui.px(em * 0.5))
+		if m.previous != "" && m.previous != m.text {
+			text("p", m.previous, hex(HEX_FAINT), small)
+			text("arrow", "  →  ", hex(HEX_FAINT), small)
+		}
+		text("n", m.text, hex(HEX_WEAK), small)
+		ui.spacer(ui.px(em * 0.6))
+		groove(across = true)
+	}
+	ui.spacer(ui.px(em * 0.8))
 }
 
 turn_end :: proc(app: ^App, m: ^Message, em: f32) {

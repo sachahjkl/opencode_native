@@ -22,8 +22,6 @@ Goal :: struct {
 
 GOAL_EVENT :: "rpc.opencode.goal.changed"
 
-GOAL_REASON_H_EM :: 1.3   // the line of why the goal stands as it does, under its objective
-
 // The session shown's goal, asked again.
 goal_read :: proc(app: ^App) {
 	id := app.chat.id
@@ -63,10 +61,7 @@ goal_strip :: proc(app: ^App, em: f32) {
 	c := &app.chat
 	if !c.has_goal || c.id == "" { return }
 	g := &c.goal
-	// (a height of its own: its words and marks are as tall as it, a height from them would be one from itself)
-	h := math.round(em * BUTTON_COMPACT_H_EM)
-	if g.reason != "" { h += math.round(em * GOAL_REASON_H_EM) + math.round(em * 0.3) }
-	ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center})
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * BUTTON_COMPACT_H_EM)), axis = .X, cross = .Center})
 	ui.a11y({role = .Group, name = "Goal"})
 	if ui.row(.Center, id = "###goal_strip") {
 		note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
@@ -80,7 +75,7 @@ goal_strip :: proc(app: ^App, em: f32) {
 		word := g.status == .Active ? "goal" : g.status == .Paused ? "goal paused" : "goal met"
 		text("w", word, hex(HEX_WEAK), note)
 		ui.spacer(ui.px(em * 0.5))
-		goal_words(g, em)
+		text("o", g.objective, hex(HEX_TEXT_SOFT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		if g.max_rounds > 0 {
 			ui.spacer(ui.px(em * 0.6))
 			text("r", fmt.tprintf("round %d/%d", g.rounds, g.max_rounds), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
@@ -102,20 +97,23 @@ goal_strip :: proc(app: ^App, em: f32) {
 	}
 }
 
-// The objective and, under it, why the goal stands as it does (the server's reason: "The session failed: You've hit your limit…").
-// The reason is cut at the strip's width; the pointer over it shows all of it.
-@(private = "file")
-goal_words :: proc(g: ^Goal, em: f32) {
-	line := math.round(em * BUTTON_COMPACT_H_EM)
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if ui.column(id = "###g_words") {
-		text("o", g.objective, hex(HEX_TEXT_SOFT), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(line)}, ui.fill())
-		if g.reason != "" {
-			// (Clickable: only such a box knows the pointer is over it; a click does nothing)
-			ui.next({width = ui.fill(), height = ui.px(math.round(em * GOAL_REASON_H_EM)), font_size = math.round(em * FS_CAPTION), fg = hex(HEX_FAINT), text_pad = 0})
-			why := ui.signal(ui.build_box({.Draw_Text, .Clickable}, fmt.tprintf("%s###why", label_safe(g.reason))))
-			if ui.hovered_for(why, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(g.reason) } }
-			ui.spacer(ui.px(math.round(em * 0.3)))
-		}
+// Why the goal is paused (the server's reason: "The session failed: You've hit your 5-hour limit…"), at the end of the conversation,
+// across it as a change of the session is: all of it, on as many lines as it takes. It goes when the goal goes on.
+goal_reason_line :: proc(app: ^App, em: f32) {
+	c := &app.chat
+	if !c.has_goal || c.goal.status != .Paused || c.goal.reason == "" { return }
+	small := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
+	ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
+	if ui.row(.Center, id = "###goal_why") {
+		groove(across = true)
+		ui.spacer(ui.px(em * 0.6))
+		lamp("###gwl", hex(HEX_FAINT), 1, size = em * CARD_MARK_EM)
+		ui.spacer(ui.px(em * 0.35))
+		text("w", "goal paused", hex(HEX_WEAK), small)
+		ui.spacer(ui.px(em * 0.6))
+		groove(across = true)
 	}
+	ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Text_Wrap}, fg = hex(HEX_WEAK), text_pad = 0, text_align = .Center})
+	ui.paragraph(fmt.tprintf("%s###goal_reason", label_safe(c.goal.reason)))
+	ui.spacer(ui.px(em * 1.2))
 }

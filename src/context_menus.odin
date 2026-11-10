@@ -162,7 +162,7 @@ message_menu :: proc(app: ^App, m: ^Message) {
 		if m.shell_id != "" { if ui.menu_item("Inspect the output", icon = lucide.SQUARE_TERMINAL).clicked { output_view_open_shell(app, m.shell_id, m.text, chat_dir(app)) } }
 		ui.menu_separator()
 		fork_item(app, m)
-	case .Compaction, .Idle, .Other:
+	case .Compaction, .Idle, .Switch, .Other:
 		if ui.menu_item("Copy", icon = lucide.COPY, enabled = m.text != "").clicked { copied(m.text, "Text") }
 	}
 }

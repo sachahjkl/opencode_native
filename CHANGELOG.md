@@ -5,6 +5,16 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-10
+
+### Added
+
+- **What the session changed shows across the conversation**: a change of model ("opus → claude-fable-5-2 · high"), of agent or of folder is a line across it, as the end of a turn is. One made elsewhere shows at once in the composer.
+
+### Changed
+
+- **Why a goal is paused shows at the end of the conversation**, across it and in full, instead of under the objective: the strip over the composer is one line again.
+
 ## [0.34.1] - 2026-11-10
 
 ### Fixed
@@ -1128,7 +1138,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.34.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.35.0
 [0.34.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.34.1
 [0.34.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.34.0
 [0.33.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.33.0
