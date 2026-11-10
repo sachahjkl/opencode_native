@@ -80,6 +80,24 @@ sections_with_nothing_do_not_show_and_search_works_in_both_modes :: proc(t: ^tes
 	testing.expect_value(t, len(sidebar_sections(app, sidebar_rows(app, "nothing like it"), .Inbox)), 0)
 }
 
+// Each word of a search in one of a session's fields: its title, its id, its folder; a sub-agent found alone has a row of its own.
+@(test)
+a_search_looks_in_every_field_of_a_session :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := inbox_app()
+	rows :: proc(app: ^App, q: string) -> string { return dealt(app, sidebar_sections(app, sidebar_rows(app, q), .Projects)) }
+	testing.expect_value(t, rows(app, "never"), "beta: never")                         // its id ("Never viewed": its title too)
+	testing.expect_value(t, rows(app, "ended"), "beta: ended")                         // its id and title
+	testing.expect_value(t, rows(app, "beta viewed"), "beta: never")                   // its folder and its title
+	testing.expect_value(t, rows(app, "ALPHA  runs"), "alpha: runs")                   // any case, any spaces
+	testing.expect_value(t, rows(app, "code/gamma"), "gamma: new")                     // a piece of its path
+	testing.expect_value(t, rows(app, "alpha ended"), "")                              // a word in none of its fields
+	testing.expect_value(t, rows(app, "sub-agent"), "alpha: sub")                      // a sub-agent whose parent is not found
+	testing.expect_value(t, rows(app, "seen"), "alpha: seen")                          // its parent found: under it, not twice
+	testing.expect_value(t, rows(app, `"never viewed"`), "beta: never")              // words between quotes are one
+	testing.expect_value(t, rows(app, `"viewed never"`), "")
+}
+
 @(test)
 a_wait_of_a_sub_agent_is_its_parents_and_a_sub_agent_is_never_unseen :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()

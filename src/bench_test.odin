@@ -179,7 +179,7 @@ output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 	testing.expect(t, session.find(s, "out_bar") != nil, "the bar")
 	testing.expect(t, session.find(s, "out_close") != nil, "Close, ended as one watched")
 	testing.expect(t, session.find(s, "term_box") != nil, "the grid")
-	testing.expectf(t, len(v.term.lines) > 0 && strings.has_prefix(v.term.lines[0], "$ cargo build"), "the command, at the head of the grid: %q", len(v.term.lines) > 0 ? v.term.lines[0] : "")
+	testing.expectf(t, strings.has_prefix(term_text(v.term), "$ cargo build"), "the command, at the head of the grid: %q", term_text(v.term))
 	// a drag over the grid selects, and Ctrl+C copies it
 	if g := session.find(s, "term_box"); g != nil {
 		y := g.rect.min.y + app.cx.terms.cell_h * 1.5   // (its second row: the first is the command)
@@ -192,19 +192,19 @@ output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 		session.frames(s, 1)
 		session.event(s, {kind = .Mouse_Release, button = .Left, pos = to})
 		session.frames(s, 2)
-		testing.expectf(t, v.term.has_selection, "a selection (selecting %v, from %v to %v)", v.term.selecting, v.term.sel_from, v.term.sel_to)
+		testing.expectf(t, term_has_selection(v.term), "a selection (selecting %v)", v.term.selecting)
 		session.event(s, {kind = .Key_Press, key = .C, mods = {.Ctrl}})
 		session.frames(s, 1)
 		testing.expectf(t, strings.contains(session.clipboard(s), "Compiling"), "copied: %q", session.clipboard(s))
 	}
 	// a right click on the grid: its menu
-	v.term.selecting, v.term.has_selection = false, false
+	term_selection_drop(v.term)
 	session.click(s, "term_box", .Right)
 	session.frames(s, 2)
 	testing.expect(t, session.find_text(s, "Select all") != nil && session.find_text(s, "Copy all the output") != nil, "the grid's menu")
 	session.click_text(s, "Select all")
 	session.frames(s, 2)
-	testing.expect(t, v.term.has_selection, "Select all: the screen selected")
+	testing.expect(t, term_has_selection(v.term), "Select all: the screen selected")
 	session.click(s, "term_box", .Right)
 	session.frames(s, 2)
 	session.click_text(s, "Copy all the output")
@@ -1036,7 +1036,7 @@ an_archived_session_is_put_away :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app, s := bench_app(t)
 	id := "ses_2"
-	ui.field_set(&app.search, "Session 2 about")   // (it alone: the end of a long list is not built)
+	ui.field_set(&app.search, `"Session 2 about"`)   // (it alone: the end of a long list is not built)
 	session.frames(s, 2)
 	testing.expect(t, session.find(s, "ls_ses_2") != nil, "listed")
 	testing.expect(t, session.find_text(s, "ARCHIVED") == nil, "no Archived section while nothing is")

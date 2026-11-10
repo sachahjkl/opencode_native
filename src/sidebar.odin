@@ -7,6 +7,7 @@ import "core:fmt"
 import "core:hash"
 import "core:math"
 import "core:strings"
+import "gt:config"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -83,14 +84,30 @@ sessions_seen_shown :: proc(app: ^App) {
 }
 
 // The rows of the list before they are dealt, in the mode's order: sub-agents as the preference says, what the search leaves.
-sidebar_rows :: proc(app: ^App, needle: string) -> []int {
+// A search keeps a session when each of its words is in one of its fields (session_matches). A sub-agent found while its parent
+// is not has a row of its own: nested under a parent that is not shown, it would not be seen.
+sidebar_rows :: proc(app: ^App, query: string) -> []int {
 	rows := make([dynamic]int, 0, len(app.sessions), context.temp_allocator)
+	nested := app.prefs.subagents != "flat"
+	searching := strings.trim_space(query) != ""
+	shown := make(map[string]bool, allocator = context.temp_allocator)
 	for s, i in app.sessions {
-		if s.parent != "" && app.prefs.subagents != "flat" { continue }
-		if needle != "" && !strings.contains(strings.to_lower(s.title, context.temp_allocator), needle) && !strings.contains(strings.to_lower(s.directory, context.temp_allocator), needle) { continue }
+		if s.parent != "" && nested { continue }
+		if searching && !session_matches(s, query) { continue }
+		append(&rows, i)
+		shown[s.id] = true
+	}
+	if !searching || !nested { return rows[:] }
+	for s, i in app.sessions {
+		if s.parent == "" || shown[s.parent] || !session_matches(s, query) { continue }
 		append(&rows, i)
 	}
 	return rows[:]
+}
+
+// What a search of the sessions looks in: each word of `query` in one of these, in any case.
+session_matches :: proc(s: Session_Info, query: string) -> bool {
+	return config.words_match(query, s.title, s.id, s.directory, s.agent, s.model, s.provider, s.parent)
 }
 
 // The one place that knows the modes. What was archived is in none of their sections: it is in the last one, Archived, folded
