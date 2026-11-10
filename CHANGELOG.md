@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.38.2] - 2026-11-10
+
+### Fixed
+
+- **The window opens where it was**: on the monitor it was on, at its size, maximized or not, after an update's restart as after a close (it was where the system put it, on Windows the main monitor). Its place is kept when it changes; a monitor that is gone brings it onto one that is there (gui_toolkit 0.148.0, `platform.placement_text`).
+
 ## [0.38.1] - 2026-11-10
 
 ### Fixed
@@ -1183,7 +1189,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.38.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.38.2...HEAD
+[0.38.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.38.2
 [0.38.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.38.1
 [0.38.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.38.0
 [0.37.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.37.1

@@ -1101,3 +1101,29 @@ escape_stops_the_run_and_the_composer_keeps_the_keyboard :: proc(t: ^testing.T) 
 	testing.expect(t, session.focused_name(s) != "composer", "nothing runs: it lets go")
 	ui.area_set(&app.composer, "")
 }
+
+// Where the window is is kept when it changes, and the window opens there again: an update's restart, on two monitors, puts it
+// back where it was.
+@(test)
+the_window_opens_where_it_was :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, _ := bench_app(t)
+	platform.set_placement(app.win, {{-1700, 120, 1400, 900}, false})   // (the monitor on the left)
+	app.cx.placement_ms = -PLACEMENT_CHECK_MS   // (looked at long ago)
+	placement_track(app)
+	testing.expect_value(t, config.string_of(&app.cfg_prefs, "window.placement"), "-1700 120 1400 900")
+	// another start: the window opens elsewhere, the placement kept puts it back
+	platform.set_placement(app.win, {{0, 0, 800, 600}, false})
+	placement_restore(app)
+	testing.expect_value(t, platform.get_placement(app.win), platform.Placement{{-1700, 120, 1400, 900}, false})
+	// maximized, on the same monitor
+	platform.set_placement(app.win, {{-1700, 120, 1400, 900}, true})
+	app.cx.placement_ms = -PLACEMENT_CHECK_MS   // (looked at long ago)
+	placement_track(app)
+	testing.expect_value(t, config.string_of(&app.cfg_prefs, "window.placement"), "-1700 120 1400 900 maximized")
+	// unchanged: nothing written again
+	app.cx.placement_ms = -PLACEMENT_CHECK_MS   // (looked at long ago)
+	before := app.cx.placement_seen
+	placement_track(app)
+	testing.expect(t, app.cx.placement_seen == before, "the same: kept as it was")
+}

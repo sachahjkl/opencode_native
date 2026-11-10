@@ -101,6 +101,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "layout.dialogs", description = "The sizes the dialogs were given (settings, statistics, shortcuts), in logical pixels.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "update.channel", description = "Which releases this copy follows: the stable ones, or the betas too.", kind = .String, default = {s = "stable"}, choices = {"stable", "beta"}},
 	{name = "update.auto", description = "Look for a new version at start (it is only installed when you say so).", kind = .Bool, default = {b = true}},
+	{name = "window.placement", description = "Where the window was (platform.placement_text): it opens there again.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "update.base_url", description = "Where releases are read from (empty: GitHub). Whatever the place, only what the built-in key signed is installed.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "general.start", description = "What the window opens on: the home page, or the session it showed when it closed (the latest one if it showed none yet).", kind = .String, default = {s = "last"}, choices = {"home", "last"}},
 	{name = "advanced.experimental", description = "Turn on the experimental options of a server on this computer, in its configuration file. What you set there yourself stays.", kind = .Bool, default = {b = true}},

@@ -224,6 +224,8 @@ App_Context :: struct {
 	commands_due:   [dynamic]^Command, // to run after this frame, in order (commands.odin)
 	slash:          [dynamic]Slash,    // the server's commands
 	have_slash:     bool,
+	placement_seen: string,   // the window's placement as last kept (window.placement), and when it was looked at
+	placement_ms:   f64,
 	attachments:    [dynamic]Attachment,   // what goes with the prompt (attachments.odin)
 	ctx:            Ctx_Target,        // what the menu of a right click is about (context_menus.odin)
 	ctx_taken:      bool,              // a right press of this build found its target
@@ -707,6 +709,7 @@ main :: proc() {
 	if !slice.contains(os.args, "--no-fixed-surface") { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
 	_ = platform.drop_target_enable(app.win, true)   // (files dropped on the window are attached: attach_drop)
 	app_init(app, prefs_path())
+	placement_restore(app)
 	drafts_load(app)   // (what was typed before, in each session: the home page's comes back now)
 	app.cx.web_host = web_host_system()
 	if app.servers_in_clear { servers_save(app) }
@@ -757,6 +760,7 @@ main :: proc() {
 			app.slept = true
 		}
 		frame(app)   // (what it still owes goes down there: host_frame)
+		placement_track(app)
 	}
 	threads_stop(app)
 	if app.cx.due[.Drafts].due_ms != 0 { drafts_save(app) }   // (what was typed in the last second)
@@ -765,4 +769,30 @@ main :: proc() {
 	os.exit(0)
 }
 
+// The window opens where it was, on the monitor it was on (set_placement brings it onto one that is there), unless --size asks
+// for a size. Before it is shown; the surface then takes that monitor's size. (Wayland: the compositor places it; only
+// maximized comes back.)
+placement_restore :: proc(app: ^App) {
+	for a in os.args[1:] { if strings.has_prefix(a, "--size=") { return } }
+	p, ok := platform.placement_parse(config.string_of(&app.cfg_prefs, "window.placement"))
+	if !ok { return }
+	platform.set_placement(app.win, p)
+	if !slice.contains(os.args, "--no-fixed-surface") { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
+	app.cx.placement_seen = strings.clone(platform.placement_text(p))
+}
 
+// Where the window is, kept when it changes (looked at every PLACEMENT_CHECK_MS): an update's restart, a crash or a close all
+// find it saved. Not while minimized: get_placement says where it comes back to, but nothing moved.
+placement_track :: proc(app: ^App) {
+	now := ui.now_ms()
+	// (it runs in the main loop, after show_window: the window is on screen)
+	if now - app.cx.placement_ms < PLACEMENT_CHECK_MS || app.win == nil || platform.is_minimized(app.win) { return }
+	app.cx.placement_ms = now
+	text := platform.placement_text(platform.get_placement(app.win))
+	if text == app.cx.placement_seen { return }
+	delete(app.cx.placement_seen)
+	app.cx.placement_seen = strings.clone(text)
+	pref_set(app, "window.placement", text)
+}
+
+PLACEMENT_CHECK_MS :: 2000
