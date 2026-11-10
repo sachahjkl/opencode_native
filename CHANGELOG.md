@@ -5,6 +5,16 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-11-10
+
+### Changed
+
+- **The session search looks in every field**: each word typed must be in one of a session's fields: its title, its id, its folder, its agent, its model, its provider, its parent's id ("kernel ses_e3" finds a session by its title and its id; "opencode_native sonnet" by its folder and its model). Words between double quotes are one ("\"Session 2\"" does not find "Session 12"). A sub-agent found while its parent is not has a row of its own (gui_toolkit 0.155.0, `config.words_match`).
+
+### Fixed
+
+- **A selection in a terminal stays on its text**: the next line a running command printed dropped what was selected. The selection is now the emulation's own (libghostty-vt): it follows its text as rows come and leave the view, when the wheel moves the view and when the grid is resized; only typing drops it. A copy reads the text through Ghostty's formatter: a selection scrolled out of the view is copied whole, and a line the grid wrapped is copied as one line. Select all takes the scrollback too.
+
 ## [0.40.0] - 2026-11-10
 
 ### Added
@@ -1202,7 +1212,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.40.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.41.0...HEAD
+[0.41.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.41.0
 [0.40.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.40.0
 [0.39.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.39.0
 [0.38.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.38.2
