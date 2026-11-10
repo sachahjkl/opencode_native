@@ -542,47 +542,64 @@ a_shell_that_ended_has_no_size :: proc(t: ^testing.T) {
 ////////////////////////////////
 // Selection and the mouse
 
+// A drag from `from` to `to`, cells of the view.
 @(private = "file")
-selected :: proc(s: ^Term) {
-	s.has_selection = true
-	s.sel_from, s.sel_to = {0, 0}, {3, 0}
+drag_cells :: proc(s: ^Term, from, to: [2]int) {
+	term_select_begin(s, from)
+	term_select_to(s, to)
+	s.selecting = false
 }
 
+// The rows that come move the selected text up and out of the view: the selection stays on it, and a copy is that text.
 @(test)
-output_drops_a_selection_of_the_rows_it_moves :: proc(t: ^testing.T) {
+output_keeps_a_selection_on_its_text :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	open_shells(t, app, "a")
 	s := app.cx.terms.list[0]
-	selected(s)
-	term_feed(s, "more\r\n")
-	testing.expect(t, !s.has_selection, "those cells hold other text now")
+	term_feed(s, "alpha\r\nbravo charlie\r\n")
+	drag_cells(s, {0, 1}, {4, 1})
+	testing.expect_value(t, term_selection_text(s), "bravo")
+	for i in 0 ..< 3 * int(s.rows) { term_feed(s, fmt.tprintf("line %d\r\n", i)) }
+	testing.expect(t, term_has_selection(s), "rows came: still selected")
+	testing.expect_value(t, term_selection_text(s), "bravo")
 }
 
+// The view moved by the wheel, the grid wrapped again: the selection is on the same text.
 @(test)
-the_wheel_drops_a_selection :: proc(t: ^testing.T) {
+the_wheel_and_a_new_size_keep_a_selection :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	open_shells(t, app, "a")
 	s := app.cx.terms.list[0]
-	for _ in 0 ..< 60 { term_feed(s, "line\r\n") }
+	for i in 0 ..< 60 { term_feed(s, fmt.tprintf("line %d\r\n", i)) }
 	built(app, s, 11)
-	selected(s)
+	drag_cells(s, {0, 2}, {6, 2})
+	before := term_selection_text(s)
+	testing.expect(t, strings.has_prefix(before, "line "), "a line selected")
 	ev := []platform.Event{{kind = .Scroll, pos = {10, 10}, delta = {0, -1}}}
 	testing.expect_value(t, len(term_events(app, ev)), 0)
-	testing.expect(t, !s.has_selection, "the view moved")
+	testing.expect_value(t, term_selection_text(s), before)
+	term_resize(app, s, 100, 30, 8, 16)
+	testing.expect_value(t, term_selection_text(s), before)
+	bench_clear(app)
 }
 
+// A press let go on the cell it began on selects nothing; Select all takes the scrollback too.
 @(test)
-a_grid_resized_drops_a_selection :: proc(t: ^testing.T) {
+a_click_selects_nothing_and_select_all_takes_the_scrollback :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	open_shells(t, app, "a")
 	s := app.cx.terms.list[0]
-	selected(s)
-	term_resize(app, s, 100, 30, 8, 16)
-	testing.expect(t, !s.has_selection, "the rows were wrapped again")
-	bench_clear(app)
+	for i in 0 ..< 60 { term_feed(s, fmt.tprintf("line %d\r\n", i)) }
+	drag_cells(s, {3, 3}, {3, 3})
+	testing.expect(t, !term_has_selection(s), "a click")
+	term_select_all(s)
+	all := term_selection_text(s)
+	testing.expectf(t, strings.has_prefix(all, "line 0\n") && strings.contains(all, "line 59"), "all of it: %q", all)
+	term_selection_drop(s)
+	testing.expect(t, !term_has_selection(s), "dropped")
 }
 
 @(test)

@@ -8,6 +8,7 @@ when ODIN_OS == .Windows {
 }
 
 VT_OK :: 0
+VT_OUT_OF_SPACE :: -3
 VT_MODE_BRACKETED_PASTE :: 2004
 VT_MODE_FOCUS_EVENT :: 1004
 VT_STYLE_BOLD :: 1
@@ -26,10 +27,16 @@ VT_OPT_TITLE_CHANGED :: 6
 VT_OPT_COLOR_FOREGROUND :: 12
 VT_OPT_COLOR_BACKGROUND :: 13
 VT_OPT_SCROLLBACK_MAX_LINES :: 29
+VT_OPT_SELECTION :: 22
 VT_DATA_SCROLLBAR :: 9
 VT_DATA_MOUSE_TRACKING :: 11
 VT_DATA_TITLE :: 12
 VT_DATA_MODE :: 37
+VT_DATA_SELECTION :: 31
+VT_POINT_VIEWPORT :: 1
+VT_POINT_SCREEN :: 2
+VT_FORMAT_UNWRAP :: 2
+VT_FORMAT_SELECTION :: 4
 VT_STATE_ROW_ITERATOR :: 4
 VT_STATE_CURSOR_STYLE :: 10
 VT_STATE_CURSOR_VISIBLE :: 11
@@ -41,6 +48,7 @@ VT_CURSOR_BAR :: 0
 VT_CURSOR_BLOCK :: 1
 VT_CURSOR_UNDERLINE :: 2
 VT_ROW_CELLS :: 3
+VT_ROW_SELECTION :: 4
 VT_CELL_STYLE :: 2
 VT_CELL_GRAPHEMES_BUF :: 4
 VT_CELL_BG :: 5
@@ -97,6 +105,14 @@ foreign ghostty_vt {
 	ghostty_terminal_set :: proc(terminal: Vt_Terminal, option: i32, value: rawptr) -> i32 ---
 	ghostty_terminal_get :: proc(terminal: Vt_Terminal, data: i32, out: rawptr) -> i32 ---
 	ghostty_terminal_scroll_viewport :: proc(terminal: Vt_Terminal, behavior: Vt_Scroll) -> i32 ---
+	ghostty_terminal_grid_ref :: proc(terminal: Vt_Terminal, point: Vt_Point, out_ref: ^Vt_Grid_Ref) -> i32 ---
+	ghostty_terminal_grid_ref_track :: proc(terminal: Vt_Terminal, point: Vt_Point, out_ref: ^Vt_Tracked_Ref) -> i32 ---
+	ghostty_tracked_grid_ref_snapshot :: proc(ref: Vt_Tracked_Ref, out_ref: ^Vt_Grid_Ref) -> i32 ---
+	ghostty_tracked_grid_ref_free :: proc(ref: Vt_Tracked_Ref) ---
+	ghostty_formatter_terminal_new :: proc(allocator: rawptr, formatter: ^Vt_Formatter, terminal: Vt_Terminal) -> i32 ---
+	ghostty_formatter_set :: proc(formatter: Vt_Formatter, option: i32, value: rawptr) -> i32 ---
+	ghostty_formatter_format_buf :: proc(formatter: Vt_Formatter, buf: [^]u8, buf_len: uint, out_written: ^uint) -> i32 ---
+	ghostty_formatter_free :: proc(formatter: Vt_Formatter) ---
 	ghostty_render_state_new :: proc(allocator: rawptr, state: ^Vt_State) -> i32 ---
 	ghostty_render_state_free :: proc(state: Vt_State) ---
 	ghostty_render_state_update :: proc(state: Vt_State, terminal: Vt_Terminal) -> i32 ---

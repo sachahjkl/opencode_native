@@ -62,6 +62,8 @@ a_define_is_worked_out :: proc(t: ^testing.T) {
 	testing.expect_value(t, paste, 2004)
 	ansi, _ := vt_eval(h, h.defines["ANSI"])
 	testing.expect_value(t, ansi, 4 | 1 << VT_ANSI_BIT)
+	minus, _ := vt_eval(h, "-3")
+	testing.expect_value(t, minus, -3)   // (an error's result)
 	_, known := vt_eval(h, "NOBODY")
 	testing.expect(t, !known, "a name nobody defines is no number")
 }

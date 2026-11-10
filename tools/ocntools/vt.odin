@@ -19,6 +19,7 @@ Vt_Number :: struct { odin, c: string }
 
 VT_NUMBERS :: [?]Vt_Number{
 	{"VT_OK", "GHOSTTY_SUCCESS"},
+	{"VT_OUT_OF_SPACE", "GHOSTTY_OUT_OF_SPACE"},
 
 	{"VT_MODE_BRACKETED_PASTE", "GHOSTTY_MODE_BRACKETED_PASTE"},
 	{"VT_MODE_FOCUS_EVENT", "GHOSTTY_MODE_FOCUS_EVENT"},
@@ -41,11 +42,19 @@ VT_NUMBERS :: [?]Vt_Number{
 	{"VT_OPT_COLOR_FOREGROUND", "GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND"},
 	{"VT_OPT_COLOR_BACKGROUND", "GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND"},
 	{"VT_OPT_SCROLLBACK_MAX_LINES", "GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_LINES"},
+	{"VT_OPT_SELECTION", "GHOSTTY_TERMINAL_OPT_SELECTION"},
 
 	{"VT_DATA_SCROLLBAR", "GHOSTTY_TERMINAL_DATA_SCROLLBAR"},
 	{"VT_DATA_MOUSE_TRACKING", "GHOSTTY_TERMINAL_DATA_MOUSE_TRACKING"},
 	{"VT_DATA_TITLE", "GHOSTTY_TERMINAL_DATA_TITLE"},
 	{"VT_DATA_MODE", "GHOSTTY_TERMINAL_DATA_MODE"},
+	{"VT_DATA_SELECTION", "GHOSTTY_TERMINAL_DATA_SELECTION"},
+
+	{"VT_POINT_VIEWPORT", "GHOSTTY_POINT_TAG_VIEWPORT"},
+	{"VT_POINT_SCREEN", "GHOSTTY_POINT_TAG_SCREEN"},
+
+	{"VT_FORMAT_UNWRAP", "GHOSTTY_FORMATTER_OPT_UNWRAP"},
+	{"VT_FORMAT_SELECTION", "GHOSTTY_FORMATTER_OPT_SELECTION"},
 
 	{"VT_STATE_ROW_ITERATOR", "GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR"},
 	{"VT_STATE_CURSOR_STYLE", "GHOSTTY_RENDER_STATE_DATA_CURSOR_VISUAL_STYLE"},
@@ -60,6 +69,7 @@ VT_NUMBERS :: [?]Vt_Number{
 	{"VT_CURSOR_UNDERLINE", "GHOSTTY_CURSOR_STYLE_UNDERLINE"},
 
 	{"VT_ROW_CELLS", "GHOSTTY_RENDER_STATE_ROW_DATA_CELLS"},
+	{"VT_ROW_SELECTION", "GHOSTTY_RENDER_STATE_ROW_DATA_SELECTION"},
 
 	{"VT_CELL_STYLE", "GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_STYLE"},
 	{"VT_CELL_GRAPHEMES_BUF", "GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_BUF"},
@@ -126,6 +136,8 @@ VT_RUNS :: [?]Vt_Run{
 VT_CALLS :: [?]string{
 	"ghostty_terminal_new", "ghostty_terminal_free", "ghostty_terminal_vt_write", "ghostty_terminal_resize", "ghostty_terminal_set",
 	"ghostty_terminal_get", "ghostty_terminal_scroll_viewport",
+	"ghostty_terminal_grid_ref", "ghostty_terminal_grid_ref_track", "ghostty_tracked_grid_ref_snapshot", "ghostty_tracked_grid_ref_free",
+	"ghostty_formatter_terminal_new", "ghostty_formatter_set", "ghostty_formatter_format_buf", "ghostty_formatter_free",
 	"ghostty_render_state_new", "ghostty_render_state_free", "ghostty_render_state_update", "ghostty_render_state_get",
 	"ghostty_render_state_row_iterator_new", "ghostty_render_state_row_iterator_free", "ghostty_render_state_row_iterator_next",
 	"ghostty_render_state_row_get", "ghostty_render_state_row_cells_new", "ghostty_render_state_row_cells_free",
@@ -149,6 +161,8 @@ VT_TYPES :: [?]Vt_Type{
 	{"GhosttyRenderStateRowCells", "Vt_Cells"}, {"GhosttyKeyEncoder", "Vt_Key_Encoder"}, {"GhosttyKeyEvent", "Vt_Key_Event"},
 	{"GhosttyMouseEncoder", "Vt_Mouse_Encoder"}, {"GhosttyMouseEvent", "Vt_Mouse_Event"},
 	{"GhosttyString", "Vt_String"}, {"GhosttyTerminalScrollViewport", "Vt_Scroll"}, {"GhosttyMousePosition", "Vt_Mouse_Position"},
+	{"GhosttyPoint", "Vt_Point"}, {"GhosttyGridRef", "Vt_Grid_Ref"}, {"GhosttyTrackedGridRef", "Vt_Tracked_Ref"},
+	{"GhosttyFormatter", "Vt_Formatter"},
 }
 
 Vt_Headers :: struct {
@@ -181,10 +195,14 @@ vt_uncomment :: proc(text: string) -> string {
 	return strings.to_string(b)
 }
 
-// A number as the headers write it: 5, 0x7u, 1u << 0, (GhosttyStyleFlags)(1u << 3), SHIFTED << NAME, ghostty_mode_new(2004, false).
+// A number as the headers write it: 5, -3, 0x7u, 1u << 0, (GhosttyStyleFlags)(1u << 3), SHIFTED << NAME, ghostty_mode_new(2004, false).
 vt_eval :: proc(h: ^Vt_Headers, expr: string, depth := 0) -> (value: i64, ok: bool) {
 	if depth > 8 { return }
 	s := strings.trim_space(expr)
+	if strings.has_prefix(s, "-") {   // (the results that are errors: GHOSTTY_OUT_OF_SPACE = -3)
+		v := vt_eval(h, s[1:], depth + 1) or_return
+		return -v, true
+	}
 	if at := strings.index(s, "ghostty_mode_new("); at >= 0 {
 		args := strings.split(s[at + len("ghostty_mode_new("):], ",", context.temp_allocator)
 		if len(args) != 2 { return }

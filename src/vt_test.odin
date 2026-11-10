@@ -16,6 +16,11 @@ what_goes_by_value_has_the_size_of_its_c_struct :: proc(t: ^testing.T) {
 	testing.expect_value(t, size_of(Vt_Codepoints), 24)
 	testing.expect_value(t, size_of(Vt_Scrollbar), 24)
 	testing.expect_value(t, size_of(Vt_Mouse_Size), 40)
+	testing.expect_value(t, size_of(Vt_Point), 24)
+	testing.expect_value(t, offset_of(Vt_Point, value), 8)
+	testing.expect_value(t, size_of(Vt_Grid_Ref), 16)
+	testing.expect_value(t, size_of(Vt_Selection), 40)   // (its header says so: its layout is frozen)
+	testing.expect_value(t, size_of(Vt_Row_Selection), 16)
 }
 
 @(private = "file")

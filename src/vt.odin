@@ -10,6 +10,19 @@ Vt_Key_Encoder   :: distinct rawptr
 Vt_Key_Event     :: distinct rawptr
 Vt_Mouse_Encoder :: distinct rawptr
 Vt_Mouse_Event   :: distinct rawptr
+Vt_Tracked_Ref   :: distinct rawptr
+Vt_Formatter     :: distinct rawptr
+
+// A cell of the grid, in the coordinates its tag says (VT_POINT_VIEWPORT: the rows shown; VT_POINT_SCREEN: from the top of the
+// scrollback). (Passed by value: the union has room for two words.)
+Vt_Coord :: struct { x: u16, y: u32 }
+Vt_Point :: struct { tag: i32, value: struct #raw_union { coord: Vt_Coord, _pad: [2]u64 } }
+// A cell, valid until the terminal next changes (a tracked one follows it).
+Vt_Grid_Ref :: struct { node: rawptr, x, y: u16 }
+// Both ends are in it; `start` is where the drag began, before or after `end`.
+Vt_Selection :: struct { start, end: Vt_Grid_Ref, rectangle: bool }
+// What of a row is selected: its columns from `start_x` to `end_x`, both in.
+Vt_Row_Selection :: struct { size: uint, start_x, end_x: u16 }
 
 Vt_Rgb :: struct { r, g, b: u8 }
 Vt_String :: struct { ptr: [^]u8, len: uint }
