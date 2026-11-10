@@ -100,6 +100,7 @@ App :: struct {
 	view_open:        bool,                  // the image viewer
 	view_key:         u64,
 	view_ref:         Image_Ref,             // what is shown: what Copy decodes again whole (its data and name owned)
+	view_diagram:     string,                // or the text of the Mermaid diagram shown (owned; "": an image)
 	view_zoom:        f32,                   // times what fits (image_viewer)
 	view_pan:         [2]f32,                // of the picture's centre from the view's, frame pixels
 	view_grab:        [2]f32,                // view_pan when the drag began

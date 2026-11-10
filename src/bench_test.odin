@@ -18,6 +18,7 @@ import "core:time"
 import "gt:config"
 import "gt:draw"
 import "gt:font"
+import paint "gt:paint"
 import "gt:platform"
 import "gt:png"
 import "gt:render"
@@ -1167,4 +1168,66 @@ a_mermaid_block_is_a_diagram :: proc(t: ^testing.T) {
 	session.wait_idle(s)
 	testing.expect(t, session.find(s, "diagram") != nil, "the diagram again")
 	diagrams_free(app)
+}
+
+// A diagram opens in the viewer on a click: the wheel zooms it where the pointer is, a drag moves it, + and 0; its menu copies it
+// as a picture, at twice its size in the conversation, on the colour of code.
+@(test)
+a_diagram_is_zoomed_and_moved_in_the_viewer :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	defer diagrams_free(app)
+	v, err := json.parse_string(mermaid_page(), allocator = context.temp_allocator)
+	testing.expect(t, err == nil)
+	chat_load(app, v, false)
+	app.snap_bottom = true
+	session.wait_idle(s)
+	if !testing.expect(t, session.find(s, "diagram") != nil, "drawn") { return }
+	session.click(s, "diagram")
+	session.wait_idle(s)
+	testing.expect(t, app.view_open && app.view_diagram != "", "a click opens the viewer on it")
+	view := session.find(s, "view")
+	if !testing.expect(t, view != nil, "the view") { return }
+	em := ui.font_size()
+	room := app.state.window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
+	vs := view.rect.max - view.rect.min
+	testing.expectf(t, vs.x > room.x * app.prefs.viewer_scale - 2 * em || vs.y > room.y * app.prefs.viewer_scale - 4 * em, "larger than in the conversation: the share of the room (%v of %v)", vs, room)
+	at := session.center(view) + {30, 10}
+	session.move(s, at)
+	session.wheel(s, at, {0, -3})
+	session.frames(s, 2)
+	testing.expectf(t, app.view_zoom > 1.9, "the wheel zooms: %v", app.view_zoom)
+	testing.expectf(t, app.view_pan.x < 0 && app.view_pan.y < 0, "toward the pointer: %v", app.view_pan)
+	session.save_png(s, "diagram_viewer.png")
+	from := app.view_pan
+	c := session.center(view)
+	session.press(s, c)
+	session.move(s, c + {20, 10})
+	session.move(s, c + {40, 20})
+	session.release(s, c + {40, 20})
+	session.frames(s, 2)
+	testing.expectf(t, abs(app.view_pan.x - from.x - 40) < 1 && abs(app.view_pan.y - from.y - 20) < 1, "a drag moves it: %v from %v", app.view_pan, from)
+	session.event(s, {kind = .Key_Press, key = .N0})
+	session.frames(s, 2)
+	testing.expect(t, app.view_zoom == 1 && app.view_pan == {}, "0: back to what fits")
+	session.click_at(s, session.center(view), .Right)
+	session.frames(s, 2)
+	testing.expect(t, session.find_text(s, "Copy as PNG") != nil, "Copy as PNG")
+	testing.expect(t, session.find_text(s, "Copy the text") != nil, "Copy the text")
+	session.event(s, {kind = .Key_Press, key = .Escape})
+	session.frames(s, 2)
+	pic, ok := diagram_picture(app, app.view_diagram)
+	defer paint.canvas_destroy(&pic)
+	if !testing.expect(t, ok, "its picture") { return }
+	d := diagram_of(app, app.view_diagram, !app.cx.theme.light)
+	want := d.doc.view[2] * DIAGRAM_COPY_SCALE * diagram_scale(ui.font_size())
+	testing.expectf(t, abs(f32(pic.width) - math.ceil(want)) < 1, "twice its size: %d for %v", pic.width, want)
+	well := themed(HEX_CODE_WELL)
+	testing.expectf(t, abs(pic.pixels[0].r - f32(well >> 24) / 255) < 0.01, "on the colour of code: %v", pic.pixels[0])
+	inked := 0
+	for p in pic.pixels { if abs(p.r - pic.pixels[0].r) + abs(p.g - pic.pixels[0].g) > 0.1 { inked += 1 } }
+	testing.expectf(t, inked > len(pic.pixels) / 50, "its boxes, lines and words: %d", inked)
+	session.event(s, {kind = .Key_Press, key = .Escape})
+	session.frames(s, 3)
+	testing.expect(t, !app.view_open, "Escape closes it")
 }

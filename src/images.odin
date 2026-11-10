@@ -17,8 +17,10 @@ import "core:sync"
 import "core:thread"
 import "gt:config"
 import "gt:draw"
+import "gt:font"
 import "gt:platform"
 import "gt:render"
+import svg "gt:svg"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -348,6 +350,8 @@ image_view_open :: proc(app: ^App, ref: Image_Ref) {
 	app.view_key = (ref.key ~ u64(image_dim(app, 0)) * HASH_MIX_B) | 1
 	image_ref_delete(&app.view_ref)
 	app.view_ref = image_ref_clone(ref)
+	delete(app.view_diagram)
+	app.view_diagram = ""
 	app.view_open = true
 	app.view_zoom, app.view_pan = 1, {}
 	app.view_resize_from = {}
@@ -406,18 +410,25 @@ viewer_outside :: proc(p, view, picture, pan: [2]f32) -> bool {
 	return !(p.x >= lo.x && p.x < hi.x && p.y >= lo.y && p.y < hi.y)
 }
 
+// What the view draws: an image's texture, or a diagram (as paths, at the zoom's scale, on the colour of code: its colours are
+// the theme's).
 @(private = "file")
-View_Draw :: struct { tex: render.Texture, size, pan: [2]f32 }
+View_Draw :: struct { tex: render.Texture, doc: ^svg.Document, size, pan: [2]f32 }
 
 @(private = "file")
 view_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^View_Draw)(user)
 	r := b.rect
-	draw_well(dc, r, 0, hex(HEX_VIEWER_WELL))
+	draw_well(dc, r, 0, hex(d.doc != nil ? HEX_CODE_WELL : HEX_VIEWER_WELL))
 	c := (r.min + r.max) * 0.5 + d.pan
 	draw.push_clip(dc, r)
 	lo, hi := c - d.size * 0.5, c + d.size * 0.5
-	draw.image(dc, d.tex, {{math.round(lo.x), math.round(lo.y)}, {math.round(hi.x), math.round(hi.y)}})
+	if d.doc != nil {
+		bold := font.styled_face(dc.fonts, the_app.font, true, false)
+		svg.draw_doc(dc, d.doc, lo, d.size.x / max(d.doc.view[2], 1), {regular = the_app.font, bold = bold})
+	} else {
+		draw.image(dc, d.tex, {{math.round(lo.x), math.round(lo.y)}, {math.round(hi.x), math.round(hi.y)}})
+	}
 	draw.pop_clip(dc)
 }
 
@@ -434,36 +445,52 @@ view_zoom_to :: proc(app: ^App, zoom, max_zoom: f32, at: [2]f32) {
 	app.view_zoom = z
 }
 
+// An image still being decoded: a moment, over the conversation dimmed.
+@(private = "file")
+image_viewer_wait :: proc(app: ^App, em: f32) {
+	animate(app)
+	if ui.modal("image_view", em * 12, &app.view_open) {
+		dialog_backdrop()
+		ui.spacer(ui.px(em))
+		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
+		if ui.tags("weak") { ui.label("Opening the image…###view_wait") }
+		ui.spacer(ui.px(em))
+	}
+}
+
 image_viewer :: proc(app: ^App, em: f32) {
 	image_view_wait(app)
 	if !app.view_open { return }
-	e, ok := &app.images[app.view_key]
-	if !ok || e.state == .Failed { app.view_open = false; return }
-	e.used = app.frame_no
-	if e.state == .Pending {
-		// (its decode: a moment, over the conversation dimmed)
-		animate(app)
-		if ui.modal("image_view", em * 12, &app.view_open) {
-			dialog_backdrop()
-			ui.spacer(ui.px(em))
-			ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
-			if ui.tags("weak") { ui.label("Opening the image…###view_wait") }
-			ui.spacer(ui.px(em))
-		}
-		return
-	}
 	sc := ui.scale()
+	// what is shown: its pixels (a diagram's: at the conversation's size), and what draws it
+	source: [2]f32
+	shown: View_Draw
+	if app.view_diagram != "" {
+		d := diagram_of(app, app.view_diagram, !app.cx.theme.light)
+		if d == nil || d.why != "" { app.view_open = false; return }
+		shown.doc = &d.doc
+		source = {d.doc.view[2], d.doc.view[3]} * diagram_scale(em) / sc
+	} else {
+		e, ok := &app.images[app.view_key]
+		if !ok || e.state == .Failed { app.view_open = false; return }
+		e.used = app.frame_no
+		if e.state == .Pending { image_viewer_wait(app, em); return }
+		shown.tex = e.tex
+		source = {f32(e.w), f32(e.h)}
+	}
+	diagram := shown.doc != nil
 	pad, bar := math.round(em * VIEWER_PAD_EM), math.round(em * VIEWER_BAR_EM)
 	chrome := [2]f32{2 * pad, pad + bar}
 	room := app.state.window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
-	f := viewer_frame({f32(e.w), f32(e.h)}, room, chrome, sc, app.prefs.viewer_scale, math.round(em * VIEWER_MIN_W_EM), app.view_grown)
+	// (a diagram has no pixels of its own to stay within: it takes the share of the room at once)
+	f := viewer_frame(source, room, chrome, sc, app.prefs.viewer_scale, math.round(em * VIEWER_MIN_W_EM), app.view_grown || diagram)
 	view := f.picture
 	max_zoom := max(1, VIEW_NATIVE_MAX * sc / f.fit)
 	// (the dialog's size in logical pixels, as modal_sized keeps it: its grips write it)
 	asked := f.panel / sc
 	size := asked
 	closing := false
-	if ui.modal_sized("image_view", viewer_frame({f32(e.w), f32(e.h)}, room, chrome, sc, 1, math.round(em * VIEWER_MIN_W_EM)).panel, &size, &app.view_open) {
+	if ui.modal_sized("image_view", viewer_frame(source, room, chrome, sc, 1, math.round(em * VIEWER_MIN_W_EM)).panel, &size, &app.view_open) {
 		dialog_backdrop()
 		// a press around the picture closes the viewer, as one outside the dialog does (the buttons and the grips are over it)
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
@@ -474,14 +501,16 @@ image_viewer :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(view.y), axis = .X})
 			if ui.row() {
 				ui.spacer(ui.fill())
-				picture := [2]f32{f32(e.w), f32(e.h)} * f.fit * app.view_zoom
+				picture := source * f.fit * app.view_zoom
 				pannable := picture.x > view.x || picture.y > view.y
 				ui.next({width = ui.px(view.x), height = ui.px(view.y), cursor = pannable ? (ui.active_key() != 0 ? .Grabbing : .Grab) : .Arrow})
-				ui.a11y({role = .Image, name = app.view_ref.name != "" ? app.view_ref.name : "Image"})
+				ui.a11y({role = .Image, name = diagram ? "A diagram" : app.view_ref.name != "" ? app.view_ref.name : "Image"})
 				b := ui.build_box({.Clickable, .Scroll_Self}, "###view")
 				sig := ui.signal(b)
 				if sig.pressed && viewer_outside(sig.mouse, view, picture, app.view_pan) { closing = true }
-				if ui.mouse_pressed(.Right) && rect_contains(b.rect, ui.mouse_pos()) && !app.cx.ctx_taken { ctx_open(app, .Image, image = app.view_ref) }
+				if ui.mouse_pressed(.Right) && rect_contains(b.rect, ui.mouse_pos()) && !app.cx.ctx_taken {
+					if diagram { ctx_open(app, .Diagram, msg = app.view_diagram) } else { ctx_open(app, .Image, image = app.view_ref) }
+				}
 				if sig.scrolled.y != 0 {
 					view_zoom_to(app, app.view_zoom * math.pow(f32(VIEW_ZOOM_STEP), -sig.scrolled.y), max_zoom, sig.mouse - view * 0.5)
 				}
@@ -491,7 +520,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 					native := sc / f.fit
 					view_zoom_to(app, app.view_zoom != 1 ? 1 : (native > 1 ? native : VIEW_DOUBLE_CLICK), max_zoom, sig.mouse - view * 0.5)
 				}
-				if ui.key_press(.C, {.Ctrl}) { image_copy(app, app.view_ref) }
+				if ui.key_press(.C, {.Ctrl}) { if diagram { diagram_copy_png(app, app.view_diagram) } else { image_copy(app, app.view_ref) } }
 				if ui.key_press(.Equal) || ui.key_press(.Num_Add) { view_zoom_to(app, app.view_zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
 				if ui.key_press(.Minus) || ui.key_press(.Num_Subtract) { view_zoom_to(app, app.view_zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
 				if ui.key_press(.N0) { app.view_zoom, app.view_pan = 1, {} }
@@ -499,10 +528,11 @@ image_viewer :: proc(app: ^App, em: f32) {
 				if ui.key_press(.Right) { app.view_pan.x -= view.x * VIEW_PAN_KEY }
 				if ui.key_press(.Up) { app.view_pan.y += view.y * VIEW_PAN_KEY }
 				if ui.key_press(.Down) { app.view_pan.y -= view.y * VIEW_PAN_KEY }
-				picture = [2]f32{f32(e.w), f32(e.h)} * f.fit * app.view_zoom
+				picture = source * f.fit * app.view_zoom
 				app.view_pan = view_pan_clamp(app.view_pan, picture, view)
 				d := ui.frame_new(View_Draw)
-				d^ = {e.tex, picture, app.view_pan}
+				d^ = shown
+				d.size, d.pan = picture, app.view_pan
 				b.custom = view_draw
 				b.custom_user = d
 				ui.spacer(ui.fill())
@@ -510,10 +540,12 @@ image_viewer :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(bar), axis = .X, cross = .Center})
 			if ui.row(.Center) {
 				ui.spacer(ui.px(em))
-				name := app.view_ref.name != "" ? app.view_ref.name : "image"
+				name := diagram ? "Mermaid diagram" : app.view_ref.name != "" ? app.view_ref.name : "image"
 				text("n", ellipsize(name, IMAGE_NAME_CHARS), hex(HEX_VIEWER_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 				ui.spacer(ui.px(em * 0.6))
-				text("d", fmt.tprintf("%d × %d  ·  %.0f %%", e.w, e.h, f.fit * app.view_zoom / sc * 100), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+				zoom := f.fit * app.view_zoom / sc * 100
+				dims := diagram ? fmt.tprintf("%.0f %%", zoom) : fmt.tprintf("%d × %d  ·  %.0f %%", int(source.x), int(source.y), zoom)
+				text("d", dims, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.8))
 				bh := math.round(em * BUTTON_SMALL_H_EM)
 				if bevel_button("###zoom_out", "−", "", .Normal, height = bh).clicked { view_zoom_to(app, app.view_zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
