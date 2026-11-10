@@ -210,8 +210,10 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 	prose_fs := math.round(fs * the_app.prose_scale)
 	line_h := math.round(prose_fs * PROSE_LINE_RATIO)
 	blocks := parse_blocks(src)
-	measure :: proc(s: string, size: f32) -> f32 { return ui.text_width(the_app.font, size, s) }
-	marker_w := list_marker_widths(blocks[:], measure, fs, math.round(em * LIST_MARKER_EM), math.round(em * LIST_MARKER_GAP_EM))
+	measure :: proc(s: string, size: f32) -> f32 { return ui.text_width(the_app.prose, size, s) }
+	// (a marker's column holds its text, the gap and the padding on both sides of a box: LIST_MARKER_EM in all at least)
+	pad := ui.parent_box().text_pad
+	marker_w := list_marker_widths(blocks[:], measure, prose_fs, math.round(em * LIST_MARKER_EM) - 2 * pad, math.round(em * LIST_MARKER_GAP_EM))
 	for &bl, n in blocks {
 		bid := fmt.tprintf("###%s_b%d", id, n)
 		if n > 0 { ui.spacer(ui.px(math.round(em * (bl.kind == .Bullet || bl.kind == .Number ? 0.25 : 0.6)))) }
@@ -252,8 +254,11 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 				ui.spacer(ui.px(em * (0.3 + 1.2 * f32(bl.level))))
 				mk := bl.marker
 				if bl.kind == .Bullet { mk = bl.level == 0 ? "•" : "◦" }
-				ui.next({width = ui.px(marker_w[n]), height = ui.px(line_h), fg = accent(), font_size = fs, text_pad = 0})
-				ui.build_box({.Draw_Text}, fmt.tprintf("%s###mk", mk))
+				// (a paragraph of the item's face, size, line height and padding: its baseline is the text's; the column is
+				// as wide as the widest marker of the list, its padding on both sides with it)
+				mark := [1]ui.Rich_Run{{text = mk, style = {color = accent()}}}
+				ui.next({width = ui.px(marker_w[n] + 2 * pad), font = the_app.prose, font_size = prose_fs})
+				ui.rich_paragraph(fmt.tprintf("%s_mk", bid), mark[:], line_height = line_h)
 				runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
 				inline_runs(joined(bl.lines[:]), {color = color}, &runs, code_size = fs)
 				ui.next({width = ui.fill(), font = the_app.prose, font_size = prose_fs, flags = {.Selectable}})
@@ -266,7 +271,7 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 // The column of a list item's marker: LIST_MARKER_EM at least; a list's numbers all take the width of its widest and a gap
 // ("10." is not cut, and the text of its items stays in one column).
 LIST_MARKER_EM     :: 1.3
-LIST_MARKER_GAP_EM :: 0.4
+LIST_MARKER_GAP_EM :: 0.3
 
 // The width of each block's marker column (0 for what is not a list item). A list is a run of list items one after the
 // other; each of its levels is measured on its own.
