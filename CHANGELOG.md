@@ -5,6 +5,19 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-11-10
+
+### Added
+
+- **Open a terminal here**: the session's menu and the palette open the system's terminal in the session's folder ($TERMINAL or a common terminal on Linux, Windows Terminal or the command prompt on Windows).
+- **Typing goes to the composer**: a character typed while nothing has the keyboard (after a click in the conversation) starts the message, instead of being lost. Not a space alone, and not while a dialog or the terminal has the keyboard.
+
+### Changed
+
+- **The palette finds words**: what is typed must be in a title whole, or in pieces that each begin a word, in order. Letters scattered in a word no longer match ("pvsc" no longer finds "Previous section"), and the text whole ranks first.
+- **gui_toolkit 0.143.0**: on Windows, a copy installed in the default folder is no longer taken for one "to repair" after its restart; the Linux desktop entry names the window's class, so a dock matches the window to its entry. ocntools writes the logo's files and the version header with the toolbox (`write_logo`, `write_version_header`).
+- **The project's picture is the logo again** (`.project/image.png`, which opencode shows for the project): `ocntools logo` writes it with the other files of the logo.
+
 ## [0.36.0] - 2026-11-10
 
 ### Added
@@ -1148,7 +1161,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.36.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.37.0...HEAD
+[0.37.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.37.0
 [0.36.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.36.0
 [0.35.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.35.0
 [0.34.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.34.1

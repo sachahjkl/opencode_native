@@ -26,9 +26,29 @@ a_setting_that_is_no_switch_is_found :: proc(t: ^testing.T) {
 	for d in PREF_DEFS {
 		if d.name != "appearance.animations" { continue }
 		testing.expect(t, !d.hidden && d.kind != .Bool, "a choice")
-		_, _, ok := ui.fuzzy_score("animation", setting_title(d))
+		_, _, ok := ui.fuzzy_words("animation", setting_title(d))
 		testing.expectf(t, ok, "found by its title: %q", setting_title(d))
 		return
 	}
 	testing.fail_now(t, "appearance.animations")
+}
+
+// The palette finds words, whole or as pieces that each begin a word, the whole first; letters scattered in a word find nothing
+// ("prio" no longer found "Previous section").
+@(test)
+the_palette_finds_words_not_scattered_letters :: proc(t: ^testing.T) {
+	app := new(App)
+	defer free(app)
+	items := []Pal_Item{
+		{kind = .Command, id = "a", title = "Open a terminal in the session's folder"},
+		{kind = .Command, id = "b", title = "Keyboard shortcuts"},
+		{kind = .Command, id = "c", title = "Previous section"},
+		{kind = .Command, id = "d", title = "Terminal"},
+	}
+	hits := palette_hits(app, items, "terminal")
+	testing.expect_value(t, len(hits), 2)
+	if len(hits) == 2 { testing.expect_value(t, items[hits[0].item].id, "d") }   // (at the start of its text)
+	hits = palette_hits(app, items, "kesh")
+	testing.expect_value(t, len(hits), 1)   // (keyboard shortcuts: pieces that begin its words)
+	testing.expect_value(t, len(palette_hits(app, items, "pvsc")), 0)   // (scattered in its words: nothing)
 }

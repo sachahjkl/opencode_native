@@ -975,3 +975,30 @@ a_session_s_changes_show_across :: proc(t: ^testing.T) {
 	testing.expect_value(t, shown_variant(app), "high")
 	testing.expect_value(t, shown_agent(app), "plan")
 }
+
+// Typed with nothing focused (a click in the conversation took the keyboard away): the composer takes it, the character too. Not a
+// space alone, nor while the palette is over the window.
+@(test)
+typing_with_nothing_focused_goes_to_the_composer :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	ui.set_focus(0)
+	session.frames(s, 2)
+	session.type_text(s, " ")
+	session.frames(s, 2)
+	testing.expect_value(t, ui.area_string(&app.composer), "")
+	ui.set_focus(0)
+	session.type_text(s, "hi")
+	session.frames(s, 2)
+	testing.expect_value(t, ui.area_string(&app.composer), "hi")
+	testing.expect(t, app.composer_focused, "it has the keyboard")
+	ui.area_set(&app.composer, "")
+	ui.set_focus(0)
+	palette_toggle(app)
+	session.frames(s, 2)
+	ui.set_focus(0)
+	session.type_text(s, "x")
+	session.frames(s, 2)
+	testing.expect_value(t, ui.area_string(&app.composer), "")
+	palette_toggle(app)
+}

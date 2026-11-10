@@ -83,17 +83,6 @@ app_version :: proc(setup: string) -> (version: string, ok: bool) {
 	return rest[:close], true
 }
 
-// What the VERSIONINFO resource reads. "": not three numbers.
-version_header :: proc(version: string) -> string {
-	parts := strings.split(version, ".", context.temp_allocator)
-	if len(parts) != 3 { return "" }
-	for p in parts {
-		if p == "" { return "" }
-		for c in p { if c < '0' || c > '9' { return "" } }
-	}
-	return fmt.tprintf("#define OCN_VER_MAJOR %s\r\n#define OCN_VER_MINOR %s\r\n#define OCN_VER_PATCH %s\r\n#define OCN_VER_STRING \"%s\"\r\n", parts[0], parts[1], parts[2], version)
-}
-
 // Every file under `dir`.
 files_under :: proc(dir: string, out: ^[dynamic]string) {
 	entries, err := os.read_all_directory_by_path(dir, context.temp_allocator)
@@ -205,10 +194,9 @@ build_vt :: proc(force: bool) -> bool {
 @(private = "file")
 write_version_header :: proc() -> bool {
 	version, found := app_version(read_text(SETUP_FILE))
-	header := found ? version_header(version) : ""
-	if header == "" { fmt.eprintfln("build: no version of three numbers in %s", SETUP_FILE); return false }
-	if read_text(VERSION_H) == header { return true }
-	return write_text(VERSION_H, header)
+	if !found || toolbox.version_header(version) == "" { fmt.eprintfln("build: no version of three numbers in %s", SETUP_FILE); return false }
+	if why := toolbox.write_version_header(VERSION_H, version); why != "" { fmt.eprintfln("build: %s", why); return false }
+	return true
 }
 
 @(private = "file")

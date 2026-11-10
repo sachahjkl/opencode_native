@@ -199,21 +199,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 		needle = text_in[1:]
 	}
 	items := palette_items(app, only, needle != "")
-	now := now_epoch_ms()
-	hits := make([dynamic]Pal_Hit, context.temp_allocator)
-	for &it, i in items {
-		score, ranges, ok := ui.fuzzy_score(needle, it.title)
-		if !ok && (it.kind == .Switch || it.kind == .Setting) {
-			// a switch is found by its name too ("permission.allow_all"), its title then shown without marks
-			score, _, ok = ui.fuzzy_score(needle, it.id)
-			ranges = nil
-		}
-		if !ok { continue }
-		s := f64(score)
-		if u, known := p.usage[usage_key(&it)]; known { s += usage_now(u, now) * USAGE_SCORE }
-		append(&hits, Pal_Hit{i, s, ranges})
-	}
-	slice.stable_sort_by(hits[:], proc(a, b: Pal_Hit) -> bool { return a.score > b.score })
+	hits := palette_hits(app, items, needle)
 	n := min(len(hits), PALETTE_ROWS_MAX)
 	if n > 0 {
 		if ui.key_press(.Down) { p.sel = (p.sel + 1) % n; p.reveal = true }
@@ -332,4 +318,26 @@ setting_title :: proc(d: config.Def) -> string {
 setting_query :: proc(name: string) -> string {
 	for d in PREF_DEFS { if d.name == name { return config.title_of(d) } }
 	return name
+}
+
+// What `needle` finds among the items, best first (temp memory): the words of a title, whole or as pieces that each begin a word
+// (ui.fuzzy_words: letters scattered in a word find nothing), what was chosen lately higher.
+palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string) -> []Pal_Hit {
+	p := &app.palette
+	now := now_epoch_ms()
+	hits := make([dynamic]Pal_Hit, context.temp_allocator)
+	for &it, i in items {
+		score, ranges, ok := ui.fuzzy_words(needle, it.title)
+		if !ok && (it.kind == .Switch || it.kind == .Setting) {
+			// a switch is found by its name too ("permission.allow_all"), its title then shown without marks
+			score, _, ok = ui.fuzzy_words(needle, it.id)
+			ranges = nil
+		}
+		if !ok { continue }
+		s := f64(score)
+		if u, known := p.usage[usage_key(&it)]; known { s += usage_now(u, now) * USAGE_SCORE }
+		append(&hits, Pal_Hit{i, s, ranges})
+	}
+	slice.stable_sort_by(hits[:], proc(a, b: Pal_Hit) -> bool { return a.score > b.score })
+	return hits[:]
 }

@@ -11,6 +11,7 @@ import "core:fmt"
 import "core:math"
 import "core:strings"
 import "gt:config"
+import desktop "gt:desktop"
 import "gt:draw"
 import "gt:platform"
 import "gt:ui"
@@ -371,6 +372,11 @@ preview_nav_ended :: proc(app: ^App, t: ^Preview_Tab, nav: u64, ok: bool) {
 }
 
 reveal_path :: proc(path: string) { _ = platform.reveal_in_folder(path) }
+
+// The system's terminal, in a session's folder (desktop.open_terminal: $TERMINAL or a common one; Windows Terminal).
+terminal_open :: proc(dir: string) {
+	if dir == "" || !desktop.open_terminal(dir) { ui.toast(.Warn, "No terminal could be started in that folder") }
+}
 
 // What the address bar was given: an address, a host, or a file.
 preview_address :: proc(s: string) -> string {

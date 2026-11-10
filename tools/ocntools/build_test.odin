@@ -12,16 +12,6 @@ the_version_is_read_from_the_source :: proc(t: ^testing.T) {
 	testing.expect(t, !none, "no version, none invented")
 }
 
-@(test)
-the_header_wants_three_numbers :: proc(t: ^testing.T) {
-	h := version_header("1.22.3")
-	testing.expect(t, strings.contains(h, "#define OCN_VER_MINOR 22\r\n"))
-	testing.expect(t, strings.contains(h, `#define OCN_VER_STRING "1.22.3"`))
-	testing.expect_value(t, version_header("1.2"), "")
-	testing.expect_value(t, version_header("1.2.3-beta"), "")
-	testing.expect_value(t, version_header("1..3"), "")
-}
-
 CHANGELOG_SAMPLE :: "# Changelog\r\n\r\n## [0.2.0] - 2026-01-02\r\n\r\n### Added\r\n- **Two**\r\n\r\n## [0.1.0] - 2026-01-01\r\n\r\n### Added\r\n- **One**\r\n\r\n[0.2.0]: https://x\r\n"
 
 @(test)

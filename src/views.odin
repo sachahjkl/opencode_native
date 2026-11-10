@@ -571,6 +571,7 @@ session_menu :: proc(app: ^App, em: f32) {
 		if s := find_session(app, app.menu_session); s != nil {
 			if ui.menu_item("Copy folder path").clicked { clip_set(s.directory) }
 			if ui.menu_item("Show the folder").clicked { reveal_path(s.directory) }
+			if ui.menu_item("Open a terminal here").clicked { terminal_open(s.directory) }
 		}
 		ui.menu_separator()
 		if ui.menu_item("Delete…").clicked {
@@ -1601,6 +1602,9 @@ composer :: proc(app: ^App, em: f32) {
 						down = ui.key_pressed_peek(.Down)
 					}
 				}
+				// typed with nothing focused (a click in the conversation took the keyboard away): the composer takes it. Not a
+				// space (a focused button's), nor while a dialog is over the window or a box (the terminal) has the keyboard.
+				if !overlay_open(app) && ui.focus_key() == 0 && typed_word(app) { ui.type_to_field(ui.key_from_string(ui.parent_box().key, "###composer")) }
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_BODY), text_pad = em * 0.5})
 				res := ui.text_edit("###composer", &app.composer, "Ask anything…", wrap = true, auto_height = true, min_lines = 2, max_lines = COMPOSER_MAX_LINES)
 				app.composer_focused = res.focused
@@ -1948,4 +1952,11 @@ variant_button :: proc(app: ^App, em: f32) {
 			if ui.menu_item(fmt.tprintf("%s###v%d", label_safe(v), i), "", v == current).clicked { choose_variant(app, v) }
 		}
 	}
+}
+
+// A character typed this build that is not a space.
+@(private = "file")
+typed_word :: proc(app: ^App) -> bool {
+	for r in app.state.typed { if r > ' ' && r != 0x7f { return true } }
+	return false
 }

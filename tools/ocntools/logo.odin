@@ -1,13 +1,14 @@
 // logo: the client's logo, a bolt of brushed silver on a machined dark tile, with hints of the peach accent: vertical gradients, a
 // lit rim, shadows. Small sizes drop the shadows (detail picked from the size). Drawn by the toolkit's paint package.
 //   ocntools logo [--out folder] [--hint 0|1|2]      (default assets; hint 0: silver alone; 1: a peach edge; 2: and a warm tip)
-// Writes logo.png (512), logo_256/64/32/16.png and opencode-native.ico (16/20/24/32/40/48/64/128/256, PNG entries).
+// Writes logo.png (512), logo_256/64/32/16.png, opencode-native.ico (the toolbox's sizes, PNG entries) and the project's picture
+// (.project/image.png) with toolbox.write_logo.
 package ocntools
 
 import "core:fmt"
-import "core:os"
 import "core:strconv"
 import paint "gt:paint"
+import toolbox "gt:toolbox"
 
 LOGO_DEFAULT_OUT :: "assets"
 LOGO_ICO :: "opencode-native.ico"
@@ -15,8 +16,7 @@ LOGO_ICO :: "opencode-native.ico"
 LOGO_SUPERSAMPLE :: 4
 // The drawing's grid: LOGO_GRID x LOGO_GRID units.
 LOGO_GRID :: 64
-LOGO_FILE_SIZES :: [?]int{512, 256, 64, 32, 16}
-LOGO_ICO_SIZES :: [?]int{16, 20, 24, 32, 40, 48, 64, 128, 256}
+@(rodata) LOGO_FILE_SIZES := [?]int{256, 64, 32, 16}   // logo_<size>.png, besides logo.png (512)
 LOGO_HINT_DEFAULT :: 1
 LOGO_HINT_MAX :: 2
 // The bolt, in grid units.
@@ -47,24 +47,12 @@ run_logo :: proc(args: []string) -> int {
 			return EXIT_USAGE
 		}
 	}
-	if err := os.make_directory_all(out); err != nil && !os.is_dir(out) { fmt.eprintfln("logo: %s cannot be made", out); return 1 }
-	for size in LOGO_FILE_SIZES {
-		name := size == 512 ? "logo.png" : fmt.tprintf("logo_%d.png", size)
-		logo := draw_logo(size, hint)
-		ok := paint.write_png(logo, fmt.tprintf("%s/%s", out, name))
-		paint.canvas_destroy(&logo)
-		if !ok { fmt.eprintfln("logo: %s cannot be written in %s", name, out); return 1 }
-	}
-	sizes := LOGO_ICO_SIZES
-	entries: [len(LOGO_ICO_SIZES)]paint.Ico_Entry
-	for size, i in sizes {
-		logo := draw_logo(size, hint)
-		entries[i] = {size, paint.png_encode(logo, context.temp_allocator)}
-		paint.canvas_destroy(&logo)
-	}
-	ico := paint.ico_encode(entries[:], context.temp_allocator)
-	if os.write_entire_file(fmt.tprintf("%s/%s", out, LOGO_ICO), ico) != nil { fmt.eprintfln("logo: %s cannot be written in %s", LOGO_ICO, out); return 1 }
-	fmt.printfln("wrote %s: logo.png, logo_256/64/32/16.png, %s", out, LOGO_ICO)
+	// (the drawing is this program's; the files every program makes of its logo are the toolbox's)
+	why := toolbox.write_logo({
+		render = proc(size: int, user: rawptr) -> paint.Canvas { return draw_logo(size, (^int)(user)^) },
+		user = &hint, dir = out, master = 512, sizes = LOGO_FILE_SIZES[:], ico = fmt.tprintf("%s/%s", out, LOGO_ICO), project_image = true,
+	})
+	if why != "" { fmt.eprintfln("logo: %s", why); return 1 }
 	return 0
 }
 

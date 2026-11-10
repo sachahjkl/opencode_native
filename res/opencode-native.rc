@@ -10,8 +10,8 @@
 1 24 "opencode-native.manifest"
 
 1 VERSIONINFO
-FILEVERSION OCN_VER_MAJOR, OCN_VER_MINOR, OCN_VER_PATCH, 0
-PRODUCTVERSION OCN_VER_MAJOR, OCN_VER_MINOR, OCN_VER_PATCH, 0
+FILEVERSION VER_MAJOR, VER_MINOR, VER_PATCH, 0
+PRODUCTVERSION VER_MAJOR, VER_MINOR, VER_PATCH, 0
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0x0L
 FILEOS 0x40004L
@@ -24,12 +24,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Froment Software"
             VALUE "FileDescription", "opencode native"
-            VALUE "FileVersion", OCN_VER_STRING
+            VALUE "FileVersion", VER_STRING
             VALUE "InternalName", "opencode-native"
             VALUE "LegalCopyright", "Copyright (c) 2026 Sacha Froment (Froment Software)"
             VALUE "OriginalFilename", "opencode-native.exe"
             VALUE "ProductName", "opencode native"
-            VALUE "ProductVersion", OCN_VER_STRING
+            VALUE "ProductVersion", VER_STRING
             VALUE "Comments", "A native desktop client for the opencode server. Not built by the OpenCode team, and not affiliated with them."
         END
     END
