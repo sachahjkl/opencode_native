@@ -5,6 +5,16 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-11-11
+
+### Added
+
+- **Icons in every menu**: the title bar's menu, a session's menu, the composer's (Undo, Cut, Copy, Paste...), a terminal's and the servers' each item has its icon, as the menus of a message and a tool call had.
+
+### Fixed
+
+- **The icons of the menus were wrong or missing**: they are Lucide's characters, and the menus drew them in the toolkit's own icon face ("Copy the text" showed a dash, "Copy as PNG" nothing). The interface's icon face is now Lucide's (gui_toolkit 0.168.0).
+
 ## [0.41.1] - 2026-11-10
 
 ### Fixed
@@ -1222,7 +1232,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.41.1...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.42.0
 [0.41.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.41.1
 [0.41.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.41.0
 [0.40.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.40.0
