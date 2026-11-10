@@ -10,7 +10,9 @@
 // The server can change an item's delivery, not its text: an item edited is taken out and queued again, and goes to the end. It
 // stays in place until Enter, so that Cancel changes nothing. If it is delivered meanwhile, what was typed stays in the composer.
 //
-// A run interrupted leaves what is queued parked: nothing here sends it. It stays in the list, which says so, with Send now.
+// A run interrupted leaves what is queued parked: nothing here sends it. It stays in the list, which says so, with Steer.
+// What is steered waits for the run's next step: Send now stops what the agent is doing and sends it at once (queue_send_now),
+// as Escape then Enter would.
 package ocn
 
 import "core:encoding/json"
@@ -247,11 +249,21 @@ payload_file_uri :: proc(f: json.Value) -> string {
 ////////////////////////////////
 // What can be done to an item
 
-queue_send_now :: proc(app: ^App, id: string) {
+queue_steer :: proc(app: ^App, id: string) {
 	it := queue_find(app, id)
 	if it == nil || it.act != .None || it.delivery != .Queue || !online(app) { return }
 	it.act = .Sending
 	request(app, .Queue_Steer, "PATCH", fmt.tprintf("/api/session/%s/inbox/%s", app.cx.queue.session, id), `{"delivery":"steer"}`, id)
+}
+
+// A steered message waits for the next step of the run; a long step (a long thought, a command that takes its time) keeps it
+// waiting. This stops the step: the run interrupted, what was steered goes as a prompt at once, in its order (inbox_resume, on
+// session.execution.interrupted). What the step was doing is lost, which is what the reader chose. Nothing runs: it goes now.
+queue_send_now :: proc(app: ^App, id: string) {
+	it := queue_find(app, id)
+	if it == nil || it.act != .None || it.delivery != .Steer || !online(app) { return }
+	it.act = .Sending
+	if app.chat.busy && app.chat.id == app.cx.queue.session { interrupt_session(app, app.cx.queue.session) } else { inbox_resume(app, app.cx.queue.session) }
 }
 
 queue_remove :: proc(app: ^App, id: string) {
@@ -392,7 +404,8 @@ queue_row :: proc(app: ^App, it: ^Queue_Item, n: int, em: f32) {
 			text("b", it.act == .Sending ? "sending…" : it.act == .Removing ? "removing…" : "changing…", hex(HEX_FAINT), note)
 		case:
 			if !it.skills && queue_action("###edit", "Edit", lucide.PENCIL, wide, em) { queue_edit(app, id) }
-			if it.delivery == .Queue && queue_action("###now", "Send now", lucide.SEND_HORIZONTAL, wide, em) { queue_send_now(app, id) }
+			if it.delivery == .Queue && queue_action("###steer", "Steer", lucide.ARROW_RIGHT, wide, em) { queue_steer(app, id) }
+			if it.delivery == .Steer && queue_action("###now", "Send now", lucide.SEND_HORIZONTAL, wide, em) { queue_send_now(app, id) }
 			if queue_action("###rm", "Remove", lucide.X, wide, em) { queue_remove(app, id) }
 		}
 		ui.spacer(ui.px(em * TRAY_PAD_EM))

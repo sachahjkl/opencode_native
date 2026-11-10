@@ -305,7 +305,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	app.prefs.expand_tools = false
 	app.snap_bottom = true
 	session.frames(s, 6)
-	// the composer's toolbar, a run going (Stop) and "Send now", as the column narrows: the send button stays within it
+	// the composer's toolbar, a run going (Stop) and "Steer", as the column narrows: the send button stays within it
 	{
 		busy, steer, width := app.chat.busy, app.prefs.steer_first, app.prefs.column_w
 		app.chat.busy, app.prefs.steer_first = true, true

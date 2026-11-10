@@ -82,7 +82,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "conversation.page_size", description = "Messages read at a time (scrolling up reads the next page by itself).", kind = .Int, default = {i = 80}, bounded = true, min = PAGE_SIZE_MIN, max = PAGE_SIZE_MAX},
 	{name = "conversation.follow", description = "Follow new messages to the bottom while you are there.", kind = .Bool, default = {b = true}},
 	{name = "conversation.usage", description = "Tokens and cost under each answer.", kind = .Bool, default = {b = true}},
-	{name = "conversation.while_running", description = "What Enter does while a turn runs: send the message into the turn, or queue it for the end of the turn. Ctrl+Enter does the other.", kind = .String, default = {s = "steer"}, choices = {"queue", "steer"}},
+	{name = "conversation.while_running", description = "What Enter does while a turn runs: steer the message into the turn (at its next step), or queue it for the end of the turn. Ctrl+Enter does the other. A message waiting in the list can be sent now: that stops what the agent is doing.", kind = .String, default = {s = "steer"}, choices = {"queue", "steer"}},
 	{name = "conversation.image_viewer_size", description = "The size of the image viewer, as a share of the most the window gives a picture. A picture opens no larger than its pixels; drag the viewer's edges or corners to make it larger or smaller.", kind = .Float, default = {f = 1}, bounded = true, min = VIEWER_SCALE_MIN, max = 1},
 	{name = "conversation.clock", description = "Times of messages in 24-hour or 12-hour form.", kind = .String, default = {s = "24h"}, choices = {"24h", "12h"}},
 	{name = "composer.send", description = "The key that sends: Enter (Shift+Enter breaks the line) or Ctrl+Enter (Enter breaks the line).", kind = .String, default = {s = "enter"}, choices = {"enter", "ctrl+enter"}},
@@ -955,7 +955,7 @@ page_conversation :: proc(app: ^App, em: f32) {
 	if setting(app, "conversation.page_size", em) { pref_slider(app, "conversation.page_size", PAGE_SIZE_MIN, PAGE_SIZE_MAX, 10, "%.0f", em) }
 	if setting(app, "conversation.follow", em) { pref_switch(app, "conversation.follow", em) }
 	if setting(app, "conversation.usage", em) { pref_switch(app, "conversation.usage", em) }
-	if setting(app, "conversation.while_running", em) { pref_choice(app, "conversation.while_running", {"Queue", "Send now"}, em) }
+	if setting(app, "conversation.while_running", em) { pref_choice(app, "conversation.while_running", {"Queue", "Steer"}, em) }
 	if setting(app, "conversation.image_viewer_size", em) { pref_slider(app, "conversation.image_viewer_size", VIEWER_SCALE_MIN, 1, 0.05, "%.2f", em) }
 	if setting(app, "conversation.clock", em) { pref_choice(app, "conversation.clock", {"24 h", "12 h"}, em) }
 }

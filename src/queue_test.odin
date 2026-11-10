@@ -55,7 +55,7 @@ attach :: proc(app: ^App, name: string) {
 // How a prompt goes
 
 @(test)
-while_a_turn_runs_enter_sends_now_and_the_other_key_queues :: proc(t: ^testing.T) {
+while_a_turn_runs_enter_steers_and_the_other_key_queues :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	for d in PREF_DEFS {
 		if d.name == "conversation.while_running" { testing.expect_value(t, d.default.s, "steer") }   // (a new reader gets this)
@@ -298,7 +298,7 @@ one_action_at_a_time_on_an_item :: proc(t: ^testing.T) {
 	enqueued(app, "i", "later", "queue")
 	queue_remove(app, "i")
 	queue_remove(app, "i")
-	queue_send_now(app, "i")
+	queue_steer(app, "i")
 	queue_edit(app, "i")
 	testing.expect_value(t, bench_count(.Queue_Cancel), 1)
 	testing.expect_value(t, bench_count(.Queue_Steer), 0)
@@ -308,12 +308,12 @@ one_action_at_a_time_on_an_item :: proc(t: ^testing.T) {
 }
 
 @(test)
-send_now_changes_the_delivery_and_leaves_it_until_it_is_delivered :: proc(t: ^testing.T) {
+steer_changes_the_delivery_and_leaves_it_until_it_is_delivered :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	running(app, "s")
 	enqueued(app, "i", "later", "queue")
-	queue_send_now(app, "i")
+	queue_steer(app, "i")
 	r := bench_take(t, .Queue_Steer)
 	testing.expect_value(t, r.method, "PATCH")
 	testing.expect_value(t, r.body, `{"delivery":"steer"}`)
@@ -322,17 +322,17 @@ send_now_changes_the_delivery_and_leaves_it_until_it_is_delivered :: proc(t: ^te
 	testing.expect_value(t, it.delivery, Delivery.Steer)
 	testing.expect_value(t, it.act, Queue_Act.None)
 	testing.expect_value(t, len(app.chat.messages), 0)
-	queue_send_now(app, "i")
+	queue_steer(app, "i")
 	testing.expect_value(t, bench_count(.Queue_Steer), 0)   // (only what is queued)
 }
 
 @(test)
-send_now_refused_reads_the_list_again :: proc(t: ^testing.T) {
+steer_refused_reads_the_list_again :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	running(app, "s")
 	enqueued(app, "i", "later", "queue")
-	queue_send_now(app, "i")
+	queue_steer(app, "i")
 	bench_answer(app, bench_take(t, .Queue_Steer), 409, `{"message":"Pending input cannot change to steer"}`)
 	testing.expect_value(t, queue_find(app, "i").act, Queue_Act.None)
 	testing.expect_value(t, bench_count(.Queue_List), 1)
@@ -553,7 +553,7 @@ what_is_queued_stays_parked_when_a_run_is_interrupted :: proc(t: ^testing.T) {
 	bench_answer(app, bench_take(t, .Inbox), 200, listed(item_json("i", "later", "queue")))
 	testing.expect_value(t, bench_count(.Inbox_Take), 0)
 	testing.expect_value(t, len(app.cx.queue.items), 1)
-	queue_send_now(app, "i")
+	queue_steer(app, "i")
 	testing.expect_value(t, bench_count(.Queue_Steer), 1)   // (one word and it goes)
 }
 
@@ -763,4 +763,41 @@ a_saved_size_stays_with_its_dialog :: proc(t: ^testing.T) {
 	testing.expect_value(t, app.cx.dialogs[.Help].x, 300)
 	testing.expect_value(t, app.cx.dialogs[.Artifacts].x, 700)
 	testing.expect_value(t, config.string_of(&app.cfg_prefs, "layout.dialogs"), "100x1 200x2 300x3 400x4 500x5 600x6 700x7")   // (nothing changed: nothing written)
+}
+
+// A steered message stuck behind a long step: Send now interrupts the run, and what was steered goes as a prompt at once.
+// Nothing running: it goes now.
+@(test)
+send_now_interrupts_the_step_a_steered_message_waits_behind :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	running(app, "s")
+	enqueued(app, "q", "later", "queue")
+	queue_send_now(app, "q")
+	testing.expect_value(t, bench_count(.Action), 0)   // (only what is steered)
+	enqueued(app, "i", "now please", "steer")
+	queue_send_now(app, "i")
+	queue_send_now(app, "i")
+	r := bench_take(t, .Action)
+	testing.expect_value(t, r.path, "/api/session/s/interrupt")
+	testing.expect_value(t, bench_count(.Action), 0)   // (once)
+	testing.expect_value(t, queue_find(app, "i").act, Queue_Act.Sending)
+	bench_answer(app, r, 204, "")
+	bench_event(app, `{"type":"session.execution.interrupted","data":{"sessionID":"s"}}`)
+	bench_answer(app, bench_take(t, .Inbox), 200, listed(item_json("q", "later", "queue"), item_json("i", "now please", "steer")))
+	take := bench_take(t, .Inbox_Take)
+	testing.expect_value(t, take.path, "/api/session/s/inbox/i")
+	bench_answer(app, take, 204, "")
+	p := bench_take(t, .Prompt)
+	testing.expect(t, strings.contains(p.body, `"text":"now please"`), p.body)
+	testing.expect(t, queue_find(app, "i") == nil, "out of the list")
+	testing.expect(t, queue_find(app, "q") != nil, "what was queued stays")
+
+	// nothing runs any more (the run ended without taking it): it goes now, without an interruption
+	bench_event(app, `{"type":"session.execution.started","data":{"sessionID":"s"}}`)
+	enqueued(app, "j", "parked", "steer")
+	app.chat.busy = false
+	queue_send_now(app, "j")
+	testing.expect_value(t, bench_count(.Action), 0)
+	testing.expect_value(t, bench_count(.Inbox), 1)
 }

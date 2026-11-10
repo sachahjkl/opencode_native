@@ -1648,7 +1648,7 @@ composer :: proc(app: ^App, em: f32) {
 					if hint_action("###h_save", app.prefs.ctrl_enter ? "Ctrl+Enter  save" : "Enter  save", em, app.mono) { submit = true }
 				} else if as := composer_send_as(app); as != .Idle {
 					// (each says what it does, and does it)
-					first, second := as == .Queue ? "queue" : "send now", as == .Queue ? "send now" : "queue"
+					first, second := as == .Queue ? "queue" : "steer", as == .Queue ? "steer" : "queue"
 					if hint_action("###h_first", fmt.tprintf("%s  %s", app.prefs.ctrl_enter ? "Ctrl+Enter" : "Enter", first), em, app.mono) { submit = true }
 					text("h_dot", "   ·   ", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 					if hint_action("###h_second", fmt.tprintf("%s  %s", app.prefs.ctrl_enter ? "Ctrl+Shift+Enter" : "Ctrl+Enter", second), em, app.mono) { submit, other = true, true }
@@ -1671,7 +1671,7 @@ composer :: proc(app: ^App, em: f32) {
 				switch composer_send_as(app) {
 				case .Idle:
 				case .Queue: send_label, send_icon = "Queue", lucide.LIST
-				case .Steer: send_label = "Send now"
+				case .Steer: send_label = "Steer"
 				}
 			}
 			if app.column_w <= em * QUEUE_WORDS_MIN_EM || fit >= 2 { send_label = "" }   // (narrow, its glyph says it: the toolbar has no room)
@@ -1686,7 +1686,7 @@ composer :: proc(app: ^App, em: f32) {
 }
 
 // What the composer's toolbar leaves out to stay within itself: 1, the keys' hint; 2, the send button's word too. A step is taken
-// when what it held went past its end in the last layout (a long model's name, Stop beside "Send now"), and given back once the row
+// when what it held went past its end in the last layout (a long model's name, Stop beside "Steer"), and given back once the row
 // is wider than where it went past (by a margin: what came back would not go past at once).
 @(private = "file")
 composer_fit :: proc(app: ^App, em: f32) -> int {
