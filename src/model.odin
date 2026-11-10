@@ -15,6 +15,7 @@ Session_Info :: struct {
 	id, title, parent, directory, agent, model, provider, outcome, project: string,
 	variant:         string,   // how hard its model thinks ("": the model's default)
 	created, updated, idle: f64,
+	archived:        f64,   // when it was put away (time.archived; 0: it is not): the sidebar's last section, nowhere else
 	viewed:          f64,   // the last end of a run someone looked at (idle later than this: not seen, sidebar.odin)
 	cost:            f64,
 	tokens_in, tokens_out, reasoning, cache_read, cache_write: f64,
@@ -279,7 +280,7 @@ session_from_json :: proc(it: json.Value, a: mem.Allocator) -> Session_Info {
 		provider = strings.clone(jstr(it, "model", "providerID"), a), outcome = strings.clone(jstr(it, "outcome"), a),
 		variant = strings.clone(variant_of(it), a),
 		project = strings.clone(jstr(it, "projectID"), a),
-		created = jnum(it, "time", "created"), updated = jnum(it, "time", "updated"), idle = jnum(it, "time", "idle"), viewed = jnum(it, "time", "viewed"),
+		created = jnum(it, "time", "created"), updated = jnum(it, "time", "updated"), idle = jnum(it, "time", "idle"), viewed = jnum(it, "time", "viewed"), archived = jnum(it, "time", "archived"),
 		cost = jnum(it, "cost"), tokens_in = jnum(it, "tokens", "input"), tokens_out = jnum(it, "tokens", "output"),
 		reasoning = jnum(it, "tokens", "reasoning"), cache_read = jnum(it, "tokens", "cache", "read"), cache_write = jnum(it, "tokens", "cache", "write"),
 	}

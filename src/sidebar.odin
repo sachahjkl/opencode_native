@@ -41,8 +41,11 @@ Side_Section :: struct {
 	dir:     string,   // a project's folder
 	title:   string,   // "": it is a project, named after its folder
 	unseen:  bool,     // what it holds can be marked as seen, all at once
+	shut:    bool,     // folded until it is opened (Archived)
 	items:   [dynamic]int,
 }
+
+ARCHIVED_TITLE :: "Archived"
 
 // The server knows what was seen, for every client of it and across restarts: a run ended (time.idle) after the last end someone looked
 // at (time.viewed), POST /view says one was. Its own rule, on the sessions one opens: sub-agents are read through their parent, and
@@ -90,18 +93,38 @@ sidebar_rows :: proc(app: ^App, needle: string) -> []int {
 	return rows[:]
 }
 
-// The one place that knows the modes.
+// The one place that knows the modes. What was archived is in none of their sections: it is in the last one, Archived, folded
+// until it is opened, whatever the mode.
 sidebar_sections :: proc(app: ^App, rows: []int, mode: Sidebar_Mode) -> []Side_Section {
+	live := make([dynamic]int, 0, len(rows), context.temp_allocator)
+	archived := make([dynamic]int, context.temp_allocator)
+	for i in rows { append(app.sessions[i].archived > 0 ? &archived : &live, i) }
+	sections: [dynamic]Side_Section
 	switch mode {
-	case .Inbox:    return inbox_sections(app, rows)
-	case .Projects: return project_sections(app, rows)
+	case .Inbox:    sections = inbox_sections(app, live[:])
+	case .Projects: sections = project_sections(app, live[:])
 	}
-	return nil
+	if len(archived) > 0 {
+		append(&sections, Side_Section{key = hash.fnv64a(transmute([]u8)string("archived")), title = ARCHIVED_TITLE, shut = true, items = archived})
+	}
+	return sections[:]
+}
+
+// Archives a session, or brings it back: at once here, the server's list then says it as it stands.
+session_archive :: proc(app: ^App, id: string, archive: bool) {
+	if s := find_session(app, id); s != nil { s.archived = archive ? max(now_epoch_ms(), 1) : 0 }
+	request(app, .Action, "PATCH", fmt.tprintf("/api/session/%s", id), archive ? `{"archived":true}` : `{"archived":false}`, id)
+	refresh_sessions(app)
+}
+
+session_is_archived :: proc(app: ^App, id: string) -> bool {
+	s := find_session(app, id)
+	return s != nil && s.archived > 0
 }
 
 // The present grouping: a section per folder, the one last active first.
 @(private = "file")
-project_sections :: proc(app: ^App, rows: []int) -> []Side_Section {
+project_sections :: proc(app: ^App, rows: []int) -> [dynamic]Side_Section {
 	sections := make([dynamic]Side_Section, context.temp_allocator)
 	index := make(map[string]int, allocator = context.temp_allocator)
 	for i in rows {
@@ -114,13 +137,13 @@ project_sections :: proc(app: ^App, rows: []int) -> []Side_Section {
 		}
 		append(&sections[at].items, i)
 	}
-	return sections[:]
+	return sections
 }
 
 // What needs attention first, across projects; those with nothing do not show. What lights a row decides its section: session_waits,
 // app.busy, session_unseen. (app.sessions is by recency: so is each section.)
 @(private = "file")
-inbox_sections :: proc(app: ^App, rows: []int) -> []Side_Section {
+inbox_sections :: proc(app: ^App, rows: []int) -> [dynamic]Side_Section {
 	waiting := sessions_waiting(app)
 	dealt: [Inbox_Class][dynamic]int
 	for c in Inbox_Class { dealt[c] = make([dynamic]int, context.temp_allocator) }
@@ -140,13 +163,13 @@ inbox_sections :: proc(app: ^App, rows: []int) -> []Side_Section {
 		key := fmt.tprintf("inbox:%v", c)
 		append(&sections, Side_Section{key = hash.fnv64a(transmute([]u8)key), title = INBOX_TITLES[c], unseen = c == .Finished, items = dealt[c]})
 	}
-	return sections[:]
+	return sections
 }
 
 // Rows do not move under a pointer about to click one. While it moves over the list, sections and order stay what they were when it came
 // (the sessions in them stay live: a lamp changes at once, a title too); a run that ends meanwhile moves its row when the pointer has
 // left the list, or has stayed still for SIDEBAR_HOLD_MS. New sessions wait as well: a row added above would push the others down.
-Side_Held :: struct { key: u64, dir, title: string, unseen: bool, ids: [dynamic]string }   // (owned)
+Side_Held :: struct { key: u64, dir, title: string, unseen, shut: bool, ids: [dynamic]string }   // (owned)
 
 Side_Hold :: struct {
 	on:       bool,
@@ -163,7 +186,7 @@ sidebar_held :: proc(app: ^App, rows: []int, wanted: bool, of: u64) -> []Side_Se
 		if wanted {
 			h.on, h.over = true, of
 			for &sec in live {
-				held := Side_Held{key = sec.key, dir = strings.clone(sec.dir), title = strings.clone(sec.title), unseen = sec.unseen}
+				held := Side_Held{key = sec.key, dir = strings.clone(sec.dir), title = strings.clone(sec.title), unseen = sec.unseen, shut = sec.shut}
 				for i in sec.items { append(&held.ids, strings.clone(app.sessions[i].id)) }
 				append(&h.sections, held)
 			}
@@ -175,7 +198,7 @@ sidebar_held :: proc(app: ^App, rows: []int, wanted: bool, of: u64) -> []Side_Se
 	for i in rows { at[app.sessions[i].id] = i }
 	sections := make([dynamic]Side_Section, 0, len(h.sections), context.temp_allocator)
 	for &held in h.sections {
-		sec := Side_Section{key = held.key, dir = held.dir, title = held.title, unseen = held.unseen, items = make([dynamic]int, 0, len(held.ids), context.temp_allocator)}
+		sec := Side_Section{key = held.key, dir = held.dir, title = held.title, unseen = held.unseen, shut = held.shut, items = make([dynamic]int, 0, len(held.ids), context.temp_allocator)}
 		for id in held.ids { if i, there := at[id]; there { append(&sec.items, i) } }
 		if len(sec.items) > 0 { append(&sections, sec) }
 	}

@@ -123,7 +123,7 @@ home :: proc(app: ^App, em: f32) {
 		section_label("h_rec", "RECENT", em)
 		shown := 0
 		for &s in app.sessions {
-			if s.parent != "" || (app.busy[s.id] or_else false) { continue }
+			if s.parent != "" || s.archived > 0 || (app.busy[s.id] or_else false) { continue }   // (archived: put away)
 			if shown == HOME_RECENT { break }
 			home_session(app, &s, f64(em), now, false)
 			shown += 1

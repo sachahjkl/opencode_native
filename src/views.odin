@@ -363,7 +363,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 		lz := ui.lazy_begin()
 		gap := false   // (between a section's last session and the next section)
 		for &sec in sections {
-			folded := app.folded[sec.key] or_else false
+			folded := app.folded[sec.key] or_else sec.shut
 			if ui.lazy_item(lz, fmt.tprintf("###lg%d", sec.key)) {
 				if gap { ui.spacer(ui.px(em * 0.5)) }
 				if sec.title != "" { inbox_header(app, &sec, folded, em) } else { group_header(app, &sec, folded, em) }
@@ -562,6 +562,8 @@ session_menu :: proc(app: ^App, em: f32) {
 		if ui.menu_item("Rename…", "F2").clicked { rename_open(app, app.menu_session) }
 		if ui.menu_item("Fork").clicked { fork_session(app, app.menu_session, "") }
 		if ui.menu_item("Move to a folder…").clicked { session_move_pick(app, app.menu_session) }
+		archived := session_is_archived(app, app.menu_session)
+		if ui.menu_item(archived ? "Unarchive" : "Archive").clicked { session_archive(app, app.menu_session, !archived) }
 		if ui.menu_item("What it changed").clicked { changes_open(app, app.menu_session) }
 		if !app.cx.no_schedules && ui.menu_item("Schedules").clicked { schedules_open(app, app.menu_session) }
 		if ui.menu_item("Export…").clicked { session_export(app, app.menu_session) }

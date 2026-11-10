@@ -1028,3 +1028,53 @@ a_password_can_be_shown :: proc(t: ^testing.T) {
 	testing.expect(t, !app.server_edit.password_shown, "opened again: hidden")
 	app.server_edit.open = false
 }
+
+// A session archived leaves its section for the last one, Archived, folded until it is opened; brought back, it is where it was.
+@(test)
+an_archived_session_is_put_away :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	id := "ses_2"
+	ui.field_set(&app.search, "Session 2 about")   // (it alone: the end of a long list is not built)
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "ls_ses_2") != nil, "listed")
+	testing.expect(t, session.find_text(s, "ARCHIVED") == nil, "no Archived section while nothing is")
+	session_archive(app, id, true)
+	session.frames(s, 3)
+	testing.expect(t, session.find(s, "ls_ses_2") == nil, "out of its section; Archived is folded")
+	header := session.find_text(s, "ARCHIVED")
+	if !testing.expect(t, header != nil, "the Archived section") { return }
+	secs := sidebar_sections(app, sidebar_rows(app, ""), app.prefs.sidebar_mode)
+	last := secs[len(secs) - 1]
+	testing.expect(t, last.title == ARCHIVED_TITLE && len(last.items) == 1 && app.sessions[last.items[0]].id == id, "the last section, with it alone")
+	app.folded[last.key] = false   // (opened, as its header's click does)
+	session.frames(s, 3)
+	testing.expect(t, session.find(s, "ls_ses_2") != nil, "opened: it shows")
+	session_archive(app, id, false)
+	session.frames(s, 3)
+	testing.expect(t, session.find(s, "ls_ses_2") != nil, "back in its section")
+	testing.expect(t, session.find_text(s, "ARCHIVED") == nil, "nothing archived: no section")
+	ui.field_set(&app.search, "")
+}
+
+// Past the time the limit resets, the goal is still paused (the server waits for a word): the line says the limit reset, and
+// offers to resume it. Before, it says when, and offers nothing.
+@(test)
+a_goal_paused_past_its_reset_offers_to_resume :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app, s := bench_app(t)
+	paused :: proc(app: ^App, at: string) {
+		v, _ := json.parse_string(fmt.tprintf(`{{"objective":"Booted OS","status":"paused","reason":"The session failed: limit. Resets at %s.","rounds":0,"maxRounds":50}}`, at), allocator = context.temp_allocator)
+		goal_set(app, app.chat.id, v)
+	}
+	paused(app, "2000-01-01T00:00:00.000Z")
+	app.snap_bottom = true
+	session.wait_idle(s)
+	testing.expect(t, session.find(s, "gw_resume") != nil, "past: resume offered")
+	when_ := session.find(s, "when")
+	testing.expect(t, when_ != nil && strings.contains(when_.text, "limit reset at"), "the limit reset")
+	paused(app, "2999-01-01T00:00:00.000Z")
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "gw_resume") == nil, "not yet: nothing offered")
+	goal_set(app, app.chat.id, nil)
+}

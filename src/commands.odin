@@ -64,6 +64,7 @@ COMMANDS := [?]Command{
 	{id = "session.artifacts", title = "Artifacts of this folder", group = "Session", icon = lucide.FILE, run = artifacts_open, enabled = proc(app: ^App) -> bool { return !app.cx.no_artifacts }},
 	{id = "session.files", title = "Browse the files", group = "Session", icon = lucide.FOLDER, keys = "Ctrl+P", key = .P, mods = {.Ctrl}, run = files_open},
 	{id = "session.changes", title = "What this session changed", group = "Session", icon = lucide.FILE, run = proc(app: ^App) { changes_open(app, app.chat.id) }, enabled = has_session},
+	{id = "session.archive", title = "Archive the session, or bring it back", group = "Session", icon = lucide.FILE_ARCHIVE, run = proc(app: ^App) { session_archive(app, app.chat.id, !session_is_archived(app, app.chat.id)) }, enabled = has_session},
 	{id = "session.terminal", title = "Open a terminal in the session's folder", group = "Session", icon = lucide.SQUARE_TERMINAL, run = proc(app: ^App) { terminal_open(chat_dir(app)) }, enabled = has_session},
 	{id = "session.move", title = "Move the session to a folder", group = "Session", icon = lucide.FOLDER, run = proc(app: ^App) { session_move_pick(app, app.chat.id) }, enabled = has_session},
 	{id = "session.export", title = "Export the session", group = "Session", icon = lucide.FILE, run = proc(app: ^App) { session_export(app, app.chat.id) }, enabled = has_session},

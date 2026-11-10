@@ -1248,3 +1248,53 @@ a_choice_made_elsewhere_shows_at_once :: proc(t: ^testing.T) {
 	testing.expect_value(t, shown_agent(app), "plan")
 	testing.expect(t, app.cx.due[.Refresh].due_ms > 0, "the page read again")
 }
+
+// The goal's reason as the server says it ends with a time in UTC, after the same time in words: that sentence goes, and the line
+// over the reason says the time on the local clock, and what is left.
+@(test)
+a_goal_s_reset_time_is_said_for_a_person :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	app.prefs.clock24 = true
+	the_app = app   // (clock_time reads the 24-hour preference there)
+	defer the_app = nil
+	reason := "The session failed: You've hit your 5-hour limit · resets 12:20pm (Europe/Paris) Resets at 2026-11-10T11:20:00.000Z."
+	text, at := reason_and_reset(reason)
+	testing.expect_value(t, text, "The session failed: You've hit your 5-hour limit · resets 12:20pm (Europe/Paris)")
+	testing.expect_value(t, at, 1794309600000.0)   // (2026-11-10 11:20 UTC)
+	testing.expect_value(t, reset_text(at, at - 42 * 60_000 - 5_000), fmt.tprintf("  ·  resets at %s  ·  in 43 min", clock_time(at)))
+	testing.expect_value(t, reset_text(at, at - 65 * 60_000), fmt.tprintf("  ·  resets at %s  ·  in 1h 05", clock_time(at)))
+	testing.expect_value(t, reset_text(at, at + 1), fmt.tprintf("  ·  limit reset at %s", clock_time(at)))
+	// another day: its date, and the time left in days
+	later := at + 3 * 86_400_000
+	testing.expect(t, strings.has_prefix(reset_text(later, at), "  ·  resets on Nov 13 at ") || strings.has_prefix(reset_text(later, at), "  ·  resets on Nov 14 at "), reset_text(later, at))
+	testing.expect(t, strings.has_suffix(reset_text(later, at), "  ·  in 3d 00h"), reset_text(later, at))
+	// a time in the middle of a sentence: the local clock's, in its place
+	text, at = reason_and_reset("Paused until 2026-11-10T11:20:00Z by the user.")
+	testing.expect_value(t, text, fmt.tprintf("Paused until %s by the user.", clock_time(1794309600000)))
+	testing.expect_value(t, at, 1794309600000.0)
+	text, at = reason_and_reset("The session failed: no time here.")
+	testing.expect_value(t, text, "The session failed: no time here.")
+	testing.expect_value(t, at, 0)
+}
+
+// Archiving asks the server (PATCH archived), and the list shows it at once; bringing it back, the same.
+@(test)
+archiving_asks_the_server_and_shows_at_once :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	append(&app.sessions, Session_Info{id = "s1", title = "One"})
+	session_archive(app, "s1", true)
+	r := bench_take(t, .Action)
+	testing.expect_value(t, r.method, "PATCH")
+	testing.expect_value(t, r.path, "/api/session/s1")
+	testing.expect_value(t, r.body, `{"archived":true}`)
+	testing.expect(t, session_is_archived(app, "s1"), "at once")
+	// the list says it as the server keeps it
+	v, _ := json.parse_string(`{"data":[{"id":"s1","title":"One","time":{"created":1,"updated":2,"archived":3}}]}`, allocator = context.temp_allocator)
+	sessions_load(app, v)
+	testing.expect(t, session_is_archived(app, "s1"), "time.archived")
+	session_archive(app, "s1", false)
+	testing.expect_value(t, bench_take(t, .Action).body, `{"archived":false}`)
+	testing.expect(t, !session_is_archived(app, "s1"))
+}
