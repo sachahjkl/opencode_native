@@ -114,7 +114,6 @@ list_item :: proc(l: string) -> (indent: int, marker: string, rest: string, ok: 
 	return
 }
 
-@(private = "file")
 parse_blocks :: proc(src: string) -> [dynamic]Block {
 	blocks := make([dynamic]Block, context.temp_allocator)
 	cur: ^Block
@@ -211,6 +210,8 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 	prose_fs := math.round(fs * the_app.prose_scale)
 	line_h := math.round(prose_fs * PROSE_LINE_RATIO)
 	blocks := parse_blocks(src)
+	measure :: proc(s: string, size: f32) -> f32 { return ui.text_width(the_app.font, size, s) }
+	marker_w := list_marker_widths(blocks[:], measure, fs, math.round(em * LIST_MARKER_EM), math.round(em * LIST_MARKER_GAP_EM))
 	for &bl, n in blocks {
 		bid := fmt.tprintf("###%s_b%d", id, n)
 		if n > 0 { ui.spacer(ui.px(math.round(em * (bl.kind == .Bullet || bl.kind == .Number ? 0.25 : 0.6)))) }
@@ -251,7 +252,7 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 				ui.spacer(ui.px(em * (0.3 + 1.2 * f32(bl.level))))
 				mk := bl.marker
 				if bl.kind == .Bullet { mk = bl.level == 0 ? "•" : "◦" }
-				ui.next({width = ui.px(em * 1.3), height = ui.px(line_h), fg = accent(), font_size = fs, text_pad = 0})
+				ui.next({width = ui.px(marker_w[n]), height = ui.px(line_h), fg = accent(), font_size = fs, text_pad = 0})
 				ui.build_box({.Draw_Text}, fmt.tprintf("%s###mk", mk))
 				runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
 				inline_runs(joined(bl.lines[:]), {color = color}, &runs, code_size = fs)
@@ -260,6 +261,32 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 			}
 		}
 	}
+}
+
+// The column of a list item's marker: LIST_MARKER_EM at least; a list's numbers all take the width of its widest and a gap
+// ("10." is not cut, and the text of its items stays in one column).
+LIST_MARKER_EM     :: 1.3
+LIST_MARKER_GAP_EM :: 0.4
+
+// The width of each block's marker column (0 for what is not a list item). A list is a run of list items one after the
+// other; each of its levels is measured on its own.
+list_marker_widths :: proc(blocks: []Block, measure: proc(s: string, size: f32) -> f32, size, least, gap: f32) -> []f32 {
+	out := make([]f32, len(blocks), context.temp_allocator)
+	is_item :: proc(b: Block) -> bool { return b.kind == .Bullet || b.kind == .Number }
+	for start := 0; start < len(blocks); {
+		if !is_item(blocks[start]) { start += 1; continue }
+		end := start
+		for end < len(blocks) && is_item(blocks[end]) { end += 1 }
+		widest := make(map[int]f32, allocator = context.temp_allocator)
+		for b in blocks[start:end] {
+			w := least
+			if b.kind == .Number { w = max(w, math.ceil(measure(b.marker, size) + gap)) }
+			widest[b.level] = max(widest[b.level] or_else 0, w)
+		}
+		for b, i in blocks[start:end] { out[start + i] = widest[b.level] }
+		start = end
+	}
+	return out
 }
 
 link_clicked :: proc(res: ui.Rich_Result) {
