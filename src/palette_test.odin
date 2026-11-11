@@ -1,5 +1,6 @@
 package ocn
 
+import "base:runtime"
 import "core:math"
 import "core:strings"
 import "core:testing"
@@ -66,4 +67,18 @@ a_theme_cards_dots_stay_under_its_name :: proc(t: ^testing.T) {
 		testing.expectf(t, accent_top >= name_bottom, "em %v: the dots' top %v, the name's bottom %v", em, accent_top, name_bottom)
 		testing.expectf(t, y + dot <= r.max.y, "em %v: inside the card", em)
 	}
+}
+
+// A command is found by its tags ("exit" for Quit) and with a slip ("Qestart pencode native" for the restart).
+@(test)
+the_palette_finds_a_command_by_its_tags_or_a_slip :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	items := make([dynamic]Pal_Item, context.temp_allocator)
+	for &c in COMMANDS { append(&items, Pal_Item{kind = .Command, id = c.id, title = c.title, cmd = &c, tags = strings.fields(c.tags, context.temp_allocator)}) }
+	app := new(App)
+	defer free(app)
+	first :: proc(hits: []Pal_Hit, items: []Pal_Item) -> string { return len(hits) > 0 ? items[hits[0].item].id : "" }
+	testing.expect_value(t, first(palette_hits(app, items[:], "exit"), items[:]), "app.quit")
+	testing.expect_value(t, first(palette_hits(app, items[:], "Qestart pencode native"), items[:]), "app.restart")
+	testing.expect_value(t, first(palette_hits(app, items[:], "restart opencode"), items[:]), "app.restart")
 }

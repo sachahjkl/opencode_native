@@ -24,13 +24,13 @@ Pal_Item :: struct {
 	detail: string,
 	keys:   string,
 	icon:   string,
+	tags:   []string, // other words it is found by (a command's, a setting's)
 	cmd:    ^Command,
 	index:  int,      // in app.models
 	on:     bool,     // a switch's state
 	toggle: bool,     // it is a switch
 }
 
-@(private = "file")
 Pal_Hit :: struct { item: int, score: f64, ranges: []ui.Fuzzy_Range }
 
 Usage :: struct { weight: f64, last_ms: f64 }
@@ -118,7 +118,7 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 	if want(only, '>') {
 		for &c in COMMANDS {
 			if !command_enabled(app, &c) || c.id == "app.palette" { continue }
-			it := Pal_Item{kind = .Command, id = c.id, title = c.title, detail = c.group, keys = c.keys, icon = c.icon, cmd = &c}
+			it := Pal_Item{kind = .Command, id = c.id, title = c.title, detail = c.group, keys = c.keys, icon = c.icon, cmd = &c, tags = strings.fields(c.tags, context.temp_allocator)}
 			if c.checked != nil { it.toggle, it.on = true, c.checked(app) }
 			append(&items, it)
 		}
@@ -153,10 +153,10 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 			for d in PREF_DEFS {
 				if d.hidden { continue }
 				if d.kind != .Bool {
-					append(&items, Pal_Item{kind = .Setting, id = d.name, title = setting_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL})
+					append(&items, Pal_Item{kind = .Setting, id = d.name, title = setting_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, tags = d.tags})
 					continue
 				}
-				append(&items, Pal_Item{kind = .Switch, id = d.name, title = setting_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, on = config.bool_of(&app.cfg_prefs, d.name)})
+				append(&items, Pal_Item{kind = .Switch, id = d.name, title = setting_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, on = config.bool_of(&app.cfg_prefs, d.name), tags = d.tags})
 			}
 		}
 	}
@@ -317,14 +317,14 @@ setting_query :: proc(name: string) -> string {
 	return name
 }
 
-// What `needle` finds among the items, best first (temp memory): the words of a title, whole or as pieces that each begin a word
-// (ui.fuzzy_words: letters scattered in a word find nothing), what was chosen lately higher.
+// What `needle` finds among the items, best first (temp memory), as the toolkit's palette ranks its commands (ui.palette_match):
+// a title whole or at the starts of its words, then its tags, then with a slip or two in each word; what was chosen lately higher.
 palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string) -> []Pal_Hit {
 	p := &app.palette
 	now := now_epoch_ms()
 	hits := make([dynamic]Pal_Hit, context.temp_allocator)
 	for &it, i in items {
-		score, ranges, ok := ui.fuzzy_words(needle, it.title)
+		score, ranges, ok := ui.palette_match(needle, it.title, "", it.tags)
 		if !ok && (it.kind == .Switch || it.kind == .Setting) {
 			// a switch is found by its name too ("appearance.system_title"), its title then shown without marks
 			score, _, ok = ui.fuzzy_words(needle, it.id)

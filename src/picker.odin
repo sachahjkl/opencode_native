@@ -342,7 +342,7 @@ lit_text :: proc(app: ^App, s: string, split: int, ranges: []ui.Fuzzy_Range, col
 		c := faint ? hex(HEX_FAINT) : col
 		m := ui.Style_Mod{font_size = faint ? math.round(fs * FS_NOTE) : fs}
 		if lit {
-			c = accent()
+			// (the text's own colour on the accent's tint: accent on its own tint read at a contrast of about 3, too low)
 			m.bg = with_alpha(accent(), 0.16)
 			m.radius = 3 * ui.scale()
 			m.width = ui.text_size(0)

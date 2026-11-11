@@ -167,7 +167,7 @@ update_installed :: proc(app: ^App, j: ^Update_Job) {
 	}
 	version := strings.clone(d.offer.manifest.version)
 	update_go(u, Update_Installed{version})
-	ui.toast_action(.Good, proc(user: rawptr) { update_restart((^App)(user)) }, app, "%s is installed: click to restart", version)
+	ui.toast_action(.Good, proc(user: rawptr) { app_restart((^App)(user)) }, app, "%s is installed: click to restart", version)
 }
 
 @(private = "file")
@@ -234,7 +234,7 @@ update_check :: proc(app: ^App, asked: bool) {
 	case Update_Downloading:
 		return
 	case Update_Installed:
-		if asked { ui.toast_action(.Good, proc(user: rawptr) { update_restart((^App)(user)) }, app, "%s is installed: click to restart", v.version) }
+		if asked { ui.toast_action(.Good, proc(user: rawptr) { app_restart((^App)(user)) }, app, "%s is installed: click to restart", v.version) }
 		return
 	case Update_Ready:
 		update_go(u, Update_Checking{asked, v.offer})
@@ -273,8 +273,8 @@ update_install :: proc(app: ^App) {
 	update_job_start(app, j)
 }
 
-// The new program takes over.
-update_restart :: proc(app: ^App) {
+// The program starts again: another of it from the same file, then this one ends (the same one, or the one an update put there).
+app_restart :: proc(app: ^App) {
 	args := []string{process.executable_path()}
 	if _, err := os.process_start({command = args}); err != nil { ui.toast(.Bad, "Restart it by hand: it could not be started"); return }
 	app.quit = true
@@ -301,7 +301,7 @@ update_pill :: proc(app: ^App, em: f32) {
 	case nil:                return
 	}
 	if pill_button("###update", label, accent(), lucide.REFRESH_CW).clicked {
-		if update_is_ready(u) { update_install(app) } else if update_is_installed(u) { update_restart(app) }
+		if update_is_ready(u) { update_install(app) } else if update_is_installed(u) { app_restart(app) }
 	}
 	ui.spacer(ui.px(em * 0.6))
 }

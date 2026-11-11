@@ -1068,7 +1068,7 @@ page_updates :: proc(app: ^App, em: f32) {
 				if bevel_button("###u_inst", fmt.tprintf("Install %s", update_version(u)), lucide.CHECK, .Accent).clicked { update_install(app) }
 			}
 			if update_is_installed(u) {
-				if bevel_button("###u_rest", "Restart now", lucide.REFRESH_CW, .Accent).clicked { update_restart(app) }
+				if bevel_button("###u_rest", "Restart now", lucide.REFRESH_CW, .Accent).clicked { app_restart(app) }
 			}
 		}
 		ui.spacer(ui.px(em * 0.9))
