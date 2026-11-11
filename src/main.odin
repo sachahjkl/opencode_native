@@ -151,6 +151,8 @@ Server_Known :: struct {
 // What the window keeps from one frame to the next that belongs to no panel: what is due, what is open, where things are.
 App_Context :: struct {
 	notified:            map[platform.Notification_Id]string,   // the notifications of the system shown, their sessions (owned: settings.odin notify_event)
+	toast_targets:       [TOAST_TARGETS]string,   // the sessions a click on a toast opens, a ring (owned: settings.odin toast_session)
+	toast_target_next:   int,
 	column_drag_from:    f32,                  // the conversation's width when a handle of it was pressed (views.odin column_handles)
 	composer_fit:        struct { level: int, at: [2]f32 },   // what the composer's toolbar leaves out, and at which widths (views.odin composer_fit)
 	theme:               Theme_State,          // the themes, the one shown, its colours (theme.odin)

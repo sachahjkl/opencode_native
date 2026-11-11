@@ -8,6 +8,7 @@ import "core:fmt"
 import "core:strings"
 import "core:testing"
 import "gt:config"
+import "gt:ui"
 
 // The session `id` asks for a permission.
 @(private = "file")
@@ -271,4 +272,41 @@ what_a_schedule_row_says :: proc(t: ^testing.T) {
 	testing.expect_value(t, schedule_detail(&it), "every 1 day · 3 left · ran 2 (ok)")
 	it = Schedule{when_text = "once, in 2 hours", runs = 1}
 	testing.expect_value(t, schedule_detail(&it), "once, in 2 hours · ran 1")
+}
+
+// A toast about another session says which and what it asks; a click on it opens that session. (It said "A session is waiting
+// for a permission", and led nowhere.)
+@(test)
+a_toast_names_its_session_and_opens_it :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := inbox_app()
+	the_app = app   // (a toast's action finds the app there, as in the program)
+	defer the_app = nil
+	show(app, "seen")
+	for &x in app.state.toasts { x.alive = false }
+	bench_event(app, `{"type":"permission.asked","data":{"request":{"id":"p2","sessionID":"ended","action":"bash","resources":["git push"]}}}`)
+	bench_event(app, `{"type":"form.created","data":{"form":{"id":"f2","sessionID":"runs","title":"Which branch?","fields":[]}}}`)
+	texts := make([dynamic]string, context.temp_allocator)
+	actions := make([dynamic]ui.Toast, context.temp_allocator)
+	for &x in app.state.toasts {
+		if !x.alive { continue }
+		append(&texts, fmt.tprintf("%s | %s", string(x.title[:x.title_len]), string(x.text[:x.len])))
+		append(&actions, x)
+	}
+	testing.expectf(t, slice_has(texts[:], "Ended | Permission: bash git push"), "the session, then what it asks: %v", texts)
+	testing.expectf(t, slice_has(texts[:], "Runs | Question: Which branch?"), "a question too: %v", texts)
+	for &x in actions {
+		if string(x.text[:x.len]) != "Permission: bash git push" { continue }
+		testing.expect(t, x.action != nil, "a click does something")
+		if x.action != nil { x.action(x.user) }
+	}
+	nav_apply(app)   // (the next frame's)
+	testing.expect_value(t, app.chat.id, "ended")
+	bench_clear(app)
+}
+
+@(private = "file")
+slice_has :: proc(list: []string, s: string) -> bool {
+	for x in list { if x == s { return true } }
+	return false
 }

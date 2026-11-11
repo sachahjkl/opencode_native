@@ -284,35 +284,69 @@ notify_finished :: proc(app: ^App, sid, outcome: string) {
 	front := window_in_front(app)
 	if sid == app.chat.id && front { return }
 	if find_child(&app.chat, sid) != nil && front { return }   // (its card and the strip say it)
-	title := sid
-	if s := find_session(app, sid); s != nil { title = s.title } else if sid == app.chat.id && app.chat.have_self { title = app.chat.self.title }
 	word := outcome == "failed" ? "Failed" : outcome == "interrupted" ? "Stopped" : "Done"
 	// (in front, the toast says it: a notification of the system is for a window you are not looking at)
-	if mode == "system" && !front && notify_system(app, sid, word, title) { return }
-	switch outcome {
-	case "failed":      ui.toast(.Bad, "%s: %s", word, ellipsize(title, TOAST_TITLE_CHARS))
-	case "interrupted": ui.toast(.Warn, "%s: %s", word, ellipsize(title, TOAST_TITLE_CHARS))
-	case:               ui.toast(.Good, "%s: %s", word, ellipsize(title, TOAST_TITLE_CHARS))
-	}
+	if mode == "system" && !front && notify_system(app, sid, word, "") { return }
+	kind: ui.Toast_Kind = outcome == "failed" ? .Bad : outcome == "interrupted" ? .Warn : .Good
+	toast_session(app, kind, sid, word, "")
 	if mode != "toast" && !front { flash_taskbar(app) }
 }
 
-// A session waits for you (a permission, a question) while the window is not in front.
-notify_waiting :: proc(app: ^App, sid, what: string) {
+// A session waits for you (a permission, a question) while the window is not in front: `what` and `detail` (what it asks).
+notify_waiting :: proc(app: ^App, sid, what, detail: string) {
 	if !app.prefs.notify_perm || window_in_front(app) { return }
 	flash_taskbar(app)
 	if app.prefs.notify != "system" { return }
-	title := sid
-	if s := find_session(app, sid); s != nil { title = s.title }
-	notify_system(app, sid, what, title)
+	notify_system(app, sid, what, detail)
 }
 
-// A notification of the system: what happened, and the session's title. A click on it brings the window and opens the session
-// (main_input). False: the system shows none.
+// A session's title, as a notification names it ("" a session not listed: the start of its id).
+session_title_of :: proc(app: ^App, sid: string) -> string {
+	if s := find_session(app, sid); s != nil && s.title != "" { return s.title }
+	if sid == app.chat.id && app.chat.have_self && app.chat.self.title != "" { return app.chat.self.title }
+	return sid
+}
+
+// What a permission asks, in a line: the server's message, else its action and what it is on.
+permission_words :: proc(req: json.Value) -> string {
+	if m := strings.trim_space(jstr(req, "message")); m != "" { return first_line(m) }
+	what := jstr(req, "action")
+	if res := jarr(req, "resources"); len(res) > 0 { if r, ok := res[0].(json.String); ok { what = fmt.tprintf("%s %s", what, string(r)) } }
+	return what
+}
+
+// What a form asks, in a line: its title, else its first field's.
+form_words :: proc(form: json.Value) -> string {
+	if t := strings.trim_space(jstr(form, "title")); t != "" { return first_line(t) }
+	if f := jarr(form, "fields"); len(f) > 0 { return first_line(jstr(f[0], "title")) }
+	return ""
+}
+
+// A toast about the session `sid`: its title on the first line, `what` and `detail` under it; a click on it opens the session.
+TOAST_TARGETS :: 16   // (more than the toasts that can stand at once: a toast's session is still there when it is clicked)
+
+toast_session :: proc(app: ^App, kind: ui.Toast_Kind, sid, what, detail: string) {
+	body := detail != "" ? fmt.tprintf("%s: %s", what, detail) : what
+	title := session_title_of(app, sid)
+	if sid == "" { ui.toast_titled(kind, title, body); return }
+	k := app.cx.toast_target_next
+	app.cx.toast_target_next = (k + 1) % TOAST_TARGETS
+	delete(app.cx.toast_targets[k])
+	app.cx.toast_targets[k] = strings.clone(sid)
+	ui.toast_titled(kind, title, body, proc(user: rawptr) {
+		app := the_app
+		sid := app.cx.toast_targets[int(uintptr(user))]
+		if sid != "" && sid != app.chat.id { open_root(app, sid) }
+	}, rawptr(uintptr(k)))
+}
+
+// A notification of the system: the session's title, what happened and what it is about. A click on it brings the window and
+// opens the session (main_input). False: the system shows none.
 @(private = "file")
-notify_system :: proc(app: ^App, sid, what, title: string) -> bool {
+notify_system :: proc(app: ^App, sid, what, detail: string) -> bool {
 	if app.win == nil || !platform.notify_supported() { return false }
-	id, ok := platform.notify(app.win, {title = fmt.tprintf("%s: %s", what, title), body = APP_NAME})
+	body := detail != "" ? fmt.tprintf("%s: %s", what, detail) : what
+	id, ok := platform.notify(app.win, {title = session_title_of(app, sid), body = body})
 	if !ok { return false }
 	app.cx.notified[id] = strings.clone(sid)
 	return true
