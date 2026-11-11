@@ -905,6 +905,15 @@ theme_cards :: proc(app: ^App, em: f32) {
 	}
 }
 
+// Where a theme card's dots go: their size, the first one's left, their top. `em`: the font's size as drawn (frame pixels,
+// the screen's scale in it already: scaled once more, at 200 % the dots rose onto the name).
+theme_card_dots :: proc(r: Rect, em: f32) -> (dot, x, y: f32) {
+	dot = math.round((r.max.y - r.min.y) * 0.16)
+	x = r.min.x + math.round(0.8 * em)
+	y = r.max.y - math.round(0.55 * em) - dot
+	return
+}
+
 @(private = "file")
 theme_card_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Theme_Card)(user)
@@ -917,9 +926,7 @@ theme_card_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	edge := d.chosen ? accent : draw.mix(draw.hex(t.steps[5]), draw.hex(t.texts[1]), 0.35 * b.hot_t)
 	draw.rect(dc, r, edge, radius, d.chosen ? 2 * px1() : px1())
 	// its colours, as dots along the bottom: the accent first, larger
-	dot := math.round((r.max.y - r.min.y) * 0.16)
-	x := r.min.x + math.round(0.8 * ui.font_size() * s)
-	y := r.max.y - math.round(0.55 * ui.font_size() * s) - dot
+	dot, x, y := theme_card_dots(r, ui.font_size())
 	prev := draw.set_circular_corners(dc, true)
 	defer draw.set_circular_corners(dc, prev)
 	for h, i in t.hues {

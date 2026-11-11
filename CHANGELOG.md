@@ -5,6 +5,10 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A theme card's colours stay under its name at any scale of the screen**: at 200 % they rose onto it (the font's size, already scaled, was scaled again).
+
 ## [0.45.0] - 2026-11-11
 
 ### Added

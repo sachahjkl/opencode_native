@@ -1,5 +1,6 @@
 package ocn
 
+import "core:math"
 import "core:strings"
 import "core:testing"
 import "gt:config"
@@ -51,4 +52,18 @@ the_palette_finds_words_not_scattered_letters :: proc(t: ^testing.T) {
 	hits = palette_hits(app, items, "kesh")
 	testing.expect_value(t, len(hits), 1)   // (keyboard shortcuts: pieces that begin its words)
 	testing.expect_value(t, len(palette_hits(app, items, "pvsc")), 0)   // (scattered in its words: nothing)
+}
+
+// A theme card's dots stay under its name at every scale of the screen: the name is a line under a margin, the dots along the
+// bottom (at 200 % they rose onto the name: the font's size, already scaled, was scaled again).
+@(test)
+a_theme_cards_dots_stay_under_its_name :: proc(t: ^testing.T) {
+	for em in ([]f32{14, 21, 28, 35}) {   // (100 %, 150 %, 200 %, 250 %)
+		r := Rect{{0, 0}, {300, math.round(em * THEME_CARD_H_EM)}}
+		dot, _, y := theme_card_dots(r, em)
+		name_bottom := em * 0.55 + em * 1.4   // (theme_cards: its margin, then its line)
+		accent_top := y + dot * 0.5 - dot * 1.5 * 0.5
+		testing.expectf(t, accent_top >= name_bottom, "em %v: the dots' top %v, the name's bottom %v", em, accent_top, name_bottom)
+		testing.expectf(t, y + dot <= r.max.y, "em %v: inside the card", em)
+	}
 }
