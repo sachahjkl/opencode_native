@@ -644,6 +644,24 @@ an_artifact_of_the_session_is_a_card :: proc(t: ^testing.T) {
 	})
 }
 
+// A right click on the sessions' search opens its menu: Paste puts a value in it (gui_toolkit's field_menu).
+@(test)
+the_search_has_a_menu :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		session.set_clipboard(s, "ses_2")
+		session.click(s, "search", .Right)
+		session.frames(s, 2)
+		testing.expect(t, ui.ctx_menu_any_open(), "its menu")
+		session.click_text(s, "Paste")
+		session.frames(s, 3)
+		testing.expect_value(t, ui.field_string(&app.search), "ses_2")
+		testing.expect(t, session.find(s, "ls_ses_2") != nil, "the search found it by its id")
+		ui.field_set(&app.search, "")
+	})
+}
+
 // A slider of the settings dragged and let go: the preference takes the value it was let go at, and keeps it.
 @(test)
 a_slider_keeps_the_value_it_is_let_go_at :: proc(t: ^testing.T) {
