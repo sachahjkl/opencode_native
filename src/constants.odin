@@ -89,6 +89,7 @@ HEX_PAL_SELECTED    :: 0x0c0c0cff
 ZOOM_FACTOR :: 1.1
 TERM_ZOOM_MIN :: 0.5   // a shell's own zoom, times the program's size
 TERM_ZOOM_MAX :: 3
+TERM_ZOOM_REST_MS :: 150   // a shell's zoom at rest after this long without a notch: its grid takes its new size (term_fit)
 
 ////////////////////////////////
 // Context menus

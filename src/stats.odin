@@ -595,7 +595,7 @@ context_line :: proc(app: ^App, id, name, size, key: string, indent: f32, shade:
 	ui.next({width = ui.fill(), height = ui.px(em * 1.55), axis = .X, cross = .Center, cursor = opens ? .Hand : .Arrow})
 	b := ui.build_box(opens ? {.Clickable} : {}, id)
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-		if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.035 * b.hot_t}, 5 * ui.scale()) }
+		if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.035 * b.hot_t}) }   // (square: a row)
 	}
 	sig := ui.signal(b)
 	if ui.parent(b) {

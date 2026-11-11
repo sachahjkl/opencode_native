@@ -796,10 +796,10 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	r.min.x += 6 * s
 	r.max.x -= 6 * s
 	if (^Row_Draw)(user).selected {
-		draw.rect(dc, r, hex(HEX_ACT_ROW_SELECTED), 6 * s * corners())
+		draw.rect(dc, r, hex(HEX_ACT_ROW_SELECTED))   // (square: a row)
 		draw.rect(dc, {{r.min.x + 2 * s, r.min.y + 5 * s}, {r.min.x + 4 * s, r.max.y - 5 * s}}, accent(), 1 * s)
 	} else if b.hot_t > FADE_VISIBLE {
-		draw.rect(dc, r, {1, 1, 1, 0.025 * b.hot_t}, 6 * s * corners())
+		draw.rect(dc, r, {1, 1, 1, 0.025 * b.hot_t})
 	}
 }
 

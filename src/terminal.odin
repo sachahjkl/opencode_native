@@ -87,6 +87,7 @@ Term :: struct {
 	sel_press:  [2]int,        // that cell, in the view at the press: a selection begins when the pointer leaves it
 	formatter:  Vt_Formatter,  // what a copy reads the text through
 	zoom:    f32,              // its own, times the program's size (Ctrl and the wheel, Ctrl+= - 0): kept by its id (term_zoom_set)
+	zoom_ms: f64,              // when it last changed: the grid keeps its columns and rows until the zoom rests (term_fit)
 	metrics: Term_Metrics,     // as last laid out
 }
 
@@ -1213,9 +1214,13 @@ term_label :: proc(t: ^Term) -> string {
 // The grid follows the panel at once. The shell is told the last size, one request at a time, once the grid has rested. A window being
 // dragged would otherwise send one for each step, on as many threads, in no order, and the last to arrive would be any of them; and a
 // shell paints its whole screen again for each size it takes, in pieces, which the grid would show: its text a few rows off, for a frame.
+//
+// A zoom that moves (the wheel turned notch after notch) keeps the grid as it is, drawn in the new cells, until it rests: each
+// new number of columns rewraps every row of the scrollback, thousands of them, at every notch.
 @(private = "file")
 term_fit :: proc(app: ^App, t: ^Term, r: draw.Rect) {
 	if t.vt == nil || t.metrics.cell_w <= 0 || r.max.x - r.min.x < 1 { return }
+	if t.fitted && t.zoom_ms != 0 && ui.now_ms() - t.zoom_ms < TERM_ZOOM_REST_MS { return }
 	cols := u16(clamp((r.max.x - r.min.x - 2 * TERM_PAD) / t.metrics.cell_w, 2, 1000))
 	rows := u16(clamp((r.max.y - r.min.y - 2 * TERM_PAD) / t.metrics.cell_h, 2, 1000))
 	term_resize(app, t, cols, rows, u32(t.metrics.cell_w), u32(t.metrics.cell_h))
@@ -1447,6 +1452,10 @@ term_zooms_load :: proc(app: ^App, file: string) {
 term_zoom_set :: proc(app: ^App, t: ^Term, zoom: f32) {
 	t.zoom = clamp(zoom, TERM_ZOOM_MIN, TERM_ZOOM_MAX)
 	if abs(t.zoom - 1) < 0.01 { t.zoom = 1 }   // (steps of 1.1 back and forth come back near 1, not to it)
+	// (a frame when it rests: the grid takes its new columns and rows then, term_fit)
+	t.zoom_ms = ui.now_ms()
+	app.cx.due[.Term_Size] = {}
+	deferred_ask(&app.cx.due[.Term_Size], TERM_ZOOM_REST_MS)
 	if term_find(app, t.id) != t { return }
 	z := &app.term_zooms
 	if t.zoom == 1 {

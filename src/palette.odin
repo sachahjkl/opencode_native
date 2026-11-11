@@ -266,7 +266,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 					r.min.x += 6 * s
 					r.max.x -= 6 * s
 					if (^Pal_Row_Draw)(user).selected {
-						draw_well(dc, r, 6 * s, hex(HEX_PAL_SELECTED))
+						draw_well(dc, r, 0, hex(HEX_PAL_SELECTED))   // (square: a row)
 						draw.rect(dc, {{r.min.x + 2 * s, r.min.y + 6 * s}, {r.min.x + 4 * s, r.max.y - 6 * s}}, accent(), 1 * s)
 					}
 				}
@@ -290,6 +290,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 				}
 			}
 		}
+		edge_line("###pal_foot_rule")   // (as the field's from the results: the keys apart from the list)
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###pal_foot") {
 			ui.spacer(ui.px(em * 1))

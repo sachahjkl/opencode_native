@@ -12,7 +12,7 @@ import lucide "gt:lucide"
 
 @(private = "file")
 home_row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.035 * b.hot_t}, 7 * ui.scale()) }
+	if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.035 * b.hot_t}) }   // (square: a row)
 }
 
 @(private = "file")

@@ -576,6 +576,23 @@ text :: proc(id: string, s: string, color: Color, f: Maybe(ui.Style_Mod) = nil, 
 	ui.build_box({.Draw_Text}, fmt.tprintf("%s###%s", label_safe(s), id))
 }
 
+// `text`, its parts that `query`'s words find lit (each word where it is in `s`, in any case: a word that is in another field of
+// what was searched, not here, lights nothing). An empty query: `text`.
+text_found :: proc(id: string, s: string, query: string, color: Color, f: Maybe(ui.Style_Mod) = nil, width: Maybe(ui.Size) = nil) {
+	ranges := make([dynamic]ui.Fuzzy_Range, context.temp_allocator)
+	for word in strings.fields(query, context.temp_allocator) {
+		if r, ok := ui.fuzzy_find(word, s); ok { append(&ranges, ..r) }
+	}
+	if len(ranges) == 0 { text(id, s, color, f, width); return }
+	m := f.? or_else ui.Style_Mod{}
+	m.width = width.? or_else ui.text_size(0)
+	if m.height == nil { m.height = ui.pct(1) }
+	m.fg = color
+	if m.text_pad == nil { m.text_pad = 0 }
+	ui.next(m)
+	ui.label_fuzzy(fmt.tprintf("%s###%s", label_safe(s), id), ranges[:])
+}
+
 // A key / value line in a mono face; each panel has its own sizes (in font sizes).
 Kv_Row :: struct { h, key_w, key_fs, val_fs, pad_l, pad_r: f32, val: u32 }
 

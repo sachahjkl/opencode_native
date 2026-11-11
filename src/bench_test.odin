@@ -1608,3 +1608,101 @@ a_diagram_is_zoomed_and_moved_in_the_viewer :: proc(t: ^testing.T) {
 		testing.expect(t, !app.view_open, "Escape closes it")
 	})
 }
+
+// A row is square: the ground of the session shown reaches the corners of its row (a rounded one left the sidebar's colour
+// there).
+@(test)
+the_session_shown_is_a_square_row :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		_, s := bench_app(t)
+		session.wait_idle(s)
+		row: ^ui.Box
+		for i := 0; ; i += 1 {
+			b := session.find(s, "item", i)
+			if b == nil { break }
+			if b.custom == item_draw && (^Item_Draw)(b.custom_user).selected { row = b; break }
+		}
+		if !testing.expect(t, row != nil, "the row of the session shown") { return }
+		img := session.capture(s)
+		corner := session.pixel(img, int(row.rect.min.x) + 1, int(row.rect.min.y) + 1)
+		inside := session.pixel(img, int(row.rect.min.x) + 1, int((row.rect.min.y + row.rect.max.y) * 0.5))
+		testing.expectf(t, session.near(corner, inside, 6), "its corner is its ground: %v, %v", corner, inside)
+	})
+}
+
+// A search of the sessions lights what it found in their titles: "frame" in "...frame pacing"; a word found in another
+// field (the folder) lights nothing there.
+@(test)
+the_sessions_search_lights_what_it_found :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		lit_titles :: proc(s: ^session.Session) -> (lit, all: int) {
+			for i := 0; ; i += 1 {
+				b := session.find(s, "t", i)
+				if b == nil { break }
+				if !strings.contains(ui.box_text(b), "frame pacing") { continue }
+				all += 1
+				if b.custom != nil { lit += 1 }
+			}
+			return
+		}
+		ui.field_set(&app.search, "FRAME project_3")
+		session.frames(s, 3)
+		lit, all := lit_titles(s)
+		testing.expectf(t, all > 0 && lit == all, "the titles found are lit: %d of %d", lit, all)
+		ui.field_set(&app.search, "")
+		session.frames(s, 3)
+		lit, all = lit_titles(s)
+		testing.expectf(t, all > 0 && lit == 0, "no search, nothing lit: %d of %d", lit, all)
+	})
+}
+
+// The wheel turned notch after notch keeps a shell's grid as it is (each new size would rewrap its whole scrollback); at rest,
+// the grid takes the columns of its new cells.
+@(test)
+a_shells_zoom_rewraps_once_at_rest :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		if app.conn == nil { app.conn = new(Conn) }
+		clear(&bench_sent)
+		terminal_toggle(app)
+		bench_answer(app, bench_take(t, .Pty_List), 200, `{"data":[{"id":"a","title":"bash","status":"running"}]}`)
+		for sh in app.cx.terms.list { term_link_set(app, sh, .Attached) }
+		bench_clear(app)
+		if !testing.expect(t, len(app.cx.terms.list) == 1, "a shell") { return }
+		sh := app.cx.terms.list[0]
+		session.wait_idle(s)
+		cols := sh.cols
+		at := session.center(session.get(s, "term_box"))
+		for _ in 0 ..< 3 {
+			session.event(s, {kind = .Scroll, pos = at, delta = {0, -1}, mods = {.Ctrl}})
+			session.frames(s, 1)
+			session.advance(s, TERM_ZOOM_REST_MS * 0.5)
+		}
+		testing.expectf(t, sh.zoom > 1.3, "zoomed in: %v", sh.zoom)
+		testing.expect_value(t, sh.cols, cols)
+		session.advance(s, TERM_ZOOM_REST_MS * 2)
+		session.wait_idle(s)
+		testing.expectf(t, sh.cols < cols, "at rest, fewer columns of bigger cells: %d, then %d", cols, sh.cols)
+	})
+}
+
+// The palette's keys at its foot are apart from the list, by a line as the field is: the field, its line, the list, a line,
+// the keys.
+@(test)
+the_palettes_keys_are_apart_from_its_list :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		palette_toggle(app)
+		session.frames(s, 3)
+		list, rule, foot := session.find(s, "pal_list"), session.find(s, "pal_foot_rule"), session.find(s, "pal_foot")
+		if testing.expect(t, list != nil && rule != nil && foot != nil, "the list, a line, the keys") {
+			testing.expect(t, rule.rect.min.y >= list.rect.max.y - 0.5 && rule.rect.max.y <= foot.rect.min.y + 0.5, "the line between them")
+		}
+		palette_toggle(app)
+	})
+}

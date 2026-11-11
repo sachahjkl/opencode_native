@@ -606,7 +606,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
 		hb := ui.build_box({.Clickable, .Focusable, .Hot_Within}, "###head")
 		hb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-			if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.035 * b.hot_t}, 7 * ui.scale()) }
+			if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.035 * b.hot_t}) }   // (square: a row)
 		}
 		hs := ui.signal(hb)
 		if hs.clicked { part_toggle(app, m.id, hb) }

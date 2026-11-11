@@ -275,21 +275,16 @@ base_name :: proc(path: string) -> string {
 ////////////////////////////////
 // Sidebar
 
-@(private = "file")
 Item_Draw :: struct { selected: bool }
 
-@(private = "file")
 item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Item_Draw)(user)
-	s := ui.scale()
-	r := b.rect
-	rad := 6 * s
-	rad *= corners()
-	// the one shown: a ground of the accent, nothing more (its mark and its lamp say the rest); under the pointer, a lighter one
+	// the one shown: a ground of the accent, nothing more (its mark and its lamp say the rest); under the pointer, a lighter
+	// one. Square: a row's ground runs from edge to edge, row under row.
 	if d.selected {
-		draw.rect(dc, r, chosen_ground(), rad)
+		draw.rect(dc, b.rect, chosen_ground())
 	} else if b.hot_t > FADE_VISIBLE {
-		draw.rect(dc, r, with_alpha(hex(HEX_TEXT), ITEM_HOVER_TINT * b.hot_t), rad)
+		draw.rect(dc, b.rect, with_alpha(hex(HEX_TEXT), ITEM_HOVER_TINT * b.hot_t))
 	}
 }
 
@@ -526,7 +521,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				if ui.column(id = "###words") {
 					ui.spacer(ui.fill())
 					title_style.height = ui.px(math.round(em * 1.3))
-					if renaming_at(app, s.id, .Side) { rename_in_place(app, em, title_style.font_size.?, math.round(em * 1.3)) } else { text("t", title, tcol, title_style, ui.fill()) }
+					if renaming_at(app, s.id, .Side) { rename_in_place(app, em, title_style.font_size.?, math.round(em * 1.3)) } else { text_found("t", title, ui.field_string(&app.search), tcol, title_style, ui.fill()) }
 					where_ := s.directory != "" ? base_name(s.directory) : "(no folder)"
 					if session_unseen(app, s) && s.outcome != "succeeded" && s.outcome != "" { where_ = fmt.tprintf("%s · %s", where_, s.outcome) }
 					text("p", ellipsize(where_, SIDE_PROJECT_CHARS), quiet, ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(math.round(em * 1.1))}, ui.fill())
@@ -535,7 +530,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			} else if renaming_at(app, s.id, .Side) {
 				rename_in_place(app, em, title_style.font_size.?, math.round(em * 1.6))
 			} else {
-				text("t", title, tcol, title_style, ui.fill())
+				text_found("t", title, ui.field_string(&app.search), tcol, title_style, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.4))
 			if len(kids) > 0 {

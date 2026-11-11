@@ -4,6 +4,18 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.46.2] - 2026-11-11
+
+### Added
+- **Search sessions lights what it found**: the words of the search are lit in the titles they are in.
+
+### Changed
+- **The palette's keys are apart from its list**: a line between the results and the keys at its foot, as between the field and the results.
+- **Rows are square**: the session shown and the one under the pointer in the sidebar, the activity's and the commands' rows, the home page's and the statistics' fill their whole row with square corners.
+
+### Fixed
+- **A shell's zoom no longer lags under the wheel**: its grid keeps its columns while the wheel turns and takes its new size once, when it stops (each notch rewrapped the whole scrollback).
+
 ## [0.46.1] - 2026-11-11
 
 ### Added
@@ -1330,6 +1342,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.46.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.2
 [0.46.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.1
 [0.46.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.0
 [0.45.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.45.0
