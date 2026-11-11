@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.46.4] - 2026-11-11
+
+### Added
+- **Each tool call says its time**: how long it took at the end of its row ("0.4s", "4m 12s"), and while it runs, the time so far, counting. Under the pointer, when it ran: its start and its end to the second, with the date on another day than today.
+
 ## [0.46.3] - 2026-11-11
 
 ### Added
@@ -1351,6 +1356,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.46.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.4
 [0.46.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.3
 [0.46.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.2
 [0.46.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.1
