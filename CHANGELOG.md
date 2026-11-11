@@ -5,6 +5,12 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.43.3] - 2026-11-11
+
+### Fixed
+
+- **Setup's check box stands on its line**: "Shortcut on the Desktop" had its mark at the top of its tile, above the middle of its text (gui_toolkit 0.178.0, with the toolkit's changes from 0.174.0).
+
 ## [0.43.2] - 2026-11-11
 
 ### Fixed
@@ -1260,7 +1266,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.43.2...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.43.3...HEAD
+[0.43.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.3
 [0.43.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.2
 [0.43.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.1
 [0.43.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.0
