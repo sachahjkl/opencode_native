@@ -7,7 +7,7 @@
 <p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.46.4-fab283" alt="version 0.46.4"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.46.5-fab283" alt="version 0.46.5"></a>
 <a href="https://ocn.froment.software/"><img src="https://img.shields.io/badge/site-ocn.froment.software-56b6c2" alt="site"></a>
 </p>
 

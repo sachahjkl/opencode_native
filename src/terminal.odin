@@ -93,7 +93,7 @@ Term :: struct {
 
 // What the left button (or another, for a program) holds on a grid. Its release comes wherever the pointer is: a program that was told
 // of the press is told of that too.
-Term_Press :: enum u8 { None, Select, Program }
+Term_Press :: enum u8 { None, Select, Program, Scrollbar }   // (Scrollbar: its thumb held, the view follows the pointer)
 
 // The user asked for a shell to have the keyboard. It takes it when it is there, unless the focus went elsewhere meanwhile: an answer
 // does not move the keyboard by itself. (`panel` 0: the next shell, the one on its way.)
@@ -117,6 +117,7 @@ Terminals :: struct {
 	pressed: ^Term,
 	press_button: platform.Mouse_Button,
 	press_pos:    [2]f32,
+	bar_grab:     f32,         // a thumb held: where in it the pointer took it
 	menu_for: ^Term,           // a right click asked for its menu (at menu_at): its next build opens it
 	menu_at:  [2]f32,
 }
@@ -886,7 +887,7 @@ term_press_end :: proc(s: ^Terminals) {
 	s.press, s.pressed = .None, nil
 	if t == nil { return }
 	switch press {
-	case .None:
+	case .None, .Scrollbar:
 	case .Select:
 		t.selecting = false
 		ghostty_tracked_grid_ref_free(t.sel_anchor)
@@ -1039,7 +1040,15 @@ term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 		case .Mouse_Press:
 			t := term_at(app, e.pos)
 			if t == nil || t.vt == nil { break }
-			if e.button == .Right && (!term_tracks_mouse(t) || .Shift in e.mods) {
+			if g, on_bar := term_bar_at(t, e.pos); on_bar && e.button == .Left && s.press == .None {
+				// (the scroll bar's band takes the press, whatever the program asks of the mouse: the thumb held where it was
+				// taken, or, in its track, held by its middle and brought there)
+				s.press, s.pressed, s.press_button, s.press_pos = .Scrollbar, t, e.button, e.pos
+				on_thumb := e.pos.y >= g.thumb_top && e.pos.y < g.thumb_top + g.thumb_h
+				s.bar_grab = on_thumb ? e.pos.y - g.thumb_top : g.thumb_h * 0.5
+				if !on_thumb { term_bar_drag(t, e.pos.y, s.bar_grab) }
+				take = true
+			} else if e.button == .Right && (!term_tracks_mouse(t) || .Shift in e.mods) {
 				s.menu_for, s.menu_at = t, e.pos
 				take = true
 			} else if term_tracks_mouse(t) && .Shift not_in e.mods {
@@ -1058,6 +1067,8 @@ term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 			}
 		case .Mouse_Move:
 			switch s.press {
+			case .Scrollbar:
+				term_bar_drag(s.pressed, e.pos.y, s.bar_grab)
 			case .Select:
 				term_select_to(s.pressed, term_cell_at(s.pressed, s, e.pos))
 			case .Program:
@@ -1412,14 +1423,43 @@ term_draw_cursor :: proc(t: ^Term, s: ^Terminals, dc: ^draw.Context, origin: [2]
 	}
 }
 
+// A grid's scroll bar: its thumb in the grid's right edge, where the scrollback's view is (none while all of it shows).
+Term_Bar :: struct { bar: Vt_Scrollbar, thumb_top, thumb_h: f32 }
+
+@(private = "file")
+term_bar :: proc(t: ^Term, r: draw.Rect) -> (g: Term_Bar, ok: bool) {
+	if t.vt == nil || ghostty_terminal_get(t.vt, VT_DATA_SCROLLBAR, &g.bar) != VT_OK || g.bar.total <= g.bar.len { return }
+	h := r.max.y - r.min.y
+	g.thumb_h = max(h * f32(g.bar.len) / f32(g.bar.total), 12 * px1())
+	g.thumb_top = r.min.y + (h - g.thumb_h) * f32(g.bar.offset) / f32(g.bar.total - g.bar.len)
+	return g, true
+}
+
+// The bar under `p`: its band along the grid's right edge, wider than what is drawn (a thin thumb is hard to take).
+@(private = "file")
+term_bar_at :: proc(t: ^Term, p: [2]f32) -> (g: Term_Bar, ok: bool) {
+	r := t.rect
+	if p.x < r.max.x - TERM_BAR_HIT_PX * px1() || p.x >= r.max.x || p.y < r.min.y || p.y >= r.max.y { return }
+	return term_bar(t, r)
+}
+
+// The thumb held `grab` below its top, its top at `y` less that: the view where it puts it.
+@(private = "file")
+term_bar_drag :: proc(t: ^Term, y, grab: f32) {
+	g, ok := term_bar(t, t.rect)
+	if !ok { return }
+	room := (t.rect.max.y - t.rect.min.y) - g.thumb_h
+	if room <= 0 { return }
+	f := clamp((y - grab - t.rect.min.y) / room, 0, 1)
+	want := i64(math.round(f * f32(g.bar.total - g.bar.len)))
+	ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = want - i64(g.bar.offset)})
+}
+
 @(private = "file")
 term_draw_scrollbar :: proc(t: ^Term, r: draw.Rect, dc: ^draw.Context) {
-	bar: Vt_Scrollbar
-	if ghostty_terminal_get(t.vt, VT_DATA_SCROLLBAR, &bar) != VT_OK || bar.total <= bar.len { return }
-	h := r.max.y - r.min.y
-	thumb := max(h * f32(bar.len) / f32(bar.total), 12 * px1())
-	top := r.min.y + (h - thumb) * f32(bar.offset) / f32(bar.total - bar.len)
-	draw.rect(dc, {{r.max.x - 4 * px1(), top}, {r.max.x - px1(), top + thumb}}, hex(HEX_FAINT))
+	g, ok := term_bar(t, r)
+	if !ok { return }
+	draw.rect(dc, {{r.max.x - 4 * px1(), g.thumb_top}, {r.max.x - px1(), g.thumb_top + g.thumb_h}}, hex(HEX_FAINT))
 }
 
 ////////////////////////////////
