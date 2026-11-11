@@ -5,6 +5,13 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.43.1] - 2026-11-11
+
+### Fixed
+
+- **A right click in a text field opens its menu**: the sessions' search, a dialog's field... had none; Undo, Cut, Copy, Paste, Delete and Select all now, each with its keys and its icon (gui_toolkit 0.171.0).
+- The toolkit's history was rewritten without a build folder committed in it by mistake (46 MB): the program points to the same toolkit, under its new hashes.
+
 ## [0.43.0] - 2026-11-11
 
 ### Added
@@ -1243,7 +1250,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.43.1...HEAD
+[0.43.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.1
 [0.43.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.0
 [0.42.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.42.0
 [0.41.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.41.1
