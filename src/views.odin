@@ -1342,6 +1342,18 @@ TOOL_IMAGE_OPEN_H_PX    :: 360
 TOOL_IMAGE_W_PX         :: 240
 TOOL_IMAGE_H_PX         :: 150
 
+// How long a tool call took ("0.4s", "12s", "4m 12s"), or has taken so far while it runs (`now`, epoch ms). Tenths under
+// TOOL_ELAPSED_TENTHS_S: there the difference between two runs is in them. "": its times are not known.
+tool_elapsed :: proc(p: ^Part, running: bool, now: f64) -> string {
+	if p.started_ms <= 0 { return "" }
+	end := running ? now : p.ended_ms
+	if end <= 0 { return "" }
+	ms := max(end - p.started_ms, 0)   // (the server's clock a little ahead of this one: 0, not less)
+	if ms < MS_PER_S / 10 { return "<0.1s" }   // ("0.0s" says nothing)
+	if ms < TOOL_ELAPSED_TENTHS_S * MS_PER_S { return fmt.tprintf("%.1fs", ms / MS_PER_S) }
+	return duration(p.started_ms, end)
+}
+
 // A tool call on the timeline: a flat row (its header lights under the pointer), its input and output in wells when
 // open. `above`, `below`: calls right before and after it, joined by the rail.
 tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, below := false) {
@@ -1381,6 +1393,11 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 				if p.added > 0 { text("ad", fmt.tprintf("+%d", p.added), hex(HEX_GREEN), st); ui.spacer(ui.px(em * 0.3)) }
 				if p.removed > 0 { text("rm", fmt.tprintf("−%d", p.removed), hex(HEX_RED), st); ui.spacer(ui.px(em * 0.3)) }
 				ui.spacer(ui.px(em * 0.2))
+			}
+			// how long it took, or has taken so far (it counts while it runs: animate above)
+			if took := tool_elapsed(p, running, now_epoch_ms()); took != "" {
+				text("tk", took, running ? hex(HEX_TEXT_SOFT) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				ui.spacer(ui.px(em * 0.5))
 			}
 			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY))
 			ui.spacer(ui.px(em * 0.6))

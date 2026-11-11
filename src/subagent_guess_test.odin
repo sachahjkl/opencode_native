@@ -28,3 +28,17 @@ a_running_card_finds_its_session :: proc(t: ^testing.T) {
 	delete(c.children)
 	delete(c.messages)
 }
+
+// A tool call's time: tenths while short, minutes later; while it runs, up to now; nothing when its times are not known.
+@(test)
+a_tool_calls_time :: proc(t: ^testing.T) {
+	p := Part{started_ms = 1_000, ended_ms = 1_420}
+	testing.expect_value(t, tool_elapsed(&p, false, 99_000), "0.4s")
+	p.ended_ms = 1_000 + 252_000
+	testing.expect_value(t, tool_elapsed(&p, false, 99_000), "4m 12s")
+	running := Part{started_ms = 1_000}
+	testing.expect_value(t, tool_elapsed(&running, true, 13_000), "12s")
+	testing.expect_value(t, tool_elapsed(&running, true, 900), "<0.1s")   // (the server's clock ahead)
+	unknown := Part{}
+	testing.expect_value(t, tool_elapsed(&unknown, true, 13_000), "")
+}
