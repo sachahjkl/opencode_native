@@ -913,6 +913,7 @@ the_settings_search_shows_what_matches :: proc(t: ^testing.T) {
 		settings_open(app)
 		session.frames(s, 3)
 		testing.expect(t, session.find(s, "set_appearance.glow") != nil, "a page shows its settings")
+		testing.expect(t, session.find_text(s, fmt.tprintf("opencode native %s", APP_VERSION)) != nil, "the version, under the pages")
 		ui.field_set(&app.settings_query, "permission")
 		session.frames(s, 3)
 		testing.expect(t, session.find(s, "set_notify.permission") != nil, "the match")

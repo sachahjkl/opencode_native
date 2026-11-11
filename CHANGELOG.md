@@ -4,6 +4,14 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.46.1] - 2026-11-11
+
+### Added
+- **The version in the settings**: "opencode native" and its version at the bottom of the settings' list of pages, above where the preferences are.
+
+### Fixed
+- **The themes' line scrolls with the mouse's wheel** (Settings > Appearance): it scrolled only with a wheel turned sideways or a touchpad (gui_toolkit's strip_grid).
+
 ## [0.46.0] - 2026-11-11
 
 ### Added
@@ -1322,6 +1330,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.46.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.1
 [0.46.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.0
 [0.45.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.45.0
 [0.44.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.44.0

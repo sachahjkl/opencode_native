@@ -664,6 +664,12 @@ settings_dialog :: proc(app: ^App, em: f32) {
 					}
 				}
 				if !narrow {
+					// (the program and its version, above where its preferences are: what a report of a problem says first)
+					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+					if ui.row(id = "###nav_version") {
+						ui.spacer(ui.px(em * 0.9))
+						text("v", fmt.tprintf("opencode native %s", APP_VERSION), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.4)})
+					}
 					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 					if ui.row(id = "###nav_foot") {
 						ui.spacer(ui.px(em * 0.9))
