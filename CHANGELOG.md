@@ -5,6 +5,21 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-11-11
+
+### Added
+
+- **The todos filter**: All / Active n / Done m at the right of the list's header, in words, the chosen one bold and underlined (gui_toolkit's `segmented(look = .Text)`). "Done" is what is over, done or cancelled; a filter that leaves nothing says so.
+
+### Changed
+
+- **A toast about another session names it, says what it asks, and opens it**: "A session is waiting for a permission" said neither which nor what. Now the session's title in bold, "Permission: bash git push" or "Question: …" under it; the end of a run too ("Done", "Failed"). A click on it opens the session. A notification of the system has the session's title for its title and what it asks for its text.
+- **A toast is as tall as its words**: a long one goes on to the next lines inside it instead of past its edge (gui_toolkit 0.181.0).
+
+### Fixed
+
+- **A thin border's rounded corners are as heavy as its sides** (the "Installed" badge of Setup, every framed box): blended in linear light, the pixels of a curve were paler than a browser draws them (gui_toolkit 0.181.0).
+
 ## [0.43.3] - 2026-11-11
 
 ### Fixed
@@ -1266,7 +1281,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.43.3...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.44.0
 [0.43.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.3
 [0.43.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.2
 [0.43.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.1
