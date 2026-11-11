@@ -50,3 +50,11 @@ a_tag_says_its_version_and_whether_it_is_a_beta :: proc(t: ^testing.T) {
 	v, beta = tag_version("v0.21.0-beta.2")
 	testing.expect(t, v == "0.21.0" && beta)
 }
+
+// A release that failed on the network is tried again; one that failed on its build is not.
+@(test)
+a_network_hiccup_is_tried_again :: proc(t: ^testing.T) {
+	testing.expect(t, network_hiccup("E: Failed to fetch http://x/y.deb  Temporary failure resolving 'azure.archive.ubuntu.com'"), "apt's mirror")
+	testing.expect(t, network_hiccup("curl: (22) The requested URL returned error: 503"), "a 5xx")
+	testing.expect(t, !network_hiccup("src/main.odin(12:3) Error: Undeclared name: x"), "a build that fails")
+}

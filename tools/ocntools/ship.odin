@@ -86,9 +86,18 @@ watch_release :: proc(id: string) -> bool {
 	for try in 1 ..= RELEASE_TRIES {
 		if watch(id) { return true }
 		why, _ := toolbox.capture({"gh", "run", "view", id, "--log-failed"})
-		if !strings.contains(why, "error: 50") && !strings.contains(why, "returned error: 5") { return false }
+		if !network_hiccup(why) { return false }
 		if try == RELEASE_TRIES || !run("gh", "run", "rerun", id, "--failed") { return false }
 		time.sleep(RUN_FOUND_WAIT)
+	}
+	return false
+}
+
+// Whether a failed run's log says the network failed, not the build: a server's 5xx, or a name the runner could not resolve (its
+// package mirror, apt's "Temporary failure resolving").
+network_hiccup :: proc(log: string) -> bool {
+	for words in ([]string{"error: 50", "returned error: 5", "Temporary failure resolving", "Could not resolve host"}) {
+		if strings.contains(log, words) { return true }
 	}
 	return false
 }
