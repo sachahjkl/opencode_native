@@ -659,18 +659,20 @@ rel_time :: proc(now, t: f64) -> string {
 	return fmt.tprintf("%dw", int(d / SECS_PER_WEEK))
 }
 
-clock_time :: proc(t: f64) -> string {
+// The local time of `t` (epoch ms): "14:32", "2:32 pm" (the clock24 preference); `seconds`: "14:32:05".
+clock_time :: proc(t: f64, seconds := false) -> string {
 	if t <= 0 { return "" }
 	tm := time.unix(0, i64(t * NS_PER_MS))
-	h, m, _ := time.clock_from_time(tm)
+	h, m, sec := time.clock_from_time(tm)
 	// (UTC + the machine's offset: Windows' local time)
 	off := local_offset_minutes()
 	total := (h * MINUTES_PER_HOUR + m + off + MINUTES_PER_DAY) % MINUTES_PER_DAY
+	ss := seconds ? fmt.tprintf(":%02d", sec) : ""
 	if !the_app.prefs.clock24 {
 		hh := (total / MINUTES_PER_HOUR) % HOURS_HALF_DAY
-		return fmt.tprintf("%d:%02d %s", hh == 0 ? HOURS_HALF_DAY : hh, total % MINUTES_PER_HOUR, total / MINUTES_PER_HOUR < HOURS_HALF_DAY ? "am" : "pm")
+		return fmt.tprintf("%d:%02d%s %s", hh == 0 ? HOURS_HALF_DAY : hh, total % MINUTES_PER_HOUR, ss, total / MINUTES_PER_HOUR < HOURS_HALF_DAY ? "am" : "pm")
 	}
-	return fmt.tprintf("%02d:%02d", total / MINUTES_PER_HOUR, total % MINUTES_PER_HOUR)
+	return fmt.tprintf("%02d:%02d%s", total / MINUTES_PER_HOUR, total % MINUTES_PER_HOUR, ss)
 }
 
 ////////////////////////////////
@@ -1344,6 +1346,22 @@ TOOL_IMAGE_H_PX         :: 150
 
 // How long a tool call took ("0.4s", "12s", "4m 12s"), or has taken so far while it runs (`now`, epoch ms). Tenths under
 // TOOL_ELAPSED_TENTHS_S: there the difference between two runs is in them. "": its times are not known.
+// When it ran, on the local clock to the second: "Started 14:32:05, ended 14:32:17", a day other than today's with its date
+// ("Started Nov 10, 14:32:05"); while it runs, "running".
+tool_when :: proc(p: ^Part, running: bool, now: f64) -> string {
+	at :: proc(ms, now: f64) -> string {
+		clock := clock_time(ms, seconds = true)
+		if local_day(ms) == local_day(now) { return clock }
+		t := time.unix(0, i64((ms + f64(local_offset_minutes()) * 60 * MS_PER_S) * NS_PER_MS))
+		_, month, d := time.date(t)
+		return fmt.tprintf("%s %d, %s", MONTHS_SHORT[int(month) - 1], d, clock)
+	}
+	start := fmt.tprintf("Started %s", at(p.started_ms, now))
+	if running { return fmt.tprintf("%s, running", start) }
+	if p.ended_ms <= 0 { return start }
+	return fmt.tprintf("%s, ended %s", start, at(p.ended_ms, now))
+}
+
 tool_elapsed :: proc(p: ^Part, running: bool, now: f64) -> string {
 	if p.started_ms <= 0 { return "" }
 	end := running ? now : p.ended_ms
@@ -1395,8 +1413,12 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 				ui.spacer(ui.px(em * 0.2))
 			}
 			// how long it took, or has taken so far (it counts while it runs: animate above)
+			// (and when, under the pointer: its start and its end. A click on it is the header's)
 			if took := tool_elapsed(p, running, now_epoch_ms()); took != "" {
-				text("tk", took, running ? hex(HEX_TEXT_SOFT) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				ui.next({width = ui.text_size(0), height = ui.pct(1), fg = running ? hex(HEX_TEXT_SOFT) : hex(HEX_FAINT), font = app.mono, font_size = math.round(em * FS_CAPTION), text_pad = 0})
+				tk := ui.signal(ui.build_box({.Draw_Text, .Clickable}, fmt.tprintf("%s###tk", took)))
+				if tk.clicked { part_toggle(app, p.tool_id != "" ? p.tool_id : pid, hb) }
+				if ui.hovered_for(tk, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(tool_when(p, running, now_epoch_ms())) } }
 				ui.spacer(ui.px(em * 0.5))
 			}
 			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY))

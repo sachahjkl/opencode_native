@@ -1,5 +1,7 @@
 package ocn
 
+import "base:runtime"
+import "core:strings"
 import "core:testing"
 
 // A running sub-agent's card finds its session before the server names it (it does when the call ends): the child with the call's
@@ -41,4 +43,21 @@ a_tool_calls_time :: proc(t: ^testing.T) {
 	testing.expect_value(t, tool_elapsed(&running, true, 900), "<0.1s")   // (the server's clock ahead)
 	unknown := Part{}
 	testing.expect_value(t, tool_elapsed(&unknown, true, 13_000), "")
+}
+
+// When a tool call ran, to the second; another day with its date.
+@(test)
+a_tool_call_says_when :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := new(App)
+	defer free(app)
+	the_app = app
+	app.prefs.clock24 = true
+	day := f64(MS_PER_S * SECS_PER_DAY)
+	start := day * 20_000 + 3_600_000 + 61_000 - f64(local_offset_minutes()) * 60 * MS_PER_S   // (01:01:01, local)
+	p := Part{started_ms = start, ended_ms = start + 12_000}
+	testing.expect_value(t, tool_when(&p, false, start + 60_000), "Started 01:01:01, ended 01:01:13")
+	testing.expect_value(t, tool_when(&p, true, start + 1_000), "Started 01:01:01, running")
+	when_ := tool_when(&p, false, start + 2 * day)
+	testing.expectf(t, strings.contains(when_, ", 01:01:01") && when_ != "Started 01:01:01, ended 01:01:13", "another day, its date: %s", when_)
 }

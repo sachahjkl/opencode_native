@@ -181,7 +181,6 @@ reset_text :: proc(resets_ms, now_ms: f64) -> string {
 MONTHS_SHORT := [12]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
 
 // The day on the local clock (days since 1970) of a time in ms since 1970.
-@(private = "file")
 local_day :: proc(ms: f64) -> int {
 	return int(math.floor((ms / (60 * MS_PER_S) + f64(local_offset_minutes())) / MINUTES_PER_DAY))
 }
