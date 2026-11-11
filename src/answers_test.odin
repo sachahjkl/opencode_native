@@ -6,12 +6,16 @@ package ocn
 // fails without its fix.
 
 import "base:runtime"
+import "core:encoding/base64"
 import "core:encoding/json"
 import "core:fmt"
+import "core:os"
 import "core:strings"
 import "core:testing"
 import "gt:draw"
 import "gt:config"
+import fsx "gt:fsx"
+import "gt:png"
 import "gt:ui"
 
 // The requests of this thread's test, oldest first.
@@ -35,7 +39,7 @@ bench_new :: proc() -> ^App {
 	app.prefs.notify = "off"
 	app.cfg_prefs = config.prefs_make()
 	config.register(&app.cfg_prefs, PREF_DEFS[:])
-	app.fonts_wanted = "\n\n"   // (the faces stay as they are: pref_set does not load any)
+	app.fonts_wanted = "\n\n\n"   // (the faces stay as they are: pref_set does not load any)
 	chat_home(app)
 	return app
 }
@@ -955,23 +959,96 @@ what_was_shown_stays_while_a_first_page_comes :: proc(t: ^testing.T) {
 	testing.expect_value(t, frame_held_ms(app, size), 0)   // (it came: shown at once)
 }
 
-// permission.allow_all: what waits when it is turned on, and what comes after, is allowed once, at once, and each only once.
+// A session's rules read as a preset: none, or one of the presets' own rule; any other set of rules is Custom (left alone).
 @(test)
-allow_all_answers_every_permission_once :: proc(t: ^testing.T) {
+a_sessions_rules_read_as_a_preset :: proc(t: ^testing.T) {
+	of :: proc(text: string) -> Approval {
+		v, err := json.parse_string(text, allocator = context.temp_allocator)
+		assert(err == nil, text)
+		return approval_of(v)
+	}
+	testing.expect_value(t, approval_of(nil), Approval.Configured)
+	testing.expect_value(t, of(`[]`), Approval.Configured)
+	for m in Approval {
+		if m == .Configured || m == .Custom { continue }
+		testing.expectf(t, of(APPROVAL_RULES[m]) == m, "%v reads as itself", m)
+	}
+	testing.expect_value(t, of(`[{"action":"shell","resource":"*","effect":"allow"}]`), Approval.Custom)
+	testing.expect_value(t, of(`[{"action":"*","resource":"*","effect":"allow"},{"action":"shell","resource":"rm *","effect":"ask"}]`), Approval.Custom)
+}
+
+// The shield sets the session's rules on the server, and shows what the server says of them, from this client or another;
+// a permission asked is never answered here in the server's place.
+@(test)
+the_approval_mode_is_the_servers :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	show(app, "s")
+	// the session shown, as the server describes it (no rules of its own)
+	self, _ := json.parse_string(`{"data":{"id":"s","title":"t"}}`, allocator = context.temp_allocator)
+	self_load(app, self, 0)
+	testing.expect_value(t, approval_shown(app), Approval.Configured)
+	approval_set(app, "s", .Allow_All)
+	r := bench_take(t, .Action)
+	testing.expect_value(t, r.method, "PATCH")
+	testing.expect_value(t, r.path, "/api/session/s")
+	testing.expect_value(t, r.body, `{"permissions":[{"action":"*","resource":"*","effect":"allow"}]}`)
+	testing.expect_value(t, approval_shown(app), Approval.Allow_All)
+	approval_set(app, "s", .Configured)
+	testing.expect_value(t, bench_take(t, .Action).body, `{"permissions":null}`)
+	// another client's choice
+	bench_event(app, `{"type":"session.permissions","data":{"sessionID":"s","permissions":[{"action":"edit","resource":"*","effect":"allow"}]}}`)
+	testing.expect_value(t, approval_shown(app), Approval.Allow_Edits)
+	bench_event(app, `{"type":"session.permissions","data":{"sessionID":"other","permissions":[]}}`)
+	testing.expect_value(t, approval_shown(app), Approval.Allow_Edits)   // (another session's)
+	// what the server asks waits for an answer from someone: none from here by itself
 	bench_event(app, `{"type":"permission.asked","data":{"request":` + PERM_P + `}}`)
-	testing.expect_value(t, bench_count(.Permission_Reply), 0)   // (off: it waits for you)
-	pref_set(app, "permission.allow_all", "true")
-	testing.expect_value(t, bench_count(.Permission_Reply), 1)
-	r := bench_take(t, .Permission_Reply)
-	testing.expect_value(t, r.body, `{"decision":"once"}`)
-	bench_event(app, `{"type":"permission.asked","data":{"request":{"id":"q","sessionID":"other","action":"bash"}}}`)
-	testing.expect_value(t, bench_count(.Permission_Reply), 1)
-	pref_set(app, "permission.allow_all", "true")   // (again: the ones on their way are not asked twice)
-	testing.expect_value(t, bench_count(.Permission_Reply), 1)
-	pref_set(app, "permission.allow_all", "false")
+	testing.expect_value(t, bench_count(.Permission_Reply), 0)
+}
+
+// A project's icon of the user's own: an image goes to the server as the icon's override, made the icon's size (a PNG data URL);
+// what is no image goes nowhere, a removal empties it; the projects read again say which have one.
+@(test)
+a_projects_icon_is_set_on_the_server :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	dir := fmt.tprintf("%s/ocn_project_icon", fsx.temp_dir(context.temp_allocator))
+	fsx.make_dirs(dir)
+	defer fsx.remove_tree(dir)
+	// a real image, larger than the icon's side: what goes is a PNG of PROJECT_ICON_SIDE at most, its proportions kept
+	big := make([]u8, 600 * 300 * 4, context.temp_allocator)
+	for i in 0 ..< 600 * 300 { big[i * 4], big[i * 4 + 3] = 200, 255 }
+	jpg_like := fmt.tprintf("%s/wide.png", dir)
+	_ = os.write_entire_file(jpg_like, png.encode(big, 600, 300, allocator = context.temp_allocator))
+	project_icon_set_file(app, "p1", jpg_like)
+	r := bench_take(t, .Project_Icon)
+	testing.expect_value(t, r.method, "PATCH")
+	testing.expect_value(t, r.path, "/api/project/p1")
+	prefix := `{"icon":{"override":"data:image/png;base64,`
+	if testing.expect(t, strings.has_prefix(r.body, prefix), r.body[:min(len(r.body), 80)]) {
+		b64 := r.body[len(prefix):len(r.body) - len(`"}}`)]
+		sent, _ := base64.decode(b64, allocator = context.temp_allocator)
+		w, h, ok := png_size(sent)
+		testing.expect(t, ok && w == PROJECT_ICON_SIDE && h == PROJECT_ICON_SIDE / 2, "made the icon's size, its proportions kept")
+	}
+	txt := fmt.tprintf("%s/notes.txt", dir)
+	_ = os.write_entire_file(txt, transmute([]u8)string("hello"))
+	project_icon_set_file(app, "p1", txt)
+	testing.expect_value(t, bench_count(.Project_Icon), 0)   // (no image: nothing sent)
+	project_icon_remove(app, "p1")
+	testing.expect_value(t, bench_take(t, .Project_Icon).body, `{"icon":{"override":""}}`)
+	v, _ := json.parse_string(`[{"id":"p1","icon":{"url":"data:image/png;base64,AA","override":"data:image/png;base64,BB"}},{"id":"p2","icon":{"url":"data:image/png;base64,AA","override":""}}]`, allocator = context.temp_allocator)
+	projects_load(app, v)
+	testing.expect(t, project_icon_overridden(app, "p1"), "p1: the user's own")
+	testing.expect(t, !project_icon_overridden(app, "p2"), "p2: the one found in the project")
+}
+
+// A PNG's width and height (its IHDR), for what a test sent.
+@(private = "file")
+png_size :: proc(data: []u8) -> (w, h: int, ok: bool) {
+	if len(data) < 24 || string(data[12:16]) != "IHDR" { return }
+	be :: proc(b: []u8) -> int { return int(b[0]) << 24 | int(b[1]) << 16 | int(b[2]) << 8 | int(b[3]) }
+	return be(data[16:20]), be(data[20:24]), true
 }
 
 // The tray is the session's: a folder's commands of another session stay out; those it pushed back say so.

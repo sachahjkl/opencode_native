@@ -11,7 +11,6 @@ import "core:slice"
 import "core:strings"
 import "core:time"
 import "gt:draw"
-import "gt:font"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -153,6 +152,13 @@ bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	if d.lit_top { draw.rect(dc, {r.min, {r.max.x, r.min.y + px1()}}, {1, 1, 1, 0.05}) }
 }
 
+// The title bar's face: the finish's (ui.caption_face), in its two colours.
+@(private = "file")
+caption_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+	d := (^Bar_Draw)(user)
+	ui.caption_face(dc, b.rect, d.top, d.bottom)
+}
+
 @(private = "file")
 Side_Handle_Draw :: struct { hot: bool, groove_y: f32 }
 
@@ -196,17 +202,18 @@ title_bar :: proc(app: ^App, em: f32) {
 		b := ui.parent_box()
 		d := ui.frame_new(Bar_Draw)
 		d^ = {hex(HEX_TITLE_BAR_TOP), hex(HEX_TITLE_BAR_BOTTOM), true}
-		b.custom = bar_draw
+		b.custom = caption_draw   // (the finish's title bar: in the edged one the accent fading out, its words light: ui.caption_ink)
 		b.custom_user = d
+		ink := ui.caption_ink
 		ui.spacer(ui.px(em * 0.4))
-		msig := glyph_button("###appmenu", lucide.MENU, math.round(h * 0.78))
+		msig := glyph_button("###appmenu", lucide.MENU, math.round(h * 0.78), ink(hex(HEX_WEAK)))
 		menu_key := ui.key_from_string(0, "app_menu")
 		if msig.clicked { ui.ctx_menu_open_rect(menu_key, msig.box.rect, msig.box.key) }
 		app_menu(app, menu_key, em)
 		nav_button :: proc(app: ^App, id, icon, tip: string, d: int, size: f32) {
 			can := nav_can(app, d)
 			ui.a11y({role = .Button, name = tip})
-			sig := glyph_button(id, icon, size, can ? Color{} : hex(HEX_FAINT))
+			sig := glyph_button(id, icon, size, ui.caption_ink(can ? hex(HEX_WEAK) : hex(HEX_FAINT)))
 			if sig.clicked { nav_step(app, d) }
 			if can && ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(tip) } }
 		}
@@ -222,29 +229,29 @@ title_bar :: proc(app: ^App, em: f32) {
 			logo_box(app, "###tlogo", math.round(h * 0.6))
 			ui.spacer(ui.px(em * 0.5))
 			mono := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_HEADING)}
-			text("w1", "open", hsig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), mono)
-			text("w2", "code", hsig.hovering ? hex(HEX_BRIGHT) : hex(HEX_TEXT), mono)
+			text("w1", "open", ink(hsig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK)), mono)
+			text("w2", "code", ink(hsig.hovering ? hex(HEX_BRIGHT) : hex(HEX_TEXT)), mono)
 			ui.spacer(ui.px(em * 0.45))
-			text("w3", "native", accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_HEADING)})
+			text("w3", "native", ink(accent()), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_HEADING)})
 		}
 		if hsig.clicked { command_run(app, command_find("nav.home")) }
 		if ui.hovered_for(hsig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Home  (Ctrl+H)") } }
 		side_line("###tg", b.last, em * 0.9)
 		ui.spacer(ui.px(em * 1.3))
 		if !app.servers[app.server].local {   // another computer's server: its name first
-			glyph(lucide.GLOBE, hex(HEX_CYAN), math.round(em * ICON_SMALL))
+			glyph(lucide.GLOBE, ink(hex(HEX_CYAN)), math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.3))
-			text("srv", server_name(app), hex(HEX_CYAN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-			if app.chat.id != "" { text("srvsep", "  /  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}) }
+			text("srv", server_name(app), ink(hex(HEX_CYAN)), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			if app.chat.id != "" { text("srvsep", "  /  ", ink(hex(HEX_FAINT)), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}) }
 		}
 		s := find_session(app, app.chat.id)
 		if s == nil && app.chat.have_self { s = &app.chat.self }
 		if s != nil {
 			// the project's logo before its folder
 			if logo_of(app, "###tproj", project_logo(app, s.project), math.round(h * 0.55)) { ui.spacer(ui.px(em * 0.45)) }
-			text("dir", base_name(s.directory), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
-			text("sep", "  /  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
-			text("ttl", ellipsize(s.title, TITLE_BAR_TITLE_CHARS), hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+			text("dir", base_name(s.directory), ink(hex(HEX_WEAK)), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
+			text("sep", "  /  ", ink(hex(HEX_FAINT)), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
+			text("ttl", ellipsize(s.title, TITLE_BAR_TITLE_CHARS), ink(hex(HEX_TEXT)), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 		} else {
 			ui.spacer(ui.fill())
 		}
@@ -386,6 +393,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 	}
 	ui.spacer(ui.px(em))
 	session_menu(app, em)
+	project_menu(app, em)
 }
 
 // A group's header: folder, name, count, "+".
@@ -396,6 +404,12 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 	hdr := ui.build_box({.Clickable, .Hot_Within}, fmt.tprintf("###g%d", gkey))
 	hs := ui.signal(hdr)
 	if hs.clicked { app.folded[gkey] = !folded }
+	// a right click: its project's menu (its icon)
+	if hs.right_clicked && len(gr.items) > 0 {
+		delete(app.menu_project)
+		app.menu_project = strings.clone(app.sessions[gr.items[0]].project)
+		ui.ctx_menu_open(ui.key_from_string(0, "project_menu"), ui.mouse_pos(), hdr.key)
+	}
 	if ui.parent(hdr) {
 		ui.spacer(ui.px(em * 0.8))
 		glyph(folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
@@ -433,7 +447,7 @@ session_badge :: proc(app: ^App, s: ^Session_Info, size, em: f32) {
 	}
 	c := hex(SESSION_BADGE_HEX[session_badge_index(s.id)])
 	ui.next({width = ui.px(size), height = ui.px(size), bg = with_alpha(c, SESSION_BADGE_ALPHA), fg = c, radius = math.round(size * 0.3 * corners()),
-		text_align = .Center, font = font.styled_face(&the_app.fonts, the_app.font, true, false), font_size = math.round(size * 0.55), text_pad = 0})
+		text_align = .Center, font = ui.styled_face(the_app.font, true, false), font_size = math.round(size * 0.55), text_pad = 0})
 	ui.build_box({.Draw_Background, .Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###badge", letter))
 }
 
@@ -562,6 +576,7 @@ session_menu :: proc(app: ^App, em: f32) {
 		if ui.menu_item("Rename…", "F2", icon = lucide.PENCIL).clicked { rename_open(app, app.menu_session) }
 		if ui.menu_item("Fork", icon = lucide.GIT_FORK).clicked { fork_session(app, app.menu_session, "") }
 		if ui.menu_item("Move to a folder…", icon = lucide.FOLDER_INPUT).clicked { session_move_pick(app, app.menu_session) }
+		if s := find_session(app, app.menu_session); s != nil { project_icon_items(app, s.project) }
 		archived := session_is_archived(app, app.menu_session)
 		if ui.menu_item(archived ? "Unarchive" : "Archive", icon = archived ? lucide.ARCHIVE_RESTORE : lucide.ARCHIVE).clicked { session_archive(app, app.menu_session, !archived) }
 		if ui.menu_item("What it changed", icon = lucide.FILE_DIFF).clicked { changes_open(app, app.menu_session) }
@@ -582,6 +597,11 @@ session_menu :: proc(app: ^App, em: f32) {
 			app.delete_open = true
 		}
 	}
+}
+
+// A project's menu (a right click on its header in the sidebar).
+project_menu :: proc(app: ^App, em: f32) {
+	if ui.ctx_menu(ui.key_from_string(0, "project_menu"), em * 17) { project_icon_items(app, app.menu_project) }
 }
 
 delete_dialog :: proc(app: ^App, em: f32) {
@@ -1651,6 +1671,8 @@ composer :: proc(app: ^App, em: f32) {
 			msig := bevel_button("###model", model, lucide.CPU, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "model")
 			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(&app.picker, "model", msig.box.rect) } }
 			variant_button(app, em)
+			ui.spacer(ui.px(em * 0.4))
+			if app.chat.id != "" { approval_button(app, em) }   // (a session's: a new one has none yet)
 			ui.spacer(ui.fill())
 			held := composer_held(app)
 			if app.column_w > em * COMPOSER_HINT_MIN_EM && fit < 1 {   // (room for it beside the agent and model buttons)

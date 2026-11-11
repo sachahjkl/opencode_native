@@ -17,7 +17,6 @@ import "core:sync"
 import "core:thread"
 import "gt:config"
 import "gt:draw"
-import "gt:font"
 import "gt:platform"
 import "gt:render"
 import svg "gt:svg"
@@ -424,7 +423,7 @@ view_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	draw.push_clip(dc, r)
 	lo, hi := c - d.size * 0.5, c + d.size * 0.5
 	if d.doc != nil {
-		bold := font.styled_face(dc.fonts, the_app.font, true, false)
+		bold := ui.styled_face_of(&the_app.state, the_app.font, true, false)
 		svg.draw_doc(dc, d.doc, lo, d.size.x / max(d.doc.view[2], 1), {regular = the_app.font, bold = bold})
 	} else {
 		draw.image(dc, d.tex, {{math.round(lo.x), math.round(lo.y)}, {math.round(hi.x), math.round(hi.y)}})

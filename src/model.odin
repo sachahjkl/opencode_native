@@ -19,6 +19,7 @@ Session_Info :: struct {
 	viewed:          f64,   // the last end of a run someone looked at (idle later than this: not seen, sidebar.odin)
 	cost:            f64,
 	tokens_in, tokens_out, reasoning, cache_read, cache_write: f64,
+	approval:        Approval,   // its own permission rules, as a preset (approval.odin)
 }
 
 // What a sub-agent does while it runs, from the event stream (its session is not the one shown).
@@ -283,11 +284,12 @@ session_from_json :: proc(it: json.Value, a: mem.Allocator) -> Session_Info {
 		created = jnum(it, "time", "created"), updated = jnum(it, "time", "updated"), idle = jnum(it, "time", "idle"), viewed = jnum(it, "time", "viewed"), archived = jnum(it, "time", "archived"),
 		cost = jnum(it, "cost"), tokens_in = jnum(it, "tokens", "input"), tokens_out = jnum(it, "tokens", "output"),
 		reasoning = jnum(it, "tokens", "reasoning"), cache_read = jnum(it, "tokens", "cache", "read"), cache_write = jnum(it, "tokens", "cache", "write"),
+		approval = approval_of(jget(it, "permissions")),
 	}
 }
 
 // A project's logo (Project.icon: an image as a data URL, the user's override first) and its colour.
-Project_Logo :: struct { ref: Image_Ref, has_ref: bool, color: string, worktree: string }
+Project_Logo :: struct { ref: Image_Ref, has_ref: bool, color: string, worktree: string, overridden: bool }   // (overridden: the user's own icon)
 
 projects_load :: proc(app: ^App, v: json.Value) {
 	a := arena_renew(&app.proj_arena)
@@ -297,8 +299,9 @@ projects_load :: proc(app: ^App, v: json.Value) {
 	for it in list {
 		icon := jget(it, "icon")
 		url := jstr(icon, "override")
-		if !strings.has_prefix(url, "data:") { url = jstr(icon, "url") }
-		p := Project_Logo{color = strings.clone(jstr(icon, "color"), a), worktree = strings.clone(jstr(it, "worktree"), a)}
+		overridden := strings.has_prefix(url, "data:")
+		if !overridden { url = jstr(icon, "url") }
+		p := Project_Logo{color = strings.clone(jstr(icon, "color"), a), worktree = strings.clone(jstr(it, "worktree"), a), overridden = overridden}
 		if strings.has_prefix(url, "data:image/") {
 			p.ref = image_ref(strings.clone(url, a), .Data_Url, "image", strings.clone(base_name(p.worktree), a))
 			p.has_ref = true
@@ -519,7 +522,6 @@ permissions_replace :: proc(app: ^App, session: string, list: json.Array, asked_
 		if !listed { permission_free(p); ordered_remove(&app.permissions, i) }
 	}
 	for it in list { permission_add(app, it) }
-	if app.prefs.allow_all { permissions_allow_pending(app) }
 }
 
 // A permission or a form answered, here or elsewhere: a list read before that still has it.
@@ -981,11 +983,12 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		req := jget(d, "request")
 		if req == nil { req = d }
 		permission_add(app, req)
-		if app.prefs.allow_all { permissions_allow_pending(app); break }   // (allowed at once: nothing to say)
 		asker := jstr(req, "sessionID")
 		detail := permission_words(req)
 		if asker != c.id { toast_session(app, .Warn, asker, "Permission", detail) }
 		notify_waiting(app, asker, "Permission", detail)
+	case "session.permissions":   // (a session's approval mode, set here or by another client)
+		approval_seen(app, sid, approval_of(jget(d, "permissions")))
 	case "permission.replied":
 		id := jstr(d, "id")
 		if id == "" { id = jstr(d, "requestID") }

@@ -701,6 +701,162 @@ the_todos_filter_by_state :: proc(t: ^testing.T) {
 	})
 }
 
+// Console is made for the edged finish: chosen, it brings it (whatever appearance.style says), and its square corners; the
+// statistics' sections are headed in their colours, the tokens' mix a bar.
+@(test)
+the_console_theme_is_edged :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		testing.expect_value(t, app.theme.finish, ui.Finish.Machined)
+		pref_set(app, "appearance.theme", "Console")
+		defer pref_set(app, "appearance.theme", "OpenCode")
+		testing.expect_value(t, app.theme.finish, ui.Finish.Edged)
+		testing.expect_value(t, corners(), 0)
+		pref_set(app, "appearance.style", "flat")   // (the theme's own finish wins over the style asked)
+		testing.expect_value(t, app.theme.finish, ui.Finish.Edged)
+		pref_set(app, "appearance.style", "machined")
+		stats_open(app)
+		session.wait_idle(s)
+		testing.expect(t, session.find(s, "st_Tokens") != nil, "the tokens' section")
+		session.save_png(s, "console.png")
+		panel_close(app, u32(Panel.Stats))
+	})
+}
+
+// The screens in Console, for the eye (build/session/bench_app/console_*.png): the settings, the palette, the activity with
+// its todos, a shell. What each shows is checked elsewhere; here, that each opens in the theme.
+@(test)
+the_console_screens :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		pref_set(app, "appearance.theme", "Console")
+		defer pref_set(app, "appearance.theme", "OpenCode")
+		settings_open(app)
+		session.wait_idle(s)
+		session.save_png(s, "console_settings.png")
+		app.settings_open = false
+		// the approvals' shield and its menu, in the composer's toolbar
+		session.wait_idle(s)
+		testing.expect(t, session.find(s, "approval") != nil, "the shield")
+		session.click(s, "approval")
+		session.wait_idle(s)
+		session.save_png(s, "console_approvals.png")
+		ui.ctx_menu_close()
+		session.frames(s, 2)
+		command_run(app, command_find("app.palette"))
+		session.frames(s, 3)
+		ui.field_set(&app.palette.field, "the")
+		session.wait_idle(s)
+		session.save_png(s, "console_palette.png")
+		app.palette.open = false
+		a := &app.activity
+		todos_clear(a)
+		for it in ([4][2]string{{"read the code", "completed"}, {"write the fix", "in_progress"}, {"test it", "pending"}, {"ship it", "pending"}}) {
+			append(&a.todos, Todo{strings.clone(it[0]), strings.clone(it[1])})
+		}
+		defer todos_clear(a)
+		activity_open(app)
+		session.wait_idle(s)
+		session.save_png(s, "console_activity.png")
+		activity_close(app)
+		if app.conn == nil { app.conn = new(Conn) }   // (the bench has no server: its requests are kept for the test to answer)
+		clear(&bench_sent)
+		terminal_toggle(app)
+		bench_answer(app, bench_take(t, .Pty_List), 200, `{"data":[{"id":"a","title":"bash","status":"running"}]}`)
+		for sh in app.cx.terms.list { term_link_set(app, sh, .Attached) }
+		bench_clear(app)
+		term_feed(app.cx.terms.list[0], "\x1b[1;34m~/code/project\x1b[0m \x1b[32m$\x1b[0m ls\r\n\x1b[1;34msrc\x1b[0m  \x1b[1;34mdocs\x1b[0m  README.md  \x1b[32mbuild.sh\x1b[0m\r\n\x1b[1;34m~/code/project\x1b[0m \x1b[32m$\x1b[0m odin build src\r\n\x1b[33mwarning\x1b[0m: an unused import\r\n\x1b[1;34m~/code/project\x1b[0m \x1b[32m$\x1b[0m ")
+		session.wait_idle(s)
+		testing.expect(t, len(app.cx.terms.list) == 1, "a shell")
+		session.save_png(s, "console_terminal.png")
+	})
+}
+
+// The shells have a face of their own, Fira Mono (no ligatures), not the code's; a family of the system when one is asked.
+@(test)
+the_shells_have_their_own_face :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, _ := bench_app(t)
+		testing.expect(t, app.term_font == app.own.term[0] && app.term_font != app.mono, "Fira Mono, not DM Mono")
+		testing.expect(t, app.term_font_bold == app.own.term[1] && app.term_font_bold != app.term_font, "its bold")
+		testing.expect_value(t, app.term_face, "")
+		pref_set(app, "appearance.terminal_font", "DejaVu Sans Mono")
+		defer pref_set(app, "appearance.terminal_font", "")
+		if app.term_face != "" {   // (where it is installed)
+			testing.expect_value(t, app.term_face, "DejaVu Sans Mono")
+			testing.expect(t, app.term_font != app.own.term[0], "the system's")
+		}
+		pref_set(app, "appearance.terminal_font", "")
+		testing.expect(t, app.term_font == app.own.term[0], "back to its own")
+	})
+}
+
+// A shell's letters stay on their columns whatever their colours: a line whose colour changes at every letter ends where
+// the same line in one colour ends (drawn at the face's own advance, a run fell behind the grid and the next one, at its cell,
+// left a gap).
+@(test)
+a_shell_keeps_its_columns_across_colours :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		if app.conn == nil { app.conn = new(Conn) }   // (the bench has no server: its requests are kept for the test to answer)
+		clear(&bench_sent)
+		terminal_toggle(app)
+		bench_answer(app, bench_take(t, .Pty_List), 200, `{"data":[{"id":"a","title":"bash","status":"running"}]}`)
+		for sh in app.cx.terms.list { term_link_set(app, sh, .Attached) }
+		bench_clear(app)
+		if !testing.expect(t, len(app.cx.terms.list) == 1, "a shell") { return }
+		sh := app.cx.terms.list[0]
+		// one line in one colour, the same with a change of colour at every letter (each letter its own run, at its cell)
+		mixed := strings.builder_make(context.temp_allocator)
+		for c, i in "abcdefghijklmnopqrst" { fmt.sbprintf(&mixed, "\x1b[%dm%c", i % 2 == 0 ? 33 : 0, c) }
+		term_feed(sh, fmt.tprintf("abcdefghijklmnopqrst\r\n%s\x1b[0m\r\n", strings.to_string(mixed)))   // (the cursor on the next line)
+		session.wait_idle(s)
+		img := session.capture(s)
+		ts := &app.cx.terms
+		// the right end of what is drawn on a row of cells
+		end_of :: proc(img: session.Image, r: Rect, top, h: f32) -> int {
+			bg := session.pixel(img, int(r.max.x) - 4, int(top + h * 0.5))
+			last := -1
+			for y in int(top) ..< int(top + h) {
+				for x in int(r.min.x) ..< int(r.max.x) - 8 {
+					if !session.near(session.pixel(img, x, y), bg, 40) { last = max(last, x) }
+				}
+			}
+			return last
+		}
+		plain := end_of(img, sh.rect, sh.rect.min.y, ts.cell_h)
+		coloured := end_of(img, sh.rect, sh.rect.min.y + ts.cell_h, ts.cell_h)
+		testing.expect(t, plain > int(sh.rect.min.x), "the first line is drawn")
+		testing.expectf(t, abs(plain - coloured) <= 1, "both lines end at one column: %d and %d", plain, coloured)
+	})
+}
+
+// The system's title bar, by choice: chosen, the window's title is the system's and its buttons are not drawn here; the
+// program's again when it is turned off.
+@(test)
+the_system_title_bar_by_choice :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		testing.expect(t, platform.is_integrated_title(app.win), "the program's title bar at first")
+		session.wait_idle(s)
+		testing.expect(t, session.find(s, "wb_close") != nil, "its buttons")
+		pref_set(app, "appearance.system_title", "true")
+		defer pref_set(app, "appearance.system_title", "false")
+		session.wait_idle(s)
+		testing.expect(t, !platform.is_integrated_title(app.win), "the system's")
+		testing.expect(t, session.find(s, "wb_close") == nil, "the system's buttons: none here")
+		testing.expect(t, session.find(s, "appmenu") != nil, "the program's bar stays, its menu in it")
+		pref_set(app, "appearance.system_title", "false")
+		session.wait_idle(s)
+		testing.expect(t, platform.is_integrated_title(app.win) && session.find(s, "wb_close") != nil, "the program's again")
+	})
+}
+
 // A slider of the settings dragged and let go: the preference takes the value it was let go at, and keeps it.
 @(test)
 a_slider_keeps_the_value_it_is_let_go_at :: proc(t: ^testing.T) {
@@ -741,8 +897,7 @@ the_settings_search_shows_what_matches :: proc(t: ^testing.T) {
 		testing.expect(t, session.find(s, "set_appearance.glow") != nil, "a page shows its settings")
 		ui.field_set(&app.settings_query, "permission")
 		session.frames(s, 3)
-		testing.expect(t, session.find(s, "set_permission.allow_all") != nil, "the match")
-		testing.expect(t, session.find(s, "set_notify.permission") != nil, "every match")
+		testing.expect(t, session.find(s, "set_notify.permission") != nil, "the match")
 		testing.expect(t, session.find(s, "set_appearance.glow") == nil, "nothing else")
 		testing.expect(t, session.find(s, "hint_setup") == nil, "nor what a page says besides its settings")
 		ui.field_set(&app.settings_query, "no setting is called this")

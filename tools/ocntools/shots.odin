@@ -307,10 +307,11 @@ PICTURES :: [?]Picture{
 	{name = "settings", extra = "--settings=0"},
 	{name = "subagent-session", ready = ready_subagent_session},
 	{name = "viewer", on_conversation = true, ready = ready_viewer},
-	// the themes: a light one, a flat one, a black one with its own colours
+	// the themes: a light one, a flat one, a black one with its own colours, the edged one
 	{name = "theme-gruvbox-light", theme = "Gruvbox", mode = "light"},
 	{name = "theme-nord-flat", theme = "Nord", style = "flat"},
 	{name = "theme-retro", theme = "Retro"},
+	{name = "theme-console", theme = "Console", ready = ready_statistics},   // (edged: its hairlines, its sections in their colours)
 	// the Linux build, in WSL, on Windows's server: its port and password from what the service wrote (never printed)
 	{name = "linux", linux = true},
 }

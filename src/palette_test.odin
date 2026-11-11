@@ -5,12 +5,12 @@ import "core:testing"
 import "gt:config"
 import "gt:ui"
 
-// A switch of the palette shows the setting's title, as the settings say it, not its name ("permission.allow_all").
+// A switch of the palette shows the setting's title, as the settings say it, not its name ("appearance.system_title").
 @(test)
 a_palette_switch_shows_its_title :: proc(t: ^testing.T) {
 	found := 0
 	for d in PREF_DEFS {
-		if d.name != "permission.allow_all" && d.name != "notify.permission" { continue }
+		if d.name != "appearance.system_title" && d.name != "notify.permission" { continue }
 		found += 1
 		title := setting_title(d)
 		testing.expectf(t, !strings.contains(title, ".") && !strings.contains(title, "_"), "a title, not the name: %q", title)

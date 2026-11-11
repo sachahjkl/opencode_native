@@ -31,11 +31,13 @@ App :: struct {
 	using gfx:    host.Shared,   // the renderer, the drawing, the fonts, the theme, the interface's face (font)
 	using window: host.Host,     // the main window: win, its interface (state), its pacing, what it still owes (settle)
 	prose, mono, mono_bold, icons, tk_icons: Face_Id,   // (Face_Id: in here, font is the interface's face, host.Shared's)
+	term_font, term_font_bold: Face_Id,   // the shells' (appearance.terminal_font)
 	own:           Own_Faces,
 	prose_scale:   f32,        // the answers' size, of the text around them
 	prose_face:    string,     // the system face of the answers ("": not one)
 	ui_face:       string,     // the system face of the interface ("": the embedded one)
 	mono_face:     string,     // the same for code
+	term_face:     string,     // the same for the shells
 	fonts_wanted:  string,     // the two font preferences fonts_apply last applied (prefs_refresh compares)
 	font_families: []string,   // the installed families (read when a font picker first opens)
 
@@ -94,6 +96,7 @@ App :: struct {
 	delete_id:        string,
 	delete_open:      bool,
 	menu_session:     string,         // the session the context menu is about (owned)
+	menu_project:     string,         // the project the project menu is about (owned)
 	logo:             Logo,
 	column_w:         f32,    // the conversation column, frame pixels (this frame)
 	chat_sb:          ^ui.Box, // the conversation scroll box, when built this frame
@@ -516,7 +519,7 @@ FONT_SYSTEM  :: "system"     // the preferences' value for the system's usual fa
 FONT_SAME    :: "interface"  // appearance.prose_font: the answers in the interface's face
 
 // The client's own faces (open licences, Latin: assets/fonts): the interface, the answers, code. Weights as the code asks them.
-Own_Faces :: struct { ui, prose, mono: [4]font.Font_Id, mono_bold: font.Font_Id }   // regular, bold, italic, bold italic
+Own_Faces :: struct { ui, prose, mono: [4]font.Font_Id, mono_bold: font.Font_Id, term: [2]font.Font_Id }   // regular, bold, italic, bold italic; the shells' regular and bold
 PROSE_OWN_SCALE  :: 1.08   // Newsreader's small letters are low: larger than the text around it, to read as large
 PROSE_LINE_RATIO :: 1.36   // of the answers' size: the height of their lines
 
@@ -542,6 +545,10 @@ load_fonts :: proc(app: ^App) -> bool {
 	regular := own(app, #load("../assets/fonts/dm-mono-400.ttf"), app.mono)
 	app.own.mono = {regular, regular, regular, regular}
 	app.own.mono_bold = own(app, #load("../assets/fonts/dm-mono-500.ttf"), regular)
+	// the shells': Fira Mono, no ligatures (what a shell prints is read sign by sign)
+	term := own(app, #load("../assets/fonts/fira-mono-400.ttf"), regular)
+	app.own.term = {term, own(app, #load("../assets/fonts/fira-mono-700.ttf"), term)}
+	app.term_font, app.term_font_bold = app.own.term[0], app.own.term[1]
 	return ok
 }
 
@@ -590,10 +597,10 @@ fonts_from_dir :: proc(app: ^App) {
 	bold := face(app, dir, "ui-bold", app.font)
 	italic := face(app, dir, "ui-italic", app.font)
 	bi := face(app, dir, "ui-bold-italic", bold)
-	ui.rich_set_faces(&app.state, app.font, bold, italic, bi)
+	ui.set_family(&app.state, app.font, bold, italic, bi)
 	app.prose = face(app, dir, "prose", app.font)
 	if app.prose != app.font {
-		ui.rich_set_faces(&app.state, app.prose, face(app, dir, "prose-bold", app.prose), face(app, dir, "prose-italic", app.prose), face(app, dir, "prose-bold-italic", app.prose))
+		ui.set_family(&app.state, app.prose, face(app, dir, "prose-bold", app.prose), face(app, dir, "prose-italic", app.prose), face(app, dir, "prose-bold-italic", app.prose))
 	}
 }
 
@@ -602,6 +609,7 @@ fonts_apply :: proc(app: ^App) {
 	want_ui := config.string_of(&app.cfg_prefs, "appearance.font")
 	want_mono := config.string_of(&app.cfg_prefs, "appearance.mono_font")
 	want_prose := config.string_of(&app.cfg_prefs, "appearance.prose_font")
+	want_term := config.string_of(&app.cfg_prefs, "appearance.terminal_font")
 	app.font, app.ui_face = face_resolve(app, want_ui, UI_FACES, app.own.ui[0])
 	mono_face: string
 	app.mono, mono_face = face_resolve(app, want_mono, MONO_FACES, app.own.mono[0])
@@ -611,20 +619,30 @@ fonts_apply :: proc(app: ^App) {
 		if b, ok := font.load_system(&app.fonts, mono_face, WEIGHT_MONO_BOLD); ok { app.mono_bold = b }
 	}
 	app.state.mono_font = app.mono
+	// the shells': their own face (Fira Mono), the system's usual monospace, or a family of the system
+	term_face: string
+	app.term_font, term_face = face_resolve(app, want_term, MONO_FACES, app.own.term[0])
+	app.term_font_bold = app.own.term[1]
+	if term_face != "" {
+		app.term_font_bold = app.term_font
+		if b, ok := font.load_system(&app.fonts, term_face, WEIGHT_MONO_BOLD); ok { app.term_font_bold = b }
+	}
+	delete(app.term_face)
+	app.term_face = strings.clone(term_face)
 	ui_set := app.ui_face != "" ? system_set(app, app.ui_face, app.font) : app.own.ui
-	ui.rich_set_faces(&app.state, app.font, ui_set[1], ui_set[2], ui_set[3])
+	ui.set_family(&app.state, app.font, ui_set[1], ui_set[2], ui_set[3])
 	// the answers: their own face, the interface's, or a family of the system
 	prose_face := ""
 	prose_own := want_prose == "" || want_prose == FONT_BUILTIN
 	app.prose = app.font
 	if prose_own {
 		app.prose = app.own.prose[0]
-		ui.rich_set_faces(&app.state, app.prose, app.own.prose[1], app.own.prose[2], app.own.prose[3])
+		ui.set_family(&app.state, app.prose, app.own.prose[1], app.own.prose[2], app.own.prose[3])
 	} else if want_prose != FONT_SAME {
 		if f, ok := font.load_system(&app.fonts, want_prose); ok {
 			app.prose, prose_face = f, want_prose
 			set := system_set(app, want_prose, f)
-			ui.rich_set_faces(&app.state, f, set[1], set[2], set[3])
+			ui.set_family(&app.state, f, set[1], set[2], set[3])
 		}
 	}
 	app.prose_scale = prose_own ? PROSE_OWN_SCALE : 1
@@ -634,7 +652,7 @@ fonts_apply :: proc(app: ^App) {
 	delete(app.mono_face)
 	app.mono_face = strings.clone(mono_face)
 	delete(app.fonts_wanted)
-	app.fonts_wanted = strings.concatenate({want_ui, "\n", want_mono, "\n", want_prose})
+	app.fonts_wanted = strings.concatenate({want_ui, "\n", want_mono, "\n", want_prose, "\n", want_term})
 }
 
 SCALE_MIN            :: 0.5   // what --scale= accepts
@@ -705,6 +723,7 @@ main :: proc() {
 	// Wren's browser.window.fixed_surface). Where DirectComposition is missing it is an ordinary swap chain.
 	app.win = platform.open_window(APP_NAME, {WINDOW_W, WINDOW_H}, transparent = true, integrated_title = true)
 	if app.win == nil { fmt.eprintln("opencode-native: no window"); os.exit(1) }
+	title_apply(app)   // (the preferences were read before the window was there)
 	if !fonts_init(app) { fmt.eprintln("opencode-native: no UI font"); os.exit(1) }
 	for a in os.args[1:] {   // --size=<w>x<h>: the window's size in pixels, whichever screen it opens on (ocntools shots)
 		if !strings.has_prefix(a, "--size=") { continue }

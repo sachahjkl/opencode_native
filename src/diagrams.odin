@@ -9,7 +9,6 @@ import "core:hash"
 import "core:math"
 import "core:strings"
 import "gt:draw"
-import "gt:font"
 import mermaid "gt:mermaid"
 import paint "gt:paint"
 import "gt:platform"
@@ -146,7 +145,7 @@ diagram_box :: proc(app: ^App, doc: ^svg.Document, code: string, em: f32) {
 		b.custom_user = dd
 		b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 			dd := (^Diagram_Draw)(user)
-			bold := font.styled_face(dc.fonts, the_app.font, true, false)
+			bold := ui.styled_face_of(&the_app.state, the_app.font, true, false)   // (the family's own bold, not a simulated one)
 			svg.draw_doc(dc, dd.doc, b.rect.min, dd.scale, {regular = the_app.font, bold = bold})
 		}
 		ui.spacer(ui.fill())
@@ -184,6 +183,6 @@ diagram_picture :: proc(app: ^App, code: string) -> (c: paint.Canvas, ok: bool) 
 	scale = min(scale, DIAGRAM_COPY_MOST / max(d.doc.view[2], d.doc.view[3], 1))
 	well := themed(HEX_CODE_WELL)
 	bg := svg.Color{f32(well >> 24) / 255, f32((well >> 16) & 0xFF) / 255, f32((well >> 8) & 0xFF) / 255, 1}
-	bold := font.styled_face(&app.fonts, app.font, true, false)
+	bold := ui.styled_face_of(&app.state, app.font, true, false)
 	return svg.raster(&d.doc, scale, &app.fonts, {regular = app.font, bold = bold}, bg), true
 }

@@ -115,6 +115,7 @@ Terminals :: struct {
 	menu_for: ^Term,           // a right click asked for its menu (at menu_at): its next build opens it
 	menu_at:  [2]f32,
 	font_size, cell_w, cell_h, ascent: f32,
+	spacing, spacing_bold: f32,   // what a letter of the face (its bold) is short of a cell: a run is drawn on the grid
 }
 
 @(private = "file")
@@ -1096,8 +1097,11 @@ terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
 	if sig.pressed || term_takes_focus(s, t, ui.focus_key()) { ui.set_focus(b.key) }
 	t.box, t.rect, t.shown = b.key, b.rect, true
 	s.font_size = math.round(em * FS_NOTE)
-	s.cell_w = math.ceil(font.text_width(&app.fonts, app.mono, s.font_size, "M"))
-	m := font.metrics(&app.fonts, app.mono, s.font_size)
+	advance := font.text_width(&app.fonts, app.term_font, s.font_size, "M")
+	s.cell_w = math.ceil(advance)
+	s.spacing = s.cell_w - advance
+	s.spacing_bold = s.cell_w - font.text_width(&app.fonts, app.term_font_bold, s.font_size, "M")
+	m := font.metrics(&app.fonts, app.term_font, s.font_size)
 	s.cell_h = math.ceil(m.line_height)
 	s.ascent = m.ascent
 	term_fit(app, t, b.rect)
@@ -1320,7 +1324,11 @@ term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 			if !ascii { flush(&runs, &row, run_x, run_color, run_bold) }
 		}
 		flush(&runs, &row, run_x, run_color, run_bold)
-		for r in runs { draw.text(dc, r.bold ? app.mono_bold : app.mono, s.font_size, {r.x, top + s.ascent}, r.color, r.text) }
+		// (each letter a cell wide: at the face's own advance a run fell behind the grid, and the next run, at its cell,
+		// left a gap after every change of colour)
+		for r in runs {
+			draw.text_ex(dc, r.bold ? app.term_font_bold : app.term_font, s.font_size, {r.x, top + s.ascent}, r.color, r.text, {letter_spacing = r.bold ? s.spacing_bold : s.spacing})
+		}
 	}
 	term_draw_cursor(t, s, dc, origin, &colors)
 	term_draw_scrollbar(t, b.rect, dc)

@@ -417,10 +417,13 @@ rank_row :: proc(id, name: string, n, max_n, failed: int, extra: string, em: f32
 }
 
 @(private = "file")
-heading :: proc(s: string, em: f32) {
+// A section of the panel: a stripe and its title in its colour (one of opencode's, as the theme shown has it), a weak note.
+heading :: proc(s: string, em: f32, color: u32 = HEX_BLUE, note := "") {
 	ui.spacer(ui.px(em * 0.9))
-	section_label(fmt.tprintf("st_%s", s), s, em)
-	ui.spacer(ui.px(em * 0.2))
+	if ui.style({font = the_app.mono, font_size = em}) {
+		ui.section_header(fmt.tprintf("###st_%s", s), s, note, "", hex(color))
+	}
+	ui.spacer(ui.px(em * 0.35))
 }
 
 // Its place in the dock. Nothing here is focusable: it does not take the keyboard from the composer.
@@ -658,7 +661,7 @@ context_list :: proc(app: ^App, used: f64, em: f32) {
 // The context the last step filled, against the model's window, and what fills it.
 @(private = "file")
 stats_context :: proc(app: ^App, used, window: f64, em: f32) {
-	heading("CONTEXT", em)
+	heading("Context", em, HEX_CYAN)
 	if used > 0 {
 		t := f32(window > 0 ? used / window : 0)
 		wrapped("###ctx", window > 0 ? fmt.tprintf("%.0f %%  ·  %s / %s", t * 100, kfmt(used), kfmt(window)) : fmt.tprintf("%s  (the model's window is not listed)", kfmt(used)), context_color(t), em)
@@ -678,18 +681,27 @@ stats_context :: proc(app: ^App, used, window: f64, em: f32) {
 @(private = "file")
 stats_tokens :: proc(t: Totals, em: f32) {
 	tin, tout, reas, cread, cwrite, cost := t.tin, t.tout, t.reas, t.cread, t.cwrite, t.cost
-	heading("TOKENS", em)
-	kv("###k1", "input", fmt.tprintf("%s  (uncached)", kfmt(tin)), em)
-	kv("###k2", "cache read", kfmt(cread), em)
-	kv("###k3", "cache write", kfmt(cwrite), em)
-	kv("###k4", "output", kfmt(tout), em)
-	kv("###k5", "reasoning", kfmt(reas), em)
+	heading("Tokens", em, HEX_YELLOW)
+	// their mix at a glance: what went in (cached or not), what came out
+	if total := tin + cread + cwrite + tout + reas; total > 0 {
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5))})
+		ui.stacked_bar("###kbar", {
+			{f32(tin), hex(HEX_BLUE), kfmt(tin)}, {f32(cread), hex(HEX_CYAN), kfmt(cread)}, {f32(cwrite), hex(HEX_PURPLE), kfmt(cwrite)},
+			{f32(tout), hex(HEX_GREEN), kfmt(tout)}, {f32(reas), hex(HEX_YELLOW), kfmt(reas)},
+		})
+		ui.spacer(ui.px(em * 0.4))
+	}
+	kv("###k1", "input", fmt.tprintf("%s  (uncached)", kfmt(tin)), em, hex(HEX_BLUE))   // (the colour of its part of the bar)
+	kv("###k2", "cache read", kfmt(cread), em, hex(HEX_CYAN))
+	kv("###k3", "cache write", kfmt(cwrite), em, hex(HEX_PURPLE))
+	kv("###k4", "output", kfmt(tout), em, hex(HEX_GREEN))
+	kv("###k5", "reasoning", kfmt(reas), em, hex(HEX_YELLOW))
 	kv("###k6", "cost", fmt.tprintf("$%.4f", cost), em)
 }
 
 @(private = "file")
 stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local, now: f64, em: f32) {
-	heading("TIME", em)
+	heading("Time", em, HEX_PURPLE)
 	if s != nil {
 		kv("###d1", "created", fmt.tprintf("%s  (%s ago)", clock_time(s.created), duration(s.created, now)), em)
 		if s.updated > 0 { kv("###d2", "last change", fmt.tprintf("%s  (%s ago)", clock_time(s.updated), duration(s.updated, now)), em) }
@@ -704,7 +716,7 @@ stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local, now: f64, em: f32) {
 // What the loaded messages called, and which models answered.
 @(private = "file")
 stats_rankings :: proc(app: ^App, l: ^Local, em: f32) {
-	heading(fmt.tprintf("TOOLS  (%d calls, %d failed)", l.calls, l.failed), em)
+	heading("Tools", em, HEX_GREEN, fmt.tprintf("%d calls, %d failed", l.calls, l.failed))
 	max_t := len(l.tools) > 0 ? l.tools[0].calls : 0
 	for t, i in l.tools {
 		if i == TOOLS_SHOWN { info_line(app, "###tm", fmt.tprintf("… and %d more tools", len(l.tools) - TOOLS_SHOWN), em, hex(HEX_FAINT)); break }
@@ -713,7 +725,7 @@ stats_rankings :: proc(app: ^App, l: ^Local, em: f32) {
 	if len(l.tools) == 0 { info_line(app, "###tn", "No tool call in the loaded messages.", em, hex(HEX_FAINT)) }
 
 	if len(l.models) > 0 {
-		heading("MODELS", em)
+		heading("Models", em, HEX_PEACH)
 		max_m := l.models[0].steps
 		for m, i in l.models {
 			rank_row(fmt.tprintf("###ml%d", i), m.name, m.steps, max_m, 0, fmt.tprintf("%s out", kfmt(m.tokens_out)), em, hex(HEX_WEAK))
@@ -724,7 +736,7 @@ stats_rankings :: proc(app: ^App, l: ^Local, em: f32) {
 @(private = "file")
 stats_children :: proc(app: ^App, c: ^Chat, em: f32) {
 	if len(c.children) > 0 {
-		heading("SUB-AGENTS", em)
+		heading("Sub-agents", em, HEX_ROSE)
 		running, scost, sin, sout := 0, 0.0, 0.0, 0.0
 		for k in c.children {
 			if app.busy[k.id] or_else false { running += 1 }
@@ -741,7 +753,7 @@ stats_children :: proc(app: ^App, c: ^Chat, em: f32) {
 stats_project :: proc(app: ^App, now: f64, em: f32) {
 	ps := &app.proj_stats
 	if ps.project != "" {
-		heading("THE PROJECT", em)
+		heading("The project", em, HEX_BLUE)
 		if read_shown(app, "###pl", &app.cx.stats_read, em, stats_ask) {
 			kv("###p1", "sessions", fmt.tprintf("%d  (+ %d sub-agents)", ps.sessions, ps.subagents), em)
 			kv("###p2", "prompts · steps", fmt.tprintf("%d · %d", ps.prompts, ps.steps), em)

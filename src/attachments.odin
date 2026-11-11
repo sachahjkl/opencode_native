@@ -33,7 +33,7 @@ attach_bytes :: proc(app: ^App, data: []u8, mime, name: string) {
 	append(&app.cx.attachments, Attachment{name = stored_name, uri = uri, size = len(data), ref = ref})
 }
 
-@(private = "file")
+// An image's type by its extension, among those this program shows ("": none of them).
 image_mime :: proc(path: string) -> string {
 	switch strings.to_lower(filepath.ext(path), context.temp_allocator) {
 	case ".png":           return "image/png"

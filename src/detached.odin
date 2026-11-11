@@ -53,7 +53,7 @@ detached_style :: proc(app: ^App, s: ^ui.State) {
 	ui.set_scrollbar_autohide(s, app.prefs.autohide_scrollbars)
 	ui.set_toast_position(s, m.toast_pos)
 	s.icon_font, s.mono_font = m.icon_font, m.mono_font
-	for regular, set in m.rich_faces { ui.rich_set_faces(s, regular, set[1], set[2], set[3]) }
+	for regular, set in m.families { ui.set_family(s, regular, set[1], set[2], set[3]) }
 }
 
 // What a window's build leaves to the program's loop, which only looks at the main state: input settles as it does there, and what the window

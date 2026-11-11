@@ -60,10 +60,12 @@ TEXT_SMOOTHINGS :: []string{"auto", "rgb", "bgr", "grey"}
 PREF_DEFS := [?]config.Def{
 	{name = "appearance.theme", description = "The colours of the whole interface: opencode's black with an accent of its own, or an editor's palette. Themes of your own go in themes.txt beside the preferences.", kind = .String, default = {s = "OpenCode"}},
 	{name = "appearance.mode", description = "Each theme in its dark or its light version: as the system's apps are, or always one.", kind = .String, default = {s = "system"}, choices = {"system", "dark", "light"}},
-	{name = "appearance.style", description = "Machined: raised buttons, sunken wells, carved lines, glowing lamps. Flat: plain surfaces and thin lines.", kind = .String, default = {s = "machined"}, choices = {"machined", "flat"}},
+	{name = "appearance.style", description = "Machined: raised buttons, sunken wells, carved lines, glowing lamps. Edged: the same reliefs drawn crisp, a lit line along the top of each, square corners. Flat: plain surfaces and thin lines. A theme made for one style (Console: edged) brings it.", kind = .String, default = {s = "machined"}, choices = {"machined", "edged", "flat"}},
+	{name = "appearance.system_title", description = "The system's title bar above the window, with its own buttons, instead of the one drawn here. The bar with the menu, the way back and the session's name stays under it. Shown where the system can draw it (Windows, X11, KDE; not GNOME).", kind = .Bool, default = {b = false}},
 	{name = "appearance.font", description = "The face of the interface's text: the client's own (automatic), the system's usual one, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.prose_font", description = "The face of the answers: the client's own (automatic), the interface's, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.mono_font", description = "The face of code, paths and figures: the client's own (automatic), the system's usual one, or any installed family.", kind = .String, default = {s = ""}},
+	{name = "appearance.terminal_font", description = "The face of the shells: the client's own (automatic: Fira Mono, no ligatures), the system's usual monospace, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.font_size", description = "Size of the interface's text, in points at 100 % zoom.", kind = .Int, default = {i = 14}, bounded = true, min = FONT_SIZE_MIN, max = FONT_SIZE_MAX},
 	{name = "appearance.text_smoothing", description = "Text smoothed per colour stripe of the screen's pixels: sharper at few pixels per letter, with faint colours on its edges. Automatic: as the system says (ClearType on Windows, fontconfig on Linux).", kind = .String, default = {s = "auto"}, choices = TEXT_SMOOTHINGS},
 	{name = "appearance.zoom", description = "Zoom of the interface: bars, sidebar, menus (Ctrl + Shift + = / - / 0, Ctrl + wheel outside the conversation).", kind = .Float, default = {f = 1}, bounded = true, min = ZOOM_MIN, max = ZOOM_MAX},
@@ -90,7 +92,6 @@ PREF_DEFS := [?]config.Def{
 	{name = "sidebar.mode", description = "What the sidebar shows: what needs you first across projects (what waits for you, what finished and you have not seen, what runs, the rest), or sessions by project.", kind = .String, default = {s = "inbox"}, choices = {"inbox", "projects"}},
 	{name = "notify.finished", description = "When a session that is not in front of you ends its run: nothing, a toast, a toast and the taskbar button flashing, or a notification of the system (a click on it opens the session).", kind = .String, default = {s = "system"}, choices = {"off", "toast", "flash", "system"}},
 	{name = "notify.permission", description = "When a session asks for a permission or a question and the window is not in front: the taskbar button flashes, and with notifications of the system, one says it.", kind = .Bool, default = {b = true}},
-	{name = "permission.allow_all", description = "Allow every permission a session asks, once, at once: no card, no toast, no flash. What the server's rules deny stays denied.", kind = .Bool, default = {b = false}},
 	{name = "appearance.throbber", description = "What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing.", kind = .String, default = {s = "board"}, choices = {"board", "orbit", "scanner", "none"}},
 	{name = "session.agent", description = "The agent a new session starts with: the one chosen last.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "session.model", description = "The model a new session starts with: the one chosen last.", kind = .String, default = {s = ""}, hidden = true},
@@ -113,7 +114,7 @@ PREF_DEFS := [?]config.Def{
 Prefs :: struct {
 	accent:       Color,   // the theme's (theme.odin)
 	accent_hex:   u32,
-	flat:         bool,    // appearance.style
+	finish:       ui.Finish,   // appearance.style
 	mode:         string,  // appearance.mode: system, dark, light (the preference's own text: not owned)
 	font_size:    f32,
 	zoom:         f32,
@@ -138,7 +139,6 @@ Prefs :: struct {
 	diff_layout:  Diff_Layout,
 	notify:       string,
 	notify_perm:  bool,
-	allow_all:    bool,   // permission.allow_all: every permission asked is allowed once, at once
 	content_zoom: f32,
 	viewer_scale: f32,   // conversation.image_viewer_size (images.odin: viewer_frame)
 	start:        string,
@@ -150,6 +150,7 @@ Prefs :: struct {
 	experimental: bool,
 	update_channel: string,
 	update_auto:  bool,
+	system_title: bool,    // appearance.system_title (title_apply)
 }
 
 CONTENT_ZOOM_MIN :: 0.5
@@ -171,7 +172,7 @@ prefs_init :: proc(app: ^App, file: string) {
 prefs_refresh :: proc(app: ^App) {
 	p := &app.cfg_prefs
 	s := &app.prefs
-	s.flat = config.string_of(p, "appearance.style") == "flat"
+	s.finish = ui.finish_of(config.string_of(p, "appearance.style"))
 	s.mode = config.string_of(p, "appearance.mode")
 	theme_load(app)
 	theme_set(app, theme_index(app, config.string_of(p, "appearance.theme")), theme_wants_light(s.mode))
@@ -201,8 +202,6 @@ prefs_refresh :: proc(app: ^App) {
 	s.diff_layout = diff_layout_of(config.string_of(p, "conversation.diff_layout"))
 	s.notify = config.string_of(p, "notify.finished")
 	s.notify_perm = config.bool_of(p, "notify.permission")
-	s.allow_all = config.bool_of(p, "permission.allow_all")
-	if s.allow_all { permissions_allow_pending(app) }   // (turned on while some wait: they go too)
 	s.content_zoom = f32(config.float_of(p, "appearance.content_zoom"))
 	s.viewer_scale = f32(config.float_of(p, "conversation.image_viewer_size"))
 	s.start = config.string_of(p, "general.start")
@@ -215,10 +214,12 @@ prefs_refresh :: proc(app: ^App) {
 	s.experimental = config.bool_of(p, "advanced.experimental")
 	s.update_channel = config.string_of(p, "update.channel")
 	s.update_auto = config.bool_of(p, "update.auto")
+	s.system_title = config.bool_of(p, "appearance.system_title")
 	update_channel_follow(app)
+	title_apply(app)
 
 	// the faces, when either preference changed (a family is opened once: the font state keeps it)
-	if wanted := fmt.tprintf("%s\n%s\n%s", config.string_of(p, "appearance.font"), config.string_of(p, "appearance.mono_font"), config.string_of(p, "appearance.prose_font")); wanted != app.fonts_wanted {
+	if wanted := fmt.tprintf("%s\n%s\n%s\n%s", config.string_of(p, "appearance.font"), config.string_of(p, "appearance.mono_font"), config.string_of(p, "appearance.prose_font"), config.string_of(p, "appearance.terminal_font")); wanted != app.fonts_wanted {
 		fonts_apply(app)
 	}
 
@@ -227,6 +228,13 @@ prefs_refresh :: proc(app: ^App) {
 	ui.set_rounding(&app.state, s.rounding)
 	theme_refresh(&app.theme)
 	terms_recolour(app)
+}
+
+// The window's title bar: the program's, or the system's when asked and the system can draw it (not on GNOME: there the
+// program's always). Its buttons follow (ui.window_buttons draws none under the system's).
+title_apply :: proc(app: ^App) {
+	if app.win == nil { return }
+	platform.set_integrated_title(app.win, !(app.prefs.system_title && platform.system_title_available(app.win)))
 }
 
 prefs_save :: proc(app: ^App) {
@@ -932,10 +940,14 @@ page_appearance :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.6))
 	}
 	if setting(app, "appearance.mode", em) { pref_choice(app, "appearance.mode", {"System", "Dark", "Light"}, em, em * 16) }
-	if setting(app, "appearance.style", em) { pref_choice(app, "appearance.style", {"Machined", "Flat"}, em, em * 14) }
+	if setting(app, "appearance.style", em) { pref_choice(app, "appearance.style", {"Machined", "Edged", "Flat"}, em, em * 18) }
+	if app.win != nil && platform.system_title_available(app.win) {   // (GNOME: no title bar of the system to choose)
+		if setting(app, "appearance.system_title", em) { pref_switch(app, "appearance.system_title", em) }
+	}
 	if setting(app, "appearance.font", em) { font_button(app, "appearance.font", em) }
 	if setting(app, "appearance.prose_font", em) { font_button(app, "appearance.prose_font", em) }
 	if setting(app, "appearance.mono_font", em) { font_button(app, "appearance.mono_font", em) }
+	if setting(app, "appearance.terminal_font", em) { font_button(app, "appearance.terminal_font", em) }
 	if setting(app, "appearance.font_size", em) { pref_slider(app, "appearance.font_size", FONT_SIZE_MIN, FONT_SIZE_MAX, 1, "%.0f pt", em) }
 	if setting(app, "appearance.text_smoothing", em) { pref_choice(app, "appearance.text_smoothing", {"Auto", "RGB", "BGR", "Grey"}, em, em * 18) }
 	if setting(app, "appearance.zoom", em) { pref_slider(app, "appearance.zoom", ZOOM_MIN, ZOOM_MAX, 0.05, "%.2f×", em) }
@@ -952,11 +964,12 @@ page_appearance :: proc(app: ^App, em: f32) {
 // The button of a font preference (its face) and its picker: Automatic (the client's own), the other choice, then the
 // installed families, matched as one types.
 font_button :: proc(app: ^App, name: string, em: f32) {
-	mono := name == "appearance.mono_font"
+	term := name == "appearance.terminal_font"
+	mono := name == "appearance.mono_font" || term
 	prose := name == "appearance.prose_font"
 	want := config.string_of(&app.cfg_prefs, name)
-	face := mono ? app.mono_face : prose ? app.prose_face : app.ui_face
-	own := mono ? "DM Mono" : prose ? "Newsreader" : "Hanken Grotesk"
+	face := term ? app.term_face : mono ? app.mono_face : prose ? app.prose_face : app.ui_face
+	own := term ? "Fira Mono" : mono ? "DM Mono" : prose ? "Newsreader" : "Hanken Grotesk"
 	second := prose ? FONT_SAME : FONT_SYSTEM
 	// the button names the face in use; a faint word before it says how it was chosen
 	mode, shown: string
@@ -1008,7 +1021,6 @@ page_behaviour :: proc(app: ^App, em: f32) {
 	if setting(app, "sidebar.subagents", em) { pref_choice(app, "sidebar.subagents", {"Nested", "Flat", "Hidden"}, em) }
 	if setting(app, "notify.finished", em) { pref_choice(app, "notify.finished", {"Off", "Toast", "Flash", "System"}, em) }
 	if setting(app, "notify.permission", em) { pref_switch(app, "notify.permission", em) }
-	if setting(app, "permission.allow_all", em) { pref_switch(app, "permission.allow_all", em) }
 	if setting(app, "general.start", em) { pref_choice(app, "general.start", {"Home", "Latest session"}, em, em * 14) }
 	if !settings_searching(app) {
 		ui.spacer(ui.px(em * 0.6))

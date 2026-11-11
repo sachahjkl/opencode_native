@@ -218,27 +218,23 @@ palette_dialog :: proc(app: ^App, em: f32) {
 	// (resizable, its size kept as the dialogs' are; its top held where a palette is)
 	if ui.modal_sized("palette", DIALOG_PREFERRED_EM[.Palette] * em, &app.cx.dialogs[.Palette], &p.open, DIALOG_MIN_EM[.Palette] * em, top = PALETTE_TOP) {
 		dialog_backdrop()
-		ui.spacer(ui.px(em * 0.6))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+		// the search: flush with the palette's top and sides, no frame of its own; a line under it parts it from the list
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###pal_top") {
-			ui.spacer(ui.px(em * 0.6))
-			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
-			if well("###pal_well", .X, radius = 8, focus = 1) {
-				ui.spacer(ui.px(em * 0.6))
-				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
-				if ui.tags("bare") {
-					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.35, font_size = math.round(em * FS_BODY)})
-					res := ui.line_edit("###pal_field", &p.field, "Search commands, sessions, agents, models…")
-					if p.fresh { ui.set_focus(res.box.key) }
-					if res.changed { p.sel = 0; p.reveal = true }
-					if res.committed && n > 0 { chosen = hits[p.sel].item }
-					if res.cancelled { p.open = false }
-				}
-				text("n", fmt.tprintf("%d", len(hits)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-				ui.spacer(ui.px(em * 0.6))
+			ui.spacer(ui.px(em * 0.9))
+			glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
+			if ui.tags("bare") {
+				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.45, font_size = math.round(em * FS_BODY)})
+				res := ui.line_edit("###pal_field", &p.field, "Search commands, sessions, agents, models…")
+				if p.fresh { ui.set_focus(res.box.key) }
+				if res.changed { p.sel = 0; p.reveal = true }
+				if res.committed && n > 0 { chosen = hits[p.sel].item }
+				if res.cancelled { p.open = false }
 			}
-			ui.spacer(ui.px(em * 0.6))
+			text("n", fmt.tprintf("%d", len(hits)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			ui.spacer(ui.px(em * 0.9))
 		}
+		edge_line("###pal_rule")
 		ui.spacer(ui.px(em * 0.45))
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###pal_list") {
@@ -329,7 +325,7 @@ palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string) -> []Pal_Hit 
 	for &it, i in items {
 		score, ranges, ok := ui.fuzzy_words(needle, it.title)
 		if !ok && (it.kind == .Switch || it.kind == .Setting) {
-			// a switch is found by its name too ("permission.allow_all"), its title then shown without marks
+			// a switch is found by its name too ("appearance.system_title"), its title then shown without marks
 			score, _, ok = ui.fuzzy_words(needle, it.id)
 			ranges = nil
 		}

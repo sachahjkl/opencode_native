@@ -357,7 +357,7 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 	cell_size := math.round(fs * FS_LABEL)
 	cells := make([][][dynamic]ui.Rich_Run, len(rows), context.temp_allocator)
 	st := &the_app.state
-	rc := ui.Rich_Context{fonts = st.fonts, base_font = the_app.font, base_size = cell_size, mono = st.mono_font, faces = &st.rich_faces}
+	rc := ui.Rich_Context{fonts = st.fonts, base_font = the_app.font, base_size = cell_size, mono = st.mono_font, faces = &st.families}
 	for r, ri in rows {
 		cells[ri] = make([][dynamic]ui.Rich_Run, ncol, context.temp_allocator)
 		for ci in 0 ..< ncol {

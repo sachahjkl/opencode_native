@@ -208,6 +208,7 @@ Req_Kind :: enum u8 {
 	Mcp_Done,       // POST /api/experimental/mcp/:name/connect, /disconnect (the tag: its name)
 	Saved_Done,     // DELETE /api/permission/saved/:id
 	Projects,       // GET /api/project: the projects and their logos
+	Project_Icon,   // PATCH /api/project/:id {icon.override} (project_icon.odin; the tag: the project)
 	Stats,          // GET /api/experimental/session/stats: the project's totals (stats.odin)
 	Created,        // POST /api/session: the new session
 	Action,         // a POST whose answer only matters when it fails
@@ -420,6 +421,7 @@ Req_Facts :: struct { json: bool, life: Req_Life }
 	.Mcp_Done         = {},
 	.Saved_Done       = {},
 	.Projects         = {json = true},
+	.Project_Icon     = {},
 	.Stats            = {json = true},
 	.Created          = {json = true},
 	.Action           = {},
@@ -594,6 +596,7 @@ answer :: proc(app: ^App, r: ^Request) {
 	case .Mcp_Done:    mcp_done(app, r.tag)
 	case .Saved_Done:  saved_revoke_done(app, r.tag)
 	case .Projects:    projects_load(app, v)
+	case .Project_Icon: request(app, .Projects, "GET", "/api/project")   // (shown at once, as project.updated would)
 	case .Stats:       stats_load(app, v)
 	case .Created:
 		if id := jstr(v, "data", "id"); id != "" {
@@ -710,6 +713,7 @@ answer_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) {
 request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
 	refused := f == .Refused
 	switch r.kind {
+	case .Project_Icon: return false   // (the toast says it: the icon is as it was)
 	case .Session_Agent: outgoing_setup(app, r.out, .Model)     // (the prompt goes all the same, with what the session has)
 	case .Session_Model: outgoing_setup(app, r.out, .Sending)
 	case .Session_Choice:
@@ -903,11 +907,6 @@ reply_permission :: proc(app: ^App, p: ^Permission, decision: string) {
 	if p.replying { return }
 	p.replying = true
 	request(app, .Permission_Reply, "POST", fmt.tprintf("/api/session/%s/permission/%s/reply", p.session, p.id), fmt.tprintf(`{{"decision":%s}}`, jquote(decision)), p.id)
-}
-
-// permission.allow_all: every permission waiting is allowed once (each is answered once: one on its way is left).
-permissions_allow_pending :: proc(app: ^App) {
-	for &p in app.permissions { if !p.replying { reply_permission(app, &p, "once") } }
 }
 
 switch_model :: proc(app: ^App, session, model, provider, variant: string) {

@@ -125,7 +125,13 @@ theme_refresh :: proc(t: ^ui.Theme) {
 themed_palette :: proc() -> ui.Palette {
 	p := OPENCODE_PALETTE
 	for c in ([]^u32{&p.bg, &p.panel, &p.panel2, &p.text, &p.weak, &p.border, &p.accent, &p.accent_text, &p.good, &p.warn, &p.bad, &p.bar}) { c^ = themed(c^) }
-	if the_app != nil && the_app.prefs.flat { p.finish = .Flat }   // (a light version: apply_palette makes it flat)
+	if app := the_app; app != nil {
+		// the style asked for, unless the theme is made for one (Console: edged); a light version: apply_palette makes it flat
+		p.finish = app.prefs.finish
+		if all := themes(app); app.cx.theme.at < len(all) {
+			if f, made := all[app.cx.theme.at].finish.?; made { p.finish = f }
+		}
+	}
 	p.dark = !theme_light()   // (the toolkit's own marks, the window's buttons among them, light on dark or dark on light)
 	return p
 }
@@ -291,7 +297,7 @@ dialog_close :: proc(open: ^bool) {
 // `lit`: shown as under the pointer, as long as what it opened is open (a menu, a picker).
 // `wrap`: a label longer than the button's width goes on more lines and the button grows to hold them (it is `height`
 // tall on one line); else it is one line, as wide as its text.
-bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Normal, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false, quiet := false, wrap := false, lit := false) -> ui.Signal {
+bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Normal, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false, quiet := false, wrap := false, lit := false, icon_color := Color{}) -> ui.Signal {
 	em := ui.font_size()
 	h := height > 0 ? height : math.round(em * BUTTON_H_EM)
 	fg := kind == .Accent ? hex(HEX_ON_ACCENT) : kind == .Danger ? WHITE : hex(HEX_TEXT)
@@ -310,7 +316,8 @@ bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Nor
 		pad := label != "" ? em * 0.75 : em * 0.55
 		if _, fixed := width.?; fixed && !left { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(left ? em * 0.8 : pad)) }
 		if icon != "" {
-			ui.next({width = ui.px(em * 1.25), height = ui.pct(1), font = the_app.icons, font_size = math.round(em * ICON_REGULAR), fg = fg, text_align = .Center, text_pad = 0})
+			// (`icon_color`: the icon says a state in its colour, the label stays the button's)
+			ui.next({width = ui.px(em * 1.25), height = ui.pct(1), font = the_app.icons, font_size = math.round(em * ICON_REGULAR), fg = icon_color.a > 0 ? icon_color : fg, text_align = .Center, text_pad = 0})
 			ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###ico", icon))
 			if label != "" { ui.spacer(ui.px(em * 0.4)) }
 		}
