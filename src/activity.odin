@@ -30,6 +30,11 @@ Shell_Job :: struct {
 
 Todo :: struct { content, status: string }   // (in Activity.todo_arena's allocator: context of todos_read)
 
+// Which todos the list shows: all of them (what remains first), what remains, or what is over (done or cancelled).
+Todo_Filter :: enum u8 { All, Active, Done }
+
+todo_active :: proc(t: Todo) -> bool { return t.status == "in_progress" || t.status == "pending" }
+
 Peek :: struct { text: string, read_ms: f64 }   // the end of a sub-agent's work (text owned)
 
 Activity :: struct {
@@ -43,6 +48,7 @@ Activity :: struct {
 	jobs:       [dynamic]Shell_Job,
 	peeks:      map[string]Peek,    // by session (keys owned)
 	todos:      [dynamic]Todo,      // (strings owned)
+	todo_filter: Todo_Filter,       // what its list shows
 	todos_known: map[string][dynamic]Todo,   // each session's last list (keys and strings owned): shown at once when it comes back,
 	                                         // while its pages are read again (it came a moment late, and the conversation moved up)
 	todos_sig:  u64,
@@ -110,7 +116,6 @@ job_free :: proc(j: ^Shell_Job) {
 	delete(j.id); delete(j.command); delete(j.cwd); delete(j.session); delete(j.tail)
 }
 
-@(private = "file")
 todos_clear :: proc(a: ^Activity) {
 	for t in a.todos { delete(t.content); delete(t.status) }
 	clear(&a.todos)
@@ -911,15 +916,35 @@ todo_row :: proc(app: ^App, t: Todo, k: int, em: f32) {
 activity_todos :: proc(app: ^App, em: f32) {
 	a := &app.activity
 	done, _ := todos_done(a)
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
+	active := 0
+	for t in a.todos { if todo_active(t) { active += 1 } }
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.7)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###td_head") {
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
 		text("h", fmt.tprintf("TODO  %d/%d", done, len(a.todos)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+		ui.spacer(ui.fill())
+		labels := [3]string{"All", fmt.tprintf("Active %d", active), fmt.tprintf("Done %d", len(a.todos) - active)}   // (Todo_Filter's order)
+		sel := int(a.todo_filter)
+		if ui.style({font = app.mono, font_size = math.round(em * FS_CAPTION)}) {
+			ui.next({height = ui.px(math.round(em * 1.4))})
+			ui.a11y({name = "Which todos show"})
+			if ui.segmented("###td_filter", labels[:], &sel, look = .Text) { a.todo_filter = Todo_Filter(sel) }
+		}
+		ui.spacer(ui.px(em * TRAY_PAD_EM))
 	}
 	ui.spacer(ui.px(em * 0.2))
-	for t, k in a.todos { if t.status == "in_progress" || t.status == "pending" { todo_row(app, t, k, em) } }   // (what remains first)
-	for t, k in a.todos { if t.status != "in_progress" && t.status != "pending" { todo_row(app, t, k, em) } }
+	shown := 0
+	if a.todo_filter != .Done { for t, k in a.todos { if todo_active(t) { todo_row(app, t, k, em); shown += 1 } } }   // (what remains first)
+	if a.todo_filter != .Active { for t, k in a.todos { if !todo_active(t) { todo_row(app, t, k, em); shown += 1 } } }
+	if shown == 0 {
+		ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###td_none") {
+			ui.spacer(ui.px(em * TRAY_PAD_EM))
+			text("n", a.todo_filter == .Active ? "Nothing left to do." : "Nothing done yet.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+		}
+	}
 }
+
 
 // What runs, a row each.
 @(private = "file")

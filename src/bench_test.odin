@@ -666,6 +666,41 @@ the_search_has_a_menu :: proc(t: ^testing.T) {
 	})
 }
 
+// The todos show all, what remains or what is done: the header's choice says how many of each.
+@(test)
+the_todos_filter_by_state :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		a := &app.activity
+		todos_clear(a)
+		for it in ([4][2]string{{"read the code", "completed"}, {"write the fix", "in_progress"}, {"test it", "pending"}, {"old idea", "cancelled"}}) {
+			append(&a.todos, Todo{strings.clone(it[0]), strings.clone(it[1])})
+		}
+		defer todos_clear(a)
+		activity_open(app)
+		session.wait_idle(s)
+		rows :: proc(s: ^session.Session) -> (n: int) {
+			for k in 0 ..< 4 { if session.find(s, fmt.tprintf("td%d", k)) != nil { n += 1 } }
+			return
+		}
+		testing.expect_value(t, rows(s), 4)
+		testing.expect(t, session.find_text(s, "Active 2") != nil && session.find_text(s, "Done 2") != nil, "how many of each")
+		session.click(s, "seg1")
+		session.wait_idle(s)   // (the tray glides to its new height: what is clicked next stands still)
+		testing.expect_value(t, a.todo_filter, Todo_Filter.Active)
+		testing.expect(t, rows(s) == 2 && session.find(s, "td1") != nil && session.find(s, "td2") != nil, "what remains")
+		session.click(s, "seg2")
+		session.wait_idle(s)   // (the tray glides to its new height: what is clicked next stands still)
+		testing.expect(t, rows(s) == 2 && session.find(s, "td0") != nil && session.find(s, "td3") != nil, "what is over")
+		session.click(s, "seg0")
+		session.wait_idle(s)   // (the tray glides to its new height: what is clicked next stands still)
+		testing.expect_value(t, rows(s), 4)
+		session.save_png(s, "todos_filter.png")
+		activity_close(app)
+	})
+}
+
 // A slider of the settings dragged and let go: the preference takes the value it was let go at, and keeps it.
 @(test)
 a_slider_keeps_the_value_it_is_let_go_at :: proc(t: ^testing.T) {
