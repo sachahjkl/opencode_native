@@ -87,6 +87,8 @@ HEX_PAL_SELECTED    :: 0x0c0c0cff
 // Commands
 
 ZOOM_FACTOR :: 1.1
+TERM_ZOOM_MIN :: 0.5   // a shell's own zoom, times the program's size
+TERM_ZOOM_MAX :: 3
 
 ////////////////////////////////
 // Context menus
@@ -306,6 +308,7 @@ SESSION_BADGE_EM       :: 1.45   // a session's mark in the sidebar, a row of on
 SESSION_BADGE_INBOX_EM :: 1.9    // ... a row of two (the inbox)
 SESSION_BADGE_ALPHA    :: 0.2    // its colour behind its letter
 SESSION_BADGE_HEX := [?]u32{HEX_PEACH, HEX_BLUE, HEX_PURPLE, HEX_GREEN, HEX_YELLOW, HEX_RED, HEX_CYAN, HEX_ROSE}   // what a session's id picks from
+THEME_CARD_W_EM   :: 12    // a theme's card: its width (on the line, in the grid)
 THEME_CARD_H_EM   :: 3.6   // a theme's card in the settings (settings.odin theme_cards)
 THEME_CARD_RADIUS :: 8     // its corners, logical px
 COMPOSER_FIT_SLACK_EM :: 3   // the composer's toolbar gives back what it left out once this much wider than where it went past (views.odin composer_fit)

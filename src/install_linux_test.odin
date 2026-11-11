@@ -28,7 +28,7 @@ an_install_of_the_earlier_setup_is_seen_and_removed :: proc(t: ^testing.T) {
 	dir := pjoin({data, "opencode-native"})
 	exe := pjoin({dir, "opencode-native"})
 	entry := fmt.tprintf(
-		"[Desktop Entry]\nType=Application\nName=%s\nGenericName=opencode client\nComment=A native desktop client for the opencode server. Not affiliated with the OpenCode team.\n" +
+		"[Desktop Entry]\nType=Application\nName=%s\nGenericName=opencode client\nComment=A native desktop client for opencode. Not affiliated with the OpenCode team.\n" +
 		"Exec=\"%s\" %%U\nIcon=%s\nTerminal=false\nCategories=Development;\nStartupWMClass=%s\n",
 		APP_NAME, exe, "opencode-native", "opencode-native")
 	files := [?][2]string{

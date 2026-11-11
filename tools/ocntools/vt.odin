@@ -37,6 +37,7 @@ VT_NUMBERS :: [?]Vt_Number{
 	{"VT_SCROLL_ROW", "GHOSTTY_TERMINAL_SCROLL_VIEWPORT_ROW"},
 
 	{"VT_OPT_USERDATA", "GHOSTTY_TERMINAL_OPT_USERDATA"},
+	{"VT_OPT_COLOR_PALETTE", "GHOSTTY_TERMINAL_OPT_COLOR_PALETTE"},
 	{"VT_OPT_WRITE_PTY", "GHOSTTY_TERMINAL_OPT_WRITE_PTY"},
 	{"VT_OPT_TITLE_CHANGED", "GHOSTTY_TERMINAL_OPT_TITLE_CHANGED"},
 	{"VT_OPT_COLOR_FOREGROUND", "GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND"},
@@ -150,6 +151,7 @@ VT_CALLS :: [?]string{
 	"ghostty_mouse_encoder_encode",
 	"ghostty_mouse_event_new", "ghostty_mouse_event_free", "ghostty_mouse_event_set_action", "ghostty_mouse_event_set_button",
 	"ghostty_mouse_event_clear_button", "ghostty_mouse_event_set_mods", "ghostty_mouse_event_set_position",
+	"ghostty_color_palette_generate",
 }
 
 // What src/vt.odin declares for each of these: their layout is checked there, on the real library (vt_test.odin).
@@ -162,7 +164,7 @@ VT_TYPES :: [?]Vt_Type{
 	{"GhosttyMouseEncoder", "Vt_Mouse_Encoder"}, {"GhosttyMouseEvent", "Vt_Mouse_Event"},
 	{"GhosttyString", "Vt_String"}, {"GhosttyTerminalScrollViewport", "Vt_Scroll"}, {"GhosttyMousePosition", "Vt_Mouse_Position"},
 	{"GhosttyPoint", "Vt_Point"}, {"GhosttyGridRef", "Vt_Grid_Ref"}, {"GhosttyTrackedGridRef", "Vt_Tracked_Ref"},
-	{"GhosttyFormatter", "Vt_Formatter"},
+	{"GhosttyFormatter", "Vt_Formatter"}, {"GhosttyColorRgb", "Vt_Rgb"}, {"GhosttyColorPaletteMask", "Vt_Palette_Mask"},
 }
 
 Vt_Headers :: struct {

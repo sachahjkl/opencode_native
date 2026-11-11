@@ -106,7 +106,13 @@ panel_tab :: proc(user: rawptr, t: ui.Dock_Tab) {
 @(private = "file")
 strip_look :: proc(user: rawptr, d: ^ui.Dock, leaf: i32) {
 	b := ui.parent_box()
+	focus, _ := ui.dock_focus_leaf(d)
+	lit := ui.frame_new(bool)
+	lit^ = focus == leaf
+	b.custom_user = lit
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		// (the edged style: the stack's strip a window's title, the accent fading out, lit where the focus is)
+		if ui.edged() { ui.caption_face(dc, b.rect, hex(HEX_BG1), hex(HEX_BG1), (^bool)(user)^); return }
 		draw.rect(dc, b.rect, hex(HEX_BG1))
 		draw.rect(dc, {{b.rect.min.x, b.rect.max.y - px1()}, b.rect.max}, hex(HEX_LINE))
 	}

@@ -60,7 +60,7 @@ TEXT_SMOOTHINGS :: []string{"auto", "rgb", "bgr", "grey"}
 PREF_DEFS := [?]config.Def{
 	{name = "appearance.theme", description = "The colours of the whole interface: opencode's black with an accent of its own, or an editor's palette. Themes of your own go in themes.txt beside the preferences.", kind = .String, default = {s = "OpenCode"}},
 	{name = "appearance.mode", description = "Each theme in its dark or its light version: as the system's apps are, or always one.", kind = .String, default = {s = "system"}, choices = {"system", "dark", "light"}},
-	{name = "appearance.style", description = "Machined: raised buttons, sunken wells, carved lines, glowing lamps. Edged: the same reliefs drawn crisp, a lit line along the top of each, square corners. Flat: plain surfaces and thin lines. A theme made for one style (Console: edged) brings it.", kind = .String, default = {s = "machined"}, choices = {"machined", "edged", "flat"}},
+	{name = "appearance.style", description = "Machined: raised buttons, sunken wells, carved lines, glowing lamps. Edged: the same reliefs drawn crisp, a lit line along the top of each, square corners. Flat: plain surfaces and thin lines. A theme made for one style (Kernel: edged) brings it.", kind = .String, default = {s = "machined"}, choices = {"machined", "edged", "flat"}},
 	{name = "appearance.system_title", description = "The system's title bar above the window, with its own buttons, instead of the one drawn here. The bar with the menu, the way back and the session's name stays under it. Shown where the system can draw it (Windows, X11, KDE; not GNOME).", kind = .Bool, default = {b = false}},
 	{name = "appearance.font", description = "The face of the interface's text: the client's own (automatic), the system's usual one, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.prose_font", description = "The face of the answers: the client's own (automatic), the interface's, or any installed family.", kind = .String, default = {s = ""}},
@@ -91,6 +91,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "sidebar.subagents", description = "Sub-agent sessions: under their parent, in the list with the others, or not shown.", kind = .String, default = {s = "nested"}, choices = {"nested", "flat", "hidden"}},
 	{name = "sidebar.mode", description = "What the sidebar shows: what needs you first across projects (what waits for you, what finished and you have not seen, what runs, the rest), or sessions by project.", kind = .String, default = {s = "inbox"}, choices = {"inbox", "projects"}},
 	{name = "notify.finished", description = "When a session that is not in front of you ends its run: nothing, a toast, a toast and the taskbar button flashing, or a notification of the system (a click on it opens the session).", kind = .String, default = {s = "system"}, choices = {"off", "toast", "flash", "system"}},
+	{name = "permission.new_sessions", description = "The approvals a session made here starts with, set on the server (the composer's shield changes them for one session): the server's configured rules, file edits allowed, everything allowed (a policy's deny stays), or every action asked.", kind = .String, default = {s = "configured"}, choices = {"configured", "allow_edits", "allow_all", "ask_all"}},
 	{name = "notify.permission", description = "When a session asks for a permission or a question and the window is not in front: the taskbar button flashes, and with notifications of the system, one says it.", kind = .Bool, default = {b = true}},
 	{name = "appearance.throbber", description = "What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing.", kind = .String, default = {s = "board"}, choices = {"board", "orbit", "scanner", "none"}},
 	{name = "session.agent", description = "The agent a new session starts with: the one chosen last.", kind = .String, default = {s = ""}, hidden = true},
@@ -151,6 +152,7 @@ Prefs :: struct {
 	update_channel: string,
 	update_auto:  bool,
 	system_title: bool,    // appearance.system_title (title_apply)
+	new_sessions: Approval,   // permission.new_sessions: the preset a session made here starts with
 }
 
 CONTENT_ZOOM_MIN :: 0.5
@@ -215,6 +217,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.update_channel = config.string_of(p, "update.channel")
 	s.update_auto = config.bool_of(p, "update.auto")
 	s.system_title = config.bool_of(p, "appearance.system_title")
+	s.new_sessions = approval_of_pref(config.string_of(p, "permission.new_sessions"))
 	update_channel_follow(app)
 	title_apply(app)
 
@@ -868,41 +871,35 @@ pref_slider :: proc(app: ^App, name: string, lo, hi, step: f32, format: string, 
 @(private = "file")
 Theme_Card :: struct { cols: ^ui.Theme_Colors, chosen: bool }
 
-// The themes, three to a row, each in its own colours: its surface, its name in its text, its colours as dots, a ring of its
-// accent around the one shown.
+// The themes, each in its own colours: its surface, its name in its text, its colours as dots, a ring of its accent around the
+// one shown. On one line that scrolls sideways; "Show all" lays them out as a grid (gui_toolkit's strip_grid).
 @(private = "file")
 theme_cards :: proc(app: ^App, em: f32) {
 	all := themes(app)
 	cur := app.cx.theme.at
-	PER_ROW :: 3
-	for row := 0; row < len(all); row += PER_ROW {
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row(id = fmt.tprintf("###themes%d", row)) {
-			for i in row ..< row + PER_ROW {
-				if i > row { ui.spacer(ui.px(em * 0.5)) }
-				if i >= len(all) { ui.next({width = ui.fill(), height = ui.px(1)}); ui.build_box({}, fmt.tprintf("###th_pad%d", i)); continue }
-				def := &all[i]
-				ui.next({width = ui.fill(), height = ui.px(math.round(em * THEME_CARD_H_EM)), axis = .Y, cursor = .Hand})
-				ui.a11y({role = .Radio_Button, name = def.name, toggled = i == cur ? .True : .False})
-				b := ui.build_box({.Clickable, .Focusable}, fmt.tprintf("###th%d", i))
-				d := ui.frame_new(Theme_Card)
-				cols := ui.frame_new(ui.Theme_Colors)
-				cols^, _ = ui.theme_version(def^, app.cx.theme.light)   // (in the version shown)
-				d^ = {cols, i == cur}
-				b.custom, b.custom_user = theme_card_draw, d
-				if ui.signal(b).clicked && i != cur { pref_set(app, "appearance.theme", def.name) }
-				if ui.parent(b) {
-					ui.spacer(ui.px(em * 0.55))
-					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-					if ui.row(id = "###n") {
-						ui.spacer(ui.px(em * 0.8))
-						text("t", def.name, draw.hex(cols.texts[2]), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.4)}, ui.fill())
-					}
+	gap := em * 0.5
+	if ui.strip_grid("###themes", &app.cx.themes_open, {gap, gap}) {
+		for &def, i in all {
+			ui.next({width = ui.px(math.round(em * THEME_CARD_W_EM)), height = ui.px(math.round(em * THEME_CARD_H_EM)), axis = .Y, cursor = .Hand})
+			ui.a11y({role = .Radio_Button, name = def.name, toggled = i == cur ? .True : .False})
+			b := ui.build_box({.Clickable, .Focusable}, fmt.tprintf("###th%d", i))
+			d := ui.frame_new(Theme_Card)
+			cols := ui.frame_new(ui.Theme_Colors)
+			cols^, _ = ui.theme_version(def, app.cx.theme.light)   // (in the version shown)
+			d^ = {cols, i == cur}
+			b.custom, b.custom_user = theme_card_draw, d
+			if ui.signal(b).clicked && i != cur { pref_set(app, "appearance.theme", def.name) }
+			if ui.parent(b) {
+				ui.spacer(ui.px(em * 0.55))
+				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+				if ui.row(id = "###n") {
+					ui.spacer(ui.px(em * 0.8))
+					text("t", def.name, draw.hex(cols.texts[2]), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.4)}, ui.fill())
 				}
 			}
 		}
-		ui.spacer(ui.px(em * 0.5))
 	}
+	ui.spacer(ui.px(em * 0.5))
 }
 
 // Where a theme card's dots go: their size, the first one's left, their top. `em`: the font's size as drawn (frame pixels,
@@ -1027,6 +1024,7 @@ page_behaviour :: proc(app: ^App, em: f32) {
 	if setting(app, "sidebar.mode", em) { pref_choice(app, "sidebar.mode", {SIDEBAR_MODES[.Inbox].label, SIDEBAR_MODES[.Projects].label}, em, em * 14) }
 	if setting(app, "sidebar.subagents", em) { pref_choice(app, "sidebar.subagents", {"Nested", "Flat", "Hidden"}, em) }
 	if setting(app, "notify.finished", em) { pref_choice(app, "notify.finished", {"Off", "Toast", "Flash", "System"}, em) }
+	if setting(app, "permission.new_sessions", em) { pref_choice(app, "permission.new_sessions", {"As configured", "Allow edits", "Allow all", "Ask all"}, em, em * 26) }
 	if setting(app, "notify.permission", em) { pref_switch(app, "notify.permission", em) }
 	if setting(app, "general.start", em) { pref_choice(app, "general.start", {"Home", "Latest session"}, em, em * 14) }
 	if !settings_searching(app) {

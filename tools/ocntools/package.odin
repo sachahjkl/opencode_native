@@ -6,6 +6,7 @@ package ocntools
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import tk_changelog "gt:changelog"
 import update "gt:update"
 import ocn_update "../../src/update"
 import toolbox "gt:toolbox"
@@ -20,7 +21,7 @@ NOTES_TAIL :: `
 
 It finds the opencode server of the computer by itself (another one: --url, or the status bar's server menu).`
 
-LINUX_README :: `opencode native %s for Linux (x64): a native desktop client for the opencode server.
+LINUX_README :: `opencode native %s for Linux (x64): a native desktop client for opencode.
 An independent project: not built by the OpenCode team, and not affiliated with them.
 
   ./opencode-native              run it (it finds the opencode server of this computer by itself)
@@ -34,28 +35,11 @@ the installed copy gets its libraries from nix-build and runs by itself).
 https://github.com/sachahjkl/opencode_native
 `
 
-// The CHANGELOG's section of a version: from its heading to the next one.
-changelog_section :: proc(changelog, version: string) -> (section: string, ok: bool) {
-	heading := fmt.tprintf("## [%s]", version)
-	lines := strings.split_lines(changelog, context.temp_allocator)
-	start := -1
-	end := len(lines)
-	for line, i in lines {
-		if start < 0 {
-			if strings.has_prefix(line, heading) { start = i + 1 }
-			continue
-		}
-		if strings.has_prefix(line, "## [") { end = i; break }
-	}
-	if start < 0 { return "", false }
-	joined := strings.join(lines[start:end], "\n", context.temp_allocator)
-	return strings.trim_space(joined), true
-}
-
-release_notes :: proc(changelog, version: string) -> (notes: string, ok: bool) {
-	section, found := changelog_section(changelog, version)
+// A version's section of the CHANGELOG.md in `root`, then where the program runs.
+release_notes :: proc(root, version: string) -> (notes: string, ok: bool) {
+	section, found := tk_changelog.section(root, version)
 	if !found { return "", false }
-	return strings.concatenate({section, NOTES_TAIL}, context.temp_allocator), true
+	return strings.concatenate({strings.trim_right_space(section), NOTES_TAIL}, context.temp_allocator), true
 }
 
 // What is published is optimized: a program built otherwise (build.bat with no word, debug) is no release.
@@ -83,7 +67,7 @@ package_windows :: proc(version: string) -> bool {
 	sum := toolbox.sha256_hex(data, context.temp_allocator)
 	sums := fmt.tprintf("%s  %s", sum, name)
 	if os.write_entire_file(DIST_DIR + "/SHA256SUMS.txt", transmute([]byte)sums) != nil { return false }
-	notes, found := release_notes(read_text("CHANGELOG.md"), version)
+	notes, found := release_notes(".", version)
 	if !found { fmt.eprintfln("package: CHANGELOG.md has no section for %s", version); return false }
 	if os.write_entire_file(DIST_DIR + "/NOTES.md", transmute([]byte)notes) != nil { return false }
 	fmt.printfln("packaged %s (%s)", path, sum)

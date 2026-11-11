@@ -151,3 +151,21 @@ the_cursor_is_where_the_text_stopped :: proc(t: ^testing.T) {
 	testing.expect_value(t, ghostty_render_state_get(term.state, VT_STATE_CURSOR_STYLE, &look), VT_OK)
 	testing.expect_value(t, look, VT_CURSOR_UNDERLINE)
 }
+
+// A program's colour by number is the theme's: red (31) is the theme's red, the cube after the 16 made between the
+// background and the text (not Ghostty's console colours).
+@(test)
+a_shells_colours_are_the_themes :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	term := term_new("x", "t", "")
+	defer term_free(term)
+	bg, fg := rgb_of(HEX_TERM_BG), rgb_of(HEX_TEXT)
+	p := term_palette(bg, fg)
+	testing.expect_value(t, p[1], rgb_of(HEX_RED))
+	testing.expect_value(t, p[4], rgb_of(HEX_BLUE))
+	testing.expect(t, p[16] != {} || p[231] != {}, "the cube made")
+	term_recolour(term)
+	term_feed(term, "\x1b[31mr\x1b[0m")
+	row := first_row(term)
+	if testing.expect(t, len(row) > 0, "a row") { testing.expect_value(t, row[0].fg, rgb_of(HEX_RED)) }
+}

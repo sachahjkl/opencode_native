@@ -1,12 +1,24 @@
 # Changelog
 
 All notable changes to opencode native. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
-project follows [semantic versioning](https://semver.org).
+project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
+two branches never conflict on this file.
 
-## [Unreleased]
+## [0.46.0] - 2026-11-11
+
+### Added
+- **Each shell has its own zoom**: Ctrl+= / Ctrl+- / Ctrl+0 in the shell with the keyboard, Ctrl and the wheel over one, or its menu. It stays with the shell: the program started again finds it (`terminal_zoom.txt` beside the preferences, by the shell's id on the server).
+- **The approvals new sessions start with** (Settings > Behaviour): as configured, allow edits, allow all, ask all. A session made here is created with those rules on the server, which applies them; the shield changes them for one session.
+- **`--help` and `--version`**, and an option it does not have is refused with the help (exit code 2): `opencode-native --help` started the program as if nothing was said, the terminal held by its window (gui_toolkit's `cli`).
+
+### Changed
+- **A shell's colours are the theme's**: a program's red, green, blue... (the 16 named colours) are the theme shown's, the 240 after them made between its background and its text; they were a console's, the same in every theme.
+- **Kernel's look further**: the sections' titles (the home page, the activity, the settings, the commands) are a stripe and the title in a colour, and a stack of panels is a window, its strip the accent fading out, lit where the focus is.
+- **The themes on one line** (Settings > Appearance): it scrolls sideways; "Show all" lays them out as a grid (gui_toolkit's `strip_grid`).
+- **Console is now Kernel**: the theme takes the name of what it comes from. A preference that names Console shows OpenCode until Kernel is chosen.
 
 ### Fixed
-
+- **Scrolling up through a long session no longer jumps**: the wheel stopped at the top while the earlier messages were read glided over all of them once they came; the view now stays on what it shows.
 - **A theme card's colours stay under its name at any scale of the screen**: at 200 % they rose onto it (the font's size, already scaled, was scaled again).
 
 ## [0.45.0] - 2026-11-11
@@ -1310,7 +1322,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.45.0...HEAD
+[0.46.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.0
 [0.45.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.45.0
 [0.44.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.44.0
 [0.43.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.3

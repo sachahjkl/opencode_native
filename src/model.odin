@@ -98,9 +98,9 @@ Chat :: struct {
 	loading:   bool,
 	loading_older: bool,           // that page is on its way
 	older_failed:  f64,            // when it could not be read (ui.now_ms): tried again a little later, on the next scroll
-	first_msg: ^ui.Box,            // its first message, when built at the last build (an answer arrives before the next one: begin_build)
 	view_msg:  string,             // the message at the top of the view (of the arena) and how far into it
 	view_dy:   f32,
+	view_box:  ^ui.Box,            // view_msg's box at the last build (an answer arrives before the next one: begin_build)
 	keep_id:   string,             // the message built whatever while the page before it comes in (the view stays on it)
 	new_dir:   string,             // the folder of the session about to be made
 	loaded:    bool,
@@ -574,12 +574,13 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(Seq)) {
 	if older {
 		c.loading_older = false
 		c.older = cursor
-		// the view stays on what it shows: at the very top the lazy column does not move it (frame does). Only with the first
-		// message on screen: built for a view that glides toward it (a match, Home), it is far above, and the view stopped there
-		// went to the end. The lazy column keeps that view, its target too. (A view on its way to a message of an older page stays
-		// at the top instead: that is what reads the pages up to it.)
-		if b, sb := app.chat.first_msg, app.chat_sb; b != nil && sb != nil && !app.stick_bottom && app.cx.restore_msg == "" && len(c.messages) > 0 && b.rect.max.y > sb.rect.min.y {
-			c.keep_id = c.messages[0].id
+		// the view stays on the message it shows at its top (frame builds it whatever, and moves the view by as much as the page
+		// pushed it down). The lazy column does not: what it builds is reckoned where the view now stands, in the new page, and
+		// the message it was on is not among it; a wheel turned up past the top went on to the top of the new page. (A view sent
+		// to the start (Home), or on its way to a message of an older page, stays at the top instead: that is what reads the
+		// pages up to it.)
+		if b, sb := c.view_box, app.chat_sb; b != nil && sb != nil && !app.stick_bottom && app.cx.restore_msg == "" && !sb.view_top_held[1] {
+			c.keep_id = c.view_msg
 			app.anchor = b
 			app.anchor_y = b.rect.min.y
 		}

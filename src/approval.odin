@@ -6,6 +6,7 @@ package ocn
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
+import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -102,4 +103,23 @@ approval_button :: proc(app: ^App, em: f32) {
 			}
 		}
 	}
+}
+
+// The preset a new session is made with (permission.new_sessions): its rules go in the request that makes it, so the server
+// applies them from its first step, as the shield would.
+approval_of_pref :: proc(name: string) -> Approval {
+	switch name {
+	case "allow_edits": return .Allow_Edits
+	case "allow_all":   return .Allow_All
+	case "ask_all":     return .Ask_All
+	}
+	return .Configured
+}
+
+// What makes a session in `directory` ("": the server's): its place, and the rules of the preset new sessions take.
+new_session_body :: proc(app: ^App, directory: string) -> string {
+	fields := make([dynamic]string, context.temp_allocator)
+	if directory != "" { append(&fields, fmt.tprintf(`"location":{{"directory":%s}}`, jquote(directory))) }
+	if mode := app.prefs.new_sessions; mode != .Configured { append(&fields, fmt.tprintf(`"permissions":%s`, APPROVAL_RULES[mode])) }
+	return fmt.tprintf("{{%s}}", strings.join(fields[:], ",", context.temp_allocator))
 }

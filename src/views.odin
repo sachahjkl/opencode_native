@@ -852,16 +852,20 @@ chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) -> (moved: bool) {
 	if ui.key_press(.Page_Up) { y -= sb.size.y * PAGE_SCROLL }
 	if ui.key_press(.Page_Down) { y += sb.size.y * PAGE_SCROLL }
 	f := ui.box_from_key(ui.focus_key())
+	top := false
 	if f == nil || (.Text_Input not_in f.flags && !app.state.focus_visible) {
 		if ui.key_press(.Up) { y -= em * LINE_SCROLL_EM }
 		if ui.key_press(.Down) { y += em * LINE_SCROLL_EM }
-		if ui.key_press(.Home) { y = 0 }
+		if ui.key_press(.Home) { y, top = 0, true }
 		if ui.key_press(.End) { y = limit }
 	}
 	y = clamp(y, 0, limit)
 	moved = y != sb.view_target.y
 	if moved { ui.scrollbar_reveal(sb) }
 	sb.view_target.y = y
+	// (Home: the start as such, the pages read before it on the way included. Page Up stopped at the top is a place like any
+	// other: a page read then comes above it, and the view stays on what it shows)
+	if top { ui.view_top(sb) }
 	return
 }
 
@@ -953,7 +957,7 @@ kfmt :: proc(v: f64) -> string {
 }
 
 messages :: proc(app: ^App, em: f32) {
-	app.chat.first_msg = nil
+	app.chat.view_box = nil
 	c := &app.chat
 	ui.spacer(ui.px(em * 1.2))
 	subagent_banner(app, em)
@@ -995,12 +999,11 @@ messages :: proc(app: ^App, em: f32) {
 			id := m.id != "" ? m.lazy_id : fmt.tprintf("###msg_end%d", len(c.messages) - i)
 			restoring := app.cx.restore_msg != "" && m.id == app.cx.restore_msg
 			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || (c.keep_id != "" && m.id == c.keep_id) || restoring) {
-				if i == 0 { app.chat.first_msg = ui.parent_box() }
 				item := ui.parent_box()
 				if sb := lz.scroll; sb != nil {
 					if !top_seen && m.id != "" && item.rect.max.y > sb.rect.min.y {
 						top_seen = true
-						app.chat.view_msg, app.chat.view_dy = m.id, sb.rect.min.y - item.rect.min.y
+						app.chat.view_msg, app.chat.view_dy, app.chat.view_box = m.id, sb.rect.min.y - item.rect.min.y, item
 					}
 				}
 				message(app, c, &m, i, em)
@@ -1433,9 +1436,20 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 
 section_label :: proc(id, s: string, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
-	if ui.row(.Center, id = fmt.tprintf("###sl_%s", id)) {
-		text("l", s, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+	if ui.row(.Center, id = fmt.tprintf("###sl_%s", id)) { caption_title("l", s, "", em) }
+}
+
+// A title in capitals over what follows, `note` after it. Faint, in the mono face; in the edged style (Kernel) a stripe and
+// the title in the accent, as a console's sections (gui_toolkit's section_header).
+caption_title :: proc(id, title, note: string, em: f32, color := Color{}) {
+	if ui.edged() {
+		if ui.style({font = the_app.mono, font_size = math.round(em * FS_CAPTION / 0.85)}) {   // (section_header draws its title at 0.85)
+			ui.section_header(fmt.tprintf("###ct_%s", id), title, note, "", color.a > 0 ? color : accent(), inline = true)
+		}
+		return
 	}
+	words := note != "" ? fmt.tprintf("%s  %s", title, note) : title
+	text(id, words, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 }
 
 MONO_WELL_MAX_BYTES :: 20000   // of a tool's text, whatever the lines allow

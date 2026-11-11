@@ -1,5 +1,5 @@
 {
-  description = "opencode native: a native desktop client for the opencode server";
+  description = "opencode native: a native desktop client for opencode";
 
   inputs = {
     # the toolkit is a submodule: the package builds from it
@@ -171,7 +171,7 @@
           name = "opencode-native";
           desktopName = "opencode native";
           genericName = "opencode client";
-          comment = "A native desktop client for the opencode server. Not affiliated with the OpenCode team.";
+          comment = "A native desktop client for opencode. Not affiliated with the OpenCode team.";
           exec = "opencode-native %U";
           icon = "opencode-native";
           categories = ["Development"];
@@ -190,7 +190,7 @@
       '';
 
       meta = {
-        description = "A native desktop client for the opencode server";
+        description = "A native desktop client for opencode";
         homepage = "https://github.com/sachahjkl/opencode_native";
         license = lib.licenses.mit;
         platforms = [system];

@@ -52,6 +52,7 @@ App :: struct {
 	history:        History,           // Up and Down in the composer: the session's prompts (history.odin)
 	activity:       Activity,          // what runs behind the conversation (activity.odin)
 	palette:        Palette,           // Ctrl+K (palette.odin)
+	term_zooms:     Term_Zooms,        // each shell's zoom, by its id (terminal.odin)
 	throbber:       Throbber,          // what says a run goes on (throbber.odin)
 	preview:        Preview,           // the page beside the conversation (preview.odin)
 	browser:        Browser,           // the agents' tools on that page (browser_mcp.odin)
@@ -194,6 +195,7 @@ App_Context :: struct {
 	was_gliding:    bool,              // ... it did in the last one
 	docked_w:       f32,               // the conversation's room as a panel of the dock (0: it is not one)
 	help_open:      bool,              // the keyboard's dialog (commands.odin)
+	themes_open:    bool,              // the settings' themes as a grid, not one line (theme_cards)
 	dialogs:        [Dialog]Vec2,      // the sizes given to the dialogs (logical pixels, {}: what they prefer)
 	dialogs_saved:  [Dialog]Vec2,
 	dialogs_read:   bool,
@@ -677,6 +679,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	ui.set_autoscroll_enabled(&app.state, true)   // a click of the wheel scrolls by the pointer, as in the browsers
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
 	palette_init(app, prefs_file != "" ? pjoin({filepath.dir(prefs_file), "palette_usage.txt"}) : "")
+	term_zooms_load(app, prefs_file != "" ? pjoin({filepath.dir(prefs_file), "terminal_zoom.txt"}) : "")
 	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
 }
 
@@ -691,6 +694,7 @@ fonts_init :: proc(app: ^App) -> bool {
 }
 
 main :: proc() {
+	cli_check()   // (--help, --version, a line not understood: said, no window)
 	started := time.tick_now()
 	frames := -1   // --frames=N: N frames of the hidden window, then exit (a check that it runs)
 	forced_scale: f32 = 0   // --scale=<factor>

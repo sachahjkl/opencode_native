@@ -93,8 +93,7 @@ outgoing_composer :: proc(app: ^App, text, directory: string, fields := "") {
 	if app.chat.id == "" {
 		o := outgoing_new(app, .Creating, "", text)
 		outgoing_takes_composer(app, o)
-		body := directory != "" ? fmt.tprintf(`{{"location":{{"directory":%s}}}}`, jquote(directory)) : "{}"
-		request(app, .Created, "POST", "/api/session", body, out = o.id)
+		request(app, .Created, "POST", "/api/session", new_session_body(app, directory), out = o.id)
 		return
 	}
 	o := outgoing_new(app, .Sending, app.chat.id, text)

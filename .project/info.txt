@@ -1,2 +1,2 @@
 name=opencode_native
-description=A native desktop client for the opencode server: one program for Windows or Linux, no runtime to install.
+description=A native desktop client for opencode.

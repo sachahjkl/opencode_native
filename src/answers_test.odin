@@ -1006,6 +1006,21 @@ the_approval_mode_is_the_servers :: proc(t: ^testing.T) {
 	testing.expect_value(t, bench_count(.Permission_Reply), 0)
 }
 
+// A session made here starts with the preset of permission.new_sessions: its rules go in the request that makes it.
+@(test)
+a_new_session_starts_with_the_default_approvals :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	testing.expect_value(t, new_session_body(app, ""), "{}")
+	testing.expect_value(t, new_session_body(app, "/w"), `{"location":{"directory":"/w"}}`)
+	pref_set(app, "permission.new_sessions", "allow_all")
+	defer pref_set(app, "permission.new_sessions", "configured")
+	testing.expect_value(t, new_session_body(app, "/w"), `{"location":{"directory":"/w"},"permissions":[{"action":"*","resource":"*","effect":"allow"}]}`)
+	outgoing_composer(app, "hello", "/w")
+	r := bench_take(t, .Created)
+	testing.expect(t, strings.contains(r.body, `"permissions":[{"action":"*","resource":"*","effect":"allow"}]`), r.body)
+}
+
 // A project's icon of the user's own: an image goes to the server as the icon's override, made the icon's size (a PNG data URL);
 // what is no image goes nowhere, a removal empties it; the projects read again say which have one.
 @(test)

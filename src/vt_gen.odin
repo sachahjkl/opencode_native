@@ -22,6 +22,7 @@ VT_SCROLL_BOTTOM :: 1
 VT_SCROLL_DELTA :: 2
 VT_SCROLL_ROW :: 3
 VT_OPT_USERDATA :: 1
+VT_OPT_COLOR_PALETTE :: 15
 VT_OPT_WRITE_PTY :: 2
 VT_OPT_TITLE_CHANGED :: 6
 VT_OPT_COLOR_FOREGROUND :: 12
@@ -149,4 +150,5 @@ foreign ghostty_vt {
 	ghostty_mouse_event_clear_button :: proc(event: Vt_Mouse_Event) -> i32 ---
 	ghostty_mouse_event_set_mods :: proc(event: Vt_Mouse_Event, mods: u16) -> i32 ---
 	ghostty_mouse_event_set_position :: proc(event: Vt_Mouse_Event, position: Vt_Mouse_Position) -> i32 ---
+	ghostty_color_palette_generate :: proc(base: ^Vt_Rgb, skip: ^Vt_Palette_Mask, bg: ^Vt_Rgb, fg: ^Vt_Rgb, harmonious: bool, out: ^Vt_Rgb) ---
 }

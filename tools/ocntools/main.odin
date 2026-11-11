@@ -29,6 +29,8 @@ COMMANDS :: [?]Command{
 	{name = "clean", about = "what a live run that did not end left in the demo folder, and only that", run = run_clean},
 	{name = "measure", about = "[find] [--runs n] [--exe file]: the start and the memory of the real program, or a file search; the figures that may be published", run = run_measure},
 	{name = "film", about = "prepare | all | <scene>: the program filmed from inside, its own frames, into build/film", run = run_film},
+	{name = "changelog", about = "new <type> <text> | check | preview: the fragments of changelog.d, what CHANGELOG.md is made of", run = run_changelog},
+	{name = "prepare", about = "<version>: the fragments into CHANGELOG.md with today's date, the version in src/setup.odin and the README", run = run_prepare},
 	{name = "ship", about = "<version> [--dry-run]: from branch release/<version>: CI, tag, release, master, the site, each after the last one's success", run = run_ship},
 	{name = "release", about = "dist <tag> | publish <tag> <folder>: what the release workflow does: this system's files and signed manifests; the GitHub release and the beta channel", run = run_release},
 	{name = "fonts_check", about = "<program>: every font of assets/fonts is in the program, byte for byte", run = run_fonts_check},

@@ -921,7 +921,7 @@ activity_todos :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.7)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###td_head") {
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
-		text("h", fmt.tprintf("TODO  %d/%d", done, len(a.todos)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+		caption_title("h", "TODO", fmt.tprintf("%d/%d", done, len(a.todos)), em, hex(HEX_GREEN))
 		ui.spacer(ui.fill())
 		labels := [3]string{"All", fmt.tprintf("Active %d", active), fmt.tprintf("Done %d", len(a.todos) - active)}   // (Todo_Filter's order)
 		sel := int(a.todo_filter)
@@ -956,7 +956,7 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###act_head") {
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
-		text("h", fmt.tprintf("ACTIVITY  %d running", running), hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+		caption_title("h", "ACTIVITY", fmt.tprintf("%d running", running), em, hex(HEX_CYAN))
 		ui.spacer(ui.fill())
 		if app.column_w > em * ACT_KEYS_MIN_EM { text("k", "↑↓ move   Enter open   Del stop   ", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
 		if hint_action("###act_close", "Esc close", em, app.mono) { activity_close(app) }

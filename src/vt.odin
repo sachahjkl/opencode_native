@@ -25,6 +25,7 @@ Vt_Selection :: struct { start, end: Vt_Grid_Ref, rectangle: bool }
 Vt_Row_Selection :: struct { size: uint, start_x, end_x: u16 }
 
 Vt_Rgb :: struct { r, g, b: u8 }
+Vt_Palette_Mask :: struct { bits: [4]u64 }   // (GhosttyColorPaletteMask: index i kept when its bit is set)
 Vt_String :: struct { ptr: [^]u8, len: uint }
 
 Vt_Style_Color :: struct { tag: u8, value: [3]u8 }   // (the union is a palette index or three bytes)

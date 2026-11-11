@@ -2,12 +2,12 @@
 
 <h1 align="center">opencode native</h1>
 
-<p align="center"><b>A native desktop client for the <a href="https://opencode.ai">opencode</a> v2 server, for Windows and Linux.</b></p>
+<p align="center"><b>A native desktop client for <a href="https://opencode.ai">opencode</a>.</b></p>
 
 <p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.45.0-fab283" alt="version 0.45.0"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.46.0-fab283" alt="version 0.46.0"></a>
 <a href="https://ocn.froment.software/"><img src="https://img.shields.io/badge/site-ocn.froment.software-56b6c2" alt="site"></a>
 </p>
 

@@ -38,7 +38,7 @@ open_shells :: proc(t: ^testing.T, app: ^App, ids: ..string, loc := #caller_loca
 built :: proc(app: ^App, s: ^Term, key: ui.Key, focused := true) {
 	s.shown, s.box = true, key
 	s.rect = {{0, 0}, {800, 400}}
-	app.cx.terms.cell_w, app.cx.terms.cell_h = 8, 16
+	s.metrics.cell_w, s.metrics.cell_h = 8, 16
 	if focused { ui.set_focus(key) }
 	terminals_settle(app)
 }
@@ -1320,4 +1320,39 @@ closing_stops_every_connection_and_shell :: proc(t: ^testing.T) {
 	testing.expect(t, sync.atomic_load(&first.stop) && sync.atomic_load(&second.stop), "every connection")
 	testing.expect(t, sync.atomic_load(&app.cx.terms.list[0].conn.stop), "the shells' threads")
 	testing.expect(t, sync.atomic_load(&l.stop), "the browser's")
+}
+
+// A shell's zoom is its own (Ctrl+= on the one with the keyboard, Ctrl and the wheel over one), nothing goes to the shell,
+// and it is kept by the shell's id: the program started again finds it on the same shell. Back to 1 or closed: forgotten.
+@(test)
+each_shell_has_its_own_zoom_kept_by_its_id :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	tmp, _ := os.temp_dir(context.temp_allocator)
+	file, _ := filepath.join({tmp, fmt.tprintf("ocn_term_zoom_%d.txt", os.get_pid())}, context.temp_allocator)
+	defer os.remove(file)
+	app := bench_new()
+	app.term_zooms.file = file
+	open_shells(t, app, "a", "b")
+	a, b := app.cx.terms.list[0], app.cx.terms.list[1]
+	built(app, a, 11)
+	ev := []platform.Event{{kind = .Key_Press, key = .Equal, mods = {.Ctrl}}}
+	testing.expect_value(t, len(term_events(app, ev)), 0)
+	testing.expect_value(t, outbox(a), "")
+	testing.expect(t, a.zoom > 1.05 && b.zoom == 1, "the one with the keyboard only")
+	b.shown, b.box, b.rect = true, 12, {{0, 500}, {800, 900}}
+	wheel := []platform.Event{{kind = .Scroll, pos = {10, 600}, delta = {0, 1}, mods = {.Ctrl}}}
+	testing.expect_value(t, len(term_events(app, wheel)), 0)
+	testing.expect(t, b.zoom < 0.95, "the one under the wheel")
+	// the program again: the same shells, their zooms
+	app2 := bench_new()
+	term_zooms_load(app2, file)
+	open_shells(t, app2, "a", "b")
+	testing.expect_value(t, app2.cx.terms.list[0].zoom, a.zoom)
+	testing.expect_value(t, app2.cx.terms.list[1].zoom, b.zoom)
+	// back to 1: forgotten; closed: forgotten
+	term_zoom_set(app, a, 1)
+	term_close(app, b)
+	testing.expect_value(t, len(app.term_zooms.by_id), 0)
+	data, _ := os.read_entire_file(file, context.temp_allocator)
+	testing.expect_value(t, string(data), "")
 }

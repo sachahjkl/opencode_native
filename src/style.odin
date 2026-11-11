@@ -126,7 +126,7 @@ themed_palette :: proc() -> ui.Palette {
 	p := OPENCODE_PALETTE
 	for c in ([]^u32{&p.bg, &p.panel, &p.panel2, &p.text, &p.weak, &p.border, &p.accent, &p.accent_text, &p.good, &p.warn, &p.bad, &p.bar}) { c^ = themed(c^) }
 	if app := the_app; app != nil {
-		// the style asked for, unless the theme is made for one (Console: edged); a light version: apply_palette makes it flat
+		// the style asked for, unless the theme is made for one (Kernel: edged); a light version: apply_palette makes it flat
 		p.finish = app.prefs.finish
 		if all := themes(app); app.cx.theme.at < len(all) {
 			if f, made := all[app.cx.theme.at].finish.?; made { p.finish = f }

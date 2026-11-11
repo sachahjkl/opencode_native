@@ -18,6 +18,8 @@ import "base:runtime"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
+import "core:os"
+import "core:strconv"
 import "core:strings"
 import "core:sync"
 import "core:thread"
@@ -84,6 +86,8 @@ Term :: struct {
 	sel_anchor: Vt_Tracked_Ref, // the cell the drag began on (nil: none)
 	sel_press:  [2]int,        // that cell, in the view at the press: a selection begins when the pointer leaves it
 	formatter:  Vt_Formatter,  // what a copy reads the text through
+	zoom:    f32,              // its own, times the program's size (Ctrl and the wheel, Ctrl+= - 0): kept by its id (term_zoom_set)
+	metrics: Term_Metrics,     // as last laid out
 }
 
 // What the left button (or another, for a program) holds on a grid. Its release comes wherever the pointer is: a program that was told
@@ -114,6 +118,10 @@ Terminals :: struct {
 	press_pos:    [2]f32,
 	menu_for: ^Term,           // a right click asked for its menu (at menu_at): its next build opens it
 	menu_at:  [2]f32,
+}
+
+// A grid's cells: its face's size (the program's size times its own zoom) and what follows from it.
+Term_Metrics :: struct {
 	font_size, cell_w, cell_h, ascent: f32,
 	spacing, spacing_bold: f32,   // what a letter of the face (its bold) is short of a cell: a run is drawn on the grid
 }
@@ -128,7 +136,7 @@ term_path :: proc(t: ^Term, tail := "") -> string {
 term_new :: proc(id, title, dir: string, cols: u16 = TERM_COLS, rows: u16 = TERM_ROWS) -> ^Term {
 	t := new(Term)
 	t.id, t.title, t.dir = strings.clone(id), strings.clone(title), strings.clone(dir)
-	t.cols, t.rows = cols, rows
+	t.cols, t.rows, t.zoom = cols, rows, 1
 	if ghostty_terminal_new(nil, &t.vt, cols, rows) != VT_OK { return t }
 	ghostty_render_state_new(nil, &t.state)
 	ghostty_render_state_row_iterator_new(nil, &t.rows_it)
@@ -151,7 +159,6 @@ term_new :: proc(id, title, dir: string, cols: u16 = TERM_COLS, rows: u16 = TERM
 	return t
 }
 
-@(private = "file")
 rgb_of :: proc(x: u32) -> Vt_Rgb { return {u8(x >> 24), u8(x >> 16), u8(x >> 8)} }   // (0xRRGGBBAA)
 
 // A colour the grid has: the program's own, as it asked for it (a theme moves only what the terminal chose: term_recolour).
@@ -159,12 +166,34 @@ rgb_of :: proc(x: u32) -> Vt_Rgb { return {u8(x >> 24), u8(x >> 16), u8(x >> 8)}
 color_of :: proc(c: Vt_Rgb) -> Color { return draw.hex(u32(c.r) << 24 | u32(c.g) << 16 | u32(c.b) << 8 | 0xff) }
 
 // The grid's own background and text, the theme's.
-@(private = "file")
 term_recolour :: proc(t: ^Term) {
 	if t.vt == nil { return }
 	bg, fg := rgb_of(themed(HEX_TERM_BG)), rgb_of(themed(HEX_TEXT))
 	ghostty_terminal_set(t.vt, VT_OPT_COLOR_BACKGROUND, &bg)
 	ghostty_terminal_set(t.vt, VT_OPT_COLOR_FOREGROUND, &fg)
+	palette := term_palette(bg, fg)
+	ghostty_terminal_set(t.vt, VT_OPT_COLOR_PALETTE, &palette)
+}
+
+// The 256 colours a program asks for by number, in the theme shown: the 16 named ones are the theme's hues (as the code's and
+// the diffs' are), the cube and the greys after them made between its background and its text (libghostty-vt's
+// palette_generate). Ghostty's own were a console's, the same in every theme.
+term_palette :: proc(bg, fg: Vt_Rgb) -> (palette: [256]Vt_Rgb) {
+	named := [16]u32{
+		HEX_BG3, HEX_RED, HEX_GREEN, HEX_YELLOW, HEX_BLUE, HEX_PURPLE, HEX_CYAN, HEX_TEXT_SOFT,
+		HEX_FAINT, HEX_RED, HEX_GREEN, HEX_YELLOW, HEX_BLUE, HEX_PURPLE, HEX_CYAN, HEX_BRIGHT,
+	}
+	for c, i in named {
+		x := themed(c)
+		// (the bright eight: a step toward white, as terminals draw them)
+		if i >= 9 && i <= 14 { l := lighten(draw.hex(x), 0.25); x = u32(l.r * 255) << 24 | u32(l.g * 255) << 16 | u32(l.b * 255) << 8 | 0xff }
+		palette[i] = rgb_of(x)
+	}
+	keep: Vt_Palette_Mask
+	keep.bits[0] = 0xffff   // (the 16 named: kept, the rest made from them)
+	b, f := bg, fg
+	ghostty_color_palette_generate(&palette[0], &keep, &b, &f, false, &palette[0])
+	return
 }
 
 // Another theme: every grid's own colours follow it.
@@ -513,6 +542,7 @@ term_add :: proc(app: ^App, it: json.Value, dir: string) -> ^Term {
 	id := jstr(it, "id")
 	if id == "" || term_find(app, id) != nil { return nil }
 	t := term_new(id, jstr(it, "title"), dir)
+	t.zoom = app.term_zooms.by_id[id] or_else 1
 	t.server = app.conn
 	t.panel = TERM_PANEL_BASE + s.next_panel
 	s.next_panel += 1
@@ -620,6 +650,7 @@ term_close :: proc(app: ^App, t: ^Term) {
 	s := &app.cx.terms
 	had_keys := s.focused == t
 	if t.link != .Closed { request(app, .Action, "DELETE", term_path(t), conn = t.server) }
+	term_zoom_forget(app, t.id)
 	term_forget_one(app, t)
 	if len(s.list) == 0 {
 		s.open = false
@@ -769,8 +800,8 @@ term_tracks_mouse :: proc(t: ^Term) -> bool {
 
 @(private = "file")
 term_cell_at :: proc(t: ^Term, s: ^Terminals, p: [2]f32) -> [2]int {
-	x := int((p.x - t.rect.min.x - TERM_PAD) / max(s.cell_w, 1))
-	y := int((p.y - t.rect.min.y - TERM_PAD) / max(s.cell_h, 1))
+	x := int((p.x - t.rect.min.x - TERM_PAD) / max(t.metrics.cell_w, 1))
+	y := int((p.y - t.rect.min.y - TERM_PAD) / max(t.metrics.cell_h, 1))
 	return {max(x, 0), max(y, 0)}
 }
 
@@ -877,7 +908,7 @@ term_mouse :: proc(t: ^Term, s: ^Terminals, action, button: i32, at: [2]f32, mod
 	ghostty_mouse_encoder_set_from_terminal(t.mouse_enc, t.vt)
 	size := Vt_Mouse_Size{
 		size = size_of(Vt_Mouse_Size), screen_width = u32(t.rect.max.x - t.rect.min.x), screen_height = u32(t.rect.max.y - t.rect.min.y),
-		cell_width = u32(s.cell_w), cell_height = u32(s.cell_h),
+		cell_width = u32(t.metrics.cell_w), cell_height = u32(t.metrics.cell_h),
 		padding_top = u32(TERM_PAD), padding_bottom = u32(TERM_PAD), padding_right = u32(TERM_PAD), padding_left = u32(TERM_PAD),
 	}
 	ghostty_mouse_encoder_set(t.mouse_enc, VT_MOUSE_OPT_SIZE, &size)
@@ -970,7 +1001,14 @@ term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 		typed := keys != nil && !keys.read_only
 		#partial switch e.kind {
 		case .Key_Press:
-			if keys != nil { take = term_key_event(app, keys, e) }
+			if keys != nil && e.mods == {.Ctrl} {
+				#partial switch e.key {
+				case .Equal, .Num_Add:      term_zoom_set(app, keys, keys.zoom * ZOOM_FACTOR); take = true
+				case .Minus, .Num_Subtract: term_zoom_set(app, keys, keys.zoom / ZOOM_FACTOR); take = true
+				case .N0:                   term_zoom_set(app, keys, 1); take = true
+				}
+			}
+			if keys != nil && !take { take = term_key_event(app, keys, e) }
 		case .Key_Release:
 			take = typed
 		case .Text:
@@ -986,7 +1024,9 @@ term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 			t := term_at(app, e.pos)
 			if t == nil || t.vt == nil { break }
 			take = true
-			if term_tracks_mouse(t) {
+			if .Ctrl in e.mods {
+				term_zoom_set(app, t, e.delta.y < 0 ? t.zoom * ZOOM_FACTOR : t.zoom / ZOOM_FACTOR)
+			} else if term_tracks_mouse(t) {
 				button: i32 = e.delta.y > 0 ? VT_MOUSE_FIVE : VT_MOUSE_FOUR
 				term_mouse(t, s, VT_MOUSE_PRESS, button, e.pos, e.mods, false)
 				term_mouse(t, s, VT_MOUSE_RELEASE, button, e.pos, e.mods, false)
@@ -1096,14 +1136,14 @@ terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
 	sig := ui.signal(b)
 	if sig.pressed || term_takes_focus(s, t, ui.focus_key()) { ui.set_focus(b.key) }
 	t.box, t.rect, t.shown = b.key, b.rect, true
-	s.font_size = math.round(em * FS_NOTE)
-	advance := font.text_width(&app.fonts, app.term_font, s.font_size, "M")
-	s.cell_w = math.ceil(advance)
-	s.spacing = s.cell_w - advance
-	s.spacing_bold = s.cell_w - font.text_width(&app.fonts, app.term_font_bold, s.font_size, "M")
-	m := font.metrics(&app.fonts, app.term_font, s.font_size)
-	s.cell_h = math.ceil(m.line_height)
-	s.ascent = m.ascent
+	t.metrics.font_size = math.round(em * FS_NOTE * t.zoom)
+	advance := font.text_width(&app.fonts, app.term_font, t.metrics.font_size, "M")
+	t.metrics.cell_w = math.ceil(advance)
+	t.metrics.spacing = t.metrics.cell_w - advance
+	t.metrics.spacing_bold = t.metrics.cell_w - font.text_width(&app.fonts, app.term_font_bold, t.metrics.font_size, "M")
+	m := font.metrics(&app.fonts, app.term_font, t.metrics.font_size)
+	t.metrics.cell_h = math.ceil(m.line_height)
+	t.metrics.ascent = m.ascent
 	term_fit(app, t, b.rect)
 	b.custom, b.custom_user = term_draw, t
 	menu := ui.key_from_string(b.key, "term_menu")
@@ -1119,6 +1159,11 @@ term_menu :: proc(app: ^App, t: ^Term) {
 	}
 	if !t.read_only && ui.menu_item("Paste", "Ctrl+Shift+V", icon = lucide.CLIPBOARD_PASTE).clicked { term_paste(app, t) }
 	if ui.menu_item("Select all", icon = lucide.TEXT_CURSOR_INPUT, enabled = t.vt != nil).clicked { term_select_all(t) }
+	ui.menu_separator()
+	if ui.menu_item("Zoom in", "Ctrl+=", icon = lucide.PLUS).clicked { term_zoom_set(app, t, t.zoom * ZOOM_FACTOR) }
+	if ui.menu_item("Zoom out", "Ctrl+-", icon = lucide.CHEVRON_DOWN).clicked { term_zoom_set(app, t, t.zoom / ZOOM_FACTOR) }
+	reset := t.zoom != 1 ? fmt.tprintf("Reset the zoom (%d%%)", int(math.round(t.zoom * 100))) : "Reset the zoom"
+	if ui.menu_item(reset, "Ctrl+0", icon = lucide.UNDO_2, enabled = t.zoom != 1).clicked { term_zoom_set(app, t, 1) }
 	if v := output_view_of_term(app, t); v != nil {
 		ui.menu_separator()
 		if ui.menu_item("Copy all the output", icon = lucide.COPY, enabled = len(v.raw) > 0).clicked { clip_set(plain_output(string(v.raw[:]))) }
@@ -1170,11 +1215,10 @@ term_label :: proc(t: ^Term) -> string {
 // shell paints its whole screen again for each size it takes, in pieces, which the grid would show: its text a few rows off, for a frame.
 @(private = "file")
 term_fit :: proc(app: ^App, t: ^Term, r: draw.Rect) {
-	s := &app.cx.terms
-	if t.vt == nil || s.cell_w <= 0 || r.max.x - r.min.x < 1 { return }
-	cols := u16(clamp((r.max.x - r.min.x - 2 * TERM_PAD) / s.cell_w, 2, 1000))
-	rows := u16(clamp((r.max.y - r.min.y - 2 * TERM_PAD) / s.cell_h, 2, 1000))
-	term_resize(app, t, cols, rows, u32(s.cell_w), u32(s.cell_h))
+	if t.vt == nil || t.metrics.cell_w <= 0 || r.max.x - r.min.x < 1 { return }
+	cols := u16(clamp((r.max.x - r.min.x - 2 * TERM_PAD) / t.metrics.cell_w, 2, 1000))
+	rows := u16(clamp((r.max.y - r.min.y - 2 * TERM_PAD) / t.metrics.cell_h, 2, 1000))
+	term_resize(app, t, cols, rows, u32(t.metrics.cell_w), u32(t.metrics.cell_h))
 }
 
 term_resize :: proc(app: ^App, t: ^Term, cols, rows: u16, cell_w, cell_h: u32) {
@@ -1273,7 +1317,7 @@ term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		if ghostty_render_state_row_get(t.rows_it, VT_ROW_CELLS, &t.cells) != VT_OK { continue }
 		picked := Vt_Row_Selection{size = size_of(Vt_Row_Selection)}
 		has_picked := ghostty_render_state_row_get(t.rows_it, VT_ROW_SELECTION, &picked) == VT_OK
-		top := origin.y + f32(y) * s.cell_h
+		top := origin.y + f32(y) * t.metrics.cell_h
 		clear(&runs)
 		strings.builder_reset(&row)
 		run_x: f32
@@ -1287,7 +1331,7 @@ term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		x := 0
 		for ghostty_render_state_row_cells_next(t.cells) {
 			defer x += 1
-			left := origin.x + f32(x) * s.cell_w
+			left := origin.x + f32(x) * t.metrics.cell_w
 			style: Vt_Style
 			ghostty_render_state_row_cells_get(t.cells, VT_CELL_STYLE, &style)
 			bold := style.flags & VT_STYLE_BOLD != 0
@@ -1296,7 +1340,7 @@ term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 			bg := colors.background
 			has_bg := ghostty_render_state_row_cells_get(t.cells, VT_CELL_BG, &bg) == VT_OK
 			if style.flags & VT_STYLE_INVERSE != 0 { fg, bg, has_bg = bg, fg, true }
-			cell := draw.Rect{{left, top}, {left + s.cell_w, top + s.cell_h}}
+			cell := draw.Rect{{left, top}, {left + t.metrics.cell_w, top + t.metrics.cell_h}}
 			if has_picked && x >= int(picked.start_x) && x <= int(picked.end_x) {
 				draw.rect(dc, cell, hex(HEX_TERM_SELECTION))
 			} else if has_bg {
@@ -1309,8 +1353,8 @@ term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 			ghostty_render_state_row_cells_get(t.cells, VT_CELL_GRAPHEMES_BUF, &read)   // (more than it holds: the first of them)
 			n := min(read.len, len(glyphs))
 			if style.flags & VT_STYLE_INVISIBLE != 0 { n = 0 }
-			if style.flags & VT_STYLE_UNDERLINE != 0 { draw.rect(dc, {{left, top + s.ascent + 1}, {left + s.cell_w, top + s.ascent + 2}}, color) }
-			if style.flags & VT_STYLE_STRIKETHROUGH != 0 { draw.rect(dc, {{left, top + s.cell_h * 0.55}, {left + s.cell_w, top + s.cell_h * 0.55 + 1}}, color) }
+			if style.flags & VT_STYLE_UNDERLINE != 0 { draw.rect(dc, {{left, top + t.metrics.ascent + 1}, {left + t.metrics.cell_w, top + t.metrics.ascent + 2}}, color) }
+			if style.flags & VT_STYLE_STRIKETHROUGH != 0 { draw.rect(dc, {{left, top + t.metrics.cell_h * 0.55}, {left + t.metrics.cell_w, top + t.metrics.cell_h * 0.55 + 1}}, color) }
 			ascii := n == 1 && glyphs[0] < 0x80
 			if n == 0 {
 				if strings.builder_len(row) > 0 { strings.write_byte(&row, ' ') }
@@ -1327,7 +1371,7 @@ term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		// (each letter a cell wide: at the face's own advance a run fell behind the grid, and the next run, at its cell,
 		// left a gap after every change of colour)
 		for r in runs {
-			draw.text_ex(dc, r.bold ? app.term_font_bold : app.term_font, s.font_size, {r.x, top + s.ascent}, r.color, r.text, {letter_spacing = r.bold ? s.spacing_bold : s.spacing})
+			draw.text_ex(dc, r.bold ? app.term_font_bold : app.term_font, t.metrics.font_size, {r.x, top + t.metrics.ascent}, r.color, r.text, {letter_spacing = r.bold ? t.metrics.spacing_bold : t.metrics.spacing})
 		}
 	}
 	term_draw_cursor(t, s, dc, origin, &colors)
@@ -1346,8 +1390,8 @@ term_draw_cursor :: proc(t: ^Term, s: ^Terminals, dc: ^draw.Context, origin: [2]
 	look: i32
 	ghostty_render_state_get(t.state, VT_STATE_CURSOR_STYLE, &look)
 	color := color_of(colors.cursor_has_value ? colors.cursor : colors.foreground)
-	left, top := origin.x + f32(cx) * s.cell_w, origin.y + f32(cy) * s.cell_h
-	r := draw.Rect{{left, top}, {left + s.cell_w, top + s.cell_h}}
+	left, top := origin.x + f32(cx) * t.metrics.cell_w, origin.y + f32(cy) * t.metrics.cell_h
+	r := draw.Rect{{left, top}, {left + t.metrics.cell_w, top + t.metrics.cell_h}}
 	switch {
 	case s.focused != t:
 		t1 := px1()
@@ -1371,4 +1415,60 @@ term_draw_scrollbar :: proc(t: ^Term, r: draw.Rect, dc: ^draw.Context) {
 	thumb := max(h * f32(bar.len) / f32(bar.total), 12 * px1())
 	top := r.min.y + (h - thumb) * f32(bar.offset) / f32(bar.total - bar.len)
 	draw.rect(dc, {{r.max.x - 4 * px1(), top}, {r.max.x - px1(), top + thumb}}, hex(HEX_FAINT))
+}
+
+////////////////////////////////
+// Each shell's zoom
+
+// The shells' zooms, by their id on the server: a shell found again (the program started again, the server come back) has
+// its own. The server keeps a shell's title and size only: the zooms are the client's, in terminal_zoom.txt beside the
+// preferences, one "id<TAB>zoom" a line. A shell closed from here leaves the file.
+Term_Zooms :: struct {
+	file:  string,              // ("": nowhere, as in the tests)
+	by_id: map[string]f32,      // (keys owned; 1 is not kept)
+}
+
+term_zooms_load :: proc(app: ^App, file: string) {
+	z := &app.term_zooms
+	z.file = strings.clone(file)
+	if file == "" { return }
+	data, err := os.read_entire_file(file, context.temp_allocator)
+	if err != nil { return }
+	rest := string(data)
+	for line in strings.split_lines_iterator(&rest) {
+		id, _, value := strings.partition(line, "\t")
+		v, ok := strconv.parse_f32(value)
+		if id != "" && ok && v != 1 && id not_in z.by_id { z.by_id[strings.clone(id)] = clamp(v, TERM_ZOOM_MIN, TERM_ZOOM_MAX) }
+	}
+}
+
+// A shell's zoom, within its bounds; kept when the shell is one of the server's (an output's grid has its own for the time
+// it is open).
+term_zoom_set :: proc(app: ^App, t: ^Term, zoom: f32) {
+	t.zoom = clamp(zoom, TERM_ZOOM_MIN, TERM_ZOOM_MAX)
+	if abs(t.zoom - 1) < 0.01 { t.zoom = 1 }   // (steps of 1.1 back and forth come back near 1, not to it)
+	if term_find(app, t.id) != t { return }
+	z := &app.term_zooms
+	if t.zoom == 1 {
+		term_zoom_forget(app, t.id)
+		return
+	}
+	if t.id not_in z.by_id { z.by_id[strings.clone(t.id)] = t.zoom } else { z.by_id[t.id] = t.zoom }
+	term_zooms_save(z)
+}
+
+term_zoom_forget :: proc(app: ^App, id: string) {
+	z := &app.term_zooms
+	if id not_in z.by_id { return }
+	key, _ := delete_key(&z.by_id, id)
+	delete(key)
+	term_zooms_save(z)
+}
+
+@(private = "file")
+term_zooms_save :: proc(z: ^Term_Zooms) {
+	if z.file == "" { return }
+	b := strings.builder_make(context.temp_allocator)
+	for id, v in z.by_id { fmt.sbprintf(&b, "%s\t%v\n", id, v) }   // (%v: read back, the same number)
+	_ = os.write_entire_file(z.file, transmute([]u8)strings.to_string(b))
 }

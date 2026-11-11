@@ -183,7 +183,7 @@ output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 	testing.expectf(t, strings.has_prefix(term_text(v.term), "$ cargo build"), "the command, at the head of the grid: %q", term_text(v.term))
 	// a drag over the grid selects, and Ctrl+C copies it
 	if g := session.find(s, "term_box"); g != nil {
-		y := g.rect.min.y + app.cx.terms.cell_h * 1.5   // (its second row: the first is the command)
+		y := g.rect.min.y + v.term.metrics.cell_h * 1.5   // (its second row: the first is the command)
 		from := [2]f32{g.rect.min.x + 12, y}
 		to := [2]f32{g.rect.min.x + 160, y}
 		session.move(s, from)
@@ -592,6 +592,22 @@ older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session)
 	session.frames(s, 2)
 	testing.expect_value(t, app.find.index, 18)
 	find_close(app)
+
+	// a wheel turned up past the top while the page is read stops at the top; the page that comes carries that stop along. (It
+	// glided over all of the page to its top: the view jumped, and the next page was asked for at once.)
+	c.older = strings.clone("more", c.alloc)
+	session.frames(s, 2)
+	sb = session.get(s, "chat")
+	session.wheel(s, session.center(sb), {0, -200})
+	session.frames(s, 1)
+	sb = session.get(s, "chat")
+	testing.expect(t, sb.view_target.y == 0 && sb.view_anim[1].active, "on its way to the top, stopped there")
+	if testing.expect_value(t, bench_count(.Older), 1) {
+		post_answer(app, bench_take(t, .Older), older_page(3000, 60, ""))
+		session.wait_idle(s)
+		sb = session.get(s, "chat")
+		testing.expectf(t, sb.view_off.y > sb.size.y * OLDER_MARGIN, "the view stays under the new page: %v", sb.view_off.y)
+	}
 	app.conn = nil
 }
 
@@ -701,7 +717,7 @@ the_todos_filter_by_state :: proc(t: ^testing.T) {
 	})
 }
 
-// Console is made for the edged finish: chosen, it brings it (whatever appearance.style says), and its square corners; the
+// Kernel is made for the edged finish: chosen, it brings it (whatever appearance.style says), and its square corners; the
 // statistics' sections are headed in their colours, the tokens' mix a bar.
 @(test)
 the_console_theme_is_edged :: proc(t: ^testing.T) {
@@ -712,7 +728,7 @@ the_console_theme_is_edged :: proc(t: ^testing.T) {
 		pref_set(app, "appearance.mode", "dark")
 		defer pref_set(app, "appearance.mode", "system")
 		testing.expect_value(t, app.theme.finish, ui.Finish.Machined)
-		pref_set(app, "appearance.theme", "Console")
+		pref_set(app, "appearance.theme", "Kernel")
 		defer pref_set(app, "appearance.theme", "OpenCode")
 		testing.expect_value(t, app.theme.finish, ui.Finish.Edged)
 		testing.expect_value(t, corners(), 0)
@@ -727,14 +743,14 @@ the_console_theme_is_edged :: proc(t: ^testing.T) {
 	})
 }
 
-// The screens in Console, for the eye (build/session/bench_app/console_*.png): the settings, the palette, the activity with
+// The screens in Kernel, for the eye (build/session/bench_app/console_*.png): the settings, the palette, the activity with
 // its todos, a shell. What each shows is checked elsewhere; here, that each opens in the theme.
 @(test)
 the_console_screens :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		pref_set(app, "appearance.theme", "Console")
+		pref_set(app, "appearance.theme", "Kernel")
 		defer pref_set(app, "appearance.theme", "OpenCode")
 		settings_open(app)
 		session.wait_idle(s)
@@ -819,7 +835,6 @@ a_shell_keeps_its_columns_across_colours :: proc(t: ^testing.T) {
 		term_feed(sh, fmt.tprintf("abcdefghijklmnopqrst\r\n%s\x1b[0m\r\n", strings.to_string(mixed)))   // (the cursor on the next line)
 		session.wait_idle(s)
 		img := session.capture(s)
-		ts := &app.cx.terms
 		// the right end of what is drawn on a row of cells
 		end_of :: proc(img: session.Image, r: Rect, top, h: f32) -> int {
 			bg := session.pixel(img, int(r.max.x) - 4, int(top + h * 0.5))
@@ -831,8 +846,8 @@ a_shell_keeps_its_columns_across_colours :: proc(t: ^testing.T) {
 			}
 			return last
 		}
-		plain := end_of(img, sh.rect, sh.rect.min.y, ts.cell_h)
-		coloured := end_of(img, sh.rect, sh.rect.min.y + ts.cell_h, ts.cell_h)
+		plain := end_of(img, sh.rect, sh.rect.min.y, sh.metrics.cell_h)
+		coloured := end_of(img, sh.rect, sh.rect.min.y + sh.metrics.cell_h, sh.metrics.cell_h)
 		testing.expect(t, plain > int(sh.rect.min.x), "the first line is drawn")
 		testing.expectf(t, abs(plain - coloured) <= 1, "both lines end at one column: %d and %d", plain, coloured)
 	})

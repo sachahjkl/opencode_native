@@ -50,7 +50,7 @@ NIXOS_LIBRARIES := [?]string{
 identity :: proc() -> desktop.Identity {
 	return desktop.Identity{
 		name = APP_NAME, key = "OpencodeNative", slug = APP_SLUG, aumid = "FromentSoftware.OpencodeNative",
-		description = "A native desktop client for the opencode server. Not affiliated with the OpenCode team.",
+		description = "A native desktop client for opencode. Not affiliated with the OpenCode team.",
 		vendor = APP_PUBLISHER,
 		entry_marker = "X-OpencodeNative-Integration", registry_mark = "OpencodeNativeIntegration", vendor_key = "FromentSoftware",
 		manifest_name = MANIFEST_NAME,
