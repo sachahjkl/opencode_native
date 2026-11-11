@@ -7,7 +7,7 @@
 <p align="center"><i>An independent project: it is not built by the OpenCode team, and it is not affiliated with them in any way.</i></p>
 
 <p align="center">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.44.0-fab283" alt="version 0.44.0"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.45.0-fab283" alt="version 0.45.0"></a>
 <a href="https://ocn.froment.software/"><img src="https://img.shields.io/badge/site-ocn.froment.software-56b6c2" alt="site"></a>
 </p>
 
@@ -43,7 +43,7 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 | ![The conversation of a sub-agent: where it comes from, the way back](docs/screenshots/subagent-session.png) | ![The model picker, searched as one types](docs/screenshots/picker.png) |
 | **A sub-agent's own conversation**: the breadcrumb, Back | **The model picker**: subsequence search ("sonnet"), the matched letters lit |
 | ![Session statistics](docs/screenshots/statistics.png) | ![Settings: the themes, each in its own colours](docs/screenshots/settings.png) |
-| **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Themes**: twenty, dark and light or as the system, machined or flat, and your own in themes.txt |
+| **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Themes**: twenty-seven, dark and light or as the system, machined, edged or flat, and your own in themes.txt |
 | ![Gruvbox, light](docs/screenshots/theme-gruvbox-light.png) | ![Nord, flat](docs/screenshots/theme-nord-flat.png) |
 | **Gruvbox**, its light version | **Nord** in the flat style: plain surfaces, thin lines |
 | ![Retro: a black that holds, colours that pop](docs/screenshots/theme-retro.png) | ![The conversation](docs/screenshots/conversation.png) |
@@ -58,7 +58,7 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 ## What it does
 
 - **A typeface of its own**, built into the program: Hanken Grotesk for the interface, Newsreader for the answers, DM Mono
-  for code. Settings > Appearance goes back to the system's faces. Below 150 % text is smoothed per colour stripe of the screen's
+  for code, Fira Mono for the shells. Settings > Appearance goes back to the system's faces. Below 150 % text is smoothed per colour stripe of the screen's
   pixels, on Windows and on Linux, as the system says; Text smoothing chooses RGB, BGR or grey.
 - **Sessions** grouped by project folder, with the project's logo; search; running ones lit; sub-agents nested under
   the session that launched them (the active ones counted and shown first).
@@ -107,7 +107,7 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 - **Statistics of a session** (its token count in the header, Ctrl+I): tokens in, out, reasoning, cache reads and
   writes, cost, cache hits, the context the last step filled against the model's window, time and pace, tool calls by
   tool (failures counted), models, its sub-agents, and the whole project's totals from the server.
-- **Settings** (Ctrl+,): the theme (17 of them, each dark and light, as the system or always one; themes of your own in `themes.txt`) and the style (machined or flat), the fonts of the interface, the answers and code (built in, the system's, or any installed one, in a searched picker), text size, zoom, density, rounding, animations, smooth scrolling, scroll bars that hide, glow; how the conversation shows;
+- **Settings** (Ctrl+,): the theme (27 of them, most dark and light, as the system or always one; themes of your own in `themes.txt`) and the style (machined, edged or flat), the system's title bar or the program's, the fonts of the interface, the answers and code (built in, the system's, or any installed one, in a searched picker), text size, zoom, density, rounding, animations, smooth scrolling, scroll bars that hide, glow; how the conversation shows;
   the send key; sub-agents in the sidebar; notifications when a session finishes or asks. And what the server lets one see
   or change: its shell, its MCP servers (connect, disconnect), the usage limits and budgets of an OpenCode workspace, the
   saved permissions (revoke), providers, models, agents, skills, commands, the configuration files.
@@ -202,5 +202,5 @@ every step is a command of `tools/ocntools` (`help` lists them; `AGENTS.md`). Th
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Hanken Grotesk, Newsreader and DM Mono: SIL Open Font License, see `assets/fonts/*-LICENSE.txt`. Lucide's icons (gui_toolkit's `lucide`): ISC, see `ext/gui_toolkit/src/lucide/LICENSE.txt`.
+MIT, see [LICENSE](LICENSE). Hanken Grotesk, Newsreader, DM Mono and Fira Mono: SIL Open Font License, see `assets/fonts/*-LICENSE.txt`. Lucide's icons (gui_toolkit's `lucide`): ISC, see `ext/gui_toolkit/src/lucide/LICENSE.txt`.
 opencode is a project of its own ([opencode.ai](https://opencode.ai)). This client is not built by the OpenCode team and is not affiliated with them in any way. Its logo is its own.

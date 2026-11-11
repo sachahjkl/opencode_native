@@ -5,6 +5,31 @@ project follows [semantic versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-11-11
+
+### Added
+
+- **Console, a theme with its own style**: blue black, the colours of a console, and the edged style it brings: the reliefs drawn crisp, a dark hairline around each surface, a line of light along its top, a shade along its bottom, square corners (a switch, a radio and a lamp stay round). The title bar is the accent fading out from the left, the close button a red block (gui_toolkit 0.187.0's edged finish).
+- **Edged, a third style** (Settings > Appearance > Style): the edged reliefs with any theme.
+- **The system's title bar, by choice** (Settings > Appearance): the system's bar and buttons above the window instead of the ones drawn here; the bar with the menu and the session's name stays under it. Offered where the system can draw one (Windows, X11, KDE; not GNOME).
+- **A shield for the session's approvals**, in the composer's toolbar: As configured, Allow edits, Allow everything, Ask for everything. It sets the session's own permission rules on the server (they come after the configuration's), so the server decides and every client shows the same; rules set elsewhere show as Custom and are left alone.
+- **A project's icon of your own**: a right click on a project in the sidebar, or on one of its sessions, then "Set the project's icon…" (any image: it goes made 256 pixels at most, as a PNG). It goes to the server as the project's icon, so every client shows it; "Remove the project's icon" brings back the one found in the project.
+- **The shells have a face of their own**: Fira Mono, built in, no ligatures (Settings > Appearance > Terminal font: the system's monospace or any installed family).
+
+### Changed
+
+- **The palette's search is flush with it**: no frame of its own, no margin above and on its sides; a line under it parts it from the list.
+- **The statistics' sections are headed in their colours**: a stripe and the name in the section's colour (Context, Tokens, Time, Tools...), the tools' count beside their name; the tokens' mix is a bar cut in their parts (input, cache read, cache write, output, reasoning), each value in the colour of its part.
+
+### Fixed
+
+- **A toast's title is in Hanken Grotesk's own bold**: it was the regular face thickened by an algorithm (a simulated bold), and the bar of an "e" lost its join at its size (gui_toolkit's `styled_face`).
+- **A shell's letters stay on their columns**: after each change of colour a gap opened (`warning :`, `project  $`): a run of one colour was drawn at the face's own advance, a little short of a cell, and fell behind the grid.
+
+### Removed
+
+- **"Allow every permission"** (permission.allow_all): this client answered yes in the server's place, over the configuration's own asks (`rm`, `sudo`...), and another client connected to the same server still told of a request already answered. The shield sets the session's rules on the server instead.
+
 ## [0.44.0] - 2026-11-11
 
 ### Added
@@ -1281,7 +1306,8 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
-[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.44.0...HEAD
+[Unreleased]: https://github.com/sachahjkl/opencode_native/compare/v0.45.0...HEAD
+[0.45.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.45.0
 [0.44.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.44.0
 [0.43.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.3
 [0.43.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.43.2
