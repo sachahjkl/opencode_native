@@ -311,7 +311,7 @@ sidebar :: proc(app: ^App, em: f32) {
 				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-					ui.line_edit("###search", &app.search, "Search sessions")
+					ui.line_edit("###search", &app.search, "Search sessions", clearable = true)
 				}
 			}
 			pad_row(em)

@@ -654,11 +654,15 @@ the_search_has_a_menu :: proc(t: ^testing.T) {
 		session.click(s, "search", .Right)
 		session.frames(s, 2)
 		testing.expect(t, ui.ctx_menu_any_open(), "its menu")
+		session.save_png(s, "search_menu.png")
 		session.click_text(s, "Paste")
 		session.frames(s, 3)
 		testing.expect_value(t, ui.field_string(&app.search), "ses_2")
 		testing.expect(t, session.find(s, "ls_ses_2") != nil, "the search found it by its id")
-		ui.field_set(&app.search, "")
+		// its cross empties it
+		session.click(s, "clear")
+		session.frames(s, 3)
+		testing.expect_value(t, ui.field_string(&app.search), "")
 	})
 }
 
