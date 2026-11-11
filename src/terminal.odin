@@ -87,7 +87,8 @@ Term :: struct {
 	sel_press:  [2]int,        // that cell, in the view at the press: a selection begins when the pointer leaves it
 	formatter:  Vt_Formatter,  // what a copy reads the text through
 	zoom:    f32,              // its own, times the program's size (Ctrl and the wheel, Ctrl+= - 0): kept by its id (term_zoom_set)
-	zoom_ms: f64,              // when it last changed: the grid keeps its columns and rows until the zoom rests (term_fit)
+	zoom_ms: f64,
+	bar_look: Term_Bar_Look,   // its scroll bar at rest, under the pointer or held (terminal_panel)              // when it last changed: the grid keeps its columns and rows until the zoom rests (term_fit)
 	metrics: Term_Metrics,     // as last laid out
 }
 
@@ -1143,7 +1144,11 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
 	s := &app.cx.terms
 	term_banner(app, t, em)
-	ui.next({width = ui.fill(), height = ui.fill(), cursor = .Text})
+	// the scroll bar under the pointer, or held: an arrow over it, and the thumb wider and lighter (term_draw_scrollbar)
+	_, over_bar := term_bar_at(t, ui.mouse_pos())
+	held := s.press == .Scrollbar && s.pressed == t
+	t.bar_look = held ? .Held : over_bar ? .Hot : .Rest
+	ui.next({width = ui.fill(), height = ui.fill(), cursor = over_bar || held ? .Arrow : .Text})
 	b := ui.build_box({.Clickable, .Focusable, .Clip}, "###term_box")
 	sig := ui.signal(b)
 	if sig.pressed || term_takes_focus(s, t, ui.focus_key()) { ui.set_focus(b.key) }
@@ -1423,6 +1428,8 @@ term_draw_cursor :: proc(t: ^Term, s: ^Terminals, dc: ^draw.Context, origin: [2]
 	}
 }
 
+Term_Bar_Look :: enum u8 { Rest, Hot, Held }
+
 // A grid's scroll bar: its thumb in the grid's right edge, where the scrollback's view is (none while all of it shows).
 Term_Bar :: struct { bar: Vt_Scrollbar, thumb_top, thumb_h: f32 }
 
@@ -1459,7 +1466,15 @@ term_bar_drag :: proc(t: ^Term, y, grab: f32) {
 term_draw_scrollbar :: proc(t: ^Term, r: draw.Rect, dc: ^draw.Context) {
 	g, ok := term_bar(t, r)
 	if !ok { return }
-	draw.rect(dc, {{r.max.x - 4 * px1(), g.thumb_top}, {r.max.x - px1(), g.thumb_top + g.thumb_h}}, hex(HEX_FAINT))
+	// at rest a thumb that is seen; under the pointer its track, the thumb wider and lighter; held, lighter still
+	w := TERM_BAR_W_PX * px1()
+	thumb := with_alpha(hex(HEX_WEAK), 0.7)
+	if t.bar_look != .Rest {
+		w = TERM_BAR_HOT_W_PX * px1()
+		draw.rect(dc, {{r.max.x - w - 2 * px1(), r.min.y}, {r.max.x, r.max.y}}, with_alpha(hex(HEX_TEXT), 0.06))
+		thumb = t.bar_look == .Held ? hex(HEX_TEXT) : hex(HEX_TEXT_SOFT)
+	}
+	draw.rect(dc, {{r.max.x - w - px1(), g.thumb_top}, {r.max.x - px1(), g.thumb_top + g.thumb_h}}, thumb, w * 0.5 * corners())
 }
 
 ////////////////////////////////
