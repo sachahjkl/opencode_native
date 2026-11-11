@@ -4,6 +4,15 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.46.3] - 2026-11-11
+
+### Added
+- **Restart opencode native** in the palette: the program starts again.
+- **The palette forgives a slip**: a word typed with a letter wrong, missing, one too many or two swapped still finds its command, session or setting ("Qestart pencode native" finds "Restart opencode native"), after every exact match. Each command has tags, other words it is found by ("exit" finds Quit).
+
+### Fixed
+- **What a search lit is readable**: the letters found keep the text's colour on the accent's tint; in the accent's colour they read at a contrast of about 3.
+
 ## [0.46.2] - 2026-11-11
 
 ### Added
@@ -1342,6 +1351,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.46.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.3
 [0.46.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.2
 [0.46.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.1
 [0.46.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.0
