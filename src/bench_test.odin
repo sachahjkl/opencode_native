@@ -708,6 +708,9 @@ the_console_theme_is_edged :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		// (the dark version, whatever the system's: a light one is flat by design, and a CI machine may be light)
+		pref_set(app, "appearance.mode", "dark")
+		defer pref_set(app, "appearance.mode", "system")
 		testing.expect_value(t, app.theme.finish, ui.Finish.Machined)
 		pref_set(app, "appearance.theme", "Console")
 		defer pref_set(app, "appearance.theme", "OpenCode")
