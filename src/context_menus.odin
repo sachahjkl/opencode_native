@@ -10,11 +10,11 @@ import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
 
-Ctx_Kind :: enum u8 { None, Message, Tool, Composer, Image, Diagram }
+Ctx_Kind :: enum u8 { None, Message, Tool, Composer, Image, Diagram, Folder }
 
 Ctx_Target :: struct {
 	kind:   Ctx_Kind,
-	msg:    string,     // the message; a diagram's text (owned)
+	msg:    string,     // the message; a diagram's text; a folder's path (owned)
 	part:   int,        // its tool call
 	image:  Image_Ref,  // the image (owned: the message that holds it can be read again before the menu is used)
 }
@@ -204,6 +204,8 @@ context_menu :: proc(app: ^App, em: f32) {
 			if !app.cx.open[.Viewer] {
 				if ui.menu_item("Open in the viewer", icon = lucide.ZOOM_IN).clicked { image_view_open(app, image) }
 			}
+		case .Folder:
+			if ui.menu_item("Copy the path", icon = lucide.COPY).clicked { clip_set(app.cx.ctx.msg); ui.toast(.Good, "Copied") }
 		case .Diagram:
 			code := app.cx.ctx.msg
 			if ui.menu_item("Copy as PNG", app.cx.open[.Viewer] ? "Ctrl+C" : "", icon = lucide.IMAGE).clicked { diagram_copy_png(app, code) }

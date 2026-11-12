@@ -47,7 +47,6 @@ home_session :: proc(app: ^App, s: ^Session_Info, em, now: f64, busy: bool) {
 }
 
 // The folders of the latest sessions, the latest first.
-@(private = "file")
 home_folders :: proc(app: ^App) -> []string {
 	seen := make(map[string]bool, allocator = context.temp_allocator)
 	out := make([dynamic]string, context.temp_allocator)
@@ -95,10 +94,14 @@ home :: proc(app: ^App, em: f32) {
 		for d, i in folders {
 			kind := Btn_Kind.Normal
 			if d == app.chat.new_dir { kind = .Toggled }
-			if bevel_button(fmt.tprintf("###hf%d", i), base_name(d), lucide.FOLDER, kind, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
+			sig := bevel_button(fmt.tprintf("###hf%d", i), base_name(d), lucide.FOLDER, kind, height = math.round(em * BUTTON_COMPACT_H_EM))
+			if sig.clicked {
 				app.chat.new_dir = strings.clone(d, app.chat.alloc)
 				app.cx.focus_composer = true
 			}
+			// (the button shows the folder's name alone: two folders of one name differ only by their paths)
+			if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(d) } }
+			if sig.right_clicked { ctx_open(app, .Folder, msg = d) }
 		}
 		if bevel_button("###hf_other", "Other folder…", lucide.PLUS, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { home_pick_folder(app) }
 	}

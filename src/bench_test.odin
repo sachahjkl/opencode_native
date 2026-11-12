@@ -1745,3 +1745,27 @@ a_shells_scroll_bar_can_be_dragged :: proc(t: ^testing.T) {
 		testing.expect(t, !term_has_selection(sh), "no selection made by that press")
 	})
 }
+
+// A recent folder of the home page shows only its name: its whole path is in its tooltip, and its menu copies it.
+@(test)
+a_recent_folder_tells_and_copies_its_path :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		chat_home(app)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "hf0") != nil }, "the recent folders built")
+		session.wait_idle(s)   // (the home page comes in where the chat was: the folder stands still before the pointer goes to it)
+		path := strings.clone(home_folders(app)[0], context.temp_allocator)
+		testing.expect(t, session.find_text(s, path) == nil, "the path is not shown at rest")
+		session.hover(s, "hf0")
+		session.advance(s, 1000 * TOOLTIP_DELAY_S + 100)
+		session.save_png(s, "folder_tooltip.png")
+		testing.expect(t, session.find_text(s, path) != nil, "the tooltip says the whole path")
+		session.click(s, "hf0", .Right)
+		session.frames(s, 2)
+		testing.expect(t, ui.ctx_menu_any_open(), "its menu")
+		session.click_text(s, "Copy the path")
+		session.frames(s, 2)
+		testing.expect_value(t, session.clipboard(s), path)
+	})
+}
