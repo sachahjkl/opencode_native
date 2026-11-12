@@ -323,38 +323,38 @@ logo_of :: proc(app: ^App, id: string, ref: ^Image_Ref, size: f32) -> bool {
 image_view_start :: proc(app: ^App, path: string) {
 	data, err := os.read_entire_file(path, context.allocator)
 	if err != nil { ui.toast(.Bad, fmt.tprintf("Cannot read %s", path)); return }
-	app.view_start = image_ref(string(data), .Bytes, "image", strings.clone(filepath.base(path)))
+	app.viewer.start = image_ref(string(data), .Bytes, "image", strings.clone(filepath.base(path)))
 }
 
 // What --image= waits for: open once decoded, said and given up on when it cannot be. (An empty file has nothing to decode: nothing would
 // ever come, and the wait would draw frames for good.)
 image_view_wait :: proc(app: ^App) {
-	if app.view_start.key == 0 { return }
-	s := image_get(app, app.view_start, 0)
+	if app.viewer.start.key == 0 { return }
+	s := image_get(app, app.viewer.start, 0)
 	if s != nil && s.state == .Pending {
 		animate(app)
 		return
 	}
 	if s != nil && s.state == .Ready {
-		image_view_open(app, app.view_start)
+		image_view_open(app, app.viewer.start)
 	} else {
-		ui.toast(.Bad, "%s: %s", app.view_start.name, s != nil ? image_failed_words(s) : "image unreadable: the file is empty")
+		ui.toast(.Bad, "%s: %s", app.viewer.start.name, s != nil ? image_failed_words(s) : "image unreadable: the file is empty")
 	}
-	app.view_start.key = 0
+	app.viewer.start.key = 0
 }
 
 // The viewer, on the whole image (decoded now if the thumbnail's was all there was: it waits for it).
 image_view_open :: proc(app: ^App, ref: Image_Ref) {
 	_ = image_get(app, ref, 0)
-	app.view_key = (ref.key ~ u64(image_dim(app, 0)) * HASH_MIX_B) | 1
-	image_ref_delete(&app.view_ref)
-	app.view_ref = image_ref_clone(ref)
-	delete(app.view_diagram)
-	app.view_diagram = ""
+	app.viewer.key = (ref.key ~ u64(image_dim(app, 0)) * HASH_MIX_B) | 1
+	image_ref_delete(&app.viewer.ref)
+	app.viewer.ref = image_ref_clone(ref)
+	delete(app.viewer.diagram)
+	app.viewer.diagram = ""
 	app.cx.open[.Viewer] = true
-	app.view_zoom, app.view_pan = 1, {}
-	app.view_resize_from = {}
-	app.view_grown = false
+	app.viewer.zoom, app.viewer.pan = 1, {}
+	app.viewer.resize_from = {}
+	app.viewer.grown = false
 }
 
 IMAGE_NAME_CHARS :: 80
@@ -437,11 +437,24 @@ view_pan_clamp :: proc(pan, picture, view: [2]f32) -> [2]f32 {
 	return {clamp(pan.x, -reach.x, reach.x), clamp(pan.y, -reach.y, reach.y)}
 }
 
+// The image viewer (open: Dialog.Viewer): what it shows, and how it is zoomed, moved and sized.
+Image_Viewer :: struct {
+	key:         u64,
+	ref:         Image_Ref,   // what is shown: what Copy decodes again whole (its data and name owned)
+	diagram:     string,      // or the text of the Mermaid diagram shown (owned; "": an image)
+	zoom:        f32,         // times what fits (image_viewer)
+	pan:         [2]f32,      // of the picture's centre from the view's, frame pixels
+	grab:        [2]f32,      // pan when the drag began
+	resize_from: [3]f32,      // a grip of the viewer held: the dialog's size (logical pixels) and scale at its press ({}: none)
+	grown:       bool,        // the viewer's grips were dragged since it opened: its picture may pass its pixels (viewer_frame)
+	start:       Image_Ref,   // --image=<file>: opened in the viewer once it is decoded (its data owned)
+}
+
 // The zoom asked for, within its limits, keeping the point `at` of the view (from its centre) where it is.
 view_zoom_to :: proc(app: ^App, zoom, max_zoom: f32, at: [2]f32) {
 	z := clamp(zoom, VIEW_ZOOM_MIN, max_zoom)
-	app.view_pan = at - (at - app.view_pan) * (z / app.view_zoom)
-	app.view_zoom = z
+	app.viewer.pan = at - (at - app.viewer.pan) * (z / app.viewer.zoom)
+	app.viewer.zoom = z
 }
 
 // An image still being decoded: a moment, over the conversation dimmed.
@@ -464,13 +477,13 @@ image_viewer :: proc(app: ^App, em: f32) {
 	// what is shown: its pixels (a diagram's: at the conversation's size), and what draws it
 	source: [2]f32
 	shown: View_Draw
-	if app.view_diagram != "" {
-		d := diagram_of(app, app.view_diagram, !app.cx.theme.light)
+	if app.viewer.diagram != "" {
+		d := diagram_of(app, app.viewer.diagram, !app.cx.theme.light)
 		if d == nil || d.why != "" { app.cx.open[.Viewer] = false; return }
 		shown.doc = &d.doc
 		source = {d.doc.view[2], d.doc.view[3]} * diagram_scale(em) / sc
 	} else {
-		e, ok := &app.images[app.view_key]
+		e, ok := &app.images[app.viewer.key]
 		if !ok || e.state == .Failed { app.cx.open[.Viewer] = false; return }
 		e.used = app.frame_no
 		if e.state == .Pending { image_viewer_wait(app, em); return }
@@ -482,7 +495,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 	chrome := [2]f32{2 * pad, pad + bar}
 	room := app.state.window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
 	// (a diagram has no pixels of its own to stay within: it takes the share of the room at once)
-	f := viewer_frame(source, room, chrome, sc, app.prefs.viewer_scale, math.round(em * VIEWER_MIN_W_EM), app.view_grown || diagram)
+	f := viewer_frame(source, room, chrome, sc, app.prefs.viewer_scale, math.round(em * VIEWER_MIN_W_EM), app.viewer.grown || diagram)
 	view := f.picture
 	max_zoom := max(1, VIEW_NATIVE_MAX * sc / f.fit)
 	// (the dialog's size in logical pixels, as modal_sized keeps it: its grips write it)
@@ -500,38 +513,38 @@ image_viewer :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(view.y), axis = .X})
 			if ui.row() {
 				ui.spacer(ui.fill())
-				picture := source * f.fit * app.view_zoom
+				picture := source * f.fit * app.viewer.zoom
 				pannable := picture.x > view.x || picture.y > view.y
 				ui.next({width = ui.px(view.x), height = ui.px(view.y), cursor = pannable ? (ui.active_key() != 0 ? .Grabbing : .Grab) : .Arrow})
-				ui.a11y({role = .Image, name = diagram ? "A diagram" : app.view_ref.name != "" ? app.view_ref.name : "Image"})
+				ui.a11y({role = .Image, name = diagram ? "A diagram" : app.viewer.ref.name != "" ? app.viewer.ref.name : "Image"})
 				b := ui.build_box({.Clickable, .Scroll_Self}, "###view")
 				sig := ui.signal(b)
-				if sig.pressed && viewer_outside(sig.mouse, view, picture, app.view_pan) { closing = true }
-				if ui.mouse_pressed(.Right) && rect_contains(b.rect, ui.mouse_pos()) && !app.cx.ctx_taken {
-					if diagram { ctx_open(app, .Diagram, msg = app.view_diagram) } else { ctx_open(app, .Image, image = app.view_ref) }
+				if sig.pressed && viewer_outside(sig.mouse, view, picture, app.viewer.pan) { closing = true }
+				if ui.mouse_pressed(.Right) && rect_contains(b.rect, ui.mouse_pos()) && !app.ctx_menu.taken {
+					if diagram { ctx_open(app, .Diagram, msg = app.viewer.diagram) } else { ctx_open(app, .Image, image = app.viewer.ref) }
 				}
 				if sig.scrolled.y != 0 {
-					view_zoom_to(app, app.view_zoom * math.pow(f32(VIEW_ZOOM_STEP), -sig.scrolled.y), max_zoom, sig.mouse - view * 0.5)
+					view_zoom_to(app, app.viewer.zoom * math.pow(f32(VIEW_ZOOM_STEP), -sig.scrolled.y), max_zoom, sig.mouse - view * 0.5)
 				}
-				if sig.pointer_pressed { app.view_grab = app.view_pan }
-				if sig.dragging { app.view_pan = app.view_grab + sig.drag_delta }
+				if sig.pointer_pressed { app.viewer.grab = app.viewer.pan }
+				if sig.dragging { app.viewer.pan = app.viewer.grab + sig.drag_delta }
 				if sig.double_clicked {
 					native := sc / f.fit
-					view_zoom_to(app, app.view_zoom != 1 ? 1 : (native > 1 ? native : VIEW_DOUBLE_CLICK), max_zoom, sig.mouse - view * 0.5)
+					view_zoom_to(app, app.viewer.zoom != 1 ? 1 : (native > 1 ? native : VIEW_DOUBLE_CLICK), max_zoom, sig.mouse - view * 0.5)
 				}
-				if ui.key_press(.C, {.Ctrl}) { if diagram { diagram_copy_png(app, app.view_diagram) } else { image_copy(app, app.view_ref) } }
-				if ui.key_press(.Equal) || ui.key_press(.Num_Add) { view_zoom_to(app, app.view_zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
-				if ui.key_press(.Minus) || ui.key_press(.Num_Subtract) { view_zoom_to(app, app.view_zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
-				if ui.key_press(.N0) { app.view_zoom, app.view_pan = 1, {} }
-				if ui.key_press(.Left) { app.view_pan.x += view.x * VIEW_PAN_KEY }
-				if ui.key_press(.Right) { app.view_pan.x -= view.x * VIEW_PAN_KEY }
-				if ui.key_press(.Up) { app.view_pan.y += view.y * VIEW_PAN_KEY }
-				if ui.key_press(.Down) { app.view_pan.y -= view.y * VIEW_PAN_KEY }
-				picture = source * f.fit * app.view_zoom
-				app.view_pan = view_pan_clamp(app.view_pan, picture, view)
+				if ui.key_press(.C, {.Ctrl}) { if diagram { diagram_copy_png(app, app.viewer.diagram) } else { image_copy(app, app.viewer.ref) } }
+				if ui.key_press(.Equal) || ui.key_press(.Num_Add) { view_zoom_to(app, app.viewer.zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
+				if ui.key_press(.Minus) || ui.key_press(.Num_Subtract) { view_zoom_to(app, app.viewer.zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
+				if ui.key_press(.N0) { app.viewer.zoom, app.viewer.pan = 1, {} }
+				if ui.key_press(.Left) { app.viewer.pan.x += view.x * VIEW_PAN_KEY }
+				if ui.key_press(.Right) { app.viewer.pan.x -= view.x * VIEW_PAN_KEY }
+				if ui.key_press(.Up) { app.viewer.pan.y += view.y * VIEW_PAN_KEY }
+				if ui.key_press(.Down) { app.viewer.pan.y -= view.y * VIEW_PAN_KEY }
+				picture = source * f.fit * app.viewer.zoom
+				app.viewer.pan = view_pan_clamp(app.viewer.pan, picture, view)
 				d := ui.frame_new(View_Draw)
 				d^ = shown
-				d.size, d.pan = picture, app.view_pan
+				d.size, d.pan = picture, app.viewer.pan
 				b.custom = view_draw
 				b.custom_user = d
 				ui.spacer(ui.fill())
@@ -539,19 +552,19 @@ image_viewer :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(bar), axis = .X, cross = .Center})
 			if ui.row(.Center) {
 				ui.spacer(ui.px(em))
-				name := diagram ? "Mermaid diagram" : app.view_ref.name != "" ? app.view_ref.name : "image"
+				name := diagram ? "Mermaid diagram" : app.viewer.ref.name != "" ? app.viewer.ref.name : "image"
 				text("n", ellipsize(name, IMAGE_NAME_CHARS), hex(HEX_VIEWER_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 				ui.spacer(ui.px(em * 0.6))
-				zoom := f.fit * app.view_zoom / sc * 100
+				zoom := f.fit * app.viewer.zoom / sc * 100
 				dims := diagram ? fmt.tprintf("%.0f %%", zoom) : fmt.tprintf("%d × %d  ·  %.0f %%", int(source.x), int(source.y), zoom)
 				text("d", dims, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.8))
 				bh := math.round(em * BUTTON_SMALL_H_EM)
-				if bevel_button("###zoom_out", "−", "", .Normal, height = bh).clicked { view_zoom_to(app, app.view_zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
+				if bevel_button("###zoom_out", "−", "", .Normal, height = bh).clicked { view_zoom_to(app, app.viewer.zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
 				ui.spacer(ui.px(em * 0.3))
-				if bevel_button("###zoom_in", "+", "", .Normal, height = bh).clicked { view_zoom_to(app, app.view_zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
+				if bevel_button("###zoom_in", "+", "", .Normal, height = bh).clicked { view_zoom_to(app, app.viewer.zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
 				ui.spacer(ui.px(em * 0.3))
-				if bevel_button("###zoom_fit", "Fit", "", .Normal, height = bh).clicked { app.view_zoom, app.view_pan = 1, {} }
+				if bevel_button("###zoom_fit", "Fit", "", .Normal, height = bh).clicked { app.viewer.zoom, app.viewer.pan = 1, {} }
 				ui.spacer(ui.px(em * 0.8))
 				if bevel_button("###close", "Close", lucide.X, .Normal, height = bh).clicked { app.cx.open[.Viewer] = false }
 				ui.spacer(ui.px(em))
@@ -571,17 +584,17 @@ viewer_resized :: proc(app: ^App, size, asked: [2]f32, f: Viewer_Frame) {
 	switch {
 	case size == {}:
 		app.prefs.viewer_scale = 1
-		app.view_resize_from = {}
-		app.view_grown = false
+		app.viewer.resize_from = {}
+		app.viewer.grown = false
 	case size != asked:
 		// (from the size shown: a picture held to its pixels shows less than the share saved)
-		if app.view_resize_from == {} { app.view_resize_from = {asked.x, asked.y, f.picture.x / f.full.x} }
-		app.view_grown = true
-		from := app.view_resize_from
+		if app.viewer.resize_from == {} { app.viewer.resize_from = {asked.x, asked.y, f.picture.x / f.full.x} }
+		app.viewer.grown = true
+		from := app.viewer.resize_from
 		app.prefs.viewer_scale = viewer_scale_of((size - from.xy) * sc, f.full, from.z)
 	}
 	if ui.active_key() != 0 { return }
-	app.view_resize_from = {}
+	app.viewer.resize_from = {}
 	if abs(f64(app.prefs.viewer_scale) - config.float_of(&app.cfg_prefs, "conversation.image_viewer_size")) > SLIDER_EPSILON {
 		pref_set(app, "conversation.image_viewer_size", fmt.tprintf("%.3f", app.prefs.viewer_scale))
 	}

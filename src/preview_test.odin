@@ -231,7 +231,7 @@ a_session_that_never_opened_it_has_no_tab_and_no_view :: proc(t: ^testing.T) {
 	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Preview)), "no tab")
 	testing.expect_value(t, len(bench_views), 1)
 	go_to(app, "c")
-	testing.expect_value(t, len(app.cx.previews), 1)   // (a's alone: b held nothing)
+	testing.expect_value(t, len(app.previews.by_session), 1)   // (a's alone: b held nothing)
 	go_to(app, "a")
 	testing.expect(t, ui.dock_has(&app.dock, u32(Panel.Preview)), "back with its session")
 	testing.expect(t, ui.dock_shown(&app.dock, u32(Panel.Preview)), "in front")
@@ -327,7 +327,7 @@ the_way_down_says_the_root_at_once :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	with_page(app, "root", "http://r.local/", "R")
-	append(&app.nav, strings.clone("root"))
+	append(&app.nav.drilled, strings.clone("root"))
 	chat_reset(&app.chat)
 	app.chat.id = strings.clone("child", app.chat.alloc)
 	preview_follow(app)
@@ -342,23 +342,23 @@ past_the_limit_the_view_shown_longest_ago_goes_and_its_address_stays :: proc(t: 
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	for i in 0 ..< PREVIEW_VIEWS_MOST { with_page(app, fmt.tprintf("s%d", i), fmt.tprintf("http://%d.local/", i), "T") }
-	testing.expect_value(t, len(app.cx.web_views), PREVIEW_VIEWS_MOST)
+	testing.expect_value(t, len(app.previews.views), PREVIEW_VIEWS_MOST)
 	first, second := bench_views[0], bench_views[1]
 	testing.expect(t, !first.closed, "none past the limit yet")
 	with_page(app, "over", "http://over.local/", "T")
-	testing.expect_value(t, len(app.cx.web_views), PREVIEW_VIEWS_MOST)
+	testing.expect_value(t, len(app.previews.views), PREVIEW_VIEWS_MOST)
 	testing.expect(t, first.closed, "the oldest went")
 	testing.expect(t, !second.closed, "it alone")
-	kept := preview_front(app.cx.previews["s0"])
+	kept := preview_front(app.previews.by_session["s0"])
 	testing.expect_value(t, kept.url, "http://0.local/")
 	testing.expect(t, kept.view == nil && kept.web == nil, "no view")
-	testing.expect(t, app.cx.previews["s0"].open, "and still open")
+	testing.expect(t, app.previews.by_session["s0"].open, "and still open")
 
 	go_to(app, "s0")
 	testing.expect(t, !fake(fr(app)).closed, "a new one")
 	testing.expect(t, fake(fr(app)) != first, "not the one closed")
 	testing.expect_value(t, fake(fr(app)).urls[0], "http://0.local/")
-	testing.expect_value(t, len(app.cx.web_views), PREVIEW_VIEWS_MOST)
+	testing.expect_value(t, len(app.previews.views), PREVIEW_VIEWS_MOST)
 	testing.expect(t, second.closed, "the next oldest made room")
 }
 
@@ -370,7 +370,7 @@ the_limit_leaves_a_view_a_call_waits_on :: proc(t: ^testing.T) {
 	for i in 0 ..< PREVIEW_VIEWS_MOST { with_page(app, fmt.tprintf("s%d", i), fmt.tprintf("http://%d.local/", i), "T") }
 	first, second := bench_views[0], bench_views[1]
 	agent_call(app, l, 1, "evaluate", "s0")
-	preview_front(app.cx.previews["s0"]).used = 0   // (the oldest, the call notwithstanding)
+	preview_front(app.previews.by_session["s0"]).used = 0   // (the oldest, the call notwithstanding)
 	with_page(app, "over", "http://over.local/", "T")
 	testing.expect(t, !first.closed, "its answer comes from it")
 	testing.expect(t, second.closed, "the next oldest went")
@@ -387,8 +387,8 @@ a_server_left_forgets_every_sessions_page :: proc(t: ^testing.T) {
 	parked := fr(app).view
 	with_page(app, "b", "http://b.local/", "B")
 	server_forget(app)
-	testing.expect_value(t, len(app.cx.previews), 0)
-	testing.expect_value(t, len(app.cx.web_views), 0)
+	testing.expect_value(t, len(app.previews.by_session), 0)
+	testing.expect_value(t, len(app.previews.views), 0)
 	for b in bench_views { testing.expect(t, b.closed, "every view") }
 	testing.expect_value(t, len(app.preview.tabs), 0)
 	testing.expect(t, !app.preview.open, "closed")
@@ -404,13 +404,13 @@ a_deleted_session_takes_its_browser :: proc(t: ^testing.T) {
 	with_page(app, "a", "http://a.local/", "A")
 	with_page(app, "b", "http://b.local/", "B")
 	preview_session_gone(app, "a")
-	testing.expect(t, "a" not_in app.cx.previews, "parked: at once")
+	testing.expect(t, "a" not_in app.previews.by_session, "parked: at once")
 	testing.expect(t, bench_views[0].closed, "its view")
 	preview_session_gone(app, "b")
 	testing.expect(t, !bench_views[1].closed, "shown: not while it shows")
 	go_home(app)
 	testing.expect(t, bench_views[1].closed, "the moment it stops")
-	testing.expect_value(t, len(app.cx.previews), 0)
+	testing.expect_value(t, len(app.previews.by_session), 0)
 }
 
 ////////////////////////////////
@@ -514,7 +514,7 @@ an_agent_opens_its_sessions_browser_without_showing_it :: proc(t: ^testing.T) {
 	shown := fr(app).view
 	agent_call(app, l, 1, "tabs_open", "other", url = "http://o.local/")
 	testing.expect(t, fr(app).view == shown, "the page shown stays")
-	e := app.cx.previews["other"]
+	e := app.previews.by_session["other"]
 	testing.expect(t, e != nil && e.open, "open, where it is")
 	testing.expect(t, !fake(preview_front(e)).visible, "out of sight")
 	testing.expect(t, fake(preview_front(e)).bounds[2] > 0, "at a size its page can be read at")
@@ -634,7 +634,7 @@ a_view_that_fails_ends_its_own_calls_alone :: proc(t: ^testing.T) {
 	agent_call(app, l, 2, "navigate", "b")
 	web_event_add(va, .Failed, 0, words("no runtime"))
 	web_events_drain(app)
-	_, failed := preview_front(app.cx.previews["a"]).web.(Web_Failed)
+	_, failed := preview_front(app.previews.by_session["a"]).web.(Web_Failed)
 	testing.expect(t, failed, "in its Preview")
 	_, also := fr(app).web.(Web_Failed)
 	testing.expect(t, !also, "not in the one shown")
@@ -870,9 +870,9 @@ a_new_tab_costs_no_view_until_it_has_an_address :: proc(t: ^testing.T) {
 	app := bench_new()
 	with_page(app, "a", "http://one.local/", "One")
 	preview_tab_add(app, &app.preview)
-	testing.expect_value(t, len(app.cx.web_views), 1)
+	testing.expect_value(t, len(app.previews.views), 1)
 	preview_go(app, fr(app), "http://two.local/")
-	testing.expect_value(t, len(app.cx.web_views), 2)
+	testing.expect_value(t, len(app.previews.views), 2)
 }
 
 ////////////////////////////////
@@ -1005,7 +1005,7 @@ the_first_tabs_open_of_a_session_is_its_first_tab :: proc(t: ^testing.T) {
 	app := bench_new()
 	l := link(app)
 	agent_call(app, l, 1, "tabs_open", "fresh", url = "http://new.local/")
-	e := app.cx.previews["fresh"]
+	e := app.previews.by_session["fresh"]
 	testing.expect_value(t, len(e.tabs), 1)
 	agent_call(app, l, 2, "tabs_open", "fresh", url = "http://two.local/")
 	testing.expect_value(t, len(e.tabs), 2)   // (the first was asked for an address, which has not come yet)
@@ -1065,10 +1065,10 @@ the_limit_counts_every_tab_of_every_session :: proc(t: ^testing.T) {
 	behind := fr(app)
 	id := strings.clone(behind.id)
 	for i in 1 ..< PREVIEW_VIEWS_MOST { second_tab(app, fmt.tprintf("http://%d.local/", i), "T") }
-	testing.expect_value(t, len(app.cx.web_views), PREVIEW_VIEWS_MOST)
+	testing.expect_value(t, len(app.previews.views), PREVIEW_VIEWS_MOST)
 	testing.expect(t, behind.view != nil, "none past the limit yet")
 	with_page(app, "b", "http://over.local/", "T")
-	testing.expect_value(t, len(app.cx.web_views), PREVIEW_VIEWS_MOST)
+	testing.expect_value(t, len(app.previews.views), PREVIEW_VIEWS_MOST)
 	testing.expect(t, behind.view == nil, "the tab shown longest ago, in the session parked")
 	testing.expect_value(t, behind.url, "http://0.local/")
 	testing.expect_value(t, behind.id, id)
@@ -1077,7 +1077,7 @@ the_limit_counts_every_tab_of_every_session :: proc(t: ^testing.T) {
 	preview_tab_front(app, &app.preview, behind)
 	testing.expect(t, behind.view != nil, "shown: a view again")
 	testing.expect_value(t, fake(behind).urls[0], "http://0.local/")
-	testing.expect_value(t, len(app.cx.web_views), PREVIEW_VIEWS_MOST)
+	testing.expect_value(t, len(app.previews.views), PREVIEW_VIEWS_MOST)
 }
 
 @(test)
@@ -1105,7 +1105,7 @@ the_limit_never_takes_the_page_on_the_screen :: proc(t: ^testing.T) {
 	behind := preview_tab_add(app, &app.preview, front = false)
 	web_navigate(app, behind, "http://behind.local/")
 	testing.expect(t, shown.view != nil, "it stays")
-	testing.expect_value(t, len(app.cx.web_views), PREVIEW_VIEWS_MOST)
+	testing.expect_value(t, len(app.previews.views), PREVIEW_VIEWS_MOST)
 }
 
 // As the tools' own ids go: a client may hold it to that form.

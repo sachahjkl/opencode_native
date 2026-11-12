@@ -1144,7 +1144,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 			preview_session_gone(app, sid)
 			if mine {   // (elsewhere: what is shown no longer is)
 				effect_toast(app, .Warn, "This session was deleted")
-				append(&app.nav_steps, Nav_Step{kind = .Gone})
+				append(&app.nav.steps, Nav_Step{kind = .Gone})
 			}
 		}
 		if kind == "session.moved" && mine { request(app, .Self, "GET", strings.concatenate({"/api/session/", sid}, context.temp_allocator), tag = sid) }

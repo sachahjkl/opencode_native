@@ -23,10 +23,10 @@ drafts_save_soon :: proc(app: ^App) { deferred_ask(&app.cx.due[.Drafts], DRAFTS_
 // Each frame the composer is built: what it holds against what it held, so that whatever changed it (a key, a prompt sent and
 // the composer emptied, a prompt that came back) reaches the disk. (A sent prompt left on disk came back at the next start.)
 drafts_track :: proc(app: ^App) {
-	text := ui.area_string(&app.composer)
-	if text == app.cx.drafts_seen { return }
-	delete(app.cx.drafts_seen)
-	app.cx.drafts_seen = strings.clone(text)
+	text := ui.area_string(&app.composer.area)
+	if text == app.composer.drafts_seen { return }
+	delete(app.composer.drafts_seen)
+	app.composer.drafts_seen = strings.clone(text)
 	drafts_save_soon(app)
 }
 
@@ -41,8 +41,8 @@ drafts_json :: proc(app: ^App) -> string {
 		fmt.sbprintf(b, "%s:%s", jquote(id), jquote(text))
 		n^ += 1
 	}
-	for id, d in app.cx.drafts { if id != app.chat.id { put(&b, &n, id, d.text) } }
-	put(&b, &n, app.chat.id, ui.area_string(&app.composer))
+	for id, d in app.composer.drafts { if id != app.chat.id { put(&b, &n, id, d.text) } }
+	put(&b, &n, app.chat.id, ui.area_string(&app.composer.area))
 	strings.write_byte(&b, '}')
 	return strings.to_string(b)
 }
@@ -70,8 +70,8 @@ drafts_load_json :: proc(app: ^App, text: string) {
 	for id, t in obj {
 		s, is_text := t.(json.String)
 		if !is_text || strings.trim_space(string(s)) == "" { continue }
-		if id in app.cx.drafts { continue }
-		app.cx.drafts[strings.clone(id)] = Draft{text = strings.clone(string(s))}
+		if id in app.composer.drafts { continue }
+		app.composer.drafts[strings.clone(id)] = Draft{text = strings.clone(string(s))}
 	}
 	draft_enter(app)
 }
@@ -86,8 +86,8 @@ Draft :: struct {
 draft_leave :: proc(app: ^App) {
 	if queue_editing(app) { queue_edit_end(app, .Cancel) }   // (the inbox's prompt goes back: the composer gets its own text)
 	history_leave(app, true)
-	c := &app.cx
-	text := ui.area_string(&app.composer)
+	c := &app.composer
+	text := ui.area_string(&app.composer.area)
 	if strings.trim_space(text) == "" && len(c.attachments) == 0 && len(c.mentions.chosen) == 0 { draft_drop(app, app.chat.id); return }
 	d, known := &c.drafts[app.chat.id]
 	if !known {
@@ -100,16 +100,16 @@ draft_leave :: proc(app: ^App) {
 	clear(&c.attachments)
 	append(&d.mentions, ..c.mentions.chosen[:])
 	clear(&c.mentions.chosen)
-	ui.area_set(&app.composer, "")
+	ui.area_set(&app.composer.area, "")
 	drafts_save_soon(app)
 }
 
 // After it changed: the session's draft, if it has one, is in the composer again.
 draft_enter :: proc(app: ^App) {
-	c := &app.cx
+	c := &app.composer
 	d, known := &c.drafts[app.chat.id]
 	if !known { return }
-	ui.area_set(&app.composer, d.text)
+	ui.area_set(&app.composer.area, d.text)
 	append(&c.attachments, ..d.attachments[:])
 	append(&c.mentions.chosen, ..d.mentions[:])
 	clear(&d.attachments)
@@ -120,10 +120,10 @@ draft_enter :: proc(app: ^App) {
 // What came for the composer of session `chat` (an attachment read on its thread, a file's path for the text): in the
 // composer when that session is shown, else in its draft, which its composer gets when it is shown again.
 composer_take :: proc(app: ^App, chat: string, a: Maybe(Attachment), text: string) {
-	c := &app.cx
+	c := &app.composer
 	if chat == app.chat.id {
 		if x, ok := a.?; ok { append(&c.attachments, x) }
-		if text != "" { area_insert(&app.composer, text) }
+		if text != "" { area_insert(&app.composer.area, text) }
 		return
 	}
 	d, known := &c.drafts[chat]
@@ -152,12 +152,12 @@ draft_free :: proc(d: ^Draft) {
 
 @(private = "file")
 draft_drop :: proc(app: ^App, id: string) {
-	key, d, known := map_entry_of(&app.cx.drafts, id)
+	key, d, known := map_entry_of(&app.composer.drafts, id)
 	if !known { return }
 	draft_free(d)
 	delete(d.attachments)
 	delete(d.mentions)
-	delete_key(&app.cx.drafts, id)
+	delete_key(&app.composer.drafts, id)
 	delete(key)
 }
 
@@ -168,14 +168,14 @@ map_entry_of :: proc(m: ^map[string]Draft, id: string) -> (key: string, d: ^Draf
 }
 
 drafts_destroy :: proc(app: ^App) {
-	for k, &d in app.cx.drafts {
+	for k, &d in app.composer.drafts {
 		draft_free(&d)
 		delete(d.attachments)
 		delete(d.mentions)
 		delete(k)
 	}
-	delete(app.cx.drafts)
-	app.cx.drafts = nil
-	delete(app.cx.drafts_seen)
-	app.cx.drafts_seen = ""
+	delete(app.composer.drafts)
+	app.composer.drafts = nil
+	delete(app.composer.drafts_seen)
+	app.composer.drafts_seen = ""
 }

@@ -133,7 +133,7 @@ detached_body :: proc(app: ^App, d: ^Detached, size: draw.Vec2, em: f32) {
 	}
 	switch {
 	case d.panel == u32(Panel.Stats):
-		app.cx.stats_w = size.x
+		app.stats.width = size.x
 		stats_panel(app, em)
 	case d.panel == u32(Panel.Preview):
 		preview_panel(app, em)
@@ -202,7 +202,7 @@ detached_frames :: proc(app: ^App) {
 	for i := len(app.cx.detached) - 1; i >= 0; i -= 1 {
 		if i >= len(app.cx.detached) { continue }   // (a frame of the system's loop, inside this one, closed one)
 		d := app.cx.detached[i]
-		gone := d.panel == u32(Panel.Stats) && !app.stats_open || d.closing
+		gone := d.panel == u32(Panel.Stats) && !app.stats.open || d.closing
 		if platform.is_closed(d.win) || gone {
 			detached_end(app, i)
 			dock_setup(app)
@@ -230,7 +230,7 @@ panel_for_window :: proc(app: ^App) -> u32 {
 		if !t.detached && ui.dock_shown(&app.dock, t.panel) { return t.panel }
 	}
 	if app.preview.open && ui.dock_shown(&app.dock, u32(Panel.Preview)) { return u32(Panel.Preview) }
-	if app.stats_open && ui.dock_shown(&app.dock, u32(Panel.Stats)) { return u32(Panel.Stats) }
+	if app.stats.open && ui.dock_shown(&app.dock, u32(Panel.Stats)) { return u32(Panel.Stats) }
 	return 0
 }
 

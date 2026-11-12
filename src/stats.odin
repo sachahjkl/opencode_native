@@ -22,7 +22,7 @@ Model_Count :: struct { name: string, steps: int, tokens_in, tokens_out, cost: f
 
 Project_Stats :: struct {
 	arena:      virtual.Arena,
-	project:    string,   // what they are of ("": not known yet, or none); App_Context.stats_read says how far that is
+	project:    string,   // what they are of ("": not known yet, or none); Stats_View.read says how far that is
 	sessions, subagents, prompts, steps: int,
 	tokens_in, tokens_out, reasoning, cache_read, cache_write, cost: f64,
 	active_days, streak: int,
@@ -54,8 +54,20 @@ Stats_Context :: struct {
 	model:    string,   // what that step ran on
 }
 
+// The Statistics panel of the session shown: whether it is open, its width, the project's totals, the context, the figures of
+// the loaded messages, and their readings.
+Stats_View :: struct {
+	open:            bool,
+	width:           f32,             // the panel's width, at this build
+	project:         Project_Stats,
+	read:            Remote,          // the project's totals
+	session_context: Stats_Context,   // what fills the context of the session shown
+	context_read:    Remote,          // ... its reading
+	local:           Local_Kept,      // the figures of the loaded messages
+}
+
 stats_open :: proc(app: ^App) {
-	app.stats_open = true
+	app.stats.open = true
 	dock_setup(app)
 	ui.dock_activate(&app.dock, u32(Panel.Stats))
 	stats_ask(app)
@@ -66,7 +78,7 @@ stats_open :: proc(app: ^App) {
 // Shown, hidden. (Open, but under the Preview's tab: it comes up. What the pill is for is to see it.)
 stats_toggle :: proc(app: ^App) {
 	switch {
-	case !app.stats_open:                         stats_open(app)
+	case !app.stats.open:                         stats_open(app)
 	case !ui.dock_shown(&app.dock, u32(Panel.Stats)):
 		ui.dock_activate(&app.dock, u32(Panel.Stats))
 		app.settle = max(app.settle, FRAMES_AFTER_INPUT)
@@ -77,36 +89,36 @@ stats_toggle :: proc(app: ^App) {
 // The totals of the project of the session shown, nothing of the one before. (Also Try again.)
 stats_ask :: proc(app: ^App) {
 	p := strings.clone(chat_project(app), context.temp_allocator)   // (it may live in the arena that goes)
-	ps := &app.proj_stats
+	ps := &app.stats.project
 	virtual.arena_destroy(&ps.arena)
 	ps^ = {}
 	_ = virtual.arena_init_growing(&ps.arena)
-	remote_reset(&app.cx.stats_read)
+	remote_reset(&app.stats.read)
 	if p == "" { return }
 	ps.project = strings.clone(p, virtual.arena_allocator(&ps.arena))
-	remote_begin(&app.cx.stats_read)
-	request(app, .Stats, "GET", fmt.tprintf("/api/experimental/session/stats?project=%s&tools=detail", url_escape(p)), remote = &app.cx.stats_read)
+	remote_begin(&app.stats.read)
+	request(app, .Stats, "GET", fmt.tprintf("/api/experimental/session/stats?project=%s&tools=detail", url_escape(p)), remote = &app.stats.read)
 }
 
 // The panel stays on the session shown: its project comes after it opened (.Self), or the conversation changed under it.
 stats_follow :: proc(app: ^App) {
-	if chat_project(app) != app.proj_stats.project { stats_ask(app) }
-	if app.cx.stats_context.session != app.chat.id { context_ask(app) }
+	if chat_project(app) != app.stats.project.project { stats_ask(app) }
+	if app.stats.session_context.session != app.chat.id { context_ask(app) }
 }
 
 stats_forget :: proc(app: ^App) {
-	if app.stats_open { panel_close(app, u32(Panel.Stats)) }
-	ps := &app.proj_stats
+	if app.stats.open { panel_close(app, u32(Panel.Stats)) }
+	ps := &app.stats.project
 	virtual.arena_destroy(&ps.arena)
 	ps^ = {}
-	remote_reset(&app.cx.stats_read)
+	remote_reset(&app.stats.read)
 	context_clear(app)
-	remote_reset(&app.cx.context_read)
+	remote_reset(&app.stats.context_read)
 }
 
 @(private = "file")
 context_clear :: proc(app: ^App) {
-	x := &app.cx.stats_context
+	x := &app.stats.session_context
 	virtual.arena_destroy(&x.arena)
 	delete(x.session)
 	x^ = {}
@@ -115,21 +127,21 @@ context_clear :: proc(app: ^App) {
 // What the model has in front of it. (A step ended, the stream came back, Try again.) What is shown stays until the answer, unless it
 // is of another session.
 context_ask :: proc(app: ^App) {
-	x := &app.cx.stats_context
+	x := &app.stats.session_context
 	id := app.chat.id
 	if x.session != id {
 		context_clear(app)
 		x.session = strings.clone(id)
-		remote_reset(&app.cx.context_read)
+		remote_reset(&app.stats.context_read)
 	}
 	if id == "" { return }
-	remote_begin(&app.cx.context_read)
-	request(app, .Context, "GET", fmt.tprintf("/api/session/%s/context", id), tag = id, remote = &app.cx.context_read)
+	remote_begin(&app.stats.context_read)
+	request(app, .Context, "GET", fmt.tprintf("/api/session/%s/context", id), tag = id, remote = &app.stats.context_read)
 }
 
 // The stream has no event for it: a step that ended is when the context changed. Nothing is read while the panel is closed.
 stats_context_soon :: proc(app: ^App) {
-	if app.stats_open { deferred_ask(&app.cx.due[.Context], CONTEXT_DEBOUNCE_MS, CONTEXT_DEBOUNCE_MS * DEFERRED_MOST) }
+	if app.stats.open { deferred_ask(&app.cx.due[.Context], CONTEXT_DEBOUNCE_MS, CONTEXT_DEBOUNCE_MS * DEFERRED_MOST) }
 }
 
 @(private = "file")
@@ -200,7 +212,7 @@ context_message :: proc(x: ^Stats_Context, m: json.Value) {
 
 // The answer replaces what was read. Sizes are in proportion to the text, and together never more than what the step really sent.
 context_load :: proc(app: ^App, session: string, v: json.Value) {
-	x := &app.cx.stats_context
+	x := &app.stats.session_context
 	virtual.arena_destroy(&x.arena)
 	delete(x.session)
 	x^ = {session = strings.clone(session)}
@@ -223,7 +235,7 @@ context_load :: proc(app: ^App, session: string, v: json.Value) {
 }
 
 stats_load :: proc(app: ^App, v: json.Value) {
-	ps := &app.proj_stats
+	ps := &app.stats.project
 	a := virtual.arena_allocator(&ps.arena)
 	d := jget(v, "data")
 	ps.sessions, ps.subagents = int(jnum(d, "sessions")), int(jnum(d, "subagents"))
@@ -270,7 +282,7 @@ Local_Kept :: struct {
 }
 
 local_stats :: proc(app: ^App) -> ^Local_Stats {
-	k := &app.cx.local_stats
+	k := &app.stats.local
 	c := &app.chat
 	if k.made && k.gen == c.gen && k.changes == c.changes { return &k.stats }
 	k.stats = local_stats_of(c, arena_renew(&k.arena))
@@ -384,7 +396,7 @@ wrapped :: proc(id, v: string, color: Color, em: f32) {
 // A key and its value, which wraps; very narrow, it goes under its key.
 @(private = "file")
 kv :: proc(id, k, v: string, em: f32, col := Color{}) {
-	w := the_app.cx.stats_w
+	w := the_app.stats.width
 	color := col.a > 0 ? col : hex(HEX_STAT_VALUE)
 	key := ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(math.round(em * 1.45))}
 	stacked := w <= em * STATS_STACK_EM
@@ -410,7 +422,7 @@ rank_row :: proc(id, name: string, n, max_n, failed: int, extra: string, em: f32
 	failures := failed > 0 ? fmt.tprintf("%d failed", failed) : ""
 	ui.next({width = ui.fill(), height = ui.px(em * 1.55), axis = .X, cross = .Center})
 	if ui.row(.Center, id = id) {
-		if the_app.cx.stats_w > em * STATS_WIDE_EM {
+		if the_app.stats.width > em * STATS_WIDE_EM {
 			text("n", ellipsize(name, RANK_NAME_CHARS), hex(HEX_RANK_NAME), mono, ui.px(em * 11))
 			meter("###m", max_n > 0 ? f32(n) / f32(max_n) : 0, color, em)
 			ui.spacer(ui.px(em * 0.6))
@@ -421,7 +433,7 @@ rank_row :: proc(id, name: string, n, max_n, failed: int, extra: string, em: f32
 		}
 		text("n", ellipsize(name, RANK_NAME_CHARS), hex(HEX_RANK_NAME), mono, ui.fill())
 		ui.spacer(ui.px(em * 0.5))
-		if the_app.cx.stats_w > em * STATS_METER_EM {
+		if the_app.stats.width > em * STATS_METER_EM {
 			meter("###m", max_n > 0 ? f32(n) / f32(max_n) : 0, color, em, ui.px(em * STATS_METER_W_EM))
 			ui.spacer(ui.px(em * 0.5))
 		}
@@ -456,7 +468,7 @@ stats_panel :: proc(app: ^App, em: f32) {
 	if ui.column(flags = {.Draw_Background}, id = "###st") {
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###stats_scroll") {
-			pad := em * (app.cx.stats_w > em * STATS_STACK_EM ? DIALOG_MARGIN_EM : STATS_NARROW_PAD_EM)
+			pad := em * (app.stats.width > em * STATS_STACK_EM ? DIALOG_MARGIN_EM : STATS_NARROW_PAD_EM)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row() {
 				ui.spacer(ui.px(pad))
@@ -514,7 +526,7 @@ stats_totals :: proc(c: ^Chat, s: ^Session_Info) -> (t: Totals) {
 // The context filled, and the model's window (0: not known). The server's word for it first, what the loaded messages say else.
 @(private = "file")
 context_used :: proc(app: ^App, c: ^Chat, l: ^Local_Stats) -> (used, window: f64) {
-	x := &app.cx.stats_context
+	x := &app.stats.session_context
 	used = x.total > 0 ? x.total : l.last_context
 	model := x.model != "" ? x.model : l.last_model != "" ? l.last_model : c.model
 	for m in app.models { if m.id == model { window = m.ctx_len; break } }
@@ -579,7 +591,7 @@ stacked_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 // What fills the context as parts of a bar as long as the model's window.
 @(private = "file")
 context_bar :: proc(app: ^App, used, window: f64, em: f32) {
-	x := &app.cx.stats_context
+	x := &app.stats.session_context
 	whole := window > 0 ? window : used
 	parts := make([dynamic]Bar_Part, context.temp_allocator)
 	rest := 0.0
@@ -639,21 +651,21 @@ context_line :: proc(app: ^App, id, name, size, key: string, indent: f32, shade:
 }
 
 @(private = "file")
-context_open :: proc(app: ^App, key: string) -> bool { return app.expanded[hash.fnv64a(transmute([]u8)key)] or_else false }
+context_open :: proc(app: ^App, key: string) -> bool { return app.conversation.expanded[hash.fnv64a(transmute([]u8)key)] or_else false }
 
 @(private = "file")
 context_flip :: proc(app: ^App, key: string) {
 	k := hash.fnv64a(transmute([]u8)key)
-	app.expanded[k] = !(app.expanded[k] or_else false)
+	app.conversation.expanded[k] = !(app.conversation.expanded[k] or_else false)
 }
 
 // The parts, the largest first, each opened in place on what it holds, each of those on its text.
 @(private = "file")
 context_list :: proc(app: ^App, used: f64, em: f32) {
-	x := &app.cx.stats_context
+	x := &app.stats.session_context
 	whole := max(used, 1)
 	size_of :: proc(tokens, whole: f64) -> string {
-		if the_app.cx.stats_w <= ui.font_size() * STATS_STACK_EM { return fmt.tprintf("~%s", kfmt(tokens)) }   // (the name needs the room)
+		if the_app.stats.width <= ui.font_size() * STATS_STACK_EM { return fmt.tprintf("~%s", kfmt(tokens)) }   // (the name needs the room)
 		return fmt.tprintf("~%s  %.0f %%", kfmt(tokens), tokens / whole * 100)
 	}
 	for &g, i in x.groups {
@@ -692,7 +704,7 @@ stats_context :: proc(app: ^App, used, window: f64, em: f32) {
 	} else {
 		info_line(app, "###ctxn", "Not known yet (no step in the loaded messages, or the model's window is not listed).", em, hex(HEX_FAINT))
 	}
-	if read_shown(app, "###ctxl", &app.cx.context_read, em, context_ask) {
+	if read_shown(app, "###ctxl", &app.stats.context_read, em, context_ask) {
 		context_list(app, used, em)
 		ui.spacer(ui.px(em * 0.3))
 		info_line(app, "###ctxh", "The last step's total is the server's. It gives the messages, not their sizes: the parts are estimated from their text, the rest is what no message says. Near the top, opencode compacts the conversation.", em)
@@ -772,10 +784,10 @@ stats_children :: proc(app: ^App, c: ^Chat, em: f32) {
 // The project's totals, from the server.
 @(private = "file")
 stats_project :: proc(app: ^App, now: f64, em: f32) {
-	ps := &app.proj_stats
+	ps := &app.stats.project
 	if ps.project != "" {
 		heading("The project", em, HEX_BLUE)
-		if read_shown(app, "###pl", &app.cx.stats_read, em, stats_ask) {
+		if read_shown(app, "###pl", &app.stats.read, em, stats_ask) {
 			kv("###p1", "sessions", fmt.tprintf("%d  (+ %d sub-agents)", ps.sessions, ps.subagents), em)
 			kv("###p2", "prompts · steps", fmt.tprintf("%d · %d", ps.prompts, ps.steps), em)
 			kv("###p3", "tokens", fmt.tprintf("%s in · %s out · %s reasoning", kfmt(ps.tokens_in + ps.cache_read), kfmt(ps.tokens_out), kfmt(ps.reasoning)), em)

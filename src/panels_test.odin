@@ -129,7 +129,7 @@ hiding_keeps_the_shells_showing_brings_them_back :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(s.list), 2)
 	testing.expect_value(t, bench_count(.Action), 0)   // (no DELETE)
 	testing.expect(t, !ui.dock_has(&app.dock, panels[0]) && !ui.dock_has(&app.dock, panels[1]), "no tab left")
-	testing.expect(t, app.cx.focus_composer, "the keyboard goes back to the conversation")
+	testing.expect(t, app.composer.focus_next, "the keyboard goes back to the conversation")
 	terminal_toggle(app)
 	testing.expect(t, s.open, "shown")
 	testing.expect(t, ui.dock_has(&app.dock, panels[0]) && ui.dock_has(&app.dock, panels[1]), "both are back")
@@ -793,7 +793,7 @@ a_server_left_takes_the_page_with_it :: proc(t: ^testing.T) {
 	testing.expect(t, !p.open, "closed")
 	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Preview)), "no tab")
 	testing.expect_value(t, len(p.tabs), 0)
-	testing.expect_value(t, len(app.cx.web_views), 0)
+	testing.expect_value(t, len(app.previews.views), 0)
 	web_events_drain(app)
 	testing.expect_value(t, len(p.tabs), 0)
 }
@@ -1225,7 +1225,7 @@ an_empty_file_ends_the_wait :: proc(t: ^testing.T) {
 	image_view_start(app, path)
 	image_view_wait(app)
 	testing.expect_value(t, ui.wake_in_ms(&app.state), 0)   // (no frame after frame)
-	testing.expect_value(t, app.view_start.key, u64(0))
+	testing.expect_value(t, app.viewer.start.key, u64(0))
 	testing.expect_value(t, toasts(app), 1)
 }
 
@@ -1300,11 +1300,11 @@ a_picture_that_failed_says_why :: proc(t: ^testing.T) {
 what_was_chosen_does_not_cross_to_the_next_server :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	ui.area_set(&app.composer, "look at @a.txt")
-	append(&app.cx.mentions.chosen, Mention{.File, strings.clone("@a.txt"), strings.clone("file:///old/a.txt"), strings.clone("a.txt")})
+	ui.area_set(&app.composer.area, "look at @a.txt")
+	append(&app.composer.mentions.chosen, Mention{.File, strings.clone("@a.txt"), strings.clone("file:///old/a.txt"), strings.clone("a.txt")})
 	server_forget(app)
-	testing.expect_value(t, len(app.cx.mentions.chosen), 0)
-	testing.expect_value(t, ui.area_string(&app.composer), "look at @a.txt")
+	testing.expect_value(t, len(app.composer.mentions.chosen), 0)
+	testing.expect_value(t, ui.area_string(&app.composer.area), "look at @a.txt")
 }
 
 @(test)

@@ -141,7 +141,7 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	app = new(App)
 	the_app = app
 	append(&app.servers, Server{name = "This computer", local = true})
-	app.sidebar_w = SIDEBAR_W_DEFAULT
+	app.sidebar.width = SIDEBAR_W_DEFAULT
 	app.chat_scroll = Scroll_Following{}
 	app.link = .Online
 	chat_reset(&app.chat)
@@ -321,7 +321,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 				testing.expectf(t, send.rect.max.x <= tools.rect.max.x + 0.5, "at %v, the send button within the toolbar: %v past %v (%q)", w, send.rect.max.x, tools.rect.max.x, send.text)
 			}
 			app.chat.busy, app.prefs.steer_first, app.prefs.column_w = busy, steer, width
-			ui.area_set(&app.composer, "")
+			ui.area_set(&app.composer.area, "")
 			session.frames(s, 4)
 		}
 		// a double click on the title edits it in place: Enter keeps it, Escape leaves it, a click elsewhere keeps it
@@ -379,7 +379,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 			bench_frame(s, &typing)
 		}
 		bench_report(&typing)
-		testing.expect_value(t, len(ui.area_string(&app.composer)), BENCH_FRAMES)
+		testing.expect_value(t, len(ui.area_string(&app.composer.area)), BENCH_FRAMES)
 
 		// a click of the wheel at the bottom, the pointer then a little above it: the view goes up, slowly, and lets go of the bottom.
 		// Its steps (a pixel a frame or less) were each put back at the bottom it was following, and the lazy column read the error
@@ -521,7 +521,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 			bench_frame(s, &search)
 		}
 		bench_report(&search)
-		testing.expect_value(t, ui.field_string(&app.search), BENCH_SEARCH)
+		testing.expect_value(t, ui.field_string(&app.sidebar.search), BENCH_SEARCH)
 
 		older_pages_keep_the_view(t, app, s)
 		output_view_built(t, app, s)
@@ -673,12 +673,12 @@ the_search_has_a_menu :: proc(t: ^testing.T) {
 		session.save_png(s, "search_menu.png")
 		session.click_text(s, "Paste")
 		session.frames(s, 3)
-		testing.expect_value(t, ui.field_string(&app.search), "ses_2")
+		testing.expect_value(t, ui.field_string(&app.sidebar.search), "ses_2")
 		testing.expect(t, session.find(s, "ls_ses_2") != nil, "the search found it by its id")
 		// its cross empties it
 		session.click(s, "clear")
 		session.frames(s, 3)
-		testing.expect_value(t, ui.field_string(&app.search), "")
+		testing.expect_value(t, ui.field_string(&app.sidebar.search), "")
 	})
 }
 
@@ -882,7 +882,7 @@ a_slider_keeps_the_value_it_is_let_go_at :: proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
 		settings_open(app)
-		ui.field_set(&app.settings_query, "conversation width")
+		ui.field_set(&app.settings.query, "conversation width")
 		session.frames(s, 3)
 		sl := session.find(s, "sl")
 		if !testing.expect(t, sl != nil, "the slider") { return }
@@ -898,7 +898,7 @@ a_slider_keeps_the_value_it_is_let_go_at :: proc(t: ^testing.T) {
 		testing.expectf(t, after > before + 20, "dragged right: %v, from %v", after, before)
 		session.frames(s, 3)
 		testing.expect_value(t, config.int_of(&app.cfg_prefs, "conversation.width"), after)
-		ui.field_set(&app.settings_query, "")
+		ui.field_set(&app.settings.query, "")
 		app.cx.open[.Settings] = false
 		pref_set(app, "conversation.width", fmt.tprintf("%v", before))
 	})
@@ -914,15 +914,15 @@ the_settings_search_shows_what_matches :: proc(t: ^testing.T) {
 		session.frames(s, 3)
 		testing.expect(t, session.find(s, "set_appearance.glow") != nil, "a page shows its settings")
 		testing.expect(t, session.find_text(s, fmt.tprintf("opencode native %s", APP_VERSION)) != nil, "the version, under the pages")
-		ui.field_set(&app.settings_query, "permission")
+		ui.field_set(&app.settings.query, "permission")
 		session.frames(s, 3)
 		testing.expect(t, session.find(s, "set_notify.permission") != nil, "the match")
 		testing.expect(t, session.find(s, "set_appearance.glow") == nil, "nothing else")
 		testing.expect(t, session.find(s, "hint_setup") == nil, "nor what a page says besides its settings")
-		ui.field_set(&app.settings_query, "no setting is called this")
+		ui.field_set(&app.settings.query, "no setting is called this")
 		session.frames(s, 3)
 		testing.expect(t, session.find_text(s, "No setting matches.") != nil, "nothing matches, and it says so")
-		ui.field_set(&app.settings_query, "")
+		ui.field_set(&app.settings.query, "")
 		session.frames(s, 3)
 		testing.expect(t, session.find(s, "set_appearance.glow") != nil, "the page again")
 	})
@@ -942,11 +942,11 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		render.update_texture_rgba(&app.r, tex, 0, 0, W, H, pixels)
 		open :: proc(app: ^App, tex: render.Texture) {
 			// (as image_view_open, its decode not asked: the picture is given)
-			image_ref_delete(&app.view_ref)
-			app.view_ref = image_ref_clone(image_ref("not decoded here", .Bytes, "image/png", "picture.png"))
-			app.view_key = 0x5eed
-			app.images[app.view_key] = {state = .Ready, tex = tex, w = W, h = H, used = app.frame_no}
-			app.cx.open[.Viewer], app.view_zoom, app.view_pan, app.view_grown = true, 1, {}, false
+			image_ref_delete(&app.viewer.ref)
+			app.viewer.ref = image_ref_clone(image_ref("not decoded here", .Bytes, "image/png", "picture.png"))
+			app.viewer.key = 0x5eed
+			app.images[app.viewer.key] = {state = .Ready, tex = tex, w = W, h = H, used = app.frame_no}
+			app.cx.open[.Viewer], app.viewer.zoom, app.viewer.pan, app.viewer.grown = true, 1, {}, false
 		}
 		open(app, tex)
 		session.frames(s, 3)
@@ -963,7 +963,7 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		// a press on the picture keeps it; zoomed out, a press beside the picture closes it
 		session.click_at(s, view.rect.min + 5)
 		testing.expect(t, app.cx.open[.Viewer], "a press on the picture")
-		app.view_zoom = 0.5
+		app.viewer.zoom = 0.5
 		session.frames(s, 2)
 		session.click_at(s, view.rect.min + 5)
 		testing.expect(t, !app.cx.open[.Viewer], "a press beside the picture closes it")
@@ -1060,11 +1060,11 @@ a_table_s_copy_button_is_over_its_rows :: proc(t: ^testing.T) {
 				b := session.find(s, "rows", i)
 				if b == nil { return nil }
 				// (a table's, in the conversation: the sidebar's list is "rows" too)
-				if b.rect.min.x > app.sidebar_w && b.rect.min.y > 0 && b.rect.max.y < f32(BENCH_SIZE.y) && b.rect.max.x > b.rect.min.x { return b }
+				if b.rect.min.x > app.sidebar.width && b.rect.min.y > 0 && b.rect.max.y < f32(BENCH_SIZE.y) && b.rect.max.x > b.rect.min.x { return b }
 			}
 		}
 		rows := table_in_sight(s, app)
-		mid := [2]f32{app.sidebar_w + (f32(BENCH_SIZE.x) - app.sidebar_w) * 0.5, f32(BENCH_SIZE.y) * 0.5}
+		mid := [2]f32{app.sidebar.width + (f32(BENCH_SIZE.x) - app.sidebar.width) * 0.5, f32(BENCH_SIZE.y) * 0.5}
 		for k := 0; rows == nil && k < 60; k += 1 {
 			session.event(s, {kind = .Scroll, pos = mid, delta = {0, 3}})
 			session.wait_idle(s)   // (the scroll glides: where the table is, once it stands)
@@ -1091,7 +1091,7 @@ every_setting_of_the_palette_is_on_a_page :: proc(t: ^testing.T) {
 		app, s := bench_app(t)
 		settings_open(app)
 		for d in PREF_DEFS {
-			ui.field_set(&app.settings_query, setting_query(d.name))
+			ui.field_set(&app.settings.query, setting_query(d.name))
 			session.frames(s, 2)
 			found := session.find(s, fmt.tprintf("set_%s", d.name)) != nil
 			if d.hidden {
@@ -1100,7 +1100,7 @@ every_setting_of_the_palette_is_on_a_page :: proc(t: ^testing.T) {
 				testing.expectf(t, found, "%s: the settings show it when the palette opens them on it (%q)", d.name, setting_query(d.name))
 			}
 		}
-		ui.field_set(&app.settings_query, "")
+		ui.field_set(&app.settings.query, "")
 	})
 }
 
@@ -1320,20 +1320,20 @@ typing_with_nothing_focused_goes_to_the_composer :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		session.type_text(s, " ")
 		session.frames(s, 2)
-		testing.expect_value(t, ui.area_string(&app.composer), "")
+		testing.expect_value(t, ui.area_string(&app.composer.area), "")
 		ui.set_focus(0)
 		session.type_text(s, "hi")
 		session.frames(s, 2)
-		testing.expect_value(t, ui.area_string(&app.composer), "hi")
-		testing.expect(t, app.composer_focused, "it has the keyboard")
-		ui.area_set(&app.composer, "")
+		testing.expect_value(t, ui.area_string(&app.composer.area), "hi")
+		testing.expect(t, app.composer.focused, "it has the keyboard")
+		ui.area_set(&app.composer.area, "")
 		ui.set_focus(0)
 		palette_toggle(app)
 		session.frames(s, 2)
 		ui.set_focus(0)
 		session.type_text(s, "x")
 		session.frames(s, 2)
-		testing.expect_value(t, ui.area_string(&app.composer), "")
+		testing.expect_value(t, ui.area_string(&app.composer.area), "")
 		palette_toggle(app)
 	})
 }
@@ -1373,7 +1373,7 @@ an_archived_session_is_put_away :: proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
 		id := "ses_2"
-		ui.field_set(&app.search, `"Session 2 about"`)   // (it alone: the end of a long list is not built)
+		ui.field_set(&app.sidebar.search, `"Session 2 about"`)   // (it alone: the end of a long list is not built)
 		session.frames(s, 2)
 		testing.expect(t, session.find(s, "ls_ses_2") != nil, "listed")
 		testing.expect(t, session.find_text(s, "ARCHIVED") == nil, "no Archived section while nothing is")
@@ -1385,14 +1385,14 @@ an_archived_session_is_put_away :: proc(t: ^testing.T) {
 		secs := sidebar_sections(app, sidebar_rows(app, ""), app.prefs.sidebar_mode)
 		last := secs[len(secs) - 1]
 		testing.expect(t, last.title == ARCHIVED_TITLE && len(last.items) == 1 && app.sessions[last.items[0]].id == id, "the last section, with it alone")
-		app.folded[last.key] = false   // (opened, as its header's click does)
+		app.sidebar.folded[last.key] = false   // (opened, as its header's click does)
 		session.frames(s, 3)
 		testing.expect(t, session.find(s, "ls_ses_2") != nil, "opened: it shows")
 		session_archive(app, id, false)
 		session.frames(s, 3)
 		testing.expect(t, session.find(s, "ls_ses_2") != nil, "back in its section")
 		testing.expect(t, session.find_text(s, "ARCHIVED") == nil, "nothing archived: no section")
-		ui.field_set(&app.search, "")
+		ui.field_set(&app.sidebar.search, "")
 	})
 }
 
@@ -1403,7 +1403,7 @@ a_session_archived_under_the_pointer_leaves_at_once :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		ui.field_set(&app.search, `"Session 2 about"`)
+		ui.field_set(&app.sidebar.search, `"Session 2 about"`)
 		session.frames(s, 2)
 		row := session.find(s, "ls_ses_2")
 		if !testing.expect(t, row != nil, "listed") { return }
@@ -1411,7 +1411,7 @@ a_session_archived_under_the_pointer_leaves_at_once :: proc(t: ^testing.T) {
 		session.move(s, at)
 		session.move(s, at + {2, 0})
 		session.frames(s, 2)
-		testing.expect(t, app.cx.side_hold.on, "the list is held under the pointer")
+		testing.expect(t, app.sidebar.hold.on, "the list is held under the pointer")
 		session_archive(app, "ses_2", true)
 		session.move(s, at + {4, 0})   // (the pointer moves on over the list: the hold goes on)
 		session.frames(s, 2)
@@ -1421,7 +1421,7 @@ a_session_archived_under_the_pointer_leaves_at_once :: proc(t: ^testing.T) {
 		session.move(s, at + {6, 0})
 		session.frames(s, 2)
 		testing.expect(t, session.find(s, "ls_ses_2") != nil, "brought back: at once too")
-		ui.field_set(&app.search, "")
+		ui.field_set(&app.sidebar.search, "")
 	})
 }
 
@@ -1463,13 +1463,13 @@ escape_stops_the_run_and_the_composer_keeps_the_keyboard :: proc(t: ^testing.T) 
 		session.frames(s, 2)
 		testing.expect_value(t, session.focused_name(s), "composer")   // (still writing)
 		session.type_text(s, "no")
-		testing.expect_value(t, ui.area_string(&app.composer), "wait, no")
+		testing.expect_value(t, ui.area_string(&app.composer.area), "wait, no")
 		app.chat.busy = false
 		delete_key(&app.busy, app.chat.id)
 		session.key(s, .Escape)
 		session.frames(s, 2)
 		testing.expect(t, session.focused_name(s) != "composer", "nothing runs: it lets go")
-		ui.area_set(&app.composer, "")
+		ui.area_set(&app.composer.area, "")
 	})
 }
 
@@ -1560,7 +1560,7 @@ a_diagram_is_zoomed_and_moved_in_the_viewer :: proc(t: ^testing.T) {
 		if !testing.expect(t, session.find(s, "diagram") != nil, "drawn") { return }
 		session.click(s, "diagram")
 		session.wait_idle(s)
-		testing.expect(t, app.cx.open[.Viewer] && app.view_diagram != "", "a click opens the viewer on it")
+		testing.expect(t, app.cx.open[.Viewer] && app.viewer.diagram != "", "a click opens the viewer on it")
 		view := session.find(s, "view")
 		if !testing.expect(t, view != nil, "the view") { return }
 		em := ui.font_size()
@@ -1571,30 +1571,30 @@ a_diagram_is_zoomed_and_moved_in_the_viewer :: proc(t: ^testing.T) {
 		session.move(s, at)
 		session.wheel(s, at, {0, -3})
 		session.frames(s, 2)
-		testing.expectf(t, app.view_zoom > 1.9, "the wheel zooms: %v", app.view_zoom)
-		testing.expectf(t, app.view_pan.x < 0 && app.view_pan.y < 0, "toward the pointer: %v", app.view_pan)
+		testing.expectf(t, app.viewer.zoom > 1.9, "the wheel zooms: %v", app.viewer.zoom)
+		testing.expectf(t, app.viewer.pan.x < 0 && app.viewer.pan.y < 0, "toward the pointer: %v", app.viewer.pan)
 		session.save_png(s, "diagram_viewer.png")
-		from := app.view_pan
+		from := app.viewer.pan
 		c := session.center(view)
 		session.press(s, c)
 		session.move(s, c + {20, 10})
 		session.move(s, c + {40, 20})
 		session.release(s, c + {40, 20})
 		session.frames(s, 2)
-		testing.expectf(t, abs(app.view_pan.x - from.x - 40) < 1 && abs(app.view_pan.y - from.y - 20) < 1, "a drag moves it: %v from %v", app.view_pan, from)
+		testing.expectf(t, abs(app.viewer.pan.x - from.x - 40) < 1 && abs(app.viewer.pan.y - from.y - 20) < 1, "a drag moves it: %v from %v", app.viewer.pan, from)
 		session.event(s, {kind = .Key_Press, key = .N0})
 		session.frames(s, 2)
-		testing.expect(t, app.view_zoom == 1 && app.view_pan == {}, "0: back to what fits")
+		testing.expect(t, app.viewer.zoom == 1 && app.viewer.pan == {}, "0: back to what fits")
 		session.click_at(s, session.center(view), .Right)
 		session.frames(s, 2)
 		testing.expect(t, session.find_text(s, "Copy as PNG") != nil, "Copy as PNG")
 		testing.expect(t, session.find_text(s, "Copy the text") != nil, "Copy the text")
 		session.event(s, {kind = .Key_Press, key = .Escape})
 		session.frames(s, 2)
-		pic, ok := diagram_picture(app, app.view_diagram)
+		pic, ok := diagram_picture(app, app.viewer.diagram)
 		defer paint.canvas_destroy(&pic)
 		if !testing.expect(t, ok, "its picture") { return }
-		d := diagram_of(app, app.view_diagram, !app.cx.theme.light)
+		d := diagram_of(app, app.viewer.diagram, !app.cx.theme.light)
 		want := d.doc.view[2] * DIAGRAM_COPY_SCALE * diagram_scale(ui.font_size())
 		testing.expectf(t, abs(f32(pic.width) - math.ceil(want)) < 1, "twice its size: %d for %v", pic.width, want)
 		well := themed(HEX_CODE_WELL)
@@ -1647,11 +1647,11 @@ the_sessions_search_lights_what_it_found :: proc(t: ^testing.T) {
 			}
 			return
 		}
-		ui.field_set(&app.search, "FRAME project_3")
+		ui.field_set(&app.sidebar.search, "FRAME project_3")
 		session.frames(s, 3)
 		lit, all := lit_titles(s)
 		testing.expectf(t, all > 0 && lit == all, "the titles found are lit: %d of %d", lit, all)
-		ui.field_set(&app.search, "")
+		ui.field_set(&app.sidebar.search, "")
 		session.frames(s, 3)
 		lit, all = lit_titles(s)
 		testing.expectf(t, all > 0 && lit == 0, "no search, nothing lit: %d of %d", lit, all)

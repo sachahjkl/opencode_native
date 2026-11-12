@@ -839,8 +839,8 @@ dialogs_reread :: proc(app: ^App) {
 	if cx.open[.Schedules] && remote_failed(&cx.schedules.read) { schedules_ask(app) }
 	if cx.open[.Artifacts] && remote_failed(&cx.artifacts.read) { artifacts_ask(app) }
 	if cx.open[.Files] && remote_failed(&cx.files.read) { files_list(app) }
-	if app.stats_open {
-		if remote_failed(&cx.stats_read) { stats_ask(app) }
+	if app.stats.open {
+		if remote_failed(&app.stats.read) { stats_ask(app) }
 		context_ask(app)   // (what a step added was missed)
 	}
 	changes_reread(app)

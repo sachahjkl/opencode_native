@@ -283,10 +283,10 @@ server_forget :: proc(app: ^App) {
 server_view_forget :: proc(app: ^App) {
 	chat_home(app)
 	remote_reset(&app.cx.chat_read)
-	for id in app.nav { delete(id) }
-	clear(&app.nav)
-	for st in app.nav_steps { delete(st.id) }
-	clear(&app.nav_steps)
+	for id in app.nav.drilled { delete(id) }
+	clear(&app.nav.drilled)
+	for st in app.nav.steps { delete(st.id) }
+	clear(&app.nav.steps)
 	nav_clear(app)
 }
 
@@ -296,8 +296,8 @@ server_dialogs_forget :: proc(app: ^App) {
 	app.cx.open[.Picker] = false
 	app.cx.open[.Delete], app.cx.open[.Rename], app.rename.at = false, false, .None   // (their ids were that server's: nothing acts on one with what came from the other)
 	sidebar_hold_end(app)
-	delete(app.cx.fork_prompt)
-	app.cx.fork_prompt = ""
+	delete(app.composer.fork_prompt)
+	app.composer.fork_prompt = ""
 	app.opened_first = false
 	app.start_session = ""
 }

@@ -1,6 +1,6 @@
 // A browser per session, of one tab or several. A tab is the live thing: a page, its web view, its address, its history. A session's
 // Preview is its list of tabs and the one in front; `app.preview` is the Preview of the session shown, and the others wait in
-// `cx.previews`, parked, by session. Only the front tab of the session shown is visible; every other page is alive and hidden. A web view is
+// `app.previews.by_session`, parked. Only the front tab of the session shown is visible; every other page is alive and hidden. A web view is
 // made when a tab first needs one, so a session that never opens the browser costs nothing. Whatever a view says reaches its own tab: a
 // parked page goes on loading, and an agent can go on driving it.
 package ocn
@@ -37,6 +37,15 @@ Web_View :: struct {
 	gone:   bool,
 }
 
+// The browsers of every session: what makes their web views, those alive, the browsers of the sessions not shown.
+Previews :: struct {
+	host:       Web_Host,               // what makes web views
+	views:      [dynamic]^Web_View,     // ... those alive, every session's tabs together
+	by_session: map[string]^Preview,    // the browsers of the sessions not shown (keys: their own)
+	clock:      u64,                    // what Preview_Tab.used counts in
+	tabs_made:  u64,                    // what the tabs' ids count
+}
+
 // The view exists, or is on its way. One that failed is made anew: a failure holds for this attempt, not for ever.
 web_start :: proc(app: ^App, t: ^Preview_Tab) {
 	switch _ in t.web {
@@ -44,7 +53,7 @@ web_start :: proc(app: ^App, t: ^Preview_Tab) {
 	case Web_Failed:              web_close(app, t)
 	case nil:
 	}
-	host := app.cx.web_host
+	host := app.previews.host
 	if host.open == nil { return }   // (no window: nothing to put it in)
 	v := new(Web_View)
 	v.app, v.tab = app, t
@@ -56,7 +65,7 @@ web_start :: proc(app: ^App, t: ^Preview_Tab) {
 		return
 	}
 	t.view = v
-	append(&app.cx.web_views, v)
+	append(&app.previews.views, v)
 	web_state_set(t, Web_Creating{})
 	preview_touch(app, t)
 	if preview_tab_shown(app, t) {
@@ -71,11 +80,11 @@ web_start :: proc(app: ^App, t: ^Preview_Tab) {
 web_close :: proc(app: ^App, t: ^Preview_Tab) {
 	if v := t.view; v != nil {
 		browser_calls_end(app, v, "The page was closed before it answered.")
-		app.cx.web_host.close(v.native)
+		app.previews.host.close(v.native)
 		v.gone = true
 		web_events_drop(v)
 		delete(v.events)
-		for w, i in app.cx.web_views { if w == v { ordered_remove(&app.cx.web_views, i); break } }
+		for w, i in app.previews.views { if w == v { ordered_remove(&app.previews.views, i); break } }
 		t.view = nil
 	}
 	web_state_set(t, nil)
@@ -86,7 +95,7 @@ web_parent :: proc(t: ^Preview_Tab, w: ^platform.Window) {
 	v := t.view
 	if v == nil || v.parent == w { return }
 	if _, coming := t.web.(Web_Creating); coming { return }
-	v.app.cx.web_host.parent(v.native, w)
+	v.app.previews.host.parent(v.native, w)
 	v.parent = w
 }
 
@@ -95,29 +104,29 @@ web_navigate :: proc(app: ^App, t: ^Preview_Tab, url: string) {
 	t.asked = true
 	if t.url == "" { t.url = strings.clone(url) }
 	if t.view == nil { web_start(app, t) }
-	if v := t.view; v != nil { app.cx.web_host.navigate(v.native, url) }
+	if v := t.view; v != nil { app.previews.host.navigate(v.native, url) }
 }
 
 web_act :: proc(t: ^Preview_Tab, what: Web_Act) {
-	if v := t.view; v != nil { v.app.cx.web_host.act(v.native, what) }
+	if v := t.view; v != nil { v.app.previews.host.act(v.native, what) }
 }
 
 // Whether the page has a place to go Back or Forward to.
 web_can :: proc(t: ^Preview_Tab, what: Web_Act) -> bool {
 	v := t.view
-	return v != nil && v.app.cx.web_host.can(v.native, what)
+	return v != nil && v.app.previews.host.can(v.native, what)
 }
 
 web_script :: proc(t: ^Preview_Tab, code: string, id: u64) {
-	if v := t.view; v != nil { v.app.cx.web_host.script(v.native, code, id) }
+	if v := t.view; v != nil { v.app.previews.host.script(v.native, code, id) }
 }
 
 web_capture :: proc(t: ^Preview_Tab, id: u64) {
-	if v := t.view; v != nil { v.app.cx.web_host.capture(v.native, id) }
+	if v := t.view; v != nil { v.app.previews.host.capture(v.native, id) }
 }
 
 web_place :: proc(t: ^Preview_Tab, x, y, w, h: int, visible: bool) {
-	if v := t.view; v != nil { v.app.cx.web_host.place(v.native, x, y, w, h, visible) }
+	if v := t.view; v != nil { v.app.previews.host.place(v.native, x, y, w, h, visible) }
 }
 
 // Out of sight, at a size a page can be read at: what is laid out at nothing has no element an agent could see.
@@ -145,9 +154,9 @@ preview_front :: proc(p: ^Preview) -> ^Preview_Tab {
 // (The ids go on from session to session: one given to an agent never comes to mean another page.)
 @(private = "file")
 preview_tab_make :: proc(app: ^App) -> ^Preview_Tab {
-	app.cx.preview_tabs_made += 1
+	app.previews.tabs_made += 1
 	t := new(Preview_Tab)
-	t.id = fmt.aprintf("tab_00000000-0000-4000-8000-%012x", app.cx.preview_tabs_made)
+	t.id = fmt.aprintf("tab_00000000-0000-4000-8000-%012x", app.previews.tabs_made)
 	return t
 }
 
@@ -305,16 +314,16 @@ preview_root :: proc(app: ^App, id: string) -> (root: string, known: bool) {
 @(private = "file")
 preview_key :: proc(app: ^App) -> (key: string, known: bool) {
 	if app.chat.id == "" { return "", true }
-	return preview_root(app, len(app.nav) > 0 ? app.nav[0] : app.chat.id)
+	return preview_root(app, len(app.nav.drilled) > 0 ? app.nav.drilled[0] : app.chat.id)
 }
 
 // The Preview of `key`, shown or parked, made if it has none.
 preview_entry :: proc(app: ^App, key: string) -> ^Preview {
 	if key == app.preview.key { return &app.preview }
-	if e, parked := app.cx.previews[key]; parked { return e }
+	if e, parked := app.previews.by_session[key]; parked { return e }
 	e := new(Preview)
 	e.key = strings.clone(key)
-	app.cx.previews[e.key] = e
+	app.previews.by_session[e.key] = e
 	return e
 }
 
@@ -333,8 +342,8 @@ preview_move :: proc(app: ^App, w: ^platform.Window) {
 }
 
 preview_touch :: proc(app: ^App, t: ^Preview_Tab) {
-	app.cx.preview_clock += 1
-	t.used = app.cx.preview_clock
+	app.previews.clock += 1
+	t.used = app.previews.clock
 }
 
 ////////////////////////////////
@@ -357,8 +366,8 @@ preview_switch :: proc(app: ^App, key: string) {
 	if t := preview_front(old); t != nil { tab_leave(app, t) }
 	preview_park(app)
 
-	if e, parked := app.cx.previews[key]; parked {
-		delete_key(&app.cx.previews, key)
+	if e, parked := app.previews.by_session[key]; parked {
+		delete_key(&app.previews.by_session, key)
 		app.preview = e^
 		free(e)
 	} else {
@@ -397,7 +406,7 @@ preview_park :: proc(app: ^App) {
 	old.due_new, old.due_front, old.due_close = false, nil, nil
 	e := new(Preview)
 	e^ = old^
-	app.cx.previews[e.key] = e
+	app.previews.by_session[e.key] = e
 }
 
 // A tab with a view, its page loaded again from its address if the limit took the last one.
@@ -422,9 +431,9 @@ oldest_of :: proc(app: ^App, p: ^Preview, keep, oldest: ^Preview_Tab) -> ^Previe
 // it. The tab stays with its address and its id: showing it loads the page again; what is lost is the page's own state and its history.
 @(private = "file")
 preview_trim :: proc(app: ^App, keep: ^Preview_Tab) {
-	for len(app.cx.web_views) > PREVIEW_VIEWS_MOST {
+	for len(app.previews.views) > PREVIEW_VIEWS_MOST {
 		oldest := oldest_of(app, &app.preview, keep, nil)
-		for _, e in app.cx.previews { oldest = oldest_of(app, e, keep, oldest) }
+		for _, e in app.previews.by_session { oldest = oldest_of(app, e, keep, oldest) }
 		if oldest == nil { return }
 		web_close(app, oldest)
 		clear(&oldest.navs)
@@ -451,9 +460,9 @@ preview_session_gone :: proc(app: ^App, id: string) {
 		app.preview.gone = true
 		return
 	}
-	e, parked := app.cx.previews[id]
+	e, parked := app.previews.by_session[id]
 	if !parked { return }
-	delete_key(&app.cx.previews, id)
+	delete_key(&app.previews.by_session, id)
 	preview_free(app, e)
 	free(e)
 }
@@ -461,6 +470,6 @@ preview_session_gone :: proc(app: ^App, id: string) {
 // The home page's prompt made this session: what was open beside it was opened for it, and stays with it.
 preview_adopt :: proc(app: ^App, id: string) {
 	p := &app.preview
-	if p.key != "" || id in app.cx.previews { return }
+	if p.key != "" || id in app.previews.by_session { return }
 	p.key = strings.clone(id)
 }

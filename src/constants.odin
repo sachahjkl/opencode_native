@@ -310,21 +310,21 @@ TERM_MENU_EM :: 14   // a shell's menu, its width (terminal.odin term_menu)
 OUTPUT_PROMPT      :: "\x1b[2m$\x1b[0m "    // before a command's first line at the head of its output (output_view.odin output_view_echo)
 OUTPUT_PROMPT_MORE :: "\x1b[2m>\x1b[0m "    // before its next lines
 OUTPUT_ECHO_ON     :: "\x1b[1m"              // the command itself: bold
-SESSION_BADGE_EM       :: 1.45   // a session's mark in the sidebar, a row of one line (views.odin session_badge)
+SESSION_BADGE_EM       :: 1.45   // a session's mark in the sidebar, a row of one line (sidebar_rows.odin session_badge)
 SESSION_BADGE_INBOX_EM :: 1.9    // ... a row of two (the inbox)
 SESSION_BADGE_ALPHA    :: 0.2    // its colour behind its letter
 SESSION_BADGE_HEX := [?]u32{HEX_PEACH, HEX_BLUE, HEX_PURPLE, HEX_GREEN, HEX_YELLOW, HEX_RED, HEX_CYAN, HEX_ROSE}   // what a session's id picks from
 THEME_CARD_W_EM   :: 12    // a theme's card: its width (on the line, in the grid)
 THEME_CARD_H_EM   :: 3.6   // a theme's card in the settings (settings.odin theme_cards)
 THEME_CARD_RADIUS :: 8     // its corners, logical px
-COMPOSER_FIT_SLACK_EM :: 3   // the composer's toolbar gives back what it left out once this much wider than where it went past (views.odin composer_fit)
+COMPOSER_FIT_SLACK_EM :: 3   // the composer's toolbar gives back what it left out once this much wider than where it went past (composer.odin composer_fit)
 THEMES_FILE  :: "themes.txt"   // the user's themes, beside the preferences (theme.odin)
 ITEM_HOVER_TINT    :: 0.05   // a row under the pointer: the text's
 TODO_SCAN_PAGES :: 10   // older pages read at most for a session's last todo list (activity.odin todos_scan_load)
 CHOICE_RATE          :: 40     // a choice's plate sliding to the one chosen (style.odin choice)
 CHOICE_PAD_EM        :: 0.2    // between its track and its plate
 CHOICE_RADIUS_SHARE  :: 0.32   // its corners, of its height
-COLUMN_HANDLE_EM :: 0.9   // a handle beside the conversation's column, its width (views.odin column_handles)
+COLUMN_HANDLE_EM :: 0.9   // a handle beside the conversation's column, its width (conversation.odin column_handles)
 COLUMN_GRIP_PX   :: 18    // its strokes, their length
 READABLE_TEXT    :: 4.5    // words that are read: WCAG AA (ui.readable)
 READABLE_QUIET   :: 3.0    // what is glanced at: a folder, an age

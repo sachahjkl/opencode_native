@@ -58,7 +58,7 @@ Preview_Tab :: struct {
 	view:     ^Web_View,          // its web view (nil: none, not asked for, or the limit took it: preview_trim)
 	asked:    bool,               // it was given an address, which may not have come yet
 	focus_page: bool,             // the page takes the keyboard when its view comes
-	used:     u64,                // when it was last shown or driven (cx.preview_clock)
+	used:     u64,                // when it was last shown or driven (Previews.clock)
 	focus_address: bool,          // the address takes the focus at its next build
 	placed:   [4]int,             // x, y, width, height last given to the view
 	placed_shown: bool,
@@ -193,7 +193,7 @@ dock_setup :: proc(app: ^App) {
 		return ui.dock_has(d, u32(other)) ? ui.dock_with(d, u32(other)) : ui.dock_beside(d, u32(Panel.Conversation), .Right)
 	}
 	preview := app.preview.open && !panel_detached(app, u32(Panel.Preview))
-	stats := app.stats_open && !panel_detached(app, u32(Panel.Stats))
+	stats := app.stats.open && !panel_detached(app, u32(Panel.Stats))
 	if preview && !ui.dock_has(d, u32(Panel.Preview)) { ui.dock_add(d, u32(Panel.Preview), beside(d, .Stats)) }
 	if stats && !ui.dock_has(d, u32(Panel.Stats)) { ui.dock_add(d, u32(Panel.Stats), beside(d, .Preview)) }
 	// (only what is open, and not in a window of its own, has a tab)
@@ -211,7 +211,7 @@ panel_close :: proc(app: ^App, panel: u32) {
 		ui.dock_close(&app.dock, panel)
 		detached_closing(app, panel)
 	case panel == u32(Panel.Stats):
-		app.stats_open = false
+		app.stats.open = false
 		ui.dock_close(&app.dock, panel)
 	case panel == u32(Panel.Terminal):
 		terminals_hide(app)
@@ -291,11 +291,11 @@ preview_forget :: proc(app: ^App) {
 	p := &app.preview
 	if p.open { panel_close(app, u32(Panel.Preview)) }
 	preview_tabs_clear(app, p)
-	for _, e in app.cx.previews {
+	for _, e in app.previews.by_session {
 		preview_free(app, e)
 		free(e)
 	}
-	clear(&app.cx.previews)
+	clear(&app.previews.by_session)
 }
 
 ////////////////////////////////
@@ -317,7 +317,7 @@ web_events_drop :: proc(v: ^Web_View) {
 
 // The frame's point for it: no build runs, and what an event does may say more (a script refused answers at once): that waits for the next.
 web_events_drain :: proc(app: ^App) {
-	for v in app.cx.web_views {
+	for v in app.previews.views {
 		if len(v.events) == 0 { continue }
 		batch := v.events
 		v.events = {}
@@ -544,11 +544,11 @@ main_area :: proc(app: ^App, em: f32) {
 	p.shown = false
 	terminals_begin(app)
 	defer terminals_settle(app)
-	app.cx.docked_w = 0
+	app.conversation.docked_w = 0
 	// (in the dock or out of it the conversation is other boxes, and their scroll starts at the top: whatever opened or closed a panel)
-	docked := p.open || s.open || app.stats_open
-	if docked != app.cx.was_docked {
-		app.cx.was_docked = docked
+	docked := p.open || s.open || app.stats.open
+	if docked != app.conversation.was_docked {
+		app.conversation.was_docked = docked
 		chat_scroll_event(app, Scroll_Hold_View{app.chat.view_msg, app.chat.view_dy})
 	}
 	if !docked { conversation(app, em); return }
@@ -556,15 +556,15 @@ main_area :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.fill()})
 	ui.dock_begin(d, "###dock", {title = panel_title, tab = panel_tab, strip_begin = strip_look, strip_end = strip_end, closable = panel_closable, on_save = dock_save, user = app, close_buttons = true, tab_height = math.round(em * DOCK_TAB_H_EM)})
 	if ui.dock_panel(d, u32(Panel.Conversation)) {
-		app.cx.docked_w = ui.dock_panel_size(d, u32(Panel.Conversation)).x
+		app.conversation.docked_w = ui.dock_panel_size(d, u32(Panel.Conversation)).x
 		conversation(app, em)
 	}
 	if p.open && !panel_detached(app, u32(Panel.Preview)) {
 		if ui.dock_panel(d, u32(Panel.Preview)) { preview_panel(app, em) }
 	}
-	if app.stats_open && !panel_detached(app, u32(Panel.Stats)) {
+	if app.stats.open && !panel_detached(app, u32(Panel.Stats)) {
 		if ui.dock_panel(d, u32(Panel.Stats)) {
-			app.cx.stats_w = ui.dock_panel_size(d, u32(Panel.Stats)).x
+			app.stats.width = ui.dock_panel_size(d, u32(Panel.Stats)).x
 			stats_panel(app, em)
 		}
 	}

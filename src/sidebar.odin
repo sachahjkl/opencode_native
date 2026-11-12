@@ -1,6 +1,6 @@
 // What the sidebar lists, and in what order. A mode is a way of dealing the sessions into sections: an entry of Sidebar_Mode, its
 // word and label below, a case of sidebar_sections. Everything else (the search, the rows, the headers, folding, what holds the order
-// under the pointer) is the same for all of them. The rows themselves are in views.odin.
+// under the pointer) is the same for all of them. The rows themselves are in sidebar_rows.odin.
 package ocn
 
 import "core:fmt"
@@ -231,10 +231,24 @@ Side_Kept :: struct {
 	rows_computed, sections_computed: int,   // times each was made (tests)
 }
 
+// The sidebar: its width, its search, what is folded or open in it, what it keeps of the list, what its menus are about.
+Sidebar :: struct {
+	width:        f32,
+	hidden:       bool,
+	search:       ui.Text_Field,
+	folded:       map[u64]bool,   // groups folded (hash of the directory)
+	sub_open:     map[u64]bool,   // sessions whose sub-agents are listed under them
+	hold:         Side_Hold,      // the order, under the pointer
+	kept:         Side_Kept,      // the rows and sections
+	menu_session: string,         // the session the context menu is about (owned)
+	menu_project: string,         // the project the project menu is about (owned)
+	delete_id:    string,         // the session the dialog that deletes it is about
+}
+
 // The sections the list shows, made again only when what they come from changed. `wanted`: the pointer is over the list.
 sidebar_view :: proc(app: ^App, query: string, wanted: bool) -> []Side_Section {
-	k := &app.cx.side
-	h := &app.cx.side_hold
+	k := &app.sidebar.kept
+	h := &app.sidebar.hold
 	side_rows_refresh(app, query)
 	if h.on && (!wanted || h.over != k.of) { sidebar_hold_end(app) }
 	side_sections_refresh(app)
@@ -253,7 +267,7 @@ sidebar_view :: proc(app: ^App, query: string, wanted: bool) -> []Side_Section {
 
 @(private = "file")
 side_rows_refresh :: proc(app: ^App, query: string) {
-	k := &app.cx.side
+	k := &app.sidebar.kept
 	mode := app.prefs.sidebar_mode
 	if k.rows_made && k.rows_sessions == app.cx.sessions_ver && k.mode == mode && k.query == query && k.subagents == app.prefs.subagents { return }
 	a := arena_renew(&k.rows_arena)
@@ -275,8 +289,8 @@ side_rows_refresh :: proc(app: ^App, query: string) {
 
 @(private = "file")
 side_sections_refresh :: proc(app: ^App) {
-	k := &app.cx.side
-	h := &app.cx.side_hold
+	k := &app.sidebar.kept
+	h := &app.sidebar.hold
 	if k.sections_made && k.sections_rows == k.rows_ver && k.sections_marks == app.cx.marks_ver && k.sections_hold == h.ver && k.shown == app.chat.id { return }
 	a := arena_renew(&k.sections_arena)
 	k.sections = h.on ? held_sections(app, k.rows, a) : sidebar_sections(app, k.rows, k.mode, a)
@@ -288,7 +302,7 @@ side_sections_refresh :: proc(app: ^App) {
 // The sections held, with the sessions in them now. By id: a new list changes the indices.
 @(private = "file")
 held_sections :: proc(app: ^App, rows: []int, a: mem.Allocator) -> []Side_Section {
-	h := &app.cx.side_hold
+	h := &app.sidebar.hold
 	listed := make([]bool, len(app.sessions), context.temp_allocator)
 	for i in rows { listed[i] = true }
 	sections := make([dynamic]Side_Section, 0, len(h.sections), a)
@@ -303,7 +317,7 @@ held_sections :: proc(app: ^App, rows: []int, a: mem.Allocator) -> []Side_Sectio
 }
 
 sidebar_hold_end :: proc(app: ^App) {
-	h := &app.cx.side_hold
+	h := &app.sidebar.hold
 	for &sec in h.sections {
 		for id in sec.ids { delete(id) }
 		delete(sec.ids)
@@ -348,7 +362,7 @@ inbox_header :: proc(app: ^App, sec: ^Side_Section, folded: bool, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 	hdr := ui.build_box({.Clickable, .Hot_Within}, fmt.tprintf("###g%d", sec.key))
 	hs := ui.signal(hdr)
-	if hs.clicked { app.folded[sec.key] = !folded }
+	if hs.clicked { app.sidebar.folded[sec.key] = !folded }
 	if ui.parent(hdr) {
 		ui.spacer(ui.px(em * 0.8))
 		glyph(folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)

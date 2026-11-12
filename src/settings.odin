@@ -336,17 +336,24 @@ form_words :: proc(form: json.Value) -> string {
 // A toast about the session `sid`: its title on the first line, `what` and `detail` under it; a click on it opens the session.
 TOAST_TARGETS :: 16   // (more than the toasts that can stand at once: a toast's session is still there when it is clicked)
 
+// The sessions that the system's notifications and the toasts shown are about: a click on one opens its session.
+Notices :: struct {
+	notified:      map[platform.Notification_Id]string,   // the notifications of the system shown, their sessions (owned: notify_event)
+	toast_targets: [TOAST_TARGETS]string,   // the sessions a click on a toast opens, a ring (owned: toast_session)
+	toast_next:    int,
+}
+
 toast_session :: proc(app: ^App, kind: ui.Toast_Kind, sid, what, detail: string) {
 	body := detail != "" ? fmt.tprintf("%s: %s", what, detail) : what
 	title := session_title_of(app, sid)
 	if sid == "" { ui.toast_titled(kind, title, body); return }
-	k := app.cx.toast_target_next
-	app.cx.toast_target_next = (k + 1) % TOAST_TARGETS
-	delete(app.cx.toast_targets[k])
-	app.cx.toast_targets[k] = strings.clone(sid)
+	k := app.notices.toast_next
+	app.notices.toast_next = (k + 1) % TOAST_TARGETS
+	delete(app.notices.toast_targets[k])
+	app.notices.toast_targets[k] = strings.clone(sid)
 	ui.toast_titled(kind, title, body, proc(user: rawptr) {
 		app := the_app
-		sid := app.cx.toast_targets[int(uintptr(user))]
+		sid := app.notices.toast_targets[int(uintptr(user))]
 		if sid != "" && sid != app.chat.id { open_root(app, sid) }
 	}, rawptr(uintptr(k)))
 }
@@ -359,7 +366,7 @@ notify_system :: proc(app: ^App, sid, what, detail: string) -> bool {
 	body := detail != "" ? fmt.tprintf("%s: %s", what, detail) : what
 	id, ok := platform.notify(app.win, {title = session_title_of(app, sid), body = body})
 	if !ok { return false }
-	app.cx.notified[id] = strings.clone(sid)
+	app.notices.notified[id] = strings.clone(sid)
 	return true
 }
 
@@ -367,13 +374,13 @@ notify_system :: proc(app: ^App, sid, what, detail: string) -> bool {
 notify_event :: proc(app: ^App, e: platform.Event) {
 	#partial switch e.kind {
 	case .Notification_Click, .Notification_Action:
-		sid, ok := app.cx.notified[e.notification.id]
+		sid, ok := app.notices.notified[e.notification.id]
 		if !ok { return }
 		platform.raise_window(app.win)
 		if sid != "" && sid != app.chat.id { open_root(app, sid) }
 	case .Notification_Closed:
-		if e.notification.id in app.cx.notified {
-			_, sid := delete_key(&app.cx.notified, e.notification.id)
+		if e.notification.id in app.notices.notified {
+			_, sid := delete_key(&app.notices.notified, e.notification.id)
 			delete(sid)
 		}
 	}
@@ -632,6 +639,20 @@ dialogs_track :: proc(app: ^App) {
 
 Settings_Page :: enum u8 { Appearance, Conversation, Behaviour, Updates, Advanced, Server, Connections, Mcp, Plugins, Usage, Permissions, Catalog }
 
+// The settings dialog: its page, its search, the slider held, what is unfolded in it.
+Settings_View :: struct {
+	page:              Settings_Page,
+	// the slider held (its preference, a constant name; "": none) and where it is: ui.slider moves its value only while the
+	// button is down, so the value is kept here between frames and written at the release
+	slider_held:       string,
+	slider_held_value: f32,
+	query:             ui.Text_Field,    // the search: while it has text, the matching settings of every client page
+	search:            config.Search,    // what that text shows, this frame (settings_dialog)
+	row_hidden:        bool,             // the row being built does not match the search: setting_end has nothing to close
+	themes_open:       bool,             // the themes as a grid, not one line (theme_cards)
+	show_licence:      bool,             // Ghostty's
+}
+
 SETTINGS_PAGES := [Settings_Page]struct { title, icon: string, opencode: bool }{
 	.Appearance   = {"Appearance", lucide.PALETTE, false},
 	.Conversation = {"Conversation", lucide.MESSAGE_SQUARE, false},
@@ -656,12 +677,12 @@ settings_open :: proc(app: ^App) {
 SETTINGS_CLIENT_PAGES :: [?]Settings_Page{.Appearance, .Conversation, .Behaviour, .Updates, .Advanced}
 
 // A search is typed: the page area shows what matches in every client page, and only that.
-settings_searching :: proc(app: ^App) -> bool { return config.searching(&app.settings_search) }
+settings_searching :: proc(app: ^App) -> bool { return config.searching(&app.settings.search) }
 
 settings_dialog :: proc(app: ^App, em: f32) {
 	if ui.modal_sized("settings", DIALOG_PREFERRED_EM[.Settings] * em, &app.cx.dialogs[.Settings], &app.cx.open[.Settings], DIALOG_MIN_EM[.Settings] * em) {
 		dialog_backdrop()
-		config.search_begin(&app.settings_search, ui.field_string(&app.settings_query))
+		config.search_begin(&app.settings.search, ui.field_string(&app.settings.query))
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 		if ui.row(id = "###settings_body") {
 			// the pages (their icons alone in a narrow dialog: the page needs the room more)
@@ -681,10 +702,10 @@ settings_dialog :: proc(app: ^App, em: f32) {
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 						if ui.row(id = fmt.tprintf("###nv%d", int(page))) {
 							ui.spacer(ui.px(em * 0.7))
-							current := app.settings_page == page && !settings_searching(app)
+							current := app.settings.page == page && !settings_searching(app)
 							if bevel_button(fmt.tprintf("###nav%d", int(page)), narrow ? "" : info.title, info.icon, current ? .Toggled : .Ghost, ui.fill(), math.round(em * BUTTON_H_EM), left = true).clicked {
-								app.settings_page = page
-								ui.field_set(&app.settings_query, "")   // (a page chosen: the search is done)
+								app.settings.page = page
+								ui.field_set(&app.settings.query, "")   // (a page chosen: the search is done)
 							}
 							ui.spacer(ui.px(em * 0.9))   // (the scroll bar's place)
 						}
@@ -719,10 +740,10 @@ settings_dialog :: proc(app: ^App, em: f32) {
 						if settings_searching(app) {
 							settings_results(app, em)
 						} else {
-							info := SETTINGS_PAGES[app.settings_page]
+							info := SETTINGS_PAGES[app.settings.page]
 							text("pt", info.title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
 							ui.spacer(ui.px(em * 0.6))
-							settings_page_draw(app, app.settings_page, em)
+							settings_page_draw(app, app.settings.page, em)
 						}
 						ui.spacer(ui.px(em * 1.5))
 					}
@@ -746,7 +767,7 @@ settings_search_field :: proc(app: ^App, em: f32) {
 			glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-				ui.line_edit("###settings_query", &app.settings_query, "Search settings")
+				ui.line_edit("###settings_query", &app.settings.query, "Search settings")
 			}
 		}
 		ui.spacer(ui.px(em * 0.9))
@@ -758,10 +779,10 @@ settings_search_field :: proc(app: ^App, em: f32) {
 settings_results :: proc(app: ^App, em: f32) {
 	text("pt", "Search", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
 	for page in SETTINGS_CLIENT_PAGES {
-		config.search_page(&app.settings_search, SETTINGS_PAGES[page].title)
+		config.search_page(&app.settings.search, SETTINGS_PAGES[page].title)
 		settings_page_draw(app, page, em)
 	}
-	if app.settings_search.found == 0 {
+	if app.settings.search.found == 0 {
 		ui.spacer(ui.px(em * 0.6))
 		info_line(app, "###settings_none", "No setting matches.", em, hex(HEX_FAINT))
 	}
@@ -799,8 +820,8 @@ nav_heading :: proc(s: string, face: Face_Id, em: f32) {
 @(deferred_in = setting_end)
 setting :: proc(app: ^App, name: string, em: f32) -> bool {
 	p := &app.cfg_prefs
-	show, heading := config.search_shows(&app.settings_search, p, name)
-	if !show { app.setting_hidden = true; return false }
+	show, heading := config.search_shows(&app.settings.search, p, name)
+	if !show { app.settings.row_hidden = true; return false }
 	if heading != "" { section_draw(heading, em) }   // (a search: the page's title before its first match)
 	r := config.ref_of(p, name)
 	e := config.entry(p, r)
@@ -830,7 +851,7 @@ setting :: proc(app: ^App, name: string, em: f32) -> bool {
 
 @(private = "file")
 setting_end :: proc(app: ^App, name: string, _: f32) {
-	if app.setting_hidden { app.setting_hidden = false; return }
+	if app.settings.row_hidden { app.settings.row_hidden = false; return }
 	ui.pop_parent()   // ###line
 	em := ui.font_size()
 	ui.spacer(ui.px(em * 0.5))
@@ -882,17 +903,17 @@ slider_idle :: proc(v, lo, hi, step: f32) -> f32 {
 pref_slider :: proc(app: ^App, name: string, lo, hi, step: f32, format: string, em: f32) {
 	p := &app.cfg_prefs
 	d := config.entry(p, config.ref_of(p, name)).def
-	held := app.slider_held == name
-	v := held ? app.slider_held_value : (d.kind == .Int ? f32(config.int_of(p, name)) : f32(config.float_of(p, name)))
+	held := app.settings.slider_held == name
+	v := held ? app.settings.slider_held_value : (d.kind == .Int ? f32(config.int_of(p, name)) : f32(config.float_of(p, name)))
 	ui.next({width = ui.px(em * 15), height = ui.px(math.round(em * 2))})
 	ui.a11y({name = config.title_of(d)})
 	idle := slider_idle(v, lo, hi, step)
 	sig := ui.slider("###sl", &v, lo, hi, step, format)
 	// while the button is down the value is the app's (the preference is read again at each frame); at the release it is written
 	if sig.pointer_pressed || sig.dragging {
-		app.slider_held, app.slider_held_value = name, v
+		app.settings.slider_held, app.settings.slider_held_value = name, v
 	} else if held {
-		app.slider_held = ""
+		app.settings.slider_held = ""
 	}
 	// written when the drag ends (or at each key step): the file is not rewritten at the pointer's rate, nor by the focus alone
 	if (sig.released || (sig.focused && !sig.dragging && abs(v - idle) > SLIDER_EPSILON)) && (d.kind == .Int ? i64(math.round(v)) != config.int_of(p, name) : abs(f64(v) - config.float_of(p, name)) > SLIDER_EPSILON) {
@@ -912,7 +933,7 @@ theme_cards :: proc(app: ^App, em: f32) {
 	all := themes(app)
 	cur := app.cx.theme.at
 	gap := em * 0.5
-	if ui.strip_grid("###themes", &app.cx.themes_open, {gap, gap}) {
+	if ui.strip_grid("###themes", &app.settings.themes_open, {gap, gap}) {
 		for &def, i in all {
 			ui.next({width = ui.px(math.round(em * THEME_CARD_W_EM)), height = ui.px(math.round(em * THEME_CARD_H_EM)), axis = .Y, cursor = .Hand})
 			ui.a11y({role = .Radio_Button, name = def.name, toggled = i == cur ? .True : .False})
@@ -1125,9 +1146,9 @@ page_advanced :: proc(app: ^App, em: f32) {
 		if ui.row(.Center, id = "###adv_b") {
 			if bevel_button("###adv_dir", "Open the settings folder", lucide.FOLDER, .Normal).clicked { _ = platform.open_path(filepath.dir(prefs_path())) }
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###adv_lic", app.cx.show_licence ? "Hide the terminal's licence" : "The terminal's licence", "", .Ghost).clicked { app.cx.show_licence = !app.cx.show_licence }
+			if bevel_button("###adv_lic", app.settings.show_licence ? "Hide the terminal's licence" : "The terminal's licence", "", .Ghost).clicked { app.settings.show_licence = !app.settings.show_licence }
 		}
-		if app.cx.show_licence {
+		if app.settings.show_licence {
 			ui.spacer(ui.px(em * 0.5))
 			info_line(app, "###adv_lic_say", "The terminal's emulation is Ghostty's, through libghostty-vt.", em)
 			ui.spacer(ui.px(em * 0.3))

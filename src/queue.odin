@@ -303,16 +303,16 @@ queue_edit :: proc(app: ^App, id: string) {
 	it = queue_find(app, id)
 	e := &q.edit
 	e.id = strings.clone(id)
-	e.draft = strings.clone(ui.area_string(&app.composer))
-	append(&e.files, ..app.cx.attachments[:])
-	clear(&app.cx.attachments)
-	append(&e.mentions, ..app.cx.mentions.chosen[:])
-	clear(&app.cx.mentions.chosen)
+	e.draft = strings.clone(ui.area_string(&app.composer.area))
+	append(&e.files, ..app.composer.attachments[:])
+	clear(&app.composer.attachments)
+	append(&e.mentions, ..app.composer.mentions.chosen[:])
+	clear(&app.composer.mentions.chosen)
 	v := json_of_own(app, "queued payload", it.payload)
 	body := json_of_own(app, "queued prompt", prompt_of_payload(v))
-	prompt_parts(body, &app.cx.attachments, &app.cx.mentions.chosen)
-	ui.area_set(&app.composer, it.text)
-	app.cx.focus_composer = true
+	prompt_parts(body, &app.composer.attachments, &app.composer.mentions.chosen)
+	ui.area_set(&app.composer.area, it.text)
+	app.composer.focus_next = true
 	activity_close(app)
 }
 
@@ -320,15 +320,15 @@ queue_edit_end :: proc(app: ^App, how: Edit_End) {
 	e := &app.cx.queue.edit
 	if e.id == "" { return }
 	if how == .Cancel {
-		for a in app.cx.attachments { delete(a.name); delete(a.uri) }
-		clear(&app.cx.attachments)
+		for a in app.composer.attachments { delete(a.name); delete(a.uri) }
+		clear(&app.composer.attachments)
 		mentions_clear(app)
-		ui.area_set(&app.composer, "")
+		ui.area_set(&app.composer.area, "")
 	}
 	prompt_restore(app, e.draft)
-	append(&app.cx.attachments, ..e.files[:])
+	append(&app.composer.attachments, ..e.files[:])
 	clear(&e.files)
-	append(&app.cx.mentions.chosen, ..e.mentions[:])
+	append(&app.composer.mentions.chosen, ..e.mentions[:])
 	clear(&e.mentions)
 	delete(e.id); delete(e.draft)
 	e.id, e.draft = "", ""
@@ -342,7 +342,7 @@ queue_edit_commit :: proc(app: ^App, text: string) {
 	if it == nil { queue_edit_end(app, .Lost); return }
 	it.act = .Replacing
 	outgoing_replace(app, text, it.id, it.delivery == .Queue ? `,"delivery":"queue","resume":false` : `,"delivery":"steer"`)
-	ui.area_set(&app.composer, "")
+	ui.area_set(&app.composer.area, "")
 	queue_edit_end(app, .Done)
 }
 
@@ -394,7 +394,7 @@ queue_row :: proc(app: ^App, it: ^Queue_Item, n: int, em: f32) {
 			ui.spacer(ui.px(em * 0.5))
 			text("f", it.files == 1 ? "1 file" : fmt.tprintf("%d files", it.files), hex(HEX_FAINT), note)
 		}
-		wide := app.column_w > em * QUEUE_WORDS_MIN_EM
+		wide := app.conversation.column_w > em * QUEUE_WORDS_MIN_EM
 		switch {
 		case editing:
 			ui.spacer(ui.px(em * 0.7))
@@ -476,7 +476,7 @@ queue_edit_banner :: proc(app: ^App, em: f32) {
 		glyph(lucide.PENCIL, accent(), math.round(em * ICON_SMALL), em * 1.1)
 		ui.spacer(ui.px(em * 0.25))
 		text("t", "Editing a pending message", accent(), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
-		if len(q.items) > 1 && q.items[len(q.items) - 1].id != q.edit.id && app.column_w > em * QUEUE_WORDS_MIN_EM {
+		if len(q.items) > 1 && q.items[len(q.items) - 1].id != q.edit.id && app.conversation.column_w > em * QUEUE_WORDS_MIN_EM {
 			ui.spacer(ui.px(em * 0.6))
 			text("o", "it goes back last", hex(HEX_FAINT), note)
 		}

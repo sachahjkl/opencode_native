@@ -67,7 +67,7 @@ mermaid_block :: proc(id, code: string, closed: bool, version: u64) {
 	app := the_app
 	em := ui.font_size()
 	k := hash.fnv64a(transmute([]u8)id)
-	as_text := app.expanded[k] or_else false
+	as_text := app.conversation.expanded[k] or_else false
 	d: ^Diagram
 	if closed && !as_text { d = diagram_of(app, code, !app.cx.theme.light) }
 	ok := d != nil && d.why == ""
@@ -88,7 +88,7 @@ mermaid_block :: proc(id, code: string, closed: bool, version: u64) {
 			if closed && (d == nil || d.why == "") {   // (what is no diagram shows its text already)
 				ui.a11y({role = .Button, name = as_text ? "Show the diagram" : "Show its text"})
 				sig := glyph_button("###as_text", as_text ? lucide.GIT_FORK : lucide.CODE, math.round(em * 1.6))
-				if sig.clicked { app.expanded[k] = !as_text }
+				if sig.clicked { app.conversation.expanded[k] = !as_text }
 				if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(as_text ? "Show the diagram" : "Show its text") } }
 			}
 			if ok {
@@ -129,7 +129,7 @@ Diagram_Draw :: struct { doc: ^svg.Document, scale: f32 }
 @(private = "file")
 diagram_box :: proc(app: ^App, doc: ^svg.Document, code: string, em: f32) {
 	ui.spacer(ui.px(em * 0.6))
-	avail := max(app.column_w - em * 1.8, em * 8)
+	avail := max(app.conversation.column_w - em * 1.8, em * 8)
 	scale := min(em / DIAGRAM_FONT_PX, avail / max(doc.view[2], 1))
 	sz := svg.size(doc, scale)
 	ui.next({width = ui.fill(), height = ui.px(math.ceil(sz.y)), axis = .X})
@@ -158,7 +158,7 @@ diagram_scale :: proc(em: f32) -> f32 { return em / DIAGRAM_FONT_PX }
 // The viewer, on the diagram of `code` (as the theme has it now).
 diagram_view_open :: proc(app: ^App, code: string) {
 	image_view_open(app, {})
-	app.view_diagram = strings.clone(code)
+	app.viewer.diagram = strings.clone(code)
 }
 
 // A copied picture of a diagram: DIAGRAM_COPY_SCALE times its size in the conversation, its longest side at most

@@ -403,7 +403,7 @@ browser_tab :: proc(app: ^App, session, tab: string) -> (^Preview, ^Preview_Tab)
 		return p, preview_tab_of(p, tab)
 	}
 	if t := preview_tab_of(&app.preview, tab); t != nil { return &app.preview, t }
-	for _, e in app.cx.previews {
+	for _, e in app.previews.by_session {
 		if t := preview_tab_of(e, tab); t != nil { return e, t }
 	}
 	return nil, nil

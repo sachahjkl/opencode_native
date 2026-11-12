@@ -170,18 +170,18 @@ the_history_is_the_sessions_own :: proc(t: ^testing.T) {
 	app.chat.id = "ses_a"
 	append(&app.chat.messages, Message{id = "m1", kind = .User, text = "first"}, Message{id = "m2", kind = .Assistant},
 		Message{id = "m3", kind = .User, text = " second "}, Message{id = "m4", kind = .User, text = "second"})
-	ui.area_set(&app.composer, "a draft")
+	ui.area_set(&app.composer.area, "a draft")
 	history_step(app, -1)   // (nothing newer than what is typed)
 	testing.expect(t, !history_browsing(app))
 	history_step(app, 1)
-	testing.expect_value(t, ui.area_string(&app.composer), "second")
+	testing.expect_value(t, ui.area_string(&app.composer.area), "second")
 	history_step(app, 1)
-	testing.expect_value(t, ui.area_string(&app.composer), "first")
+	testing.expect_value(t, ui.area_string(&app.composer.area), "first")
 	history_step(app, 1)   // (the oldest one stays)
-	testing.expect_value(t, ui.area_string(&app.composer), "first")
+	testing.expect_value(t, ui.area_string(&app.composer.area), "first")
 	history_step(app, -1)
 	history_step(app, -1)
-	testing.expect_value(t, ui.area_string(&app.composer), "a draft")
+	testing.expect_value(t, ui.area_string(&app.composer.area), "a draft")
 	testing.expect(t, !history_browsing(app))
 
 	// another session: only its own prompts, and none at all for a new one
@@ -189,14 +189,14 @@ the_history_is_the_sessions_own :: proc(t: ^testing.T) {
 	app.chat.id = "ses_b"
 	append(&app.chat.messages, Message{id = "m9", kind = .User, text = "other"})
 	history_step(app, 1)
-	testing.expect_value(t, ui.area_string(&app.composer), "other")
+	testing.expect_value(t, ui.area_string(&app.composer.area), "other")
 	history_step(app, 1)
-	testing.expect_value(t, ui.area_string(&app.composer), "other")
+	testing.expect_value(t, ui.area_string(&app.composer.area), "other")
 	history_leave(app, true)
 	chat_reset(&app.chat)
 	history_step(app, 1)
 	testing.expect(t, !history_browsing(app))
-	testing.expect_value(t, ui.area_string(&app.composer), "a draft")
+	testing.expect_value(t, ui.area_string(&app.composer.area), "a draft")
 }
 
 @(test)
@@ -216,19 +216,19 @@ the_history_goes_back_and_forward :: proc(t: ^testing.T) {
 	app := new(App)
 	defer free(app)
 	defer nav_clear(app)
-	defer delete(app.cx.nav_hist)
-	defer delete(app.nav_steps)
+	defer delete(app.nav.visited)
+	defer delete(app.nav.steps)
 	testing.expect(t, !nav_can(app, -1) && !nav_can(app, 1), "nowhere yet")
 
 	take :: proc(app: ^App) -> string {   // the step asked for, as nav_apply would see it
-		st := pop(&app.nav_steps)
+		st := pop(&app.nav.steps)
 		defer delete(st.id)
 		return strings.clone(st.id, context.temp_allocator)
 	}
 	nav_visit(app, "", "a")   // from the home page
 	nav_visit(app, "a", "b")
 	nav_visit(app, "b", "b")
-	testing.expect_value(t, len(app.cx.nav_hist), 3)
+	testing.expect_value(t, len(app.nav.visited), 3)
 	testing.expect(t, nav_can(app, -1) && !nav_can(app, 1), "at the end")
 
 	nav_step(app, -1)
@@ -237,32 +237,32 @@ the_history_goes_back_and_forward :: proc(t: ^testing.T) {
 	testing.expect_value(t, take(app), "")
 	testing.expect(t, !nav_can(app, -1) && nav_can(app, 1), "at the start")
 	nav_step(app, -1)
-	testing.expect_value(t, len(app.nav_steps), 0)
+	testing.expect_value(t, len(app.nav.steps), 0)
 	nav_step(app, 1)
 	testing.expect_value(t, take(app), "a")
 
 	// a step adds nothing
-	app.cx.nav_moving = true
+	app.nav.moving = true
 	nav_visit(app, "a", "z")
-	app.cx.nav_moving = false
-	testing.expect_value(t, len(app.cx.nav_hist), 3)
+	app.nav.moving = false
+	testing.expect_value(t, len(app.nav.visited), 3)
 
 	// from the middle: what was ahead is forgotten
 	nav_visit(app, "a", "c")
-	testing.expect_value(t, len(app.cx.nav_hist), 3)
-	testing.expect_value(t, app.cx.nav_hist[2].id, "c")
+	testing.expect_value(t, len(app.nav.visited), 3)
+	testing.expect_value(t, app.nav.visited[2].id, "c")
 	testing.expect(t, !nav_can(app, 1), "b is gone")
 
 	// a session deleted: home, a, c, a -> home, a once c is gone, and where one is stays right
 	nav_visit(app, "c", "a")
 	nav_forget(app, "c")
-	testing.expect_value(t, len(app.cx.nav_hist), 2)
-	testing.expect_value(t, app.cx.nav_hist[app.cx.nav_at].id, "a")
+	testing.expect_value(t, len(app.nav.visited), 2)
+	testing.expect_value(t, app.nav.visited[app.nav.at].id, "a")
 
 	// the limit
 	for i in 0 ..< NAV_HISTORY_MAX + 20 { nav_visit(app, "", i % 2 == 0 ? "x" : "y") }
-	testing.expect_value(t, len(app.cx.nav_hist), NAV_HISTORY_MAX)
-	testing.expect_value(t, app.cx.nav_at, NAV_HISTORY_MAX - 1)
+	testing.expect_value(t, len(app.nav.visited), NAV_HISTORY_MAX)
+	testing.expect_value(t, app.nav.at, NAV_HISTORY_MAX - 1)
 }
 
 // A form as the server sends it: defaults taken, a field that depends on another, the answer as JSON, and what is missing says where.
@@ -392,8 +392,8 @@ a_prompt_says_what_it_mentions :: proc(t: ^testing.T) {
 	app := new(App)
 	defer free(app)
 	defer mentions_destroy(app)
-	defer delete(app.cx.attachments)
-	m := &app.cx.mentions
+	defer delete(app.composer.attachments)
+	m := &app.composer.mentions
 	append(&m.chosen, Mention{.File, strings.clone("@a.txt"), strings.clone("file:///d/a.txt"), strings.clone("a.txt")})
 	append(&m.chosen, Mention{.File, strings.clone("@gone.txt"), strings.clone("file:///d/gone.txt"), strings.clone("gone.txt")})
 	append(&m.chosen, Mention{.Agent, strings.clone("@explore"), strings.clone("explore"), strings.clone("")})

@@ -193,12 +193,12 @@ rows_do_not_move_under_the_pointer :: proc(t: ^testing.T) {
 	permission_remove(app, "p")
 	sessions(app, strings.concatenate({LIST[:len(LIST) - 3], `,{"id":"born","title":"Born meanwhile","time":{"created":1,"updated":99}}]}`}, context.temp_allocator))
 	testing.expect_value(t, dealt(app, sidebar_view(app, "", true)), first)
-	testing.expect(t, app.cx.side_hold.on)
+	testing.expect(t, app.sidebar.hold.on)
 
 	// (the pointer left, or rested)
 	testing.expect_value(t, dealt(app, sidebar_view(app, "", false)),
 		"Finished: ended never runs | Recent: born waits seen new")
-	testing.expect(t, !app.cx.side_hold.on)
+	testing.expect(t, !app.sidebar.hold.on)
 }
 
 @(test)
@@ -220,7 +220,7 @@ a_session_gone_leaves_a_held_list :: proc(t: ^testing.T) {
 	sessions(app, `{"data":[{"id":"never","title":"Never viewed","location":{"directory":"C:/code/beta"},"time":{"created":1,"updated":45,"idle":40}}]}`)
 	testing.expect_value(t, dealt(app, sidebar_view(app, "beta", true)), "Finished: never")
 	server_forget(app)
-	testing.expect(t, !app.cx.side_hold.on)
+	testing.expect(t, !app.sidebar.hold.on)
 }
 
 // What the list shows is kept: a build that changes nothing makes nothing again, and each change shows at the next one (a session
@@ -229,7 +229,7 @@ a_session_gone_leaves_a_held_list :: proc(t: ^testing.T) {
 the_sidebar_is_made_again_only_when_what_it_shows_changes :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := inbox_app()
-	k := &app.cx.side
+	k := &app.sidebar.kept
 	view :: proc(app: ^App, q := "") -> string { return dealt(app, sidebar_view(app, q, false)) }
 	testing.expect_value(t, view(app), "Waits for you: waits | Finished: ended never | Running: runs | Recent: seen new")
 	rows, secs, waits := k.rows_computed, k.sections_computed, app.cx.waiting.computed
@@ -311,16 +311,16 @@ the_prompt_a_fork_leaves_out_comes_back_in_the_composer :: proc(t: ^testing.T) {
 	r := bench_take(t, .Forked)
 	testing.expect_value(t, r.body, `{"before":"m1"}`)
 	bench_answer(app, r, 200, `{"data":{"id":"forked"}}`)
-	testing.expect_value(t, len(app.nav_steps), 1)
-	testing.expect_value(t, app.nav_steps[0].id, "forked")
-	testing.expect_value(t, string(app.composer.buf[:]), "first")
+	testing.expect_value(t, len(app.nav.steps), 1)
+	testing.expect_value(t, app.nav.steps[0].id, "forked")
+	testing.expect_value(t, string(app.composer.area.buf[:]), "first")
 
 	// (a fork of all of it has no prompt to give back, whatever the last one left)
 	fork_session(app, "s", "")
 	r = bench_take(t, .Forked)
 	testing.expect_value(t, r.body, "{}")
 	bench_answer(app, r, 200, `{"data":{"id":"forked2"}}`)
-	testing.expect_value(t, string(app.composer.buf[:]), "first")
+	testing.expect_value(t, string(app.composer.area.buf[:]), "first")
 }
 
 @(test)

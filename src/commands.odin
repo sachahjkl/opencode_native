@@ -46,7 +46,7 @@ COMMANDS := [?]Command{
 	{id = "nav.home", title = "Home", tags = "start welcome new", group = "Go to", icon = lucide.MESSAGE_SQUARE, keys = "Ctrl+H", key = .H, mods = {.Ctrl}, run = new_session},
 	{id = "nav.back", title = "Back", tags = "previous return history", group = "Go to", icon = lucide.ARROW_LEFT, keys = "Alt+Left", key = .Left, mods = {.Alt}, enabled = can_go_back, run = proc(app: ^App) { if nav_can(app, -1) { nav_step(app, -1) } else { go_back(app) } }},
 	{id = "nav.forward", title = "Forward", tags = "next history", group = "Go to", icon = lucide.ARROW_RIGHT, keys = "Alt+Right", key = .Right, mods = {.Alt}, enabled = proc(app: ^App) -> bool { return nav_can(app, 1) }, run = proc(app: ^App) { nav_step(app, 1) }},
-	{id = "nav.composer", title = "Focus the composer", tags = "input prompt type message write", group = "Go to", icon = lucide.PENCIL, keys = "Ctrl+L", key = .L, mods = {.Ctrl}, run = proc(app: ^App) { app.cx.focus_composer = true }},
+	{id = "nav.composer", title = "Focus the composer", tags = "input prompt type message write", group = "Go to", icon = lucide.PENCIL, keys = "Ctrl+L", key = .L, mods = {.Ctrl}, run = proc(app: ^App) { app.composer.focus_next = true }},
 
 	{id = "session.new", title = "New session", tags = "chat conversation create start", group = "Session", icon = lucide.PLUS, keys = "Ctrl+N", key = .N, mods = {.Ctrl}, run = new_session},
 	{id = "session.background", title = "Push the running command to the background", tags = "detach background shell job", group = "Session", icon = lucide.SEND_TO_BACK, run = proc(app: ^App) { background_session(app, app.chat.id) }, enabled = foreground_command},
@@ -54,12 +54,12 @@ COMMANDS := [?]Command{
 	{id = "session.activity", title = "What runs in the background", tags = "jobs tasks processes activity running", group = "Session", icon = lucide.SQUARE_TERMINAL, keys = "Ctrl+J", key = .J, mods = {.Ctrl}, run = activity_toggle, enabled = has_session},
 	{id = "session.quote", title = "Quote what is selected", tags = "reply cite selection", group = "Session", icon = lucide.PENCIL, keys = "Ctrl+Q", key = .Q, mods = {.Ctrl}, run = quote_selection, enabled = proc(app: ^App) -> bool { return ui.has_selection(&app.state) }},
 	{id = "session.find", title = "Find in the conversation", tags = "search look locate", group = "Session", icon = lucide.SEARCH, keys = "Ctrl+F", run = find_open, enabled = has_session},
-	{id = "session.stats", title = "Show or hide the Statistics panel", tags = "stats tokens cost usage numbers", group = "Session", icon = lucide.GAUGE, keys = "Ctrl+I", key = .I, mods = {.Ctrl}, run = stats_toggle, enabled = has_session, checked = proc(app: ^App) -> bool { return app.stats_open }},
+	{id = "session.stats", title = "Show or hide the Statistics panel", tags = "stats tokens cost usage numbers", group = "Session", icon = lucide.GAUGE, keys = "Ctrl+I", key = .I, mods = {.Ctrl}, run = stats_toggle, enabled = has_session, checked = proc(app: ^App) -> bool { return app.stats.open }},
 	{id = "session.rename", title = "Rename the session…", tags = "title name", group = "Session", icon = lucide.PENCIL, keys = "F2", key = .F2, run = proc(app: ^App) { rename_open(app, app.chat.id) }, enabled = has_session},
 	{id = "session.fork", title = "Fork the session", tags = "branch copy duplicate split", group = "Session", icon = lucide.COPY, run = proc(app: ^App) { fork_session(app, app.chat.id, "") }, enabled = has_session},
 	{id = "session.compact", title = "Compact the conversation", tags = "summarize shrink compress context", group = "Session", icon = lucide.LIST, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/compact", app.chat.id), "{}", app.chat.id) }, enabled = has_session},
 	{id = "session.background", title = "Send running tools to the background", tags = "detach background jobs", group = "Session", icon = lucide.SQUARE_TERMINAL, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/background", app.chat.id), "", app.chat.id) }, enabled = is_busy},
-	{id = "app.connections", title = "Connect an account", tags = "login provider oauth sign auth", group = "General", icon = lucide.USER, run = proc(app: ^App) { app.settings_page = .Connections; settings_open(app) }},
+	{id = "app.connections", title = "Connect an account", tags = "login provider oauth sign auth", group = "General", icon = lucide.USER, run = proc(app: ^App) { app.settings.page = .Connections; settings_open(app) }},
 	{id = "view.terminal", title = "Terminal", tags = "shell console bash pty", group = "View", icon = lucide.SQUARE_TERMINAL, keys = "Ctrl+Shift+T", key = .T, mods = {.Ctrl, .Shift}, run = terminal_toggle},
 	{id = "view.terminal_new", title = "New terminal", tags = "shell console bash pty open", group = "View", icon = lucide.SQUARE_TERMINAL, run = terminal_new},
 	{id = "session.schedules", title = "Schedules of this session", tags = "cron timer planned recurring", group = "Session", icon = lucide.HISTORY, run = proc(app: ^App) { schedules_open(app, app.chat.id) }, enabled = proc(app: ^App) -> bool { return app.chat.id != "" && !app.cx.no_schedules }},
@@ -80,7 +80,7 @@ COMMANDS := [?]Command{
 	// (Their keys are the panel's, read while it has the keyboard: elsewhere Ctrl+W is a shell's, and a composer's to ignore.)
 	{id = "view.preview_tab", title = "New browser tab", tags = "preview web page url", group = "View", icon = lucide.PLUS, keys = "Ctrl+T", run = preview_tab_new},
 	{id = "view.preview_tab_close", title = "Close browser tab", tags = "preview web page", group = "View", icon = lucide.X, keys = "Ctrl+W", run = preview_tab_close_front, enabled = preview_tab_can_close},
-	{id = "view.sidebar", title = "Show or hide the sidebar", tags = "sessions list toggle collapse", group = "View", icon = lucide.MENU, keys = "Ctrl+B", key = .B, mods = {.Ctrl}, run = proc(app: ^App) { app.cx.sidebar_hidden = !app.cx.sidebar_hidden }, checked = proc(app: ^App) -> bool { return !app.cx.sidebar_hidden }},
+	{id = "view.sidebar", title = "Show or hide the sidebar", tags = "sessions list toggle collapse", group = "View", icon = lucide.MENU, keys = "Ctrl+B", key = .B, mods = {.Ctrl}, run = proc(app: ^App) { app.sidebar.hidden = !app.sidebar.hidden }, checked = proc(app: ^App) -> bool { return !app.sidebar.hidden }},
 	{id = "view.sidebar_mode", title = "Switch the sidebar's mode (inbox, projects)", tags = "inbox projects folders group", group = "View", icon = lucide.LIST, run = sidebar_mode_next},
 	{id = "view.content_in", title = "Zoom in the conversation", tags = "bigger larger font size text", group = "View", icon = lucide.PLUS, keys = "Ctrl+=", run = proc(app: ^App) { content_zoom_by(app, ZOOM_FACTOR) }},
 	{id = "view.content_out", title = "Zoom out the conversation", tags = "smaller font size text", group = "View", icon = lucide.CHEVRON_DOWN, keys = "Ctrl+-", run = proc(app: ^App) { content_zoom_by(app, 1 / ZOOM_FACTOR) }},
@@ -144,7 +144,7 @@ content_zoom_events :: proc(app: ^App, events: []platform.Event) {
 	for &e in events {
 		#partial switch e.kind {
 		case .Scroll:
-			if .Ctrl not_in e.mods || !rect_contains(app.cx.main_rect, e.pos) { continue }
+			if .Ctrl not_in e.mods || !rect_contains(app.conversation.rect, e.pos) { continue }
 			z := app.prefs.content_zoom
 			content_zoom_set(app, e.delta.y < 0 ? z * ZOOM_FACTOR : z / ZOOM_FACTOR)
 			e.kind = .None
