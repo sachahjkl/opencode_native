@@ -46,9 +46,9 @@ sidebar :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###side_top") {
 			pad_row(em)
-			if bevel_button("###new", "New session", lucide.PLUS, .Accent, ui.fill()).clicked { new_session(app) }
+			if bevel_button("###new", "New session", lucide.PLUS, .Primary, width = ui.fill()).clicked { new_session(app) }
 			ui.spacer(ui.px(em * 0.45))
-			if bevel_button("###refresh", "", lucide.REFRESH_CW, .Normal).clicked { refresh_sessions(app) }
+			if bevel_button("###refresh", "", lucide.REFRESH_CW).clicked { refresh_sessions(app) }
 			pad_row(em)
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -358,7 +358,7 @@ delete_dialog :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if ui.row() {
 					ui.spacer(ui.fill())
-					if bevel_button("###cancel", "Cancel", "", .Normal).clicked { app.cx.open[.Delete] = false }
+					if bevel_button("###cancel", "Cancel", "", .Cancel).clicked { app.cx.open[.Delete] = false }
 					ui.spacer(ui.px(em * 0.6))
 					if bevel_button("###confirm", "Delete", lucide.TRASH_2, .Danger).clicked {
 						delete_session(app, app.sidebar.delete_id)

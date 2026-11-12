@@ -92,9 +92,7 @@ home :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.45, em * 0.45}})
 	if ui.flow({em * 0.45, em * 0.45}, "###h_folders") {
 		for d, i in folders {
-			kind := Btn_Kind.Normal
-			if d == app.chat.new_dir { kind = .Toggled }
-			sig := bevel_button(fmt.tprintf("###hf%d", i), base_name(d), lucide.FOLDER, kind, height = math.round(em * BUTTON_COMPACT_H_EM))
+			sig := bevel_button(fmt.tprintf("###hf%d", i), base_name(d), lucide.FOLDER, height = math.round(em * BUTTON_COMPACT_H_EM), face = d == app.chat.new_dir ? .Toggled : .Raised)
 			if sig.clicked {
 				app.chat.new_dir = strings.clone(d, app.chat.alloc)
 				app.composer.focus_next = true
@@ -103,7 +101,7 @@ home :: proc(app: ^App, em: f32) {
 			if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(d) } }
 			if sig.right_clicked { ctx_open(app, .Folder, msg = d) }
 		}
-		if bevel_button("###hf_other", "Other folder…", lucide.PLUS, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { home_pick_folder(app) }
+		if bevel_button("###hf_other", "Other folder…", lucide.PLUS, height = math.round(em * BUTTON_COMPACT_H_EM), face = .Ghost).clicked { home_pick_folder(app) }
 	}
 	ui.spacer(ui.px(em * 1.1))
 

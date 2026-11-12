@@ -111,7 +111,7 @@ pair_body :: proc(app: ^App, em: f32) {
 	if p.failed != "" {
 		pair_note("###f", p.failed, hex(HEX_RED), soft)
 		ui.spacer(ui.px(em * 0.8))
-		if bevel_button("###pair_retry", "Try again", lucide.REFRESH_CW, .Normal).clicked { pair_new_code(app) }
+		if bevel_button("###pair_retry", "Try again", lucide.REFRESH_CW).clicked { pair_new_code(app) }
 		return
 	}
 	if p.code == "" {
@@ -155,9 +155,9 @@ pair_body :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###pair_buttons") {
 		ui.spacer(ui.fill())
-		if bevel_button("###pair_new", "New code", lucide.REFRESH_CW, .Normal).clicked { pair_new_code(app) }
+		if bevel_button("###pair_new", "New code", lucide.REFRESH_CW).clicked { pair_new_code(app) }
 		ui.spacer(ui.px(em * 0.5))
-		if bevel_button("###pair_close", "Close", lucide.X, .Normal).clicked { app.cx.open[.Pair] = false }
+		if bevel_button("###pair_close", "Close", lucide.X).clicked { app.cx.open[.Pair] = false }
 	}
 }
 
@@ -182,7 +182,7 @@ pair_link_row :: proc(app: ^App, id, what, link: string, em: f32) {
 		ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Selectable}})
 		link_clicked(ui.rich_paragraph("###l", runs[:], max_lines = 1))
 		ui.spacer(ui.px(em * 0.4))
-		if bevel_button("###c", "Copy", "", .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked {
+		if bevel_button("###c", "Copy", "", height = math.round(em * BUTTON_SMALL_H_EM)).clicked {
 			clip_set(link)
 			ui.toast(.Good, "Link copied")
 		}

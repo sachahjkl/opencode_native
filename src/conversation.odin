@@ -278,7 +278,7 @@ messages :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.4))
 			throbber(app, "###wl", accent(), math.round(em * 7), math.round(em * 0.9), em)
 			ui.spacer(ui.fill())
-			if hint_action("###stop_hint", "Esc to stop", em) { interrupt_session(app, c.id) }
+			if hint_action("###stop_hint", "Esc to stop", em, intent = .Danger) { interrupt_session(app, c.id) }
 		}
 		foot -= line
 	}
@@ -295,7 +295,7 @@ chat_failed :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###read_retry") {
 		ui.spacer(ui.fill())
-		if bevel_button("###retry", "Try again", lucide.REFRESH_CW, .Normal, disabled = !online(app)).clicked { chat_read(app) }
+		if bevel_button("###retry", "Try again", lucide.REFRESH_CW, disabled = !online(app)).clicked { chat_read(app) }
 		ui.spacer(ui.fill())
 	}
 }

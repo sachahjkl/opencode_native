@@ -293,17 +293,17 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, w, em: f32) {
 				set_text(&s.removing, "")
 			}
 			ui.spacer(ui.px(em * 0.3))
-			if bevel_button("###sc_no", "Keep", "", .Normal, height = small).clicked { set_text(&s.removing, "") }
+			if bevel_button("###sc_no", "Keep", "", .Cancel, height = small).clicked { set_text(&s.removing, "") }
 		} else {
 			if it.status == .Active || it.status == .Paused {
 				pause := it.status == .Active
-				if bevel_button("###sc_pause", pause ? "Pause" : "Resume", "", .Normal, height = small).clicked {
+				if bevel_button("###sc_pause", pause ? "Pause" : "Resume", "", height = small).clicked {
 					request(app, .Schedule_Done, "POST", fmt.tprintf("/api/experimental/schedule/%s/%s", url_escape(it.id), pause ? "pause" : "resume"), "{}")
 				}
 				ui.spacer(ui.px(em * 0.3))
 			}
 			ui.a11y({role = .Button, name = "Delete"})
-			if bevel_button("###sc_del", words ? "Delete" : "", lucide.TRASH_2, .Ghost, height = small).clicked { set_text(&s.removing, it.id) }
+			if bevel_button("###sc_del", words ? "Delete" : "", lucide.TRASH_2, .Danger, height = small, face = .Ghost).clicked { set_text(&s.removing, it.id) }
 		}
 	}
 }
@@ -340,7 +340,7 @@ schedule_form :: proc(app: ^App, w, em: f32) {
 		if field_line("###sc_value", &s.value, WHEN_MODES[s.mode].hint, em, unit = WHEN_MODES[s.mode].unit).committed { go = true }
 		ui.spacer(ui.px(em * 0.5))
 		making := s.making.state == .Loading
-		if bevel_button("###sc_go", making ? "Planning…" : "Plan it", lucide.CHECK, .Accent, height = math.round(em * FIELD_H_EM), disabled = making).clicked { go = true }
+		if bevel_button("###sc_go", making ? "Planning…" : "Plan it", lucide.CHECK, .Success, height = math.round(em * FIELD_H_EM), disabled = making).clicked { go = true }
 	}
 	if s.problem != "" || remote.failed(&s.making) {
 		ui.spacer(ui.px(em * 0.4))
@@ -489,7 +489,7 @@ artifact_card :: proc(app: ^App, a: Chat_Artifact, em: f32) {
 			text("k", "Artifact", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.6))
 			text("n", ellipsize(a.title != "" ? a.title : a.id, ARTIFACT_TITLE_CHARS), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
-			if bevel_button("###show", "Show", lucide.EYE, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { show = true }
+			if bevel_button("###show", "Show", lucide.EYE, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { show = true }
 			ui.spacer(ui.px(em * 0.6))
 		}
 		if show {
@@ -626,13 +626,13 @@ artifact_right :: proc(app: ^App, em: f32) {
 				return
 			}
 			ui.spacer(ui.px(em * 0.3))
-			if bevel_button("###ar_no", "Keep", "", .Normal, height = small).clicked { set_text(&a.removing, "") }
+			if bevel_button("###ar_no", "Keep", "", .Cancel, height = small).clicked { set_text(&a.removing, "") }
 		} else {
 			ui.a11y({role = .Button, name = "Open in the browser"})
-			if bevel_button("###ar_open", words ? "Open in the browser" : "", lucide.GLOBE, .Accent, height = small, disabled = !artifact_can_open(a, it)).clicked { artifact_view(a, it) }
+			if bevel_button("###ar_open", words ? "Open in the browser" : "", lucide.GLOBE, .Primary, height = small, disabled = !artifact_can_open(a, it)).clicked { artifact_view(a, it) }
 			ui.spacer(ui.px(em * 0.3))
 			ui.a11y({role = .Button, name = "Delete"})
-			if bevel_button("###ar_del", words ? "Delete" : "", lucide.TRASH_2, .Ghost, height = small).clicked { set_text(&a.removing, it.id) }
+			if bevel_button("###ar_del", words ? "Delete" : "", lucide.TRASH_2, .Danger, height = small, face = .Ghost).clicked { set_text(&a.removing, it.id) }
 		}
 	}
 	ui.spacer(ui.px(em * 0.4))
@@ -643,7 +643,7 @@ artifact_right :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.3, em * 0.3}})
 		if ui.flow({em * 0.3, em * 0.3}, "###ar_files") {
 			for f, i in a.files {
-				if bevel_button(fmt.tprintf("###arf%d", i), label_safe(f.path), "", a.file == i ? .Toggled : .Normal, height = small).clicked { a.file = i; a.version += 1 }
+				if bevel_button(fmt.tprintf("###arf%d", i), label_safe(f.path), "", height = small, face = a.file == i ? .Toggled : .Raised).clicked { a.file = i; a.version += 1 }
 			}
 		}
 		ui.spacer(ui.px(em * 0.4))
@@ -742,12 +742,12 @@ page_plugins :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###pl_bar") {
 		small := math.round(em * BUTTON_COMPACT_H_EM)
 		checking := p.check.state == .Loading
-		if bevel_button("###pl_check", checking ? "Checking…" : "Check for updates", lucide.REFRESH_CW, .Normal, height = small, disabled = checking).clicked {
+		if bevel_button("###pl_check", checking ? "Checking…" : "Check for updates", lucide.REFRESH_CW, height = small, disabled = checking).clicked {
 			remote.begin(&p.check)
 			request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", reading = &p.check)
 		}
 		ui.spacer(ui.px(em * 0.4))
-		if bevel_button("###pl_built", fmt.tprintf("%s the %d built in", p.builtin ? "Hide" : "Show", built), "", .Ghost, height = small).clicked { p.builtin = !p.builtin }
+		if bevel_button("###pl_built", fmt.tprintf("%s the %d built in", p.builtin ? "Hide" : "Show", built), "", height = small, face = .Ghost).clicked { p.builtin = !p.builtin }
 	}
 	if !p.builtin { return }
 	ui.spacer(ui.px(em * 0.5))
@@ -770,7 +770,7 @@ plugin_row :: proc(app: ^App, it: ^Plugin, i: int, em: f32) {
 		text("d", detail, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)})
 		if it.outdated && it.target != "" {
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###pl_up", it.updating ? "Updating…" : "Update", "", .Accent, height = math.round(em * BUTTON_SMALL_H_EM), disabled = it.updating).clicked {
+			if bevel_button("###pl_up", it.updating ? "Updating…" : "Update", "", .Success, height = math.round(em * BUTTON_SMALL_H_EM), disabled = it.updating).clicked {
 				request(app, .Plugin_Update, "POST", "/api/plugin/update", fmt.tprintf(`{{"targets":[%s]}}`, jquote(it.target)))
 				it.updating = true
 			}

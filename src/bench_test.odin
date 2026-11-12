@@ -1918,6 +1918,47 @@ the_palettes_search_is_a_menus_search_band :: proc(t: ^testing.T) {
 	})
 }
 
+// A button says what it does by its colour, the toolkit's soft pair of its intent's hue: the delete dialog's Delete is red
+// (Danger), the rename dialog's Rename green (Success), their Cancel red too (Cancel). Flat, so the middle of a face is its
+// fill; dark, as the request was (Windows' CI is light).
+@(test)
+a_buttons_colour_says_what_it_does :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		pref_set(app, "appearance.theme", "OpenCode")
+		pref_set(app, "appearance.mode", "dark")
+		defer pref_set(app, "appearance.mode", "system")
+		pref_set(app, "appearance.style", "flat")
+		defer pref_set(app, "appearance.style", "machined")
+		face :: proc(t: ^testing.T, s: ^session.Session, name: string, intent: ui.Intent) {
+			b := session.find(s, name)
+			if !testing.expectf(t, b != nil, "the button %s", name) { return }
+			hue := ui.hue_color(ui.intent_hue(intent))
+			hue.a = 1
+			fill, _ := ui.soft_pair(hue)
+			to8 :: proc(x: f32) -> u8 { return u8(clamp(render.linear_to_srgb(clamp(x, 0, 1)) * 255 + 0.5, 0, 255)) }
+			want := session.Color{to8(fill.r), to8(fill.g), to8(fill.b), 255}
+			img := session.capture(s)
+			got := session.pixel(img, int(b.rect.min.x) + 4, int((b.rect.min.y + b.rect.max.y) * 0.5))
+			testing.expectf(t, session.near(got, want, 3), "%s (%v): its face %v, the soft fill %v", name, intent, got, want)
+		}
+		session.leave(s)   // (a face under the pointer is lit: not its fill)
+		app.cx.open[.Delete] = true
+		session.wait_idle(s)
+		face(t, s, "confirm", .Danger)
+		face(t, s, "cancel", .Cancel)
+		app.cx.open[.Delete] = false
+		session.frames(s, 2)
+		rename_open(app, "ses_colour")
+		session.wait_idle(s)
+		face(t, s, "ren_ok", .Success)
+		face(t, s, "ren_cancel", .Cancel)
+		app.cx.open[.Rename] = false
+		session.frames(s, 2)
+	})
+}
+
 // The palette's arrows move its selection: they are read inside its dialog, which holds the keys while it is open.
 @(test)
 the_palette_arrows_move_the_selection :: proc(t: ^testing.T) {

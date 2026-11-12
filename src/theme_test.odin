@@ -106,8 +106,9 @@ themes_of_ones_own :: proc(t: ^testing.T) {
 	testing.expect_value(t, n, 1)
 }
 
-// An accent or a danger button in a dialog keeps its own background (and its label stays readable on it): our colours of what
-// floats were an entry ahead of the palette's and won over the button's (the setup dialog's Uninstall: white on white).
+// An intent's button (accent, danger, success...) in a dialog keeps its own background (and its label stays readable on
+// it): our colours of what floats were an entry ahead of the palette's and won over the button's (the setup dialog's
+// Uninstall: white on white).
 @(test)
 a_button_in_a_dialog_keeps_its_background :: proc(t: ^testing.T) {
 	th: ui.Theme
@@ -115,7 +116,9 @@ a_button_in_a_dialog_keeps_its_background :: proc(t: ^testing.T) {
 	theme_setup(&th)
 	floating := ui.theme_lookup(&th, {"floating"}, "background")
 	testing.expect_value(t, floating, hex(HEX_FLOATING_BG))
-	for kind in ([]string{"danger_button", "accent_button"}) {
+	for intent in ui.Intent {
+		kind := ui.intent_tag(intent)
+		if kind == "" { continue }
 		bg := ui.theme_lookup(&th, {"floating", kind}, "background")
 		testing.expectf(t, bg != floating, "%s in a dialog: its own background, not the dialog's", kind)
 		testing.expect_value(t, bg, ui.theme_lookup(&th, {kind}, "background"))

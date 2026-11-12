@@ -71,9 +71,9 @@ permission_card :: proc(app: ^App, p: ^Permission, em: f32) {
 				text("d", detail, hex(HEX_PERM_DETAIL), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.4)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
-			if bevel_button("###once", "Allow once", lucide.CHECK, .Accent, disabled = p.replying).clicked { reply_permission(app, p, "once") }
+			if bevel_button("###once", "Allow once", lucide.CHECK, .Success, disabled = p.replying).clicked { reply_permission(app, p, "once") }
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###always", "Always", "", .Normal, disabled = p.replying).clicked { reply_permission(app, p, "always") }
+			if bevel_button("###always", "Always", "", .Success, disabled = p.replying).clicked { reply_permission(app, p, "always") }
 			ui.spacer(ui.px(em * 0.4))
 			if bevel_button("###reject", "Reject", lucide.X, .Danger, disabled = p.replying).clicked { reply_permission(app, p, "reject") }
 			ui.spacer(ui.px(em))
@@ -167,18 +167,18 @@ composer :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.6))
 			// what goes with the prompt, then who answers it and with what
 			ui.a11y({role = .Button, name = "Attach files"})
-			att := bevel_button("###attach", "", lucide.PAPERCLIP, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true)
+			att := bevel_button("###attach", "", lucide.PAPERCLIP, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, face = .Ghost)
 			if att.clicked { attach_pick(app) }
 			if ui.hovered_for(att, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Attach files: images, PDF, text  (or paste, or drop them here)") } }
 			ui.spacer(ui.px(em * 0.1))
 			agent := shown_agent(app)
 			if agent == "" { agent = "build" }
-			asig := bevel_button("###agent", agent, lucide.BOT, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.cx.open[.Picker] && app.picker.id == "agent")
+			asig := bevel_button("###agent", agent, lucide.BOT, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.cx.open[.Picker] && app.picker.id == "agent", face = .Ghost)
 			if asig.clicked { if app.cx.open[.Picker] && app.picker.id == "agent" { app.cx.open[.Picker] = false } else { picker_open(app, "agent", asig.box.rect) } }
 			ui.spacer(ui.px(em * 0.4))
 			model, _ := shown_model(app)
 			if model == "" { model = "default model" }
-			msig := bevel_button("###model", model, lucide.CPU, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.cx.open[.Picker] && app.picker.id == "model")
+			msig := bevel_button("###model", model, lucide.CPU, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.cx.open[.Picker] && app.picker.id == "model", face = .Ghost)
 			if msig.clicked { if app.cx.open[.Picker] && app.picker.id == "model" { app.cx.open[.Picker] = false } else { picker_open(app, "model", msig.box.rect) } }
 			variant_button(app, em)
 			ui.spacer(ui.px(em * 0.4))
@@ -190,9 +190,9 @@ composer :: proc(app: ^App, em: f32) {
 					text("hint", attaching(app) ? "reading the attachment…" : "starting the session…", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				} else if history_browsing(app) {
 					text("hint", fmt.tprintf("history %d/%d   ·   ", app.composer.history.at, len(app.composer.history.view)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-					if hint_action("###hist_back", "Esc  back to your text", em, app.mono) { history_leave(app, true) }
+					if hint_action("###hist_back", "Esc  back to your text", em, app.mono, intent = .Cancel) { history_leave(app, true) }
 				} else if queue_editing(app) {
-					if hint_action("###h_save", app.prefs.ctrl_enter ? "Ctrl+Enter  save" : "Enter  save", em, app.mono) { submit = true }
+					if hint_action("###h_save", app.prefs.ctrl_enter ? "Ctrl+Enter  save" : "Enter  save", em, app.mono, intent = .Success) { submit = true }
 				} else if as := composer_send_as(app); as != .Idle {
 					// (each says what it does, and does it)
 					first, second := as == .Queue ? "queue" : "steer", as == .Queue ? "steer" : "queue"
@@ -206,14 +206,14 @@ composer :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.8))
 			composer_panels(app, em)
 			if app.chat.busy {
-				if bevel_button("###stop2", "", lucide.SQUARE, .Danger, ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), math.round(em * BUTTON_H_EM)).clicked { interrupt_session(app, app.chat.id) }
+				if bevel_button("###stop2", "", lucide.SQUARE, .Danger, width = ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), height = math.round(em * BUTTON_H_EM)).clicked { interrupt_session(app, app.chat.id) }
 				ui.spacer(ui.px(em * 0.4))
 			}
 			empty := len(strings.trim_space(ui.area_string(&app.composer.area))) == 0 && len(app.composer.attachments) == 0
 			// (what it does, while that is not what it usually does)
-			send_label, send_icon := "", lucide.SEND_HORIZONTAL
+			send_label, send_icon, send_intent := "", lucide.SEND_HORIZONTAL, ui.Intent.Primary
 			if queue_editing(app) {
-				send_label, send_icon = "Save", lucide.CHECK
+				send_label, send_icon, send_intent = "Save", lucide.CHECK, .Success
 			} else {
 				switch composer_send_as(app) {
 				case .Idle:
@@ -223,7 +223,7 @@ composer :: proc(app: ^App, em: f32) {
 			}
 			if app.conversation.column_w <= em * QUEUE_WORDS_MIN_EM || fit >= 2 { send_label = "" }   // (narrow, its glyph says it: the toolbar has no room)
 			send_w: Maybe(ui.Size) = send_label == "" ? ui.px(math.round(em * COMPOSER_BUTTON_W_EM)) : nil
-			if bevel_button("###send", send_label, send_icon, .Accent, send_w, math.round(em * BUTTON_H_EM), disabled = empty || !online(app) || held).clicked { submit = true }
+			if bevel_button("###send", send_label, send_icon, send_intent, width = send_w, height = math.round(em * BUTTON_H_EM), disabled = empty || !online(app) || held).clicked { submit = true }
 			ui.spacer(ui.px(em * 0.55))
 
 			composer_pickers(app, agent, em)
@@ -376,7 +376,7 @@ variant_button :: proc(app: ^App, em: f32) {
 	current := shown_variant(app)
 	ui.spacer(ui.px(em * 0.2))
 	ui.a11y({role = .Button, name = "Thinking"})
-	sig := bevel_button("###variant", current != "" ? current : "default", lucide.GAUGE, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true)
+	sig := bevel_button("###variant", current != "" ? current : "default", lucide.GAUGE, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, face = .Ghost)
 	key := ui.key_from_string(0, "variant_menu")
 	if sig.clicked { ui.ctx_menu_open_rect(key, sig.box.rect, sig.box.key) }
 	if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("How hard the model thinks") } }

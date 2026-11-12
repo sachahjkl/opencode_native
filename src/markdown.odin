@@ -54,7 +54,7 @@ md_code :: proc(user: rawptr, id: string, c: markdown.Code) {
 md_table_copy :: proc(user: rawptr, t: ^markdown.Table, source: []string, size: f32) {
 	app := (^App)(user)
 	ui.a11y({role = .Button, name = "Copy the table"})
-	sig := glyph_button("###copy", lucide.COPY, size, kind = .Normal)
+	sig := glyph_button("###copy", lucide.COPY, size, face = .Raised)
 	if sig.clicked {
 		_ = platform.clipboard_set(app.win, {text = strings.join(source, "\n", context.temp_allocator), html = markdown.table_html(t)})
 		ui.toast(.Good, "Table copied")

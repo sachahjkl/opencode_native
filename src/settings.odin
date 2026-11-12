@@ -705,7 +705,7 @@ settings_dialog :: proc(app: ^App, em: f32) {
 						if ui.row(id = fmt.tprintf("###nv%d", int(page))) {
 							ui.spacer(ui.px(em * 0.7))
 							current := app.settings.page == page && !settings_searching(app)
-							if bevel_button(fmt.tprintf("###nav%d", int(page)), narrow ? "" : info.title, info.icon, current ? .Toggled : .Ghost, ui.fill(), math.round(em * BUTTON_H_EM), left = true).clicked {
+							if bevel_button(fmt.tprintf("###nav%d", int(page)), narrow ? "" : info.title, info.icon, width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true, face = current ? .Toggled : .Ghost).clicked {
 								app.settings.page = page
 								ui.field_set(&app.settings.query, "")   // (a page chosen: the search is done)
 							}
@@ -1044,7 +1044,7 @@ font_button :: proc(app: ^App, name: string, em: f32) {
 		text("fm", mode, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)})
 		ui.spacer(ui.px(em * 0.5))
 	}
-	sig := bevel_button(fmt.tprintf("###fb_%s", name), shown, "", .Normal, ui.px(em * 13))
+	sig := bevel_button(fmt.tprintf("###fb_%s", name), shown, "", width = ui.px(em * 13))
 	if sig.clicked {
 		if app.cx.open[.Picker] && app.picker.id == name { app.cx.open[.Picker] = false } else { picker_open(app, name, sig.box.rect) }
 	}
@@ -1113,13 +1113,13 @@ page_updates :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###upd_b") {
-			if bevel_button("###u_check", "Check now", lucide.REFRESH_CW, .Normal, disabled = update_is_downloading(u)).clicked { update_check(app, true) }
+			if bevel_button("###u_check", "Check now", lucide.REFRESH_CW, disabled = update_is_downloading(u)).clicked { update_check(app, true) }
 			ui.spacer(ui.px(em * 0.5))
 			if update_is_ready(u) {
-				if bevel_button("###u_inst", fmt.tprintf("Install %s", update_version(u)), lucide.CHECK, .Accent).clicked { update_install(app) }
+				if bevel_button("###u_inst", fmt.tprintf("Install %s", update_version(u)), lucide.CHECK, .Success).clicked { update_install(app) }
 			}
 			if update_is_installed(u) {
-				if bevel_button("###u_rest", "Restart now", lucide.REFRESH_CW, .Accent).clicked { app_restart(app) }
+				if bevel_button("###u_rest", "Restart now", lucide.REFRESH_CW, .Success).clicked { app_restart(app) }
 			}
 		}
 		ui.spacer(ui.px(em * 0.9))
@@ -1146,9 +1146,9 @@ page_advanced :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###adv_b") {
-			if bevel_button("###adv_dir", "Open the settings folder", lucide.FOLDER, .Normal).clicked { _ = platform.open_path(filepath.dir(prefs_path())) }
+			if bevel_button("###adv_dir", "Open the settings folder", lucide.FOLDER).clicked { _ = platform.open_path(filepath.dir(prefs_path())) }
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###adv_lic", app.settings.show_licence ? "Hide the terminal's licence" : "The terminal's licence", "", .Ghost).clicked { app.settings.show_licence = !app.settings.show_licence }
+			if bevel_button("###adv_lic", app.settings.show_licence ? "Hide the terminal's licence" : "The terminal's licence", "", face = .Ghost).clicked { app.settings.show_licence = !app.settings.show_licence }
 		}
 		if app.settings.show_licence {
 			ui.spacer(ui.px(em * 0.5))
@@ -1218,7 +1218,7 @@ page_server :: proc(app: ^App, em: f32) {
 		for s, i in f.shells {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###sh%d", i)) {
-				if bevel_button(fmt.tprintf("###shb%d", i), s.name, lucide.SQUARE_TERMINAL, sel == i ? .Accent : .Normal, ui.px(em * 9), math.round(em * BUTTON_COMPACT_H_EM), disabled = !s.ok).clicked { shell_set(app, s) }
+				if bevel_button(fmt.tprintf("###shb%d", i), s.name, lucide.SQUARE_TERMINAL, width = ui.px(em * 9), height = math.round(em * BUTTON_COMPACT_H_EM), disabled = !s.ok, face = sel == i ? .Toggled : .Raised).clicked { shell_set(app, s) }
 				ui.spacer(ui.px(em * 0.7))
 				text("p", s.path, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			}
@@ -1238,9 +1238,9 @@ page_server :: proc(app: ^App, em: f32) {
 			}
 			// (only this computer's server speaks of this computer's files)
 			if app.servers[app.server].local && config_file_shaped(c.path) && os.is_file(c.path) {
-				if bevel_button("###open", "Open", lucide.FILE, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_path(c.path) }
+				if bevel_button("###open", "Open", lucide.FILE, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_path(c.path) }
 				ui.spacer(ui.px(em * 0.3))
-				if bevel_button("###dir", "", lucide.FOLDER, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_path(filepath.dir(c.path)) }
+				if bevel_button("###dir", "", lucide.FOLDER, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_path(filepath.dir(c.path)) }
 			}
 		}
 		ui.spacer(ui.px(em * 0.4))
@@ -1275,9 +1275,9 @@ page_mcp :: proc(app: ^App, em: f32) {
 				// (what goes on says itself: no button says the opposite meanwhile)
 				if going == nil {
 					if connected {
-						if bevel_button("###dc", "Disconnect", "", .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, false) }
+						if bevel_button("###dc", "Disconnect", "", .Danger, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, false) }
 					} else {
-						if bevel_button("###co", "Connect", "", .Accent, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, true) }
+						if bevel_button("###co", "Connect", "", .Success, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, true) }
 					}
 				}
 				ui.spacer(ui.px(em * 0.8))
@@ -1308,7 +1308,7 @@ page_usage :: proc(app: ^App, em: f32) {
 		if ui.row(.Center, id = "###ws") {
 			text("w", fmt.tprintf("Workspace “%s”", f.workspace), hex(HEX_WORKSPACE_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			if f.usage_url != "" {
-				if bevel_button("###web", "Usage on opencode.ai", lucide.GLOBE, .Normal, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { link_open(f.usage_url) }
+				if bevel_button("###web", "Usage on opencode.ai", lucide.GLOBE, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { link_open(f.usage_url) }
 			}
 		}
 	}

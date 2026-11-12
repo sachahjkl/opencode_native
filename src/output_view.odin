@@ -355,17 +355,17 @@ output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
 		}
 		ui.spacer(ui.px(em * 0.8))
 		h := math.round(em * BUTTON_SMALL_H_EM)
-		if bevel_button("###out_copy", "Copy", lucide.COPY, .Ghost, height = h, disabled = len(v.raw) == 0, quiet = true).clicked {
+		if bevel_button("###out_copy", "Copy", lucide.COPY, height = h, disabled = len(v.raw) == 0, quiet = true, face = .Ghost).clicked {
 			clip_set(plain_output(string(v.raw[:])))
 			ui.toast(.Good, "Output copied")
 		}
 		if !in_window {
 			ui.spacer(ui.px(em * 0.2))
-			if bevel_button("###out_win", "Window", lucide.APP_WINDOW, .Ghost, height = h, quiet = true).clicked { app.cx.outputs.window = v }
+			if bevel_button("###out_win", "Window", lucide.APP_WINDOW, height = h, quiet = true, face = .Ghost).clicked { app.cx.outputs.window = v }
 		}
 		if !in_window || v.seen_end {
 			ui.spacer(ui.px(em * 0.2))
-			if bevel_button("###out_close", "Close", "", v.seen_end ? .Normal : .Ghost, height = h, quiet = !v.seen_end).clicked { output_view_close(app, v) }
+			if bevel_button("###out_close", "Close", "", height = h, quiet = !v.seen_end, face = v.seen_end ? .Raised : .Ghost).clicked { output_view_close(app, v) }
 		}
 		ui.spacer(ui.px(em * 0.5))
 	}
