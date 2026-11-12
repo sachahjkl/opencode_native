@@ -1,7 +1,7 @@
 // The site, made when it is deployed (.github/workflows/pages.yml) so that it cannot be behind a release. The steps are the
 // toolkit's (gt:site); this file says what this site is: its address, names, colours, and its own check (the download each system's
 // browser is offered).
-//   ocntools site build <site> <out>       the two steps below, <out> is what is published
+//   ocntools site build <site> <out>       the two steps below, then the screenshots in WebP: <out> is what is published
 //   ocntools site changelog <site> <out>   <out> gets a copy of <site>, the history and the classic pages
 //   ocntools site meta <site> <out>        what a page says when it is shared, the files around the pages
 //   ocntools site card                     draws site/img/card.png, once, by hand
@@ -50,6 +50,21 @@ SITE_LD :: [?][2]string{
 	{"license", "https://opensource.org/license/mit"},
 }
 
+// The screenshots in WebP, at their width and at the two the page shows them at most (a gallery's column, the main column),
+// each twice for a screen of twice the pixels. The logo, the sharing card and the maker's mark stay PNG: other sites read them.
+SITE_IMAGE_WIDTHS :: [?]int{720, 1100}
+SITE_IMAGE_KEEP   :: [?]string{"logo.png", "card.png", "froment-software-64.png"}
+
+site_images :: proc() -> tk_site.Images_Options {
+	widths, keep := SITE_IMAGE_WIDTHS, SITE_IMAGE_KEEP
+	o := tk_site.Images_Options{dir = "img"}
+	o.widths = make([]int, len(widths), context.temp_allocator)
+	copy(o.widths, widths[:])
+	o.keep = make([]string, len(keep), context.temp_allocator)
+	copy(o.keep, keep[:])
+	return o
+}
+
 site_meta :: proc() -> tk_site.Meta {
 	m := SITE_META
 	ld := SITE_LD
@@ -72,7 +87,8 @@ run_site :: proc(args: []string) -> int {
 		if what == "changelog" { return site_changelog(site, out) ? 0 : 1 }
 		if what == "meta" { return tk_site.build_meta(site_meta(), site, out) ? 0 : 1 }
 		if !site_changelog(site, out) { return 1 }
-		return tk_site.build_meta(site_meta(), out, out) ? 0 : 1
+		if !tk_site.build_meta(site_meta(), out, out) { return 1 }
+		return tk_site.build_images(out, site_images()) ? 0 : 1
 	case "card":
 		if len(args) == 1 { return tk_site.draw_card(site_meta(), SITE_DIR) ? 0 : 1 }
 	case "check":

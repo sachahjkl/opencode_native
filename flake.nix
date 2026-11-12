@@ -228,7 +228,7 @@
 
     # nix develop: the compilers of ./build.sh and the libraries the client opens at run time.
     devShells.${system}.default = pkgs.mkShell {
-      packages = [odin zig] ++ (with pkgs; [clang lld cargo rustc rsync socat git curl]) ++ preCommit.enabledPackages;
+      packages = [odin zig] ++ (with pkgs; [clang lld cargo rustc rsync socat git curl libwebp]) ++ preCommit.enabledPackages;
       buildInputs = [pkgs.fontconfig];
       # the system's Vulkan drivers where it has them; under WSL, ocntools wsl_client says which
       MESA_ICD_DIR = "${pkgs.mesa}/share/vulkan/icd.d";
