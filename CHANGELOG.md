@@ -4,6 +4,17 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.46.9] - 2026-11-12
+
+### Added
+- **Shift+Insert pastes in a shell, Ctrl+Insert copies**, as in other terminals, beside Ctrl+Shift+V and Ctrl+Shift+C.
+
+### Changed
+- **Scroll bars look like things to take, in the theme's colours**: their thumb has a rim and three grip lines across its middle; it is the border's colour at rest, the weak text's under the pointer, a step lighter while held, on the theme's track (gui_toolkit 0.197.4). It was the text's light, near white on a dark theme.
+
+### Fixed
+- **A shell's scroll bar is the interface's**: the same as every list's, in the theme's look (its track, its thumb lit under the pointer and held), it can be held and dragged through the scrollback and pressed in its track; a press on it no longer starts a selection (gui_toolkit 0.197.0's scrollbar_under).
+
 ## [0.46.8] - 2026-11-12
 
 ### Changed
@@ -1379,6 +1390,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.46.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.9
 [0.46.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.8
 [0.46.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.7
 [0.46.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.6
