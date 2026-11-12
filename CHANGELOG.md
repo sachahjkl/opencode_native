@@ -4,6 +4,15 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.47.11] - 2026-11-12
+
+### Changed
+- **A finished sub-agent says so**: its card shows a check and "done", a cross and "failed", or a square and "stopped", with its time, and the first line of its result even when the card is folded. The same mark is in the activity, the sidebar, the sub-agent's banner and its result's line. A sub-agent that returned and is still busy says "finishing"; one launched in the background says "in background".
+- **The buttons say what they do by their colour**: red to stop or delete (Stop, Delete, Remove, Reject, Revoke), green to confirm or save (Allow, Save, Connect, Rename, Install), a soft red for Cancel and Keep, the accent for the main act of a dialog (Send, Next, Open). The colours follow the theme, light or dark.
+
+### Fixed
+- **No bars of white or of the desktop in the window on Wayland**: with some graphics drivers (NVIDIA's), bright edges such as the top of the activity panel showed white, or let the desktop behind the window through.
+
 ## [0.47.10] - 2026-11-12
 
 ### Fixed
@@ -1473,6 +1482,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.47.11]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.11
 [0.47.10]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.10
 [0.47.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.9
 [0.47.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.8
