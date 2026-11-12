@@ -5,6 +5,7 @@
 //   session_zoom.txt    "id<TAB>zoom" lines: each session's conversation zoom (commands.odin)
 //   servers.txt         "name<TAB>url<TAB>protected password" lines, readable by the user only (servers.odin)
 //   drafts.json         what was typed in each session (drafts.odin)
+//   notices.txt         what the person missed, and what they acknowledged (gt:notices: missed.odin)
 // Each is read once, at the start, before the window: the first frame needs them (the server to connect, the session to
 // show) and no frame waits yet. Then they are kept in memory and written by gt:store's workers, once the changes rest,
 // through a temporary file renamed over them: the interface's thread never waits on the disk, and a crash leaves the old
@@ -41,6 +42,7 @@ stores_open :: proc(app: ^App) {
 	if data, ok := fsx.read_all(path, context.temp_allocator); ok { st.drafts_read = strings.clone(string(data)) }
 	// (drafts_save hands it the whole file a second after the typing stops: it writes at once, on its worker)
 	store.writer_open(&st.drafts, path, on_failed = store_failed, user = app)
+	missed_open(app, pjoin({dir, MISSED_FILE}))
 }
 
 // At the end: what was set last is on the disk when it returns (the process ends right after).
@@ -52,6 +54,7 @@ stores_close :: proc(app: ^App) {
 	store.close(&st.session_zooms)
 	store.close(&st.servers)
 	store.writer_close(&st.drafts)
+	missed_close(app)
 	delete(st.drafts_read)
 	st.drafts_read = ""
 }

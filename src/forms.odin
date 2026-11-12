@@ -86,6 +86,7 @@ forms_replace :: proc(app: ^App, session: string, list: json.Array, asked_at: Se
 		if !listed { form_remove(app, f.id) }
 	}
 	for it in list { form_add(app, it) }
+	missed_due(app)   // (a question of what was missed that this list does not have was answered)
 }
 
 // Fields as the server describes them, a form's or what a way of connecting asks.

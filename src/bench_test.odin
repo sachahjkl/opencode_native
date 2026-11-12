@@ -25,6 +25,7 @@ import "gt:render"
 import "gt:term"
 import "gt:ui"
 import lucide "gt:lucide"
+import notices "gt:notices"
 import session "gt:testkit/session"
 import "gt:testkit/unwatched"
 
@@ -2107,5 +2108,87 @@ a_finished_sub_agent_says_so_folded :: proc(t: ^testing.T) {
 			line := named_under(s, card, "rs")
 			testing.expectf(t, line != nil && ui.box_text(line) == w.line, "%s: folded, its result's first line %q (got %q)", w.card, w.line, line != nil ? ui.box_text(line) : "")
 		}
+	})
+}
+
+// The bell counts what was missed and not shown yet. The view lists it by session; opening it brings the count to 0 and the
+// entries stay. Enter opens the session of the row chosen, A acknowledges it, and the history shows what was acknowledged.
+@(test)
+the_bell_counts_what_was_missed_and_its_view_answers_the_keys :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		app.prefs.notices_badge = true
+		for id in ([3]string{"ses_1", "ses_2", "ses_3"}) {
+			if x := find_session(app, id); testing.expect(t, x != nil && x.parent == "", id) { x.idle, x.viewed = BENCH_EPOCH_MS, 0 }
+		}
+		marks_changed(app)
+		session.frames(s, 3)
+		if badge := session.find(s, "badge_count"); testing.expect(t, badge != nil, "a count on the bell") {
+			testing.expect_value(t, ui.box_text(badge), "3")
+		}
+		session.key(s, .N, {.Ctrl, .Shift})
+		session.frames(s, 3)
+		testing.expect(t, app.cx.open[.Notices], "Ctrl+Shift+N opens the view")
+		testing.expect(t, session.find(s, "badge_count") == nil, "shown: nothing New")
+		key1, key2 := missed_key(app, .End, "ses_1"), missed_key(app, .End, "ses_2")
+		log := missed_log(app)
+		testing.expect(t, log.live[key1] != nil && log.live[key2] != nil, "seen, not acknowledged")
+		testing.expect(t, session.find_text(s, "Done") != nil, "what happened")
+		// Enter: the session of the first entry (the newest session first; the same time: by its id)
+		session.key(s, .Return)
+		session.frames(s, 3)
+		testing.expect_value(t, app.chat.id, "ses_1")
+		testing.expect(t, !app.cx.open[.Notices], "the view closes")
+		testing.expect(t, log.live[key1] == nil, "opened: acknowledged")
+		// A: the entry chosen
+		session.key(s, .N, {.Ctrl, .Shift})
+		session.frames(s, 3)
+		testing.expect(t, app.cx.open[.Notices])
+		chosen := app.missed.vl.sel
+		if testing.expect(t, chosen >= 0 && chosen < len(app.missed.rows) && app.missed.rows[chosen].entry != nil, "an entry is chosen") {
+			key := app.missed.rows[chosen].entry.key
+			session.key(s, .A)
+			session.frames(s, 2)
+			testing.expect(t, log.live[key] == nil, "A acknowledges it")
+		}
+		// the history: what was acknowledged, shown with it
+		acknowledged :: proc(app: ^App) -> (n: int) {
+			for r in app.missed.rows { if r.entry != nil && r.entry.state == .Acknowledged { n += 1 } }
+			return
+		}
+		testing.expect_value(t, acknowledged(app), 0)
+		session.click(s, "mi_hist")
+		session.frames(s, 3)
+		testing.expect_value(t, acknowledged(app), 2)
+		session.key(s, .Escape)
+		session.frames(s, 2)
+		testing.expect(t, !app.cx.open[.Notices], "Escape closes it")
+	})
+}
+
+// Three hundred entries: the view builds the rows in view and a margin, and at rest makes its rows again at no frame.
+@(test)
+the_view_of_what_was_missed_builds_only_its_rows_in_view :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		log := missed_log(app)
+		for i in 0 ..< 300 {
+			notices.put(log, {key = missed_key(app, .Shell, fmt.tprintf("sh_%d", i)), group = missed_group(app, fmt.tprintf("ses_%d", 1 + i / 10)),
+				title = "Command ended", text = "cargo build", kind = u16(Missed_Kind.Shell), outcome = u8(Sub_State.Done), at = i64(BENCH_EPOCH_MS) + i64(i)})
+		}
+		command_run(app, command_find("view.notices"))
+		session.frames(s, 4)
+		testing.expect_value(t, len(app.missed.rows), 330)
+		rows := 0
+		if list := session.find(s, "mi_list"); testing.expect(t, list != nil, "the list") {
+			for c := list.first; c != nil; c = c.next { if strings.contains(c.name, "lrow_") { rows += 1 } }
+		}
+		testing.expectf(t, rows > 5 && rows < 80, "the rows in view and a margin: %d built", rows)
+		stamp, made := app.missed.rows_stamp, log.groups_made
+		session.frames(s, 4)
+		testing.expect_value(t, app.missed.rows_stamp, stamp)
+		testing.expect_value(t, log.groups_made, made)
 	})
 }

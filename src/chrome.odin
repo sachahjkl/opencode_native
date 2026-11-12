@@ -124,6 +124,8 @@ title_bar :: proc(app: ^App, em: f32) {
 			throbber(app, "###tscan", accent(), math.round(em * 3), math.round(em * 0.75), em)
 			ui.spacer(ui.px(em))
 		}
+		missed_bell(app, math.round(h * 0.78), em)
+		ui.spacer(ui.px(em * 0.4))
 		_, _ = ui.window_buttons()
 	}
 	// the bar's lower edge: a carved line

@@ -219,12 +219,16 @@ GO_BOTTOM_W_EM    :: 6.5
 // What can be over the window: App_Context.open says which are (overlay_open). Those in DIALOGS_SIZED can be resized, and
 // layout.dialogs keeps their sizes by position, in this order: a new value goes at the end. (Schedules is as tall as what it holds, and no longer one that is
 // resized: its place stays.) Changes and Output are never in App_Context.open: their own state says it (overlay_open).
-Dialog :: enum u8 { Settings, Help, Changes, Files, Schedules, Artifacts, Diff, Output, Palette, Delete, Viewer, Server, Picker, Pair, Rename }
-DIALOGS_SIZED :: bit_set[Dialog]{.Settings, .Help, .Changes, .Files, .Schedules, .Artifacts, .Diff, .Output, .Palette}
+Dialog :: enum u8 { Settings, Help, Changes, Files, Schedules, Artifacts, Diff, Output, Palette, Delete, Viewer, Server, Picker, Pair, Rename, Notices }
+DIALOGS_SIZED :: bit_set[Dialog]{.Settings, .Help, .Changes, .Files, .Schedules, .Artifacts, .Diff, .Output, .Palette, .Notices}
 // (what they open at and the least they go to, in em: the window has the last word)
-DIALOG_PREFERRED_EM := #partial [Dialog][2]f32{.Settings = {62, 44}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}, .Schedules = {54, 44}, .Artifacts = {70, 46}, .Diff = {130, 80}, .Output = {96, 56}, .Palette = {40, 30}}
-DIALOG_MIN_EM       := #partial [Dialog][2]f32{.Settings = {40, 24}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}, .Schedules = {36, 22}, .Artifacts = {44, 22}, .Diff = {50, 24}, .Output = {44, 20}, .Palette = {28, 12}}
+DIALOG_PREFERRED_EM := #partial [Dialog][2]f32{.Settings = {62, 44}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}, .Schedules = {54, 44}, .Artifacts = {70, 46}, .Diff = {130, 80}, .Output = {96, 56}, .Palette = {40, 30}, .Notices = {60, 42}}
+DIALOG_MIN_EM       := #partial [Dialog][2]f32{.Settings = {40, 24}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}, .Schedules = {36, 22}, .Artifacts = {44, 22}, .Diff = {50, 24}, .Output = {44, 20}, .Palette = {28, 12}, .Notices = {36, 18}}
 DIALOGS_SAVED_WITH_STATS :: 7   // sizes in a layout.dialogs written when Statistics was a dialog, the second of them
+NOTICES_KEEP_MIN     :: 20     // acknowledged entries "What you missed" keeps (notices.keep)
+NOTICES_KEEP_MAX     :: 2000
+MISSED_ROW_H_EM      :: 2.2    // a row of "What you missed"
+MISSED_HEAD_H_EM     :: 2.4    // ... the header of a session
 LOGO_EDGE_CHROMA     :: 142    // red minus blue of the logo's edge in the file (0xe8935a)
 OPEN_HOLD_MS         :: 200    // a conversation's first page may take this long before "Loading" is shown instead of what was there
 PENDING_SHOW_MS      :: 500    // requests in flight are said in the status bar once they last: most end before anyone could read it

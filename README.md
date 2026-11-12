@@ -83,6 +83,9 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 - **Find in the conversation** (Ctrl+F): every match of the text shown lit, the current one brighter and scrolled into
   view; Enter or F3 for the next, Shift+Enter or Shift+F3 for the previous, Escape to close.
 - **An inbox in the sidebar**: what waits for you first, then what finished and you have not seen, what runs, the rest. The grouping by project is one click away.
+- **What you missed** (the bell of the title bar, Ctrl+Shift+N): runs that ended, questions and permissions that wait, commands in
+  the background, scheduled runs and sub-agents that ended, by session, kept across restarts. Opening a session acknowledges its
+  end; A acknowledges an entry, a wait goes with its answer, and a notification of the system goes with its entry.
 - **The command palette** (Ctrl+K, Ctrl+Shift+P): commands, sessions, agents, models, the server's commands and the switches of the
   settings in one field, narrowed by `>` `@` `/` `#` `:`. F1 lists the keys.
 - **Tool calls by what they do**: a diff for what edits a file, the lines of a file, matches under their file, a command and its
@@ -154,7 +157,7 @@ TLS is rustls, checked against the system's trust store.
 | `--frames=N` | N frames of a hidden window, then exit (a check that it runs; it says how long the first frame took) |
 
 Preferences live in `%APPDATA%\opencode-native\prefs.txt` on Windows, `~/.config/opencode-native/prefs.txt` on Linux (only
-what differs from the defaults), the servers in `servers.txt` beside them;
+what differs from the defaults), the servers in `servers.txt` beside them, what you missed in `notices.txt`;
 `OPENCODE_NATIVE_NO_SETUP=1` never offers Setup. `TOOLKIT_DEVTOOLS=<port>` lets a script drive the window over the Chrome
 DevTools Protocol on 127.0.0.1, and Chrome's own DevTools inspect it (gui_toolkit's docs/devtools.md): for development only,
 since a program on this computer can then type into a session.

@@ -309,6 +309,7 @@ open_chat :: proc(app: ^App, session_id: string) {
 		app.chat.tokens_in, app.chat.tokens_out, app.chat.cache_read = s.tokens_in, s.tokens_out, s.cache_read
 		if !app.chat.busy { session_seen(app, s) }
 	}
+	missed_visit(app, id)
 	app.chat.live = make(map[string]Sub_Live, allocator = app.chat.alloc)
 	chat_shown_changed(app)
 }
@@ -543,6 +544,7 @@ active_load :: proc(app: ^App, v: json.Value, asked_at := max(Seq)) {
 		if unsaid { session_waits_load(app, id) }
 	}
 	cx.waits_unread = false
+	missed_due(app)   // (a wait of what was missed, kept from before, in a session that no longer runs: it waits for nobody)
 	// (one that does not run waits for nobody: what shows for it is reconciled too)
 	for id in waits_sessions(app) { if id not_in obj { session_waits_load(app, id) } }
 	// what this list is newer than has nothing more to say
@@ -605,6 +607,7 @@ permissions_replace :: proc(app: ^App, session: string, list: json.Array, asked_
 		if !listed { permission_free(p); ordered_remove(&app.permissions, i); marks_changed(app) }
 	}
 	for it in list { permission_add(app, it) }
+	missed_due(app)   // (a wait of what was missed that this list does not have was answered)
 }
 
 // A permission or a form answered, here or elsewhere: a list read before that still has it.
@@ -1114,13 +1117,14 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 	c.seq = app.cx.stream_seq
 
 	visible = true
+	if kind == "session.inbox.enqueued" { missed_inbox(app, sid, d) }   // (a schedule's prompt, in any session: its run is the schedule's)
 	switch kind {
 	case "session.execution.started":
 		busy_event(app, sid, true)
 	case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted", "session.idle":
 		if app.busy[sid] or_else false {
 			word := strings.trim_prefix(kind, "session.execution.")
-			effect_finished(app, sid, word)
+			effect_finished(app, missed_run_ended(app, sid, word), sid, word)
 			session_ended(app, sid, word == "failed" ? "failed" : word == "interrupted" ? "interrupted" : "succeeded")
 		}
 		busy_event(app, sid, false)
@@ -1142,6 +1146,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 	case "session.created", "session.renamed", "session.deleted", "session.updated", "session.archived", "session.moved", "session.metadata.updated":
 		if kind == "session.deleted" && sid != "" {
 			nav_forget(app, sid)
+			missed_session_gone(app, sid)
 			outgoing_session_gone(app, sid)
 			preview_session_gone(app, sid)
 			if mine {   // (elsewhere: what is shown no longer is)
@@ -1183,7 +1188,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		asker := jstr(req, "sessionID")
 		detail := permission_words(req)
 		if asker != c.id { effect_session_toast(app, .Warn, asker, "Permission", detail) }
-		effect_waiting(app, asker, "Permission", detail)
+		effect_waiting(app, missed_key(app, .Permission, jstr(req, "id"), asker), asker, "Permission", detail)
 	case "session.permissions":   // (a session's approval mode, set here or by another client)
 		approval_seen(app, sid, approval_of(jget(d, "permissions")))
 	case "permission.replied":
@@ -1197,7 +1202,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		asker := jstr(form, "sessionID")
 		detail := form_words(form)
 		if asker != "" && asker != c.id && !is_child(c, asker) { effect_session_toast(app, .Warn, asker, "Question", detail) }   // (no session: shown in the conversation, no toast)
-		effect_waiting(app, asker, "Question", detail)
+		effect_waiting(app, asker != "" ? missed_key(app, .Question, jstr(form, "id"), asker) : "", asker, "Question", detail)
 	case "form.replied", "form.cancelled":
 		waits_gone(app, jstr(d, "id"))
 		form_remove(app, jstr(d, "id"))

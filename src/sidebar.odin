@@ -55,7 +55,7 @@ ARCHIVED_TITLE :: "Archived"
 // at (time.viewed), POST /view says one was. Its own rule, on the sessions one opens: sub-agents are read through their parent, and
 // nobody ever views them. The one shown is seen; one at work has not finished.
 session_unseen :: proc(app: ^App, s: ^Session_Info) -> bool {
-	return s.parent == "" && s.idle > s.viewed && s.id != app.chat.id && !(app.busy[s.id] or_else false)
+	return session_end_unseen(app, s) && !(app.busy[s.id] or_else false)
 }
 
 // Says that the end of its last run was seen, once it is known: `idle` must be the server's. (A failure says nothing: the next list

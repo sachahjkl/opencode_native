@@ -20,6 +20,7 @@ import "gt:platform"
 import "gt:ui"
 import diff "gt:diff"
 import lucide "gt:lucide"
+import notices "gt:notices"
 import remote "gt:remote"
 
 ////////////////////////////////
@@ -95,6 +96,8 @@ PREF_DEFS := [?]config.Def{
 	{name = "notify.finished", description = "When a session that is not in front of you ends its run: nothing, a toast, a toast and the taskbar button flashing, or a notification of the system (a click on it opens the session).", kind = .String, default = {s = "system"}, choices = {"off", "toast", "flash", "system"}},
 	{name = "permission.new_sessions", description = "The approvals a session made here starts with, set on the server (the composer's shield changes them for one session): the server's configured rules, file edits allowed, everything allowed (a policy's deny stays), or every action asked.", kind = .String, default = {s = "configured"}, choices = {"configured", "allow_edits", "allow_all", "ask_all"}},
 	{name = "notify.permission", description = "When a session asks for a permission or a question and the window is not in front: the taskbar button flashes, and with notifications of the system, one says it.", kind = .Bool, default = {b = true}},
+	{name = "notices.badge", description = "The count of what you missed on the bell of the title bar: runs that ended, questions and permissions that wait, commands, scheduled runs and sub-agents that ended.", kind = .Bool, default = {b = true}},
+	{name = "notices.keep", description = "How many entries that you acknowledged \"What you missed\" keeps in its history. What is not acknowledged yet always stays.", kind = .Int, default = {i = notices.CAP}, bounded = true, min = NOTICES_KEEP_MIN, max = NOTICES_KEEP_MAX},
 	{name = "appearance.throbber", description = "What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing.", kind = .String, default = {s = "board"}, choices = {"board", "orbit", "scanner", "none"}},
 	{name = "session.agent", description = "The agent a new session starts with: the one chosen last.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "session.model", description = "The model a new session starts with: the one chosen last.", kind = .String, default = {s = ""}, hidden = true},
@@ -141,6 +144,8 @@ Prefs :: struct {
 	diff_layout:  diff.Layout,
 	notify:       string,
 	notify_perm:  bool,
+	notices_badge: bool,  // notices.badge: the bell's count
+	notices_keep: int,    // notices.keep: the history of "What you missed"
 	content_zoom: f32,
 	viewer_scale: f32,   // conversation.image_viewer_size (images.odin: viewer_frame)
 	start:        string,
@@ -206,6 +211,9 @@ prefs_refresh :: proc(app: ^App) {
 	s.diff_layout = diff_layout_of(config.string_of(p, "conversation.diff_layout"))
 	s.notify = config.string_of(p, "notify.finished")
 	s.notify_perm = config.bool_of(p, "notify.permission")
+	s.notices_badge = config.bool_of(p, "notices.badge")
+	s.notices_keep = int(config.int_of(p, "notices.keep"))
+	if app.missed.opened { app.missed.log.cap = s.notices_keep }   // (the history past it goes at the next entry)
 	s.content_zoom = f32(config.float_of(p, "appearance.content_zoom"))
 	s.viewer_scale = f32(config.float_of(p, "conversation.image_viewer_size"))
 	s.start = config.string_of(p, "general.start")
@@ -290,8 +298,9 @@ animations_on :: proc(app: ^App) -> bool {
 
 window_in_front :: proc(app: ^App) -> bool { return app.win.active }
 
-// A run ended in the session `sid`: told when it is not the one in front of the user.
-notify_finished :: proc(app: ^App, sid, outcome: string) {
+// A run ended in the session `sid`: told when it is not the one in front of the user. `key`: its entry of what was missed
+// (missed.odin; "": none), which keeps the notification of the system and closes it once acknowledged.
+notify_finished :: proc(app: ^App, key, sid, outcome: string) {
 	mode := app.prefs.notify
 	if mode == "off" { return }
 	front := window_in_front(app)
@@ -299,18 +308,19 @@ notify_finished :: proc(app: ^App, sid, outcome: string) {
 	if find_child(&app.chat, sid) != nil && front { return }   // (its card and the strip say it)
 	word := outcome == "failed" ? "Failed" : outcome == "interrupted" ? "Stopped" : "Done"
 	// (in front, the toast says it: a notification of the system is for a window you are not looking at)
-	if mode == "system" && !front && notify_system(app, sid, word, "") { return }
+	if mode == "system" && !front && notify_system(app, key, sid, word, "") { return }
 	kind: ui.Toast_Kind = outcome == "failed" ? .Bad : outcome == "interrupted" ? .Warn : .Good
 	toast_session(app, kind, sid, word, "")
 	if mode != "toast" && !front { flash_taskbar(app) }
 }
 
 // A session waits for you (a permission, a question) while the window is not in front: `what` and `detail` (what it asks).
-notify_waiting :: proc(app: ^App, sid, what, detail: string) {
+// `key`: the wait's entry of what was missed: its answer closes the notification.
+notify_waiting :: proc(app: ^App, key, sid, what, detail: string) {
 	if !app.prefs.notify_perm || window_in_front(app) { return }
 	flash_taskbar(app)
 	if app.prefs.notify != "system" { return }
-	notify_system(app, sid, what, detail)
+	notify_system(app, key, sid, what, detail)
 }
 
 // A session's title, as a notification names it ("" a session not listed: the start of its id).
@@ -338,9 +348,9 @@ form_words :: proc(form: json.Value) -> string {
 // A toast about the session `sid`: its title on the first line, `what` and `detail` under it; a click on it opens the session.
 TOAST_TARGETS :: 16   // (more than the toasts that can stand at once: a toast's session is still there when it is clicked)
 
-// The sessions that the system's notifications and the toasts shown are about: a click on one opens its session.
+// The sessions that the toasts shown are about: a click on one opens its session. (A notification of the system is an entry's
+// of what was missed: missed.odin.)
 Notices :: struct {
-	notified:      map[platform.Notification_Id]string,   // the notifications of the system shown, their sessions (owned: notify_event)
 	toast_targets: [TOAST_TARGETS]string,   // the sessions a click on a toast opens, a ring (owned: toast_session)
 	toast_next:    int,
 }
@@ -360,31 +370,26 @@ toast_session :: proc(app: ^App, kind: ui.Toast_Kind, sid, what, detail: string)
 	}, rawptr(uintptr(k)))
 }
 
-// A notification of the system: the session's title, what happened and what it is about. A click on it brings the window and
-// opens the session (main_input). False: the system shows none.
+// A notification of the system: the session's title, what happened and what it is about. It is the entry `key`'s (missed.odin):
+// a second one replaces the first, acknowledging the entry closes it, a click on it brings the window and opens the session
+// (main_input). Without an entry (the session shown, the window behind), a click brings the window. False: the system shows none.
 @(private = "file")
-notify_system :: proc(app: ^App, sid, what, detail: string) -> bool {
+notify_system :: proc(app: ^App, key, sid, what, detail: string) -> bool {
 	if app.win == nil || !platform.notify_supported() { return false }
 	body := detail != "" ? fmt.tprintf("%s: %s", what, detail) : what
-	id, ok := platform.notify(app.win, {title = session_title_of(app, sid), body = body})
+	id, ok := platform.notify(app.win, {title = session_title_of(app, sid), body = body, replace = missed_system_of(app, key)})
 	if !ok { return false }
-	app.notices.notified[id] = strings.clone(sid)
+	missed_system_set(app, key, id)
 	return true
 }
 
-// What a notification of the system came back with: a click opens its session, in front.
+// What a notification of the system came back with: a click opens its session, in front; closed, its entry no longer has it.
 notify_event :: proc(app: ^App, e: platform.Event) {
 	#partial switch e.kind {
 	case .Notification_Click, .Notification_Action:
-		sid, ok := app.notices.notified[e.notification.id]
-		if !ok { return }
-		platform.raise_window(app.win)
-		if sid != "" && sid != app.chat.id { open_root(app, sid) }
+		missed_notification_click(app, e.notification.id)
 	case .Notification_Closed:
-		if e.notification.id in app.notices.notified {
-			_, sid := delete_key(&app.notices.notified, e.notification.id)
-			delete(sid)
-		}
+		missed_notification_closed(app, e.notification.id)
 	}
 }
 
@@ -1083,6 +1088,8 @@ page_behaviour :: proc(app: ^App, em: f32) {
 	if setting(app, "notify.finished", em) { pref_choice(app, "notify.finished", {"Off", "Toast", "Flash", "System"}, em) }
 	if setting(app, "permission.new_sessions", em) { pref_choice(app, "permission.new_sessions", {"As configured", "Allow edits", "Allow all", "Ask all"}, em, em * 26) }
 	if setting(app, "notify.permission", em) { pref_switch(app, "notify.permission", em) }
+	if setting(app, "notices.badge", em) { pref_switch(app, "notices.badge", em) }
+	if setting(app, "notices.keep", em) { pref_slider(app, "notices.keep", NOTICES_KEEP_MIN, NOTICES_KEEP_MAX, 10, "%.0f entries", em) }
 	if setting(app, "general.start", em) { pref_choice(app, "general.start", {"Home", "Latest session"}, em, em * 14) }
 	if !settings_searching(app) {
 		ui.spacer(ui.px(em * 0.6))
