@@ -292,10 +292,10 @@ md_runs :: proc(d: ^Md_Doc, n: int, base: ui.Rich_Style, code_size: f32 = 0) -> 
 }
 
 // The width of each block's marker column (list_marker_widths), measured again when the text (md_read) or the sizes changed.
-md_markers :: proc(d: ^Md_Doc, measure: proc(s: string, size: f32) -> f32, size, least, gap: f32) -> []f32 {
+md_markers :: proc(d: ^Md_Doc, measure: proc(face: Face_Id, s: string, size: f32) -> f32, face: Face_Id, size, least, gap: f32) -> []f32 {
 	key := [3]f32{size, least, gap}
 	if d.markers_key == key && len(d.markers) == len(d.blocks) { return d.markers[:] }
-	w := list_marker_widths(d.blocks[:], measure, size, least, gap)
+	w := list_marker_widths(d.blocks[:], measure, face, size, least, gap)
 	clear(&d.markers)
 	append(&d.markers, ..w)
 	d.markers_key = key
@@ -327,19 +327,30 @@ joined :: proc(lines: []string) -> string {
 	return strings.to_string(b)
 }
 
+// The faces Markdown is shown in, and the answers' size (md_style: the window's).
+Md_Style :: struct {
+	prose, face, mono: Face_Id,   // the answers' face, the interface's (tables), code's
+	prose_scale:     f32,       // the answers' size, of the text around them
+	state:           ^ui.State, // what holds the fonts (a table lays its cells out before it builds them)
+}
+
+md_style :: proc(app: ^App) -> Md_Style {
+	return {prose = app.prose, face = app.font, mono = app.mono, prose_scale = app.prose_scale, state = &app.state}
+}
+
 // Shows `src` as Markdown in the current column (full width), its blocks read into `doc` (kept: read again only as it changes,
 // md_read). `id` keys its blocks.
-markdown :: proc(doc: ^Md_Doc, id: string, src: string, color: Color, size: f32 = 0) {
+markdown :: proc(doc: ^Md_Doc, id: string, src: string, color: Color, style: Md_Style, size: f32 = 0) {
 	em := ui.font_size()
 	fs := size > 0 ? size : em
 	// the answers' own face and size; every line the same height, inline code or not; tables stay in the interface's face
-	prose_fs := math.round(fs * the_app.prose_scale)
+	prose_fs := math.round(fs * style.prose_scale)
 	line_h := math.round(prose_fs * PROSE_LINE_RATIO)
 	md_read(doc, src)
-	measure :: proc(s: string, size: f32) -> f32 { return ui.text_width(the_app.prose, size, s) }
+	measure :: proc(face: Face_Id, s: string, size: f32) -> f32 { return ui.text_width(face, size, s) }
 	// (a marker's column holds its text, the gap and the padding on both sides of a box: LIST_MARKER_EM in all at least)
 	pad := ui.parent_box().text_pad
-	marker_w := md_markers(doc, measure, prose_fs, math.round(em * LIST_MARKER_EM) - 2 * pad, math.round(em * LIST_MARKER_GAP_EM))
+	marker_w := md_markers(doc, measure, style.prose, prose_fs, math.round(em * LIST_MARKER_EM) - 2 * pad, math.round(em * LIST_MARKER_GAP_EM))
 	for &bl, n in doc.blocks {
 		bid := fmt.tprintf("###%s_b%d", id, n)
 		lines := md_lines(doc, &bl)
@@ -350,14 +361,14 @@ markdown :: proc(doc: ^Md_Doc, id: string, src: string, color: Color, size: f32 
 		case .Code:
 			code := md_text(doc, n)
 			version := len(lines) > 0 ? src_version(lines[0], lines[len(lines) - 1], em) : 0
-			if bl.lang == "mermaid" { mermaid_block(bid, code, bl.closed, version) } else { code_block(bid, bl.lang, code, version = version) }
+			if bl.lang == "mermaid" { mermaid_block(bid, code, bl.closed, version) } else { code_block(bid, bl.lang, code, style.mono, version = version) }
 		case .Table:
-			table_block(bid, lines, color, fs)
+			table_block(bid, lines, color, fs, style)
 		case .Heading:
 			k := [HEADING_LEVEL_MAX + 1]f32{1, 1.45, 1.25, 1.1, 1, 1, 1}
 			runs := md_runs(doc, n, {bold = true, color = bl.level <= 2 ? hex(HEX_BRIGHT) : color})
 			if bl.level >= 2 { ui.spacer(ui.px(em * 0.3)) }
-			ui.next({width = ui.fill(), font = the_app.prose, font_size = math.round(prose_fs * k[bl.level]), flags = {.Selectable}})
+			ui.next({width = ui.fill(), font = style.prose, font_size = math.round(prose_fs * k[bl.level]), flags = {.Selectable}})
 			res := ui.rich_paragraph(bid, runs, version = src_version(lines[0], lines[0], fs))
 			link_clicked(res)
 		case .Para, .Quote:
@@ -366,11 +377,11 @@ markdown :: proc(doc: ^Md_Doc, id: string, src: string, color: Color, size: f32 
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if rail_row(fmt.tprintf("%s_q", bid), with_alpha(accent(), 0.6)) {
 					ui.spacer(ui.px(em * 0.9))
-					ui.next({width = ui.fill(), font = the_app.prose, font_size = prose_fs, flags = {.Selectable}})
+					ui.next({width = ui.fill(), font = style.prose, font_size = prose_fs, flags = {.Selectable}})
 					link_clicked(ui.rich_paragraph(bid, runs, version = src_version(lines[0], lines[len(lines) - 1], fs), line_height = line_h))
 				}
 			} else {
-				ui.next({width = ui.fill(), font = the_app.prose, font_size = prose_fs, flags = {.Selectable}})
+				ui.next({width = ui.fill(), font = style.prose, font_size = prose_fs, flags = {.Selectable}})
 				link_clicked(ui.rich_paragraph(bid, runs, version = src_version(lines[0], lines[len(lines) - 1], fs), line_height = line_h))
 			}
 		case .Bullet, .Number:
@@ -382,10 +393,10 @@ markdown :: proc(doc: ^Md_Doc, id: string, src: string, color: Color, size: f32 
 				// (a paragraph of the item's face, size, line height and padding: its baseline is the text's; the column is
 				// as wide as the widest marker of the list, its padding on both sides with it)
 				mark := [1]ui.Rich_Run{{text = mk, style = {color = accent()}}}
-				ui.next({width = ui.px(marker_w[n] + 2 * pad), font = the_app.prose, font_size = prose_fs})
+				ui.next({width = ui.px(marker_w[n] + 2 * pad), font = style.prose, font_size = prose_fs})
 				ui.rich_paragraph(fmt.tprintf("%s_mk", bid), mark[:], line_height = line_h)
 				runs := md_runs(doc, n, {color = color}, code_size = fs)
-				ui.next({width = ui.fill(), font = the_app.prose, font_size = prose_fs, flags = {.Selectable}})
+				ui.next({width = ui.fill(), font = style.prose, font_size = prose_fs, flags = {.Selectable}})
 				link_clicked(ui.rich_paragraph(bid, runs, version = src_version(lines[0], lines[len(lines) - 1], fs), line_height = line_h))
 			}
 		}
@@ -399,7 +410,7 @@ LIST_MARKER_GAP_EM :: 0.3
 
 // The width of each block's marker column (0 for what is not a list item). A list is a run of list items one after the
 // other; each of its levels is measured on its own.
-list_marker_widths :: proc(blocks: []Block, measure: proc(s: string, size: f32) -> f32, size, least, gap: f32) -> []f32 {
+list_marker_widths :: proc(blocks: []Block, measure: proc(face: Face_Id, s: string, size: f32) -> f32, face: Face_Id, size, least, gap: f32) -> []f32 {
 	out := make([]f32, len(blocks), context.temp_allocator)
 	is_item :: proc(b: Block) -> bool { return b.kind == .Bullet || b.kind == .Number }
 	for start := 0; start < len(blocks); {
@@ -409,7 +420,7 @@ list_marker_widths :: proc(blocks: []Block, measure: proc(s: string, size: f32) 
 		widest := make(map[int]f32, allocator = context.temp_allocator)
 		for b in blocks[start:end] {
 			w := least
-			if b.kind == .Number { w = max(w, math.ceil(measure(b.marker, size) + gap)) }
+			if b.kind == .Number { w = max(w, math.ceil(measure(face, b.marker, size) + gap)) }
 			widest[b.level] = max(widest[b.level] or_else 0, w)
 		}
 		for b, i in blocks[start:end] { out[start + i] = widest[b.level] }
@@ -451,7 +462,7 @@ table_cells :: proc(line: string) -> []string {
 // rows shaded. Its columns: each as wide as its widest cell on one line when the table fits; else each keeps at least its longest
 // word, the columns that lack the least are given all they lack first (a short one stays on one line), and the long ones share
 // the rest as they lack it: they are the ones that wrap.
-table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
+table_block :: proc(id: string, lines: []string, color: Color, fs: f32, style: Md_Style) {
 	em := ui.font_size()
 	rows := make([dynamic][]string, context.temp_allocator)
 	aligns: []ui.Text_Align
@@ -480,8 +491,8 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 	least := make([]f32, ncol, context.temp_allocator)
 	cell_size := math.round(fs * FS_LABEL)
 	cells := make([][][dynamic]ui.Rich_Run, len(rows), context.temp_allocator)
-	st := &the_app.state
-	rc := ui.Rich_Context{fonts = st.fonts, base_font = the_app.font, base_size = cell_size, mono = st.mono_font, faces = &st.families}
+	st := style.state
+	rc := ui.Rich_Context{fonts = st.fonts, base_font = style.face, base_size = cell_size, mono = st.mono_font, faces = &st.families}
 	for r, ri in rows {
 		cells[ri] = make([][dynamic]ui.Rich_Run, ncol, context.temp_allocator)
 		for ci in 0 ..< ncol {
@@ -536,7 +547,7 @@ table_block :: proc(id: string, lines: []string, color: Color, fs: f32) {
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 						if ui.column(id = "###v") {   // (the room around the words is the spacers': measured so)
 							ui.spacer(ui.px(math.round(em * TABLE_CELL_PAD_Y_EM)))
-							ui.next({width = ui.fill(), font = the_app.font, font_size = cell_size, flags = {.Selectable}, text_align = al, text_pad = 0})
+							ui.next({width = ui.fill(), font = style.face, font_size = cell_size, flags = {.Selectable}, text_align = al, text_pad = 0})
 							link_clicked(ui.rich_paragraph("###p", runs[:], version = src_version(c, c, cell_size)))
 							ui.spacer(ui.px(math.round(em * TABLE_CELL_PAD_Y_EM)))
 						}
@@ -675,7 +686,7 @@ table_html :: proc(cells: [][][dynamic]ui.Rich_Run, aligns: []ui.Text_Align) -> 
 }
 
 // Code in a sunken well, under a header with its language and a copy button.
-code_block :: proc(id: string, lang: string, code: string, table := false, version: u64 = 0) {
+code_block :: proc(id: string, lang: string, code: string, mono: Face_Id, table := false, version: u64 = 0) {
 	em := ui.font_size()
 	ui.next({width = ui.fill(), height = ui.children_sum()})
 	if well(id, radius = 6, base = HEX_CODE_WELL) {
@@ -685,7 +696,7 @@ code_block :: proc(id: string, lang: string, code: string, table := false, versi
 				ui.spacer(ui.px(em * 0.7))
 				glyph(lucide.CODE, hex(HEX_FAINT), math.round(em * ICON_SMALL), em)
 				ui.spacer(ui.px(em * 0.3))
-				text("lang", lang != "" ? lang : "text", hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
+				text("lang", lang != "" ? lang : "text", hex(HEX_FAINT), ui.Style_Mod{font = mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.fill())
 				if glyph_button("###copy", lucide.COPY, math.round(em * 1.6)).clicked {
 					platform.set_clipboard(the_app.win, code)
@@ -699,7 +710,7 @@ code_block :: proc(id: string, lang: string, code: string, table := false, versi
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###body") {
 			ui.spacer(ui.px(em * 0.9))
-			runs := [1]ui.Rich_Run{{text = code, style = {font = the_app.mono, color = hex(table ? HEX_TEXT : HEX_CODE_TEXT)}}}
+			runs := [1]ui.Rich_Run{{text = code, style = {font = mono, color = hex(table ? HEX_TEXT : HEX_CODE_TEXT)}}}
 			ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}})
 			ui.rich_paragraph("###code", runs[:], version = version)
 			ui.spacer(ui.px(em * 0.9))

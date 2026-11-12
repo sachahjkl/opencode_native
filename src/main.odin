@@ -167,6 +167,7 @@ App_Context :: struct {
 	waits_unread:   bool,              // the stream just came up: what sessions wait on, asked before it, is read from the next list
 	built:          ^ui.State,         // the state of a window of its own, while it is built (nil: the main one)
 	answers_spent:  [dynamic]^virtual.Arena,   // what this frame's answers were read into (net.odin)
+	effects:        [dynamic]Effect,   // what the model asked of the interface, done by the build (effects.odin)
 	image_queue:    [dynamic]^Decode_Job,      // images waiting for a decoder, the last asked for first (images.odin)
 	image_decoding: int,                       // ... decoders at work
 	flights:        [dynamic]Flight,   // what is on its way (net.odin)
@@ -388,6 +389,7 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 		ui.set_scrollbar_autohide(&app.state, app.prefs.autohide_scrollbars)
 		app.state.post_budget = again ? 0 : POSTS_PER_BUILD
 		ui.begin_build(&app.state, build_params(app, app.win, size, events, dt))
+		effects_apply(app)   // (what the events begin_build ran asked for: shown in this very build)
 		app.chat_sb = nil   // (only now: the answers begin_build ran read the last build's, a page placed by chat_load above all)
 		build_ui(app)
 		ui.end_build()

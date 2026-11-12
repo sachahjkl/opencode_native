@@ -3,6 +3,7 @@
 // build, for what was noted.
 package ocn
 
+import "core:encoding/json"
 import "core:fmt"
 import "core:math"
 import "core:strings"
@@ -388,4 +389,19 @@ rename_commit :: proc(app: ^App) {
 	if s := find_session(app, r.id); s != nil && s.title == t { return }   // (nothing changed: nothing to ask)
 	rename_session(app, r.id, t)
 	refresh_soon(app)
+}
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+forked_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	id := jstr(v, "data", "id")
+	if id == "" { return }
+	refresh_sessions(app)
+	if r.gen == app.chat.gen {
+		open_root(app, id)
+		prompt_restore(app, app.cx.fork_prompt)
+		if app.cx.fork_prompt != "" { app.cx.focus_composer = true }
+	}
+	ui.toast(.Good, "Forked")
 }

@@ -26,10 +26,10 @@ age_text :: proc(now, t: f64) -> string {
 	return timefmt.age(now - t)
 }
 
-// The local time of `t` (epoch ms): "14:32", "2:32 pm" (the clock24 preference); `seconds`: "14:32:05". "": not known.
-clock_text :: proc(t: f64, seconds := false) -> string {
+// The local time of `t` (epoch ms): "14:32", "2:32 pm" (`clock24`: the preference); `seconds`: "14:32:05". "": not known.
+clock_text :: proc(t: f64, clock24: bool, seconds := false) -> string {
 	if t <= 0 { return "" }
-	return timefmt.clock(t, local_offset_minutes(), {hours12 = !the_app.prefs.clock24, seconds = seconds})
+	return timefmt.clock(t, local_offset_minutes(), {hours12 = !clock24, seconds = seconds})
 }
 
 // The local date of `t` (epoch ms): "Nov 10".
@@ -42,8 +42,8 @@ same_local_day :: proc(a, b: f64) -> bool {
 }
 
 // The time of `t` to the second, with its date when it is not on the day of `now`: "14:32:05", "Nov 10, 14:32:05".
-moment_text :: proc(t, now: f64) -> string {
-	clock := clock_text(t, seconds = true)
+moment_text :: proc(t, now: f64, clock24: bool) -> string {
+	clock := clock_text(t, clock24, seconds = true)
 	if same_local_day(t, now) { return clock }
 	return fmt.tprintf("%s, %s", date_text(t), clock)
 }
@@ -91,20 +91,20 @@ tool_elapsed :: proc(p: ^Part, running: bool, now: f64) -> string {
 
 // When a tool call ran, on the local clock to the second: "Started 14:32:05, ended 14:32:17", a day other than today's with
 // its date ("Started Nov 10, 14:32:05"); while it runs, "running".
-tool_when :: proc(p: ^Part, running: bool, now: f64) -> string {
-	start := fmt.tprintf("Started %s", moment_text(p.started_ms, now))
+tool_when :: proc(p: ^Part, running: bool, now: f64, clock24: bool) -> string {
+	start := fmt.tprintf("Started %s", moment_text(p.started_ms, now, clock24))
 	if running { return fmt.tprintf("%s, running", start) }
 	if p.ended_ms <= 0 { return start }
-	return fmt.tprintf("%s, ended %s", start, moment_text(p.ended_ms, now))
+	return fmt.tprintf("%s, ended %s", start, moment_text(p.ended_ms, now, clock24))
 }
 
 // What the line over a goal's reason says of the time its limit resets: "resets at 12:20 · in 42 min", another day with its
 // date ("resets on Nov 13 at 12:20 · in 3d 00h"); once past, "limit reset at 12:20".
-reset_text :: proc(resets_ms, now_ms: f64) -> string {
-	if resets_ms <= now_ms { return fmt.tprintf("  ·  limit reset at %s", clock_text(resets_ms)) }
+reset_text :: proc(resets_ms, now_ms: f64, clock24: bool) -> string {
+	if resets_ms <= now_ms { return fmt.tprintf("  ·  limit reset at %s", clock_text(resets_ms, clock24)) }
 	left := left_text(resets_ms, now_ms)
 	if !same_local_day(resets_ms, now_ms) {
-		return fmt.tprintf("  ·  resets on %s at %s  ·  in %s", date_text(resets_ms), clock_text(resets_ms), left)
+		return fmt.tprintf("  ·  resets on %s at %s  ·  in %s", date_text(resets_ms), clock_text(resets_ms, clock24), left)
 	}
-	return fmt.tprintf("  ·  resets at %s  ·  in %s", clock_text(resets_ms), left)
+	return fmt.tprintf("  ·  resets at %s  ·  in %s", clock_text(resets_ms, clock24), left)
 }

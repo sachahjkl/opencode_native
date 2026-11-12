@@ -343,6 +343,7 @@ a_toast_names_its_session_and_opens_it :: proc(t: ^testing.T) {
 	for &x in app.state.toasts { x.alive = false }
 	bench_event(app, `{"type":"permission.asked","data":{"request":{"id":"p2","sessionID":"ended","action":"bash","resources":["git push"]}}}`)
 	bench_event(app, `{"type":"form.created","data":{"form":{"id":"f2","sessionID":"runs","title":"Which branch?","fields":[]}}}`)
+	effects_apply(app)   // (the build's, after the events)
 	texts := make([dynamic]string, context.temp_allocator)
 	actions := make([dynamic]ui.Toast, context.temp_allocator)
 	for &x in app.state.toasts {

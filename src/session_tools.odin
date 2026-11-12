@@ -490,3 +490,51 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 		dialog_close(open)
 	}
 }
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+session_moved_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	ui.toast(.Good, "Session moved")
+	refresh_soon(app)
+}
+
+session_export_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { session_export_save(app, r.tag, r.resp) }
+
+session_import_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	refresh_soon(app)
+	// (the reader who went elsewhere meanwhile stays there: it is in the sidebar)
+	if id := jstr(v, "data", "id"); id != "" && r.gen == app.chat.gen { open_root(app, id) }
+	ui.toast(.Good, "Session imported")
+}
+
+session_import_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	if r.status == 409 { session_import_conflict(app, r.tag); return true }
+	return false
+}
+
+changes_range_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { changes_range(app, v) }
+
+changes_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { changes_load(app, v) }
+
+changes_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	if r.status == 400 { changes_refused(app) }
+	return true
+}
+
+revert_staged_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { revert_staged(app, v) }
+
+// A stage has written the files back: nobody waits for it any more, so they are put back as they were, on the server it went to.
+revert_staged_on_left :: proc(app: ^App, r: ^Request) {
+	if !r.ok || r.status >= 400 { return }
+	request(app, .Action, "DELETE", fmt.tprintf("/api/session/%s/revert", r.tag), tag = r.tag, conn = r.conn)
+}
+
+revert_done_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { revert_done(app) }
+
+revert_cancelled_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { revert_cancelled(app) }
+
+revert_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	revert_failed(app, r.tag)
+	return false
+}

@@ -432,97 +432,115 @@ Req_Life :: enum u8 {
 }
 
 // What is known of a kind of request, in one place. `json`: an answer that cannot be read is a failure; of the others, only that they went
-// through matters, or the answer is not JSON at all. (Every kind is here: a new one does not compile until it says.)
-Req_Facts :: struct { json: bool, life: Req_Life }
+// through matters, or the answer is not JSON at all. What its answer does lives with the feature that asked for it (the procedure named
+// in its entry): this table only says who. (Every kind is here: a new one does not compile until it says.)
+// - on_ok: what a good answer does (nil: nothing, only that it went through mattered).
+// - on_fail: what a failure leaves undone, whatever the way it failed. `told`: the failure is shown where it belongs, or is not one
+//   (a server without that page): no toast. (nil: nothing undone, the toast says it.)
+// - on_left: what was begun on a server and nobody waits for any more, a server left or a conversation left (answer_left).
+Req_On_Ok   :: #type proc(app: ^App, r: ^Request, v: json.Value)
+Req_On_Fail :: #type proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool)
+Req_On_Left :: #type proc(app: ^App, r: ^Request)
+
+Req_Facts :: struct {
+	json:    bool,
+	life:    Req_Life,
+	on_ok:   Req_On_Ok,
+	on_fail: Req_On_Fail,
+	on_left: Req_On_Left,
+}
+
+// A failure that is shown where it belongs, or is none (a server without that page): no toast, nothing undone.
+quiet_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) { return true }
 
 @(rodata) REQ_FACTS := [Req_Kind]Req_Facts{
-	.Sessions         = {json = true},
-	.Messages         = {json = true, life = .Chat},
-	.Older            = {json = true, life = .Chat},
-	.Todo_Scan        = {json = true, life = .Chat},
-	.Agents           = {json = true},
-	.Models           = {json = true},
-	.Info             = {json = true},
-	.Permissions      = {json = true},
-	.Permission_Reply = {},
-	.Active           = {json = true},
-	.Self             = {json = true, life = .Chat},
-	.Parent           = {json = true, life = .Chat},
-	.Children         = {json = true, life = .Chat},
-	.Cfg              = {json = true},
-	.Shells           = {json = true},
-	.Mcp              = {json = true},
-	.Saved            = {json = true},
-	.Usage            = {json = true},
-	.Providers        = {json = true},
-	.Skills           = {json = true},
-	.Commands         = {json = true},
-	.Shell_Set        = {},
-	.Mcp_Done         = {},
-	.Saved_Done       = {},
-	.Projects         = {json = true},
-	.Project_Icon     = {},
-	.Stats            = {json = true},
-	.Created          = {json = true},
+	.Sessions         = {json = true, on_ok = sessions_on_ok},
+	.Messages         = {json = true, life = .Chat, on_ok = messages_on_ok, on_fail = messages_on_fail},
+	.Older            = {json = true, life = .Chat, on_ok = older_on_ok, on_fail = older_on_fail},
+	.Todo_Scan        = {json = true, life = .Chat, on_ok = todos_scan_load, on_fail = todo_scan_on_fail},
+	.Agents           = {json = true, on_ok = agents_on_ok},
+	.Models           = {json = true, on_ok = models_on_ok},
+	.Info             = {json = true, on_ok = info_on_ok},
+	.Permissions      = {json = true, on_ok = permissions_on_ok},
+	.Permission_Reply = {on_ok = permission_reply_on_ok, on_fail = permission_reply_on_fail},
+	.Active           = {json = true, on_ok = active_on_ok},
+	.Self             = {json = true, life = .Chat, on_ok = self_on_ok},
+	.Parent           = {json = true, life = .Chat, on_ok = parent_on_ok},
+	.Children         = {json = true, life = .Chat, on_ok = children_on_ok},
+	.Cfg              = {json = true, on_ok = server_facts_on_ok, on_fail = quiet_on_fail},
+	.Shells           = {json = true, on_ok = server_facts_on_ok, on_fail = quiet_on_fail},
+	.Mcp              = {json = true, on_ok = server_facts_on_ok, on_fail = quiet_on_fail},
+	.Saved            = {json = true, on_ok = server_facts_on_ok, on_fail = quiet_on_fail},
+	.Usage            = {json = true, on_ok = server_facts_on_ok, on_fail = quiet_on_fail},
+	.Providers        = {json = true, on_ok = server_facts_on_ok, on_fail = quiet_on_fail},
+	.Skills           = {json = true, on_ok = server_facts_on_ok, on_fail = quiet_on_fail},
+	.Commands         = {json = true, on_ok = server_facts_on_ok, on_fail = quiet_on_fail},
+	.Shell_Set        = {on_ok = shell_set_on_ok, on_fail = shell_set_on_fail},
+	.Mcp_Done         = {on_ok = mcp_done_on_ok, on_fail = mcp_done_on_fail},
+	.Saved_Done       = {on_ok = saved_done_on_ok, on_fail = saved_done_on_fail},
+	.Projects         = {json = true, on_ok = projects_on_ok},
+	.Project_Icon     = {on_ok = project_icon_on_ok},   // (failed: the toast says it, the icon is as it was)
+	.Stats            = {json = true, on_ok = stats_on_ok, on_fail = quiet_on_fail},
+	.Created          = {json = true, on_ok = created_on_ok, on_fail = created_on_fail},
 	.Action           = {},
-	.Prompt           = {},
-	.Shell_List       = {json = true, life = .Chat_Gen},
-	.Job_List         = {json = true, life = .Chat_Gen},
-	.Background       = {json = true},
-	.Shell_One        = {json = true, life = .Chat_Gen},
-	.Shell_Output     = {json = true, life = .Chat_Gen},
-	.Peek             = {json = true, life = .Chat_Gen},
-	.Slash            = {json = true},
-	.Goal             = {json = true, life = .Chat_Gen},
-	.Pair             = {json = true},   // (the server's, whatever is shown)
-	.Forked           = {json = true},
-	.Session_Agent    = {},
-	.Session_Model    = {},
-	.Session_Choice   = {},
-	.Session_Moved    = {},
-	.Session_Export   = {json = true},
-	.Session_Import   = {json = true},
-	.Pty_List         = {json = true},
-	.Pty_Made         = {json = true},
-	.Pty_Size         = {},
-	.Schedules        = {json = true},
-	.Schedule_Made    = {json = true},
-	.Schedule_Done    = {},
-	.Artifacts        = {json = true},
-	.Artifact_Read    = {json = true},
-	.Chat_Artifacts   = {json = true},
-	.Artifact_Done    = {},
-	.Plugins          = {json = true},
-	.Plugins_Check    = {json = true},
-	.Plugin_Update    = {},
-	.Integrations     = {json = true},
-	.Credentials      = {json = true},
-	.Credential_Done  = {},
-	.Connected        = {},
-	.Connect_Begin    = {json = true},
-	.Connect_Status   = {json = true},
-	.Mention_Files    = {json = true},
-	.Files_List       = {json = true},
-	.File_Read        = {},
-	.Changes_Range    = {json = true},
-	.Changes          = {json = true},
-	.Revert_Staged    = {json = true},
-	.Revert_Done      = {},
-	.Revert_Cancelled = {},
-	.Forms            = {json = true},
-	.Form_Reply       = {},
-	.Form_Dismiss     = {},
-	.Inbox            = {json = true},
-	.Inbox_Take       = {},
-	.Queue_List       = {json = true},
-	.Queue_Steer      = {},
-	.Queue_Cancel     = {},
-	.Queue_Replace    = {},
-	.Queue_Check      = {},
-	.Output_Read      = {json = true},
-	.Output_State     = {json = true},
-	.Context          = {json = true, life = .Chat},
-	.Session_Viewed   = {},
+	.Prompt           = {on_ok = prompt_on_ok, on_fail = prompt_on_fail, on_left = prompt_on_left},
+	.Shell_List       = {json = true, life = .Chat_Gen, on_ok = shell_list_on_ok, on_fail = activity_on_fail},
+	.Job_List         = {json = true, life = .Chat_Gen, on_ok = job_list_on_ok, on_fail = activity_on_fail},
+	.Background       = {json = true, on_ok = background_on_ok, on_fail = quiet_on_fail},
+	.Shell_One        = {json = true, life = .Chat_Gen, on_ok = shell_one_on_ok, on_fail = activity_on_fail},
+	.Shell_Output     = {json = true, life = .Chat_Gen, on_ok = shell_output_on_ok, on_fail = activity_on_fail},
+	.Peek             = {json = true, life = .Chat_Gen, on_ok = peek_on_ok, on_fail = activity_on_fail},
+	.Slash            = {json = true, on_ok = slash_on_ok, on_fail = slash_on_fail},
+	.Goal             = {json = true, life = .Chat_Gen, on_ok = goal_on_ok, on_fail = quiet_on_fail},   // (a server without the goal plugin: nothing to say)
+	.Pair             = {json = true, on_ok = pair_on_ok, on_fail = pair_on_fail},   // (the server's, whatever is shown)
+	.Forked           = {json = true, on_ok = forked_on_ok},
+	.Session_Agent    = {on_ok = session_agent_on_ok, on_fail = session_agent_on_fail},
+	.Session_Model    = {on_ok = session_model_on_ok, on_fail = session_model_on_fail},
+	.Session_Choice   = {on_fail = session_choice_on_fail},
+	.Session_Moved    = {on_ok = session_moved_on_ok},
+	.Session_Export   = {json = true, on_ok = session_export_on_ok},
+	.Session_Import   = {json = true, on_ok = session_import_on_ok, on_fail = session_import_on_fail},
+	.Pty_List         = {json = true, on_ok = pty_list_on_ok, on_fail = pty_list_on_fail},
+	.Pty_Made         = {json = true, on_ok = pty_made_on_ok, on_fail = pty_made_on_fail, on_left = pty_made_on_left},
+	.Pty_Size         = {on_ok = pty_size_on_ok, on_fail = pty_size_on_fail},
+	.Schedules        = {json = true, on_ok = schedules_on_ok, on_fail = quiet_on_fail},
+	.Schedule_Made    = {json = true, on_ok = schedule_made_on_ok, on_fail = schedule_made_on_fail},
+	.Schedule_Done    = {on_ok = schedule_done_on_ok},
+	.Artifacts        = {json = true, on_ok = artifacts_on_ok, on_fail = quiet_on_fail},
+	.Artifact_Read    = {json = true, on_ok = artifact_read_on_ok, on_fail = quiet_on_fail},
+	.Chat_Artifacts   = {json = true, on_ok = chat_artifacts_on_ok, on_fail = quiet_on_fail},   // (no cards: nothing worth a toast)
+	.Artifact_Done    = {on_ok = artifact_done_on_ok},
+	.Plugins          = {json = true, on_ok = plugins_on_ok, on_fail = quiet_on_fail},
+	.Plugins_Check    = {json = true, on_ok = plugins_check_on_ok},
+	.Plugin_Update    = {on_ok = plugin_update_on_ok, on_fail = plugin_update_on_fail},
+	.Integrations     = {json = true, on_ok = integrations_on_ok, on_fail = quiet_on_fail},
+	.Credentials      = {json = true, on_ok = credentials_on_ok, on_fail = quiet_on_fail},
+	.Credential_Done  = {on_ok = credential_done_on_ok},
+	.Connected        = {on_ok = connected_on_ok, on_fail = connect_on_fail},
+	.Connect_Begin    = {json = true, on_ok = connect_begin_on_ok, on_fail = connect_on_fail, on_left = connect_begin_on_left},
+	.Connect_Status   = {json = true, on_ok = connect_status_on_ok, on_fail = connect_status_on_fail},
+	.Mention_Files    = {json = true, on_ok = mention_files_on_ok, on_fail = mention_files_on_fail},
+	.Files_List       = {json = true, on_ok = files_list_on_ok, on_fail = quiet_on_fail},
+	.File_Read        = {on_ok = file_read_on_ok, on_fail = quiet_on_fail},
+	.Changes_Range    = {json = true, on_ok = changes_range_on_ok, on_fail = quiet_on_fail},
+	.Changes          = {json = true, on_ok = changes_on_ok, on_fail = changes_on_fail},
+	.Revert_Staged    = {json = true, on_ok = revert_staged_on_ok, on_fail = revert_on_fail, on_left = revert_staged_on_left},
+	.Revert_Done      = {on_ok = revert_done_on_ok, on_fail = revert_on_fail},
+	.Revert_Cancelled = {on_ok = revert_cancelled_on_ok, on_fail = revert_on_fail},
+	.Forms            = {json = true, on_ok = forms_on_ok},
+	.Form_Reply       = {on_ok = form_answer_on_ok, on_fail = form_answer_on_fail},
+	.Form_Dismiss     = {on_ok = form_answer_on_ok, on_fail = form_answer_on_fail},
+	.Inbox            = {json = true, on_ok = inbox_on_ok, on_fail = inbox_on_fail},
+	.Inbox_Take       = {on_ok = inbox_take_on_ok},
+	.Queue_List       = {json = true, on_ok = queue_list_on_ok, on_fail = quiet_on_fail},   // (the list says it, with its Try again)
+	.Queue_Steer      = {on_ok = queue_item_on_ok, on_fail = queue_item_on_fail},
+	.Queue_Cancel     = {on_ok = queue_item_on_ok, on_fail = queue_item_on_fail},
+	.Queue_Replace    = {on_ok = queue_replace_on_ok, on_fail = queue_replace_on_fail, on_left = queue_replace_on_left},
+	.Queue_Check      = {on_ok = queue_check_on_ok, on_fail = queue_check_on_fail, on_left = queue_check_on_left},
+	.Output_Read      = {json = true, on_ok = output_read_on_ok, on_fail = output_view_on_fail},
+	.Output_State     = {json = true, on_ok = output_state_on_ok, on_fail = output_view_on_fail},
+	.Context          = {json = true, life = .Chat, on_ok = context_on_ok, on_fail = quiet_on_fail},
+	.Session_Viewed   = {on_fail = quiet_on_fail},   // (session.viewed says it, to every client; the next list shows it as it stands)
 }
 
 // The conversation it was asked for is gone: what it says is about nothing shown, success or failure.
@@ -546,23 +564,14 @@ refusal_text :: proc(r: ^Request) -> string {
 }
 
 // What was begun on a server and nobody waits for any more: nothing here will end it, so it is undone there, on the server it went
-// to. (A stage has written the files back; a login or a command goes on running.)
+// to (the kind's on_left). (A stage has written the files back; a login or a command goes on running; a prompt on its way still has
+// to say whether it got there.)
 @(private = "file")
 answer_left :: proc(app: ^App, r: ^Request) {
-	if !r.ok || r.status >= 400 { return }
-	#partial switch r.kind {
-	case .Revert_Staged:
-		request(app, .Action, "DELETE", fmt.tprintf("/api/session/%s/revert", r.tag), tag = r.tag, conn = r.conn)
-	case .Connect_Begin:
-		v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-		if id := jstr(v, "data", "attemptID"); id != "" { request(app, .Action, "DELETE", fmt.tprintf("%s/%s", r.path, url_escape(id)), conn = r.conn) }
-	case .Pty_Made:
-		v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-		term_made_left(app, r, v)
-	}
+	if left := REQ_FACTS[r.kind].on_left; left != nil { left(app, r) }
 }
 
-// Everything an answer can be, in one place. A Remote is settled here, before any handler.
+// Everything an answer can be, in one place. A Remote is settled here, before the kind's procedure.
 answer :: proc(app: ^App, r: ^Request) {
 	defer {
 		if r.read_in != nil { append(&app.cx.answers_spent, r.read_in) }
@@ -572,11 +581,8 @@ answer :: proc(app: ^App, r: ^Request) {
 	sync.atomic_sub(&app.pending, 1)
 	flight_ends(app, r)
 	if r.conn != app.conn {
-		// a server left: server_forget cleaned up what depends on it. A reading it forgot does not stay Loading, and a
-		// prompt on its way still has to say whether it got there.
+		// a server left: server_forget cleaned up what depends on it. A reading it forgot does not stay Loading.
 		if x := r.remote; x != nil && x.ticket == r.ticket { remote_reset(x) }
-		if r.kind == .Prompt { outgoing_answered(app, r, r.ok && r.status < 400) }
-		if r.kind == .Queue_Replace || r.kind == .Queue_Check { outgoing_answered(app, r, false) }   // (taken out or not, that server is left: what was written comes back)
 		answer_left(app, r)
 		return
 	}
@@ -601,128 +607,7 @@ answer :: proc(app: ^App, r: ^Request) {
 	}
 	if unreadable && REQ_FACTS[r.kind].json { answer_failed(app, r, .Unreadable, "Unreadable answer"); return }
 	if r.remote != nil { remote_settle(r.remote, .Ready, "") }
-	switch r.kind {
-	case .Sessions:    sessions_load(app, v)
-	case .Messages:
-		first := !app.chat.loaded
-		chat_load(app, v, false, r.asked_at)
-		if first { chat_scroll_event(app, Scroll_Signal.Snap) }   // (followed: shown at its bottom in the very frame it arrives)
-		chat_scroll_restore_check(app)
-	case .Todo_Scan:
-		todos_scan_load(app, r, v)
-	case .Older:
-		chat_load(app, v, true)   // (Scroll_Older_Page: a way back under way gets a whole wait again)
-		chat_scroll_restore_check(app)
-	case .Agents:      agents_load(app, v)
-	case .Models:      models_load(app, v)
-	case .Info:
-		delete(app.server_version); app.server_version = strings.clone(jstr(v, "version"))
-		server_urls_clear(app)
-		for u in jarr(v, "urls") { if s, ok := u.(json.String); ok && s != "" { append(&app.server_urls, strings.clone(string(s))) } }
-	case .Pair:        pair_load(app, jstr(v, "code"), jnum(v, "expires_in"))
-	case .Permissions: permissions_replace(app, r.tag, jarr(v, "data"), r.asked_at)
-	case .Permission_Reply:
-		waits_gone(app, r.tag)
-		permission_remove(app, r.tag)
-	case .Active:      active_load(app, v, r.asked_at)
-	case .Self:        self_load(app, v, r.asked_at)
-	case .Parent:      parent_load(app, v)
-	case .Children:    children_load(app, v)
-	case .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands: server_facts_answer(app, r.kind, v)
-	case .Shell_Set:
-		ui.toast(.Good, "Shell set")
-		facts_soon(app)   // (a reading that crossed it said the one before)
-	case .Mcp_Done:    mcp_done(app, r.tag)
-	case .Saved_Done:  saved_revoke_done(app, r.tag)
-	case .Projects:    projects_load(app, v)
-	case .Project_Icon: request(app, .Projects, "GET", "/api/project")   // (shown at once, as project.updated would)
-	case .Stats:       stats_load(app, v)
-	case .Created:
-		if id := jstr(v, "data", "id"); id != "" {
-			outgoing_created(app, r, id)
-		} else {
-			answer_failed(app, r, .Unreadable, "Unreadable answer")
-		}
-	case .Action:
-	case .Prompt:
-		// (the stream may say a prompt without its files: what was attached shows as soon as it is stored)
-		if strings.contains(r.body, `"files":`) && r.gen == app.chat.gen && r.tag == app.chat.id { load_messages(app, r.tag) }
-		queue_prompt_answered(app, r.tag, v)
-		outgoing_answered(app, r, true)
-	case .Session_Agent: outgoing_setup(app, r.out, .Model)
-	case .Session_Model: outgoing_setup(app, r.out, .Sending)
-	case .Session_Choice:
-	case .Session_Moved: ui.toast(.Good, "Session moved"); refresh_soon(app)
-	case .Session_Export: session_export_save(app, r.tag, r.resp)
-	case .Session_Import:
-		refresh_soon(app)
-		// (the reader who went elsewhere meanwhile stays there: it is in the sidebar)
-		if id := jstr(v, "data", "id"); id != "" && r.gen == app.chat.gen { open_root(app, id) }
-		ui.toast(.Good, "Session imported")
-	case .Pty_List:      terminals_load(app, r.tag, v)
-	case .Pty_Made:      term_made(app, r.tag, v)
-	case .Pty_Size:      term_size_answered(app, r.tag)
-	case .Schedules:     schedules_load(app, v)
-	case .Schedule_Made: schedule_made(app)
-	case .Schedule_Done: schedule_changed(app)
-	case .Artifacts:     artifacts_load(app, v)
-	case .Chat_Artifacts: chat_artifacts_load(app, r.tag, v)
-	case .Artifact_Read: artifact_loaded(app, v)
-	case .Artifact_Done: artifacts_changed(app)
-	case .Plugins:       plugins_load(app, v)
-	case .Plugins_Check: plugins_checked(app, v)
-	case .Plugin_Update: plugins_changed(app)
-	case .Integrations:  integrations_load(app, v)
-	case .Credentials:   credentials_load(app, v)
-	case .Credential_Done: integrations_changed(app)
-	case .Connected:     connect_done(app)
-	case .Connect_Begin: connect_begun(app, v)
-	case .Connect_Status: connect_status(app, v)
-	case .Mention_Files: mention_load(app, v)
-	case .Files_List:    files_load(app, v)
-	case .File_Read:     file_loaded(app, r.resp)
-	case .Changes_Range: changes_range(app, v)
-	case .Changes:       changes_load(app, v)
-	case .Revert_Staged: revert_staged(app, v)
-	case .Revert_Done:   revert_done(app)
-	case .Revert_Cancelled: revert_cancelled(app)
-	case .Forms:         forms_replace(app, r.tag, jarr(v, "data"), r.asked_at)
-	case .Form_Reply, .Form_Dismiss:
-		waits_gone(app, r.tag)
-		form_remove(app, r.tag)
-	case .Inbox:         inbox_take(app, r.tag, v)
-	case .Inbox_Take:    inbox_send(app, r)
-	case .Queue_List:    queue_load(app, r.tag, v, r.asked_at)
-	case .Queue_Steer, .Queue_Cancel: queue_answered(app, r)
-	case .Queue_Replace: queue_replaced(app, r)
-	case .Queue_Check:   outgoing_replaced(app, r.out, false)   // (stored: it was delivered)
-	case .Output_Read:   output_view_output_load(app, v, r.tag)
-	case .Output_State:  output_view_state_load(app, v, r.tag)
-	case .Context:       context_load(app, r.tag, v)
-	case .Shell_List:   activity_shells_load(app, v, r.tag)
-	case .Job_List:     activity_jobs_load(app, v, r.tag)
-	case .Background:   background_load(app, v)
-	case .Shell_One:    activity_shell_load(app, v, r.tag)
-	case .Shell_Output: activity_output_load(app, v, r.tag)
-	case .Peek:         activity_peek_load(app, v, r.tag)
-	case .Goal:         goal_set(app, r.tag, jget(v, "output"))
-	case .Slash:
-		list := make([dynamic]Slash, context.temp_allocator)
-		for it in jarr(v, "data") { append(&list, Slash{strings.clone(jstr(it, "name")), strings.clone(jstr(it, "description"))}) }
-		slash_load(app, list[:])
-		outgoing_catalog(app)
-	case .Session_Viewed:   // (session.viewed says it, to every client)
-	case .Forked:
-		if id := jstr(v, "data", "id"); id != "" {
-			refresh_sessions(app)
-			if r.gen == app.chat.gen {
-				open_root(app, id)
-				prompt_restore(app, app.cx.fork_prompt)
-				if app.cx.fork_prompt != "" { app.cx.focus_composer = true }
-			}
-			ui.toast(.Good, "Forked")
-		}
-	}
+	if ok := REQ_FACTS[r.kind].on_ok; ok != nil { ok(app, r, v) }
 }
 
 // How a request failed.
@@ -733,132 +618,17 @@ Failure :: enum u8 {
 	Unreadable,   // a success that says nothing that can be read
 }
 
-// Every failure comes here: its Remote, what it leaves undone, what the reader is told.
+// Every failure comes here: its Remote, what it leaves undone (the kind's on_fail), what the reader is told.
 answer_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) {
 	if r.remote != nil { remote_settle(r.remote, f == .Refused ? .Refused : .Failed, message) }
 	if f == .Auth { conn_auth_refused(app) }
-	if request_failed(app, r, f, message) { return }
+	if fail := REQ_FACTS[r.kind].on_fail; fail != nil && fail(app, r, f, message) { return }
 	switch f {
 	case .Transport:  ui.toast(.Bad, "Server unreachable (%s)", r.path)
 	case .Auth:       ui.toast(.Bad, "Authentication refused by the server")
 	case .Refused:    ui.toast(.Bad, "%s %s: %d %s", r.method, r.path, r.status, message)
 	case .Unreadable: ui.toast(.Warn, "Unreadable answer (%s)", r.path)
 	}
-}
-
-// What a request that failed leaves undone, whatever the way it failed. Every kind is here: a new one does not compile until it
-// says. `told`: the failure is shown where it belongs, or is not one (a server without that page): no toast.
-@(private = "file")
-request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
-	refused := f == .Refused
-	switch r.kind {
-	case .Project_Icon: return false   // (the toast says it: the icon is as it was)
-	case .Session_Agent: outgoing_setup(app, r.out, .Model)     // (the prompt goes all the same, with what the session has)
-	case .Session_Model: outgoing_setup(app, r.out, .Sending)
-	case .Session_Choice:
-		// (the session did not take it: what is shown goes back to what it uses)
-		if r.gen == app.chat.gen && r.tag == app.chat.id {
-			if strings.has_suffix(r.path, "/agent") { app.chat.chose_agent = "" } else { app.chat.chose_model, app.chat.chose_provider, app.chat.chose_variant = "", "", "" }
-		}
-	case .Created, .Prompt:
-		outgoing_answered(app, r, false)
-	case .Messages:
-		app.chat.loading = false
-		chat_scroll_event(app, Scroll_Signal.Restore_End)   // (what it would go back to will not come)
-	case .Older:
-		older_failed(app, r)
-	case .Todo_Scan:
-		if r.tag == app.activity.scan.session {
-			app.activity.scan.busy, app.activity.scan.over = false, true   // (not again: the list stays as the pages read say)
-			app.activity.todos_sig = 0
-		}
-	case .Form_Reply, .Form_Dismiss:
-		if fr := form_find(app, r.tag); fr != nil { fr.sending = false }
-	case .Permission_Reply:
-		for &p in app.permissions { if p.id == r.tag { p.replying = false } }
-	case .Plugin_Update:
-		plugins_changed(app)
-	case .Connected, .Connect_Begin:
-		connect_failed(app, message)
-		return true
-	case .Connect_Status:
-		connect_poll_failed(app)
-		return true
-	case .Changes:
-		if r.status == 400 { changes_refused(app) }
-		return true
-	case .Revert_Staged, .Revert_Done, .Revert_Cancelled:
-		revert_failed(app, r.tag)
-	case .Shell_Set:
-		shell_failed(app, r.tag)
-	case .Mcp_Done:
-		mcp_done(app, r.tag)
-	case .Saved_Done:
-		saved_revoke_done(app, r.tag)
-	case .Pty_List:
-		return app.cx.terms.open   // (the panel says it, with its Try again)
-	case .Pty_Made:
-		return term_made_failed(app)
-	case .Pty_Size:
-		term_size_answered(app, r.tag)   // (the grid has its size; a server that refuses it says nothing worth a toast at each step of a drag)
-		return true
-	case .Pair:
-		pair_failed(app, message)
-		return true   // (the dialog says it, with its Try again)
-	case .Goal, .Background:
-		return true   // (a server without the goal plugin: no line over the composer, nothing to say)
-	case .Shell_List, .Shell_One, .Shell_Output, .Peek, .Job_List:
-		// (what runs behind the conversation: a server without it says nothing about it)
-		activity_request_failed(app, r)
-		return true
-	case .Inbox:
-		return refused   // (a server without one: nothing to say)
-	case .Queue_List:
-		return true      // (the list says it, with its Try again; a server without one says nothing)
-	case .Queue_Steer, .Queue_Cancel:
-		return queue_failed(app, r)
-	case .Queue_Replace:
-		queue_replace_failed(app, r)
-		return true      // (Outgoing says it)
-	case .Output_Read, .Output_State:
-		output_view_failed(app, r)
-		return true      // (the view says it)
-	case .Queue_Check:
-		// (404: not stored, so it really left the inbox. Anything else says nothing: what was written comes back rather than go twice.)
-		if r.status == 404 { outgoing_replaced(app, r.out, true) } else { outgoing_answered(app, r, false) }
-		return true
-	case .Mention_Files:
-		mention_failed(app)   // (what was proposed is not what is typed any more)
-		return refused        // (a server without one, a folder gone: nothing to say)
-	// (a dialog's reading: read_shown says it where it would have been, in the server's words: "set experimental.schedules in config")
-	case .Chat_Artifacts:
-		return true   // (no cards: a server without artifacts says nothing worth a toast)
-	case .Schedules, .Artifacts, .Artifact_Read, .Plugins, .Integrations, .Credentials, .Files_List, .File_Read, .Stats, .Context, .Changes_Range,
-	     .Cfg, .Shells, .Mcp, .Saved, .Usage, .Providers, .Skills, .Commands:
-		return true
-	case .Slash:
-		outgoing_catalog(app)   // (what waited for the commands goes as a prompt: nothing is lost)
-		return false
-	case .Schedule_Made:
-		return app.cx.open[.Schedules]   // ("Invalid duration": under the form, with what was typed)
-	case .Session_Viewed:
-		return true   // (nothing to say: the next list shows it as it stands)
-	case .Session_Import:
-		if r.status == 409 { session_import_conflict(app, r.tag); return true }
-	// nothing waits on them here: the toast says it, what they would have changed stays
-	case .Sessions, .Agents, .Models, .Info, .Permissions, .Active, .Self, .Parent, .Children, .Projects,
-	     .Action, .Forked, .Session_Moved, .Session_Export,
-	     .Schedule_Done, .Artifact_Done, .Credential_Done, .Plugins_Check, .Forms, .Inbox_Take:
-	}
-	return false
-}
-
-// The page before the first message was not read: said where it would have been.
-older_failed :: proc(app: ^App, r: ^Request) {
-	if r.gen != app.chat.gen || r.tag != app.chat.id { return }
-	app.chat.loading_older = false
-	app.chat.older_failed = ui.now_ms()
-	chat_scroll_event(app, Scroll_Signal.Restore_End)   // (the place it would go back to is on that page: the view is the reader's again)
 }
 
 SESSIONS_LIMIT :: "200"   // most sessions read at a time (text of the query)
@@ -902,39 +672,6 @@ load_older :: proc(app: ^App, b: ^ui.Box) {
 	c.loading_older = true
 	c.older_failed = 0
 	request(app, .Older, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", app.chat.id, app.prefs.page_size, url_escape(app.chat.older)), tag = app.chat.id)
-}
-
-
-// A run that is interrupted leaves what was steered into it in the session's inbox, where only the next prompt would pick it up,
-// glued to that prompt: it looks lost. The newest goes as a prompt now, which starts a run: the server puts what is left in the
-// inbox before a prompt, so they keep their order. (It has no way to wake an inbox: out of it, then sent.) If the prompt fails its text comes back to the composer; if the
-// taking fails it stays in the inbox. Nothing is lost. What was queued is left where it is: the reader stopped the run, and queued it
-// for after that run, not for a new one started without a word. It stays parked in the list (queue.odin), Steer at hand.
-inbox_resume :: proc(app: ^App, id: string) {
-	request(app, .Inbox, "GET", fmt.tprintf("/api/session/%s/inbox", id), tag = id)
-}
-
-@(private = "file")
-inbox_take :: proc(app: ^App, id: string, v: json.Value) {
-	newest: json.Value
-	last: f64
-	for item in jarr(v, "data") {
-		if jstr(item, "type") != "user" || delivery_of(jstr(item, "delivery")) == .Queue { continue }
-		if t := jnum(item, "time", "created"); t >= last { last, newest = t, item }
-	}
-	if newest == nil { return }
-	request(app, .Inbox_Take, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", id, jstr(newest, "id")), prompt_of_payload(jget(newest, "payload")), id)
-}
-
-@(private = "file")
-inbox_send :: proc(app: ^App, r: ^Request) {
-	// (what shows of it goes: the prompt comes back under its own id)
-	if r.tag == app.chat.id {
-		taken := r.path[strings.last_index_byte(r.path, '/') + 1:]
-		if queue_shown_as_sent(app, taken) { chat_drop(&app.chat, taken) }
-		queue_gone(app, taken, false, app.cx.stream_seq)
-	}
-	outgoing_inbox(app, r.tag, r.body)
 }
 
 interrupt_session :: proc(app: ^App, id: string) {

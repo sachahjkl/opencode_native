@@ -62,7 +62,6 @@ every_theme_reads :: proc(t: ^testing.T) {
 	for def, i in themes(app) {
 		for light in ([]bool{false, true}) {
 			theme_set(app, i, light)
-			app.prefs.accent = hex(HEX_PEACH)
 			testing.expectf(t, ui.contrast(hex(HEX_TEXT), hex(HEX_BG0)) >= READABLE_TEXT, "%s (light %v): the text on the conversation, %.2f", def.name, light, ui.contrast(hex(HEX_TEXT), hex(HEX_BG0)))
 			g := chosen_ground()
 			title := ui.readable(hex(HEX_BRIGHT), g, READABLE_TEXT)

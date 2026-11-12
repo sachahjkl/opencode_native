@@ -956,6 +956,72 @@ tool_set_input :: proc(p: ^Part, input: json.Value, a: mem.Allocator) {
 }
 
 ////////////////////////////////
+// What the answers to the model's requests do (net.odin REQ_FACTS)
+
+sessions_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { sessions_load(app, v) }
+
+messages_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	first := !app.chat.loaded
+	chat_load(app, v, false, r.asked_at)
+	if first { chat_scroll_event(app, Scroll_Signal.Snap) }   // (followed: shown at its bottom in the very frame it arrives)
+	chat_scroll_restore_check(app)
+}
+
+messages_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	app.chat.loading = false
+	chat_scroll_event(app, Scroll_Signal.Restore_End)   // (what it would go back to will not come)
+	return false
+}
+
+older_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	chat_load(app, v, true)   // (Scroll_Older_Page: a way back under way gets a whole wait again)
+	chat_scroll_restore_check(app)
+}
+
+// The page before the first message was not read: said where it would have been.
+older_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	if r.gen != app.chat.gen || r.tag != app.chat.id { return false }
+	app.chat.loading_older = false
+	app.chat.older_failed = ui.now_ms()
+	chat_scroll_event(app, Scroll_Signal.Restore_End)   // (the place it would go back to is on that page: the view is the reader's again)
+	return false
+}
+
+agents_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { agents_load(app, v) }
+
+models_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { models_load(app, v) }
+
+permissions_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { permissions_replace(app, r.tag, jarr(v, "data"), r.asked_at) }
+
+permission_reply_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	waits_gone(app, r.tag)
+	permission_remove(app, r.tag)
+}
+
+permission_reply_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	for &p in app.permissions { if p.id == r.tag { p.replying = false } }
+	return false
+}
+
+active_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { active_load(app, v, r.asked_at) }
+
+self_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { self_load(app, v, r.asked_at) }
+
+parent_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { parent_load(app, v) }
+
+children_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { children_load(app, v) }
+
+projects_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { projects_load(app, v) }
+
+// The session did not take the agent or the model picked: what is shown goes back to what it uses.
+session_choice_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	if r.gen == app.chat.gen && r.tag == app.chat.id {
+		if strings.has_suffix(r.path, "/agent") { app.chat.chose_agent = "" } else { app.chat.chose_model, app.chat.chose_provider, app.chat.chose_variant = "", "", "" }
+	}
+	return false
+}
+
+////////////////////////////////
 // The event stream
 
 find_message :: proc(c: ^Chat, id: string) -> ^Message {
@@ -1035,7 +1101,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 	case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted", "session.idle":
 		if app.busy[sid] or_else false {
 			word := strings.trim_prefix(kind, "session.execution.")
-			notify_finished(app, sid, word)
+			effect_finished(app, sid, word)
 			session_ended(app, sid, word == "failed" ? "failed" : word == "interrupted" ? "interrupted" : "succeeded")
 		}
 		busy_event(app, sid, false)
@@ -1043,7 +1109,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		if mine {
 			load_messages(app, sid)   // the stored page: the stream only gave the pieces
 			stats_context_soon(app)
-			if kind == "session.execution.failed" { ui.toast(.Bad, "The run failed") }
+			if kind == "session.execution.failed" { effect_toast(app, .Bad, "The run failed") }
 		}
 		refresh_soon(app)
 	case "session.viewed":
@@ -1060,7 +1126,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 			outgoing_session_gone(app, sid)
 			preview_session_gone(app, sid)
 			if mine {   // (elsewhere: what is shown no longer is)
-				ui.toast(.Warn, "This session was deleted")
+				effect_toast(app, .Warn, "This session was deleted")
 				append(&app.nav_steps, Nav_Step{kind = .Gone})
 			}
 		}
@@ -1097,8 +1163,8 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		permission_add(app, req)
 		asker := jstr(req, "sessionID")
 		detail := permission_words(req)
-		if asker != c.id { toast_session(app, .Warn, asker, "Permission", detail) }
-		notify_waiting(app, asker, "Permission", detail)
+		if asker != c.id { effect_session_toast(app, .Warn, asker, "Permission", detail) }
+		effect_waiting(app, asker, "Permission", detail)
 	case "session.permissions":   // (a session's approval mode, set here or by another client)
 		approval_seen(app, sid, approval_of(jget(d, "permissions")))
 	case "permission.replied":
@@ -1111,8 +1177,8 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		form_add(app, form)
 		asker := jstr(form, "sessionID")
 		detail := form_words(form)
-		if asker != "" && asker != c.id && !is_child(c, asker) { toast_session(app, .Warn, asker, "Question", detail) }   // (no session: shown in the conversation, no toast)
-		notify_waiting(app, asker, "Question", detail)
+		if asker != "" && asker != c.id && !is_child(c, asker) { effect_session_toast(app, .Warn, asker, "Question", detail) }   // (no session: shown in the conversation, no toast)
+		effect_waiting(app, asker, "Question", detail)
 	case "form.replied", "form.cancelled":
 		waits_gone(app, jstr(d, "id"))
 		form_remove(app, jstr(d, "id"))

@@ -3,6 +3,7 @@
 // Escape closes it for this word. Enter on a name typed in full sends it, as before (slash_send).
 package ocn
 
+import "core:encoding/json"
 import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -97,4 +98,19 @@ slash_list :: proc(app: ^App, em: f32) {
 	clicked: int
 	clicked, p.list = completion_list(app, "###slash_list", rows, p.sel, em)
 	if clicked >= 0 { slash_choose(app, hits[clicked]) }
+}
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+slash_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	list := make([dynamic]Slash, context.temp_allocator)
+	for it in jarr(v, "data") { append(&list, Slash{strings.clone(jstr(it, "name")), strings.clone(jstr(it, "description"))}) }
+	slash_load(app, list[:])
+	outgoing_catalog(app)
+}
+
+slash_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	outgoing_catalog(app)   // (what waited for the commands goes as a prompt: nothing is lost)
+	return false
 }

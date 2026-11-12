@@ -592,6 +592,20 @@ files_right :: proc(app: ^App, em: f32) {
 	if f.size > len(f.content) { info_line(app, "###fl_cut", fmt.tprintf("The first %d of %d bytes.", len(f.content), f.size), em) }
 	ui.next({width = ui.fill(), height = ui.fill()})
 	if ui.scroll_y("###fl_view") {
-		code_block("###fl_code", strings.trim_prefix(filepath.ext(f.file), "."), f.content, version = f.version)
+		code_block("###fl_code", strings.trim_prefix(filepath.ext(f.file), "."), f.content, app.mono, version = f.version)
 	}
 }
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+mention_files_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { mention_load(app, v) }
+
+mention_files_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	mention_failed(app)    // (what was proposed is not what is typed any more)
+	return f == .Refused   // (a server without one, a folder gone: nothing to say)
+}
+
+files_list_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { files_load(app, v) }
+
+file_read_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { file_loaded(app, r.resp) }

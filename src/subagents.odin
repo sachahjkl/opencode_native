@@ -474,7 +474,7 @@ card_body :: proc(app: ^App, v: ^Sub_View, p: ^Part, pid: string, running: bool,
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})   // (as the prompt: in the card, no box of its own)
 				if ui.column(id = "###result") {
 					id := fmt.tprintf("%s_res", pid)
-					markdown(md_doc(&app.chat, id), id, v.result, hex(HEX_CARD_RESULT), math.round(em * FS_LABEL))
+					markdown(md_doc(&app.chat, id), id, v.result, hex(HEX_CARD_RESULT), md_style(app), math.round(em * FS_LABEL))
 				}
 				ui.spacer(ui.px(em * 0.4))
 			} else if running {
@@ -530,8 +530,8 @@ sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 		}
 		row("###f1", "session", s.id, em)
 		row("###f2", "title", s.title, em)
-		row("###f3", "started", fmt.tprintf("%s  (%s ago)", clock_text(s.created), duration_text(s.created, now_epoch_ms())), em)
-		if s.idle > 0 { row("###f4", "finished", fmt.tprintf("%s  after %s", clock_text(s.idle), duration_text(s.created, s.idle)), em) }
+		row("###f3", "started", fmt.tprintf("%s  (%s ago)", clock_text(s.created, app.prefs.clock24), duration_text(s.created, now_epoch_ms())), em)
+		if s.idle > 0 { row("###f4", "finished", fmt.tprintf("%s  after %s", clock_text(s.idle, app.prefs.clock24), duration_text(s.created, s.idle)), em) }
 		if s.outcome != "" {
 			row("###f5", "outcome", s.outcome, em)
 		}
@@ -567,7 +567,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 			ui.spacer(ui.px(em * 0.6))
 			desc := m.sub_desc != "" ? m.sub_desc : v.desc
 			text("d", desc, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
-			text("at", clock_text(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("at", clock_text(m.created, app.prefs.clock24), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.5))
 			if m.sub_child != "" {
 				if bevel_button("###open", "Open", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true).clicked { drill_down(app, m.sub_child) }
@@ -584,7 +584,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 				if ui.column() {
 					ui.spacer(ui.px(em * 0.3))
 					id := fmt.tprintf("%s_sr", m.id)
-					markdown(md_doc(&app.chat, id), id, m.text, hex(HEX_RETURNED_TEXT), math.round(em * FS_LABEL))
+					markdown(md_doc(&app.chat, id), id, m.text, hex(HEX_RETURNED_TEXT), md_style(app), math.round(em * FS_LABEL))
 					ui.spacer(ui.px(em * 0.3))
 				}
 			}
@@ -634,7 +634,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 				parent := c.parent_title != "" ? c.parent_title : s.parent
 				text("p", fmt.tprintf("launched by “%s”", parent), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.4)}, ui.fill())
 				end := s.idle > 0 && st != .Running ? s.idle : now_epoch_ms()
-				facts := fmt.tprintf("started %s · %s · %s in · %s out%s", clock_text(s.created), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out), s.cost > 0 ? fmt.tprintf(" · $%.2f", s.cost) : "")
+				facts := fmt.tprintf("started %s · %s · %s in · %s out%s", clock_text(s.created, app.prefs.clock24), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out), s.cost > 0 ? fmt.tprintf(" · $%.2f", s.cost) : "")
 				text("f", facts, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
