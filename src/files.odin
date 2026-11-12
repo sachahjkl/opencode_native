@@ -170,7 +170,7 @@ mention_load :: proc(app: ^App, v: json.Value) {
 	_ = virtual.arena_init_growing(&m.arena)
 	a := virtual.arena_allocator(&m.arena)
 	m.dir = strings.clone(jstr(v, "location", "directory"))
-	for h in ui.rank(m.query, app.agents[:], proc(ag: ^Agent_Info, _: rawptr) -> ui.Rank_Entry { return {label = ag.id, skip = ag.mode != "subagent"} }, match = ui.fuzzy_match) {
+	for h in ui.rank(m.query, app.agents[:], proc(ag: ^Agent_Info, _: rawptr) -> ui.Rank_Entry { return {label = ag.id, skip = ag.mode != "subagent"} }, match = ui.rank_fuzzy) {
 		ag := &app.agents[h.index]
 		append(&m.hits, Mention_Hit{.Agent, strings.clone(ag.id, a), strings.clone(ag.description, a)})
 	}
@@ -306,6 +306,7 @@ mentions_destroy :: proc(app: ^App) {
 	virtual.arena_destroy(&m.arena)
 	m^ = {}
 	delete(app.cx.slash_pick.query)   // (the other list over the composer: slash.odin)
+	ui.fuzzy_cache_destroy(&app.cx.slash_pick.search)
 	app.cx.slash_pick = {}
 }
 

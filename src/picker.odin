@@ -100,6 +100,7 @@ Picker :: struct {
 	reveal: bool,      // bring the selected row into view (the keyboard moved it, it was opened, the search changed)
 	fresh:  bool,      // opened in this frame: focus the field, select the current item
 	mouse:  Vec2,
+	search: ui.Fuzzy_Cache,   // the query and the items folded, from one frame to the next: they are ranked each frame
 }
 
 PICK_ROWS :: 10
@@ -160,7 +161,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 	chosen = -1
 	if !app.cx.open[.Picker] || p.id != id { return }
 	needle := ui.field_string(&p.field)
-	hits := ui.rank(needle, items, proc(it: ^Pick_Item, _: rawptr) -> ui.Rank_Entry { return {label = it.label, group = it.group} }, match = ui.fuzzy_match)
+	hits := ui.rank(needle, items, proc(it: ^Pick_Item, _: rawptr) -> ui.Rank_Entry { return {label = it.label, group = it.group} }, match = ui.rank_fuzzy, cache = &p.search)
 	if p.fresh { for h in hits { if it := items[h.index]; it.current && it.group != "" { picker_fold(p, it.group, true) } } }
 	typed := needle != ""
 	rows := picker_rows(p, items, hits, typed)

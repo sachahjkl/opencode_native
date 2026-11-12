@@ -40,6 +40,7 @@ Palette :: struct {
 	mouse:   Vec2,
 	view_h:  f32,                // the list's height at the last frame: a page of Page Up / Down
 	usage:   map[string]Usage,   // by "kind:id" (keys owned); palette_usage.txt keeps them (app.stores.palette)
+	search:  ui.Fuzzy_Cache,     // the query and the items folded, from one frame to the next: the list is made again each frame
 }
 
 Slash :: struct { name, description: string }   // a command of the server (owned)
@@ -317,5 +318,5 @@ palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string) -> []ui.Rank_
 		at := (^Usage_Now)(user)
 		u, known := at.palette.usage[usage_key(it)]
 		return known ? usage_now(u, at.now) * USAGE_SCORE : 0
-	})
+	}, cache = &app.palette.search)
 }

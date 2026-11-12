@@ -13,6 +13,7 @@ Slash_Pick :: struct {
 	query:     string,    // what follows the `/` (owned)
 	sel:       int,
 	list:      ui.Key,    // its box
+	search:    ui.Fuzzy_Cache,   // the query and the names folded: the list is ranked several times a frame
 }
 
 // The command being typed: the composer starts with `/` and the caret is in its first word.
@@ -25,7 +26,7 @@ slash_word :: proc(text: string, cursor: int) -> (query: string, ok: bool) {
 
 // The commands that match `query`, best first (indices into app.cx.slash), at most MENTION_ROWS.
 slash_matches :: proc(app: ^App, query: string) -> []int {
-	hits := ui.rank(query, app.cx.slash[:], proc(s: ^Slash, _: rawptr) -> ui.Rank_Entry { return {label = s.name} }, match = ui.fuzzy_match)
+	hits := ui.rank(query, app.cx.slash[:], proc(s: ^Slash, _: rawptr) -> ui.Rank_Entry { return {label = s.name} }, match = ui.rank_fuzzy, cache = &app.cx.slash_pick.search)
 	out := make([dynamic]int, context.temp_allocator)
 	for h in hits {
 		if len(out) == MENTION_ROWS { break }
