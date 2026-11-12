@@ -8,6 +8,7 @@ import "core:fmt"
 import "core:os"
 import "core:strconv"
 import "core:strings"
+import "core:mem"
 import "core:mem/virtual"
 import "core:sync"
 import "core:thread"
@@ -737,6 +738,7 @@ Failure :: enum u8 {
 answer_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) {
 	if r.remote != nil { remote_settle(r.remote, f == .Refused ? .Refused : .Failed, message) }
 	if f == .Auth { conn_auth_refused(app) }
+	if f == .Unreadable { unreadable_note(app, fmt.tprintf("answer %v", r.kind), r.resp) }   // (counted before request_failed: it may tell no one)
 	if request_failed(app, r, f, message) { return }
 	switch f {
 	case .Transport:  ui.toast(.Bad, "Server unreachable (%s)", r.path)
@@ -974,9 +976,8 @@ events_thread :: proc(data: rawptr) {
 	for !sync.atomic_load(&c.stop) {
 		st := http_sse(&c.http, "/api/event", &c.stop, proc(data: string, user: rawptr) -> bool {
 			c := (^Conn)(user)
-			e := new(Event_Msg)
-			e^ = {conn = c, text = strings.clone(data)}
-			if !ui.post(&c.app.state, on_event, e, EVENT_WORD) { delete(e.text); free(e); return false }
+			e := event_read(c, data)
+			if !ui.post(&c.app.state, on_event, e, EVENT_WORD) { event_free(e); return false }
 			return true
 		}, c, proc(user: rawptr) {
 			ui.post(&(^Conn)(user).app.state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_up(the_app) } }, user)
@@ -987,10 +988,46 @@ events_thread :: proc(data: rawptr) {
 	}
 }
 
-// An event's text and the connection it came by (dropped when that is no longer the one connected).
-Event_Msg :: struct { conn: ^Conn, text: string }
+// An event read on the stream's thread, and the connection it came by (dropped when that is no longer the one connected). Read there,
+// not in the interface's thread: a burst of deltas costs that thread only what applying them costs. What it holds lives in its own arena,
+// gone once applied (event_take).
+Event_Msg :: struct {
+	conn:       ^Conn,
+	value:      json.Value,
+	unreadable: bool,
+	excerpt:    string,            // an unreadable one's first bytes, for the log
+	arena:      mem.Dynamic_Arena,
+}
 
 EVENT_WORD :: u64(0x4556454e54)   // a post's word for an Event_Msg (on_drop frees it)
+
+// Small blocks: most events are a delta of a few hundred bytes, and a large text (a tool's output) goes in a block of its own.
+EVENT_BLOCK_BYTES    :: 8 * 1024
+EVENT_OUT_BAND_BYTES :: 2 * 1024
+
+// `allocator`: where the arena takes its blocks (a test's, to see them all given back).
+event_read :: proc(c: ^Conn, text: string, allocator := context.allocator) -> ^Event_Msg {
+	e := new(Event_Msg, allocator)
+	e.conn = c
+	mem.dynamic_arena_init(&e.arena, allocator, allocator, EVENT_BLOCK_BYTES, EVENT_OUT_BAND_BYTES)
+	a := mem.dynamic_arena_allocator(&e.arena)
+	// (on an error the parser frees what it made with context.allocator, not with `allocator`: the arena's own, which frees nothing)
+	context.allocator = a
+	v, err := json.parse_string(text, parse_integers = true, allocator = a)
+	if err != nil {
+		e.unreadable = true
+		e.excerpt = strings.clone(text[:min(len(text), UNREADABLE_EXCERPT_BYTES)], a)
+	} else {
+		e.value = v
+	}
+	return e
+}
+
+event_free :: proc(e: ^Event_Msg) {
+	allocator := e.arena.block_allocator
+	mem.dynamic_arena_destroy(&e.arena)
+	free(e, allocator)
+}
 
 // Where the link to the server stands, as the event stream says it: stream_up and stream_down write it, server_forget starts it
 // again.
@@ -1064,21 +1101,26 @@ children_soon :: proc(app: ^App) { deferred_ask(&app.cx.due[.Children], CHILDREN
 
 facts_soon :: proc(app: ^App) { deferred_ask(&app.cx.due[.Facts], FACTS_DEBOUNCE_MS, FACTS_DEBOUNCE_MS * DEFERRED_MOST) }
 
-on_event :: proc(data: rawptr, word: u64) {
-	app := the_app
-	e := (^Event_Msg)(data)
-	defer { delete(e.text); free(e) }
+on_event :: proc(data: rawptr, word: u64) { event_take(the_app, (^Event_Msg)(data)) }
+
+// An event read on the stream's thread, applied, then freed. Only what changed what a window shows moves the windows of their own
+// (shared_moved): a delta of a session nobody looks at leaves them at rest. (main.odin posts_moved counts the other posts.)
+event_take :: proc(app: ^App, e: ^Event_Msg) {
+	defer event_free(e)
+	app.cx.events_run += 1
 	if e.conn != app.conn { return }   // a server left
-	v, err := json.parse_string(e.text, parse_integers = true, allocator = context.temp_allocator)
-	if err != nil { return }
-	apply_event(app, v)
+	if e.unreadable {
+		unreadable_note(app, "event", e.excerpt)
+		return
+	}
+	if apply_event(app, e.value) { app.cx.shared_moved = true }
 }
 
 // What the queue will never run. It blocks when full and is closed only at the end, with no worker joined and no ui.destroy: a Request or a
 // shell's output left there then goes with the process, and a post refused after the close is freed by whoever posted it. An event is the
 // one message this has to know, for a queue that does get destroyed (a test's).
 on_drop :: proc(data: rawptr, word: u64) {
-	if word == EVENT_WORD { e := (^Event_Msg)(data); delete(e.text); free(e) }
+	if word == EVENT_WORD { event_free((^Event_Msg)(data)) }
 }
 
 // "http://host:port[/]" -> host, port (ok false: not that form).

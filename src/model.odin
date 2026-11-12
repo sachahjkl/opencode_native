@@ -145,6 +145,7 @@ Chat :: struct {
 	have_self:    bool,
 	parent_title: string,
 	children:     [dynamic]Session_Info,   // sessions whose parent is this one (newest first; in children_arena: read often)
+	child_ids:    map[string]bool,         // ... their ids, for is_child: asked of every event of another session (in children_arena)
 	children_arena: virtual.Arena,
 	live:         map[string]Sub_Live,     // keyed by child session id (keys and strings in the arena)
 	goal:         Goal,                    // its /goal (goal.odin; strings in the arena)
@@ -411,8 +412,13 @@ parent_load :: proc(app: ^App, v: json.Value) {
 children_load :: proc(app: ^App, v: json.Value) {
 	c := &app.chat
 	a := arena_renew(&c.children_arena)
-	c.children = make([dynamic]Session_Info, a)
-	for it in jarr(v, "data") { append(&c.children, session_from_json(it, a)) }
+	list := jarr(v, "data")
+	c.children = make([dynamic]Session_Info, 0, len(list), a)
+	c.child_ids = make(map[string]bool, len(list), a)
+	for it in list {
+		append(&c.children, session_from_json(it, a))
+		c.child_ids[c.children[len(c.children) - 1].id] = true
+	}
 }
 
 find_child :: proc(c: ^Chat, id: string) -> ^Session_Info {
@@ -989,7 +995,7 @@ user_message_add :: proc(c: ^Chat, id, text: string, files: json.Array, created:
 queue_delivered :: proc(app: ^App, id: string, created: f64) {
 	c := &app.chat
 	if it := queue_find(app, id); it != nil && find_message(c, id) == nil {
-		v, _ := json.parse_string(it.payload, parse_integers = true, allocator = context.temp_allocator)
+		v := json_of_own(app, "queued payload", it.payload)
 		user_message_add(c, id, it.text, jarr(v, "files"), created)
 	}
 	queue_gone(app, id, true, c.seq)
@@ -1019,7 +1025,10 @@ tool_part :: proc(c: ^Chat, m: ^Message, id: string) -> ^Part {
 	return &m.parts[len(m.parts) - 1]
 }
 
-apply_event :: proc(app: ^App, ev: json.Value) {
+// What an event of the stream changes. `visible`: something any window may show changed, the session shown, the sidebar, the activity,
+// a dialog, a toast; false for what no window shows, a delta of a session nobody looks at above all, the bulk of a busy stream. (Each
+// kind of the first switch is rare and shows somewhere: it counts as seen without a finer rule.)
+apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 	kind := jstr(ev, "type")
 	d := jget(ev, "data")
 	sid := jstr(d, "sessionID")
@@ -1029,6 +1038,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 	app.cx.stream_seq += 1
 	c.seq = app.cx.stream_seq
 
+	visible = true
 	switch kind {
 	case "session.execution.started":
 		busy_event(app, sid, true)
@@ -1071,7 +1081,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		goal_set(app, sid, jget(d, "goal"))
 	case "session.agent.selected", "session.model.selected":
 		// (from here or elsewhere: the composer says it now, the page read again brings its line into the conversation)
-		if !mine { return }
+		if !mine { return false }
 		if kind == "session.agent.selected" {
 			c.agent = strings.clone(jstr(d, "agent"), a)
 		} else {
@@ -1116,13 +1126,13 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 	case "form.replied", "form.cancelled":
 		waits_gone(app, jstr(d, "id"))
 		form_remove(app, jstr(d, "id"))
+	case:
+		visible = false
 	}
-	if sid != "" && !mine && is_child(c, sid) {
-		child_event(app, kind, sid, d, ev)
-		return
-	}
+	if sid != "" && !mine && is_child(c, sid) { return child_event(app, kind, sid, d, ev) || visible }
 	if !mine { return }
 	chat_changed(c)   // (what follows changes the messages, or their parts)
+	visible = true
 
 	mid := jstr(d, "assistantMessageID")
 	switch kind {
@@ -1227,16 +1237,18 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		c.tokens_out = jnum(d, "tokens", "output")
 		c.cache_read = jnum(d, "tokens", "cache", "read")
 	}
+	return true   // (an event of the session shown)
 }
 
-// A session the shown one launched: one of its children, or the session of one of its sub-agent calls.
+// A session the shown one launched: one of its children (children_load), or the session of one of its sub-agent calls (the index, made
+// again only when a page or a call names another: subs_changed). Two lookups: every event of another session asks it.
 is_child :: proc(c: ^Chat, sid: string) -> bool {
 	if sid == "" { return false }
-	return find_child(c, sid) != nil || sid in sub_index(c).claimed
+	return sid in c.child_ids || sid in sub_index(c).claimed
 }
 
-// An event of a sub-agent of the session shown: what it is doing now, what it has cost.
-child_event :: proc(app: ^App, kind, sid: string, d, ev: json.Value) {
+// An event of a sub-agent of the session shown: what it is doing now, what it has cost. (false: not one it shows)
+child_event :: proc(app: ^App, kind, sid: string, d, ev: json.Value) -> bool {
 	c := &app.chat
 	a := c.alloc
 	key := sid
@@ -1268,10 +1280,11 @@ child_event :: proc(app: ^App, kind, sid: string, d, ev: json.Value) {
 		live.activity = ""
 		children_soon(app)
 	case:
-		return
+		return false
 	}
 	live.last_ms = now
 	c.live[key] = live
+	return true
 }
 
 set_busy :: proc(app: ^App, id: string, busy: bool) {
