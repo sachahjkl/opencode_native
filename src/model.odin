@@ -158,7 +158,7 @@ LAST_SESSION_HOME :: "home"
 last_session_keep :: proc(app: ^App) {
 	if app.prefs_file == "" || !app.opened_first { return }
 	id := app.chat.id != "" ? app.chat.id : LAST_SESSION_HOME
-	if settings_get(LAST_SESSION_KEY) != id { settings_set(LAST_SESSION_KEY, id) }
+	settings_set(app, LAST_SESSION_KEY, id)   // (the same id changes nothing: no write)
 }
 
 // The home page, whichever way one gets there: nothing to load.
@@ -380,7 +380,7 @@ sessions_load :: proc(app: ^App, v: json.Value) {
 	}
 	if app.chat.id == "" && len(app.sessions) > 0 && !app.opened_first {
 		app.opened_first = true
-		last := settings_get(LAST_SESSION_KEY)
+		last := settings_get(app, LAST_SESSION_KEY)
 		switch {
 		case app.start_session != "":   // --session=<id>
 			open_root(app, app.start_session)

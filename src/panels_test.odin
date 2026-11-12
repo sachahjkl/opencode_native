@@ -11,6 +11,7 @@ import "core:strings"
 import "core:sync"
 import "core:testing"
 import "gt:platform"
+import store "gt:store"
 import "gt:ui"
 
 @(thread_local) bench_update_job: ^Update_Job
@@ -1345,9 +1346,10 @@ each_shell_has_its_own_zoom_kept_by_its_id :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	tmp, _ := os.temp_dir(context.temp_allocator)
 	file, _ := filepath.join({tmp, fmt.tprintf("ocn_term_zoom_%d.txt", os.get_pid())}, context.temp_allocator)
+	os.remove(file)
 	defer os.remove(file)
 	app := bench_new()
-	app.term_zooms.file = file
+	store.open(&app.stores.zooms, file, wait_ms = 0, most_ms = 0)
 	open_shells(t, app, "a", "b")
 	a, b := app.cx.terms.list[0], app.cx.terms.list[1]
 	built(app, a, 11)
@@ -1360,8 +1362,11 @@ each_shell_has_its_own_zoom_kept_by_its_id :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(term_events(app, wheel)), 0)
 	testing.expect(t, b.zoom < 0.95, "the one under the wheel")
 	// the program again: the same shells, their zooms
+	store.flush(&app.stores.zooms)
 	app2 := bench_new()
-	term_zooms_load(app2, file)
+	store.open(&app2.stores.zooms, file)
+	term_zooms_load(app2)
+	store.close(&app2.stores.zooms)
 	open_shells(t, app2, "a", "b")
 	testing.expect_value(t, app2.cx.terms.list[0].zoom, a.zoom)
 	testing.expect_value(t, app2.cx.terms.list[1].zoom, b.zoom)
@@ -1369,6 +1374,7 @@ each_shell_has_its_own_zoom_kept_by_its_id :: proc(t: ^testing.T) {
 	term_zoom_set(app, a, 1)
 	term_close(app, b)
 	testing.expect_value(t, len(app.term_zooms.by_id), 0)
+	store.close(&app.stores.zooms)   // (what was set last, on the disk)
 	data, _ := os.read_entire_file(file, context.temp_allocator)
 	testing.expect_value(t, string(data), "")
 }

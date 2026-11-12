@@ -1,14 +1,11 @@
-// The version, the client's own preferences, the command line of the desktop integration, and the Setup dialog: the
-// toolkit's (gt:setup), with opencode native's Config (desktop.odin setup_config), its logo, and the user's answer kept in
-// settings.txt.
+// The version, the command line of the desktop integration, and the Setup dialog: the toolkit's (gt:setup), with opencode
+// native's Config (desktop.odin setup_config), its logo, and the user's answer kept in settings.txt (stores.odin).
 package ocn
 
 import "core:fmt"
 import "core:image/png"
 import "core:os"
-import "core:path/filepath"
 import "core:slice"
-import "core:strings"
 import desktop "gt:desktop"
 import "gt:draw"
 import "gt:render"
@@ -18,36 +15,6 @@ import "gt:ui"
 APP_VERSION :: "0.46.9"
 
 LOGO_PNG :: #load("../assets/logo_256.png")
-
-////////////////////////////////
-// Preferences: %APPDATA%\opencode-native\settings.txt, "key=value" lines
-
-settings_path :: proc() -> string {
-	return pjoin({config_dir(), "settings.txt"})
-}
-
-settings_get :: proc(key: string) -> string {
-	data, err := os.read_entire_file(settings_path(), context.temp_allocator)
-	if err != nil { return "" }
-	text := string(data)
-	for line in strings.split_lines_iterator(&text) {
-		if i := strings.index_byte(line, '='); i > 0 && strings.trim_space(line[:i]) == key { return strings.trim_space(line[i + 1:]) }
-	}
-	return ""
-}
-
-settings_set :: proc(key, value: string) {
-	data, _ := os.read_entire_file(settings_path(), context.temp_allocator)
-	b := strings.builder_make(context.temp_allocator)
-	text := string(data)
-	for line in strings.split_lines_iterator(&text) {
-		if i := strings.index_byte(line, '='); i > 0 && strings.trim_space(line[:i]) == key { continue }
-		if strings.trim_space(line) != "" { fmt.sbprintf(&b, "%s\n", line) }
-	}
-	fmt.sbprintf(&b, "%s=%s\n", key, value)
-	_ = os.make_directory_all(filepath.dir(settings_path()))
-	if os.write_entire_file(settings_path(), transmute([]u8)strings.to_string(b)) != nil { ui.toast(.Bad, "The settings could not be saved") }
-}
 
 ////////////////////////////////
 // Command line: --install [--desktop], --uninstall, --status (no window; exit code 0 = done / installed)
@@ -147,7 +114,7 @@ setup_open :: proc(app: ^App) {
 setup_offer_at_start :: proc(app: ^App) {
 	if os.get_env("OPENCODE_NATIVE_NO_SETUP", context.temp_allocator) != "" { return }
 	cfg := setup_config()
-	if setup.wanted(setup.facts(cfg), APP_VERSION, settings_get("setup")) { setup.open(&app.setup, cfg) }
+	if setup.wanted(setup.facts(cfg), APP_VERSION, settings_get(app, "setup")) { setup.open(&app.setup, cfg) }
 }
 
 setup_dialog :: proc(app: ^App, em: f32) {
@@ -155,7 +122,7 @@ setup_dialog :: proc(app: ^App, em: f32) {
 	logo: Maybe(setup.Logo)
 	if app.logo.tex != 0 { logo = setup.Logo{app.logo.tex, app.logo.size} }
 	ev := setup.dialog(&app.setup, setup_config(), em, logo)
-	if choice, changed := setup_choice(ev, app.setup.facts, settings_get("setup")); changed { settings_set("setup", choice) }
+	if choice, changed := setup_choice(ev, app.setup.facts, settings_get(app, "setup")); changed { settings_set(app, "setup", choice) }
 	#partial switch ev {
 	case .Uninstalled: desktop_copy_remove()
 	case .Launched:    app.quit = true   // (the installed copy runs)

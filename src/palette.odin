@@ -6,12 +6,12 @@ package ocn
 
 import "core:fmt"
 import "core:math"
-import "core:os"
 import "core:slice"
 import "core:strconv"
 import "core:strings"
 import "gt:config"
 import "gt:draw"
+import store "gt:store"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -43,34 +43,21 @@ Palette :: struct {
 	reveal:  bool,
 	mouse:   Vec2,
 	view_h:  f32,                // the list's height at the last frame: a page of Page Up / Down
-	usage:   map[string]Usage,   // by "kind:id" (keys owned)
-	file:    string,
+	usage:   map[string]Usage,   // by "kind:id" (keys owned); palette_usage.txt keeps them (app.stores.palette)
 }
 
 Slash :: struct { name, description: string }   // a command of the server (owned)
 
-palette_init :: proc(app: ^App, file: string) {
+// What the palette ranks first, from palette_usage.txt as read at the start (stores.odin): kept here as numbers, since the
+// list's order reads them at each search.
+palette_init :: proc(app: ^App) {
 	p := &app.palette
-	p.file = strings.clone(file)
-	if file == "" { return }
-	data, err := os.read_entire_file(file, context.temp_allocator)
-	if err != nil { return }
-	rest := string(data)
-	for line in strings.split_lines_iterator(&rest) {
-		parts := strings.split(line, "\t", context.temp_allocator)
-		if len(parts) != 3 { continue }
-		w, w_ok := strconv.parse_f64(parts[1])
-		t, t_ok := strconv.parse_f64(parts[2])
-		if w_ok && t_ok { p.usage[strings.clone(parts[0])] = {w, t} }
+	for e in store.list(&app.stores.palette) {
+		weight, _, last := strings.partition(e.value, "\t")
+		w, w_ok := strconv.parse_f64(weight)
+		t, t_ok := strconv.parse_f64(last)
+		if w_ok && t_ok { p.usage[strings.clone(e.key)] = {w, t} }
 	}
-}
-
-@(private = "file")
-usage_save :: proc(p: ^Palette) {
-	if p.file == "" { return }
-	b := strings.builder_make(context.temp_allocator)
-	for k, u in p.usage { fmt.sbprintf(&b, "%s\t%f\t%f\n", k, u.weight, u.last_ms) }
-	_ = os.write_entire_file(p.file, transmute([]u8)strings.to_string(b))
 }
 
 // What choosing this before is worth now.
@@ -81,13 +68,14 @@ usage_now :: proc(u: Usage, now: f64) -> f64 { return u.weight * math.pow(0.5, (
 usage_key :: proc(it: ^Pal_Item) -> string { return fmt.tprintf("%d:%s", int(it.kind), it.id) }
 
 @(private = "file")
-usage_note :: proc(p: ^Palette, it: ^Pal_Item) {
+usage_note :: proc(app: ^App, it: ^Pal_Item) {
+	p := &app.palette
 	k := usage_key(it)
 	now := now_epoch_ms()
 	u, known := p.usage[k]
 	if !known { k = strings.clone(k) }
 	p.usage[k] = {usage_now(u, now) + 1, now}
-	usage_save(p)
+	store.set(&app.stores.palette, k, fmt.tprintf("%f\t%f", p.usage[k].weight, now))
 }
 
 palette_toggle :: proc(app: ^App) {
@@ -166,7 +154,7 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 // Done when it is chosen. (open_root and command_run wait for the end of the frame; the others only note a value.)
 @(private = "file")
 palette_choose :: proc(app: ^App, it: ^Pal_Item) {
-	usage_note(&app.palette, it)
+	usage_note(app, it)
 	app.palette.open = false
 	switch it.kind {
 	case .Command: command_run(app, it.cmd)

@@ -8,7 +8,6 @@ import "core:fmt"
 import "core:mem/virtual"
 import "core:math"
 import "core:os"
-import "core:path/filepath"
 import "core:slice"
 import "core:strconv"
 import "core:strings"
@@ -53,6 +52,7 @@ App :: struct {
 	activity:       Activity,          // what runs behind the conversation (activity.odin)
 	palette:        Palette,           // Ctrl+K (palette.odin)
 	term_zooms:     Term_Zooms,        // each shell's zoom, by its id (terminal.odin)
+	stores:         Stores,            // what it remembers beside the preferences, written on workers (stores.odin)
 	throbber:       Throbber,          // what says a run goes on (throbber.odin)
 	preview:        Preview,           // the page beside the conversation (preview.odin)
 	browser:        Browser,           // the agents' tools on that page (browser_mcp.odin)
@@ -678,8 +678,8 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	ui.set_toast_position(&app.state, .Top_Right)
 	ui.set_autoscroll_enabled(&app.state, true)   // a click of the wheel scrolls by the pointer, as in the browsers
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
-	palette_init(app, prefs_file != "" ? pjoin({filepath.dir(prefs_file), "palette_usage.txt"}) : "")
-	term_zooms_load(app, prefs_file != "" ? pjoin({filepath.dir(prefs_file), "terminal_zoom.txt"}) : "")
+	palette_init(app)      // (from app.stores, read at the start: a test's are empty)
+	term_zooms_load(app)
 	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
 }
 
@@ -720,6 +720,7 @@ main :: proc() {
 	app.stick_bottom = true
 	chat_home(app)
 
+	stores_open(app)   // (before the window and its loop: the servers, the last session and the setup's answer decide the first frame)
 	servers_init(app)
 
 	// a composition swap chain whose buffers keep the monitor's size while the window is resized: the window shows their
@@ -763,6 +764,7 @@ main :: proc() {
 			time.sleep(CHECK_FRAME_SLEEP_MS * time.Millisecond)
 		}
 		fmt.printfln("opencode-native: %d frames, %d boxes, online=%v, %d sessions, %d messages, first frame %.1f ms", frames, app.state.boxes_built, online(app), len(app.sessions), len(app.chat.messages), time.duration_milliseconds(first))
+		stores_close(app)
 		os.exit(0)
 	}
 
@@ -796,6 +798,7 @@ main :: proc() {
 	}
 	threads_stop(app)
 	if app.cx.due[.Drafts].due_ms != 0 { drafts_save(app) }   // (what was typed in the last second)
+	stores_close(app)   // (waits for the disk: the window is gone, nothing waits on a frame)
 	ui.post_close(&app.state)
 	setup_finish(app)
 	os.exit(0)

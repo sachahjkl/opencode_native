@@ -7,10 +7,10 @@ import "core:fmt"
 import "core:math"
 import "core:mem/virtual"
 import "core:os"
-import "core:path/filepath"
 import "core:strings"
 import "core:sync"
 import "core:thread"
+import store "gt:store"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -53,21 +53,18 @@ servers_init :: proc(app: ^App) {
 	for a in os.args[1:] { if strings.has_prefix(a, "--url=") { argv = true } }
 	local := argv ? local_server_config() : cfg
 	append(&app.servers, Server{name = strings.clone("This computer"), url = server_url(local), password = strings.clone(local.password), local = true})
-	if data, err := os.read_entire_file(servers_path(), context.temp_allocator); err == nil {
-		text := string(data)
-		for line in strings.split_lines_iterator(&text) {
-			f := strings.split(line, "\t", context.temp_allocator)
-			if len(f) < 2 || strings.trim_space(f[0]) == "" { continue }
-			password, stored, clear_text := password_from_field(f[0], len(f) > 2 ? f[2] : "")
-			append(&app.servers, Server{name = strings.clone(f[0]), url = strings.clone(f[1]), password = strings.clone(password), stored = strings.clone(stored)})
-			if clear_text { app.servers_in_clear = true }
-		}
+	for e in store.list(&app.stores.servers) {   // (read at the start, stores_open: the name, then "url<TAB>field")
+		if strings.trim_space(e.key) == "" { continue }
+		url, _, field := strings.partition(e.value, "\t")
+		password, stored, clear_text := password_from_field(e.key, field)
+		append(&app.servers, Server{name = strings.clone(e.key), url = strings.clone(url), password = strings.clone(password), stored = strings.clone(stored)})
+		if clear_text { app.servers_in_clear = true }
 	}
 	app.server = 0
 	if argv {
 		append(&app.servers, Server{name = strings.clone("Command line"), url = server_url(cfg), password = strings.clone(cfg.password), argv = true})
 		app.server = len(app.servers) - 1
-	} else if last := settings_get("server"); last != "" {
+	} else if last := settings_get(app, "server"); last != "" {
 		for s, i in app.servers { if s.name == last { app.server = i } }
 	}
 	for a in os.args[1:] {   // --server=<name>: that one at start
@@ -131,9 +128,11 @@ reopen_clear :: proc(app: ^App) {
 	app.cx.reopen = {}
 }
 
-// Written beside it, then moved over it, readable by the user only: a failure leaves the file as it was, no password lost.
+// The whole list at once to its store, whose worker writes it beside the file, then moves it over, readable by the user only
+// (stores_open): a failure leaves the file as it was, no password lost. `saved`: every password was protected and the list
+// handed over; the disk follows in a moment.
 servers_save :: proc(app: ^App) -> (saved: bool) {
-	b := strings.builder_make(context.temp_allocator)
+	entries := make([dynamic]store.Entry, context.temp_allocator)
 	for s in app.servers {
 		if s.local || s.argv { continue }
 		field := s.stored
@@ -142,19 +141,9 @@ servers_save :: proc(app: ^App) -> (saved: bool) {
 			if !ok { ui.toast(.Bad, "The password of %s could not be protected: the list of servers was not saved", label_safe(s.name)); return false }
 			field = f
 		}
-		fmt.sbprintf(&b, "%s\t%s\t%s\n", s.name, s.url, field)
+		append(&entries, store.Entry{s.name, fmt.tprintf("%s\t%s", s.url, field)})
 	}
-	path := servers_path()
-	tmp := strings.concatenate({path, ".tmp"}, context.temp_allocator)
-	_ = os.make_directory_all(filepath.dir(path))
-	_ = os.remove(tmp)
-	err := os.write_entire_file(tmp, transmute([]u8)strings.to_string(b), perm = {.Read_User, .Write_User})
-	if err == nil { err = os.rename(tmp, path) }
-	if err != nil {
-		_ = os.remove(tmp)
-		ui.toast(.Bad, "The list of servers could not be saved")
-		return false
-	}
+	store.replace(&app.stores.servers, entries[:])
 	app.servers_in_clear = false
 	return true
 }
@@ -203,7 +192,7 @@ server_connect :: proc(app: ^App, i: int) {
 	app.conn = c
 	append(&app.cx.conns, c)
 	app.server = i
-	if !s.argv { settings_set("server", s.name) }
+	if !s.argv { settings_set(app, "server", s.name) }
 	thread.create_and_start_with_data(c, events_thread, self_cleanup = true)
 }
 
