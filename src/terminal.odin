@@ -90,7 +90,26 @@ Term :: struct {
 	zoom_ms: f64,              // when it last changed: the grid keeps its columns and rows until the zoom rests (term_fit)
 	bar_at:  f32,              // where the grid's view put its box's scroll (term_scroll_sync): another place is its bar, moved
 	metrics: Term_Metrics,     // as last laid out
+	// What term_draw draws of each row of the view, in columns: built again only for a row libghostty-vt says changed (its
+	// dirty flags), so that a frame where the shell wrote nothing reads none of its cells.
+	drawn_rows: [dynamic]Term_Row,
+	rows_stale: bool,          // the colours the rows were built with moved (term_recolour): every row is built again
+	rows_built: int,           // rows built since it was made: what a test counts
 }
+
+// A row of the grid as it is drawn, in columns and not in pixels: a new size of face or zoom moves it without building it again.
+Term_Row :: struct {
+	text:  [dynamic]u8,        // the text of all its runs, one after the other (owned: built again in place)
+	runs:  [dynamic]Term_Run,
+	fills: [dynamic]Term_Fill,
+	marks: [dynamic]Term_Mark,
+}
+
+// Cells of the same look go together, so that a row is a few runs of text and not one draw per cell.
+Term_Run :: struct { col: u16, from, to: u32, color: Color, bold: bool }   // (its text: the row's text[from:to])
+// (columns from..<to; `picked`: the selection's colour, the theme's when it is drawn)
+Term_Fill :: struct { from, to: u16, color: Color, picked: bool }
+Term_Mark :: struct { from, to: u16, color: Color, strike: bool }   // an underline, or (strike) a line through
 
 // What the left button (or another, for a program) holds on a grid. Its release comes wherever the pointer is: a program that was told
 // of the press is told of that too.
@@ -139,6 +158,7 @@ term_new :: proc(id, title, dir: string, cols: u16 = TERM_COLS, rows: u16 = TERM
 	t := new(Term)
 	t.id, t.title, t.dir = strings.clone(id), strings.clone(title), strings.clone(dir)
 	t.cols, t.rows, t.zoom = cols, rows, 1
+	t.drawn_rows = make([dynamic]Term_Row)   // (its rows take its allocator: they are built in a frame, never in its temp one)
 	if ghostty_terminal_new(nil, &t.vt, cols, rows) != VT_OK { return t }
 	ghostty_render_state_new(nil, &t.state)
 	ghostty_render_state_row_iterator_new(nil, &t.rows_it)
@@ -175,6 +195,7 @@ term_recolour :: proc(t: ^Term) {
 	ghostty_terminal_set(t.vt, VT_OPT_COLOR_FOREGROUND, &fg)
 	palette := term_palette(bg, fg)
 	ghostty_terminal_set(t.vt, VT_OPT_COLOR_PALETTE, &palette)
+	t.rows_stale = true   // (the rows hold the colours they were built with)
 }
 
 // The 256 colours a program asks for by number, in the theme shown: the 16 named ones are the theme's hues (as the code's and
@@ -219,6 +240,8 @@ term_free :: proc(t: ^Term) {
 		ghostty_render_state_free(t.state)
 		ghostty_terminal_free(t.vt)
 	}
+	for &r in t.drawn_rows { term_row_delete(&r) }
+	delete(t.drawn_rows)
 	delete(t.id); delete(t.title); delete(t.dir)
 	free(t)
 }
@@ -1304,11 +1327,121 @@ terms_size_due :: proc(app: ^App) {
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
-@(private = "file")
-Term_Run :: struct { x: f32, text: string, color: Color, bold: bool }
+// The rows libghostty-vt says changed since they were last built, built again from its cells: none in a frame where the shell
+// wrote nothing, the view did not move and nothing was selected (each of those marks its rows, or all of them). Its dirty flags
+// are then taken as read (ghostty_render_state_clean): the next update says only what changed after.
+term_rows_build :: proc(t: ^Term, colors: ^Vt_Colors) {
+	dirty: i32 = VT_DIRTY_FULL
+	ghostty_render_state_get(t.state, VT_STATE_DIRTY, &dirty)
+	every := t.rows_stale || dirty == VT_DIRTY_FULL
+	if !every && dirty == VT_DIRTY_FALSE { return }
+	if ghostty_render_state_get(t.state, VT_STATE_ROW_ITERATOR, &t.rows_it) != VT_OK { return }
+	y := 0
+	for ghostty_render_state_row_iterator_next(t.rows_it) {
+		defer y += 1
+		fresh := y == len(t.drawn_rows)   // (never built: whatever its flag says)
+		if fresh {
+			a := t.drawn_rows.allocator
+			append(&t.drawn_rows, Term_Row{make([dynamic]u8, a), make([dynamic]Term_Run, a), make([dynamic]Term_Fill, a), make([dynamic]Term_Mark, a)})
+		}
+		if !every && !fresh {
+			changed := true
+			ghostty_render_state_row_get(t.rows_it, VT_ROW_DIRTY, &changed)
+			if !changed { continue }
+		}
+		term_row_build(t, &t.drawn_rows[y], colors)
+	}
+	// (fewer rows: the view is shorter, and only a full update says so)
+	for len(t.drawn_rows) > y { r := pop(&t.drawn_rows); term_row_delete(&r) }
+	ghostty_render_state_clean(t.state)
+	t.rows_stale = false
+}
 
-// Cells of the same look go together, so that a row is a few runs of text and not one draw per cell; what is not ASCII stands alone, at
-// the column it belongs to, whatever width the fallback face gives it.
+@(private = "file")
+term_row_delete :: proc(r: ^Term_Row) {
+	delete(r.text); delete(r.runs); delete(r.fills); delete(r.marks)
+}
+
+// One row, from its cells: what is not ASCII stands alone, at the column it belongs to, whatever width the fallback face gives it.
+@(private = "file")
+term_row_build :: proc(t: ^Term, r: ^Term_Row, colors: ^Vt_Colors) {
+	t.rows_built += 1
+	clear(&r.text); clear(&r.runs); clear(&r.fills); clear(&r.marks)
+	if ghostty_render_state_row_get(t.rows_it, VT_ROW_CELLS, &t.cells) != VT_OK { return }
+	picked := Vt_Row_Selection{size = size_of(Vt_Row_Selection)}
+	has_picked := ghostty_render_state_row_get(t.rows_it, VT_ROW_SELECTION, &picked) == VT_OK
+	run_col: u16
+	run_from: int
+	run_color: Color
+	run_bold := false
+	flush :: proc(r: ^Term_Row, from: int, col: u16, color: Color, bold: bool) {
+		trimmed := strings.trim_right_space(string(r.text[from:]))
+		resize(&r.text, from + len(trimmed))   // (the spaces after a run's last letter draw nothing)
+		if trimmed != "" { append(&r.runs, Term_Run{col, u32(from), u32(len(r.text)), color, bold}) }
+	}
+	// (cells side by side of one colour, or one line, are one rectangle)
+	fill :: proc(r: ^Term_Row, x: u16, color: Color, picked: bool) {
+		if n := len(r.fills); n > 0 {
+			last := &r.fills[n - 1]
+			if last.to == x && last.picked == picked && (picked || last.color == color) { last.to = x + 1; return }
+		}
+		append(&r.fills, Term_Fill{x, x + 1, color, picked})
+	}
+	mark :: proc(r: ^Term_Row, x: u16, color: Color, strike: bool) {
+		// (a cell underlined and struck adds two: the one before the last may be of its kind)
+		for i := len(r.marks) - 1; i >= max(len(r.marks) - 2, 0); i -= 1 {
+			m := &r.marks[i]
+			if m.strike == strike && m.to == x && m.color == color { m.to = x + 1; return }
+		}
+		append(&r.marks, Term_Mark{x, x + 1, color, strike})
+	}
+	x: u16 = 0
+	for ghostty_render_state_row_cells_next(t.cells) {
+		defer x += 1
+		style: Vt_Style
+		ghostty_render_state_row_cells_get(t.cells, VT_CELL_STYLE, &style)
+		bold := style.flags & VT_STYLE_BOLD != 0
+		fg := colors.foreground
+		ghostty_render_state_row_cells_get(t.cells, VT_CELL_FG, &fg)
+		bg := colors.background
+		has_bg := ghostty_render_state_row_cells_get(t.cells, VT_CELL_BG, &bg) == VT_OK
+		if style.flags & VT_STYLE_INVERSE != 0 { fg, bg, has_bg = bg, fg, true }
+		if has_picked && x >= picked.start_x && x <= picked.end_x {
+			fill(r, x, {}, true)
+		} else if has_bg {
+			fill(r, x, color_of(bg), false)
+		}
+		color := color_of(fg)
+		if style.flags & VT_STYLE_FAINT != 0 { color.a *= TERM_FAINT }
+		glyphs: [8]u32
+		read := Vt_Codepoints{ptr = &glyphs[0], cap = len(glyphs)}
+		ghostty_render_state_row_cells_get(t.cells, VT_CELL_GRAPHEMES_BUF, &read)   // (more than it holds: the first of them)
+		n := min(read.len, len(glyphs))
+		if style.flags & VT_STYLE_INVISIBLE != 0 { n = 0 }
+		if style.flags & VT_STYLE_UNDERLINE != 0 { mark(r, x, color, false) }
+		if style.flags & VT_STYLE_STRIKETHROUGH != 0 { mark(r, x, color, true) }
+		ascii := n == 1 && glyphs[0] < 0x80
+		started := len(r.text) > run_from
+		if n == 0 {
+			if started { append(&r.text, ' ') }
+			continue
+		}
+		if !ascii || color != run_color || bold != run_bold || !started {
+			flush(r, run_from, run_col, run_color, run_bold)
+			run_from, run_col, run_color, run_bold = len(r.text), x, color, bold
+		}
+		for g in glyphs[:n] {
+			bytes, w := utf8.encode_rune(rune(g))
+			append(&r.text, ..bytes[:w])
+		}
+		if !ascii {
+			flush(r, run_from, run_col, run_color, run_bold)
+			run_from = len(r.text)
+		}
+	}
+	flush(r, run_from, run_col, run_color, run_bold)
+}
+
 @(private = "file")
 term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	app := the_app
@@ -1323,71 +1456,24 @@ term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	}
 	colors := Vt_Colors{size = size_of(Vt_Colors)}
 	if ghostty_render_state_get(t.state, VT_STATE_COLORS, &colors) != VT_OK { return }
-	if ghostty_render_state_get(t.state, VT_STATE_ROW_ITERATOR, &t.rows_it) != VT_OK { return }
+	term_rows_build(t, &colors)
 	origin := b.rect.min + TERM_PAD
-	runs := make([dynamic]Term_Run, context.temp_allocator)
-	row := strings.builder_make(context.temp_allocator)
-	y := 0
-	for ghostty_render_state_row_iterator_next(t.rows_it) {
-		defer y += 1
-		if ghostty_render_state_row_get(t.rows_it, VT_ROW_CELLS, &t.cells) != VT_OK { continue }
-		picked := Vt_Row_Selection{size = size_of(Vt_Row_Selection)}
-		has_picked := ghostty_render_state_row_get(t.rows_it, VT_ROW_SELECTION, &picked) == VT_OK
-		top := origin.y + f32(y) * t.metrics.cell_h
-		clear(&runs)
-		strings.builder_reset(&row)
-		run_x: f32
-		run_color: Color
-		run_bold := false
-		flush :: proc(runs: ^[dynamic]Term_Run, row: ^strings.Builder, x: f32, color: Color, bold: bool) {
-			trimmed := strings.trim_right_space(strings.to_string(row^))
-			if trimmed != "" { append(runs, Term_Run{x, strings.clone(trimmed, context.temp_allocator), color, bold}) }
-			strings.builder_reset(row)
+	m := &t.metrics
+	at :: proc(origin: f32, col: u16, w: f32) -> f32 { return origin + f32(col) * w }
+	for &r, y in t.drawn_rows {
+		top := origin.y + f32(y) * m.cell_h
+		for f in r.fills {
+			draw.rect(dc, {{at(origin.x, f.from, m.cell_w), top}, {at(origin.x, f.to, m.cell_w), top + m.cell_h}}, f.picked ? hex(HEX_TERM_SELECTION) : f.color)
 		}
-		x := 0
-		for ghostty_render_state_row_cells_next(t.cells) {
-			defer x += 1
-			left := origin.x + f32(x) * t.metrics.cell_w
-			style: Vt_Style
-			ghostty_render_state_row_cells_get(t.cells, VT_CELL_STYLE, &style)
-			bold := style.flags & VT_STYLE_BOLD != 0
-			fg := colors.foreground
-			ghostty_render_state_row_cells_get(t.cells, VT_CELL_FG, &fg)
-			bg := colors.background
-			has_bg := ghostty_render_state_row_cells_get(t.cells, VT_CELL_BG, &bg) == VT_OK
-			if style.flags & VT_STYLE_INVERSE != 0 { fg, bg, has_bg = bg, fg, true }
-			cell := draw.Rect{{left, top}, {left + t.metrics.cell_w, top + t.metrics.cell_h}}
-			if has_picked && x >= int(picked.start_x) && x <= int(picked.end_x) {
-				draw.rect(dc, cell, hex(HEX_TERM_SELECTION))
-			} else if has_bg {
-				draw.rect(dc, cell, color_of(bg))
-			}
-			color := color_of(fg)
-			if style.flags & VT_STYLE_FAINT != 0 { color.a *= TERM_FAINT }
-			glyphs: [8]u32
-			read := Vt_Codepoints{ptr = &glyphs[0], cap = len(glyphs)}
-			ghostty_render_state_row_cells_get(t.cells, VT_CELL_GRAPHEMES_BUF, &read)   // (more than it holds: the first of them)
-			n := min(read.len, len(glyphs))
-			if style.flags & VT_STYLE_INVISIBLE != 0 { n = 0 }
-			if style.flags & VT_STYLE_UNDERLINE != 0 { draw.rect(dc, {{left, top + t.metrics.ascent + 1}, {left + t.metrics.cell_w, top + t.metrics.ascent + 2}}, color) }
-			if style.flags & VT_STYLE_STRIKETHROUGH != 0 { draw.rect(dc, {{left, top + t.metrics.cell_h * 0.55}, {left + t.metrics.cell_w, top + t.metrics.cell_h * 0.55 + 1}}, color) }
-			ascii := n == 1 && glyphs[0] < 0x80
-			if n == 0 {
-				if strings.builder_len(row) > 0 { strings.write_byte(&row, ' ') }
-				continue
-			}
-			if !ascii || color != run_color || bold != run_bold || strings.builder_len(row) == 0 {
-				flush(&runs, &row, run_x, run_color, run_bold)
-				run_x, run_color, run_bold = left, color, bold
-			}
-			for g in glyphs[:n] { strings.write_rune(&row, rune(g)) }
-			if !ascii { flush(&runs, &row, run_x, run_color, run_bold) }
+		for k in r.marks {
+			lo := k.strike ? top + m.cell_h * 0.55 : top + m.ascent + 1
+			draw.rect(dc, {{at(origin.x, k.from, m.cell_w), lo}, {at(origin.x, k.to, m.cell_w), lo + 1}}, k.color)
 		}
-		flush(&runs, &row, run_x, run_color, run_bold)
 		// (each letter a cell wide: at the face's own advance a run fell behind the grid, and the next run, at its cell,
 		// left a gap after every change of colour)
-		for r in runs {
-			draw.text_ex(dc, r.bold ? app.term_font_bold : app.term_font, t.metrics.font_size, {r.x, top + t.metrics.ascent}, r.color, r.text, {letter_spacing = r.bold ? t.metrics.spacing_bold : t.metrics.spacing})
+		for run in r.runs {
+			text := string(r.text[run.from:run.to])
+			draw.text_ex(dc, run.bold ? app.term_font_bold : app.term_font, m.font_size, {at(origin.x, run.col, m.cell_w), top + m.ascent}, run.color, text, {letter_spacing = run.bold ? m.spacing_bold : m.spacing})
 		}
 	}
 	term_draw_cursor(t, s, dc, origin, &colors)

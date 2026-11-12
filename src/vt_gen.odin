@@ -45,11 +45,15 @@ VT_STATE_CURSOR_IN_VIEW :: 14
 VT_STATE_CURSOR_X :: 15
 VT_STATE_CURSOR_Y :: 16
 VT_STATE_COLORS :: 19
+VT_STATE_DIRTY :: 3
+VT_DIRTY_FALSE :: 0
+VT_DIRTY_FULL :: 2
 VT_CURSOR_BAR :: 0
 VT_CURSOR_BLOCK :: 1
 VT_CURSOR_UNDERLINE :: 2
 VT_ROW_CELLS :: 3
 VT_ROW_SELECTION :: 4
+VT_ROW_DIRTY :: 1
 VT_CELL_STYLE :: 2
 VT_CELL_GRAPHEMES_BUF :: 4
 VT_CELL_BG :: 5
@@ -117,6 +121,7 @@ foreign ghostty_vt {
 	ghostty_render_state_new :: proc(allocator: rawptr, state: ^Vt_State) -> i32 ---
 	ghostty_render_state_free :: proc(state: Vt_State) ---
 	ghostty_render_state_update :: proc(state: Vt_State, terminal: Vt_Terminal) -> i32 ---
+	ghostty_render_state_clean :: proc(state: Vt_State) -> i32 ---
 	ghostty_render_state_get :: proc(state: Vt_State, data: i32, out: rawptr) -> i32 ---
 	ghostty_render_state_row_iterator_new :: proc(allocator: rawptr, out_iterator: ^Vt_Rows) -> i32 ---
 	ghostty_render_state_row_iterator_free :: proc(iterator: Vt_Rows) ---
