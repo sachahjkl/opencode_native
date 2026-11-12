@@ -178,6 +178,8 @@ GLYPH_BUTTON_RADIUS :: 5
 CARD_RADIUS         :: 9      // the plates of the conversation
 GROOVE_BOX_PX       :: 6      // the box a groove lies in, thicker than its line
 DIALOG_MARGIN_EM    :: 1.4
+DIALOG_HEAD_EM      :: BUTTON_H_EM   // the row across a dialog's top, and the side of its close cross
+DIALOG_CORNER_EM    :: 0.5    // the close cross's margin from the dialog's top and right edges
 LINE_HEIGHT_RATIO   :: 1.35   // of the font size
 SELECTION_ALPHA     :: 0.28
 FADE_VISIBLE        :: 0.01   // a hover or focus fade above this shows on screen
@@ -226,8 +228,9 @@ corners :: proc() -> f32 {
 // (appearance.rounding).
 
 // A raised, machined surface; pressed, it sinks. `glow`: a halo of that colour under the pointer.
-draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, hot, pressed: f32, glow: Color = CLEAR) {
-	ui.machined_bevel(dc, r, radius_asked * corners(), base, hot, pressed, glow)
+// `drawn`: the radius is as drawn already (a control in a dialog's corner: ui.modal_corner), not one the rounding scales.
+draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, hot, pressed: f32, glow: Color = CLEAR, drawn := false) {
+	ui.machined_bevel(dc, r, drawn ? radius_asked : radius_asked * corners(), base, hot, pressed, glow)
 }
 
 // Words that say what can be done are also what does it: quiet like a hint, lit under the pointer. True when clicked.
@@ -270,40 +273,43 @@ draw_pip :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color) { ui.machined_p
 Btn_Kind :: enum u8 { Normal, Accent, Danger, Ghost, Toggled }
 
 @(private = "file")
-Bevel_Draw :: struct { kind: Btn_Kind, radius: f32, lit: bool }   // lit: drawn as under the pointer (its menu is open)
+Bevel_Draw :: struct { kind: Btn_Kind, radius: f32, lit: bool, drawn: bool }   // lit: drawn as under the pointer (its menu is open); drawn: `radius` is frame pixels, as drawn
 
 @(private = "file")
 bevel_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Bevel_Draw)(user)
 	held := b.active_t * b.hot_t
 	hot := d.lit ? 1 : b.hot_t
-	rad := d.radius * ui.scale()
+	rad := d.drawn ? d.radius : d.radius * ui.scale()
 	switch d.kind {
-	case .Normal:  draw_bevel(dc, b.rect, rad, hex(HEX_BTN_FACE), hot, held)
-	case .Accent:  draw_bevel(dc, b.rect, rad, accent(), hot, held, accent())
-	case .Danger:  draw_bevel(dc, b.rect, rad, hex(HEX_BTN_DANGER), hot, held, hex(HEX_RED))
-	case .Toggled: draw_bevel(dc, b.rect, rad, hex(HEX_BTN_FACE), hot, 1)
+	case .Normal:  draw_bevel(dc, b.rect, rad, hex(HEX_BTN_FACE), hot, held, drawn = d.drawn)
+	case .Accent:  draw_bevel(dc, b.rect, rad, accent(), hot, held, accent(), d.drawn)
+	case .Danger:  draw_bevel(dc, b.rect, rad, hex(HEX_BTN_DANGER), hot, held, hex(HEX_RED), d.drawn)
+	case .Toggled: draw_bevel(dc, b.rect, rad, hex(HEX_BTN_FACE), hot, 1, drawn = d.drawn)
 	case .Ghost:
-		if hot > FADE_VISIBLE || held > FADE_VISIBLE { draw_bevel(dc, b.rect, rad, hex(HEX_BTN_GHOST), hot, held) }
+		if hot > FADE_VISIBLE || held > FADE_VISIBLE { draw_bevel(dc, b.rect, rad, hex(HEX_BTN_GHOST), hot, held, drawn = d.drawn) }
 	}
 }
 
-// The close cross in the top-right corner of a dialog (call it last inside ui.modal, so it sits over the content and takes
-// its clicks; Escape and a click outside close the dialog too). Placed from the panel's width of the last frame.
-dialog_close :: proc(open: ^bool) {
-	panel := ui.parent_box()
-	w := panel.rect.max.x - panel.rect.min.x
-	if w < 1 { return }
+// The row across the top of a dialog (first in it): its title and its controls, centered with the close cross that
+// dialog_close puts in its corner, and clear of it (the toolkit leaves the cross its room: ui.modal_header).
+@(deferred_none = ui.modal_header_end)
+dialog_header :: proc(id: string) -> bool {
 	em := ui.font_size()
-	sz := math.round(em * 1.9)
-	m := math.round(em * 0.5)
-	// clear of the scroll bar a scrolling dialog has along its right edge
-	right := math.round(em * 1.4)
-	ui.next({fixed_x = w - sz - right, fixed_y = m, width = ui.px(sz), height = ui.px(sz), axis = .X, cross = .Center})
+	return ui.modal_header(id, math.round(em * DIALOG_HEAD_EM), math.round(em * DIALOG_CORNER_EM))
+}
+
+// The close cross in the top right corner of a dialog, beside its header (dialog_header, or the Setup dialog's title bar):
+// the toolkit places it, the same margin from the top and the right edge, its corners concentric with the dialog's
+// (ui.modal_corner). Call it last inside the dialog: it is the last stop of Tab. Escape and a click outside close the
+// dialog too.
+dialog_close :: proc(open: ^bool) {
+	em := ui.font_size()
+	ui.next({axis = .X, cross = .Center})
 	ui.a11y({role = .Button, name = "Close"})
-	b := ui.build_box({.Clickable, .Focusable}, "###dialog_close")
+	b := ui.modal_corner({.Clickable, .Focusable}, "###dialog_close")
 	d := ui.frame_new(Bevel_Draw)
-	d^ = {kind = .Ghost, radius = GLYPH_BUTTON_RADIUS}
+	d^ = {kind = .Ghost, radius = b.radius, drawn = true}
 	b.custom, b.custom_user = bevel_box_draw, d
 	sig := ui.signal(b)
 	if ui.parent(b) {

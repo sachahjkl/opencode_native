@@ -730,26 +730,27 @@ settings_dialog :: proc(app: ^App, em: f32) {
 				}
 			}
 			groove("###settings_div")
-			// the page
-			ui.next({width = ui.fill(), height = ui.fill()})
-			if ui.scroll_y("###settings_page") {
-				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-				if ui.row(id = "###pg") {
+			// the page: its title in the header, beside the close cross (it stays as the page scrolls under it)
+			ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
+			if ui.column(id = "###settings_side") {
+				if dialog_header("###settings_head") {
 					ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-					if ui.column() {
-						ui.spacer(ui.px(em * 1.1))
-						if settings_searching(app) {
-							settings_results(app, em)
-						} else {
-							info := SETTINGS_PAGES[app.settings.page]
-							text("pt", info.title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
+					title := settings_searching(app) ? "Search" : SETTINGS_PAGES[app.settings.page].title
+					text("pt", title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
+				}
+				ui.next({width = ui.fill(), height = ui.fill()})
+				if ui.scroll_y("###settings_page") {
+					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+					if ui.row(id = "###pg") {
+						ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+						if ui.column() {
 							ui.spacer(ui.px(em * 0.6))
-							settings_page_draw(app, app.settings.page, em)
+							if settings_searching(app) { settings_results(app, em) } else { settings_page_draw(app, app.settings.page, em) }
+							ui.spacer(ui.px(em * 1.5))
 						}
-						ui.spacer(ui.px(em * 1.5))
+						ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 					}
-					ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 				}
 			}
 		}
@@ -779,7 +780,6 @@ settings_search_field :: proc(app: ^App, em: f32) {
 // What the search finds in every client page, under each page's title (config.Search), the controls live.
 @(private = "file")
 settings_results :: proc(app: ^App, em: f32) {
-	text("pt", "Search", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
 	for page in SETTINGS_CLIENT_PAGES {
 		config.search_page(&app.settings.search, SETTINGS_PAGES[page].title)
 		settings_page_draw(app, page, em)

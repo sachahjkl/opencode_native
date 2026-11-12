@@ -950,6 +950,25 @@ the_settings_search_shows_what_matches :: proc(t: ^testing.T) {
 	})
 }
 
+// The full diff's close cross: in the dialog's corner, the same margin from its top and its right edge, centered with the
+// header's controls and clear of them (it once touched the "Stacked | Split" choice beside it).
+@(test)
+the_full_diff_s_close_cross_is_clear_of_its_header :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		diff_full_open(app, "a.txt", "--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+b\n")
+		session.frames(s, 3)
+		x, mode := session.find(s, "dialog_close"), session.find(s, "df_mode")
+		if !testing.expect(t, x != nil && mode != nil, "the cross and the layout's choice") { return }
+		panel := x.parent.rect
+		top, right := x.rect.min.y - panel.min.y, panel.max.x - x.rect.max.x
+		testing.expectf(t, top > 0 && top == right, "the same margin from the top (%v) and from the right (%v)", top, right)
+		testing.expectf(t, mode.rect.max.x + right <= x.rect.min.x, "the choice ends at %v, the cross begins at %v", mode.rect.max.x, x.rect.min.x)
+		testing.expectf(t, abs(session.center(mode).y - session.center(x).y) <= 1, "centered together: %v and %v", session.center(mode).y, session.center(x).y)
+	})
+}
+
 // The viewer, in the real interface: exactly around its picture, a press beside the picture closes it, a press on it does not, its corner
 // sets the size it keeps, and its menu copies the image.
 @(test)

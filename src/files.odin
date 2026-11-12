@@ -474,12 +474,9 @@ files_dialog :: proc(app: ^App, em: f32) {
 	if !app.cx.open[.Files] { return }
 	if ui.modal_sized("files", DIALOG_PREFERRED_EM[.Files] * em, &app.cx.dialogs[.Files], &app.cx.open[.Files], DIALOG_MIN_EM[.Files] * em) {
 		dialog_backdrop()
-		ui.spacer(ui.px(em * 0.9))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-		if ui.row(.Center, id = "###fl_head") {
+		if dialog_header("###fl_head") {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			text("t", f.at != "" && !f.searching ? f.at : base_name(f.dir), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
-			ui.spacer(ui.px(em * 3))
 		}
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})

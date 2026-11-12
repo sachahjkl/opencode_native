@@ -425,14 +425,17 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 	_, staging := c.state.(Changes_Staging)
 	if ui.modal_sized("changes", DIALOG_PREFERRED_EM[.Changes] * em, &app.cx.dialogs[.Changes], open, DIALOG_MIN_EM[.Changes] * em) {
 		dialog_backdrop()
-		ui.spacer(ui.px(em * 0.9))
+		if dialog_header("###ch_head") {
+			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+			title := !viewing ? "Go back to this prompt" : v.from != "" ? "What this prompt changed" : "What this session changed"
+			text("t", title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
+		}
+		// (under the header, as wide as the dialog: the corner is the close cross's only beside the header)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row(id = "###ch_head") {
+		if ui.row(id = "###ch_sub") {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
-				title := !viewing ? "Go back to this prompt" : v.from != "" ? "What this prompt changed" : "What this session changed"
-				text("t", title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
 				if !viewing || read_shown(app, "###ch_read", &c.read, em, changes_read) { info_line(app, "###ch_say", changes_say(c), em) }
 			}
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
