@@ -1888,12 +1888,15 @@ the_palette_at_rest_builds_only_its_rows_in_view :: proc(t: ^testing.T) {
 }
 
 // The palette's search is on a field's darker background, the strip of the toolkit's palette and menus: it was the dialog's own
-// colour, a line under it, unlike every other search.
+// colour, a line under it, unlike every other search. (Dark, as the request was: in a light theme a field is the lighter one,
+// and the system's mode, which "system" follows, is the machine's.)
 @(test)
 the_palettes_search_is_on_a_darker_strip :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pref_set(app, "appearance.mode", "dark")
+		defer pref_set(app, "appearance.mode", "system")
 		command_run(app, command_find("app.palette"))
 		session.frames(s, 3)
 		top, list := session.find(s, "pal_top"), session.find(s, "pal_list")
