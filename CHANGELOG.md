@@ -4,6 +4,12 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.47.2] - 2026-11-12
+
+### Fixed
+- **Text selected in a dialog is copied**: Ctrl+C (or Ctrl+Insert) copies the text selected in a dialog, a diff's title or a path for one; it did nothing there.
+- **Pasting files or an image no longer waits for the clipboard either**: a paste in the composer asks the clipboard for its files, its image and its text at once and takes them when they come; an image is decoded on a thread of its own. A slow program holding the clipboard, or a large picture, no longer freezes the window.
+
 ## [0.47.1] - 2026-11-12
 
 ### Changed
@@ -1419,6 +1425,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.47.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.2
 [0.47.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.1
 [0.47.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.0
 [0.46.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.9
