@@ -1811,6 +1811,27 @@ a_recent_folder_tells_and_copies_its_path :: proc(t: ^testing.T) {
 	})
 }
 
+// A long session opened shows its bottom in the first frame after its page came: it showed an empty view for a frame (the lazy
+// column placed its messages from where the view was before it jumped), then a place above the bottom (what that build measured
+// moved the bottom).
+@(test)
+a_session_opens_at_its_bottom_in_its_first_frame :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		if app.conn == nil { app.conn = bench_conn(app) }
+		session.wait_idle(s)
+		open_chat(app, "ses_3")
+		session.frames(s, 2)
+		bench_answer(app, bench_take(t, .Messages), 200, bench_page())
+		session.frames(s, 1)
+		testing.expect(t, session.find(s, fmt.tprintf("msg_msg_%d_a", BENCH_TURNS - 1)) != nil, "its last answer built")
+		sb := session.get(s, "chat")
+		testing.expectf(t, sb.view_off.y >= ui.view_limit(sb) - 1, "at its bottom: %v of %v", sb.view_off.y, ui.view_limit(sb))
+		testing.expectf(t, ui.view_limit(sb) > f32(BENCH_TURNS) * sb.size.y * 0.5, "the bottom of its whole length: %v", ui.view_limit(sb))
+	})
+}
+
 // The palette over hundreds of sessions builds the rows in view only, and at rest makes nothing again: it built two hundred
 // rows and matched and ranked every item at each frame, the pointer moving over it enough. A session that comes makes the list again.
 @(test)

@@ -117,15 +117,37 @@ output_view_open_part :: proc(app: ^App, p: ^Part) {
 		if x.tool == p.tool_id && !x.gone { output_view_show(app, x); return }
 	}
 	x := output_view_new(app, "", p.tool_id, command, chat_dir(app))
+	defer output_view_show(app, x)
+	// (at work, and silent so far or the server's command not named yet: it waits for either, output_view_part_changed)
+	if p.status == .Running || p.status == .Pending { x.started = p.started_ms; return }
 	output_view_feed(x, p.output)
 	x.status, x.over = .Exited, true
 	x.has_exit, x.exit = p.status == .Error, 1
 	x.started, x.ended = p.started_ms, p.ended_ms
-	output_view_show(app, x)
 }
 
-// Whether there is anything to look at, for a button that says so.
-output_view_can :: proc(p: ^Part) -> bool { return p.shell_id != "" || p.output != "" }
+// Whether there is anything to look at, for a button that says so: a command at work too, silent as it may be (its output
+// sent to a file): the view waits for it.
+output_view_can :: proc(p: ^Part) -> bool {
+	return p.shell_id != "" || p.output != "" || (tool_kind(p.tool_name) == .Shell && (p.status == .Running || p.status == .Pending))
+}
+
+// A call changed (the stream named its command, or it ended): a view opened on it while it was at work follows the server's
+// command from then on, or shows what the call handed back.
+output_view_part_changed :: proc(app: ^App, p: ^Part) {
+	for v in app.cx.outputs.list {
+		if v.gone || v.over || v.shell != "" || v.tool == "" || v.tool != p.tool_id { continue }
+		if p.shell_id != "" {
+			v.shell = strings.clone(p.shell_id)
+			output_view_ask_state(app, v)
+		} else if p.status == .Done || p.status == .Error {
+			output_view_feed(v, p.output)
+			v.status, v.over = .Exited, true
+			v.has_exit, v.exit = p.status == .Error, 1
+			v.ended = p.ended_ms
+		}
+	}
+}
 
 // The command at the head of the grid, as it was typed after a prompt: whole, in the scrollback with what it printed, not cut in
 // the bar. (Not in what is copied of the output: it is the terminal's, not the command's.)

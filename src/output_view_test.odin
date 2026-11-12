@@ -184,6 +184,36 @@ a_call_with_only_its_text_shows_that :: proc(t: ^testing.T) {
 	testing.expect_value(t, bench_count(.Output_Read) + bench_count(.Output_State), 0)
 }
 
+// A command at work that prints nothing (its output sent to a file) can be inspected too: its view waits, at work, then follows
+// the server's command once the stream names it; one that ends unnamed shows what it handed back. It had no button: nothing to
+// look at yet, and its view would have been one of a command that ended.
+@(test)
+a_silent_command_at_work_can_be_inspected :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	p := test_tool("shell", `{"command":"make > build.log"}`, "", .Running)
+	p.tool_id = "c1"
+	testing.expect(t, output_view_can(&p), "at work: something to look at")
+	output_view_open_part(app, &p)
+	v := app.cx.outputs.shown
+	if !testing.expect(t, v != nil, "its view") { return }
+	testing.expect(t, !v.over && v.status == .Running, "at work, waiting")
+	bench_meta(&p, `{"shellID":"sh_7"}`)
+	output_view_part_changed(app, &p)
+	testing.expect_value(t, v.shell, "sh_7")
+	testing.expect_value(t, bench_count(.Output_State), 1)
+
+	q := test_tool("shell", `{"command":"sleep 5 > /dev/null"}`, "", .Running)
+	q.tool_id = "c2"
+	output_view_open_part(app, &q)
+	w := app.cx.outputs.shown
+	q.status = .Done
+	tool_set_output(&q, "done\n", context.allocator)
+	output_view_part_changed(app, &q)
+	testing.expect(t, w.over && w.status == .Exited, "ended: what it handed back")
+	testing.expect_value(t, string(w.raw[:]), "done\n")
+}
+
 @(test)
 leaving_the_server_closes_the_views :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()

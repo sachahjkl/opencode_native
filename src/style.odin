@@ -296,7 +296,7 @@ bevel_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 @(deferred_none = ui.modal_header_end)
 dialog_header :: proc(id: string) -> bool {
 	em := ui.font_size()
-	return ui.modal_header(id, math.round(em * DIALOG_HEAD_EM), math.round(em * DIALOG_CORNER_EM))
+	return ui.modal_header_begin(id, math.round(em * DIALOG_HEAD_EM), math.round(em * DIALOG_CORNER_EM))
 }
 
 // The close cross in the top right corner of a dialog, beside its header (dialog_header, or the Setup dialog's title bar):

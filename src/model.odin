@@ -1278,6 +1278,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		tool_set_meta(p, jget(d, "metadata"), a)
 		if p.sub_session != had { subs_changed(c) }
 		if p.sub_session != "" { children_soon(app) }
+		output_view_part_changed(app, p)
 	case "session.tool.success":
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
 		p.status = .Done
@@ -1289,11 +1290,13 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		tool_set_meta(p, jget(d, "metadata"), a)
 		if p.sub_session != had { subs_changed(c) }
 		if p.sub_session != "" { children_soon(app) }
+		output_view_part_changed(app, p)
 	case "session.tool.failed":
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
 		p.status = .Error
 		p.done = true
 		tool_set_output(p, error_text(jget(d, "error")), a)
+		output_view_part_changed(app, p)
 	case "session.step.ended":
 		m := assistant(c, mid)
 		m.streaming = false

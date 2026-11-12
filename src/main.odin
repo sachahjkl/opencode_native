@@ -248,6 +248,7 @@ FRAMES_AFTER_INPUT :: 3        // still drawn after an event, and at start: what
 DT_MIN_S           :: 0.0005
 DT_MAX_S           :: 0.1      // after a long stall the animations go on, they do not jump
 ANCHOR_BUILDS_MAX  :: 4        // builds spent on keeping a part header in place
+SNAP_BUILDS_MAX    :: 4        // builds spent on reaching the bottom of a page just read, while what they build moves it
 
 // How soon an action is followed by reading again what it changed: a burst of events reads once.
 REFRESH_DEBOUNCE_MS  :: 1200
@@ -366,8 +367,19 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 		grew := b.view_bounds.y > app.conversation.height + 0.5 && b.view_off.y < limit - 0.5
 		if b.view_off.y > limit + 1 || f.jump || grew {
 			b.view_anim[1].active = false   // (the glide stops where it is: the second build reaches the bottom at once)
+			bounds := b.view_bounds.y
 			chat_scroll_event(app, Scroll_Signal.Snap)
 			build(app, size, nil, 0, again = true)
+			// (the bottom it reached was reckoned with the guessed heights of the messages the lazy column had not built: those
+			// it built there were measured, and the bottom moved. Again while it moves, so that the frame shows the bottom)
+			for _ in 0 ..< SNAP_BUILDS_MAX {
+				nb := app.conversation.scroll_box
+				if nb == nil || abs(nb.view_bounds.y - bounds) <= 0.5 { break }
+				bounds = nb.view_bounds.y
+				nb.view_anim[1].active = false
+				chat_scroll_event(app, Scroll_Signal.Snap)
+				build(app, size, nil, 0, again = true)
+			}
 		}
 	}
 	if b := app.conversation.scroll_box; b != nil { app.conversation.height = b.view_bounds.y }
