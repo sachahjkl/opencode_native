@@ -4,6 +4,25 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.47.0] - 2026-11-12
+
+### Added
+- **Diffs show code in its colours**: the lines of an edit, of What changed and of a diff's full view are coloured by the language of their file, and what changed in a changed line stays marked over them.
+- **A recent folder tells its whole path**: on the home page, a folder of "Start in" shows its full path in a tooltip under the pointer, and a right click on it copies the path.
+
+### Changed
+- **Code in answers is coloured**: a fenced code block whose language is known (Odin, C, JavaScript, TypeScript, Rust, Python, Go, the shell, SQL, JSON, PowerShell) shows its keywords, strings, comments, calls and types in the theme's colours.
+- **Server events are read off the interface**: each event of the server is read on its stream's thread, so a burst of deltas costs the interface only what applying them costs. An event that changes nothing a window shows (a delta of a session not shown) no longer redraws the detached windows. What cannot be read (an event, an answer, a queued prompt) is counted and logged once per kind; the status bar shows the count beside the frame rate.
+- **A session's command in the palette names its session**: "Fork the session", "Rename the session…", "Export the session"… say beside them which one they act on: "Session · <its title>", the one shown.
+
+### Fixed
+- **The palette's arrows move its selection again**: Up, Down, Page Up and Page Down did nothing in the palette since the toolkit gave an open dialog the keys; the palette now reads them inside its dialog.
+- **Attaching a large file and sending it no longer freezes the window**: a file attached, dropped or pasted is read and encoded on a thread of its own (Send waits for it, "reading the attachment…"), and a prompt's body, its images quoted, is made on the thread that sends it. The palette and the pickers fold what is typed and their items once, not at every frame.
+- **A long answer streams without slowing down**: what a message, a diff or a tool's output shows is read once and kept, and a growing answer reads only its last block again; each delta made the whole answer be read again, and a tool's input was parsed from JSON at every frame.
+- **A shell costs nothing while it does not change**: its rows are kept as drawn and rebuilt only when libghostty-vt says they changed; a 200 x 60 grid read every cell, some 60,000 calls, at each frame it was shown.
+- **Settings and remembered lists are saved in the background**: the last session, the server, the palette's ranking, each shell's zoom, the drafts and the list of servers are read once at the start, then saved by a background thread a moment after they change. The window no longer waits on the disk for them, and a crash can no longer leave one of these files cut.
+- **Times on the local clock follow a change of daylight saving time**: the offset from UTC was read once for the life of the program; it is read again every minute, on a thread of its own, never on the interface's.
+
 ## [0.46.9] - 2026-11-12
 
 ### Added
@@ -1390,6 +1409,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.47.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.0
 [0.46.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.9
 [0.46.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.8
 [0.46.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.7
