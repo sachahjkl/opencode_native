@@ -87,10 +87,36 @@ state_of_word :: proc(w: string) -> (Sub_State, bool) {
 	return .Unknown, false
 }
 
+// What the conversation says of its sub-agents, read again only when that changed (Chat.subs_seq: subs_changed): the message each one's
+// result came back in, and the sessions a call names as its own. Each card, each row of the activity, each event of another session
+// asked it of every message, at every build.
+Sub_Index :: struct {
+	made:     bool,
+	at:       u64,                // Chat.subs_seq it was read at
+	results:  map[string]int,     // a sub-agent's session → the last message its result came back in (an index into messages)
+	claimed:  map[string]bool,    // the sessions a call of the conversation names
+	computed: int,                // times it was read (tests)
+}
+
+sub_index :: proc(c: ^Chat) -> ^Sub_Index {
+	x := &c.subs
+	if x.made && x.at == c.subs_seq { return x }
+	a := arena_renew(&c.subs_arena)
+	x.results = make(map[string]int, allocator = a)
+	x.claimed = make(map[string]bool, allocator = a)
+	for &m, i in c.messages {
+		if m.kind == .Synthetic && m.sub_child != "" { x.results[strings.clone(m.sub_child, a)] = i }   // (the last one wins)
+		for &p in m.parts { if p.sub_session != "" { x.claimed[strings.clone(p.sub_session, a)] = true } }
+	}
+	x.made, x.at = true, c.subs_seq
+	x.computed += 1
+	return x
+}
+
 // The result message of a sub-agent in the session shown (nil: none yet).
 sub_result :: proc(c: ^Chat, child: string) -> ^Message {
 	if child == "" { return nil }
-	#reverse for &m in c.messages { if m.kind == .Synthetic && m.sub_child == child { return &m } }
+	if i, ok := sub_index(c).results[child]; ok { return &c.messages[i] }
 	return nil
 }
 
@@ -341,19 +367,10 @@ sub_session_guess :: proc(c: ^Chat, p: ^Part) -> string {
 	for &s in c.children {
 		if s.title != p.sub_desc || (p.sub_agent != "" && s.agent != "" && s.agent != p.sub_agent) { continue }
 		if p.started_ms > 0 && s.created + SUB_GUESS_SLACK_MS < p.started_ms { continue }   // (made before the call: another one's)
-		if sub_session_claimed(c, s.id) { continue }
+		if s.id in sub_index(c).claimed { continue }   // (a call of the conversation names it as its own already)
 		if best == nil || s.created < best.created { best = &s }
 	}
 	return best != nil ? best.id : ""
-}
-
-// Whether a call of the conversation names this session as its own already.
-@(private = "file")
-sub_session_claimed :: proc(c: ^Chat, sid: string) -> bool {
-	for &m in c.messages {
-		for &p in m.parts { if p.sub_session == sid { return true } }
-	}
-	return false
 }
 
 SUB_GUESS_SLACK_MS :: 5000   // a child made this much before the call's start is still its (the two clocks are the server's, a step apart)

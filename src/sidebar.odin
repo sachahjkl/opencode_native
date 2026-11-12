@@ -6,6 +6,8 @@ package ocn
 import "core:fmt"
 import "core:hash"
 import "core:math"
+import "core:mem"
+import "core:mem/virtual"
 import "core:strings"
 import "gt:config"
 import "gt:ui"
@@ -39,6 +41,7 @@ INBOX_TITLES := [Inbox_Class]string{.Waiting = "Waits for you", .Finished = "Fin
 // A section of the list. `items`: indices into app.sessions, in order.
 Side_Section :: struct {
 	key:     u64,      // what folds it
+	lazy_id: string,   // its header's id in the lazy column
 	dir:     string,   // a project's folder
 	title:   string,   // "": it is a project, named after its folder
 	unseen:  bool,     // what it holds can be marked as seen, all at once
@@ -61,6 +64,7 @@ session_seen :: proc(app: ^App, s: ^Session_Info) {
 	if s.idle <= s.viewed { return }
 	request(app, .Session_Viewed, "POST", fmt.tprintf("/api/session/%s/view", s.id), fmt.tprintf(`{{"idle":%.0f}}`, s.idle), s.id)
 	s.viewed = s.idle
+	marks_changed(app)
 }
 
 // A run ended: until the list says when, the row must not go through Recent to get to Finished. (No clock here: only that it is later
@@ -70,11 +74,12 @@ session_ended :: proc(app: ^App, id, outcome: string) {
 	if s == nil || id == app.chat.id { return }
 	s.idle = max(s.idle, s.viewed + 1)
 	s.outcome = outcome   // (a literal, or the word of the next list)
+	marks_changed(app)
 }
 
 // Someone looked at it, here or elsewhere.
 session_viewed :: proc(app: ^App, id: string, idle: f64) {
-	if s := find_session(app, id); s != nil { s.viewed = max(s.viewed, idle) }
+	if s := find_session(app, id); s != nil { s.viewed = max(s.viewed, idle); marks_changed(app) }
 }
 
 // The list says what ended: the one shown was in front of the person.
@@ -86,8 +91,8 @@ sessions_seen_shown :: proc(app: ^App) {
 // The rows of the list before they are dealt, in the mode's order: sub-agents as the preference says, what the search leaves.
 // A search keeps a session when each of its words is in one of its fields (session_matches). A sub-agent found while its parent
 // is not has a row of its own: nested under a parent that is not shown, it would not be seen.
-sidebar_rows :: proc(app: ^App, query: string) -> []int {
-	rows := make([dynamic]int, 0, len(app.sessions), context.temp_allocator)
+sidebar_rows :: proc(app: ^App, query: string, allocator := context.temp_allocator) -> []int {
+	rows := make([dynamic]int, 0, len(app.sessions), allocator)
 	nested := app.prefs.subagents != "flat"
 	searching := strings.trim_space(query) != ""
 	shown := make(map[string]bool, allocator = context.temp_allocator)
@@ -112,24 +117,28 @@ session_matches :: proc(s: Session_Info, query: string) -> bool {
 
 // The one place that knows the modes. What was archived is in none of their sections: it is in the last one, Archived, folded
 // until it is opened, whatever the mode.
-sidebar_sections :: proc(app: ^App, rows: []int, mode: Sidebar_Mode) -> []Side_Section {
+sidebar_sections :: proc(app: ^App, rows: []int, mode: Sidebar_Mode, allocator := context.temp_allocator) -> []Side_Section {
 	live := make([dynamic]int, 0, len(rows), context.temp_allocator)
-	archived := make([dynamic]int, context.temp_allocator)
+	archived := make([dynamic]int, allocator)
 	for i in rows { append(app.sessions[i].archived > 0 ? &archived : &live, i) }
 	sections: [dynamic]Side_Section
 	switch mode {
-	case .Inbox:    sections = inbox_sections(app, live[:])
-	case .Projects: sections = project_sections(app, live[:])
+	case .Inbox:    sections = inbox_sections(app, live[:], allocator)
+	case .Projects: sections = project_sections(app, live[:], allocator)
 	}
 	if len(archived) > 0 {
 		append(&sections, Side_Section{key = hash.fnv64a(transmute([]u8)string("archived")), title = ARCHIVED_TITLE, shut = true, items = archived})
 	}
+	for &sec in sections { sec.lazy_id = side_section_lazy_id(sec.key, allocator) }
 	return sections[:]
 }
 
+@(private = "file")
+side_section_lazy_id :: proc(key: u64, a: mem.Allocator) -> string { return fmt.aprintf("###lg%d", key, allocator = a) }
+
 // Archives a session, or brings it back: at once here, the server's list then says it as it stands.
 session_archive :: proc(app: ^App, id: string, archive: bool) {
-	if s := find_session(app, id); s != nil { s.archived = archive ? max(now_epoch_ms(), 1) : 0 }
+	if s := find_session(app, id); s != nil { s.archived = archive ? max(now_epoch_ms(), 1) : 0; marks_changed(app) }
 	// (the list held under the pointer is for what changes by itself: what the person just did shows at once, the hold
 	// taken again from the sections as they are now)
 	sidebar_hold_end(app)
@@ -144,8 +153,8 @@ session_is_archived :: proc(app: ^App, id: string) -> bool {
 
 // The present grouping: a section per folder, the one last active first.
 @(private = "file")
-project_sections :: proc(app: ^App, rows: []int) -> [dynamic]Side_Section {
-	sections := make([dynamic]Side_Section, context.temp_allocator)
+project_sections :: proc(app: ^App, rows: []int, a: mem.Allocator) -> [dynamic]Side_Section {
+	sections := make([dynamic]Side_Section, a)
 	index := make(map[string]int, allocator = context.temp_allocator)
 	for i in rows {
 		dir := app.sessions[i].directory
@@ -153,7 +162,7 @@ project_sections :: proc(app: ^App, rows: []int) -> [dynamic]Side_Section {
 		if !ok {
 			at = len(sections)
 			index[dir] = at
-			append(&sections, Side_Section{key = hash.fnv64a(transmute([]u8)dir), dir = dir, items = make([dynamic]int, context.temp_allocator)})
+			append(&sections, Side_Section{key = hash.fnv64a(transmute([]u8)dir), dir = dir, items = make([dynamic]int, a)})
 		}
 		append(&sections[at].items, i)
 	}
@@ -163,10 +172,10 @@ project_sections :: proc(app: ^App, rows: []int) -> [dynamic]Side_Section {
 // What needs attention first, across projects; those with nothing do not show. What lights a row decides its section: session_waits,
 // app.busy, session_unseen. (app.sessions is by recency: so is each section.)
 @(private = "file")
-inbox_sections :: proc(app: ^App, rows: []int) -> [dynamic]Side_Section {
+inbox_sections :: proc(app: ^App, rows: []int, a: mem.Allocator) -> [dynamic]Side_Section {
 	waiting := sessions_waiting(app)
 	dealt: [Inbox_Class][dynamic]int
-	for c in Inbox_Class { dealt[c] = make([dynamic]int, context.temp_allocator) }
+	for c in Inbox_Class { dealt[c] = make([dynamic]int, a) }
 	for i in rows {
 		s := &app.sessions[i]
 		class := Inbox_Class.Rest
@@ -177,7 +186,7 @@ inbox_sections :: proc(app: ^App, rows: []int) -> [dynamic]Side_Section {
 		}
 		append(&dealt[class], i)
 	}
-	sections := make([dynamic]Side_Section, context.temp_allocator)
+	sections := make([dynamic]Side_Section, a)
 	for c in Inbox_Class {
 		if len(dealt[c]) == 0 { continue }
 		key := fmt.tprintf("inbox:%v", c)
@@ -195,32 +204,100 @@ Side_Hold :: struct {
 	on:       bool,
 	sections: [dynamic]Side_Held,
 	over:     u64,        // what the list is of: another search, mode or preference is another list
+	ver:      u64,        // moves when a hold starts or ends (Side_Kept)
 }
 
-// `wanted`: the pointer is there. `of`: what this list is of.
-sidebar_held :: proc(app: ^App, rows: []int, wanted: bool, of: u64) -> []Side_Section {
+// What the list shows, kept until what it is made from changes. Its rows: the list of sessions (sessions_ver), the search, the mode and
+// the sub-agents preference. Its sections: the rows, what deals a session or lights it (marks_ver), the session shown (it is never
+// unseen) and the hold. Made at every build, they went through every session, with a map, a string and a hash each.
+Side_Kept :: struct {
+	rows_arena:     virtual.Arena,
+	rows_made:      bool,
+	rows_sessions:  u64,             // sessions_ver they were made at
+	query:          string,          // the search as typed (rows_arena)
+	mode:           Sidebar_Mode,
+	subagents:      string,          // the preference (rows_arena)
+	rows:           []int,
+	kids:           map[string][dynamic]int,   // each session's sub-agents among the loaded ones, newest first (indices into app.sessions)
+	of:             u64,             // what the list is of (Side_Hold.over)
+	rows_ver:       u64,             // counts the rows made: what the sections were made from
+
+	sections_arena: virtual.Arena,
+	sections_made:  bool,
+	sections_rows, sections_marks, sections_hold: u64,   // rows_ver, marks_ver and Side_Hold.ver they were made at
+	shown:          string,          // app.chat.id they were made with (sections_arena)
+	sections:       []Side_Section,
+
+	rows_computed, sections_computed: int,   // times each was made (tests)
+}
+
+// The sections the list shows, made again only when what they come from changed. `wanted`: the pointer is over the list.
+sidebar_view :: proc(app: ^App, query: string, wanted: bool) -> []Side_Section {
+	k := &app.cx.side
 	h := &app.cx.side_hold
-	if h.on && (!wanted || h.over != of) { sidebar_hold_end(app) }
-	if !h.on {
-		live := sidebar_sections(app, rows, app.prefs.sidebar_mode)
-		if wanted {
-			h.on, h.over = true, of
-			for &sec in live {
-				held := Side_Held{key = sec.key, dir = strings.clone(sec.dir), title = strings.clone(sec.title), unseen = sec.unseen, shut = sec.shut}
-				for i in sec.items { append(&held.ids, strings.clone(app.sessions[i].id)) }
-				append(&h.sections, held)
-			}
+	side_rows_refresh(app, query)
+	if h.on && (!wanted || h.over != k.of) { sidebar_hold_end(app) }
+	side_sections_refresh(app)
+	if !h.on && wanted {
+		h.on, h.over = true, k.of
+		for &sec in k.sections {
+			held := Side_Held{key = sec.key, dir = strings.clone(sec.dir), title = strings.clone(sec.title), unseen = sec.unseen, shut = sec.shut}
+			for i in sec.items { append(&held.ids, strings.clone(app.sessions[i].id)) }
+			append(&h.sections, held)
 		}
-		return live
+		h.ver += 1
+		k.sections_hold = h.ver   // (what is held is what shows: nothing to make again)
 	}
-	// (by id: a new list changes the indices)
-	at := make(map[string]int, len(rows), context.temp_allocator)
-	for i in rows { at[app.sessions[i].id] = i }
-	sections := make([dynamic]Side_Section, 0, len(h.sections), context.temp_allocator)
+	return k.sections
+}
+
+@(private = "file")
+side_rows_refresh :: proc(app: ^App, query: string) {
+	k := &app.cx.side
+	mode := app.prefs.sidebar_mode
+	if k.rows_made && k.rows_sessions == app.cx.sessions_ver && k.mode == mode && k.query == query && k.subagents == app.prefs.subagents { return }
+	a := arena_renew(&k.rows_arena)
+	k.rows_made, k.rows_sessions, k.mode = true, app.cx.sessions_ver, mode
+	k.query, k.subagents = strings.clone(query, a), strings.clone(app.prefs.subagents, a)
+	lower := strings.to_lower(query, context.temp_allocator)
+	k.rows = sidebar_rows(app, lower, a)
+	k.kids = make(map[string][dynamic]int, allocator = a)
+	for s, i in app.sessions {
+		if s.parent == "" { continue }
+		list := k.kids[s.parent] or_else make([dynamic]int, a)
+		append(&list, i)
+		k.kids[s.parent] = list
+	}
+	k.of = hash.fnv64a(transmute([]u8)fmt.tprintf("%v %s %s", mode, app.prefs.subagents, lower))
+	k.rows_ver += 1
+	k.rows_computed += 1
+}
+
+@(private = "file")
+side_sections_refresh :: proc(app: ^App) {
+	k := &app.cx.side
+	h := &app.cx.side_hold
+	if k.sections_made && k.sections_rows == k.rows_ver && k.sections_marks == app.cx.marks_ver && k.sections_hold == h.ver && k.shown == app.chat.id { return }
+	a := arena_renew(&k.sections_arena)
+	k.sections = h.on ? held_sections(app, k.rows, a) : sidebar_sections(app, k.rows, k.mode, a)
+	k.sections_made, k.sections_rows, k.sections_marks, k.sections_hold = true, k.rows_ver, app.cx.marks_ver, h.ver
+	k.shown = strings.clone(app.chat.id, a)
+	k.sections_computed += 1
+}
+
+// The sections held, with the sessions in them now. By id: a new list changes the indices.
+@(private = "file")
+held_sections :: proc(app: ^App, rows: []int, a: mem.Allocator) -> []Side_Section {
+	h := &app.cx.side_hold
+	listed := make([]bool, len(app.sessions), context.temp_allocator)
+	for i in rows { listed[i] = true }
+	sections := make([dynamic]Side_Section, 0, len(h.sections), a)
 	for &held in h.sections {
-		sec := Side_Section{key = held.key, dir = held.dir, title = held.title, unseen = held.unseen, shut = held.shut, items = make([dynamic]int, 0, len(held.ids), context.temp_allocator)}
-		for id in held.ids { if i, there := at[id]; there { append(&sec.items, i) } }
-		if len(sec.items) > 0 { append(&sections, sec) }
+		sec := Side_Section{key = held.key, dir = strings.clone(held.dir, a), title = strings.clone(held.title, a), unseen = held.unseen, shut = held.shut, items = make([dynamic]int, 0, len(held.ids), a)}
+		for id in held.ids { if i, there := app.session_at[id]; there && listed[i] { append(&sec.items, i) } }
+		if len(sec.items) == 0 { continue }
+		sec.lazy_id = side_section_lazy_id(sec.key, a)
+		append(&sections, sec)
 	}
 	return sections[:]
 }
@@ -234,6 +311,7 @@ sidebar_hold_end :: proc(app: ^App) {
 	}
 	clear(&h.sections)
 	h.on = false
+	h.ver += 1
 	app.cx.due[.Side_Wake] = {}   // (the frame that lets go, when nothing else would come)
 }
 

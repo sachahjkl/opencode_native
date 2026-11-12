@@ -263,6 +263,7 @@ server_known_end :: proc(app: ^App) {
 	virtual.arena_destroy(&app.sess_arena)
 	virtual.arena_destroy(&app.proj_arena)
 	app.known = {}
+	app.cx.sessions_ver += 1   // (no list, no busy, no waits: what was made from them goes)
 	app.cx.open[.Pair] = false   // (its code was that server's; the dialog's state is in known, its being open is not)
 }
 

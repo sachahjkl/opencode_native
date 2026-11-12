@@ -1228,7 +1228,7 @@ a_thought_opened_while_the_run_goes_on_stays :: proc(t: ^testing.T) {
 		testing.expect(t, err == nil)
 		chat_load(app, v, false)
 		app.chat.busy = true
-		app.busy[app.chat.id] = true
+		set_busy(app, app.chat.id, true)
 		chat_scroll_event(app, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		chat := session.find(s, "chat")
@@ -1455,8 +1455,7 @@ escape_stops_the_run_and_the_composer_keeps_the_keyboard :: proc(t: ^testing.T) 
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		app.chat.busy = true
-		app.busy[app.chat.id] = true
+		set_busy(app, app.chat.id, true)
 		session.click(s, "composer")
 		session.type_text(s, "wait, ")
 		testing.expect_value(t, session.focused_name(s), "composer")

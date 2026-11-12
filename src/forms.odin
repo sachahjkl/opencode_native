@@ -6,6 +6,7 @@ package ocn
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
+import "core:mem"
 import "core:mem/virtual"
 import "core:strconv"
 import "core:strings"
@@ -70,6 +71,7 @@ form_add :: proc(app: ^App, v: json.Value) {
 	f := form_new(id, jstr(v, "sessionID"), jstr(v, "title"), jstr(v, "metadata", "kind") == "question", jarr(v, "fields"))
 	f.born = app.cx.stream_seq
 	append(&app.cx.forms, f)
+	marks_changed(app)
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
@@ -153,6 +155,7 @@ form_remove :: proc(app: ^App, id: string) {
 		if f.id != id { continue }
 		ordered_remove(&app.cx.forms, i)
 		form_free(f)
+		marks_changed(app)
 		return
 	}
 }
@@ -161,17 +164,30 @@ forms_clear :: proc(app: ^App) {
 	for len(app.cx.forms) > 0 { form_remove(app, app.cx.forms[0].id) }
 }
 
-// The sessions that ask something of the person and wait for it, themselves or through a sub-agent. (Once for a whole list: asked of each
-// session it went through all the sessions for each thing that waits.)
+// The sessions that wait for the person, kept until a wait comes or goes or the list changes: every row of the sidebar asks it.
+Waiting_Kept :: struct {
+	arena:    virtual.Arena,     // the set and its keys
+	set:      map[string]bool,
+	made:     bool,
+	sessions, marks: u64,        // App_Context.sessions_ver and marks_ver when it was made
+	computed: int,               // times it was made (tests)
+}
+
+// The sessions that ask something of the person and wait for it, themselves or through a sub-agent.
 sessions_waiting :: proc(app: ^App) -> map[string]bool {
-	set := make(map[string]bool, allocator = context.temp_allocator)
-	note :: proc(app: ^App, set: ^map[string]bool, sid: string) {
-		set[sid] = true
-		if s := find_session(app, sid); s != nil && s.parent != "" { set[s.parent] = true }
+	w := &app.cx.waiting
+	if w.made && w.sessions == app.cx.sessions_ver && w.marks == app.cx.marks_ver { return w.set }
+	a := arena_renew(&w.arena)
+	w.set = make(map[string]bool, allocator = a)
+	note :: proc(app: ^App, set: ^map[string]bool, sid: string, a: mem.Allocator) {
+		set[strings.clone(sid, a)] = true
+		if s := find_session(app, sid); s != nil && s.parent != "" { set[strings.clone(s.parent, a)] = true }
 	}
-	for f in app.cx.forms { note(app, &set, f.session) }
-	for p in app.permissions { note(app, &set, p.session) }
-	return set
+	for f in app.cx.forms { note(app, &w.set, f.session, a) }
+	for p in app.permissions { note(app, &w.set, p.session, a) }
+	w.made, w.sessions, w.marks = true, app.cx.sessions_ver, app.cx.marks_ver
+	w.computed += 1
+	return w.set
 }
 
 session_waits :: proc(app: ^App, id: string) -> bool {
@@ -300,7 +316,8 @@ forms_dock :: proc(app: ^App, em: f32) {
 	first: ^Form_Req
 	n := 0
 	for f in app.cx.forms {
-		if f.session != app.chat.id && !is_child(&app.chat, f.session) { continue }
+		// (a form of no session is the conversation shown's: none else would show it)
+		if f.session != "" && f.session != app.chat.id && !is_child(&app.chat, f.session) { continue }
 		if first == nil { first = f }
 		n += 1
 	}

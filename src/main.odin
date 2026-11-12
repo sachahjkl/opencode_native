@@ -134,6 +134,7 @@ Server_Known :: struct {
 	server_urls:     [dynamic]string,   // where the server is reached (GET /api/info `urls`, owned): pairing (pair.odin)
 	pair:            Pair,              // the dialog that pairs a device (pair.odin)
 	sessions:        [dynamic]Session_Info,
+	session_at:      map[string]int,    // app.sessions by id (in sess_arena: sessions_changed)
 	sess_arena:      virtual.Arena,
 	sessions_loaded: bool,
 	opened_first:    bool,
@@ -238,6 +239,13 @@ App_Context :: struct {
 	fork_prompt:    string,            // the prompt a fork left out, for the composer of the new session (owned)
 	sidebar_hidden: bool,
 	side_hold:      Side_Hold,         // the order of the sidebar, under the pointer (sidebar.odin)
+	// What is made from the sessions is kept until one of these moves. Here, not in Server_Known: a count that started over with
+	// another server could meet the one a cache was made at.
+	sessions_ver:   u64,               // the list of sessions (sessions_changed)
+	marks_ver:      u64,               // what deals a session into a section or lights its row (marks_changed)
+	side:           Side_Kept,         // the sidebar's rows and sections (sidebar.odin)
+	waiting:        Waiting_Kept,      // the sessions that wait for the person (forms.odin)
+	local_stats:    Local_Kept,        // the figures of the loaded messages (stats.odin)
 	main_rect:      Rect,              // the conversation's place (Ctrl and the wheel over it zoom it)
 	frame_ms:       f32,               // what the status bar's rate says: between two frames, smoothed
 	work_ms:        f32,               // ... what a frame costs (build, draw, render)

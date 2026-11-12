@@ -1145,7 +1145,8 @@ the_sessions_with_commands_in_the_background :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	append(&app.sessions, Session_Info{id = "root"}, Session_Info{id = "child", parent = "root"}, Session_Info{id = "other"})
-	defer clear(&app.sessions)
+	sessions_changed(app)
+	defer { clear(&app.sessions); sessions_changed(app) }
 	v, _ := json.parse_string(`{"data":[{"kind":"shell","id":"j","sessionID":"child","status":"running","shellID":"j","command":"sleep 9","time":{"started":1}}]}`, allocator = context.temp_allocator)
 	background_load(app, v)
 	testing.expect(t, session_in_background(app, "child"))
@@ -1385,6 +1386,7 @@ archiving_asks_the_server_and_shows_at_once :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	append(&app.sessions, Session_Info{id = "s1", title = "One"})
+	sessions_changed(app)
 	session_archive(app, "s1", true)
 	r := bench_take(t, .Action)
 	testing.expect_value(t, r.method, "PATCH")

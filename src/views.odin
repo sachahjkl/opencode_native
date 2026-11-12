@@ -347,18 +347,9 @@ sessions_list :: proc(app: ^App, em: f32) {
 		if ui.tags("weak") { ui.label(online(app) ? "Loading…" : "Connecting…") }
 		return
 	}
-	q := strings.to_lower(ui.field_string(&app.search), context.temp_allocator)
-	// the sub-agents of each session (among those loaded), listed under it unless the list is flat
-	kids := make(map[string][dynamic]int, allocator = context.temp_allocator)
-	for s, i in app.sessions {
-		if s.parent == "" { continue }
-		list := kids[s.parent] or_else make([dynamic]int, context.temp_allocator)
-		append(&list, i)
-		kids[s.parent] = list
-	}
+	sections := sidebar_view(app, ui.field_string(&app.search), sidebar_hold_wanted(app, ui.parent_box()))
+	kids := app.cx.side.kids   // (the sub-agents of each session, listed under it unless the list is flat)
 	mode := app.prefs.sidebar_mode
-	of := hash.fnv64a(transmute([]u8)fmt.tprintf("%v %s %s", mode, app.prefs.subagents, q))
-	sections := sidebar_held(app, sidebar_rows(app, q), sidebar_hold_wanted(app, ui.parent_box()), of)
 	now := now_epoch_ms()
 	ui.spacer(ui.px(em * 0.4))
 	// Only the rows near the view are built (the toolkit's lazy column, as the conversation's): a header or a session
@@ -369,7 +360,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 		gap := false   // (between a section's last session and the next section)
 		for &sec in sections {
 			folded := app.folded[sec.key] or_else sec.shut
-			if ui.lazy_item(lz, fmt.tprintf("###lg%d", sec.key)) {
+			if ui.lazy_item(lz, sec.lazy_id) {
 				if gap { ui.spacer(ui.px(em * 0.5)) }
 				if sec.title != "" { inbox_header(app, &sec, folded, em) } else { group_header(app, &sec, folded, em) }
 			}
@@ -377,7 +368,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 			if folded { continue }
 			for i in sec.items {
 				s := &app.sessions[i]
-				if ui.lazy_item(lz, fmt.tprintf("###ls_%s", s.id), always = s.id == app.chat.id) {
+				if ui.lazy_item(lz, s.lazy_id, always = s.id == app.chat.id) {
 					session_item(app, s, em, now, 0, app.prefs.subagents == "nested" ? children_of(app, s.id, kids) : nil, project = mode == .Inbox)
 				}
 			}

@@ -188,15 +188,15 @@ a_view_refused_says_nothing :: proc(t: ^testing.T) {
 rows_do_not_move_under_the_pointer :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := inbox_app()
-	first := strings.clone(dealt(app, sidebar_held(app, sidebar_rows(app, ""), true, 1)))
+	first := strings.clone(dealt(app, sidebar_view(app, "", true)))
 	bench_event(app, `{"type":"session.execution.failed","data":{"sessionID":"runs"}}`)
 	permission_remove(app, "p")
 	sessions(app, strings.concatenate({LIST[:len(LIST) - 3], `,{"id":"born","title":"Born meanwhile","time":{"created":1,"updated":99}}]}`}, context.temp_allocator))
-	testing.expect_value(t, dealt(app, sidebar_held(app, sidebar_rows(app, ""), true, 1)), first)
+	testing.expect_value(t, dealt(app, sidebar_view(app, "", true)), first)
 	testing.expect(t, app.cx.side_hold.on)
 
 	// (the pointer left, or rested)
-	testing.expect_value(t, dealt(app, sidebar_held(app, sidebar_rows(app, ""), false, 1)),
+	testing.expect_value(t, dealt(app, sidebar_view(app, "", false)),
 		"Finished: ended never runs | Recent: born waits seen new")
 	testing.expect(t, !app.cx.side_hold.on)
 }
@@ -205,10 +205,10 @@ rows_do_not_move_under_the_pointer :: proc(t: ^testing.T) {
 what_the_reader_asks_for_is_not_held :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := inbox_app()
-	_ = sidebar_held(app, sidebar_rows(app, ""), true, 1)
-	testing.expect_value(t, dealt(app, sidebar_held(app, sidebar_rows(app, "beta"), true, 2)), "Finished: ended never")
+	_ = sidebar_view(app, "", true)
+	testing.expect_value(t, dealt(app, sidebar_view(app, "beta", true)), "Finished: ended never")
 	app.prefs.sidebar_mode = .Projects
-	testing.expect_value(t, dealt(app, sidebar_held(app, sidebar_rows(app, "beta"), true, 3)), "beta: ended never")
+	testing.expect_value(t, dealt(app, sidebar_view(app, "beta", true)), "beta: ended never")
 }
 
 @(test)
@@ -216,11 +216,68 @@ a_session_gone_leaves_a_held_list :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	sessions(app, LIST)
-	_ = sidebar_held(app, sidebar_rows(app, "beta"), true, 1)
+	_ = sidebar_view(app, "beta", true)
 	sessions(app, `{"data":[{"id":"never","title":"Never viewed","location":{"directory":"C:/code/beta"},"time":{"created":1,"updated":45,"idle":40}}]}`)
-	testing.expect_value(t, dealt(app, sidebar_held(app, sidebar_rows(app, "beta"), true, 1)), "Finished: never")
+	testing.expect_value(t, dealt(app, sidebar_view(app, "beta", true)), "Finished: never")
 	server_forget(app)
 	testing.expect(t, !app.cx.side_hold.on)
+}
+
+// What the list shows is kept: a build that changes nothing makes nothing again, and each change shows at the next one (a session
+// renamed, a new one, one archived, a run that ends, a wait answered, the one opened).
+@(test)
+the_sidebar_is_made_again_only_when_what_it_shows_changes :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := inbox_app()
+	k := &app.cx.side
+	view :: proc(app: ^App, q := "") -> string { return dealt(app, sidebar_view(app, q, false)) }
+	testing.expect_value(t, view(app), "Waits for you: waits | Finished: ended never | Running: runs | Recent: seen new")
+	rows, secs, waits := k.rows_computed, k.sections_computed, app.cx.waiting.computed
+	for _ in 0 ..< 3 {
+		_ = view(app)
+		testing.expect(t, session_waits(app, "waits") && !session_waits(app, "seen"))
+	}
+	testing.expect_value(t, k.rows_computed, rows)
+	testing.expect_value(t, k.sections_computed, secs)
+	testing.expect_value(t, app.cx.waiting.computed, waits)
+
+	testing.expect_value(t, view(app, "renamed"), "")
+	renamed, _ := strings.replace(LIST, `"title":"Seen"`, `"title":"Renamed"`, 1, context.temp_allocator)
+	sessions(app, renamed)
+	testing.expect_value(t, view(app, "renamed"), "Recent: seen")
+
+	sessions(app, strings.concatenate({LIST[:len(LIST) - 3], `,{"id":"born","title":"Born","time":{"created":1,"updated":99}}]}`}, context.temp_allocator))
+	testing.expect_value(t, view(app), "Waits for you: waits | Finished: ended never | Running: runs | Recent: born seen new")
+
+	session_archive(app, "new", true)
+	bench_clear(app)
+	testing.expect_value(t, view(app), "Waits for you: waits | Finished: ended never | Running: runs | Recent: born seen | Archived: new")
+
+	bench_event(app, `{"type":"session.execution.failed","data":{"sessionID":"runs"}}`)
+	testing.expect_value(t, view(app), "Waits for you: waits | Finished: ended never runs | Recent: born seen | Archived: new")
+
+	permission_remove(app, "p")
+	testing.expect(t, !session_waits(app, "waits"))
+	testing.expect_value(t, view(app), "Finished: ended never runs | Recent: born waits seen | Archived: new")
+
+	show(app, "ended")
+	testing.expect_value(t, view(app), "Finished: never runs | Recent: born waits ended seen | Archived: new")
+	secs = k.sections_computed
+	_ = view(app)
+	testing.expect_value(t, k.sections_computed, secs)
+}
+
+// The index of the sessions by id follows the list: one gone is not found, one come is.
+@(test)
+a_session_is_found_by_its_id_in_the_list_as_it_stands :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	sessions(app, LIST)
+	testing.expect_value(t, find_session(app, "seen").title, "Seen")
+	sessions(app, `{"data":[{"id":"other","title":"Other","time":{"created":1,"updated":2}},{"id":"seen","title":"Seen again","time":{"created":1,"updated":1}}]}`)
+	testing.expect(t, find_session(app, "never") == nil, "gone with its list")
+	testing.expect_value(t, find_session(app, "seen").title, "Seen again")
+	testing.expect_value(t, find_session(app, "other").lazy_id, "###ls_other")
 }
 
 @(private = "file")
