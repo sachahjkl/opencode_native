@@ -84,7 +84,7 @@ COMMANDS := [?]Command{
 	{id = "view.sidebar_mode", title = "Switch the sidebar's mode (inbox, projects)", tags = "inbox projects folders group", group = "View", icon = lucide.LIST, run = sidebar_mode_next},
 	{id = "view.content_in", title = "Zoom in the conversation", tags = "bigger larger font size text", group = "View", icon = lucide.PLUS, keys = "Ctrl+=", run = proc(app: ^App) { content_zoom_by(app, ZOOM_FACTOR) }},
 	{id = "view.content_out", title = "Zoom out the conversation", tags = "smaller font size text", group = "View", icon = lucide.CHEVRON_DOWN, keys = "Ctrl+-", run = proc(app: ^App) { content_zoom_by(app, 1 / ZOOM_FACTOR) }},
-	{id = "view.content_reset", title = "Reset the conversation's zoom", tags = "default font size text", group = "View", icon = lucide.UNDO_2, keys = "Ctrl+0", run = proc(app: ^App) { content_zoom_set(app, 1) }},
+	{id = "view.content_reset", title = "Reset the conversation's zoom", tags = "default font size text", group = "View", icon = lucide.UNDO_2, keys = "Ctrl+0", run = proc(app: ^App) { content_zoom_reset(app) }},
 	{id = "view.chrome_in", title = "Zoom in the interface", tags = "bigger larger scale ui", group = "View", icon = lucide.PLUS, keys = "Ctrl+Shift+=", run = proc(app: ^App) { ui.set_zoom(&app.state, ui.zoom(&app.state) * ZOOM_FACTOR) }},
 	{id = "view.chrome_out", title = "Zoom out the interface", tags = "smaller scale ui", group = "View", icon = lucide.CHEVRON_DOWN, keys = "Ctrl+Shift+-", run = proc(app: ^App) { ui.set_zoom(&app.state, ui.zoom(&app.state) / ZOOM_FACTOR) }},
 	{id = "view.chrome_reset", title = "Reset the interface's zoom", tags = "default scale ui", group = "View", icon = lucide.UNDO_2, keys = "Ctrl+Shift+0", run = proc(app: ^App) { ui.set_zoom(&app.state, 1) }},
@@ -132,11 +132,26 @@ overlay_open :: proc(app: ^App) -> bool {
 	return app.cx.open != {} || changes_shown(&app.cx.changes) || app.cx.outputs.shown != nil || app.setup.open || len(app.state.menus) > 0
 }
 
+// The conversation's zoom: the session shown's own, or the preference (appearance.content_zoom), which is every session's that has
+// none of its own and the home page's.
+content_zoom :: proc(app: ^App) -> f32 { return zoom_of(&app.session_zooms, app.chat.id, app.prefs.content_zoom) }
+
+// The session shown's zoom (kept in session_zoom.txt); on the home page, the preference.
 content_zoom_set :: proc(app: ^App, z: f32) {
-	pref_set(app, "appearance.content_zoom", fmt.tprintf("%.3f", clamp(z, CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX)))
+	zoom := clamp(z, CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX)
+	if app.chat.id == "" {
+		pref_set(app, "appearance.content_zoom", fmt.tprintf("%.3f", zoom))
+		return
+	}
+	zoom_keep(&app.session_zooms, &app.stores.session_zooms, app.chat.id, zoom, app.prefs.content_zoom)
 }
 
-content_zoom_by :: proc(app: ^App, factor: f32) { content_zoom_set(app, app.prefs.content_zoom * factor) }
+content_zoom_by :: proc(app: ^App, factor: f32) { content_zoom_set(app, content_zoom(app) * factor) }
+
+// Back to the preference: the session follows it again.
+content_zoom_reset :: proc(app: ^App) {
+	if app.chat.id == "" { content_zoom_set(app, 1) } else { zoom_forget(&app.session_zooms, &app.stores.session_zooms, app.chat.id) }
+}
 
 // What the toolkit would make of the window's zoom, where it is the conversation's that is meant: Ctrl and the wheel over
 // the conversation, Ctrl and = - 0 without Shift (with it: the interface, which the toolkit does). Before the build.
@@ -145,7 +160,7 @@ content_zoom_events :: proc(app: ^App, events: []platform.Event) {
 		#partial switch e.kind {
 		case .Scroll:
 			if .Ctrl not_in e.mods || !rect_contains(app.conversation.rect, e.pos) { continue }
-			z := app.prefs.content_zoom
+			z := content_zoom(app)
 			content_zoom_set(app, e.delta.y < 0 ? z * ZOOM_FACTOR : z / ZOOM_FACTOR)
 			e.kind = .None
 		case .Key_Press:
@@ -153,7 +168,7 @@ content_zoom_events :: proc(app: ^App, events: []platform.Event) {
 			#partial switch e.key {
 			case .Equal, .Num_Add:      content_zoom_by(app, ZOOM_FACTOR)
 			case .Minus, .Num_Subtract: content_zoom_by(app, 1 / ZOOM_FACTOR)
-			case .N0:                   content_zoom_set(app, 1)
+			case .N0:                   content_zoom_reset(app)
 			case: continue
 			}
 			e.kind = .None

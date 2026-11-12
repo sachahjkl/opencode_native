@@ -19,7 +19,6 @@ import "base:runtime"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
-import "core:strconv"
 import "core:strings"
 import "core:sync"
 import "core:thread"
@@ -27,7 +26,6 @@ import "core:time"
 import "core:unicode/utf8"
 import "gt:draw"
 import "gt:platform"
-import store "gt:store"
 import "gt:term"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -531,7 +529,7 @@ term_add :: proc(app: ^App, it: json.Value, dir: string) -> ^Term {
 	id := jstr(it, "id")
 	if id == "" || term_find(app, id) != nil { return nil }
 	t := term_new(id, jstr(it, "title"), dir)
-	t.view.zoom = app.term_zooms.by_id[id] or_else 1
+	t.view.zoom = zoom_of(&app.term_zooms, id, 1)
 	t.server = app.conn
 	t.app = app
 	t.panel = TERM_PANEL_BASE + s.next_panel
@@ -1288,20 +1286,9 @@ terms_size_due :: proc(app: ^App) {
 // Each shell's zoom
 
 // The shells' zooms, by their id on the server: a shell found again (the program started again, the server come back) has
-// its own. The server keeps a shell's title and size only: the zooms are the client's, in terminal_zoom.txt beside the
-// preferences, one "id<TAB>zoom" a line (app.stores.zooms, stores.odin). A shell closed from here leaves the file.
-Term_Zooms :: struct {
-	by_id: map[string]f32,      // (keys owned; 1 is not kept)
-}
-
-// From terminal_zoom.txt as read at the start: kept here as numbers, read whenever a shell is made.
-term_zooms_load :: proc(app: ^App) {
-	z := &app.term_zooms
-	for e in store.list(&app.stores.zooms) {
-		v, ok := strconv.parse_f32(e.value)
-		if ok && v != 1 { z.by_id[strings.clone(e.key)] = clamp(v, term.ZOOM_MIN, term.ZOOM_MAX) }
-	}
-}
+// its own. The server keeps a shell's title and size only: the zooms are the client's (Kept_Zooms, terminal_zoom.txt). A
+// shell closed from here leaves the file.
+term_zooms_load :: proc(app: ^App) { zooms_load(&app.term_zooms, &app.stores.zooms, term.ZOOM_MIN, term.ZOOM_MAX) }
 
 // A shell's zoom (term.zoom_set: within its bounds), kept.
 term_zoom_set :: proc(app: ^App, t: ^Term, zoom: f32) {
@@ -1316,23 +1303,10 @@ term_zoom_keep :: proc(app: ^App, t: ^Term) {
 	app.cx.due[.Term_Size] = {}
 	ui.deferred_ask(&app.cx.due[.Term_Size], term.ZOOM_REST_MS)
 	if term_find(app, t.id) != t { return }
-	zoom := t.view.zoom
-	z := &app.term_zooms
-	if zoom == 1 {
-		term_zoom_forget(app, t.id)
-		return
-	}
-	if t.id not_in z.by_id { z.by_id[strings.clone(t.id)] = zoom } else { z.by_id[t.id] = zoom }
-	store.set(&app.stores.zooms, t.id, fmt.tprintf("%v", zoom))   // (%v: read back, the same number)
+	zoom_keep(&app.term_zooms, &app.stores.zooms, t.id, t.view.zoom, 1)
 }
 
-term_zoom_forget :: proc(app: ^App, id: string) {
-	z := &app.term_zooms
-	if id not_in z.by_id { return }
-	key, _ := delete_key(&z.by_id, id)
-	delete(key)
-	store.remove(&app.stores.zooms, id)
-}
+term_zoom_forget :: proc(app: ^App, id: string) { zoom_forget(&app.term_zooms, &app.stores.zooms, id) }
 
 ////////////////////////////////
 // What the answers to its requests do (net.odin REQ_FACTS)

@@ -23,6 +23,7 @@ import fsx "gt:fsx"
 import "gt:png"
 import "gt:ui"
 import remote "gt:remote"
+import store "gt:store"
 
 // The requests of this thread's test, oldest first.
 @(thread_local) bench_sent: [dynamic]^Request
@@ -1639,4 +1640,30 @@ an_event_records_its_toast_without_an_interface :: proc(t: ^testing.T) {
 	}
 	effects_clear(app)
 	testing.expect_value(t, len(app.cx.effects), 0)
+}
+
+// The conversation's zoom is its session's: zoomed in one, another keeps the preference, the first finds its own again, and Ctrl+0
+// brings it back to the preference, which it follows from then on.
+@(test)
+each_session_has_its_own_zoom :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	defer store.close(&app.stores.session_zooms)
+	app.prefs.content_zoom = 1.25   // (what the preference says: a bench has none)
+	rest := app.prefs.content_zoom
+	show(app, "a")
+	content_zoom_by(app, 2)
+	testing.expect_value(t, content_zoom(app), 2 * rest)
+	show(app, "b")
+	testing.expect_value(t, content_zoom(app), rest)
+	show(app, "a")
+	testing.expect_value(t, content_zoom(app), 2 * rest)
+	value, kept := store.get(&app.stores.session_zooms, "a")
+	testing.expect(t, kept && value != "", "kept in session_zoom.txt")
+	content_zoom_reset(app)
+	testing.expect_value(t, content_zoom(app), rest)
+	_, kept = store.get(&app.stores.session_zooms, "a")
+	testing.expect(t, !kept, "the preference again: nothing kept")
+	app.prefs.content_zoom = 1.5 * rest
+	testing.expect_value(t, content_zoom(app), 1.5 * rest)
 }

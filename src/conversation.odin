@@ -52,7 +52,7 @@ conversation :: proc(app: ^App, em: f32) {
 		if app.conversation.docked_w > 0 { avail = app.conversation.docked_w }   // (a panel of the dock: its room)
 		if avail <= 0 { avail = AVAIL_FALLBACK_PX * sc }
 		app.conversation.column_w = 0
-		zoom := app.prefs.content_zoom
+		zoom := content_zoom(app)
 		cem := math.round(em * zoom)   // the conversation's own size: its zoom is not the interface's
 		col := max(COLUMN_MIN_W_PX * sc, min(app.prefs.column_w * sc * zoom, avail - em * 3))
 		side := max(em * 1.5, (avail - col) * 0.5)
@@ -94,7 +94,7 @@ conversation :: proc(app: ^App, em: f32) {
 @(private = "file")
 column_handles :: proc(app: ^App, sb, main: ^ui.Box, side, col, avail, em: f32) {
 	hw := math.round(em * COLUMN_HANDLE_EM)
-	unit := ui.scale() * app.prefs.content_zoom   // (the preference is in logical pixels of the conversation)
+	unit := ui.scale() * content_zoom(app)   // (the preference is in logical pixels of the conversation)
 	// (no room beside it, or the window narrows it already: nothing to give it by hand)
 	if side < hw * 1.5 || col < app.prefs.column_w * unit - 1 { return }
 	top := sb.rect.min.y - main.rect.min.y

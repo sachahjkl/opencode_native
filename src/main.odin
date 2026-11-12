@@ -49,7 +49,8 @@ App :: struct {
 	picker:         Picker,            // the pickers of the composer (agent, model) and of the settings (fonts) (picker.odin)
 	activity:       Activity,          // what runs behind the conversation (activity.odin)
 	palette:        Palette,           // Ctrl+K (palette.odin)
-	term_zooms:     Term_Zooms,        // each shell's zoom, by its id (terminal.odin)
+	term_zooms:     Kept_Zooms,        // each shell's zoom, by its id (terminal.odin)
+	session_zooms:  Kept_Zooms,        // each session's conversation zoom, by its id (commands.odin content_zoom)
 	stores:         Stores,            // what it remembers beside the preferences, written on workers (stores.odin)
 	throbber:       Throbber,          // what says a run goes on (throbber.odin)
 	preview:        Preview,           // the page beside the conversation (preview.odin)
@@ -622,6 +623,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
 	palette_init(app)      // (from app.stores, read at the start: a test's are empty)
 	term_zooms_load(app)
+	zooms_load(&app.session_zooms, &app.stores.session_zooms, CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX)
 	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
 	pool_init(&app.cx.chores, CHORES_WORKERS)
 }
