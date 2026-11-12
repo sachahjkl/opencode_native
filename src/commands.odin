@@ -27,8 +27,8 @@ Command :: struct {
 @(private = "file") can_go_back :: proc(app: ^App) -> bool { return nav_can(app, -1) || back_target(app) != "" }
 
 COMMANDS := [?]Command{
-	{id = "app.palette", title = "Command palette", tags = "commands actions search launcher", group = "General", icon = lucide.SEARCH, keys = "Ctrl+K, Ctrl+Shift+P", key = .K, mods = {.Ctrl}, run = palette_toggle, over = proc(app: ^App) -> bool { return app.palette.open }},
-	{id = "app.help", title = "Keyboard shortcuts", tags = "keys keybindings hotkeys help cheatsheet", group = "General", icon = lucide.LIST, keys = "F1", key = .F1, run = proc(app: ^App) { app.cx.help_open = !app.cx.help_open }, over = proc(app: ^App) -> bool { return app.cx.help_open }},
+	{id = "app.palette", title = "Command palette", tags = "commands actions search launcher", group = "General", icon = lucide.SEARCH, keys = "Ctrl+K, Ctrl+Shift+P", key = .K, mods = {.Ctrl}, run = palette_toggle, over = proc(app: ^App) -> bool { return app.cx.open[.Palette] }},
+	{id = "app.help", title = "Keyboard shortcuts", tags = "keys keybindings hotkeys help cheatsheet", group = "General", icon = lucide.LIST, keys = "F1", key = .F1, run = proc(app: ^App) { app.cx.open[.Help] = !app.cx.open[.Help] }, over = proc(app: ^App) -> bool { return app.cx.open[.Help] }},
 	{id = "app.settings", title = "Settings", tags = "preferences options configuration prefs", group = "General", icon = lucide.SLIDERS_HORIZONTAL, keys = "Ctrl+,", key = .Comma, mods = {.Ctrl}, run = settings_open},
 	{id = "app.refresh", title = "Refresh", tags = "reload sync update fetch", group = "General", icon = lucide.REFRESH_CW, keys = "F5", key = .F5, run = proc(app: ^App) {
 		refresh_sessions(app)
@@ -122,9 +122,14 @@ commands_keys :: proc(app: ^App) {
 	if c := command_find("app.palette"); command_keyed(app, c) && ui.key_press(.P, {.Ctrl, .Shift}) { command_run(app, c) }
 }
 
-// A dialog, a picker or a menu is over the window: the one list of them. What reads the keyboard behind them asks here.
+// A dialog, a picker or a menu is over the window. What reads the keyboard behind them asks here. A new dialog is a Dialog, and
+// its being open is App_Context.open: then it is in this answer. What is not there says it in its own state:
+// - Changes: its state machine (Changes_State) says whether it is on screen; a bool beside it could disagree with it.
+// - Output: the view shown is the dialog's subject; nil is its being closed.
+// - Setup: the toolkit's setup.Dialog keeps its own `open` (gt:setup opens and closes it).
+// - the toolkit's menus (ui.ctx_menu), which the toolkit's state holds.
 overlay_open :: proc(app: ^App) -> bool {
-	return changes_shown(&app.cx.changes) || app.cx.diff_full.open || app.cx.outputs.shown != nil || app.cx.files.open || app.cx.schedules.open || app.cx.artifacts.open || app.settings_open || app.delete_open || app.view_open || app.setup.open || app.server_edit.open || app.picker.open || app.palette.open || app.cx.help_open || app.pair.open || app.rename.open || len(app.state.menus) > 0
+	return app.cx.open != {} || changes_shown(&app.cx.changes) || app.cx.outputs.shown != nil || app.setup.open || len(app.state.menus) > 0
 }
 
 content_zoom_set :: proc(app: ^App, z: f32) {
@@ -160,7 +165,7 @@ rect_contains :: proc(r: Rect, p: Vec2) -> bool { return p.x >= r.min.x && p.x <
 
 // The keys of the table as a dialog: what can be done, by group.
 help_dialog :: proc(app: ^App, em: f32) {
-	if ui.modal_sized("help", DIALOG_PREFERRED_EM[.Help] * em, &app.cx.dialogs[.Help], &app.cx.help_open, DIALOG_MIN_EM[.Help] * em) {
+	if ui.modal_sized("help", DIALOG_PREFERRED_EM[.Help] * em, &app.cx.dialogs[.Help], &app.cx.open[.Help], DIALOG_MIN_EM[.Help] * em) {
 		dialog_backdrop()
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###help_scroll") {

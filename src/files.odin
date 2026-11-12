@@ -331,7 +331,7 @@ File_Row :: struct {
 }
 
 Files :: struct {
-	open, fresh: bool,
+	fresh:   bool,
 	dir:     string,               // the session's folder (owned)
 	at:      string,               // the folder shown, from it, "": itself (owned)
 	field:   ui.Text_Field,
@@ -391,13 +391,13 @@ files_open :: proc(app: ^App) {
 	f := &app.cx.files
 	files_clear(f)
 	f.dir = strings.clone(files_dir(app))
-	f.open, f.fresh = true, true
+	app.cx.open[.Files], f.fresh = true, true
 	files_list(app)
 }
 
 files_forget :: proc(app: ^App) {
 	f := &app.cx.files
-	f.open = false
+	app.cx.open[.Files] = false
 	files_clear(f)
 }
 
@@ -470,8 +470,8 @@ files_up :: proc(app: ^App) {
 
 files_dialog :: proc(app: ^App, em: f32) {
 	f := &app.cx.files
-	if !f.open { return }
-	if ui.modal_sized("files", DIALOG_PREFERRED_EM[.Files] * em, &app.cx.dialogs[.Files], &f.open, DIALOG_MIN_EM[.Files] * em) {
+	if !app.cx.open[.Files] { return }
+	if ui.modal_sized("files", DIALOG_PREFERRED_EM[.Files] * em, &app.cx.dialogs[.Files], &app.cx.open[.Files], DIALOG_MIN_EM[.Files] * em) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em * 0.9))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
@@ -492,7 +492,7 @@ files_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 		}
 		ui.spacer(ui.px(em * 0.9))
-		dialog_close(&f.open)
+		dialog_close(&app.cx.open[.Files])
 	}
 	f.fresh = false
 }
@@ -528,7 +528,7 @@ files_left :: proc(app: ^App, em: f32) {
 			res := ui.line_edit("###fl_find", &f.field, "Find a file")
 			if f.fresh { ui.set_focus(res.box.key) }
 			if res.changed { files_list(app) }
-			if res.cancelled { f.open = false }
+			if res.cancelled { app.cx.open[.Files] = false }
 			if res.committed && shows && f.sel < len(f.rows) && !file_pick(app, f.rows[f.sel]) { return }
 		}
 	}
@@ -581,7 +581,7 @@ files_right :: proc(app: ^App, em: f32) {
 			a := &app.composer
 			a.mark = a.cursor
 			mention_put(app, .File, f.file, file_uri(f.dir, f.file), filepath.base(f.file))
-			f.open = false
+			app.cx.open[.Files] = false
 		}
 	}
 	ui.spacer(ui.px(em * 0.5))

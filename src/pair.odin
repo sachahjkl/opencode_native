@@ -16,7 +16,6 @@ PAIR_CONNECT    :: "/auth/connect/"
 PAIR_HOSTNAME_HINT :: "opencode service set hostname 0.0.0.0"
 
 Pair :: struct {
-	open:       bool,
 	code:       string,   // (owned) "": none yet
 	expires_ms: f64,      // ui.now_ms() when the code stops working
 	failed:     string,   // (owned) why no code came
@@ -24,8 +23,7 @@ Pair :: struct {
 
 // Opens the dialog with a new code (a code works once: each opening makes one).
 pair_open :: proc(app: ^App) {
-	p := &app.pair
-	p.open = true
+	app.cx.open[.Pair] = true
 	pair_new_code(app)
 	request(app, .Info, "GET", "/api/info")   // (the addresses: a tunnel may have come or gone)
 }
@@ -70,9 +68,9 @@ pair_reachable :: proc(urls: []string) -> string {
 
 pair_dialog :: proc(app: ^App, em: f32) {
 	p := &app.pair
-	if !p.open { return }
+	if !app.cx.open[.Pair] { return }
 	// (the dialog is the block's: ui.modal ends with it)
-	if ui.modal("pair", em * 40, &p.open) {
+	if ui.modal("pair", em * 40, &app.cx.open[.Pair]) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -87,7 +85,7 @@ pair_dialog :: proc(app: ^App, em: f32) {
 		}
 		ui.spacer(ui.px(em))
 	}
-	if !p.open { delete(p.code); p.code = "" }
+	if !app.cx.open[.Pair] { delete(p.code); p.code = "" }
 }
 
 @(private = "file")
@@ -144,7 +142,7 @@ pair_body :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.fill())
 		if bevel_button("###pair_new", "New code", lucide.REFRESH_CW, .Normal).clicked { pair_new_code(app) }
 		ui.spacer(ui.px(em * 0.5))
-		if bevel_button("###pair_close", "Close", lucide.X, .Normal).clicked { app.pair.open = false }
+		if bevel_button("###pair_close", "Close", lucide.X, .Normal).clicked { app.cx.open[.Pair] = false }
 	}
 }
 

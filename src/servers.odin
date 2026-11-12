@@ -263,8 +263,8 @@ server_view_forget :: proc(app: ^App) {
 @(private = "file")
 server_dialogs_forget :: proc(app: ^App) {
 	app.cx.due[.Refresh], app.cx.due[.Facts], app.cx.due[.Children], app.cx.due[.Context] = {}, {}, {}, {}
-	app.picker.open = false
-	app.delete_open, app.rename.open, app.rename.at = false, false, .None   // (their ids were that server's: nothing acts on one with what came from the other)
+	app.cx.open[.Picker] = false
+	app.cx.open[.Delete], app.cx.open[.Rename], app.rename.at = false, false, .None   // (their ids were that server's: nothing acts on one with what came from the other)
 	sidebar_hold_end(app)
 	delete(app.cx.fork_prompt)
 	app.cx.fork_prompt = ""
@@ -286,6 +286,7 @@ server_known_end :: proc(app: ^App) {
 	virtual.arena_destroy(&app.sess_arena)
 	virtual.arena_destroy(&app.proj_arena)
 	app.known = {}
+	app.cx.open[.Pair] = false   // (its code was that server's; the dialog's state is in known, its being open is not)
 }
 
 // The window closes. Every connection's threads are told; none is waited for (one may be blocked in a read: the process ends with it).
@@ -300,7 +301,6 @@ threads_stop :: proc(app: ^App) {
 // The interface: the status bar's server menu, the dialog that adds or edits one
 
 Server_Edit :: struct {
-	open:     bool,
 	index:    int,          // the server edited (-1: a new one)
 	name:     ui.Text_Field,
 	url:      ui.Text_Field,
@@ -310,7 +310,7 @@ Server_Edit :: struct {
 
 server_edit_open :: proc(app: ^App, i: int) {
 	e := &app.server_edit
-	e.open = true
+	app.cx.open[.Server] = true
 	e.password_shown = false   // (each time it opens, hidden)
 	e.index = i
 	if i >= 0 {
@@ -342,7 +342,7 @@ SERVER_DIALOG_TOP :: 0.2   // of the window's height
 
 server_dialog :: proc(app: ^App, em: f32) {
 	e := &app.server_edit
-	if ui.modal("server", em * 32, &e.open, SERVER_DIALOG_TOP) {
+	if ui.modal("server", em * 32, &app.cx.open[.Server], SERVER_DIALOG_TOP) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em * 1.2))
 		pad :: proc(em: f32) { ui.spacer(ui.px(em * DIALOG_MARGIN_EM)) }
@@ -405,12 +405,12 @@ server_dialog :: proc(app: ^App, em: f32) {
 			if e.index >= 0 {
 				if bevel_button("###rm", "Remove", lucide.TRASH_2, .Danger).clicked {
 					server_remove(app, e.index)
-					e.open = false
+					app.cx.open[.Server] = false
 				}
 			}
 			ui.spacer(ui.fill())
 			if taken { text("tk", "That name is taken", hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
-			if bevel_button("###cancel", "Cancel", "", .Normal).clicked { e.open = false }
+			if bevel_button("###cancel", "Cancel", "", .Normal).clicked { app.cx.open[.Server] = false }
 			ui.spacer(ui.px(em * 0.5))
 			if bevel_button("###ok", e.index >= 0 ? "Save and connect" : "Add and connect", lucide.CHECK, .Accent, disabled = !valid).clicked { save = true }
 			pad(em)
@@ -431,11 +431,11 @@ server_dialog :: proc(app: ^App, em: f32) {
 				i = len(app.servers) - 1
 			}
 			if servers_save(app) && forget != "" { password_forget(forget) }
-			e.open = false
+			app.cx.open[.Server] = false
 			server_connect(app, i)
 		}
 		ui.spacer(ui.px(em * 1.2))
-		dialog_close(&e.open)
+		dialog_close(&app.cx.open[.Server])
 	}
 }
 

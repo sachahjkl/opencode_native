@@ -801,7 +801,7 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 		outgoing_catalog(app)   // (what waited for the commands goes as a prompt: nothing is lost)
 		return false
 	case .Schedule_Made:
-		return app.cx.schedules.open   // ("Invalid duration": under the form, with what was typed)
+		return app.cx.open[.Schedules]   // ("Invalid duration": under the form, with what was typed)
 	case .Session_Viewed:
 		return true   // (nothing to say: the next list shows it as it stands)
 	case .Session_Import:
@@ -993,12 +993,12 @@ stream_up :: proc(app: ^App) {
 @(private = "file")
 dialogs_reread :: proc(app: ^App) {
 	cx := &app.cx
-	if app.settings_open { server_facts_load(app) }
+	if app.cx.open[.Settings] { server_facts_load(app) }
 	integrations_reread(app)
 	plugins_changed(app)
-	if cx.schedules.open && remote_failed(&cx.schedules.read) { schedules_ask(app) }
-	if cx.artifacts.open && remote_failed(&cx.artifacts.read) { artifacts_ask(app) }
-	if cx.files.open && remote_failed(&cx.files.read) { files_list(app) }
+	if cx.open[.Schedules] && remote_failed(&cx.schedules.read) { schedules_ask(app) }
+	if cx.open[.Artifacts] && remote_failed(&cx.artifacts.read) { artifacts_ask(app) }
+	if cx.open[.Files] && remote_failed(&cx.files.read) { files_list(app) }
 	if app.stats_open {
 		if remote_failed(&cx.stats_read) { stats_ask(app) }
 		context_ask(app)   // (what a step added was missed)

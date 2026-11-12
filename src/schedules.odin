@@ -49,7 +49,6 @@ WHEN_MODES := [When_Mode]struct { label, key, hint, unit: string }{
 }
 
 Schedules :: struct {
-	open:     bool,
 	session:  string,   // (owned)
 	read:     Remote,   // the list
 	making:   Remote,   // a new one on its way: the form sends nothing else until it is answered, and says why it failed
@@ -93,7 +92,7 @@ schedules_open :: proc(app: ^App, id: string) {
 	set_text(&s.problem, ""); set_text(&s.removing, "")
 	schedules_clear(s)
 	remote_reset(&s.read)
-	s.open, s.fresh = true, true
+	app.cx.open[.Schedules], s.fresh = true, true
 	schedules_ask(app)
 }
 
@@ -105,7 +104,7 @@ schedules_ask :: proc(app: ^App) {
 
 schedules_forget :: proc(app: ^App) {
 	s := &app.cx.schedules
-	s.open = false
+	app.cx.open[.Schedules] = false
 	set_text(&s.session, ""); set_text(&s.removing, "")
 	schedule_form_clear(s)
 	schedules_clear(s)
@@ -140,8 +139,7 @@ schedules_load :: proc(app: ^App, v: json.Value) {
 }
 
 schedule_changed :: proc(app: ^App) {
-	s := &app.cx.schedules
-	if s.open { schedules_ask(app) }
+	if app.cx.open[.Schedules] { schedules_ask(app) }
 }
 
 // (Of the session the form is for: a later one of another session has reset `making`, and this answer was dropped.)
@@ -210,11 +208,11 @@ field_line :: proc(id: string, f: ^ui.Text_Field, hint: string, em: f32, label :
 // size. (A small thing: no sizes to choose. Its place in layout.dialogs stays: they are read by position.)
 schedules_dialog :: proc(app: ^App, em: f32) {
 	s := &app.cx.schedules
-	if !s.open { return }
+	if !app.cx.open[.Schedules] { return }
 	win := app.state.window_size
 	margin := em * ui.MODAL_MARGIN_EM
 	w := min(math.round(em * SCHEDULES_W_EM), win.x - 2 * margin)
-	if ui.modal("schedules", w, &s.open, SCHEDULES_TOP) {
+	if ui.modal("schedules", w, &app.cx.open[.Schedules], SCHEDULES_TOP) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em * 0.9))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -252,7 +250,7 @@ schedules_dialog :: proc(app: ^App, em: f32) {
 			}
 		}
 		ui.spacer(ui.px(em * 0.9))
-		dialog_close(&s.open)
+		dialog_close(&app.cx.open[.Schedules])
 	}
 }
 
@@ -360,7 +358,6 @@ Artifact :: struct { id, title, entry, url, provider: string }
 Artifact_File :: struct { path, content: string }
 
 Artifacts :: struct {
-	open:     bool,
 	dir:      string,   // the folder (owned)
 	read:     Remote,   // the list
 	file_read: Remote,  // the files of `shown`: they are its own, or there are none
@@ -389,7 +386,7 @@ artifacts_open :: proc(app: ^App) {
 	artifacts_clear(a)
 	d := chat_dir(app)
 	set_text(&a.dir, d != "" ? d : app.chat.new_dir)
-	a.open = true
+	app.cx.open[.Artifacts] = true
 	artifacts_ask(app)
 }
 
@@ -402,7 +399,7 @@ artifacts_ask :: proc(app: ^App) {
 
 artifacts_forget :: proc(app: ^App) {
 	a := &app.cx.artifacts
-	a.open = false
+	app.cx.open[.Artifacts] = false
 	artifacts_clear(a)
 	set_text(&a.dir, "")
 	app.cx.no_artifacts = false   // (what the next server offers is for it to say: experimental_check)
@@ -436,8 +433,7 @@ artifact_read :: proc(app: ^App) {
 }
 
 artifacts_changed :: proc(app: ^App) {
-	a := &app.cx.artifacts
-	if a.open { artifacts_ask(app) }
+	if app.cx.open[.Artifacts] { artifacts_ask(app) }
 	chat_artifacts_ask(app)
 }
 
@@ -573,8 +569,8 @@ artifact_view :: proc(a: ^Artifacts, it: ^Artifact) {
 
 artifacts_dialog :: proc(app: ^App, em: f32) {
 	a := &app.cx.artifacts
-	if !a.open { return }
-	if ui.modal_sized("artifacts", DIALOG_PREFERRED_EM[.Artifacts] * em, &app.cx.dialogs[.Artifacts], &a.open, DIALOG_MIN_EM[.Artifacts] * em) {
+	if !app.cx.open[.Artifacts] { return }
+	if ui.modal_sized("artifacts", DIALOG_PREFERRED_EM[.Artifacts] * em, &app.cx.dialogs[.Artifacts], &app.cx.open[.Artifacts], DIALOG_MIN_EM[.Artifacts] * em) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em * 0.9))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -610,7 +606,7 @@ artifacts_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 		}
 		ui.spacer(ui.px(em * 0.9))
-		dialog_close(&a.open)
+		dialog_close(&app.cx.open[.Artifacts])
 	}
 }
 

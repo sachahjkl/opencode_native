@@ -327,7 +327,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		// a double click on the title edits it in place: Enter keeps it, Escape leaves it, a click elsewhere keeps it
 		session.click(s, "title_b", count = 2)
 		session.frames(s, 2)
-		testing.expect(t, app.rename.at == .Header && session.find(s, "ren_f") != nil && !app.rename.open, "the header's title, a field in place")
+		testing.expect(t, app.rename.at == .Header && session.find(s, "ren_f") != nil && !app.cx.open[.Rename], "the header's title, a field in place")
 		session.key(s, .A, {.Ctrl})
 		session.type_text(s, "Frame pacing")
 		session.frames(s, 1)
@@ -439,7 +439,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		}
 		profile_end("palette")
 		bench_report(&pal)
-		app.palette.open = false
+		app.cx.open[.Palette] = false
 		session.frames(s, 2)
 
 		// the tray, opening and closing without end, over the conversation
@@ -655,8 +655,8 @@ an_artifact_of_the_session_is_a_card :: proc(t: ^testing.T) {
 		session.save_png(s, "artifact_card.png")
 		session.click(s, "art_art_1")
 		session.frames(s, 2)
-		testing.expect(t, app.cx.artifacts.open && app.cx.artifacts.shown == "art_1", "a click shows it")
-		app.cx.artifacts.open = false
+		testing.expect(t, app.cx.open[.Artifacts] && app.cx.artifacts.shown == "art_1", "a click shows it")
+		app.cx.open[.Artifacts] = false
 	})
 }
 
@@ -755,7 +755,7 @@ the_console_screens :: proc(t: ^testing.T) {
 		settings_open(app)
 		session.wait_idle(s)
 		session.save_png(s, "console_settings.png")
-		app.settings_open = false
+		app.cx.open[.Settings] = false
 		// the approvals' shield and its menu, in the composer's toolbar
 		session.wait_idle(s)
 		testing.expect(t, session.find(s, "approval") != nil, "the shield")
@@ -769,7 +769,7 @@ the_console_screens :: proc(t: ^testing.T) {
 		ui.field_set(&app.palette.field, "the")
 		session.wait_idle(s)
 		session.save_png(s, "console_palette.png")
-		app.palette.open = false
+		app.cx.open[.Palette] = false
 		a := &app.activity
 		todos_clear(a)
 		for it in ([4][2]string{{"read the code", "completed"}, {"write the fix", "in_progress"}, {"test it", "pending"}, {"ship it", "pending"}}) {
@@ -899,7 +899,7 @@ a_slider_keeps_the_value_it_is_let_go_at :: proc(t: ^testing.T) {
 		session.frames(s, 3)
 		testing.expect_value(t, config.int_of(&app.cfg_prefs, "conversation.width"), after)
 		ui.field_set(&app.settings_query, "")
-		app.settings_open = false
+		app.cx.open[.Settings] = false
 		pref_set(app, "conversation.width", fmt.tprintf("%v", before))
 	})
 }
@@ -946,7 +946,7 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 			app.view_ref = image_ref_clone(image_ref("not decoded here", .Bytes, "image/png", "picture.png"))
 			app.view_key = 0x5eed
 			app.images[app.view_key] = {state = .Ready, tex = tex, w = W, h = H, used = app.frame_no}
-			app.view_open, app.view_zoom, app.view_pan, app.view_grown = true, 1, {}, false
+			app.cx.open[.Viewer], app.view_zoom, app.view_pan, app.view_grown = true, 1, {}, false
 		}
 		open(app, tex)
 		session.frames(s, 3)
@@ -962,11 +962,11 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		testing.expect_value(t, ps.x, max(vs.x + 2 * pad, math.round(em * VIEWER_MIN_W_EM)))
 		// a press on the picture keeps it; zoomed out, a press beside the picture closes it
 		session.click_at(s, view.rect.min + 5)
-		testing.expect(t, app.view_open, "a press on the picture")
+		testing.expect(t, app.cx.open[.Viewer], "a press on the picture")
 		app.view_zoom = 0.5
 		session.frames(s, 2)
 		session.click_at(s, view.rect.min + 5)
-		testing.expect(t, !app.view_open, "a press beside the picture closes it")
+		testing.expect(t, !app.cx.open[.Viewer], "a press beside the picture closes it")
 		// its corner, outward: the picture grows past its pixels, as far as the pointer goes, and the size is kept (a share of the room)
 		open(app, tex)
 		session.frames(s, 3)
@@ -1010,7 +1010,7 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		session.event(s, {kind = .Key_Press, key = .Escape})
 		session.frames(s, 3)
-		testing.expect(t, !app.view_open, "Escape closes it")
+		testing.expect(t, !app.cx.open[.Viewer], "Escape closes it")
 	})
 }
 
@@ -1358,11 +1358,11 @@ a_password_can_be_shown :: proc(t: ^testing.T) {
 		session.click(s, "reveal")
 		testing.expect(t, app.server_edit.password_shown, "shown")
 		testing.expect_value(t, shown(s), "hunter2")
-		app.server_edit.open = false
+		app.cx.open[.Server] = false
 		session.frames(s, 2)
 		server_edit_open(app, -1)
 		testing.expect(t, !app.server_edit.password_shown, "opened again: hidden")
-		app.server_edit.open = false
+		app.cx.open[.Server] = false
 	})
 }
 
@@ -1561,7 +1561,7 @@ a_diagram_is_zoomed_and_moved_in_the_viewer :: proc(t: ^testing.T) {
 		if !testing.expect(t, session.find(s, "diagram") != nil, "drawn") { return }
 		session.click(s, "diagram")
 		session.wait_idle(s)
-		testing.expect(t, app.view_open && app.view_diagram != "", "a click opens the viewer on it")
+		testing.expect(t, app.cx.open[.Viewer] && app.view_diagram != "", "a click opens the viewer on it")
 		view := session.find(s, "view")
 		if !testing.expect(t, view != nil, "the view") { return }
 		em := ui.font_size()
@@ -1605,7 +1605,7 @@ a_diagram_is_zoomed_and_moved_in_the_viewer :: proc(t: ^testing.T) {
 		testing.expectf(t, inked > len(pic.pixels) / 50, "its boxes, lines and words: %d", inked)
 		session.event(s, {kind = .Key_Press, key = .Escape})
 		session.frames(s, 3)
-		testing.expect(t, !app.view_open, "Escape closes it")
+		testing.expect(t, !app.cx.open[.Viewer], "Escape closes it")
 	})
 }
 

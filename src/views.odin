@@ -82,7 +82,8 @@ build_ui :: proc(app: ^App) {
 	files_dialog(app, em)
 	palette_dialog(app, em)
 	context_menu(app, em)
-	when ODIN_DEBUG { assert(len(app.state.modals_built) == 0 || overlay_open(app), "a dialog overlay_open does not know: the program's keys would act behind it") }
+	// (only this way: a dialog opened by what was built after it, a menu, is open and not built until the next build)
+	when ODIN_DEBUG { assert(len(app.state.modals_built) == 0 || overlay_open(app), "a dialog built that is not in App_Context.open: the program's keys would act behind it") }
 	// (over the top of the conversation, under its header: at the bottom they hid the send button, when one wants to try again)
 	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.state.window_size})
 	ui.toasts_build()
@@ -106,7 +107,7 @@ app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 		if preview_available() {
 			if ui.menu_item("Preview panel", "Ctrl+Shift+B", app.preview.open, icon = lucide.GLOBE).clicked { command_run(app, command_find("view.preview")) }
 		}
-		if ui.menu_item("Keyboard shortcuts", "F1", icon = lucide.KEYBOARD).clicked { app.cx.help_open = true }
+		if ui.menu_item("Keyboard shortcuts", "F1", icon = lucide.KEYBOARD).clicked { app.cx.open[.Help] = true }
 		if ui.menu_item("Sub-agent sessions in the list", "", app.prefs.subagents == "flat", icon = lucide.BOT).clicked { pref_set(app, "sidebar.subagents", app.prefs.subagents == "flat" ? "nested" : "flat") }
 		ui.menu_separator()
 		if ui.menu_item("Setup…", icon = lucide.WRENCH).clicked { setup_open(app) }
@@ -592,7 +593,7 @@ session_menu :: proc(app: ^App, em: f32) {
 		if ui.menu_item("Delete…", icon = lucide.TRASH_2).clicked {
 			delete(app.delete_id)
 			app.delete_id = strings.clone(app.menu_session)
-			app.delete_open = true
+			app.cx.open[.Delete] = true
 		}
 	}
 }
@@ -603,7 +604,7 @@ project_menu :: proc(app: ^App, em: f32) {
 }
 
 delete_dialog :: proc(app: ^App, em: f32) {
-	if ui.modal("delete", em * 26, &app.delete_open) {
+	if ui.modal("delete", em * 26, &app.cx.open[.Delete]) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -621,13 +622,13 @@ delete_dialog :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if ui.row() {
 					ui.spacer(ui.fill())
-					if bevel_button("###cancel", "Cancel", "", .Normal).clicked { app.delete_open = false }
+					if bevel_button("###cancel", "Cancel", "", .Normal).clicked { app.cx.open[.Delete] = false }
 					ui.spacer(ui.px(em * 0.6))
 					if bevel_button("###confirm", "Delete", lucide.TRASH_2, .Danger).clicked {
 						delete_session(app, app.delete_id)
 						if app.delete_id == app.chat.id { new_session(app) }
 						nav_forget(app, app.delete_id)
-						app.delete_open = false
+						app.cx.open[.Delete] = false
 						refresh_soon(app)
 					}
 				}
@@ -1636,9 +1637,9 @@ composer :: proc(app: ^App, em: f32) {
 	// Enter sends, Shift+Enter breaks the line (the editor itself breaks on Enter and commits on Ctrl+Enter). While a turn runs
 	// one way queues and the other sends now: Enter and Ctrl+Enter, or in Ctrl+Enter mode Ctrl+Enter and Ctrl+Shift+Enter.
 	submit, other := false, false
-	keys := app.composer_focused && !app.picker.open
+	keys := app.composer_focused && !app.cx.open[.Picker]
 	// (the tray's keys with the focus nowhere too: a click on one of its rows leaves it there)
-	if app.activity.open && !app.picker.open && (app.composer_focused || ui.focus_key() == 0) { activity_keys(app) }
+	if app.activity.open && !app.cx.open[.Picker] && (app.composer_focused || ui.focus_key() == 0) { activity_keys(app) }
 	if keys { mention_keys(app) }
 	if keys { slash_keys(app) }
 	if keys { history_track(app) }
@@ -1714,13 +1715,13 @@ composer :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.1))
 			agent := shown_agent(app)
 			if agent == "" { agent = "build" }
-			asig := bevel_button("###agent", agent, lucide.BOT, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "agent")
-			if asig.clicked { if app.picker.open && app.picker.id == "agent" { app.picker.open = false } else { picker_open(&app.picker, "agent", asig.box.rect) } }
+			asig := bevel_button("###agent", agent, lucide.BOT, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.cx.open[.Picker] && app.picker.id == "agent")
+			if asig.clicked { if app.cx.open[.Picker] && app.picker.id == "agent" { app.cx.open[.Picker] = false } else { picker_open(app, "agent", asig.box.rect) } }
 			ui.spacer(ui.px(em * 0.4))
 			model, _ := shown_model(app)
 			if model == "" { model = "default model" }
-			msig := bevel_button("###model", model, lucide.CPU, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "model")
-			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(&app.picker, "model", msig.box.rect) } }
+			msig := bevel_button("###model", model, lucide.CPU, .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.cx.open[.Picker] && app.picker.id == "model")
+			if msig.clicked { if app.cx.open[.Picker] && app.picker.id == "model" { app.cx.open[.Picker] = false } else { picker_open(app, "model", msig.box.rect) } }
 			variant_button(app, em)
 			ui.spacer(ui.px(em * 0.4))
 			if app.chat.id != "" { approval_button(app, em) }   // (a session's: a new one has none yet)

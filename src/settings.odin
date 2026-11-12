@@ -584,7 +584,7 @@ dialogs_track :: proc(app: ^App) {
 			_, _ = strings.split_iterator(&rest, " ")
 			rest = fmt.tprintf("%s %s", first, rest)
 		}
-		for d in Dialog {
+		for d in DIALOGS_SIZED {
 			field, _ := strings.split_iterator(&rest, " ")
 			wh := strings.split(field, "x", context.temp_allocator)
 			if len(wh) != 2 { continue }
@@ -595,7 +595,7 @@ dialogs_track :: proc(app: ^App) {
 	if cx.dialogs == cx.dialogs_saved || ui.active_key() != 0 { return }
 	cx.dialogs_saved = cx.dialogs
 	b := strings.builder_make(context.temp_allocator)
-	for d in Dialog { fmt.sbprintf(&b, "%.0fx%.0f ", cx.dialogs[d].x, cx.dialogs[d].y) }
+	for d in DIALOGS_SIZED { fmt.sbprintf(&b, "%.0fx%.0f ", cx.dialogs[d].x, cx.dialogs[d].y) }
 	pref_set(app, "layout.dialogs", strings.trim_space(strings.to_string(b)))
 }
 
@@ -620,7 +620,7 @@ SETTINGS_PAGES := [Settings_Page]struct { title, icon: string, opencode: bool }{
 }
 
 settings_open :: proc(app: ^App) {
-	app.settings_open = true
+	app.cx.open[.Settings] = true
 	server_facts_load(app)
 }
 
@@ -631,7 +631,7 @@ SETTINGS_CLIENT_PAGES :: [?]Settings_Page{.Appearance, .Conversation, .Behaviour
 settings_searching :: proc(app: ^App) -> bool { return config.searching(&app.settings_search) }
 
 settings_dialog :: proc(app: ^App, em: f32) {
-	if ui.modal_sized("settings", DIALOG_PREFERRED_EM[.Settings] * em, &app.cx.dialogs[.Settings], &app.settings_open, DIALOG_MIN_EM[.Settings] * em) {
+	if ui.modal_sized("settings", DIALOG_PREFERRED_EM[.Settings] * em, &app.cx.dialogs[.Settings], &app.cx.open[.Settings], DIALOG_MIN_EM[.Settings] * em) {
 		dialog_backdrop()
 		config.search_begin(&app.settings_search, ui.field_string(&app.settings_query))
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
@@ -702,7 +702,7 @@ settings_dialog :: proc(app: ^App, em: f32) {
 				}
 			}
 		}
-		dialog_close(&app.settings_open)
+		dialog_close(&app.cx.open[.Settings])
 	}
 }
 
@@ -995,9 +995,9 @@ font_button :: proc(app: ^App, name: string, em: f32) {
 	}
 	sig := bevel_button(fmt.tprintf("###fb_%s", name), shown, "", .Normal, ui.px(em * 13))
 	if sig.clicked {
-		if app.picker.open && app.picker.id == name { app.picker.open = false } else { picker_open(&app.picker, name, sig.box.rect) }
+		if app.cx.open[.Picker] && app.picker.id == name { app.cx.open[.Picker] = false } else { picker_open(app, name, sig.box.rect) }
 	}
-	if !(app.picker.open && app.picker.id == name) { return }
+	if !(app.cx.open[.Picker] && app.picker.id == name) { return }
 	if app.font_families == nil { app.font_families = font.system_families(&app.fonts) }
 	items := make([dynamic]Pick_Item, context.temp_allocator)
 	append(&items, Pick_Item{label = "Automatic", detail = fmt.tprintf("%s, built in", own), current = want == "" || want == FONT_BUILTIN})
