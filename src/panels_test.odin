@@ -11,6 +11,7 @@ import "core:strings"
 import "core:sync"
 import "core:testing"
 import "gt:platform"
+import "gt:term"
 import store "gt:store"
 import "gt:ui"
 
@@ -37,9 +38,9 @@ open_shells :: proc(t: ^testing.T, app: ^App, ids: ..string, loc := #caller_loca
 // A shell as a build leaves it: shown, its grid in place.
 @(private = "file")
 built :: proc(app: ^App, s: ^Term, key: ui.Key, focused := true) {
-	s.shown, s.box = true, key
-	s.rect = {{0, 0}, {800, 400}}
-	s.metrics.cell_w, s.metrics.cell_h = 8, 16
+	s.shown, s.view.box = true, key
+	s.view.rect = {{0, 0}, {800, 400}}
+	s.view.metrics.cell_w, s.view.metrics.cell_h = 8, 16
 	if focused { ui.set_focus(key) }
 	terminals_settle(app)
 }
@@ -253,8 +254,8 @@ a_hidden_shell_takes_no_wheel_nor_press :: proc(t: ^testing.T) {
 	terminals_settle(app)
 	ev := []platform.Event{{kind = .Scroll, pos = {10, 10}, delta = {0, 1}}, {kind = .Mouse_Press, pos = {10, 10}, button = .Left}}
 	testing.expect_value(t, len(term_events(app, ev)), 2)
-	testing.expect(t, !s.selecting, "no selection begins on it")
-	testing.expect_value(t, app.cx.terms.press, Term_Press.None)
+	testing.expect(t, s.view.press != .Select, "no selection begins on it")
+	testing.expect(t, app.cx.terms.pressed == nil, "nothing held")
 }
 
 @(test)
@@ -337,7 +338,7 @@ what_is_asked_of_a_shell_goes_to_its_server :: proc(t: ^testing.T) {
 	s := app.cx.terms.list[0]
 	home := app.conn
 	app.conn = bench_conn(app)   // (however it came to be another)
-	term_resize(app, s, 100, 30, 8, 16)
+	term.size_set(&s.view, 100, 30, {8, 16})
 	testing.expect(t, bench_take(t, .Pty_Size).conn == home, "the size")
 	panel_close(app, s.panel)
 	testing.expect(t, bench_take(t, .Action).conn == home, "the DELETE")
@@ -514,9 +515,9 @@ only_the_last_size_goes_one_at_a_time :: proc(t: ^testing.T) {
 	app := bench_new()
 	open_shells(t, app, "a")
 	s := app.cx.terms.list[0]
-	term_resize(app, s, 100, 30, 8, 16)
-	term_resize(app, s, 110, 30, 8, 16)
-	term_resize(app, s, 120, 40, 8, 16)
+	term.size_set(&s.view, 100, 30, {8, 16})
+	term.size_set(&s.view, 110, 30, {8, 16})
+	term.size_set(&s.view, 120, 40, {8, 16})
 	testing.expect_value(t, bench_count(.Pty_Size), 1)
 	first := bench_take(t, .Pty_Size)
 	testing.expect(t, strings.contains(first.body, `"cols":100`), "the first")
@@ -528,7 +529,7 @@ only_the_last_size_goes_one_at_a_time :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(last.body, `"cols":120`) && strings.contains(last.body, `"rows":40`), "then the last, none between")
 	bench_answer(app, last, 200, "")
 	testing.expect_value(t, bench_count(.Pty_Size), 0)
-	term_resize(app, s, 120, 40, 8, 16)
+	term.size_set(&s.view, 120, 40, {8, 16})
 	testing.expect_value(t, bench_count(.Pty_Size), 0)
 }
 
@@ -538,9 +539,9 @@ a_size_refused_is_not_asked_again_at_each_frame :: proc(t: ^testing.T) {
 	app := bench_new()
 	open_shells(t, app, "a")
 	s := app.cx.terms.list[0]
-	term_resize(app, s, 100, 30, 8, 16)
+	term.size_set(&s.view, 100, 30, {8, 16})
 	bench_answer(app, bench_take(t, .Pty_Size), 500, `{"message":"no"}`)
-	term_resize(app, s, 100, 30, 8, 16)
+	term.size_set(&s.view, 100, 30, {8, 16})
 	testing.expect_value(t, bench_count(.Pty_Size), 0)
 	testing.expect_value(t, toasts(app), 0)
 }
@@ -552,7 +553,7 @@ a_shell_that_ended_has_no_size :: proc(t: ^testing.T) {
 	open_shells(t, app, "a")
 	s := app.cx.terms.list[0]
 	term_link_set(app, s, .Closed)
-	term_resize(app, s, 100, 30, 8, 16)
+	term.size_set(&s.view, 100, 30, {8, 16})
 	testing.expect_value(t, bench_count(.Pty_Size), 0)
 }
 
@@ -562,9 +563,8 @@ a_shell_that_ended_has_no_size :: proc(t: ^testing.T) {
 // A drag from `from` to `to`, cells of the view.
 @(private = "file")
 drag_cells :: proc(s: ^Term, from, to: [2]int) {
-	term_select_begin(s, from)
-	term_select_to(s, to)
-	s.selecting = false
+	term.select_begin(&s.view, from)
+	term.select_to(&s.view, to)
 }
 
 // The rows that come move the selected text up and out of the view: the selection stays on it, and a copy is that text.
@@ -576,10 +576,10 @@ output_keeps_a_selection_on_its_text :: proc(t: ^testing.T) {
 	s := app.cx.terms.list[0]
 	term_feed(s, "alpha\r\nbravo charlie\r\n")
 	drag_cells(s, {0, 1}, {4, 1})
-	testing.expect_value(t, term_selection_text(s), "bravo")
-	for i in 0 ..< 3 * int(s.rows) { term_feed(s, fmt.tprintf("line %d\r\n", i)) }
-	testing.expect(t, term_has_selection(s), "rows came: still selected")
-	testing.expect_value(t, term_selection_text(s), "bravo")
+	testing.expect_value(t, term.selection_text(&s.view), "bravo")
+	for i in 0 ..< 3 * s.view.rows { term_feed(s, fmt.tprintf("line %d\r\n", i)) }
+	testing.expect(t, term.has_selection(&s.view), "rows came: still selected")
+	testing.expect_value(t, term.selection_text(&s.view), "bravo")
 }
 
 // The view moved by the wheel, the grid wrapped again: the selection is on the same text.
@@ -592,13 +592,13 @@ the_wheel_and_a_new_size_keep_a_selection :: proc(t: ^testing.T) {
 	for i in 0 ..< 60 { term_feed(s, fmt.tprintf("line %d\r\n", i)) }
 	built(app, s, 11)
 	drag_cells(s, {0, 2}, {6, 2})
-	before := term_selection_text(s)
+	before := term.selection_text(&s.view)
 	testing.expect(t, strings.has_prefix(before, "line "), "a line selected")
 	ev := []platform.Event{{kind = .Scroll, pos = {10, 10}, delta = {0, -1}}}
 	testing.expect_value(t, len(term_events(app, ev)), 0)
-	testing.expect_value(t, term_selection_text(s), before)
-	term_resize(app, s, 100, 30, 8, 16)
-	testing.expect_value(t, term_selection_text(s), before)
+	testing.expect_value(t, term.selection_text(&s.view), before)
+	term.size_set(&s.view, 100, 30, {8, 16})
+	testing.expect_value(t, term.selection_text(&s.view), before)
 	bench_clear(app)
 }
 
@@ -611,12 +611,12 @@ a_click_selects_nothing_and_select_all_takes_the_scrollback :: proc(t: ^testing.
 	s := app.cx.terms.list[0]
 	for i in 0 ..< 60 { term_feed(s, fmt.tprintf("line %d\r\n", i)) }
 	drag_cells(s, {3, 3}, {3, 3})
-	testing.expect(t, !term_has_selection(s), "a click")
-	term_select_all(s)
-	all := term_selection_text(s)
+	testing.expect(t, !term.has_selection(&s.view), "a click")
+	term.select_all(&s.view)
+	all := term.selection_text(&s.view)
 	testing.expectf(t, strings.has_prefix(all, "line 0\n") && strings.contains(all, "line 59"), "all of it: %q", all)
-	term_selection_drop(s)
-	testing.expect(t, !term_has_selection(s), "dropped")
+	term.selection_drop(&s.view)
+	testing.expect(t, !term.has_selection(&s.view), "dropped")
 }
 
 @(test)
@@ -628,11 +628,11 @@ a_drag_ends_when_a_menu_opens :: proc(t: ^testing.T) {
 	built(app, s, 11)
 	ev := []platform.Event{{kind = .Mouse_Press, pos = {10, 10}, button = .Left}}
 	_ = term_events(app, ev)
-	testing.expect(t, s.selecting, "it began")
+	testing.expect(t, s.view.press == .Select, "it began")
 	app.cx.open[.Help] = true
 	_ = term_events(app, nil)
-	testing.expect(t, !s.selecting, "the release will not come here")
-	testing.expect_value(t, app.cx.terms.press, Term_Press.None)
+	testing.expect(t, s.view.press != .Select, "the release will not come here")
+	testing.expect(t, app.cx.terms.pressed == nil, "nothing held")
 }
 
 @(test)
@@ -646,7 +646,7 @@ a_drag_ends_when_what_is_held_is_another_box :: proc(t: ^testing.T) {
 	_ = term_events(app, ev)
 	app.state.active_key[.Left] = 99
 	terminals_settle(app)
-	testing.expect(t, !s.selecting, "it stops")
+	testing.expect(t, s.view.press != .Select, "it stops")
 }
 
 @(test)
@@ -664,7 +664,7 @@ a_program_hears_the_release_outside_the_grid :: proc(t: ^testing.T) {
 	release := []platform.Event{{kind = .Mouse_Release, pos = {5000, 10}, button = .Left}}
 	_ = term_events(app, release)
 	testing.expect(t, outbox(s) != "", "the release, wherever the pointer went")
-	testing.expect_value(t, app.cx.terms.press, Term_Press.None)
+	testing.expect(t, app.cx.terms.pressed == nil, "nothing held")
 }
 
 @(test)
@@ -1355,11 +1355,11 @@ each_shell_has_its_own_zoom_kept_by_its_id :: proc(t: ^testing.T) {
 	ev := []platform.Event{{kind = .Key_Press, key = .Equal, mods = {.Ctrl}}}
 	testing.expect_value(t, len(term_events(app, ev)), 0)
 	testing.expect_value(t, outbox(a), "")
-	testing.expect(t, a.zoom > 1.05 && b.zoom == 1, "the one with the keyboard only")
-	b.shown, b.box, b.rect = true, 12, {{0, 500}, {800, 900}}
+	testing.expect(t, a.view.zoom > 1.05 && b.view.zoom == 1, "the one with the keyboard only")
+	b.shown, b.view.box, b.view.rect = true, 12, {{0, 500}, {800, 900}}
 	wheel := []platform.Event{{kind = .Scroll, pos = {10, 600}, delta = {0, 1}, mods = {.Ctrl}}}
 	testing.expect_value(t, len(term_events(app, wheel)), 0)
-	testing.expect(t, b.zoom < 0.95, "the one under the wheel")
+	testing.expect(t, b.view.zoom < 0.95, "the one under the wheel")
 	// the program again: the same shells, their zooms
 	store.flush(&app.stores.zooms)
 	app2 := bench_new()
@@ -1367,8 +1367,8 @@ each_shell_has_its_own_zoom_kept_by_its_id :: proc(t: ^testing.T) {
 	term_zooms_load(app2)
 	store.close(&app2.stores.zooms)
 	open_shells(t, app2, "a", "b")
-	testing.expect_value(t, app2.cx.terms.list[0].zoom, a.zoom)
-	testing.expect_value(t, app2.cx.terms.list[1].zoom, b.zoom)
+	testing.expect_value(t, app2.cx.terms.list[0].view.zoom, a.view.zoom)
+	testing.expect_value(t, app2.cx.terms.list[1].view.zoom, b.view.zoom)
 	// back to 1: forgotten; closed: forgotten
 	term_zoom_set(app, a, 1)
 	term_close(app, b)

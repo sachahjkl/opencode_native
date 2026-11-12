@@ -22,6 +22,7 @@ import paint "gt:paint"
 import "gt:platform"
 import "gt:png"
 import "gt:render"
+import "gt:term"
 import "gt:ui"
 import session "gt:testkit/session"
 import "gt:testkit/unwatched"
@@ -183,7 +184,7 @@ output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 	testing.expectf(t, strings.has_prefix(term_text(v.term), "$ cargo build"), "the command, at the head of the grid: %q", term_text(v.term))
 	// a drag over the grid selects, and Ctrl+C copies it
 	if g := session.find(s, "term_box"); g != nil {
-		y := g.rect.min.y + v.term.metrics.cell_h * 1.5   // (its second row: the first is the command)
+		y := g.rect.min.y + v.term.view.metrics.cell_h * 1.5   // (its second row: the first is the command)
 		from := [2]f32{g.rect.min.x + 12, y}
 		to := [2]f32{g.rect.min.x + 160, y}
 		session.move(s, from)
@@ -193,19 +194,19 @@ output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 		session.frames(s, 1)
 		session.event(s, {kind = .Mouse_Release, button = .Left, pos = to})
 		session.frames(s, 2)
-		testing.expectf(t, term_has_selection(v.term), "a selection (selecting %v)", v.term.selecting)
+		testing.expectf(t, term.has_selection(&v.term.view), "a selection (press %v)", v.term.view.press)
 		session.event(s, {kind = .Key_Press, key = .C, mods = {.Ctrl}})
 		session.frames(s, 1)
 		testing.expectf(t, strings.contains(session.clipboard(s), "Compiling"), "copied: %q", session.clipboard(s))
 	}
 	// a right click on the grid: its menu
-	term_selection_drop(v.term)
+	term.selection_drop(&v.term.view)
 	session.click(s, "term_box", .Right)
 	session.frames(s, 2)
 	testing.expect(t, session.find_text(s, "Select all") != nil && session.find_text(s, "Copy all the output") != nil, "the grid's menu")
 	session.click_text(s, "Select all")
 	session.frames(s, 2)
-	testing.expect(t, term_has_selection(v.term), "Select all: the screen selected")
+	testing.expect(t, term.has_selection(&v.term.view), "Select all: the screen selected")
 	session.click(s, "term_box", .Right)
 	session.frames(s, 2)
 	session.click_text(s, "Copy all the output")
@@ -215,14 +216,14 @@ output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 	if g := session.find(s, "term_box"); g != nil {
 		for i in 0 ..< 200 { output_view_feed(v, fmt.tprintf("line %d\n", i)) }
 		session.frames(s, 2)
-		testing.expect(t, term_at_bottom(v.term), "it follows its end")
+		testing.expect(t, term.at_bottom(&v.term.view), "it follows its end")
 		chat := session.get(s, "chat")
 		behind := chat.view_target.y
 		at := session.center(g)
 		session.move(s, at)
 		session.event(s, {kind = .Scroll, pos = at, delta = {0, -3}})
 		session.frames(s, 2)
-		testing.expect(t, !term_at_bottom(v.term), "the grid scrolled up")
+		testing.expect(t, !term.at_bottom(&v.term.view), "the grid scrolled up")
 		testing.expect_value(t, session.get(s, "chat").view_target.y, behind)
 	}
 	session.event(s, {kind = .Key_Press, key = .Escape})
@@ -846,9 +847,9 @@ a_shell_keeps_its_columns_across_colours :: proc(t: ^testing.T) {
 			}
 			return last
 		}
-		plain := end_of(img, sh.rect, sh.rect.min.y, sh.metrics.cell_h)
-		coloured := end_of(img, sh.rect, sh.rect.min.y + sh.metrics.cell_h, sh.metrics.cell_h)
-		testing.expect(t, plain > int(sh.rect.min.x), "the first line is drawn")
+		plain := end_of(img, sh.view.rect, sh.view.rect.min.y, sh.view.metrics.cell_h)
+		coloured := end_of(img, sh.view.rect, sh.view.rect.min.y + sh.view.metrics.cell_h, sh.view.metrics.cell_h)
+		testing.expect(t, plain > int(sh.view.rect.min.x), "the first line is drawn")
 		testing.expectf(t, abs(plain - coloured) <= 1, "both lines end at one column: %d and %d", plain, coloured)
 	})
 }
@@ -1674,18 +1675,18 @@ a_shells_zoom_rewraps_once_at_rest :: proc(t: ^testing.T) {
 		if !testing.expect(t, len(app.cx.terms.list) == 1, "a shell") { return }
 		sh := app.cx.terms.list[0]
 		session.wait_idle(s)
-		cols := sh.cols
+		cols := sh.view.cols
 		at := session.center(session.get(s, "term_box"))
 		for _ in 0 ..< 3 {
 			session.event(s, {kind = .Scroll, pos = at, delta = {0, -1}, mods = {.Ctrl}})
 			session.frames(s, 1)
-			session.advance(s, TERM_ZOOM_REST_MS * 0.5)
+			session.advance(s, term.ZOOM_REST_MS * 0.5)
 		}
-		testing.expectf(t, sh.zoom > 1.3, "zoomed in: %v", sh.zoom)
-		testing.expect_value(t, sh.cols, cols)
-		session.advance(s, TERM_ZOOM_REST_MS * 2)
+		testing.expectf(t, sh.view.zoom > 1.3, "zoomed in: %v", sh.view.zoom)
+		testing.expect_value(t, sh.view.cols, cols)
+		session.advance(s, term.ZOOM_REST_MS * 2)
 		session.wait_idle(s)
-		testing.expectf(t, sh.cols < cols, "at rest, fewer columns of bigger cells: %d, then %d", cols, sh.cols)
+		testing.expectf(t, sh.view.cols < cols, "at rest, fewer columns of bigger cells: %d, then %d", cols, sh.view.cols)
 	})
 }
 
@@ -1742,7 +1743,7 @@ a_shells_scroll_bar_can_be_dragged :: proc(t: ^testing.T) {
 		session.wait_idle(s)
 		ghostty_terminal_get(sh.vt, VT_DATA_SCROLLBAR, &bar)
 		testing.expectf(t, bar.offset < at_bottom / 2, "the view went up the scrollback: %d, then %d", at_bottom, bar.offset)
-		testing.expect(t, !term_has_selection(sh), "no selection made by that press")
+		testing.expect(t, !term.has_selection(&sh.view), "no selection made by that press")
 	})
 }
 
