@@ -1769,3 +1769,27 @@ a_recent_folder_tells_and_copies_its_path :: proc(t: ^testing.T) {
 		testing.expect_value(t, session.clipboard(s), path)
 	})
 }
+
+// The palette's arrows move its selection: they are read inside its dialog, which holds the keys while it is open.
+@(test)
+the_palette_arrows_move_the_selection :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		command_run(app, command_find("app.palette"))
+		session.frames(s, 3)
+		testing.expect_value(t, app.palette.sel, 0)
+		session.key(s, .Down)
+		session.frames(s, 2)
+		testing.expect_value(t, app.palette.sel, 1)
+		session.key(s, .Down)
+		session.key(s, .Up)
+		session.frames(s, 2)
+		testing.expect_value(t, app.palette.sel, 1)
+		session.key(s, .Up)
+		session.frames(s, 2)
+		testing.expect_value(t, app.palette.sel, 0)
+		app.cx.open[.Palette] = false
+		session.frames(s, 2)
+	})
+}

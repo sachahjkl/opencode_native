@@ -189,15 +189,6 @@ palette_dialog :: proc(app: ^App, em: f32) {
 	items := palette_items(app, only, needle != "")
 	hits := palette_hits(app, items, needle)
 	n := min(len(hits), PALETTE_ROWS_MAX)
-	if n > 0 {
-		if ui.key_press(.Down) { p.sel = (p.sel + 1) % n; p.reveal = true }
-		if ui.key_press(.Up) { p.sel = (p.sel + n - 1) % n; p.reveal = true }
-		// (a page: the rows the list showed at the last frame, as large as the person made the palette)
-		page := max(int(p.view_h / math.round(em * 2.1)), 1)
-		if ui.key_press(.Page_Down) { p.sel = min(p.sel + page, n - 1); p.reveal = true }
-		if ui.key_press(.Page_Up) { p.sel = max(p.sel - page, 0); p.reveal = true }
-	}
-	p.sel = clamp(p.sel, 0, max(n - 1, 0))
 	mouse := ui.mouse_pos()
 	moved := abs(mouse.x - p.mouse.x) + abs(mouse.y - p.mouse.y) > 0.5
 	p.mouse = mouse
@@ -205,6 +196,16 @@ palette_dialog :: proc(app: ^App, em: f32) {
 	row_h := math.round(em * 2.1)
 	// (resizable, its size kept as the dialogs' are; its top held where a palette is)
 	if ui.modal_sized("palette", DIALOG_PREFERRED_EM[.Palette] * em, &app.cx.dialogs[.Palette], &app.cx.open[.Palette], DIALOG_MIN_EM[.Palette] * em, top = PALETTE_TOP) {
+		// (read inside the dialog: an open dialog holds the keys from the code built outside it)
+		if n > 0 {
+			if ui.key_press(.Down) { p.sel = (p.sel + 1) % n; p.reveal = true }
+			if ui.key_press(.Up) { p.sel = (p.sel + n - 1) % n; p.reveal = true }
+			// (a page: the rows the list showed at the last frame, as large as the person made the palette)
+			page := max(int(p.view_h / math.round(em * 2.1)), 1)
+			if ui.key_press(.Page_Down) { p.sel = min(p.sel + page, n - 1); p.reveal = true }
+			if ui.key_press(.Page_Up) { p.sel = max(p.sel - page, 0); p.reveal = true }
+		}
+		p.sel = clamp(p.sel, 0, max(n - 1, 0))
 		dialog_backdrop()
 		// the search: flush with the palette's top and sides, no frame of its own; a line under it parts it from the list
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
