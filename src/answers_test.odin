@@ -1,17 +1,22 @@
 package ocn
 
-// The bench of the answers: requests are kept instead of sent (net.odin request), and each is answered by the test, with the status
-// and the body it wants, in the order it wants, through what the program runs for a real one (answer). No thread, no server: each
-// test has its App and its thread, nothing is shared. Each case here is a defect that once happened or could: what it checks
-// fails without its fix.
+// The bench of the answers: a connection whose transport keeps the requests instead of sending them (BENCH_TRANSPORT), and each is
+// answered by the test, with the status and the body it wants, in the order it wants, through what the program runs for a real one
+// (request_finish, the post, answer). Its pool has no thread: a request reaches the transport as it is made, on the test's thread, and
+// what waits for its time comes when the test pumps it. No server: each test has its App and its thread, nothing is shared. Each case
+// here is a defect that once happened or could: what it checks fails without its fix.
 
 import "base:runtime"
 import "core:encoding/base64"
 import "core:encoding/json"
 import "core:fmt"
+import "core:mem"
 import "core:os"
 import "core:strings"
+import "core:sync"
 import "core:testing"
+import "core:thread"
+import "core:time"
 import "gt:draw"
 import "gt:config"
 import fsx "gt:fsx"
@@ -21,17 +26,52 @@ import "gt:ui"
 // The requests of this thread's test, oldest first.
 @(thread_local) bench_sent: [dynamic]^Request
 
-bench_sent_add :: proc(r: ^Request) { append(&bench_sent, r) }
+BENCH_TRANSPORT :: Transport{call = bench_call, fetch = bench_fetch, close = bench_close}   // (no sockets: a shell's thread does not start)
 
-// An App as far as the answers need it: no window, no fonts, the toolkit's state only for what it holds (toasts, find, its clock).
+// Kept for the test: it ends it with bench_answer or bench_lost.
+bench_call :: proc(c: ^Conn, r: ^Request) -> bool {
+	append(&bench_sent, r)
+	return false
+}
+
+// What is no request (the schema, a shell's list) finds no server.
+bench_fetch :: proc(c: ^Conn, method, path, body: string, allocator: mem.Allocator) -> (status: int, resp: string, ok: bool) {
+	return 0, "", false
+}
+
+bench_close :: proc(c: ^Conn) {
+	for x, i in bench_conns { if x == c { unordered_remove(&bench_conns, i); break } }
+}
+
+@(thread_local) bench_pool_ms: i64             // the clock of the bench's pools
+@(thread_local) bench_conns: [dynamic]^Conn    // this thread's test's connections, not freed
+
+// A connection of the bench: requests reach bench_sent as they are made.
+bench_conn :: proc(app: ^App) -> ^Conn {
+	c := conn_make(app, {}, BENCH_TRANSPORT, 0, &bench_pool_ms)
+	append(&bench_conns, c)
+	return c
+}
+
+// What waits for its time comes now, on every connection: the bench answers in its own time.
+bench_pump :: proc() {
+	for c in bench_conns { pool_pump(&c.pool, all_timed = true) }
+}
+
+// The answers posted run, as the next build would run them.
+bench_drain :: proc(app: ^App) { ui.drain_posts(&app.state, max(int)) }
+
+// An App as far as the answers need it: no window, no fonts, the toolkit's state only for what it holds (toasts, find, its clock, its posts).
 bench_new :: proc() -> ^App {
 	context.allocator = runtime.heap_allocator()
 	app := new(App)
 	ui.use(&app.state)
 	ui.set_clock(&app.state, &bench_clock)
+	ui.post_configure(&app.state, on_drop = on_drop)
 	bench_clock = 1000
 	clear(&bench_sent)
-	app.conn = new(Conn)
+	clear(&bench_conns)
+	app.conn = bench_conn(app)
 	app.cx.web_host = bench_web_host()
 	app.link = .Online
 	app.chat_scroll = Scroll_Following{}
@@ -48,6 +88,7 @@ bench_new :: proc() -> ^App {
 
 // The oldest request of this kind not answered yet: it leaves the list, for bench_answer.
 bench_take :: proc(t: ^testing.T, kind: Req_Kind, loc := #caller_location) -> ^Request {
+	bench_pump()
 	for r, i in bench_sent {
 		if r.kind == kind { ordered_remove(&bench_sent, i); return r }
 	}
@@ -58,6 +99,7 @@ bench_take :: proc(t: ^testing.T, kind: Req_Kind, loc := #caller_location) -> ^R
 }
 
 bench_count :: proc(kind: Req_Kind) -> int {
+	bench_pump()
 	n := 0
 	for r in bench_sent { if r.kind == kind { n += 1 } }
 	return n
@@ -70,17 +112,25 @@ bench_clear :: proc(app: ^App) {
 	clear(&bench_sent)
 }
 
+// Its answer comes back as a worker brings it: read (unless no longer wanted), posted, run.
 bench_answer :: proc(app: ^App, r: ^Request, status: int, body: string) {
 	r.status, r.ok = status, true
 	r.resp = strings.clone(body)
-	answer(app, r)
+	bench_finish(app, r)
 }
 
 // The server was not reached.
 bench_lost :: proc(app: ^App, r: ^Request) {
 	r.ok = false
 	r.resp = strings.clone("connection refused")
-	answer(app, r)
+	bench_finish(app, r)
+}
+
+@(private = "file")
+bench_finish :: proc(app: ^App, r: ^Request) {
+	if r.app == nil { r.app = app }   // (bench_take found none: the test has failed already)
+	request_finish(r)
+	bench_drain(app)
 }
 
 bench_event :: proc(app: ^App, text: string) {
@@ -165,7 +215,7 @@ a_reading_of_a_server_left_does_not_stay_loading :: proc(t: ^testing.T) {
 	remote_begin(&x)
 	request(app, .Agents, "GET", "/a", remote = &x)
 	r := bench_take(t, .Agents)
-	app.conn = new(Conn)
+	app.conn = bench_conn(app)
 	bench_answer(app, r, 200, `{"data":[{"id":"theirs"}]}`)
 	testing.expect_value(t, x.state, Load_State.Idle)
 	testing.expect_value(t, len(app.agents), 0)
@@ -388,7 +438,7 @@ a_server_switch_gives_back_what_had_not_gone :: proc(t: ^testing.T) {
 	attach(app, "mine.png")
 	submit_prompt(app)
 	r := bench_take(t, .Created)
-	app.conn = new(Conn)
+	app.conn = bench_conn(app)
 	server_forget(app)
 	testing.expect_value(t, ui.area_string(&app.composer), "mine")
 	testing.expect_value(t, len(app.cx.attachments), 1)
@@ -959,7 +1009,7 @@ the_stream_coming_back_renews_the_shells_sockets :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()   // (the App keeps what it made, as the program does, till it ends)
 	app := bench_new()
 	here, there := new(Term_Conn), new(Term_Conn)
-	other := new(Conn)
+	other := bench_conn(app)
 	append(&app.cx.terms.list, new_clone(Term{server = app.conn, conn = here}), new_clone(Term{server = other, conn = there}))
 	app.link = .Connecting
 	stream_up(app)
@@ -1426,4 +1476,136 @@ archiving_asks_the_server_and_shows_at_once :: proc(t: ^testing.T) {
 	session_archive(app, "s1", false)
 	testing.expect_value(t, bench_take(t, .Action).body, `{"archived":false}`)
 	testing.expect(t, !session_is_archived(app, "s1"))
+}
+
+////////////////////////////////
+// The requests' workers (conn.odin, work_pool.odin)
+
+@(private = "file") REST_BOUND :: 5 * time.Second   // what a test waits at most for a worker
+
+// Until `done` says so, or REST_BOUND passed.
+@(private = "file")
+wait_for :: proc(done: proc(data: rawptr) -> bool, data: rawptr) -> bool {
+	start := time.tick_now()
+	for !done(data) {
+		if time.tick_since(start) > REST_BOUND { return false }
+		thread.yield()
+	}
+	return true
+}
+
+@(private = "file") later_calls: i32   // (atomic) what later_call was given
+@(private = "file") later_joined: int  // the threads joined when that connection closed
+
+@(private = "file")
+later_call :: proc(c: ^Conn, r: ^Request) -> bool {
+	r.status, r.ok, r.resp = 200, true, strings.clone("")
+	sync.atomic_add(&later_calls, 1)
+	return true
+}
+
+@(private = "file")
+later_close :: proc(c: ^Conn) { later_joined = c.pool.joined }
+
+// A request for later waits in its connection's timed queue: its worker waits for work, not for its time, and the request goes when the
+// clock says, not before. No thread sleeps for it.
+@(test)
+a_request_later_waits_in_a_queue_not_in_a_thread :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	clock: i64
+	c := conn_make(app, {}, Transport{call = later_call, fetch = bench_fetch, close = later_close}, 1, &clock)
+	app.conn = c
+	request_later(app, .Action, "/later", 500, "")
+	testing.expect(t, pool_wait_rest(&c.pool, REST_BOUND), "its worker rests")
+	st := pool_state(&c.pool)
+	testing.expect_value(t, st.timed, 1)
+	testing.expect_value(t, st.waiting, 1)   // (on the queue's condition: with a clock of its own it waits for a poke, not a time)
+	look :: proc(c: ^Conn, clock: ^i64, at: i64) -> bool {
+		looks := pool_state(&c.pool).looks
+		sync.atomic_store(clock, at)
+		pool_poke(&c.pool)
+		Seen :: struct { c: ^Conn, looks: int }
+		seen := Seen{c, looks}
+		return wait_for(proc(data: rawptr) -> bool {
+			s := (^Seen)(data)
+			st := pool_state(&s.c.pool)
+			return st.looks > s.looks && st.waiting == 1
+		}, &seen)
+	}
+	testing.expect(t, look(c, &clock, 499), "the worker looked")
+	testing.expect_value(t, sync.atomic_load(&later_calls), 0)
+	testing.expect_value(t, pool_state(&c.pool).timed, 1)
+	testing.expect(t, look(c, &clock, 500), "the worker looked again")
+	testing.expect_value(t, sync.atomic_load(&later_calls), 1)
+	testing.expect_value(t, pool_state(&c.pool).timed, 0)
+	// (the worker rests once its answer is posted)
+	testing.expect(t, pool_wait_rest(&c.pool, REST_BOUND), "it rests again")
+	bench_drain(app)
+	testing.expect_value(t, app.pending, 0)
+	testing.expect(t, !flying(app, .Action, ""), "its flight ended")
+	// let go by the App, nothing else holds it: freed, its worker joined
+	app.conn = nil
+	conn_release(app, c)
+	testing.expect_value(t, later_joined, 1)
+	for x in app.cx.conns { testing.expect(t, x != c, "no longer listed") }
+}
+
+@(private = "file") held_joined: int
+
+// The App lets go of a connection while one of its requests is on its way: it stays until that answer ran, then it is freed, its workers
+// joined, its client closed.
+@(test)
+a_connection_let_go_is_freed_when_its_requests_ended :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	held_joined = -1
+	answered :: proc(c: ^Conn, r: ^Request) -> bool {
+		r.status, r.ok, r.resp = 200, true, strings.clone(`{"data":[]}`)
+		return true
+	}
+	c := conn_make(app, {}, Transport{call = answered, fetch = bench_fetch, close = proc(c: ^Conn) { held_joined = c.pool.joined }}, CONN_WORKERS)
+	request(app, .Agents, "GET", "/api/agent", conn = c)
+	conn_stop(c)
+	conn_release(app, c)   // (the App's hold: the request has its own)
+	testing.expect_value(t, held_joined, -1)
+	listed := false
+	for x in app.cx.conns { if x == c { listed = true } }
+	testing.expect(t, listed, "still there while its request is on its way")
+	testing.expect(t, wait_for(proc(data: rawptr) -> bool { return ui.posts_pending(&(^App)(data).state) }, app), "its answer came")
+	bench_drain(app)
+	testing.expect_value(t, held_joined, CONN_WORKERS)
+	for x in app.cx.conns { testing.expect(t, x != c, "no longer listed") }
+	testing.expect_value(t, app.pending, 0)
+}
+
+// What a worker sees of a conversation left: an answer already on its way is not read (what it says is about nothing shown) ...
+@(test)
+an_answer_for_a_conversation_left_is_not_read :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	show(app, "a")
+	load_messages(app, "a")
+	r := bench_take(t, .Messages)
+	show(app, "b")
+	r.status, r.ok, r.resp = 200, true, strings.clone(page(`{"id":"m","type":"user","text":"from a","time":{"created":1}}`))
+	request_finish(r)
+	testing.expect(t, r.dropped, "dropped by its worker")
+	testing.expect(t, r.read_in == nil && r.value == nil, "its answer was not parsed")
+	bench_drain(app)
+	testing.expect_value(t, len(app.chat.messages), 0)
+	testing.expect(t, !flying(app, .Messages, "a"), "its flight ended")
+}
+
+// ... and one that was waiting for its time is not sent.
+@(test)
+a_request_due_after_its_conversation_was_left_is_not_sent :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	show(app, "a")
+	request(app, .Shell_Output, "GET", "/api/shell/x/output", tag = "x", delay = 100)
+	show(app, "b")
+	testing.expect_value(t, bench_count(.Shell_Output), 0)
+	bench_drain(app)
+	testing.expect(t, !flying(app, .Shell_Output, "x"), "its flight ended")
 }

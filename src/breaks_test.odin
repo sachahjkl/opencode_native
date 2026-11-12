@@ -309,6 +309,7 @@ answers_sent :: proc(move: bool) -> int {
 	l.dir = strings.clone("A")
 	app.conn.browser = l
 	fake = {app = app, l = l, move = move, ctx = context}
+	conn_hold(app.conn)   // (as browser_start does: the thread lets go at its end)
 	browser_thread(l)
 	n := 0
 	for s in fake.sent { if strings.contains(s, "42") { n += 1 } }

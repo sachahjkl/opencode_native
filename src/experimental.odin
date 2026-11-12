@@ -8,7 +8,6 @@ package ocn
 import "core:encoding/json"
 import "core:os"
 import "core:strings"
-import "core:thread"
 import "gt:ui"
 
 // The options the server's schema offers that are plain switches, and whether a feature of ours is among them.
@@ -161,19 +160,20 @@ object_text :: proc(s: string) -> string {
 Experimental_Job :: struct { app: ^App, conn: ^Conn, write: bool }
 
 @(private = "file")
-Experimental_Answer :: struct { conn: ^Conn, known: bool, schedules, artifacts, changed: bool }
+Experimental_Answer :: struct { app: ^App, conn: ^Conn, known: bool, schedules, artifacts, changed: bool }
 
-// On a thread: the schema is large, and nothing here is for the interface to wait for.
+// On a worker of the connection, which it holds until its answer ran: the schema is large, and nothing here is for the interface to wait for.
 experimental_check :: proc(app: ^App) {
 	job := new(Experimental_Job)
 	job^ = {app, app.conn, app.prefs.experimental && url_is_here(app.conn.http.base)}
-	thread.create_and_start_with_poly_data(job, proc(job: ^Experimental_Job) {
+	conn_hold(app.conn)
+	pool_add(&app.conn.pool, proc(data: rawptr) {
+		job := (^Experimental_Job)(data)
 		defer free(job)
-		defer free_all(context.temp_allocator)
 		a := context.temp_allocator
 		answer := new(Experimental_Answer)
-		answer.conn = job.conn
-		status, spec_text, ok := http_request(&job.conn.http, "GET", "/openapi.json", "", a)
+		answer.app, answer.conn = job.app, job.conn
+		status, spec_text, ok := job.conn.transport.fetch(job.conn, "GET", "/openapi.json", "", a)
 		if ok && status < 300 {
 			spec, err := json.parse_string(spec_text, allocator = a)
 			keys := experimental_keys(spec, a)
@@ -187,14 +187,14 @@ experimental_check :: proc(app: ^App) {
 			}
 		}
 		if !ui.post(&job.app.state, experimental_answer, answer) { free(answer) }
-	}, self_cleanup = true)
+	}, job)
 }
 
 // The global file the server reads last.
 @(private = "file")
 experimental_write :: proc(conn: ^Conn, keys: []string) -> bool {
 	a := context.temp_allocator
-	status, body, ok := http_request(&conn.http, "GET", "/api/config", "", a)
+	status, body, ok := conn.transport.fetch(conn, "GET", "/api/config", "", a)
 	if !ok || status >= 300 { return false }
 	v, err := json.parse_string(body, allocator = a)
 	if err != nil { return false }
@@ -216,9 +216,9 @@ experimental_write :: proc(conn: ^Conn, keys: []string) -> bool {
 
 @(private = "file")
 experimental_answer :: proc(data: rawptr, word: u64) {
-	app := the_app
 	r := (^Experimental_Answer)(data)
-	defer free(r)
+	app := r.app
+	defer { conn_release(app, r.conn); free(r) }
 	if r.conn != app.conn { return }
 	if r.known { app.cx.no_schedules, app.cx.no_artifacts = !r.schedules, !r.artifacts }
 	if r.changed { ui.toast(.Good, "The server's experimental options are on") }

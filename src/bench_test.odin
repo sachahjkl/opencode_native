@@ -561,7 +561,7 @@ older_page :: proc(first, n: int, next: string) -> string {
 @(private = "file")
 older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 	c := &app.chat
-	app.conn = new(Conn)   // (requests are kept: answers_test.odin)
+	app.conn = bench_conn(app)   // (requests are kept: answers_test.odin)
 	clear(&bench_sent)
 	c.older = strings.clone("cursor", c.alloc)
 	app.chat_scroll = Scroll_Free{}
@@ -780,7 +780,7 @@ the_console_screens :: proc(t: ^testing.T) {
 		session.wait_idle(s)
 		session.save_png(s, "console_activity.png")
 		activity_close(app)
-		if app.conn == nil { app.conn = new(Conn) }   // (the bench has no server: its requests are kept for the test to answer)
+		if app.conn == nil { app.conn = bench_conn(app) }   // (the bench has no server: its requests are kept for the test to answer)
 		clear(&bench_sent)
 		terminal_toggle(app)
 		bench_answer(app, bench_take(t, .Pty_List), 200, `{"data":[{"id":"a","title":"bash","status":"running"}]}`)
@@ -821,7 +821,7 @@ a_shell_keeps_its_columns_across_colours :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		if app.conn == nil { app.conn = new(Conn) }   // (the bench has no server: its requests are kept for the test to answer)
+		if app.conn == nil { app.conn = bench_conn(app) }   // (the bench has no server: its requests are kept for the test to answer)
 		clear(&bench_sent)
 		terminal_toggle(app)
 		bench_answer(app, bench_take(t, .Pty_List), 200, `{"data":[{"id":"a","title":"bash","status":"running"}]}`)
@@ -1665,7 +1665,7 @@ a_shells_zoom_rewraps_once_at_rest :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		if app.conn == nil { app.conn = new(Conn) }
+		if app.conn == nil { app.conn = bench_conn(app) }
 		clear(&bench_sent)
 		terminal_toggle(app)
 		bench_answer(app, bench_take(t, .Pty_List), 200, `{"data":[{"id":"a","title":"bash","status":"running"}]}`)
@@ -1713,7 +1713,7 @@ a_shells_scroll_bar_can_be_dragged :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		if app.conn == nil { app.conn = new(Conn) }
+		if app.conn == nil { app.conn = bench_conn(app) }
 		clear(&bench_sent)
 		terminal_toggle(app)
 		bench_answer(app, bench_take(t, .Pty_List), 200, `{"data":[{"id":"a","title":"bash","status":"running"}]}`)

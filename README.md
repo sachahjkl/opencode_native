@@ -183,7 +183,8 @@ every step is a command of `tools/ocntools` (`help` lists them; `AGENTS.md`). Th
 | | |
 |---|---|
 | `src/main.odin` | window, loop, fonts, frame pacing (the toolkit's cadence model: a resize step is presented at once) |
-| `src/net.odin`, `src/http.odin` | requests on worker threads, the event stream (`ui.post`) |
+| `src/net.odin`, `src/http.odin` | requests and their answers, the event stream (`ui.post`) |
+| `src/conn.odin`, `src/work_pool.odin` | a connection: its transport, its pool of workers and timed queue, when it is freed |
 | `src/servers.odin` | the servers: discovery, the saved ones, connections, the menu and the dialog |
 | `src/model.odin` | sessions, messages, parts and projects; events applied as they stream |
 | `src/views.odin`, `src/markdown.odin` | sidebar, conversation, the tool timeline, composer, Markdown |

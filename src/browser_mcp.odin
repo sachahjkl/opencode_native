@@ -194,6 +194,7 @@ browser_thread :: proc(l: ^Browser_Link) {
 		time.sleep(BROWSER_REOPEN_MS * time.Millisecond)   // (the server lets go of the name first)
 	}
 	sync.atomic_store(&l.state, Browser_Link_State.Over)
+	conn_release_post(l.conn)
 }
 
 // The event stream came back after a loss: as the shells' (terminals_renew), this socket may be dead without knowing it.
@@ -214,7 +215,10 @@ browser_start :: proc(app: ^App) {
 	l := new(Browser_Link)
 	l.app, l.ws, l.conn = app, WS_OPS, app.conn
 	app.conn.browser = l
-	when !ODIN_TEST { thread.create_and_start_with_poly_data(l, browser_thread, self_cleanup = true) }
+	when !ODIN_TEST {
+		conn_hold(app.conn)   // (its thread reads the connection: conn_release_post at its end)
+		thread.create_and_start_with_poly_data(l, browser_thread, self_cleanup = true)
+	}
 }
 
 // The preference is read at each frame, where the plain value is: turned on or off, it holds at once.

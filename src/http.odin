@@ -34,6 +34,7 @@ Ocn_Buf :: struct {
 @(default_calling_convention = "c")
 foreign ocn_native {
 	ocn_client_new :: proc(base: [^]u8, base_len: uint, user: [^]u8, user_len: uint, pass: [^]u8, pass_len: uint) -> rawptr ---
+	ocn_client_free :: proc(c: rawptr) ---
 	ocn_buf_free :: proc(b: Ocn_Buf) ---
 	ocn_request :: proc(c: rawptr, method: [^]u8, method_len: uint, path: [^]u8, path_len: uint, body: [^]u8, body_len: uint, out_status: ^i32, out_body: ^Ocn_Buf) -> i32 ---
 	ocn_sse_open :: proc(c: rawptr, path: [^]u8, path_len: uint, out_status: ^i32) -> rawptr ---
