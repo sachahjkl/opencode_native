@@ -354,9 +354,9 @@ revert_done :: proc(app: ^App) {
 	if !committing { return }
 	if s.session == app.chat.id {
 		load_messages(app, s.session)
-		if s.prompt != "" && strings.trim_space(ui.area_string(&app.composer)) == "" {
-			ui.area_set(&app.composer, s.prompt)
-			app.cx.focus_composer = true
+		if s.prompt != "" && strings.trim_space(ui.area_string(&app.composer.area)) == "" {
+			ui.area_set(&app.composer.area, s.prompt)
+			app.composer.focus_next = true
 		}
 	}
 	changes_reset(c)

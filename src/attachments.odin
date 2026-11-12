@@ -53,7 +53,7 @@ Attach_Outcome :: enum u8 {
 // Whether a file for the composer shown is still being read: it does not send yet (composer_held), what it sends would
 // leave the file behind.
 attaching :: proc(app: ^App) -> bool {
-	for job in app.cx.attaching { if job.chat == app.chat.id { return true } }
+	for job in app.composer.attaching { if job.chat == app.chat.id { return true } }
 	return false
 }
 
@@ -62,7 +62,7 @@ attaching :: proc(app: ^App) -> bool {
 attach_start :: proc(app: ^App, job: ^Attach_Job) {
 	job.app = app
 	job.chat = strings.clone(app.chat.id, runtime.heap_allocator())
-	append(&app.cx.attaching, job)
+	append(&app.composer.attaching, job)
 	sync.atomic_add(&app.pending, 1)
 	thread.create_and_start_with_poly_data(job, attach_run, self_cleanup = true)
 }
@@ -136,7 +136,7 @@ attach_done :: proc(data: rawptr, word: u64) {
 	job := (^Attach_Job)(data)
 	defer attach_job_free(job)
 	sync.atomic_sub(&app.pending, 1)
-	for j, i in app.cx.attaching { if j == job { ordered_remove(&app.cx.attaching, i); break } }
+	for j, i in app.composer.attaching { if j == job { ordered_remove(&app.composer.attaching, i); break } }
 	switch job.outcome {
 	case .Attached:
 		a := Attachment{name = strings.clone(job.name), uri = job.uri, size = job.size}
@@ -210,7 +210,7 @@ attach_drop_event :: proc(app: ^App, e: platform.Event) {
 		switch {
 		case len(d.files) > 0: for p in d.files { attach_path(app, p) }
 		case len(d.image) > 0: attach_bytes(app, d.image, "image/png", fmt.tprintf("dropped-%d.png", attach_number(app)))
-		case d.text != "":     area_insert(&app.composer, d.text)
+		case d.text != "":     area_insert(&app.composer.area, d.text)
 		}
 	}
 }
@@ -240,7 +240,7 @@ attach_paste :: proc(app: ^App) -> bool {
 
 // The number in the name of an image pasted or dropped: past those attached and those on their way.
 @(private = "file")
-attach_number :: proc(app: ^App) -> int { return len(app.cx.attachments) + len(app.cx.attaching) + 1 }
+attach_number :: proc(app: ^App) -> int { return len(app.composer.attachments) + len(app.composer.attaching) + 1 }
 
 // An attachment read back from a prompt's JSON (outgoing.odin).
 attachment_of :: proc(uri, name: string) -> Attachment {
@@ -297,10 +297,10 @@ prompt_fields_into :: proc(b: ^strings.Builder, attachments: []Attachment, menti
 
 // Over the text of the composer, in its well.
 attachments_row :: proc(app: ^App, em: f32) {
-	if len(app.cx.attachments) == 0 { return }
+	if len(app.composer.attachments) == 0 { return }
 	sc := ui.scale()
 	refs := make([dynamic]Image_Ref, context.temp_allocator)
-	for a in app.cx.attachments { if a.ref.key != 0 { append(&refs, a.ref) } }
+	for a in app.composer.attachments { if a.ref.key != 0 { append(&refs, a.ref) } }
 	if len(refs) > 0 {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###att_imgs") {
@@ -313,7 +313,7 @@ attachments_row :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.4, em * 0.3}})
 	gone := -1
 	if ui.flow({em * 0.4, em * 0.3}, "###att_names") {
-		for a, i in app.cx.attachments {
+		for a, i in app.composer.attachments {
 			ui.next({width = ui.children_sum(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###att%d", i)) {
 				ui.spacer(ui.px(em * 0.8))
@@ -324,8 +324,8 @@ attachments_row :: proc(app: ^App, em: f32) {
 		}
 	}
 	if gone >= 0 {
-		delete(app.cx.attachments[gone].name)
-		delete(app.cx.attachments[gone].uri)
-		ordered_remove(&app.cx.attachments, gone)
+		delete(app.composer.attachments[gone].name)
+		delete(app.composer.attachments[gone].uri)
+		ordered_remove(&app.composer.attachments, gone)
 	}
 }

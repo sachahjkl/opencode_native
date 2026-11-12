@@ -709,7 +709,7 @@ activity_keys :: proc(app: ^App) {
 	a.sel = clamp(a.sel, 0, max(n - 1, 0))
 	if n == 0 { return }
 	// (a prompt written in the composer goes first: Enter sends it, Delete edits it)
-	if strings.trim_space(ui.area_string(&app.composer)) != "" { return }
+	if strings.trim_space(ui.area_string(&app.composer.area)) != "" { return }
 	if ui.key_press(.Return) { row_act(app, rows[a.sel]) }
 	if ui.key_press(.Delete) { row_stop(app, rows[a.sel]) }
 }
@@ -947,7 +947,7 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
 		caption_title("h", "ACTIVITY", fmt.tprintf("%d running", running), em, hex(HEX_CYAN))
 		ui.spacer(ui.fill())
-		if app.column_w > em * ACT_KEYS_MIN_EM { text("k", "↑↓ move   Enter open   Del stop   ", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
+		if app.conversation.column_w > em * ACT_KEYS_MIN_EM { text("k", "↑↓ move   Enter open   Del stop   ", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
 		if hint_action("###act_close", "Esc close", em, app.mono) { activity_close(app) }
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
 	}
@@ -1009,7 +1009,7 @@ activity_tray :: proc(app: ^App, em: f32) {
 					if body.size.y > 0 { a.height = body.size.y + 2 * px1() }
 					ui.spacer(ui.px(em * 0.4))
 					has_todos := len(a.todos) > 0
-					if has_todos && app.column_w > em * ACT_COLUMNS_MIN_EM {
+					if has_todos && app.conversation.column_w > em * ACT_COLUMNS_MIN_EM {
 						// side by side: what runs, and the list beside it, whole
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 						if ui.row(id = "###act_cols") {

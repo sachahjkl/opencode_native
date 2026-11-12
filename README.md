@@ -187,7 +187,11 @@ every step is a command of `tools/ocntools` (`help` lists them; `AGENTS.md`). Th
 | `src/conn.odin`, `src/work_pool.odin` | a connection: its transport, its pool of workers and timed queue, when it is freed |
 | `src/servers.odin` | the servers: discovery, the saved ones, connections, the menu and the dialog |
 | `src/model.odin` | sessions, messages, parts and projects; events applied as they stream |
-| `src/views.odin`, `src/markdown.odin` | sidebar, conversation, the tool timeline, composer, Markdown (shown by the toolkit's `markdown` package; `src/markdown.odin` gives it ocn's faces, colours, links and code blocks) |
+| `src/views.odin` | the window's layout: its parts, the dialogs over them, the application menu |
+| `src/chrome.odin`, `src/sidebar_rows.odin` | the title bar, the conversation's header, the status bar; the sidebar's rows and menus |
+| `src/conversation.odin`, `src/message_parts.odin`, `src/text_wells.odin` | the conversation, its messages, the tool timeline and reasoning, text in wells |
+| `src/composer.odin` | the dock and the composer |
+| `src/markdown.odin` | Markdown, shown by the toolkit's `markdown` package: ocn's faces, colours, links and code blocks |
 | `src/picker.odin` | the agent and model pickers |
 | `src/subagents.odin` | sub-agent cards, results, navigation, the running strip, the sidebar tree |
 | `src/images.odin` | image decoding (worker threads), the texture cache, thumbnails, the viewer, logos |

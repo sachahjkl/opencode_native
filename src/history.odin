@@ -14,7 +14,7 @@ History :: struct {
 
 @(private = "file")
 history_view :: proc(app: ^App) {
-	h := &app.history
+	h := &app.composer.history
 	for s in h.view { delete(s) }
 	clear(&h.view)
 	seen := make(map[string]bool, allocator = context.temp_allocator)
@@ -27,35 +27,35 @@ history_view :: proc(app: ^App) {
 	}
 }
 
-history_browsing :: proc(app: ^App) -> bool { return app.history.at > 0 }
+history_browsing :: proc(app: ^App) -> bool { return app.composer.history.at > 0 }
 
 // One step: 1 to an older prompt, -1 to a newer one, past the newest one back to what was being typed.
 history_step :: proc(app: ^App, dir: int) {
-	h := &app.history
+	h := &app.composer.history
 	if h.at == 0 {
 		if dir < 0 { return }
 		history_view(app)
 		if len(h.view) == 0 { return }
 		delete(h.draft)
-		h.draft = strings.clone(ui.area_string(&app.composer))
+		h.draft = strings.clone(ui.area_string(&app.composer.area))
 	}
 	next := h.at + dir
 	if next > len(h.view) { return }   // (the oldest one stays)
 	if next == 0 { history_leave(app, true); return }
 	h.at = next
-	ui.area_set(&app.composer, h.view[next - 1])
+	ui.area_set(&app.composer.area, h.view[next - 1])
 }
 
 // Out of the history; `restore`: what was being typed comes back.
 history_leave :: proc(app: ^App, restore: bool) {
-	h := &app.history
+	h := &app.composer.history
 	if h.at == 0 { return }
 	h.at = 0
-	if restore { ui.area_set(&app.composer, h.draft) }
+	if restore { ui.area_set(&app.composer.area, h.draft) }
 }
 
 // The text shown is no longer the prompt it came from: it is the user's now.
 history_track :: proc(app: ^App) {
-	h := &app.history
-	if h.at > 0 && ui.area_string(&app.composer) != h.view[h.at - 1] { h.at = 0 }
+	h := &app.composer.history
+	if h.at > 0 && ui.area_string(&app.composer.area) != h.view[h.at - 1] { h.at = 0 }
 }

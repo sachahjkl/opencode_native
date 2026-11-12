@@ -109,7 +109,7 @@ mention_word :: proc(text: string, cursor: int) -> (start: int, query: string, o
 
 @(private = "file")
 mention_ask :: proc(app: ^App) {
-	m := &app.cx.mentions
+	m := &app.composer.mentions
 	folder := files_dir(app)
 	if folder != m.folder {
 		mention_hits_clear(m)
@@ -136,18 +136,18 @@ mention_hits_clear :: proc(m: ^Mentions) {
 }
 
 // What was asked was not answered: what was proposed for the word before is not for this one.
-mention_failed :: proc(app: ^App) { mention_hits_clear(&app.cx.mentions) }
+mention_failed :: proc(app: ^App) { mention_hits_clear(&app.composer.mentions) }
 
 // After the editor: what the caret stands on now.
 mention_track :: proc(app: ^App) {
-	m := &app.cx.mentions
-	a := &app.composer
+	m := &app.composer.mentions
+	a := &app.composer.area
 	start, query, ok := mention_word(ui.area_string(a), a.cursor)
 	if !ok || a.cursor != a.mark {
 		m.open, m.dismissed = false, nil
 		return
 	}
-	if !app.composer_focused {
+	if !app.composer.focused {
 		if !ui.hot_within(m.list) { m.open = false }   // (a press on a row of the list leaves the editor: it is the click that chooses)
 		return
 	}
@@ -163,7 +163,7 @@ mention_track :: proc(app: ^App) {
 
 // The answer of the list or the search, if it is still what is looked for; sub-agents that match come first, the best first.
 mention_load :: proc(app: ^App, v: json.Value) {
-	m := &app.cx.mentions
+	m := &app.composer.mentions
 	if !m.open { return }
 	sel := m.sel
 	mention_hits_clear(m)
@@ -186,26 +186,26 @@ mention_load :: proc(app: ^App, v: json.Value) {
 
 // (Of another folder than the one the session shown is in, nothing can be chosen, whatever the next frame finds.)
 mention_shown :: proc(app: ^App) -> bool {
-	m := &app.cx.mentions
+	m := &app.composer.mentions
 	return m.open && len(m.hits) > 0 && m.folder == files_dir(app)
 }
 
 // In place of what was typed, or at the caret: `@name `, remembered for the prompt.
 @(private = "file")
 mention_put :: proc(app: ^App, kind: Mention_Kind, label, target, name: string) {
-	m := &app.cx.mentions
+	m := &app.composer.mentions
 	t := fmt.tprintf("@%s", label)
-	area_insert(&app.composer, fmt.tprintf("%s ", t))
+	area_insert(&app.composer.area, fmt.tprintf("%s ", t))
 	append(&m.chosen, Mention{kind, strings.clone(t), strings.clone(target), strings.clone(name)})
 	m.open = false
-	app.cx.focus_composer = true
+	app.composer.focus_next = true
 }
 
 @(private = "file")
 mention_choose :: proc(app: ^App, k: int) {
-	m := &app.cx.mentions
+	m := &app.composer.mentions
 	h := m.hits[k]
-	a := &app.composer
+	a := &app.composer.area
 	a.mark, a.cursor = m.start, a.cursor   // (what was typed goes)
 	if h.kind == .File {
 		mention_put(app, .File, h.label, file_uri(m.dir, h.label), filepath.base(h.label))
@@ -216,7 +216,7 @@ mention_choose :: proc(app: ^App, k: int) {
 
 // Before the editor and before Enter sends: the list has the keys it needs.
 mention_keys :: proc(app: ^App) {
-	m := &app.cx.mentions
+	m := &app.composer.mentions
 	if !mention_shown(app) { return }
 	n := len(m.hits)
 	if ui.key_press(.Down) { m.sel = (m.sel + 1) % n }
@@ -226,7 +226,7 @@ mention_keys :: proc(app: ^App) {
 }
 
 // Escape belongs to a list over the composer (the `@` mentions, the `/` commands) while it is there, not to the run.
-mention_takes_escape :: proc(app: ^App) -> bool { return (mention_shown(app) || slash_shown(app)) && app.composer_focused }
+mention_takes_escape :: proc(app: ^App) -> bool { return (mention_shown(app) || slash_shown(app)) && app.composer.focused }
 
 // A row of a list over the composer (the `@` mentions, the `/` commands).
 Completion_Row :: struct { icon, label, detail: string }
@@ -270,7 +270,7 @@ completion_list :: proc(app: ^App, id: string, rows: []Completion_Row, sel: int,
 
 // Over the text of the composer, in its well.
 mention_list :: proc(app: ^App, em: f32) {
-	m := &app.cx.mentions
+	m := &app.composer.mentions
 	if !mention_shown(app) { return }
 	rows := make([]Completion_Row, len(m.hits), context.temp_allocator)
 	for h, k in m.hits { rows[k] = {h.kind == .File ? lucide.FILE : lucide.BOT, h.label, h.detail} }
@@ -295,26 +295,26 @@ mention_json :: proc(m: ^Mention, text: string) -> (mention: string, ok: bool) {
 }
 
 mentions_clear :: proc(app: ^App) {
-	m := &app.cx.mentions
+	m := &app.composer.mentions
 	for c in m.chosen { delete(c.text); delete(c.target); delete(c.name) }
 	clear(&m.chosen)
 }
 
 mentions_destroy :: proc(app: ^App) {
-	m := &app.cx.mentions
+	m := &app.composer.mentions
 	mentions_clear(app)
 	delete(m.chosen); delete(m.hits); delete(m.query); delete(m.dir); delete(m.folder); delete(m.read.message)
 	virtual.arena_destroy(&m.arena)
 	m^ = {}
-	delete(app.cx.slash_pick.query)   // (the other list over the composer: slash.odin)
-	ui.fuzzy_cache_destroy(&app.cx.slash_pick.search)
-	app.cx.slash_pick = {}
+	delete(app.composer.slash_pick.query)   // (the other list over the composer: slash.odin)
+	ui.fuzzy_cache_destroy(&app.composer.slash_pick.search)
+	app.composer.slash_pick = {}
 }
 
 // What the server proposed, and what was chosen of it: a file's uri on the server left says nothing on the next one, and must not go with a
 // prompt there. The words stay in the composer, which is the reader's and goes through server_forget whole: they go as plain text.
 mentions_forget :: proc(app: ^App) {
-	m := &app.cx.mentions
+	m := &app.composer.mentions
 	mentions_clear(app)
 	mention_hits_clear(m)
 	m.open, m.dismissed = false, nil
@@ -579,7 +579,7 @@ files_right :: proc(app: ^App, em: f32) {
 		}
 		ui.spacer(ui.px(em * 0.4))
 		if bevel_button("###fl_mention", "Mention in the prompt", lucide.PENCIL, .Accent, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
-			a := &app.composer
+			a := &app.composer.area
 			a.mark = a.cursor
 			mention_put(app, .File, f.file, file_uri(f.dir, f.file), filepath.base(f.file))
 			app.cx.open[.Files] = false

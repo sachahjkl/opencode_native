@@ -168,49 +168,58 @@ sub_view :: proc(app: ^App, child: string, p: ^Part = nil) -> (v: Sub_View) {
 Nav_Kind :: enum u8 { Root, Drill, Back, History, Gone }   // (Gone: the session shown was deleted elsewhere)
 Nav_Step :: struct { kind: Nav_Kind, id: string }   // (id owned)
 
+// Where one goes and has been: the way back up drilled sub-agents, the steps asked for in this frame, the history of places.
+Nav :: struct {
+	drilled: [dynamic]string,      // the sessions drilled down from, outermost first (owned): Back returns to the last
+	steps:   [dynamic]Nav_Step,    // navigation asked for in this frame
+	visited: [dynamic]Nav_Place,   // where one has been (nav_visit)
+	at:      int,                  // where one is in it
+	moving:  bool,                 // a step of the history: nothing to add to it
+}
+
 // Opens a session from the sidebar: no way back but its parent.
-open_root :: proc(app: ^App, id: string) { append(&app.nav_steps, Nav_Step{.Root, strings.clone(id)}) }
+open_root :: proc(app: ^App, id: string) { append(&app.nav.steps, Nav_Step{.Root, strings.clone(id)}) }
 
 // Opens the sub-agent `child` of the session shown; Back comes here again.
 drill_down :: proc(app: ^App, child: string) {
 	if child == "" { return }
-	append(&app.nav_steps, Nav_Step{.Drill, strings.clone(child)})
+	append(&app.nav.steps, Nav_Step{.Drill, strings.clone(child)})
 }
 
-go_back :: proc(app: ^App) { append(&app.nav_steps, Nav_Step{kind = .Back}) }
+go_back :: proc(app: ^App) { append(&app.nav.steps, Nav_Step{kind = .Back}) }
 
 // What was asked for during the frame, in order.
 nav_apply :: proc(app: ^App) {
-	if len(app.nav_steps) == 0 { return }
-	for st in app.nav_steps {
+	if len(app.nav.steps) == 0 { return }
+	for st in app.nav.steps {
 		switch st.kind {
 		case .Root:
-			for s in app.nav { delete(s) }
-			clear(&app.nav)
+			for s in app.nav.drilled { delete(s) }
+			clear(&app.nav.drilled)
 			open_chat(app, st.id)
 		case .Drill:
 			if st.id != app.chat.id {
-				if app.chat.id != "" { append(&app.nav, strings.clone(app.chat.id)) }
+				if app.chat.id != "" { append(&app.nav.drilled, strings.clone(app.chat.id)) }
 				open_chat(app, st.id)
 			}
 		case .Back:
 			nav_back(app)
 		case .History:
 			// (a place already in the history: going there adds nothing to it. The way up a sub-agent's parents stays the parent)
-			app.cx.nav_moving = true
-			for s in app.nav { delete(s) }
-			clear(&app.nav)
+			app.nav.moving = true
+			for s in app.nav.drilled { delete(s) }
+			clear(&app.nav.drilled)
 			if st.id == "" { new_session(app) } else { open_chat(app, st.id) }
-			app.cx.nav_moving = false
+			app.nav.moving = false
 			nav_restore(app, st.id)
 		case .Gone:
-			app.cx.nav_moving = true   // (it left the history: nav_forget)
+			app.nav.moving = true   // (it left the history: nav_forget)
 			new_session(app)
-			app.cx.nav_moving = false
+			app.nav.moving = false
 		}
 		delete(st.id)
 	}
-	clear(&app.nav_steps)
+	clear(&app.nav.steps)
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
@@ -228,9 +237,9 @@ nav_place_free :: proc(p: Nav_Place) { delete(p.id); delete(p.msg) }
 // Where the reader is, kept in the place they leave.
 @(private = "file")
 nav_mark :: proc(app: ^App) {
-	cx := &app.cx
-	if cx.nav_at >= len(cx.nav_hist) { return }
-	p := &cx.nav_hist[cx.nav_at]
+	nav := &app.nav
+	if nav.at >= len(nav.visited) { return }
+	p := &nav.visited[nav.at]
 	if p.id != app.chat.id || p.id == "" { return }
 	delete(p.msg)
 	p.msg, p.dy, p.bottom = strings.clone(app.chat.view_msg), app.chat.view_dy, chat_following(app)
@@ -240,41 +249,41 @@ nav_mark :: proc(app: ^App) {
 // sidebar, the palette, a sub-agent's card); going somewhere from the middle of it forgets what was ahead. `from` is where the
 // window is, for the first step.
 nav_visit :: proc(app: ^App, from, id: string) {
-	cx := &app.cx
-	if cx.nav_moving { return }
+	nav := &app.nav
+	if nav.moving { return }
 	nav_mark(app)
-	if len(cx.nav_hist) == 0 { append(&cx.nav_hist, Nav_Place{id = strings.clone(from)}); cx.nav_at = 0 }
-	if cx.nav_hist[cx.nav_at].id == id { return }
-	for len(cx.nav_hist) > cx.nav_at + 1 { nav_place_free(pop(&cx.nav_hist)) }
-	append(&cx.nav_hist, Nav_Place{id = strings.clone(id)})
-	cx.nav_at += 1
-	if len(cx.nav_hist) > NAV_HISTORY_MAX {
-		nav_place_free(cx.nav_hist[0])
-		ordered_remove(&cx.nav_hist, 0)
-		cx.nav_at -= 1
+	if len(nav.visited) == 0 { append(&nav.visited, Nav_Place{id = strings.clone(from)}); nav.at = 0 }
+	if nav.visited[nav.at].id == id { return }
+	for len(nav.visited) > nav.at + 1 { nav_place_free(pop(&nav.visited)) }
+	append(&nav.visited, Nav_Place{id = strings.clone(id)})
+	nav.at += 1
+	if len(nav.visited) > NAV_HISTORY_MAX {
+		nav_place_free(nav.visited[0])
+		ordered_remove(&nav.visited, 0)
+		nav.at -= 1
 	}
 }
 
 // Whether there is somewhere `d` steps from here (-1: back, 1: forward).
 nav_can :: proc(app: ^App, d: int) -> bool {
-	i := app.cx.nav_at + d
-	return i >= 0 && i < len(app.cx.nav_hist)
+	i := app.nav.at + d
+	return i >= 0 && i < len(app.nav.visited)
 }
 
 nav_step :: proc(app: ^App, d: int) {
 	if !nav_can(app, d) { return }
 	nav_mark(app)
-	app.cx.nav_at += d
-	append(&app.nav_steps, Nav_Step{.History, strings.clone(app.cx.nav_hist[app.cx.nav_at].id)})
+	app.nav.at += d
+	append(&app.nav.steps, Nav_Step{.History, strings.clone(app.nav.visited[app.nav.at].id)})
 }
 
 // The view goes back to where it was in the place reached (messages does it, once the message is there and laid out). (The same
 // session: open_chat did not start the view over, and a way back under way ends here.)
 @(private = "file")
 nav_restore :: proc(app: ^App, id: string) {
-	cx := &app.cx
-	if cx.nav_at < len(cx.nav_hist) {
-		p := cx.nav_hist[cx.nav_at]
+	nav := &app.nav
+	if nav.at < len(nav.visited) {
+		p := nav.visited[nav.at]
 		if p.id == id && id != "" && !p.bottom && p.msg != "" {
 			chat_scroll_event(app, Scroll_Restore{p.msg, p.dy})
 			return
@@ -291,38 +300,38 @@ scrollbar_held :: proc(app: ^App, sb: ^ui.Box) -> bool {
 
 // A session that is gone leaves the history, and what it separated does not stand twice in a row.
 nav_forget :: proc(app: ^App, id: string) {
-	cx := &app.cx
-	drop :: proc(cx: ^App_Context, i: int) {
-		nav_place_free(cx.nav_hist[i])
-		ordered_remove(&cx.nav_hist, i)
-		if i <= cx.nav_at && cx.nav_at > 0 { cx.nav_at -= 1 }
+	nav := &app.nav
+	drop :: proc(nav: ^Nav, i: int) {
+		nav_place_free(nav.visited[i])
+		ordered_remove(&nav.visited, i)
+		if i <= nav.at && nav.at > 0 { nav.at -= 1 }
 	}
 	gone := strings.clone(id, context.temp_allocator)   // (it may be one of them)
-	for i := len(cx.nav_hist) - 1; i >= 0; i -= 1 { if cx.nav_hist[i].id == gone { drop(cx, i) } }
-	for i := len(cx.nav_hist) - 1; i > 0; i -= 1 { if cx.nav_hist[i].id == cx.nav_hist[i - 1].id { drop(cx, i) } }
-	for i := len(app.nav) - 1; i >= 0; i -= 1 {
-		if app.nav[i] == gone { delete(app.nav[i]); ordered_remove(&app.nav, i) }
+	for i := len(nav.visited) - 1; i >= 0; i -= 1 { if nav.visited[i].id == gone { drop(nav, i) } }
+	for i := len(nav.visited) - 1; i > 0; i -= 1 { if nav.visited[i].id == nav.visited[i - 1].id { drop(nav, i) } }
+	for i := len(app.nav.drilled) - 1; i >= 0; i -= 1 {
+		if app.nav.drilled[i] == gone { delete(app.nav.drilled[i]); ordered_remove(&app.nav.drilled, i) }
 	}
 }
 
 nav_clear :: proc(app: ^App) {
-	for p in app.cx.nav_hist { nav_place_free(p) }
-	clear(&app.cx.nav_hist)
-	app.cx.nav_at = 0
+	for p in app.nav.visited { nav_place_free(p) }
+	clear(&app.nav.visited)
+	app.nav.at = 0
 	app.chat.view_msg = ""
 	chat_scroll_event(app, Scroll_Signal.Restore_End)
 }
 
 // The session to go back to: the one drilled down from, else the parent.
 back_target :: proc(app: ^App) -> string {
-	if len(app.nav) > 0 { return app.nav[len(app.nav) - 1] }
+	if len(app.nav.drilled) > 0 { return app.nav.drilled[len(app.nav.drilled) - 1] }
 	return app.chat.self.parent
 }
 
 @(private = "file")
 nav_back :: proc(app: ^App) {
-	if len(app.nav) > 0 {
-		id := pop(&app.nav)
+	if len(app.nav.drilled) > 0 {
+		id := pop(&app.nav.drilled)
 		defer delete(id)
 		open_chat(app, id)
 	} else if p := app.chat.self.parent; p != "" {
@@ -771,14 +780,14 @@ children_of :: proc(app: ^App, id: string, kids: map[string][dynamic]int) -> []i
 // A small disclosure + count beside a session that has sub-agents; returns whether its list is open.
 sub_toggle :: proc(app: ^App, id: string, n: int, running: int, em: f32) -> bool {
 	k := hash.fnv64a(transmute([]u8)id)
-	open := app.sub_open[k] or_else false
+	open := app.sidebar.sub_open[k] or_else false
 	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * PILL_H_EM)), axis = .X, cross = .Center})
 	b := ui.build_box({.Clickable}, "###subt")
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		draw_well(dc, b.rect, PILL_RADIUS, hex(b.hot_t > FADE_VISIBLE ? HEX_SUB_TOGGLE_HOT : HEX_PILL))
 	}
 	sig := ui.signal(b)
-	if sig.clicked { app.sub_open[k] = !open }
+	if sig.clicked { app.sidebar.sub_open[k] = !open }
 	if ui.parent(b) {
 		ui.spacer(ui.px(em * 0.4))
 		if running > 0 {

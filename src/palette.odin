@@ -162,14 +162,14 @@ palette_choose :: proc(app: ^App, it: ^Pal_Item) {
 	case .Agent: choose_agent(app, it.id)
 	case .Model: choose_model(app, app.models[it.index])
 	case .Slash:
-		ui.area_set(&app.composer, fmt.tprintf("/%s ", it.id))
-		app.cx.focus_composer = true
+		ui.area_set(&app.composer.area, fmt.tprintf("/%s ", it.id))
+		app.composer.focus_next = true
 	case .Switch:
 		pref_set(app, it.id, it.on ? "false" : "true")
 	case .Setting:
 		// the settings, searching for it: it shows alone, with its control
 		settings_open(app)
-		ui.field_set(&app.settings_query, setting_query(it.id))
+		ui.field_set(&app.settings.query, setting_query(it.id))
 	}
 }
 

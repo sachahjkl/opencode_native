@@ -521,7 +521,7 @@ terminals_hide :: proc(app: ^App) {
 	s.ask = {}
 	s.make_after = false
 	terminals_dock(app)
-	if had_keys { app.cx.focus_composer = true }
+	if had_keys { app.composer.focus_next = true }
 }
 
 // (a shell the list and this client both know is left as it is: the reading only adds)
@@ -647,7 +647,7 @@ term_close :: proc(app: ^App, t: ^Term) {
 	if len(s.list) == 0 {
 		s.open = false
 		s.ask = {}
-		if had_keys { app.cx.focus_composer = true }
+		if had_keys { app.composer.focus_next = true }
 	} else if had_keys {
 		for o in s.list { if ui.dock_shown(&app.dock, o.panel) { term_focus_ask(app, o.panel); break } }
 	}

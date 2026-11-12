@@ -49,13 +49,13 @@ a_sub_agents_end_shows_and_nothing_is_read_again_meanwhile :: proc(t: ^testing.T
 	read := c.subs.computed
 	stats := local_stats(app)
 	testing.expect_value(t, stats.calls, 1)
-	figured := app.cx.local_stats.computed
+	figured := app.stats.local.computed
 	for _ in 0 ..< 3 {
 		testing.expect(t, sub_result(c, "child1") == nil && !is_child(c, "child1"))
 		_ = local_stats(app)
 	}
 	testing.expect_value(t, c.subs.computed, read)
-	testing.expect_value(t, app.cx.local_stats.computed, figured)
+	testing.expect_value(t, app.stats.local.computed, figured)
 
 	bench_event(app, `{"type":"session.tool.success","data":{"sessionID":"s","assistantMessageID":"a1","id":"t1","content":[{"type":"text","text":"found it"}],"metadata":{"sessionID":"child1"}}}`)
 	testing.expect(t, is_child(c, "child1"), "the call names it now")
@@ -73,11 +73,11 @@ a_sub_agents_end_shows_and_nothing_is_read_again_meanwhile :: proc(t: ^testing.T
 	testing.expect(t, m != nil && m.text == "all done", "the result message of the page")
 	testing.expect_value(t, sub_view(app, "child1").state, Sub_State.Failed)
 	testing.expect_value(t, local_stats(app).msgs, len(c.messages))
-	read, figured = c.subs.computed, app.cx.local_stats.computed
+	read, figured = c.subs.computed, app.stats.local.computed
 	_ = sub_result(c, "child1")
 	_ = local_stats(app)
 	testing.expect_value(t, c.subs.computed, read)
-	testing.expect_value(t, app.cx.local_stats.computed, figured)
+	testing.expect_value(t, app.stats.local.computed, figured)
 }
 
 // A tool call's time: tenths while short, minutes later; while it runs, up to now; nothing when its times are not known.

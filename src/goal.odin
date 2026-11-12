@@ -89,8 +89,8 @@ goal_strip :: proc(app: ^App, em: f32) {
 		}
 		ui.spacer(ui.px(em * 0.9))
 		if hint_action("###g_change", "change", em, app.mono, lucide.PENCIL) {
-			ui.area_set(&app.composer, fmt.tprintf("/goal %s", g.objective))
-			app.cx.focus_composer = true
+			ui.area_set(&app.composer.area, fmt.tprintf("/goal %s", g.objective))
+			app.composer.focus_next = true
 		}
 		ui.spacer(ui.px(em * 0.9))
 		if hint_action("###g_clear", "clear", em, app.mono, lucide.X) { goal_command(app, "clear") }

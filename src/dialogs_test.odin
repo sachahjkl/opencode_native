@@ -269,7 +269,7 @@ looking_while_it_goes_back_keeps_the_prompt_for_the_composer :: proc(t: ^testing
 	testing.expect(t, !changes_shown(c), "closed at once")
 	changes_open(app, "s")
 	bench_answer(app, bench_take(t, .Revert_Done), 200, "")
-	testing.expect_value(t, ui.area_string(&app.composer), "the prompt")
+	testing.expect_value(t, ui.area_string(&app.composer.area), "the prompt")
 	testing.expect(t, state_is(c, Changes_Closed))
 }
 
@@ -1024,9 +1024,9 @@ a_binary_file_says_so :: proc(t: ^testing.T) {
 
 @(private = "file")
 typed :: proc(app: ^App, text: string) {
-	ui.area_set(&app.composer, text)
-	app.composer.cursor, app.composer.mark = len(text), len(text)
-	app.composer_focused = true
+	ui.area_set(&app.composer.area, text)
+	app.composer.area.cursor, app.composer.area.mark = len(text), len(text)
+	app.composer.focused = true
 }
 
 @(private = "file")
@@ -1039,7 +1039,7 @@ an_at_at_the_start_opens_at_once :: proc(t: ^testing.T) {
 	app := bench_new()
 	typed(app, "@")
 	mention_track(app)
-	testing.expect(t, app.cx.mentions.open)
+	testing.expect(t, app.composer.mentions.open)
 	testing.expect_value(t, bench_count(.Mention_Files), 1)
 }
 
@@ -1047,7 +1047,7 @@ an_at_at_the_start_opens_at_once :: proc(t: ^testing.T) {
 what_is_proposed_is_of_the_folder_shown :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	m := &app.cx.mentions
+	m := &app.composer.mentions
 	show(app, "a")
 	described(app, t, "a", "D:/a", "p")
 	typed(app, "@a")
@@ -1073,7 +1073,7 @@ what_is_proposed_is_of_the_folder_shown :: proc(t: ^testing.T) {
 a_word_given_up_or_refused_proposes_nothing_old :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	m := &app.cx.mentions
+	m := &app.composer.mentions
 	typed(app, "@a")
 	mention_track(app)
 	old := bench_take(t, .Mention_Files)
@@ -1103,11 +1103,11 @@ the_project_says_why_it_could_not_be_read :: proc(t: ^testing.T) {
 	described(app, t, "a", "D:/a", "p1")
 	stats_open(app)
 	bench_lost(app, bench_take(t, .Stats))
-	testing.expect_value(t, app.cx.stats_read.state, remote.State.Failed)
+	testing.expect_value(t, app.stats.read.state, remote.State.Failed)
 	stats_ask(app)
 	bench_answer(app, bench_take(t, .Stats), 200, STATS)
-	testing.expect_value(t, app.proj_stats.sessions, 7)
-	testing.expect(t, remote.shows(&app.cx.stats_read))
+	testing.expect_value(t, app.stats.project.sessions, 7)
+	testing.expect(t, remote.shows(&app.stats.read))
 }
 
 @(test)
@@ -1118,13 +1118,13 @@ an_earlier_projects_totals_do_not_fill_the_dialog :: proc(t: ^testing.T) {
 	described(app, t, "a", "D:/a", "p1")
 	stats_open(app)
 	old := bench_take(t, .Stats)
-	app.stats_open = false
+	app.stats.open = false
 	show(app, "b")
 	described(app, t, "b", "D:/b", "p2")
 	stats_open(app)
 	bench_answer(app, old, 200, STATS)
-	testing.expect_value(t, app.proj_stats.sessions, 0)
-	testing.expect_value(t, app.cx.stats_read.state, remote.State.Loading)
+	testing.expect_value(t, app.stats.project.sessions, 0)
+	testing.expect_value(t, app.stats.read.state, remote.State.Loading)
 }
 
 // The project was looked at once, on opening: not known yet, the section was hidden for good.
@@ -1146,8 +1146,8 @@ the_dialog_follows_the_session_shown :: proc(t: ^testing.T) {
 	show(app, "b")
 	described(app, t, "b", "D:/b", "p2")
 	stats_follow(app)
-	testing.expect_value(t, app.proj_stats.project, "p2")
-	testing.expect_value(t, app.proj_stats.sessions, 0)
+	testing.expect_value(t, app.stats.project.project, "p2")
+	testing.expect_value(t, app.stats.project.sessions, 0)
 	testing.expect(t, strings.contains(bench_take(t, .Stats).path, "project=p2"))
 }
 
@@ -1310,15 +1310,15 @@ a_shell_the_server_refused_is_not_shown_as_set :: proc(t: ^testing.T) {
 the_chip_comes_back_where_it_was :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	cx := &app.cx
-	testing.expect(t, quote_place(cx, 5, {100, 200}), "a new selection")
-	testing.expect_value(t, cx.quote_at.min.x, 100)
-	cx.quote_open = false   // (a dialog opened over it)
-	testing.expect(t, !quote_place(cx, 5, {7, 9}), "the same one")
-	testing.expect(t, cx.quote_open)
-	testing.expect_value(t, cx.quote_at.min.x, 100)
-	testing.expect(t, quote_place(cx, 6, {7, 9}))
-	testing.expect_value(t, cx.quote_at.min.x, 7)
+	q := &app.quote
+	testing.expect(t, quote_place(q, 5, {100, 200}), "a new selection")
+	testing.expect_value(t, q.at.min.x, 100)
+	q.open = false   // (a dialog opened over it)
+	testing.expect(t, !quote_place(q, 5, {7, 9}), "the same one")
+	testing.expect(t, q.open)
+	testing.expect_value(t, q.at.min.x, 100)
+	testing.expect(t, quote_place(q, 6, {7, 9}))
+	testing.expect_value(t, q.at.min.x, 7)
 }
 
 ////////////////////////////////
@@ -1412,17 +1412,17 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	testing.expect_value(t, f.read.state, remote.State.Idle)
 	testing.expect_value(t, f.file_read.state, remote.State.Idle)
 
-	m := &cx.mentions
+	m := &app.composer.mentions
 	testing.expect(t, !m.open)
 	testing.expect_value(t, len(m.hits), 0)
 	testing.expect_value(t, m.dir, "")
 	testing.expect_value(t, m.folder, "")
 	testing.expect_value(t, m.read.state, remote.State.Idle)
 
-	testing.expect(t, !app.stats_open)
-	testing.expect_value(t, app.proj_stats.project, "")
-	testing.expect_value(t, app.proj_stats.sessions, 0)
-	testing.expect_value(t, cx.stats_read.state, remote.State.Idle)
+	testing.expect(t, !app.stats.open)
+	testing.expect_value(t, app.stats.project.project, "")
+	testing.expect_value(t, app.stats.project.sessions, 0)
+	testing.expect_value(t, app.stats.read.state, remote.State.Idle)
 
 	facts := &app.facts
 	for k in Fact { testing.expect_value(t, facts.reads[k].state, remote.State.Idle) }

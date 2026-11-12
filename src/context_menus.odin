@@ -19,19 +19,33 @@ Ctx_Target :: struct {
 	image:  Image_Ref,  // the image (owned: the message that holds it can be read again before the menu is used)
 }
 
+// The menu of a right click: what it is about, and whether this build's right press found it.
+Ctx_Menu :: struct {
+	target: Ctx_Target,
+	taken:  bool,   // a right press of this build found its target
+}
+
+// The chip at the end of a selection (quote_chip).
+Quote_Chip :: struct {
+	open:         bool,
+	at:           Rect,
+	kept:         string,   // what it quotes (owned)
+	serial, done: u64,      // which selection, and the last one quoted
+}
+
 // A right press in `b` opens the menu of `kind`, unless something over it or inside it took the press.
 ctx_check :: proc(app: ^App, b: ^ui.Box, kind: Ctx_Kind, msg := "", part := 0, image := Image_Ref{}) {
-	if app.cx.ctx_taken || !ui.mouse_pressed(.Right) || b == nil || overlay_open(app) { return }
+	if app.ctx_menu.taken || !ui.mouse_pressed(.Right) || b == nil || overlay_open(app) { return }
 	if !rect_contains(b.rect, ui.mouse_pos()) { return }
 	ctx_open(app, kind, msg, part, image)
 }
 
 // The menu of `kind`, where the pointer is (a dialog opens its own: ctx_check leaves what is under a dialog alone).
 ctx_open :: proc(app: ^App, kind: Ctx_Kind, msg := "", part := 0, image := Image_Ref{}) {
-	app.cx.ctx_taken = true
-	delete(app.cx.ctx.msg)
-	image_ref_delete(&app.cx.ctx.image)
-	app.cx.ctx = {kind = kind, msg = strings.clone(msg), part = part, image = image_ref_clone(image)}
+	app.ctx_menu.taken = true
+	delete(app.ctx_menu.target.msg)
+	image_ref_delete(&app.ctx_menu.target.image)
+	app.ctx_menu.target = {kind = kind, msg = strings.clone(msg), part = part, image = image_ref_clone(image)}
 	ui.ctx_menu_open(ui.key_from_string(0, CTX_MENU_KEY), ui.mouse_pos())
 }
 
@@ -55,8 +69,8 @@ answer_text :: proc(m: ^Message) -> string {
 
 // A new session with the history of `id` before the message `before` ("": all of it). `prompt`: what the composer takes back in it.
 fork_session :: proc(app: ^App, id, before: string, prompt := "") {
-	delete(app.cx.fork_prompt)
-	app.cx.fork_prompt = strings.clone(prompt)
+	delete(app.composer.fork_prompt)
+	app.composer.fork_prompt = strings.clone(prompt)
 	body := before != "" ? fmt.tprintf(`{{"before":%s}}`, jquote(before)) : "{}"
 	request(app, .Forked, "POST", fmt.tprintf("/api/session/%s/fork", id), body, id)
 }
@@ -103,7 +117,7 @@ first_url :: proc(s: string) -> string {
 
 @(private = "file")
 composer_menu :: proc(app: ^App) {
-	a := &app.composer
+	a := &app.composer.area
 	lo, hi := min(a.cursor, a.mark), max(a.cursor, a.mark)
 	if ui.menu_item("Undo", "Ctrl+Z", icon = lucide.UNDO_2, enabled = len(a.undo) > 0).clicked { ui.area_undo(a) }
 	if ui.menu_item("Redo", "Ctrl+Y", icon = lucide.REDO_2, enabled = len(a.redo) > 0).clicked { ui.area_redo(a) }
@@ -115,12 +129,12 @@ composer_menu :: proc(app: ^App) {
 	if ui.menu_item("Copy", "Ctrl+C", icon = lucide.COPY, enabled = hi > lo).clicked { clip_set(string(a.buf[lo:hi])) }
 	if ui.menu_item("Paste", "Ctrl+V", icon = lucide.CLIPBOARD_PASTE).clicked {
 		if !attach_paste(app) { area_insert(a, clip_get()) }
-		app.cx.focus_composer = true
+		app.composer.focus_next = true
 	}
 	ui.menu_separator()
 	if ui.menu_item("Select all", "Ctrl+A", icon = lucide.TEXT_CURSOR_INPUT, enabled = len(a.buf) > 0).clicked {
 		a.mark, a.cursor = 0, len(a.buf)
-		app.cx.focus_composer = true
+		app.composer.focus_next = true
 	}
 }
 
@@ -137,8 +151,8 @@ message_menu :: proc(app: ^App, m: ^Message) {
 	case .User:
 		if ui.menu_item("Copy", "", icon = lucide.COPY).clicked { copied(m.text, "Prompt") }
 		if ui.menu_item("Edit in the composer", icon = lucide.PENCIL).clicked {
-			ui.area_set(&app.composer, m.text)
-			app.cx.focus_composer = true
+			ui.area_set(&app.composer.area, m.text)
+			app.composer.focus_next = true
 		}
 		ui.menu_separator()
 		fork_item(app, m)
@@ -188,26 +202,26 @@ tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
 
 // At the end of the build, for what a right press noted.
 context_menu :: proc(app: ^App, em: f32) {
-	app.cx.ctx_taken = false
+	app.ctx_menu.taken = false
 	quote_chip(app, em)
 	if ui.ctx_menu(ui.key_from_string(0, CTX_MENU_KEY)) {
-		switch app.cx.ctx.kind {
+		switch app.ctx_menu.target.kind {
 		case .None:
 		case .Composer: composer_menu(app)
 		case .Message:
-			if m := find_msg(app, app.cx.ctx.msg); m != nil { message_menu(app, m) }
+			if m := find_msg(app, app.ctx_menu.target.msg); m != nil { message_menu(app, m) }
 		case .Tool:
-			if m := find_msg(app, app.cx.ctx.msg); m != nil && app.cx.ctx.part < len(m.parts) { tool_menu(app, m, &m.parts[app.cx.ctx.part]) }
+			if m := find_msg(app, app.ctx_menu.target.msg); m != nil && app.ctx_menu.target.part < len(m.parts) { tool_menu(app, m, &m.parts[app.ctx_menu.target.part]) }
 		case .Image:
-			image := app.cx.ctx.image
+			image := app.ctx_menu.target.image
 			if ui.menu_item("Copy image", app.cx.open[.Viewer] ? "Ctrl+C" : "", icon = lucide.COPY).clicked { image_copy(app, image) }
 			if !app.cx.open[.Viewer] {
 				if ui.menu_item("Open in the viewer", icon = lucide.ZOOM_IN).clicked { image_view_open(app, image) }
 			}
 		case .Folder:
-			if ui.menu_item("Copy the path", icon = lucide.COPY).clicked { clip_set(app.cx.ctx.msg); ui.toast(.Good, "Copied") }
+			if ui.menu_item("Copy the path", icon = lucide.COPY).clicked { clip_set(app.ctx_menu.target.msg); ui.toast(.Good, "Copied") }
 		case .Diagram:
-			code := app.cx.ctx.msg
+			code := app.ctx_menu.target.msg
 			if ui.menu_item("Copy as PNG", app.cx.open[.Viewer] ? "Ctrl+C" : "", icon = lucide.IMAGE).clicked { diagram_copy_png(app, code) }
 			if ui.menu_item("Copy the text", icon = lucide.COPY).clicked { clip_set(code); ui.toast(.Good, "Copied") }
 			if !app.cx.open[.Viewer] {
@@ -226,13 +240,13 @@ quote_text :: proc(app: ^App, text: string, comment: bool) {
 	t := strings.trim_space(text)
 	if t == "" { return }
 	b := strings.builder_make(context.temp_allocator)
-	had := strings.trim_space(ui.area_string(&app.composer))
+	had := strings.trim_space(ui.area_string(&app.composer.area))
 	if had != "" { fmt.sbprintf(&b, "%s\n\n", had) }
 	rest := t
 	for line in strings.split_lines_iterator(&rest) { fmt.sbprintf(&b, "> %s\n", strings.trim_right_space(line)) }
 	strings.write_byte(&b, '\n')
-	ui.area_set(&app.composer, strings.to_string(b))
-	if comment { app.cx.focus_composer = true } else { ui.toast(.Good, "Quoted in the composer") }
+	ui.area_set(&app.composer.area, strings.to_string(b))
+	if comment { app.composer.focus_next = true } else { ui.toast(.Good, "Quoted in the composer") }
 }
 
 quote_selection :: proc(app: ^App) {
@@ -241,32 +255,32 @@ quote_selection :: proc(app: ^App) {
 
 // The chip of selection `serial`: a new one goes where the pointer ended it (true). One that comes back, a dialog that hid it closed,
 // stays where it was: the pointer is wherever that dialog left it.
-quote_place :: proc(cx: ^App_Context, serial: u64, pointer: Vec2) -> (new_selection: bool) {
-	cx.quote_open = true
-	if serial == cx.quote_serial { return false }
-	cx.quote_serial = serial
-	cx.quote_at = {pointer, pointer + 1}
+quote_place :: proc(q: ^Quote_Chip, serial: u64, pointer: Vec2) -> (new_selection: bool) {
+	q.open = true
+	if serial == q.serial { return false }
+	q.serial = serial
+	q.at = {pointer, pointer + 1}
 	return true
 }
 
 // Where a selection ends: what can be done with it, at hand. The press on it may take the selection away: the text was kept.
 quote_chip :: proc(app: ^App, em: f32) {
 	s := &app.state
-	cx := &app.cx
+	q := &app.quote
 	id := "###quote_chip"
 	on_chip := false
-	if r, ok := ui.popover_rect(id); ok && cx.quote_open { on_chip = rect_contains(r, ui.mouse_pos()) }
+	if r, ok := ui.popover_rect(id); ok && q.open { on_chip = rect_contains(r, ui.mouse_pos()) }
 	if !on_chip {
-		if !ui.has_selection(s) || overlay_open(app) || ui.active_key() != 0 { cx.quote_open = false; return }
+		if !ui.has_selection(s) || overlay_open(app) || ui.active_key() != 0 { q.open = false; return }
 		serial := ui.selection_serial(s)
-		if serial == cx.quote_done { return }
-		if quote_place(cx, serial, ui.mouse_pos()) {
-			delete(cx.quote_kept)
-			cx.quote_kept = ui.selected_text(s)
+		if serial == q.done { return }
+		if quote_place(q, serial, ui.mouse_pos()) {
+			delete(q.kept)
+			q.kept = ui.selected_text(s)
 		}
 	}
-	if !cx.quote_open { return }
-	if ui.popover(id, cx.quote_at, math.round(em * QUOTE_CHIP_W_EM), .Above, align_right = false) {
+	if !q.open { return }
+	if ui.popover(id, q.at, math.round(em * QUOTE_CHIP_W_EM), .Above, align_right = false) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.3)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###qr") {
 			ui.spacer(ui.px(em * 0.35))
@@ -274,9 +288,9 @@ quote_chip :: proc(app: ^App, em: f32) {
 			commented := bevel_button("###q2", "Comment", "", .Ghost, ui.fill(), math.round(em * BUTTON_SMALL_H_EM)).clicked
 			ui.spacer(ui.px(em * 0.35))
 			if quoted || commented {
-				quote_text(app, cx.quote_kept, commented)
-				cx.quote_done = cx.quote_serial
-				cx.quote_open = false
+				quote_text(app, q.kept, commented)
+				q.done = q.serial
+				q.open = false
 			}
 		}
 	}
@@ -402,8 +416,8 @@ forked_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 	refresh_sessions(app)
 	if r.gen == app.chat.gen {
 		open_root(app, id)
-		prompt_restore(app, app.cx.fork_prompt)
-		if app.cx.fork_prompt != "" { app.cx.focus_composer = true }
+		prompt_restore(app, app.composer.fork_prompt)
+		if app.composer.fork_prompt != "" { app.composer.focus_next = true }
 	}
 	ui.toast(.Good, "Forked")
 }

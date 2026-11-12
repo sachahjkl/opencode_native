@@ -46,8 +46,7 @@ App :: struct {
 	server:         int,               // the one connected
 	conn:           ^Conn,             // its connection
 	server_edit:    Server_Edit,
-	picker:         Picker,            // the composer's agent or model picker (picker.odin)
-	history:        History,           // Up and Down in the composer: the session's prompts (history.odin)
+	picker:         Picker,            // the pickers of the composer (agent, model) and of the settings (fonts) (picker.odin)
 	activity:       Activity,          // what runs behind the conversation (activity.odin)
 	palette:        Palette,           // Ctrl+K (palette.odin)
 	term_zooms:     Term_Zooms,        // each shell's zoom, by its id (terminal.odin)
@@ -70,50 +69,30 @@ App :: struct {
 	chat:            Chat,
 	using view:      Chat_View_State,   // where the conversation shown is read (one per session shown: open_chat starts it over)
 
-	// the interface's own state
-	composer:         ui.Text_Area,
-	composer_focused: bool,
-	search:           ui.Text_Field,
-	nav:              [dynamic]string, // the sessions drilled down from, outermost first (owned): Back returns to the last
-	nav_steps:        [dynamic]Nav_Step, // navigation asked for in this frame (subagents.odin)
-	sub_open:         map[u64]bool,   // sidebar: sessions whose sub-agents are listed under them
+	// the interface's own state, by feature (each struct is in the file of its feature)
+	composer:         Composer,       // composer.odin
+	sidebar:          Sidebar,        // sidebar.odin
+	chrome:           Chrome,         // chrome.odin
+	conversation:     Conversation,   // conversation.odin
+	nav:              Nav,            // subagents.odin
+	settings:         Settings_View,  // settings.odin
+	stats:            Stats_View,     // stats.odin
+	viewer:           Image_Viewer,   // images.odin
+	previews:         Previews,       // preview_views.odin
+	ctx_menu:         Ctx_Menu,       // context_menus.odin
+	quote:            Quote_Chip,     // context_menus.odin
+	notices:          Notices,        // settings.odin
+	film:             Film,           // film.odin
 	start_session:    string,
 	cli:              Cli_Options,    // the command line, read once at start (cli_options.odin)
 	cfg_prefs:        config.Prefs,   // the preferences (settings.odin)
 	prefs_file:       string,         // where they are saved ("": nowhere)
 	prefs:            Prefs,          // their plain values
 	facts:            Server_Facts,   // what the server said for the settings pages
-	settings_page:    Settings_Page,
-	// the settings' slider held (its preference, a constant name; "": none) and where it is: ui.slider moves its value only
-	// while the button is down, so the value is kept here between frames and written at the release
-	slider_held:       string,
-	slider_held_value: f32,
-	settings_query:   ui.Text_Field,    // the settings' search: while it has text, the matching settings of every client page
-	settings_search:  config.Search,    // what that text shows, this frame (settings_dialog)
-	setting_hidden:   bool,             // the row being built does not match the search: setting_end has nothing to close
 	seek_subagent:    bool,   // --seek-subagent (tests): scroll to the first sub-agent card
-	sidebar_w:        f32,
-	expanded:         map[u64]bool,   // tool and reasoning parts opened by the user (hash of their id)
-	folded:           map[u64]bool,   // sidebar groups folded (hash of the directory)
-	delete_id:        string,
-	menu_session:     string,         // the session the context menu is about (owned)
-	menu_project:     string,         // the project the project menu is about (owned)
 	logo:             Logo,
-	column_w:         f32,    // the conversation column, frame pixels (this frame)
-	chat_sb:          ^ui.Box, // the conversation scroll box, when built this frame
-	stats_open:       bool,           // the Statistics panel of the session shown (stats.odin)
-	proj_stats:       Project_Stats,
 	images:           map[u64]Image_Entry,   // decoded images, by key and size (images.odin)
 	frame_no:         u64,
-	view_key:         u64,                   // the image viewer (open: Dialog.Viewer)
-	view_ref:         Image_Ref,             // what is shown: what Copy decodes again whole (its data and name owned)
-	view_diagram:     string,                // or the text of the Mermaid diagram shown (owned; "": an image)
-	view_zoom:        f32,                   // times what fits (image_viewer)
-	view_pan:         [2]f32,                // of the picture's centre from the view's, frame pixels
-	view_grab:        [2]f32,                // view_pan when the drag began
-	view_resize_from: [3]f32,                // a grip of the viewer held: the dialog's size (logical pixels) and scale at its press ({}: none)
-	view_grown:     bool,                    // the viewer's grips were dragged since it opened: its picture may pass its pixels (viewer_frame)
-	view_start:       Image_Ref,             // --image=<file>: opened in the viewer once it is decoded (its data owned)
 	devtools:         ^devtools.Server,   // TOOLKIT_DEVTOOLS=<port>: driven over the Chrome DevTools Protocol (the toolkit's tk cdp, or gt:cdp in ocntools)
 	setup:            setup.Dialog,
 	quit:             bool,
@@ -151,17 +130,7 @@ Server_Known :: struct {
 
 // What the window keeps from one frame to the next that belongs to no panel: what is due, what is open, where things are.
 App_Context :: struct {
-	notified:            map[platform.Notification_Id]string,   // the notifications of the system shown, their sessions (owned: settings.odin notify_event)
-	toast_targets:       [TOAST_TARGETS]string,   // the sessions a click on a toast opens, a ring (owned: settings.odin toast_session)
-	toast_target_next:   int,
-	column_drag_from:    f32,                  // the conversation's width when a handle of it was pressed (views.odin column_handles)
-	composer_fit:        struct { level: int, at: [2]f32 },   // what the composer's toolbar leaves out, and at which widths (views.odin composer_fit)
 	theme:               Theme_State,          // the themes, the one shown, its colours (theme.odin)
-	film_slow:           f64,                  // --slow-motion (film.odin): 0, the interface's time is the system's
-	film_clock:          f64,                  // what ui.now_ms says then
-	film_clock_at:       f64,
-	film_begun:          time.Tick,
-	pending_since:       f64,                  // when requests went from none to some (the status bar)
 	system_stripes:      font.Subpixel_Text,   // what the system does with text (text_mode_follow)
 	system_stripes_read: bool,
 	conns:          [dynamic]^Conn,    // every connection not freed yet: their threads stop at close (servers.odin threads_stop)
@@ -179,31 +148,18 @@ App_Context :: struct {
 	busy_seq:       map[string]Seq,    // when the stream last said a session started or ended (keys owned)
 	waits_gone:     Gone_List,         // permissions and forms answered, the last WAITS_GONE_MAX
 	chat_read:      remote.Remote,            // the newest page of the conversation shown
-	stats_read:     remote.Remote,            // the project's totals (stats.odin)
-	stats_context:  Stats_Context,     // what fills the context of the session shown
-	context_read:   remote.Remote,            // ... its reading
-	stats_w:        f32,               // the panel's width, at this build
 	queue:          Queue,             // what waits in the inbox of the session shown (queue.odin)
 	due:            [Due]ui.Deferred,     // what was put off (remote.odin)
 	reopen:         Nav_Place,         // what was shown when this computer's server moved (servers_rediscover), owned, id "": none
-	quote_open:     bool,              // the chip at the end of a selection (context_menus.odin)
-	quote_at:       Rect,
-	quote_kept:     string,            // ... what it quotes (owned)
-	quote_serial, quote_done: u64,     // ... which selection, and the last one quoted
 	gliding:        bool,              // a panel's height moves in this build
 	was_gliding:    bool,              // ... it did in the last one
-	docked_w:       f32,               // the conversation's room as a panel of the dock (0: it is not one)
 	// the dialogs over the window, the one place that says which (overlay_open). Bools, not a bit_set: ui.modal closes one
 	// through a ^bool, which it keeps until modal_end
 	open:           [Dialog]bool,
-	themes_open:    bool,              // the settings' themes as a grid, not one line (theme_cards)
 	dialogs:        [Dialog]Vec2,      // the sizes given to the dialogs (logical pixels, {}: what they prefer)
 	dialogs_saved:  [Dialog]Vec2,
 	dialogs_read:   bool,
 	no_schedules, no_artifacts: bool,     // the server does not offer them (experimental.odin)
-	chat_height:    f32,                  // of the conversation, at the last frame
-	was_docked:     bool,                 // the conversation was in the dock (preview.odin main_area)
-	show_licence:   bool,                 // Ghostty's, in the settings
 	terms:          Terminals,            // the Terminal panel (terminal.odin)
 	outputs:        Output_Views,         // commands' output, read as a terminal shows it (output_view.odin)
 	schedules:      Schedules,            // schedules.odin
@@ -211,24 +167,12 @@ App_Context :: struct {
 	chat_arts:      Chat_Artifacts,   // the artifacts the session shown made: cards in its conversation (schedules.odin)
 	diff_full:      Diff_Full,            // diff_full.odin
 	detached:       [dynamic]^Detached,   // detached.odin
-	web_host:       Web_Host,             // what makes web views (preview_views.odin)
-	web_views:      [dynamic]^Web_View,   // ... those alive, every session's tabs together
-	previews:       map[string]^Preview,  // the browsers of the sessions not shown, by session (keys: their own)
-	preview_clock:  u64,                  // ... what Preview_Tab.used counts in
-	preview_tabs_made: u64,               // ... what their ids count
 	plugins:        Plugins,
 	integrations:   Integrations,         // the Connections page (integrations.odin)
-	mentions:       Mentions,             // @ in the composer (files.odin)
-	slash_pick:     Slash_Pick,           // / in the composer (slash.odin)
 	background:     map[string]bool,      // the sessions with commands running in the background, and their parents (activity.odin; keys owned)
-	drafts:         map[string]Draft,     // each session's composer while another is shown (drafts.odin; keys owned)
-	drafts_seen:    string,               // the composer's text when drafts_track last looked (owned)
 	files:          Files,                // the dialog of the folder's files
 	changes:        Changes,              // what a session changed, or would undo (session_tools.odin)
 	forms:          [dynamic]^Form_Req,   // what agents ask and wait for (forms.odin), of every session
-	nav_hist:       [dynamic]Nav_Place,   // where one has been (subagents.odin nav_visit)
-	nav_at:         int,                  // where one is in it
-	nav_moving:     bool,                 // a step of the history: nothing to add to it
 	shared_moved:   bool,                 // something of what every window shows may have changed this frame (detached_still)
 	posts_run_seen: u64,                  // ... the count of posts run at the last frame, the events of the stream left out (posts_moved)
 	events_run:     u64,                  // the events of the stream applied (event_take: each says itself whether it moved anything)
@@ -239,24 +183,11 @@ App_Context :: struct {
 	diagrams:       map[u64]Diagram,   // the Mermaid diagrams laid out (diagrams.odin)
 	placement_seen: string,   // the window's placement as last kept (window.placement), and when it was looked at
 	placement_ms:   f64,
-	attachments:    [dynamic]Attachment,   // what goes with the prompt (attachments.odin)
-	attaching:      [dynamic]^Attach_Job,  // files being read and encoded for a composer, on threads (attach_done takes them out)
-	ctx:            Ctx_Target,        // what the menu of a right click is about (context_menus.odin)
-	ctx_taken:      bool,              // a right press of this build found its target
-	focus_composer: bool,              // the composer takes the focus at its next build
-	fork_prompt:    string,            // the prompt a fork left out, for the composer of the new session (owned)
-	sidebar_hidden: bool,
-	side_hold:      Side_Hold,         // the order of the sidebar, under the pointer (sidebar.odin)
 	// What is made from the sessions is kept until one of these moves. Here, not in Server_Known: a count that started over with
 	// another server could meet the one a cache was made at.
 	sessions_ver:   u64,               // the list of sessions (sessions_changed)
 	marks_ver:      u64,               // what deals a session into a section or lights its row (marks_changed)
-	side:           Side_Kept,         // the sidebar's rows and sections (sidebar.odin)
 	waiting:        Waiting_Kept,      // the sessions that wait for the person (forms.odin)
-	local_stats:    Local_Kept,        // the figures of the loaded messages (stats.odin)
-	main_rect:      Rect,              // the conversation's place (Ctrl and the wheel over it zoom it)
-	frame_ms:       f32,               // what the status bar's rate says: between two frames, smoothed
-	work_ms:        f32,               // ... what a frame costs (build, draw, render)
 	pointer_ms:       f64,    // when the pointer or the wheel last moved (pace)
 }
 
@@ -386,7 +317,7 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 	now := time.tick_now()
 	dt := film_slow_dt(app, clamp(f32(time.duration_seconds(time.tick_diff(app.last_tick, now))), DT_MIN_S, DT_MAX_S))
 	app.last_tick = now
-	if dt < FPS_RESTED_S { app.cx.frame_ms += (dt * 1000 - app.cx.frame_ms) * FPS_SMOOTH }   // (a rest is no frame rate)
+	if dt < FPS_RESTED_S { app.chrome.frame_ms += (dt * 1000 - app.chrome.frame_ms) * FPS_SMOOTH }   // (a rest is no frame rate)
 	// `again`: another build of this frame. It runs no answer: a page read there would come after what the first build placed,
 	// and its anchor would be dropped with the frame's. It waits for the next frame, which needs_frame asks for.
 	build :: proc(app: ^App, size: draw.Vec2, events: []platform.Event, dt: f32, again := false) {
@@ -396,7 +327,7 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 		app.state.post_budget = again ? 0 : POSTS_PER_BUILD
 		ui.begin_build(&app.state, build_params(app, app.win, size, events, dt))
 		effects_apply(app)   // (what the events begin_build ran asked for: shown in this very build)
-		app.chat_sb = nil   // (only now: the answers begin_build ran read the last build's, a page placed by chat_load above all)
+		app.conversation.scroll_box = nil   // (only now: the answers begin_build ran read the last build's, a page placed by chat_load above all)
 		build_ui(app)
 		ui.end_build()
 		app.frame_times.builds += 1
@@ -413,7 +344,7 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 		build(app, size, nil, 0, again = true)
 		// (again while it moves: what this offset builds around it is measured only then, a page read before it above all)
 		for _ in 0 ..< ANCHOR_BUILDS_MAX {
-			b := app.chat_sb
+			b := app.conversation.scroll_box
 			if b == nil { break }
 			delta := a.box.rect.min.y - a.y
 			if abs(delta) <= 0.5 { break }
@@ -427,19 +358,19 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 	// all at once, and a glide to catch it up would push the bottom out of place and bring it back. The bottom stays, what is above moves.
 	// A conversation's first page just arrived (a session opened): this build placed it from the empty one's bounds, at
 	// its top. Build it again at its bottom, at once: no frame at the top, no glide down.
-	if f, following := app.chat_scroll.(Scroll_Following); following && app.chat_sb != nil {
-		b := app.chat_sb
+	if f, following := app.chat_scroll.(Scroll_Following); following && app.conversation.scroll_box != nil {
+		b := app.conversation.scroll_box
 		limit := ui.view_limit(b)
-		grew := b.view_bounds.y > app.cx.chat_height + 0.5 && b.view_off.y < limit - 0.5
+		grew := b.view_bounds.y > app.conversation.height + 0.5 && b.view_off.y < limit - 0.5
 		if b.view_off.y > limit + 1 || f.jump || grew {
 			b.view_anim[1].active = false   // (the glide stops where it is: the second build reaches the bottom at once)
 			chat_scroll_event(app, Scroll_Signal.Snap)
 			build(app, size, nil, 0, again = true)
 		}
 	}
-	if b := app.chat_sb; b != nil { app.cx.chat_height = b.view_bounds.y }
+	if b := app.conversation.scroll_box; b != nil { app.conversation.height = b.view_bounds.y }
 	chat_scroll_event(app, Scroll_Signal.Frame_Done)
-	if b := app.chat_sb; b != nil { load_older(app, b) }
+	if b := app.conversation.scroll_box; b != nil { load_older(app, b) }
 	app.frame_times.build = time.tick_since(t_build)
 }
 
@@ -449,7 +380,7 @@ main_after_frame :: proc(h: ^host.Host) {
 	app := (^App)(h.user)
 	app.frame_times.draw, app.frame_times.render = h.times.draw, h.times.present
 	work := f32(time.duration_milliseconds(app.frame_times.build + app.frame_times.draw + app.frame_times.render))
-	app.cx.work_ms += (work - app.cx.work_ms) * FPS_SMOOTH
+	app.chrome.work_ms += (work - app.chrome.work_ms) * FPS_SMOOTH
 	h.times = {}   // (a frame held draws nothing: it costs nothing either)
 	answers_spent_free(app)
 	posts_moved(app, ui.post_stats(&app.state).run)
@@ -491,7 +422,7 @@ due_run :: proc(app: ^App, k: Due) {
 	case .Refresh:   refresh_sessions(app)
 	case .Facts:     if app.cx.open[.Settings] { server_facts_load(app) }   // (an action of the settings: connect an MCP server, revoke a permission)
 	case .Children:  load_children(app)
-	case .Context:   if app.stats_open { context_ask(app) }
+	case .Context:   if app.stats.open { context_ask(app) }
 	case .Restore:   chat_scroll_event(app, Scroll_Signal.Restore_End)   // (the way back got nowhere: the view is the reader's)
 	case .Term_Size: terms_size_due(app)
 	case .Side_Wake: app.settle = max(app.settle, FRAMES_AFTER_INPUT)   // (the build sees the pointer has rested)
@@ -717,7 +648,7 @@ main :: proc() {
 
 	app := new(App)
 	the_app = app
-	app.sidebar_w = SIDEBAR_W_DEFAULT
+	app.sidebar.width = SIDEBAR_W_DEFAULT
 	app.cli = opts
 	app.start_session = opts.session   // --session=<id>: the session opened at start (else the latest)
 	app.scale = opts.scale
@@ -743,7 +674,7 @@ main :: proc() {
 	app_init(app, prefs_path())
 	placement_restore(app)
 	drafts_load(app)   // (what was typed before, in each session: the home page's comes back now)
-	app.cx.web_host = web_host_system()
+	app.previews.host = web_host_system()
 	if app.servers_in_clear { servers_save(app) }
 	platform.set_dark_title(app.win, !app.cx.theme.light)
 	app.devtools = devtools.start_from_env(app.win, "opencode")
@@ -770,7 +701,7 @@ main :: proc() {
 	update_startup(app)   // (a server or none: a check of this program's own version)
 	setup_offer_at_start(app)
 	// what the line asks to see at start
-	if opts.search != "" { ui.field_set(&app.search, opts.search) }
+	if opts.search != "" { ui.field_set(&app.sidebar.search, opts.search) }
 	if opts.setup { setup_open(app) }
 	if opts.add_server { server_edit_open(app, -1) }
 	if opts.find != "" { find_open(app); ui.field_set(&app.find.field, opts.find) }
@@ -780,7 +711,7 @@ main :: proc() {
 	if opts.slow_motion != 0 { film_slow_start(app, opts.slow_motion) }
 	if opts.settings {   // --settings[=page number]
 		settings_open(app)
-		if opts.settings_page >= 0 { app.settings_page = Settings_Page(opts.settings_page) }
+		if opts.settings_page >= 0 { app.settings.page = Settings_Page(opts.settings_page) }
 	}
 	platform.show_window(app.win)
 	for !platform.is_closed(app.win) && !app.quit {

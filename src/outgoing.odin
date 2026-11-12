@@ -75,10 +75,10 @@ outgoing_free :: proc(app: ^App, o: ^Outgoing) {
 // What is in the composer leaves it for good: from here on it is the prompt's.
 @(private = "file")
 outgoing_takes_composer :: proc(app: ^App, o: ^Outgoing) {
-	append(&o.files, ..app.cx.attachments[:])
-	clear(&app.cx.attachments)
-	append(&o.mentions, ..app.cx.mentions.chosen[:])
-	clear(&app.cx.mentions.chosen)
+	append(&o.files, ..app.composer.attachments[:])
+	clear(&app.composer.attachments)
+	append(&o.mentions, ..app.composer.mentions.chosen[:])
+	clear(&app.composer.mentions.chosen)
 }
 
 // A prompt of the composer has its body built on its request's thread (Prompt_Parts): its files' data URLs are megabytes to
@@ -337,9 +337,9 @@ outgoing_return :: proc(app: ^App) {
 		o := list[i]
 		if o.stage != .Returned || o.session != app.chat.id { continue }
 		prompt_restore(app, o.text)
-		append(&app.cx.attachments, ..o.files[:])
+		append(&app.composer.attachments, ..o.files[:])
 		clear(&o.files)
-		append(&app.cx.mentions.chosen, ..o.mentions[:])
+		append(&app.composer.mentions.chosen, ..o.mentions[:])
 		clear(&o.mentions)
 		outgoing_free(app, o)
 	}

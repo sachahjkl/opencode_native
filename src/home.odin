@@ -26,8 +26,8 @@ home_session :: proc(app: ^App, s: ^Session_Info, em, now: f64, busy: bool) {
 	if sig.clicked { open_root(app, s.id) }
 	if sig.right_clicked {
 		ui.ctx_menu_open(ui.key_from_string(0, "session_menu"), b.rect.min + sig.mouse)
-		delete(app.menu_session)
-		app.menu_session = strings.clone(s.id)
+		delete(app.sidebar.menu_session)
+		app.sidebar.menu_session = strings.clone(s.id)
 	}
 	if ui.parent(b) {
 		ui.spacer(ui.px(e * 0.6))
@@ -97,7 +97,7 @@ home :: proc(app: ^App, em: f32) {
 			sig := bevel_button(fmt.tprintf("###hf%d", i), base_name(d), lucide.FOLDER, kind, height = math.round(em * BUTTON_COMPACT_H_EM))
 			if sig.clicked {
 				app.chat.new_dir = strings.clone(d, app.chat.alloc)
-				app.cx.focus_composer = true
+				app.composer.focus_next = true
 			}
 			// (the button shows the folder's name alone: two folders of one name differ only by their paths)
 			if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(d) } }
