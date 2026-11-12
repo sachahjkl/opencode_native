@@ -20,18 +20,120 @@ a_changed_line_is_removed_then_added :: proc(t: ^testing.T) {
 @(test)
 a_server_patch_counts_its_lines_not_its_headers :: proc(t: ^testing.T) {
 	p: Part
-	part_patch_set(&p, "Index: f\n=====\n--- f\n+++ f\n@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n")
+	part_patch_set(&p, "Index: f\n=====\n--- f\n+++ f\n@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n", context.temp_allocator)
 	testing.expect_value(t, p.added, 2)
 	testing.expect_value(t, p.removed, 1)
 }
 
+// A tool call as the stream gives it: its input read as tool_set_input reads it, its output as tool_set_output does (temp memory).
+test_tool :: proc(name, input: string, output := "", status := Tool_Status.Done) -> Part {
+	p := Part{kind = .Tool, tool_name = name, status = status}
+	if input != "" {
+		v, _ := json.parse_string(input, parse_integers = true, allocator = context.temp_allocator)
+		tool_set_input(&p, v, context.temp_allocator)
+	}
+	if output != "" { tool_set_output(&p, output, context.temp_allocator) }
+	return p
+}
+
 @(test)
 a_call_without_patch_gets_one_from_its_input :: proc(t: ^testing.T) {
-	p := Part{tool_name = "edit", input = `{"filePath":"f","oldString":"one","newString":"two"}`}
+	p := test_tool("edit", `{"filePath":"f","oldString":"one","newString":"two"}`)
 	testing.expect_value(t, part_patch(&p, context.temp_allocator), "-one\n+two\n")
 	testing.expect_value(t, p.added, 1)
-	w := Part{tool_name = "write", input = `{"content":"new"}`}
+	testing.expect_value(t, len(p.diff.lines), 2)
+	w := test_tool("write", `{"content":"new"}`)
 	testing.expect(t, strings.contains(part_patch(&w, context.temp_allocator), "+new"))
+}
+
+// What a call's input says is read once, when it comes: its command, where it runs, its file, its list, all of it by key.
+@(test)
+a_call_s_input_is_read_once :: proc(t: ^testing.T) {
+	sh := test_tool("shell", `{"command":"make\nall","background":true,"timeout":30,"description":"build"}`)
+	testing.expect_value(t, sh.command, "make\nall")
+	testing.expect_value(t, sh.command_line, "$ make\nall")
+	testing.expect(t, sh.background)
+	testing.expect_value(t, sh.subject, "build")
+	testing.expect(t, sh.input_object)
+	keys := make([dynamic]string, context.temp_allocator)
+	for f in sh.fields { append(&keys, f.key) }
+	testing.expectf(t, len(keys) == 4 && keys[0] == "background" && keys[3] == "timeout", "by key: %v", keys)
+	if len(sh.fields) == 4 {
+		testing.expect_value(t, sh.fields[0].value, "yes")
+		testing.expect_value(t, sh.fields[3].value, "30")
+		testing.expect(t, sh.fields[1].long, "a command of two lines goes under its key")
+	}
+	rd := test_tool("read", `{"path":"a/b.txt"}`)
+	testing.expect_value(t, rd.file_path, "a/b.txt")
+	td := test_tool("todowrite", `{"todos":[{"content":"build","status":"completed"}]}`)
+	testing.expect(t, td.has_todos && len(td.todos) == 1 && td.todos[0].status == "completed")
+	none := test_tool("todowrite", `{"other":1}`)
+	testing.expect(t, !none.has_todos)
+	moved := test_tool("shell", `{"command":"sleep 9"}`, "Command moved to the background (shell ID: sh_42).\n")
+	testing.expect_value(t, moved.moved_shell, "sh_42")
+}
+
+// The patch a call's progress says again is read again only when it changed: a part shows the new diff.
+@(test)
+a_patch_changed_shows_the_new_diff :: proc(t: ^testing.T) {
+	p := test_tool("edit", `{"filePath":"f"}`)
+	meta :: proc(p: ^Part, patch: string) {
+		v, _ := json.parse_string(patch, allocator = context.temp_allocator)
+		tool_set_meta(p, v, context.temp_allocator)
+	}
+	meta(&p, `{"files":[{"patch":"@@ -1 +1 @@\n-a\n+b\n"}]}`)
+	testing.expect_value(t, len(p.diff.lines), 2)
+	testing.expect(t, p.diff.numbered)
+	first := raw_data(p.diff.lines)
+	meta(&p, `{"files":[{"patch":"@@ -1 +1 @@\n-a\n+b\n"}]}`)
+	testing.expect(t, raw_data(p.diff.lines) == first, "the same patch: not read again")
+	meta(&p, `{"files":[{"patch":"@@ -1 +1,2 @@\n-a\n+c\n+d\n"}]}`)
+	testing.expect_value(t, len(p.diff.lines), 3)
+	if len(p.diff.lines) == 3 { testing.expect_value(t, p.diff.lines[2].text, "d") }
+	testing.expect_value(t, p.added, 2)
+}
+
+// The links of a text that grows in its buffer, kept and read again from its last line, are those of the whole text read anew;
+// another style, or another text, is read whole.
+@(test)
+a_growing_text_has_the_links_of_the_whole :: proc(t: ^testing.T) {
+	SRC :: "see https://a.b/c.\nthen http://x.y/(z) and\nhttps://end.example/path."
+	marks :: proc(runs: []ui.Rich_Run) -> string {
+		b := strings.builder_make(context.temp_allocator)
+		for r in runs { for _ in 0 ..< len(r.text) { strings.write_byte(&b, r.link != "" ? 'L' : '.') } }
+		return strings.to_string(b)
+	}
+	text := make([dynamic]u8, 0, len(SRC) + 1, context.temp_allocator)
+	k: Link_Runs
+	src_all := SRC   // (a constant string is not indexed by a variable)
+	for i in 0 ..< len(src_all) {
+		append(&text, src_all[i])
+		got := link_runs(&k, string(text[:]), {}, context.temp_allocator)
+		want := make([dynamic]ui.Rich_Run, context.temp_allocator)
+		ui.rich_links(string(text[:]), {}, &want)
+		if !testing.expectf(t, marks(got) == marks(want[:]), "at %d bytes: %s, read whole: %s", i + 1, marks(got), marks(want[:])) { return }
+		joined := strings.builder_make(context.temp_allocator)
+		for r in got { strings.write_string(&joined, r.text) }
+		if !testing.expect_value(t, strings.to_string(joined), string(text[:])) { return }
+	}
+	italic := link_runs(&k, string(text[:]), {italic = true}, context.temp_allocator)
+	testing.expect(t, len(italic) > 0 && italic[0].italic, "another style: made again")
+}
+
+// Where a text is cut is kept with it: another text of the same length is cut again.
+@(test)
+a_cut_is_kept_with_its_text :: proc(t: ^testing.T) {
+	k: Text_Cut
+	a := strings.clone("1\n2\n3\n4", context.temp_allocator)
+	body, extra := mono_cut_kept(&k, a, 2)
+	testing.expect_value(t, body, "1\n2")
+	testing.expect_value(t, extra, 2)
+	b := strings.clone("1234567", context.temp_allocator)
+	body, extra = mono_cut_kept(&k, b, 2)
+	testing.expect_value(t, body, b)
+	testing.expect_value(t, extra, 0)
+	body, extra = mono_cut_kept(&k, b, 1)
+	testing.expect_value(t, extra, 0)
 }
 
 @(test)

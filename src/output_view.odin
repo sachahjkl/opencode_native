@@ -107,8 +107,7 @@ output_view_open_shell :: proc(app: ^App, id, command, dir: string, tool := "", 
 
 // What a call handed back: of the command it ran if the server says which, else its text.
 output_view_open_part :: proc(app: ^App, p: ^Part) {
-	v, _ := json.parse_string(p.input, allocator = context.temp_allocator)
-	command := jstr(v, "command")
+	command := p.command
 	if command == "" { command = p.subject }
 	if p.shell_id != "" {
 		output_view_open_shell(app, p.shell_id, command, chat_dir(app), p.tool_id, p.output)

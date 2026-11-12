@@ -1157,19 +1157,22 @@ the_sessions_with_commands_in_the_background :: proc(t: ^testing.T) {
 a_shell_call_in_the_background :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	fg := Part{kind = .Tool, tool_name = "shell", status = .Running, input = `{"command":"sleep 9"}`}
+	fg := test_tool("shell", `{"command":"sleep 9"}`, status = .Running)
 	bg, running := part_background(app, &fg)
 	testing.expect(t, !bg && !running, "in the foreground")
-	moved := Part{kind = .Tool, tool_name = "shell", status = .Done, input = `{"command":"sleep 9"}`, output = "Command moved to the background (shell ID: sh_42).\nOutput is streaming to: x"}
+	moved := test_tool("shell", `{"command":"sleep 9"}`, "Command moved to the background (shell ID: sh_42).\nOutput is streaming to: x")
 	append(&app.activity.jobs, Shell_Job{id = strings.clone("sh_42"), status = .Running, background = true})
 	bg, running = part_background(app, &moved)
 	testing.expect(t, bg && running, "in the background, running")
 	app.activity.jobs[0].status = .Exited
 	bg, running = part_background(app, &moved)
 	testing.expect(t, bg && !running, "in the background, finished")
-	read := Part{kind = .Tool, tool_name = "read", status = .Done, output = "(shell ID: sh_42)"}
+	read := test_tool("read", "", "(shell ID: sh_42)")
 	bg, _ = part_background(app, &read)
 	testing.expect(t, !bg, "only a shell call")
+	asked := test_tool("shell", `{"command":"sleep 9","background":true}`, status = .Running)
+	bg, _ = part_background(app, &asked)
+	testing.expect(t, bg, "asked for the background in its input")
 }
 
 // The composer's texts go to disk as JSON and come back from it, each in its session; empty ones are not kept.

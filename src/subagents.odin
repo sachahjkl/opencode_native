@@ -397,7 +397,7 @@ subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 	if !running { pt, pb, shadow, rim, border = HEX_CARD_OFF_TOP, HEX_CARD_OFF_BOTTOM, 0, 0.03, {0, 0, 0, 0.7} }
 	if plate(fmt.tprintf("###sa_%s", pid), top = pt, bottom = pb, radius = CARD_RADIUS, shadow = shadow, rim = rim, border = border) {
 		card_head(app, &v, part_id, open, running, em)
-		if open { card_body(app, &v, pid, running, em) }
+		if open { card_body(app, &v, p, pid, running, em) }
 	}
 	ui.spacer(ui.px(em * 0.6))
 }
@@ -507,8 +507,8 @@ card_when :: proc(v: ^Sub_View, end: f64) -> string {
 	return d != "" ? fmt.tprintf("%s · %s", sub_state_label(v.state), d) : sub_state_label(v.state)
 }
 
-// A card opened: what its session says, its prompt, its result.
-card_body :: proc(app: ^App, v: ^Sub_View, pid: string, running: bool, em: f32) {
+// A card opened: what its session says, its prompt (`p`'s), its result.
+card_body :: proc(app: ^App, v: ^Sub_View, p: ^Part, pid: string, running: bool, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###body") {
 		ui.spacer(ui.px(em * CARD_PAD_EM))
@@ -520,14 +520,17 @@ card_body :: proc(app: ^App, v: ^Sub_View, pid: string, running: bool, em: f32) 
 			}
 			if v.prompt != "" {
 				section_label("pr", "PROMPT", em)
-				body, extra := mono_cut(v.prompt, PROMPT_LINES_MAX)   // (the card is its frame: no box of its own inside it)
-				mono_text(body, extra, em, 0, hex(HEX_TEXT_SOFT), flush = true)
+				body, extra := mono_cut_kept(&p.prompt_well.cut, v.prompt, PROMPT_LINES_MAX)   // (the card is its frame: no box of its own inside it)
+				mono_text(body, extra, em, 0, hex(HEX_TEXT_SOFT), flush = true, kept = &p.prompt_well.runs, kept_in = app.chat.alloc)
 				ui.spacer(ui.px(em * 0.6))
 			}
 			if v.result != "" {
 				section_label("re", v.state == .Failed ? "ERROR" : "RESULT", em)
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})   // (as the prompt: in the card, no box of its own)
-				if ui.column(id = "###result") { markdown(fmt.tprintf("%s_res", pid), v.result, hex(HEX_CARD_RESULT), math.round(em * FS_LABEL)) }
+				if ui.column(id = "###result") {
+					id := fmt.tprintf("%s_res", pid)
+					markdown(md_doc(&app.chat, id), id, v.result, hex(HEX_CARD_RESULT), math.round(em * FS_LABEL))
+				}
 				ui.spacer(ui.px(em * 0.4))
 			} else if running {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
@@ -635,7 +638,8 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column() {
 					ui.spacer(ui.px(em * 0.3))
-					markdown(fmt.tprintf("%s_sr", m.id), m.text, hex(HEX_RETURNED_TEXT), math.round(em * FS_LABEL))
+					id := fmt.tprintf("%s_sr", m.id)
+					markdown(md_doc(&app.chat, id), id, m.text, hex(HEX_RETURNED_TEXT), math.round(em * FS_LABEL))
 					ui.spacer(ui.px(em * 0.3))
 				}
 			}

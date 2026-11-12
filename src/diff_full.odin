@@ -4,7 +4,6 @@ import "core:fmt"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
-import "core:slice"
 import "core:strings"
 import "gt:ui"
 
@@ -54,9 +53,7 @@ diff_full_open :: proc(app: ^App, title, patch: string) {
 	d := &app.cx.diff_full
 	diff_full_close(d)
 	d.title, d.patch = strings.clone(title), strings.clone(patch)
-	lines := diff_parse(d.patch)   // (their texts are in d.patch)
-	diff_mark(lines)
-	d.lines = slice.clone(lines)
+	d.lines = diff_read(d.patch).lines   // (their texts are in d.patch)
 	d.rows = diff_split_rows(d.lines)
 	for l in d.lines {
 		if l.sign == '+' { d.added += 1 }

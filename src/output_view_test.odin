@@ -173,7 +173,8 @@ a_call_says_which_command_it_runs :: proc(t: ^testing.T) {
 a_call_with_only_its_text_shows_that :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	p := Part{tool_id = "c1", output = "hello\n", status = .Error, input = `{"command":"false"}`}
+	p := test_tool("shell", `{"command":"false"}`, "hello\n", .Error)
+	p.tool_id = "c1"
 	output_view_open_part(app, &p)
 	v := app.cx.outputs.shown
 	testing.expect(t, v != nil && v.over && !v.seen_end)
