@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.46.7] - 2026-11-12
+
+### Fixed
+- **A window the compositor does not show no longer freezes the program** (another workspace, minimized on Wayland), and images and screenshots are read and written faster (gui_toolkit 0.196.2).
+
 ## [0.46.6] - 2026-11-11
 
 ### Fixed
@@ -1366,6 +1371,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.46.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.7
 [0.46.6]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.6
 [0.46.5]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.5
 [0.46.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.4
