@@ -32,7 +32,6 @@ md_config :: proc(app: ^App, color: Color) -> markdown.Config {
 			text = color, heading = hex(HEX_BRIGHT), quote = hex(HEX_WEAK), marker = accent(), rail = with_alpha(accent(), 0.6),
 			inline_code = hex(HEX_INLINE_CODE), code_text = hex(HEX_CODE_TEXT), table_header = hex(HEX_BRIGHT),
 			table_stripe = with_alpha(hex(HEX_TEXT), markdown.TABLE_STRIPE_ALPHA), table_rule = with_alpha(accent(), markdown.TABLE_RULE_ALPHA),
-			scroll_bar = hex(HEX_TEXT),
 		},
 		user = app,
 		link = proc(user: rawptr, url: string) { link_open(url) },
