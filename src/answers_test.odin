@@ -34,7 +34,7 @@ bench_new :: proc() -> ^App {
 	app.conn = new(Conn)
 	app.cx.web_host = bench_web_host()
 	app.link = .Online
-	app.stick_bottom = true
+	app.chat_scroll = Scroll_Following{}
 	app.prefs.page_size = 50
 	app.prefs.notify = "off"
 	app.cfg_prefs = config.prefs_make()
@@ -554,8 +554,8 @@ a_moved_server_gives_the_place_back_when_it_has_the_session :: proc(t: ^testing.
 	request(app, .Sessions, "GET", "/s")
 	bench_answer(app, bench_take(t, .Sessions), 200, `{"data":[{"id":"s"}]}`)
 	testing.expect_value(t, app.chat.id, "s")
-	testing.expect_value(t, app.cx.restore_msg, "m")
-	testing.expect(t, !app.stick_bottom)
+	testing.expect_value(t, restoring_msg(app), "m")
+	testing.expect(t, !chat_following(app))
 }
 
 ////////////////////////////////
@@ -802,17 +802,23 @@ a_job_ends_only_when_the_server_says_it_does_not_know_it :: proc(t: ^testing.T) 
 ////////////////////////////////
 // The view, the keys, find
 
+// The message the view goes back to ("": none).
+@(private = "file")
+restoring_msg :: proc(app: ^App) -> string {
+	r, _ := app.chat_scroll.(Scroll_Restoring)
+	return r.msg
+}
+
 @(test)
 what_the_reader_asks_wins_over_a_view_going_back :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	show(app, "s")
-	nav_restore_begin(app, "m", 0)
-	app.stick_bottom = false
+	chat_scroll_event(app, Scroll_Restore{"m", 0})
 	ui.area_set(&app.composer, "go")
 	submit_prompt(app)
-	testing.expect_value(t, app.cx.restore_msg, "")
-	testing.expect(t, app.stick_bottom)
+	testing.expect_value(t, restoring_msg(app), "")
+	testing.expect(t, chat_following(app))
 }
 
 @(test)
@@ -822,25 +828,25 @@ a_view_going_back_gives_up :: proc(t: ^testing.T) {
 	show(app, "s")
 	// the page it needs failed
 	app.chat.loading_older = true
-	nav_restore_begin(app, "m", 0)
+	chat_scroll_event(app, Scroll_Restore{"m", 0})
 	request(app, .Older, "GET", "/o", tag = "s")
 	bench_lost(app, bench_take(t, .Older))
-	testing.expect_value(t, app.cx.restore_msg, "")
+	testing.expect_value(t, restoring_msg(app), "")
 	// the message is never built: the clock ends it
-	nav_restore_begin(app, "m", 0)
+	chat_scroll_event(app, Scroll_Restore{"m", 0})
 	bench_clock += NAV_RESTORE_WAIT_MS + 1
 	deferred_tick(app)
-	testing.expect_value(t, app.cx.restore_msg, "")
+	testing.expect_value(t, restoring_msg(app), "")
 	// a page that comes gives it a whole wait again: a long way up a history is not a view that gets nowhere
-	nav_restore_begin(app, "m", 0)
+	chat_scroll_event(app, Scroll_Restore{"m", 0})
 	bench_clock += NAV_RESTORE_WAIT_MS - 1
-	nav_restore_page(app)
+	chat_scroll_event(app, Scroll_Older_Page{})   // (a page read on the way)
 	bench_clock += 2
 	deferred_tick(app)
-	testing.expect_value(t, app.cx.restore_msg, "m")
+	testing.expect_value(t, restoring_msg(app), "m")
 	bench_clock += NAV_RESTORE_WAIT_MS
 	deferred_tick(app)
-	testing.expect_value(t, app.cx.restore_msg, "")
+	testing.expect_value(t, restoring_msg(app), "")
 }
 
 @(test)
@@ -861,10 +867,10 @@ an_inbox_item_does_not_fetch_a_reader_who_went_up :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	show(app, "s")
-	app.stick_bottom = false
+	app.chat_scroll = Scroll_Free{}   // (gone up)
 	bench_event(app, `{"type":"session.inbox.enqueued","data":{"sessionID":"s","inboxID":"i","item":{"type":"user","payload":{"text":"later"}}}}`)
 	testing.expect_value(t, len(app.chat.messages), 1)
-	testing.expect(t, !app.stick_bottom)
+	testing.expect(t, !chat_following(app))
 }
 
 @(test)

@@ -142,7 +142,7 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	the_app = app
 	append(&app.servers, Server{name = "This computer", local = true})
 	app.sidebar_w = SIDEBAR_W_DEFAULT
-	app.stick_bottom = true
+	app.chat_scroll = Scroll_Following{}
 	app.link = .Online
 	chat_reset(&app.chat)
 	app.win = platform.open_window_offscreen("opencode", BENCH_SIZE)
@@ -161,7 +161,7 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	v, err = json.parse_string(bench_page(), allocator = context.temp_allocator)
 	testing.expect(t, err == nil)
 	chat_load(app, v, false)
-	app.snap_bottom = true
+	chat_scroll_event(app, Scroll_Signal.Snap)
 	testing.cleanup(t, bench_end, app)
 	s = session.attach(t, {win = app.win, state = &app.state, renderer = &app.r, user = app, frame = proc(user: rawptr) { frame((^App)(user)) }, allocator = context.allocator})
 	// (the lazy column learns the heights of what it builds: the bottom settles in a few frames)
@@ -306,7 +306,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		session.frames(s, 6)
 		testing.expect(t, session.find(s, "iv0") != nil && session.find(s, "kv1") != nil, "the input's long value and its short one")
 		app.prefs.expand_tools = false
-		app.snap_bottom = true
+		chat_scroll_event(app, Scroll_Signal.Snap)
 		session.frames(s, 6)
 		// the composer's toolbar, a run going (Stop) and "Steer", as the column narrows: the send button stays within it
 		{
@@ -385,7 +385,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		// Its steps (a pixel a frame or less) were each put back at the bottom it was following, and the lazy column read the error
 		// of its rounded rects as a move: it stayed there, or broke free in a jump.
 		{
-			testing.expect(t, app.stick_bottom, "at its bottom, following it")
+			testing.expect(t, chat_following(app), "at its bottom, following it")
 			mid := session.center(session.get(s, "chat"))
 			session.move(s, mid)
 			session.click_at(s, mid, .Middle)
@@ -400,7 +400,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 				append(&up, ui.view_limit(b) - b.view_target.y)
 			}
 			testing.expectf(t, up[len(up) - 1] > 4, "gone up: %v from the bottom", up[len(up) - 1])
-			testing.expect(t, !app.stick_bottom, "the bottom let go of")
+			testing.expect(t, !chat_following(app), "the bottom let go of")
 			for i in 1 ..< len(up) {
 				testing.expectf(t, up[i] >= up[i - 1] - 0.1, "never back down: %v then %v from the bottom (frame %d)", up[i - 1], up[i], i)
 				testing.expectf(t, up[i] - up[i - 1] < 40, "no jump: %v then %v from the bottom (frame %d)", up[i - 1], up[i], i)
@@ -564,7 +564,7 @@ older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session)
 	app.conn = new(Conn)   // (requests are kept: answers_test.odin)
 	clear(&bench_sent)
 	c.older = strings.clone("cursor", c.alloc)
-	app.stick_bottom = false
+	app.chat_scroll = Scroll_Free{}
 	sb := session.get(s, "chat")
 	sb.view_off.y, sb.view_target.y = 0, 0
 	sb.view_anim[1] = {}
@@ -644,7 +644,7 @@ an_artifact_of_the_session_is_a_card :: proc(t: ^testing.T) {
 		testing.expect(t, err == nil)
 		chat_artifacts_load(app, app.chat.id, v)
 		chat_artifacts_load(app, "ses_2", v)   // (an answer for a session not shown: not its)
-		app.snap_bottom = true
+		chat_scroll_event(app, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		card := session.find(s, "art_art_1")
 		if !testing.expect(t, card != nil, "the card") { return }
@@ -1177,7 +1177,7 @@ a_long_part_opens_below_its_header :: proc(t: ^testing.T) {
 		v, err := json.parse_string(long_parts_page(), allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
 		chat_load(app, v, false)
-		app.snap_bottom = true
+		chat_scroll_event(app, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		for name in ([]string{"rh_lp_2_a_0", "head"}) {
 			h := session.find(s, name)
@@ -1229,7 +1229,7 @@ a_thought_opened_while_the_run_goes_on_stays :: proc(t: ^testing.T) {
 		chat_load(app, v, false)
 		app.chat.busy = true
 		app.busy[app.chat.id] = true
-		app.snap_bottom = true
+		chat_scroll_event(app, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		chat := session.find(s, "chat")
 		if !testing.expect(t, chat != nil, "the conversation") { return }
@@ -1267,7 +1267,7 @@ a_paused_goal_says_why :: proc(t: ^testing.T) {
 		v, err := json.parse_string(fmt.tprintf(`{{"objective":"Booted OS with a REPL","status":"paused","reason":%s,"rounds":3,"maxRounds":50}}`, jquote(reason)), allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
 		goal_set(app, app.chat.id, v)
-		app.snap_bottom = true
+		chat_scroll_event(app, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		strip, line, why := session.find(s, "goal_strip"), session.find(s, "goal_why"), session.find(s, "goal_reason")
 		if !testing.expect(t, strip != nil && line != nil && why != nil, "the strip, the line and the reason") { return }
@@ -1296,7 +1296,7 @@ a_session_s_changes_show_across :: proc(t: ^testing.T) {
 		v, err := json.parse_string(page, allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
 		chat_load(app, v, false)
-		app.snap_bottom = true
+		chat_scroll_event(app, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		for id in ([]string{"sw_sw_m", "sw_sw_a", "sw_sw_l"}) { testing.expectf(t, session.find(s, id) != nil, "%s across the conversation", id) }
 		testing.expect(t, session.find_text(s, "claude-fable-5-2 · high") != nil, "the model now, with its variant")
@@ -1437,7 +1437,7 @@ a_goal_paused_past_its_reset_offers_to_resume :: proc(t: ^testing.T) {
 			goal_set(app, app.chat.id, v)
 		}
 		paused(app, "2000-01-01T00:00:00.000Z")
-		app.snap_bottom = true
+		chat_scroll_event(app, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		testing.expect(t, session.find(s, "gw_resume") != nil, "past: resume offered")
 		when_ := session.find(s, "when")
@@ -1524,7 +1524,7 @@ a_mermaid_block_is_a_diagram :: proc(t: ^testing.T) {
 		v, err := json.parse_string(mermaid_page(), allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
 		chat_load(app, v, false)
-		app.snap_bottom = true
+		chat_scroll_event(app, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		diagrams := 0
 		for i := 0; session.find(s, "diagram", i) != nil; i += 1 { diagrams += 1 }
@@ -1556,7 +1556,7 @@ a_diagram_is_zoomed_and_moved_in_the_viewer :: proc(t: ^testing.T) {
 		v, err := json.parse_string(mermaid_page(), allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
 		chat_load(app, v, false)
-		app.snap_bottom = true
+		chat_scroll_event(app, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		if !testing.expect(t, session.find(s, "diagram") != nil, "drawn") { return }
 		session.click(s, "diagram")

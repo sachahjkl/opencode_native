@@ -125,14 +125,13 @@ global_keys :: proc(app: ^App) {
 
 new_session :: proc(app: ^App) {
 	nav_visit(app, app.chat.id, "")
-	nav_restore_clear(app)
 	for s in app.nav { delete(s) }   // (the way back up is the session's: none from here)
 	clear(&app.nav)
 	dir := ""
 	if s := find_session(app, app.chat.id); s != nil { dir = s.directory } else if len(app.sessions) > 0 { dir = app.sessions[0].directory }
 	chat_home(app)
 	remote_reset(&app.cx.chat_read)
-	app.view = {stick_bottom = true}
+	chat_view_start(app, 0)   // (a way back under way ends: its place is in the conversation left)
 	app.chat.new_dir = strings.clone(dir, app.chat.alloc)
 	chat_shown_changed(app)
 	app.cx.focus_composer = true
@@ -716,24 +715,7 @@ conversation :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.fill()})
 		sb := ui.prev_box("###chat")
 		find_update(app, sb, em)
-		if app.chat.id == "" { app.stick_bottom = false }   // (the home page is read from its top)
-		if sb != nil {
-			// (the wheel's click scrolls it by steps of a pixel a frame or less: under any slack, each one counts)
-			auto := ui.autoscroll_running(&app.state)
-			slack := auto ? AUTOSCROLL_SLACK_PX : BOTTOM_SLACK_PX * ui.scale()
-			by_hand := chat_keys(app, sb, em) || app.cx.wheeled || ui.active_key() != 0 || auto
-			if scrollbar_held(app, sb) { nav_restore_clear(app) }   // (as the wheel and the keys do: frame)
-			limit := ui.view_limit(sb)
-			// the scrollbar's drag, the wheel, the keyboard moved it before this build (begin_build): up means let go of the bottom, or following
-			// it would put it back at once and the thumb would stay stuck there. Only a hand: a box built anew starts at its top, and that is no
-			// reader going up.
-			if app.stick_bottom && by_hand && sb.view_target.y < app.chat_target - (auto ? 0 : 1) && sb.view_target.y < limit - slack { app.stick_bottom = false }
-			if app.stick_bottom {
-				sb.view_target.y = limit
-				// (the tray that opens under it moves it: a glide of its own on top of that one would lag behind it)
-				if app.stick_jump || app.cx.was_gliding { sb.view_off.y = limit }
-			}
-		}
+		chat_scroll_place(app, sb, em)
 		if ui.scroll_y("###chat") {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row(id = "###lane") {
@@ -747,16 +729,7 @@ conversation :: proc(app: ^App, em: f32) {
 			}
 		}
 		app.chat_sb = ui.prev_box("###chat")
-		if sb != nil {
-			// follow the bottom while the reader is there; scrolling up lets go of it
-			limit := ui.view_limit(sb)
-			at_bottom := sb.view_target.y >= limit - (ui.autoscroll_running(&app.state) ? AUTOSCROLL_SLACK_PX : BOTTOM_SLACK_PX * ui.scale())
-			// (with following off, only the first moments of a conversation just opened follow its bottom)
-			follow := (app.prefs.follow || ui.now_ms() - app.opened_ms < OPENED_FOLLOW_MS) && app.chat.id != ""
-			// (a part just toggled: it let go of the bottom. A view going back to where it was has not got there yet)
-			if app.anchor == nil && app.cx.restore_msg == "" { app.stick_bottom = at_bottom && follow }
-			app.chat_target = sb.view_target.y
-		}
+		chat_scroll_settle(app, sb)
 		if sb != nil && app.chat.id != "" { column_handles(app, sb, main, side, col, avail, em) }
 		dock(app, em, side, col)
 		// the find bar over the conversation's top-right corner, under the header
@@ -832,7 +805,7 @@ go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
 	}
 	sig := ui.signal(b)
 	if sig.clicked {
-		view_to_bottom(app)
+		chat_scroll_event(app, Scroll_Signal.Go_Bottom)
 		sb.view_target.y = ui.view_limit(sb)
 	}
 	if ui.parent(b) {
@@ -991,16 +964,24 @@ messages :: proc(app: ^App, em: f32) {
 	// goes before what follows.)
 	{
 		lz := ui.lazy_begin(all = app.chat.loading, sweep = ui.find_sweep())
-		// (a view going back to where it was: the column keeps it on its message, however the heights around it settle)
-		restore := app.cx.restore_msg != "" && !c.loading
-		if restore { ui.lazy_pin(lz, fmt.tprintf("###msg_%s", app.cx.restore_msg), app.cx.restore_dy) }
+		// (a view going back to where it was: the column keeps it on its message, however the heights around it settle. A page read
+		// above: the message the view holds is built whatever, frame moves the view by as much as the page pushed it down. Copied:
+		// a click in this build changes the state that owns them)
+		back, keep := "", ""
+		back_dy: f32
+		#partial switch s in app.chat_scroll {
+		case Scroll_Restoring: back, back_dy = strings.clone(s.msg, context.temp_allocator), s.dy
+		case Scroll_Anchored:  keep = strings.clone(s.keep, context.temp_allocator)
+		}
+		restore := back != "" && !c.loading
+		if restore { ui.lazy_pin(lz, fmt.tprintf("###msg_%s", back), back_dy) }
 		top_seen := false   // the first message under the top of the view, for Back and Forward (subagents.odin nav_mark)
 		for &m, i in c.messages {
 			// (by its id: a page read before it does not change what it is, its height is still known)
 			if m.id != "" && m.lazy_id == "" { m.lazy_id = fmt.aprintf("###msg_%s", m.id, allocator = c.alloc) }   // (once: this is every message, at every build)
 			id := m.id != "" ? m.lazy_id : fmt.tprintf("###msg_end%d", len(c.messages) - i)
-			restoring := app.cx.restore_msg != "" && m.id == app.cx.restore_msg
-			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || (c.keep_id != "" && m.id == c.keep_id) || restoring) {
+			held := m.id != "" && (m.id == back || m.id == keep)
+			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || held) {
 				item := ui.parent_box()
 				if sb := lz.scroll; sb != nil {
 					if !top_seen && m.id != "" && item.rect.max.y > sb.rect.min.y {
@@ -1016,7 +997,12 @@ messages :: proc(app: ^App, em: f32) {
 				for a in chat_artifacts_between(app, from, to) { artifact_card(app, a, em) }
 			}
 		}
-		if restore { nav_restore_held(app, ui.lazy_pinned(lz)) }
+		if restore {
+			// (what the first layouts say of the heights around it is not what the next ones find: it stays a few builds)
+			found, moved := ui.lazy_pinned(lz)
+			chat_scroll_event(app, Scroll_Restore_Held{found, moved})
+			app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+		}
 	}
 	// The line of a run stands in the room the end of the conversation keeps anyway: the height is the same with it and without it, so
 	// the bottom does not move when a run starts or ends. (It came on top of that room, and took four lines for one word.)
@@ -1280,9 +1266,7 @@ part_open :: proc(app: ^App, id: string, default := false) -> bool {
 part_toggle :: proc(app: ^App, id: string, head: ^ui.Box, default := false) {
 	k := hash.fnv64a(transmute([]u8)id)
 	app.expanded[k] = !(app.expanded[k] or_else default)
-	app.anchor = head
-	app.anchor_y = head.rect.min.y
-	app.stick_bottom = false
+	chat_scroll_event(app, Scroll_Anchor{head, head.rect.min.y})
 }
 
 @(private = "file")
@@ -2008,7 +1992,7 @@ submit_prompt :: proc(app: ^App, other := false) {
 	fields := send_as_fields(as)
 	if app.chat.id == "" || !slash_send(app, t, fields) { outgoing_composer(app, t, app.chat.new_dir, fields) }
 	ui.area_set(&app.composer, "")
-	if as == .Idle { view_to_bottom(app) }   // (what waits shows over the composer: the conversation stays where it is)
+	if as == .Idle { chat_scroll_event(app, Scroll_Signal.Go_Bottom) }   // (what waits shows over the composer: the conversation stays where it is)
 }
 
 ////////////////////////////////

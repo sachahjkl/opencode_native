@@ -549,7 +549,7 @@ main_area :: proc(app: ^App, em: f32) {
 	docked := p.open || s.open || app.stats_open
 	if docked != app.cx.was_docked {
 		app.cx.was_docked = docked
-		nav_hold_view(app)
+		chat_scroll_event(app, Scroll_Hold_View{app.chat.view_msg, app.chat.view_dy})
 	}
 	if !docked { conversation(app, em); return }
 	d := &app.dock

@@ -121,13 +121,10 @@ App :: struct {
 
 // Where the conversation shown is read, and how it moves: it starts over with another session.
 Chat_View_State :: struct {
-	opened_ms:    f64,       // when it was opened (it follows its bottom at first)
-	stick_bottom: bool,
-	stick_jump:   bool,      // the second build of a frame: the bottom is reached at once, no glide
-	snap_bottom:  bool,      // its first page arrived: shown at its bottom in that frame (frame)
-	chat_target:  f32,       // its scroll target at the end of the last build (a drag before this one moved it)
-	anchor:       ^ui.Box,   // a part header just clicked: kept where it is on screen (part_toggle, frame)
-	anchor_y:     f32,
+	opened_ms:    f64,           // when it was opened (it follows its bottom at first)
+	chat_scroll:  Chat_Scroll,   // what the view does (scroll.odin: changed by chat_scroll_event alone)
+	// its scroll target at the end of the last build, a measure and no state: a hand that moved it up since lets go of the bottom
+	chat_target:  f32,
 }
 
 // What a server told, and nothing else: it starts from zero with the next one (server_known_end). A field added here does too. (What has a
@@ -227,12 +224,8 @@ App_Context :: struct {
 	nav_hist:       [dynamic]Nav_Place,   // where one has been (subagents.odin nav_visit)
 	nav_at:         int,                  // where one is in it
 	nav_moving:     bool,                 // a step of the history: nothing to add to it
-	restore_msg:    string,               // the message the view goes back to (owned, "": none) and how far into it
-	restore_dy:     f32,
-	restore_still:  int,                  // builds it stayed there
 	shared_moved:   bool,                 // something of what every window shows may have changed this frame (detached_still)
 	posts_run_seen: u64,                  // ... the count of posts run at the last frame
-	wheeled:        bool,                 // a wheel turned in this frame (views.odin: a hand moved the conversation)
 	commands_due:   [dynamic]^Command, // to run after this frame, in order (commands.odin)
 	slash:          [dynamic]Slash,    // the server's commands
 	have_slash:     bool,
@@ -353,12 +346,10 @@ main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
 	app.cx.shared_moved = false
 	for e in events { if e.kind != .Mouse_Move && e.kind != .Scroll { app.cx.shared_moved = true } }   // (a pointer that passes over this window changes nothing in another)
 	events = output_view_events(app, events)
-	app.cx.wheeled = false
 	events = term_events(app, events)
 	for e in events {
 		if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() }
-		if e.kind == .Scroll { app.cx.wheeled = true }
-		if e.kind == .Scroll || e.kind == .Key_Press { nav_restore_clear(app) }   // (the reader goes elsewhere: the view is theirs)
+		if e.kind == .Scroll || e.kind == .Key_Press { chat_scroll_event(app, Scroll_Signal.Restore_End) }   // (the reader goes elsewhere: the view is theirs)
 		attach_drop_event(app, e)
 		notify_event(app, e)
 		// the side buttons of the mouse, as in a browser
@@ -400,15 +391,15 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 	prefs_track_zoom(app)
 	// A part opened or closed in this build: the build drew it in its old state (the click comes after its body). Build
 	// again in its new state, then scroll by what its header moved so that it stays under the pointer, and build once
-	// more at that offset: the frame shows the result, never the steps.
-	if a := app.anchor; a != nil {
-		defer app.anchor = nil   // (kept through these builds: the bottom stays let go of)
+	// more at that offset: the frame shows the result, never the steps. (A page read above is held the same way: Keeping became
+	// Anchored in this build. Anchored through these builds, the bottom stays let go of; Frame_Done ends it.)
+	if a, anchored := app.chat_scroll.(Scroll_Anchored); anchored {
 		build(app, size, nil, 0, again = true)
 		// (again while it moves: what this offset builds around it is measured only then, a page read before it above all)
 		for _ in 0 ..< ANCHOR_BUILDS_MAX {
 			b := app.chat_sb
 			if b == nil { break }
-			delta := a.rect.min.y - app.anchor_y
+			delta := a.box.rect.min.y - a.y
 			if abs(delta) <= 0.5 { break }
 			ui.view_jump(b, clamp(b.view_off.y + delta, 0, ui.view_limit(b)))   // (no glide toward an older target)
 			build(app, size, nil, 0, again = true)
@@ -420,19 +411,18 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 	// all at once, and a glide to catch it up would push the bottom out of place and bring it back. The bottom stays, what is above moves.
 	// A conversation's first page just arrived (a session opened): this build placed it from the empty one's bounds, at
 	// its top. Build it again at its bottom, at once: no frame at the top, no glide down.
-	if b := app.chat_sb; b != nil && app.stick_bottom {
+	if f, following := app.chat_scroll.(Scroll_Following); following && app.chat_sb != nil {
+		b := app.chat_sb
 		limit := ui.view_limit(b)
 		grew := b.view_bounds.y > app.cx.chat_height + 0.5 && b.view_off.y < limit - 0.5
-		if b.view_off.y > limit + 1 || app.snap_bottom || grew {
+		if b.view_off.y > limit + 1 || f.jump || grew {
 			b.view_anim[1].active = false   // (the glide stops where it is: the second build reaches the bottom at once)
-			app.stick_jump = true
+			chat_scroll_event(app, Scroll_Signal.Snap)
 			build(app, size, nil, 0, again = true)
-			app.stick_jump = false
 		}
 	}
 	if b := app.chat_sb; b != nil { app.cx.chat_height = b.view_bounds.y }
-	app.snap_bottom = false
-	app.chat.keep_id = ""
+	chat_scroll_event(app, Scroll_Signal.Frame_Done)
 	if b := app.chat_sb; b != nil { load_older(app, b) }
 	app.frame_times.build = time.tick_since(t_build)
 }
@@ -480,7 +470,7 @@ due_run :: proc(app: ^App, k: Due) {
 	case .Facts:     if app.cx.open[.Settings] { server_facts_load(app) }   // (an action of the settings: connect an MCP server, revoke a permission)
 	case .Children:  load_children(app)
 	case .Context:   if app.stats_open { context_ask(app) }
-	case .Restore:   nav_restore_clear(app)
+	case .Restore:   chat_scroll_event(app, Scroll_Signal.Restore_End)   // (the way back got nowhere: the view is the reader's)
 	case .Term_Size: terms_size_due(app)
 	case .Side_Wake: app.settle = max(app.settle, FRAMES_AFTER_INPUT)   // (the build sees the pointer has rested)
 	case .Drafts:    drafts_save(app)
@@ -716,8 +706,7 @@ main :: proc() {
 	app.sidebar_w = SIDEBAR_W_DEFAULT
 	app.start_session = start_session
 	app.scale = forced_scale
-	app.seek_subagent = slice.contains(os.args, "--seek-subagent")
-	app.stick_bottom = true
+	app.seek_subagent = slice.contains(os.args, "--seek-subagent")   // (the view follows the bottom: Chat_Scroll's zero state)
 	chat_home(app)
 
 	stores_open(app)   // (before the window and its loop: the servers, the last session and the setup's answer decide the first frame)
