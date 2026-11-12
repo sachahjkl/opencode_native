@@ -4,6 +4,14 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.47.12] - 2026-11-12
+
+### Added
+- **"What you missed"**: a bell with the count of what happened while you were away (runs that ended, questions and permissions waiting, commands, scheduled runs and sub-agents that ended), a view that lists them by session, and acknowledges them; opening a session acknowledges its end.
+
+### Fixed
+- **The corner of a detached panel has a corner's cursor**: with some cursor themes it showed a diagonal toward the bottom left.
+
 ## [0.47.11] - 2026-11-12
 
 ### Changed
@@ -1482,6 +1490,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.47.12]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.12
 [0.47.11]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.11
 [0.47.10]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.10
 [0.47.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.9
