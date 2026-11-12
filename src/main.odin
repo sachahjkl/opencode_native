@@ -61,7 +61,9 @@ App :: struct {
 	scale:          f32,               // --scale=<factor>: the interface's scale whatever the screen says (0: the screen's)
 	servers_in_clear: bool,            // read passwords in clear from an older version's file: saved protected at start
 	rediscover_ms:  f64,               // when this computer's server was last looked for (servers_rediscover)
+	rediscover_busy: bool,             // ... a look is under way, on a chore
 	pending:        i32,       // (atomic) requests in flight
+	chat_mark:      u64,       // (atomic) moves when another conversation is shown (chat_marked): what the requests' workers read of it
 
 	using known:     Server_Known,      // what we know, as long as that server is the one
 	chat:            Chat,
@@ -161,7 +163,8 @@ App_Context :: struct {
 	pending_since:       f64,                  // when requests went from none to some (the status bar)
 	system_stripes:      font.Subpixel_Text,   // what the system does with text (text_mode_follow)
 	system_stripes_read: bool,
-	conns:          [dynamic]^Conn,    // every connection made: their threads stop at close (servers.odin threads_stop)
+	conns:          [dynamic]^Conn,    // every connection not freed yet: their threads stop at close (servers.odin threads_stop)
+	chores:         Work_Pool,         // what the interface must not wait for and keeps its order: the keyring, where the server runs (conn.odin)
 	outgoing:       [dynamic]^Outgoing,   // prompts between the composer and the server (outgoing.odin)
 	outgoing_last:  u64,               // ... the last one's id
 	waits_unread:   bool,              // the stream just came up: what sessions wait on, asked before it, is read from the next list
@@ -687,6 +690,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	palette_init(app)      // (from app.stores, read at the start: a test's are empty)
 	term_zooms_load(app)
 	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
+	pool_init(&app.cx.chores, CHORES_WORKERS)
 }
 
 // The fonts, before the renderer: they load while the graphics device is made (render.preload_device).

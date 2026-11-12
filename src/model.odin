@@ -8,6 +8,7 @@ import "core:mem"
 import "core:mem/virtual"
 import "core:slice"
 import "core:strings"
+import "core:sync"
 import "gt:config"
 import "gt:ui"
 
@@ -213,6 +214,7 @@ last_session_keep :: proc(app: ^App) {
 chat_home :: proc(app: ^App) {
 	draft_leave(app)
 	chat_reset(&app.chat)
+	chat_marked(app)
 	app.chat.loaded = true
 	draft_enter(app)
 	last_session_keep(app)
@@ -279,6 +281,10 @@ model_body :: proc(model, provider, variant: string) -> string {
 	return fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s,"variant":%s}}}}`, jquote(model), jquote(provider), jquote(variant))
 }
 
+// Another conversation is shown: what a request's worker reads of it (req_unwanted). Not Chat.gen itself: chat_reset writes it as a
+// whole struct, which a worker cannot read while it is written.
+chat_marked :: proc(app: ^App) { sync.atomic_add(&app.chat_mark, 1) }
+
 open_chat :: proc(app: ^App, session_id: string) {
 	if session_id == app.chat.id { return }
 	id := strings.clone(session_id, context.temp_allocator)   // (it may live in the arena chat_reset drops)
@@ -286,6 +292,7 @@ open_chat :: proc(app: ^App, session_id: string) {
 	draft_leave(app)
 	chat_reset(&app.chat)
 	app.chat.id = strings.clone(id, app.chat.alloc)
+	chat_marked(app)
 	draft_enter(app)
 	last_session_keep(app)
 	app.chat.loading = true

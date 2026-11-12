@@ -336,7 +336,7 @@ what_is_asked_of_a_shell_goes_to_its_server :: proc(t: ^testing.T) {
 	open_shells(t, app, "a")
 	s := app.cx.terms.list[0]
 	home := app.conn
-	app.conn = new(Conn)   // (however it came to be another)
+	app.conn = bench_conn(app)   // (however it came to be another)
 	term_resize(app, s, 100, 30, 8, 16)
 	testing.expect(t, bench_take(t, .Pty_Size).conn == home, "the size")
 	panel_close(app, s.panel)
@@ -371,7 +371,7 @@ a_list_from_a_server_left_makes_nothing :: proc(t: ^testing.T) {
 	terminal_toggle(app)
 	r := bench_take(t, .Pty_List)
 	server_forget(app)
-	app.conn = new(Conn)
+	app.conn = bench_conn(app)
 	bench_answer(app, r, 200, shells("a"))
 	testing.expect_value(t, len(app.cx.terms.list), 0)
 	testing.expect_value(t, bench_count(.Pty_Made), 0)
@@ -386,7 +386,7 @@ a_shell_made_on_a_server_left_does_not_stay_there :: proc(t: ^testing.T) {
 	r := bench_take(t, .Pty_Made)
 	left := app.conn
 	server_forget(app)
-	app.conn = new(Conn)
+	app.conn = bench_conn(app)
 	bench_answer(app, r, 200, BODY_ONE_SHELL)
 	testing.expect_value(t, len(app.cx.terms.list), 0)
 	d := bench_take(t, .Action)
@@ -1330,8 +1330,7 @@ closing_stops_every_connection_and_shell :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	open_shells(t, app, "a")
-	first, second := new(Conn), new(Conn)
-	append(&app.cx.conns, first, second)
+	first, second := bench_conn(app), bench_conn(app)
 	l := bench_link(app)
 	threads_stop(app)
 	testing.expect(t, sync.atomic_load(&first.stop) && sync.atomic_load(&second.stop), "every connection")

@@ -11,7 +11,6 @@ import "core:strings"
 import "core:mem"
 import "core:mem/virtual"
 import "core:sync"
-import "core:thread"
 import "core:time"
 import "core:unicode/utf8"
 import "gt:ascii"
@@ -315,11 +314,14 @@ Request :: struct {
 	out:    u64,       // the prompt on its way it carries (outgoing.odin, 0: none)
 	prompt: Maybe(Prompt_Parts),   // what its body is made of, built on its thread (outgoing_send: megabytes to quote; nil: `body`)
 	asked_at: Seq,     // App_Context.stream_seq when it left: what the stream said after that is newer than its answer
+	life:   Req_Life,  // (REQ_FACTS: read here, for its worker)
+	chat_mark: u64,    // App.chat_mark when it left: its worker sees that the conversation changed since
 	// the answer
 	status: int,
 	resp:   string,
 	ok:     bool,
-	delay:  int,      // ms to sleep first, in its thread
+	dropped: bool,     // its worker found it no longer wanted: not sent, or its answer not read (req_unwanted)
+	delay:  int,       // ms it waited in its connection's timed queue before it went
 	// ... read on its thread: nothing here waits for it on the interface's (nil: read there, by answer)
 	read_in:    ^virtual.Arena,
 	value:      json.Value,
@@ -347,6 +349,9 @@ flight_ends :: proc(app: ^App, r: ^Request) {
 	}
 }
 
+// A request goes to its connection's workers (`delay` ms from now: it waits in their timed queue, no thread sleeps for it). It holds the
+// connection until its answer ran. The workers give no order: what must follow another is asked when the other's answer comes
+// (outgoing.odin, a shell's size).
 request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "", delay := 0, remote: ^Remote = nil, out: u64 = 0, conn: ^Conn = nil, prompt: Maybe(Prompt_Parts) = nil) {
 	to := conn != nil ? conn : app.conn
 	if to == nil {   // (no server yet: nothing to ask)
@@ -355,24 +360,40 @@ request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag
 	}
 	r := new(Request)
 	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = to, app = app, delay = delay, remote = remote, out = out, asked_at = app.cx.stream_seq, prompt = prompt}
+	r.life, r.chat_mark = REQ_FACTS[kind].life, sync.atomic_load(&app.chat_mark)
 	if remote != nil { r.ticket = remote.ticket }
 	sync.atomic_add(&app.pending, 1)
 	append(&app.cx.flights, Flight{kind, strings.clone(tag), to})
-	when ODIN_TEST {   // (answers_test.odin: kept for the test to answer, in the order it wants; its body as its thread makes it)
-		request_body(r)
-		bench_sent_add(r)
-		return
-	}
-	thread.create_and_start_with_poly_data(r, proc(r: ^Request) {
-		if r.delay > 0 { time.sleep(time.Duration(r.delay) * time.Millisecond) }
-		request_body(r)
-		r.status, r.resp, r.ok = http_request(&r.conn.http, r.method, r.path, r.body)
-		req_read(r)
-		if !ui.post(&r.app.state, on_answer, r) { request_free(r) }
-	}, self_cleanup = true)
+	conn_hold(to)
+	pool_add(&to.pool, request_run, r, delay)
 }
 
-// A prompt's body, on the request's thread (in a test, at once). Its parts are no longer read after it: the answer may free them.
+// On a worker: what is no longer wanted is not sent; the rest goes by the connection's transport.
+@(private = "file")
+request_run :: proc(data: rawptr) {
+	r := (^Request)(data)
+	if req_unwanted(r) {
+		r.dropped = true
+		if !ui.post(&r.app.state, on_answer, r) { request_free(r) }
+		return
+	}
+	request_body(r)
+	if r.conn.transport.call(r.conn, r) { request_finish(r) }
+}
+
+// Its answer came (on a worker, or where the transport ended it): read unless no longer wanted, then handed to the interface.
+request_finish :: proc(r: ^Request) {
+	if req_unwanted(r) { r.dropped = true } else { req_read(r) }
+	if !ui.post(&r.app.state, on_answer, r) { request_free(r) }
+}
+
+// Seen from a worker: the conversation it was asked for was left (what req_outlived says on the interface, from what a worker can read:
+// the chat changed since, by App.chat_mark).
+req_unwanted :: proc(r: ^Request) -> bool {
+	return r.life != .Server && sync.atomic_load(&r.app.chat_mark) != r.chat_mark
+}
+
+// A prompt's body, on the request's worker. Its parts are no longer read after it: the answer may free them.
 @(private = "file")
 request_body :: proc(r: ^Request) {
 	p, ok := r.prompt.?
@@ -382,7 +403,7 @@ request_body :: proc(r: ^Request) {
 	r.prompt = nil
 }
 
-// A GET in a while: what is being waited for costs a sleeping thread, no frame.
+// A GET in a while: what is being waited for costs neither a frame nor a sleeping thread.
 request_later :: proc(app: ^App, kind: Req_Kind, path: string, ms: int, tag: string, remote: ^Remote = nil) {
 	request(app, kind, "GET", path, tag = tag, delay = ms, remote = remote)
 }
@@ -398,7 +419,9 @@ req_read :: proc(r: ^Request) {
 	if !r.ok || r.status >= 400 || !req_is_read(r) { return }
 	r.read_in = new(virtual.Arena)
 	_ = virtual.arena_init_growing(r.read_in)
-	v, err := json.parse_string(r.resp, parse_integers = true, allocator = virtual.arena_allocator(r.read_in))
+	// (on an error the parser frees what it made with context.allocator, not with `allocator`: the arena's must be both)
+	context.allocator = virtual.arena_allocator(r.read_in)
+	v, err := json.parse_string(r.resp, parse_integers = true, allocator = context.allocator)
 	r.value, r.unreadable = v, err != nil
 }
 
@@ -423,7 +446,10 @@ request_free :: proc(r: ^Request) {
 ERROR_EXCERPT_BYTES :: 80   // of an error's body, in its toast
 
 // On the interface's thread.
-on_answer :: proc(data: rawptr, word: u64) { answer(the_app, (^Request)(data)) }
+on_answer :: proc(data: rawptr, word: u64) {
+	r := (^Request)(data)
+	answer(r.app, r)
+}
 
 // How long a request's answer means anything, past the server it went to (Request.conn).
 Req_Life :: enum u8 {
@@ -577,7 +603,9 @@ answer :: proc(app: ^App, r: ^Request) {
 	defer {
 		if r.read_in != nil { append(&app.cx.answers_spent, r.read_in) }
 		r.read_in = nil
+		c := r.conn
 		request_free(r)
+		conn_release(app, c)
 	}
 	sync.atomic_sub(&app.pending, 1)
 	flight_ends(app, r)
@@ -587,7 +615,7 @@ answer :: proc(app: ^App, r: ^Request) {
 		answer_left(app, r)
 		return
 	}
-	if (r.remote != nil && r.remote.ticket != r.ticket) || req_outlived(app, r) {   // a reading given up, a conversation left
+	if (r.remote != nil && r.remote.ticket != r.ticket) || r.dropped || req_outlived(app, r) {   // a reading given up, a conversation left
 		answer_left(app, r)
 		return
 	}
@@ -723,6 +751,7 @@ events_thread :: proc(data: rawptr) {
 		ui.post(&c.app.state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_down(the_app, int(word)) } }, c, u64(st))
 		time.sleep(STREAM_RETRY_S * time.Second)
 	}
+	conn_release_post(c)
 }
 
 // An event read on the stream's thread, and the connection it came by (dropped when that is no longer the one connected). Read there,
@@ -796,9 +825,7 @@ stream_up :: proc(app: ^App) {
 	request(app, .Info, "GET", "/api/info")
 	request(app, .Projects, "GET", "/api/project")
 	dialogs_reread(app)
-	when !ODIN_TEST {   // (threads and files of their own: not what the answers' bench looks at)
-		experimental_check(app)
-	}
+	experimental_check(app)
 }
 
 // The server answers again, or for the first time: what a dialog has on screen and could not read is tried again, and the pages of the

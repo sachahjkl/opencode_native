@@ -287,7 +287,7 @@ term_flush :: proc(ws: rawptr, c: ^Term_Conn) {
 // The shell's thread
 
 @(private = "file")
-Term_Thread :: struct { app: ^App, conn: ^Term_Conn, http: ^Http, id, path, list_path: string }
+Term_Thread :: struct { app: ^App, conn: ^Term_Conn, server: ^Conn, id, path, list_path: string }   // (it holds `server`: conn_hold)
 
 // What a shell's thread says: output, or where its socket stands.
 @(private = "file")
@@ -347,7 +347,7 @@ term_thread :: proc(job: ^Term_Thread) {
 	tries := 0
 	for !sync.atomic_load(&c.stop) {
 		path := fmt.aprintf("%s%scursor=%d", job.path, strings.contains(job.path, "?") ? "&" : "?", c.cursor)
-		ws := ocn_ws_open(job.http.client, raw_data(path), len(path))
+		ws := job.server.transport.ws_open(job.server.http.client, raw_data(path), len(path))
 		delete(path)
 		if ws != nil {
 			began := time.tick_now()
@@ -359,7 +359,7 @@ term_thread :: proc(job: ^Term_Thread) {
 		}
 		if sync.atomic_load(&c.stop) { break }
 		if sync.atomic_exchange(&c.renew, false) { continue }   // (asked for: nothing happened to the shell)
-		status, body, reached := http_request(job.http, "GET", job.list_path)
+		status, body, reached := job.server.transport.fetch(job.server, "GET", job.list_path, "", context.allocator)
 		gone := reached && status == 200 && !term_listed(body, job.id)
 		delete(body)
 		free_all(context.temp_allocator)
@@ -369,6 +369,7 @@ term_thread :: proc(job: ^Term_Thread) {
 		term_post(job, {is_link = true, link = .Lost})
 		for left := term_backoff_ms(tries); left > 0 && !sync.atomic_load(&c.stop); left -= TERM_RETRY_STEP_MS { time.sleep(TERM_RETRY_STEP_MS * time.Millisecond) }
 	}
+	conn_release_post(job.server)
 	delete(job.id); delete(job.path); delete(job.list_path)
 	free(job)
 }
@@ -383,9 +384,10 @@ terminals_renew :: proc(app: ^App) {
 @(private = "file")
 term_connect :: proc(app: ^App, t: ^Term) {
 	if t.conn == nil { t.conn = new(Term_Conn) }
-	when ODIN_TEST { return }   // (no socket: the test says what its thread would)
+	if t.server.transport.ws_open == nil { return }   // (a transport without sockets, a test's: it says what the thread would)
 	job := new(Term_Thread)
-	job^ = {app, t.conn, &t.server.http, strings.clone(t.id), strings.clone(term_path(t, "/connect")), strings.clone(term_list_path(t.dir))}
+	job^ = {app, t.conn, t.server, strings.clone(t.id), strings.clone(term_path(t, "/connect")), strings.clone(term_list_path(t.dir))}
+	conn_hold(t.server)
 	thread.create_and_start_with_poly_data(job, term_thread, self_cleanup = true)
 }
 

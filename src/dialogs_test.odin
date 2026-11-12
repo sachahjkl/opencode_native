@@ -227,7 +227,7 @@ a_stage_on_its_way_across_a_server_switch_ends_on_that_server :: proc(t: ^testin
 	revert_stage(app, "s", "m", "the prompt")
 	r := bench_take(t, .Revert_Staged)
 	server_forget(app)
-	app.conn = new(Conn)
+	app.conn = bench_conn(app)
 	testing.expect(t, state_is(c, Changes_Closed), "not wedged for the process")
 	bench_answer(app, r, 200, STAGED)
 	testing.expect(t, state_is(c, Changes_Closed))
@@ -248,7 +248,7 @@ a_stage_on_screen_across_a_server_switch_is_cancelled_where_it_is :: proc(t: ^te
 	left := app.conn
 	staged_with(app, t, "s")
 	server_forget(app)
-	app.conn = new(Conn)
+	app.conn = bench_conn(app)
 	testing.expect(t, state_is(c, Changes_Closed))
 	testing.expect_value(t, bench_take(t, .Revert_Cancelled).conn, left)
 	changes_close(app)
@@ -418,7 +418,7 @@ the_accounts_of_a_server_left_go_with_it :: proc(t: ^testing.T) {
 	integrations_ask(app)
 	late := bench_take(t, .Integrations)
 	server_forget(app)
-	app.conn = new(Conn)
+	app.conn = bench_conn(app)
 	testing.expect_value(t, n.read.state, Load_State.Idle)
 	testing.expect_value(t, len(n.list), 0)
 	testing.expect_value(t, n.shown, "")
@@ -519,7 +519,7 @@ an_attempt_begun_on_a_server_left_is_ended_there :: proc(t: ^testing.T) {
 	left := app.conn
 	r := login_sent(app, t, n)
 	server_forget(app)
-	app.conn = new(Conn)
+	app.conn = bench_conn(app)
 	bench_answer(app, r, 200, LOGIN_BEGUN)
 	testing.expect_value(t, bench_take(t, .Action).conn, left)
 }
@@ -532,7 +532,7 @@ a_login_waiting_on_a_server_left_is_ended_there :: proc(t: ^testing.T) {
 	left := app.conn
 	bench_answer(app, login_sent(app, t, n), 200, LOGIN_BEGUN)
 	server_forget(app)
-	app.conn = new(Conn)
+	app.conn = bench_conn(app)
 	testing.expect(t, step_is(n, Connect_Choose))
 	undo := bench_take(t, .Action)
 	testing.expect_value(t, undo.conn, left)
@@ -691,7 +691,7 @@ a_check_ends_by_its_own_answer :: proc(t: ^testing.T) {
 	request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", remote = &p.check)
 	r := bench_take(t, .Plugins_Check)
 	server_forget(app)
-	app.conn = new(Conn)
+	app.conn = bench_conn(app)
 	testing.expect_value(t, p.check.state, Load_State.Idle)
 	bench_answer(app, r, 200, PLUGINS)
 	testing.expect_value(t, len(p.list), 0)
@@ -1209,7 +1209,7 @@ the_pages_are_read_again_for_the_next_server :: proc(t: ^testing.T) {
 	late := bench_take(t, .Mcp)
 	bench_clear(app)
 	server_forget(app)
-	app.conn = new(Conn)
+	app.conn = bench_conn(app)
 	testing.expect_value(t, f.reads[.Mcp].state, Load_State.Idle)
 	bench_answer(app, late, 200, `{"data":[{"name":"theirs"}]}`)
 	testing.expect_value(t, len(f.mcp), 0)
@@ -1364,7 +1364,7 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 
 	server_forget(app)
 	bench_clear(app)
-	app.conn = new(Conn)
+	app.conn = bench_conn(app)
 
 	c := &cx.changes
 	testing.expect(t, state_is(c, Changes_Closed))

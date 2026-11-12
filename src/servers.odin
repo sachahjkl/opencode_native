@@ -7,7 +7,6 @@ import "core:fmt"
 import "core:math"
 import "core:mem/virtual"
 import "core:strings"
-import "core:sync"
 import "core:thread"
 import store "gt:store"
 import "gt:ui"
@@ -20,16 +19,6 @@ Server :: struct {
 	stored:   string,   // its field in the file when it could not be opened (another account, a locked keyring): kept as it is
 	local:    bool,     // the desktop app's (found again at every start, not saved)
 	argv:     bool,     // given by --url (not saved)
-}
-
-// One connection: its HTTP client and its event thread. Never freed while the program runs: a request's worker or the
-// thread of a server left may still be using it (they end on their own; what they bring back is dropped).
-Conn :: struct {
-	app:    ^App,      // (for its threads: the_app is the interface's)
-	http:   Http,
-	stop:   bool,      // (atomic) the event thread stops at its next event or retry
-	browser: ^Browser_Link,   // the agents' browser tools on this connection, while they are wanted (browser_mcp.odin)
-	browsers_left: [dynamic]^Browser_Link,   // ... in the folders one left while an agent works there
 }
 
 servers_path :: proc() -> string {
@@ -73,14 +62,33 @@ servers_init :: proc(app: ^App) {
 REDISCOVER_MS :: 2500
 
 // While this computer's server does not answer, look again every few seconds where it runs: the service may have
-// started since, or restarted on another port. A new address reconnects at once.
+// started since, or restarted on another port. A new address reconnects at once. Its files are read on a chore, one look at a time.
 servers_rediscover :: proc(app: ^App) {
-	if !rediscovering(app) { return }
+	if !rediscovering(app) || app.rediscover_busy { return }
 	now := ui.now_ms()
 	if now - app.rediscover_ms < REDISCOVER_MS { return }
 	app.rediscover_ms = now
-	cfg := discover_server()
-	defer { delete(cfg.host); delete(cfg.password) }
+	app.rediscover_busy = true
+	pool_add(&app.cx.chores, rediscover_work, app)
+}
+
+@(private = "file")
+Rediscovered :: struct { app: ^App, cfg: Server_Config }
+
+@(private = "file")
+rediscover_work :: proc(data: rawptr) {
+	found := new(Rediscovered)
+	found^ = {(^App)(data), discover_server()}
+	if !ui.post(&found.app.state, rediscover_found, found) { delete(found.cfg.host); delete(found.cfg.password); free(found) }
+}
+
+@(private = "file")
+rediscover_found :: proc(data: rawptr, word: u64) {
+	found := (^Rediscovered)(data)
+	app, cfg := found.app, found.cfg
+	defer { delete(cfg.host); delete(cfg.password); free(found) }
+	app.rediscover_busy = false
+	if !rediscovering(app) { return }   // (it answered meanwhile, or another server was chosen)
 	url := server_url(cfg)
 	s := &app.servers[app.server]
 	if url == s.url && cfg.password == s.password { delete(url); return }
@@ -117,23 +125,67 @@ reopen_clear :: proc(app: ^App) {
 }
 
 // The whole list at once to its store, whose worker writes it beside the file, then moves it over, readable by the user only
-// (stores_open): a failure leaves the file as it was, no password lost. `saved`: every password was protected and the list
-// handed over; the disk follows in a moment.
-servers_save :: proc(app: ^App) -> (saved: bool) {
-	entries := make([dynamic]store.Entry, context.temp_allocator)
+// (stores_open): a failure leaves the file as it was, no password lost. The passwords are protected on a chore (the keyring is a call
+// over D-Bus, or DPAPI), the list handed over when that is done. `forget`: a keyring item that goes once every password is safe (a
+// server renamed); `forget_first`: one that goes whatever happens (a server removed). The chores keep their order: two saves land as
+// they were asked.
+servers_save :: proc(app: ^App, forget := "", forget_first := "") {
+	job := new(Servers_Save)
+	job.app = app
+	job.forget, job.forget_first = strings.clone(forget), strings.clone(forget_first)
 	for s in app.servers {
 		if s.local || s.argv { continue }
+		append(&job.servers, Server{name = strings.clone(s.name), url = strings.clone(s.url), password = strings.clone(s.password), stored = strings.clone(s.stored)})
+	}
+	pool_add(&app.cx.chores, servers_save_work, job)
+}
+
+@(private = "file")
+Servers_Save :: struct {
+	app:      ^App,
+	servers:  [dynamic]Server,        // (copies, owned)
+	forget, forget_first: string,     // (owned)
+	failed:   string,                 // the server whose password could not be protected: nothing was saved (owned)
+	entries:  [dynamic]store.Entry,   // what goes to the store (owned)
+}
+
+@(private = "file")
+servers_save_work :: proc(data: rawptr) {
+	job := (^Servers_Save)(data)
+	if job.forget_first != "" { password_forget(job.forget_first) }
+	for s in job.servers {
 		field := s.stored
 		if s.password != "" {
 			f, ok := password_seal(s.name, s.password)
-			if !ok { ui.toast(.Bad, "The password of %s could not be protected: the list of servers was not saved", label_safe(s.name)); return false }
+			if !ok { job.failed = strings.clone(s.name); break }
 			field = f
 		}
-		append(&entries, store.Entry{s.name, fmt.tprintf("%s\t%s", s.url, field)})
+		append(&job.entries, store.Entry{strings.clone(s.name), fmt.aprintf("%s\t%s", s.url, field)})
 	}
-	store.replace(&app.stores.servers, entries[:])
+	if job.failed == "" && job.forget != "" { password_forget(job.forget) }
+	if !ui.post(&job.app.state, servers_saved, job) { servers_save_free(job) }
+}
+
+@(private = "file")
+servers_saved :: proc(data: rawptr, word: u64) {
+	job := (^Servers_Save)(data)
+	defer servers_save_free(job)
+	app := job.app
+	if job.failed != "" {
+		ui.toast(.Bad, "The password of %s could not be protected: the list of servers was not saved", label_safe(job.failed))
+		return
+	}
+	store.replace(&app.stores.servers, job.entries[:])
 	app.servers_in_clear = false
-	return true
+}
+
+@(private = "file")
+servers_save_free :: proc(job: ^Servers_Save) {
+	for s in job.servers { delete(s.name); delete(s.url); delete(s.password); delete(s.stored) }
+	for e in job.entries { delete(e.key); delete(e.value) }
+	delete(job.servers); delete(job.entries)
+	delete(job.forget); delete(job.forget_first); delete(job.failed)
+	free(job)
 }
 
 // A password that could not be opened at start (a locked keyring) may open now: asked again when it is needed, the keyring unlocked meanwhile
@@ -160,27 +212,28 @@ server_base :: proc(app: ^App) -> string { return app.conn != nil ? app.conn.htt
 
 server_name :: proc(app: ^App) -> string { return app.server >= 0 && app.server < len(app.servers) ? app.servers[app.server].name : "" }
 
-// Connects to server `i`: the last connection's thread is told to stop, everything read from it is dropped, and the new
-// one's event stream loads everything when it connects (stream_up).
+// Connects to server `i`: the last connection's threads are told to stop, everything read from it is dropped, the App lets go of it
+// (freed once what still uses it ended), and the new one's event stream loads everything when it connects (stream_up).
 server_connect :: proc(app: ^App, i: int) {
 	if i < 0 || i >= len(app.servers) { return }
 	server_password_retry(&app.servers[i])
 	s := app.servers[i]
-	c := new(Conn)
-	c.app = app
-	if !http_init(&c.http, s.url, "opencode", s.password) {
+	h: Http
+	if !http_init(&h, s.url, "opencode", s.password) {
 		ui.toast(.Bad, "No HTTP client for %s", s.url)
-		free(c)
+		delete(h.base)
 		return
 	}
-	if app.conn != nil {
-		sync.atomic_store(&app.conn.stop, true)
-		server_forget(app)
+	c := conn_make(app, h, HTTP_TRANSPORT, CONN_WORKERS)
+	if old := app.conn; old != nil {
+		conn_stop(old)
+		server_forget(app)   // (app.conn is still that one: what must be undone there is asked of it)
+		conn_release(app, old)
 	}
 	app.conn = c
-	append(&app.cx.conns, c)
 	app.server = i
 	if !s.argv { settings_set(app, "server", s.name) }
+	conn_hold(c)   // (the event thread's: conn_release_post at its end)
 	thread.create_and_start_with_data(c, events_thread, self_cleanup = true)
 }
 
@@ -267,9 +320,10 @@ server_known_end :: proc(app: ^App) {
 	app.cx.open[.Pair] = false   // (its code was that server's; the dialog's state is in known, its being open is not)
 }
 
-// The window closes. Every connection's threads are told; none is waited for (one may be blocked in a read: the process ends with it).
+// The window closes. Every connection's threads are told; none is waited for, workers included (one may be blocked in a read: the
+// process ends with it).
 threads_stop :: proc(app: ^App) {
-	for c in app.cx.conns { sync.atomic_store(&c.stop, true) }
+	for c in app.cx.conns { conn_stop(c) }
 	detached_stop(app)
 	terminals_stop(app)
 	browser_stop(app)
@@ -408,7 +462,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 				append(&app.servers, s)
 				i = len(app.servers) - 1
 			}
-			if servers_save(app) && forget != "" { password_forget(forget) }
+			servers_save(app, forget = forget)
 			app.cx.open[.Server] = false
 			server_connect(app, i)
 		}
@@ -431,9 +485,8 @@ server_remove :: proc(app: ^App, i: int) {
 	if i <= 0 || i >= len(app.servers) || app.servers[i].local { return }
 	s := app.servers[i]
 	ordered_remove(&app.servers, i)
-	password_forget(s.name)
+	servers_save(app, forget_first = s.name)
 	delete(s.name); delete(s.url); delete(s.password); delete(s.stored)
-	servers_save(app)
 	if app.server == i {
 		server_connect(app, 0)
 	} else if app.server > i {

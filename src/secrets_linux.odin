@@ -3,7 +3,9 @@
 // client does not show: it counts as none for a new password, and what is already in it waits, kept (Server.stored).
 package ocn
 
+import "base:runtime"
 import "core:strings"
+import "core:sync"
 import "core:time"
 import "gt:dbus"
 
@@ -136,14 +138,16 @@ secret_available :: proc() -> bool {
 }
 
 @(private = "file") in_clear: map[string]bool   // the servers whose password had to stay in the file, at their last save (keys owned)
+@(private = "file") in_clear_lock: sync.Mutex   // (a save seals on a chore, the dialog reads it in a frame)
 
 // See os_windows.odin. Without a usable service the field is the password: the file is only the user's. What is said of a server is what its
 // last save found: a keyring unlocked since, and the next save moves the password there.
 password_seal :: proc(name, password: string) -> (field: string, ok: bool) {
 	stored := secret_store(name, password)
-	if key, _ := delete_key(&in_clear, name); key != "" { delete(key) }
+	sync.mutex_guard(&in_clear_lock)
+	if key, _ := delete_key(&in_clear, name); key != "" { delete(key, runtime.heap_allocator()) }
 	if stored { return IN_SERVICE_MARK, true }
-	in_clear[strings.clone(name)] = true
+	in_clear[strings.clone(name, runtime.heap_allocator())] = true
 	return password, true
 }
 
@@ -165,6 +169,9 @@ password_field_of :: proc(name, field: string) -> string {
 password_forget :: proc(name: string) { secret_delete(name) }
 
 password_note :: proc() -> string {
-	if secret_available() && len(in_clear) == 0 { return "" }
+	sync.lock(&in_clear_lock)
+	none_in_clear := len(in_clear) == 0
+	sync.unlock(&in_clear_lock)
+	if secret_available() && none_in_clear { return "" }
 	return "No usable Secret Service (none here, or its keyring is locked): the password stays in clear in servers.txt, which only you can read (mode 0600)."
 }
