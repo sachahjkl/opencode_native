@@ -135,6 +135,22 @@ hiding_keeps_the_shells_showing_brings_them_back :: proc(t: ^testing.T) {
 	testing.expect_value(t, bench_count(.Pty_List) + bench_count(.Pty_Made), 0)   // (nothing to read, nothing to make)
 }
 
+// Shift+Insert is the terminals' other paste, Ctrl+Insert their other copy: the program's, not keys sent to the shell (Insert
+// would reach it as "\x1b[2~").
+@(test)
+shift_insert_pastes_ctrl_insert_copies :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	open_shells(t, app, "a")
+	s := app.cx.terms.list[0]
+	built(app, s, 11)
+	for mods in ([2]platform.Modifiers{{.Shift}, {.Ctrl}}) {
+		ev := []platform.Event{{kind = .Key_Press, key = .Insert, mods = mods}}
+		testing.expect_value(t, len(term_events(app, ev)), 0)
+	}
+	testing.expect(t, !strings.contains(outbox(s), "[2~"), "no Insert key sent to the shell")
+}
+
 @(test)
 the_toggle_key_reaches_the_program_from_inside_a_shell :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()

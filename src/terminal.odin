@@ -965,9 +965,9 @@ term_format :: proc(t: ^Term) -> string {
 term_key_event :: proc(app: ^App, t: ^Term, e: platform.Event) -> (take: bool) {
 	if e.key == .T && e.mods == {.Ctrl, .Shift} { return false }
 	switch {
-	case e.key == .C && (e.mods == {.Ctrl, .Shift} || (t.read_only && e.mods == {.Ctrl})):   // (Ctrl+C alone is a shell's)
+	case (e.key == .C && (e.mods == {.Ctrl, .Shift} || (t.read_only && e.mods == {.Ctrl}))) || (e.key == .Insert && e.mods == {.Ctrl}):   // (Ctrl+C alone is a shell's)
 		if term_has_selection(t) { clip_set(term_selection_text(t)) }
-	case e.key == .V && e.mods == {.Ctrl, .Shift} && !t.read_only:
+	case ((e.key == .V && e.mods == {.Ctrl, .Shift}) || (e.key == .Insert && e.mods == {.Shift})) && !t.read_only:   // (Shift+Insert: the terminals' other paste)
 		term_paste(app, t)
 	case e.key == .Page_Up && e.mods == {.Shift}:
 		ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = -i64(t.rows)})
