@@ -258,7 +258,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 					r := draw.rect_pad(b.rect, -2 * s)
 					r.min.x += 4 * s
 					r.max.x -= 4 * s
-					if (^bool)(user)^ { draw_well(dc, r, 6 * s, hex(HEX_PICK_SELECTED)) } else if b.hot_t > FADE_VISIBLE { draw.rect(dc, r, {1, 1, 1, 0.04 * b.hot_t}, 6 * s) }
+					if (^bool)(user)^ { draw_well(dc, r, 0, hex(HEX_PICK_SELECTED)) } else if b.hot_t > FADE_VISIBLE { draw.rect(dc, r, {1, 1, 1, 0.04 * b.hot_t}) }   // (square: a row)
 				}
 				rb.custom_user = rd
 				rs := ui.signal(rb)

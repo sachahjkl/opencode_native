@@ -251,7 +251,7 @@ completion_list :: proc(app: ^App, id: string, rows: []Completion_Row, sel: int,
 					r := draw.rect_pad(b.rect, -1 * s)
 					r.min.x += 6 * s
 					r.max.x -= 6 * s
-					draw_well(dc, r, 6 * s, hex(HEX_PAL_SELECTED))
+					draw_well(dc, r, 0, hex(HEX_PAL_SELECTED))   // (square: a row)
 				}
 			}
 			row.custom_user = d
