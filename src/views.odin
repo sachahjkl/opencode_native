@@ -7,6 +7,7 @@ import "core:unicode"
 import "core:unicode/utf8"
 import "core:hash"
 import "core:math"
+import "core:mem"
 import "core:slice"
 import "core:strings"
 import "core:time"
@@ -1163,10 +1164,9 @@ user_message :: proc(app: ^App, m: ^Message, em: f32) {
 					text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}
 				ui.spacer(ui.px(em * 0.35))
-				runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
-				ui.rich_links(m.text, {color = hex(HEX_USER_TEXT)}, &runs)
+				runs := link_runs(&m.text_runs, m.text, {color = hex(HEX_USER_TEXT)}, app.chat.alloc)
 				ui.next({width = ui.fill(), flags = {.Selectable}})
-				link_clicked(ui.rich_paragraph("###text", runs[:]))
+				link_clicked(ui.rich_paragraph("###text", runs))
 				if len(m.images) > 0 {
 					ui.spacer(ui.px(em * 0.6))
 					sc := ui.scale()
@@ -1246,7 +1246,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 			switch p.kind {
 			case .Text:
 				if len(p.text) > 0 {
-					markdown(pid, string(p.text[:]), hex(HEX_ANSWER_TEXT))
+					markdown(md_doc(&app.chat, pid), pid, string(p.text[:]), hex(HEX_ANSWER_TEXT))
 					ui.spacer(ui.px(em * 0.6))
 				}
 			case .Reasoning: reasoning_part(app, &p, pid, em)
@@ -1452,9 +1452,9 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 					if open {
 						tool_body(app, p, em)
 					} else if show_diff {
-						diff_view(app, "###diff", p.patch, em, DIFF_FOLDED_LINES, tool_diff_title(p))
+						diff_view(app, "###diff", p.diff, p.patch, em, DIFF_FOLDED_LINES, tool_diff_title(p))
 					} else if show_error {
-						mono_well("###output", p.output, em, TOOL_ERROR_LINES_FOLDED, hex(HEX_ERROR_TEXT))
+						mono_well("###output", p.output, em, TOOL_ERROR_LINES_FOLDED, hex(HEX_ERROR_TEXT), &p.output_well, app.chat.alloc)
 					}
 					if len(p.images) > 0 {
 						ui.spacer(ui.px(em * 0.5))
@@ -1491,29 +1491,108 @@ caption_title :: proc(id, title, note: string, em: f32, color := Color{}) {
 
 MONO_WELL_MAX_BYTES :: 20000   // of a tool's text, whatever the lines allow
 
-// Monospace text in a sunken well, at most `max_lines` lines (the rest is counted).
-mono_well :: proc(id: string, s: string, em: f32, max_lines: int, color := Color{}) {
-	body, extra := mono_cut(s, max_lines)
+// What a view read of a text, kept with it: a build of a text that did not change reads none of it again. A text is known by its
+// place and its length; one that changed is in another place, or longer in the same (a part's text only grows in its buffer:
+// apply_event gives a text that changed otherwise a new one). Kept with what owns the text (a part, a message), in the same memory.
+
+// Where a text is cut to `max_lines` (`way`: what counts as a line, and how the cut is made), and how many lines are left out.
+Text_Cut :: struct {
+	src:       rawptr,
+	n:         int,
+	max_lines: int,
+	way:       Cut_Way,
+	body:      int,   // bytes shown (a Lines cut: the text up to there)
+	extra:     int,
+}
+
+Cut_Way :: enum u8 { None, Lines, Read, Search }
+
+text_cut_known :: proc(k: ^Text_Cut, s: string, max_lines: int, way: Cut_Way) -> bool {
+	return k != nil && k.way == way && k.src == raw_data(s) && k.n == len(s) && k.max_lines == max_lines
+}
+
+text_cut_keep :: proc(k: ^Text_Cut, s: string, max_lines: int, way: Cut_Way, body, extra: int) {
+	if k != nil { k^ = {src = raw_data(s), n = len(s), max_lines = max_lines, way = way, body = body, extra = extra} }
+}
+
+// mono_cut, counted once for a text (`k` nil: each time).
+mono_cut_kept :: proc(k: ^Text_Cut, s: string, max_lines: int) -> (body: string, extra: int) {
+	if text_cut_known(k, s, max_lines, .Lines) { return s[:k.body], k.extra }
+	body, extra = mono_cut(s, max_lines)
+	text_cut_keep(k, s, max_lines, .Lines, len(body), extra)
+	return
+}
+
+// A text as runs, its web addresses links (ui.rich_links), kept with the text and the style they were made with. A text that grew
+// in its place is read again from its last line before the old end: an address never spans a line, what is before it stays.
+Link_Runs :: struct {
+	src:   rawptr,
+	n:     int,
+	style: ui.Rich_Style,
+	runs:  [dynamic]ui.Rich_Run,   // (in the memory of the text's owner: cleared and filled again, it does not grow past the text)
+}
+
+link_runs :: proc(k: ^Link_Runs, s: string, style: ui.Rich_Style, a: mem.Allocator) -> []ui.Rich_Run {
+	same := k.src == raw_data(s) && k.style == style
+	if same && k.n == len(s) { return k.runs[:] }
+	if k.runs.allocator.procedure == nil { k.runs.allocator = a }
+	from := 0
+	if same && k.n < len(s) {
+		if nl := strings.last_index_byte(s[:k.n], '\n'); nl >= 0 { from = nl + 1 }
+	}
+	// the runs before `from` stay, the one across it is cut there (a link has no line break: it is text)
+	// (from > 0: they are runs of this text, in this place)
+	kept := 0
+	for from > 0 && kept < len(k.runs) {
+		r := &k.runs[kept]
+		start := int(uintptr(raw_data(r.text)) - uintptr(raw_data(s)))
+		if start >= from { break }
+		if start + len(r.text) > from { r.text = r.text[:from - start] }
+		kept += 1
+	}
+	resize(&k.runs, kept)
+	ui.rich_links(s[from:], style, &k.runs)
+	k.src, k.n, k.style = raw_data(s), len(s), style
+	return k.runs[:]
+}
+
+// What a well made of its text: where it is cut, its runs.
+Well_Kept :: struct {
+	cut:  Text_Cut,
+	runs: Link_Runs,
+}
+
+// Monospace text in a sunken well, at most `max_lines` lines (the rest is counted). `kept` (in `kept_in`, the memory of the text's
+// owner): what the well made of the text, for the next build. Without it, a text of the frame: read at each build.
+mono_well :: proc(id: string, s: string, em: f32, max_lines: int, color := Color{}, kept: ^Well_Kept = nil, kept_in := mem.Allocator{}) {
+	body, extra := mono_cut_kept(kept != nil ? &kept.cut : nil, s, max_lines)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well(id, radius = 6, base = HEX_CODE_WELL) {
 		ui.spacer(ui.px(em * 0.5))
-		mono_text(body, extra, em, 0.75, color)
+		mono_text(body, extra, em, 0.75, color, kept = kept != nil ? &kept.runs : nil, kept_in = kept_in)
 		ui.spacer(ui.px(em * 0.5))
 	}
 }
 
 // What mono_well holds, for a well that holds more: `body` (already cut), the lines left out, `pad` em on each side (`flush`: the text's own,
-// none).
-mono_text :: proc(body: string, extra: int, em, pad: f32, color := Color{}, flush := false) {
+// none). `kept`: its runs, kept with the text (in `kept_in`).
+mono_text :: proc(body: string, extra: int, em, pad: f32, color := Color{}, flush := false, kept: ^Link_Runs = nil, kept_in := mem.Allocator{}) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###r") {
 		ui.spacer(ui.px(em * pad))
-		runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
-		ui.rich_links(body, {font = the_app.mono, color = color.a > 0 ? color : hex(HEX_TOOL_OUTPUT)}, &runs)
+		style := ui.Rich_Style{font = the_app.mono, color = color.a > 0 ? color : hex(HEX_TOOL_OUTPUT)}
+		runs: []ui.Rich_Run
+		if kept != nil {
+			runs = link_runs(kept, body, style, kept_in)
+		} else {
+			list := make([dynamic]ui.Rich_Run, context.temp_allocator)
+			ui.rich_links(body, style, &list)
+			runs = list[:]
+		}
 		m := ui.Style_Mod{width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}}
 		if flush { m.text_pad = 0 }   // (its text starts at the pad, as a key above it)
 		ui.next(m)
-		link_clicked(ui.rich_paragraph("###t", runs[:]))
+		link_clicked(ui.rich_paragraph("###t", runs))
 		ui.spacer(ui.px(em * pad))
 	}
 	if extra > 0 {
@@ -1568,10 +1647,9 @@ reasoning_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if rail_row(fmt.tprintf("###rb_%s", pid), with_alpha(hex(HEX_WEAK), 0.4)) {
 			ui.spacer(ui.px(em * 0.9))
-			runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
-			ui.rich_links(string(p.text[:]), {italic = true, color = hex(HEX_REASONING_TEXT)}, &runs)
+			runs := link_runs(&p.text_runs, string(p.text[:]), {italic = true, color = hex(HEX_REASONING_TEXT)}, app.chat.alloc)
 			ui.next({width = ui.fill(), font_size = math.round(em * FS_LABEL), flags = {.Selectable}})
-			link_clicked(ui.rich_paragraph("###t", runs[:]))
+			link_clicked(ui.rich_paragraph("###t", runs))
 		}
 	}
 	ui.spacer(ui.px(em * 0.5))

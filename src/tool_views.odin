@@ -56,35 +56,24 @@ diff_lines :: proc(old, new: string, allocator := context.allocator) -> string {
 	return strings.to_string(out)
 }
 
-// The first of `keys` the call's input has.
-@(private = "file")
-input_str :: proc(v: json.Value, keys: ..string) -> (s: string, ok: bool) {
-	for k in keys {
-		if t, is := jget(v, k).(json.String); is { return string(t), true }
-	}
-	return
-}
-
 // The diff of a call: the server's, else made once from what it was asked (a call still running, an older server).
 part_patch :: proc(p: ^Part, a := context.allocator) -> string {
 	if p.patch != "" || p.patch_tried || p.input == "" { return p.patch }
 	p.patch_tried = true
-	v, err := json.parse_string(p.input, allocator = context.temp_allocator)
-	if err != nil { return "" }
-	if old, has := input_str(v, "oldString", "old_string"); has {
-		new, _ := input_str(v, "newString", "new_string")
-		part_patch_set(p, diff_lines(old, new, a))
-	} else if content, is := input_str(v, "content"); is {
-		part_patch_set(p, diff_lines("", content, a))
+	if p.has_old {
+		part_patch_set(p, diff_lines(p.old_text, p.new_text, a), a)
+	} else if p.has_content {
+		part_patch_set(p, diff_lines("", p.content, a), a)
 	}
 	return p.patch
 }
 
-// `patch` is the call's: what it adds and removes counted once.
-part_patch_set :: proc(p: ^Part, patch: string) {
+// `patch` is the call's: read once, here (its lines, what it adds and removes), not at each build. (In `a`: the patch's.)
+part_patch_set :: proc(p: ^Part, patch: string, a := context.allocator) {
 	p.patch = patch
+	p.diff = diff_read(patch, a)
 	p.added, p.removed = 0, 0
-	for l in diff_parse(patch) {
+	for l in p.diff.lines {
 		if l.sign == '+' { p.added += 1 } else if l.sign == '-' { p.removed += 1 }
 	}
 }
@@ -131,6 +120,21 @@ file_header :: proc(l: string) -> bool {
 		if strings.has_prefix(l, p) { return true }
 	}
 	return false
+}
+
+// A patch read: its lines (their texts are the patch's), what changed in each marked (diff_mark), whether they have numbers. Read
+// when the patch is set, kept with it: a build only shows it.
+Diff :: struct {
+	lines:    []Diff_Line,
+	numbered: bool,
+}
+
+diff_read :: proc(patch: string, a := context.allocator) -> Diff {
+	lines := diff_parse(patch)
+	diff_mark(lines)
+	d := Diff{lines = slice.clone(lines, a)}
+	for l in lines { if l.old_no > 0 || l.new_no > 0 { d.numbered = true; break } }
+	return d
 }
 
 // A line of a hunk begins with a sign, and only the counts of its header say where it ends: "--- x" there is the line "-- x" removed. Out
@@ -267,18 +271,16 @@ diff_row :: proc(app: ^App, l: Diff_Line, k: int, numbered: bool, em: f32) {
 	}
 }
 
-// The lines of a patch in a well, at most `max_lines` of them (the rest is counted, and the whole opens in its own window).
-diff_view :: proc(app: ^App, id, patch: string, em: f32, max_lines: int, title := "Diff") {
-	lines := diff_parse(patch)
+// The lines of a patch (`d`, read from `patch`) in a well, at most `max_lines` of them (the rest is counted, and the whole opens
+// in its own window).
+diff_view :: proc(app: ^App, id: string, d: Diff, patch: string, em: f32, max_lines: int, title := "Diff") {
+	lines := d.lines
 	if len(lines) == 0 { return }
-	diff_mark(lines)
-	numbered := false
-	for l in lines { if l.old_no > 0 || l.new_no > 0 { numbered = true; break } }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well(id, radius = 6, base = HEX_CODE_WELL) {
 		ui.spacer(ui.px(em * 0.3))
 		shown := min(len(lines), max_lines)
-		for l, k in lines[:shown] { diff_row(app, l, k, numbered, em) }
+		for l, k in lines[:shown] { diff_row(app, l, k, d.numbered, em) }
 		if diff_more(len(lines) - shown, em) { diff_full_open(app, title, patch) }
 		ui.spacer(ui.px(em * 0.3))
 	}
@@ -334,28 +336,34 @@ numbered_line :: proc(l: string) -> (no: int, rest: string, ok: bool) {
 	return n, strings.trim_prefix(rest, " "), true
 }
 
-// A file as the read tool gives it: a line of what was read, then "number: text" lines.
-read_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int) {
+// A file as the read tool gives it: a line of what was read, then "number: text" lines. (`cut`: how many are left out, counted
+// once for this output: a build reads no further than what it shows.)
+read_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut: ^Text_Cut) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well(id, radius = 6, base = HEX_CODE_WELL) {
 		ui.spacer(ui.px(em * 0.4))
+		known := text_cut_known(cut, output, max_lines, .Read)
 		rest := output
 		k := 0
 		left := 0
 		for l in strings.split_lines_iterator(&rest) {
 			no, t, ok := numbered_line(l)
 			if !ok { continue }
-			if k == max_lines { left += 1; continue }
+			if k == max_lines {
+				if known { break }
+				left += 1
+				continue
+			}
 			code_row(app, no, t, k, em)
 			k += 1
 		}
+		if known { left = cut.extra } else { text_cut_keep(cut, output, max_lines, .Read, len(output), left) }
 		more_lines(left, em)
 		ui.spacer(ui.px(em * 0.4))
 	}
 }
 
 // Whether `output` reads as lines of a file (a tool of another name may print anything).
-@(private = "file")
 read_lines_in :: proc(output: string) -> bool {
 	rest := output
 	n := 0
@@ -367,16 +375,21 @@ read_lines_in :: proc(output: string) -> bool {
 }
 
 // Matches under their file ("path:" then "  Line 12: text"), paths one a line.
-search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int) {
+search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut: ^Text_Cut) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well(id, radius = 6, base = HEX_CODE_WELL) {
 		ui.spacer(ui.px(em * 0.4))
+		known := text_cut_known(cut, output, max_lines, .Search)
 		rest := output
 		k, left := 0, 0
 		for l in strings.split_lines_iterator(&rest) {
 			t := strings.trim_space(l)
 			if t == "" { continue }
-			if k == max_lines { left += 1; continue }
+			if k == max_lines {
+				if known { break }
+				left += 1
+				continue
+			}
 			if strings.has_prefix(t, "Line ") {
 				no, s, ok := numbered_line(t[len("Line "):])
 				if ok { code_row(app, no, strings.trim_space(s), k, em); k += 1; continue }
@@ -389,6 +402,7 @@ search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int) {
 			}
 			k += 1
 		}
+		if known { left = cut.extra } else { text_cut_keep(cut, output, max_lines, .Search, len(output), left) }
 		more_lines(left, em)
 		ui.spacer(ui.px(em * 0.4))
 	}
@@ -399,28 +413,21 @@ search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int) {
 
 // A command, as one would have typed it.
 @(private = "file")
-command_view :: proc(app: ^App, id, input: string, em: f32) {
-	v, err := json.parse_string(input, allocator = context.temp_allocator)
-	if err != nil { return }
-	cmd := jstr(v, "command")
-	if cmd == "" { return }
-	mono_well(id, fmt.tprintf("$ %s", cmd), em, TOOL_INPUT_LINES_MAX, hex(HEX_TEXT_SOFT))
+command_view :: proc(app: ^App, id: string, p: ^Part, em: f32) {
+	if p.command_line == "" { return }
+	mono_well(id, p.command_line, em, TOOL_INPUT_LINES_MAX, hex(HEX_TEXT_SOFT), &p.command_well, app.chat.alloc)
 	ui.spacer(ui.px(em * 0.35))
 }
 
 @(private = "file")
-todo_view :: proc(app: ^App, input: string, em: f32) -> bool {
-	v, err := json.parse_string(input, allocator = context.temp_allocator)
-	if err != nil { return false }
-	list := jarr(v, "todos")
-	if list == nil { return false }
-	for t, k in list { todo_row(app, Todo{jstr(t, "content"), jstr(t, "status")}, k, em) }
+todo_view :: proc(app: ^App, p: ^Part, em: f32) -> bool {
+	if !p.has_todos { return false }
+	for t, k in p.todos { todo_row(app, t, k, em) }
 	ui.spacer(ui.px(em * 0.3))
 	return true
 }
 
-// A value of the input on one line, as it reads.
-@(private = "file")
+// A value of the input on one line, as it reads (temp memory).
 value_text :: proc(v: json.Value) -> string {
 	#partial switch x in v {
 	case json.String:  return string(x)
@@ -434,19 +441,14 @@ value_text :: proc(v: json.Value) -> string {
 
 // The input as keys and values, in one well: a long value under its key, at the place of the short ones' values' start. (No well in
 // the well: one edge beside another reads as unfinished.)
-input_view :: proc(app: ^App, input: string, em: f32) {
-	v, err := json.parse_string(input, allocator = context.temp_allocator)
-	obj, is := v.(json.Object)
-	if err != nil || !is { mono_well("###input", input, em, TOOL_INPUT_LINES_MAX); return }
-	keys := make([dynamic]string, context.temp_allocator)
-	for k in obj { append(&keys, k) }
-	slice.sort(keys[:])
+input_view :: proc(app: ^App, p: ^Part, em: f32) {
+	if !p.input_object { mono_well("###input", p.input, em, TOOL_INPUT_LINES_MAX); return }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well("###input", radius = 6, base = HEX_CODE_WELL) {
 		ui.spacer(ui.px(em * 0.4))
-		for k, i in keys {
-			s := value_text(obj[k])
-			if strings.index_byte(s, '\n') >= 0 || len(s) > TOOL_LINE_CHARS {
+		for &f, i in p.fields {
+			k, s := f.key, f.value
+			if f.long {
 				if i > 0 { ui.spacer(ui.px(em * 0.3)) }
 				ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 				if ui.row(.Center, id = fmt.tprintf("###ik%d", i)) {
@@ -455,10 +457,10 @@ input_view :: proc(app: ^App, input: string, em: f32) {
 				}
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column(id = fmt.tprintf("###iv%d", i)) {
-					body, extra := mono_cut(s, TOOL_INPUT_LINES_MAX)
-					mono_text(body, extra, em, INPUT_PAD_EM, flush = true)
+					body, extra := mono_cut_kept(&f.well.cut, s, TOOL_INPUT_LINES_MAX)
+					mono_text(body, extra, em, INPUT_PAD_EM, flush = true, kept = &f.well.runs, kept_in = app.chat.alloc)
 				}
-				if i + 1 < len(keys) { ui.spacer(ui.px(em * 0.3)) }
+				if i + 1 < len(p.fields) { ui.spacer(ui.px(em * 0.3)) }
 			} else {
 				kv_row(fmt.tprintf("###kv%d", i), k, s, em, {h = 1.4, key_w = 7, key_fs = FS_CAPTION, val_fs = FS_SMALL, pad_l = INPUT_PAD_EM, val = HEX_TEXT_SOFT})
 			}
@@ -480,21 +482,21 @@ tool_body :: proc(app: ^App, p: ^Part, em: f32) {
 	lines := app.prefs.tool_lines
 	output :: proc(app: ^App, p: ^Part, em: f32, lines: int) {
 		if p.output == "" { return }
-		mono_well("###output", p.output, em, lines, p.status == .Error ? hex(HEX_ERROR_TEXT) : hex(HEX_TOOL_OUTPUT))
+		mono_well("###output", p.output, em, lines, p.status == .Error ? hex(HEX_ERROR_TEXT) : hex(HEX_TOOL_OUTPUT), &p.output_well, app.chat.alloc)
 	}
 	switch tool_kind(p.tool_name) {
 	case .Edit:
 		if patch := part_patch(p, app.chat.alloc); patch != "" {
-			diff_view(app, "###diff", patch, em, lines, tool_diff_title(p))
+			diff_view(app, "###diff", p.diff, patch, em, lines, tool_diff_title(p))
 			if failed { ui.spacer(ui.px(em * 0.4)); output(app, p, em, lines) }
 			return
 		}
 	case .Read:
-		if !failed && read_lines_in(p.output) { read_view(app, "###read", p.output, em, lines); return }
+		if !failed && p.output_numbered { read_view(app, "###read", p.output, em, lines, &p.output_well.cut); return }
 	case .Search:
-		if !failed && p.output != "" { search_view(app, "###search", p.output, em, lines); return }
+		if !failed && p.output != "" { search_view(app, "###search", p.output, em, lines, &p.output_well.cut); return }
 	case .Shell:
-		command_view(app, "###cmd", p.input, em)
+		command_view(app, "###cmd", p, em)
 		output(app, p, em, lines)
 		if output_view_can(p) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
@@ -505,9 +507,9 @@ tool_body :: proc(app: ^App, p: ^Part, em: f32) {
 		}
 		return
 	case .Todo:
-		if todo_view(app, p.input, em) { return }
+		if todo_view(app, p, em) { return }
 	case .Other:
 	}
-	if p.input != "" { input_view(app, p.input, em) }
+	if p.input != "" { input_view(app, p, em) }
 	output(app, p, em, lines)
 }

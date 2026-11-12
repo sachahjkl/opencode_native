@@ -3,7 +3,6 @@
 // build, for what was noted.
 package ocn
 
-import "core:encoding/json"
 import "core:fmt"
 import "core:math"
 import "core:strings"
@@ -91,11 +90,6 @@ copied :: proc(s: string, what: string) {
 	ui.toast(.Good, "%s copied", what)
 }
 
-input_field :: proc(p: ^Part, key: string) -> string {
-	v, err := json.parse_string(p.input, allocator = context.temp_allocator)
-	return err == nil ? jstr(v, key) : ""
-}
-
 // The first address a text holds, http or https.
 first_url :: proc(s: string) -> string {
 	i := strings.index(s, "http://")
@@ -172,15 +166,13 @@ message_menu :: proc(app: ^App, m: ^Message) {
 tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
 	if ui.menu_item("Copy the output", icon = lucide.COPY, enabled = p.output != "").clicked { copied(p.output, "Output") }
 	if p.patch != "" { if ui.menu_item("Copy the diff", icon = lucide.COPY).clicked { copied(p.patch, "Diff") } }
-	if c := input_field(p, "command"); c != "" {
+	if c := p.command; c != "" {
 		if ui.menu_item("Copy the command", icon = lucide.SQUARE_TERMINAL).clicked { copied(c, "Command") }
 	}
 	if tool_kind(p.tool_name) == .Shell && output_view_can(p) {
 		if ui.menu_item("Inspect the output", icon = lucide.SQUARE_TERMINAL).clicked { output_view_open_part(app, p) }
 	}
-	path := input_field(p, "filePath")
-	if path == "" { path = input_field(p, "path") }
-	if path != "" {
+	if path := p.file_path; path != "" {
 		if ui.menu_item("Copy the path", icon = lucide.FILE).clicked { copied(path, "Path") }
 		if ui.menu_item("Show in the folder", icon = lucide.FOLDER).clicked { reveal_path(path) }
 	}

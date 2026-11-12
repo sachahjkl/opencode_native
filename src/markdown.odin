@@ -4,6 +4,7 @@ package ocn
 
 import "core:fmt"
 import "core:math"
+import "core:mem"
 import "core:strings"
 import "gt:draw"
 import "gt:platform"
@@ -90,17 +91,215 @@ inline_runs :: proc(text: string, base: ui.Rich_Style, out: ^[dynamic]ui.Rich_Ru
 @(private = "file")
 is_word :: proc(c: u8) -> bool { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') }
 
-@(private = "file")
 Block_Kind :: enum u8 { Para, Heading, Bullet, Number, Quote, Rule, Code, Table }
 
-@(private = "file")
 Block :: struct {
 	kind:   Block_Kind,
 	level:  int,      // heading level, list indent
 	marker: string,   // "3." of a numbered item
 	lang:   string,
-	lines:  [dynamic]string,
+	at:     int,      // where its first line starts in the text
+	first, count: int,   // its lines, in Md_Doc.lines
 	closed: bool,     // a code block whose closing fence came (one still being written is not)
+	// what a build makes of it, made once (md_text, md_runs): in the doc's memory, or for the last block in its tail buffers
+	text:     string,
+	has_text: bool,
+	runs:     []ui.Rich_Run,
+	runs_key: u64,    // what the runs were made with (md_runs_key; 0: none yet)
+}
+
+// The blocks of a Markdown text, kept with the text they were read from (its place, its length): a build reads none of it again.
+// The text grows (an answer streams): only its last block is read again, from where it starts. Every block before it is final:
+// a line only ever goes to the last block, and a block that starts reads the same with or without what came before it.
+// Memory: `alloc`, the chat's arena (md_doc). What is read again is cleared and filled again, it does not grow past the text; only
+// a final block's text and runs are made in the arena, once each.
+Md_Doc :: struct {
+	alloc:  mem.Allocator,
+	read:   bool,     // a text was read into it
+	src:    rawptr,   // the text read: where it lies, how long it was
+	n:      int,
+	blocks: [dynamic]Block,
+	lines:  [dynamic]string,
+	tail_text: [dynamic]u8,             // the last block's text and runs (read again as the text grows)
+	tail_runs: [dynamic]ui.Rich_Run,
+	markers:     [dynamic]f32,          // list_marker_widths, for markers_key
+	markers_key: [3]f32,                // (the size, least and gap they were measured at; none once the text is read again)
+}
+
+// The doc of a Markdown text of the conversation, by the id it is built under: one per id, read again when its text is another.
+md_doc :: proc(c: ^Chat, id: string) -> ^Md_Doc {
+	if d, ok := c.markdown[id]; ok { return d }
+	if c.markdown == nil { c.markdown = make(map[string]^Md_Doc, allocator = c.alloc) }
+	d := new(Md_Doc, c.alloc)
+	d.alloc = c.alloc
+	c.markdown[strings.clone(id, c.alloc)] = d
+	return d
+}
+
+// The lines of a block.
+md_lines :: proc(d: ^Md_Doc, bl: ^Block) -> []string { return d.lines[bl.first:][:bl.count] }
+
+// `src` read into `d`: nothing when it is the text read last, its last block and what follows when it grew in its place, else all of it.
+md_read :: proc(d: ^Md_Doc, src: string) {
+	if d.read && d.src == raw_data(src) && d.n == len(src) { return }
+	if !d.read {
+		d.blocks.allocator, d.lines.allocator, d.tail_text.allocator, d.tail_runs.allocator, d.markers.allocator = d.alloc, d.alloc, d.alloc, d.alloc, d.alloc
+	}
+	from := 0
+	if d.read && d.src == raw_data(src) && d.n < len(src) && len(d.blocks) > 0 {
+		last := d.blocks[len(d.blocks) - 1]
+		from = last.at
+		resize(&d.blocks, len(d.blocks) - 1)
+		resize(&d.lines, last.first)
+	} else {
+		clear(&d.blocks)
+		clear(&d.lines)
+	}
+	d.src, d.n, d.read = raw_data(src), len(src), true
+	d.markers_key = {}
+	parse_blocks(d, src, from)
+}
+
+parse_blocks :: proc(d: ^Md_Doc, src: string, from: int) {
+	cur := -1   // the block lines go to (always the last one: a line only ever goes there)
+	add :: proc(d: ^Md_Doc, b: Block) -> int {
+		b := b
+		b.first = len(d.lines)
+		append(&d.blocks, b)
+		return len(d.blocks) - 1
+	}
+	line_to :: proc(d: ^Md_Doc, cur: int, l: string) {
+		append(&d.lines, l)
+		d.blocks[cur].count += 1
+	}
+	text := src[from:]
+	in_code := false
+	fence := ""
+	for len(text) > 0 {
+		at := len(src) - len(text)
+		raw, _ := strings.split_lines_iterator(&text)
+		line := strings.trim_right(raw, "\r")
+		t := strings.trim_space(line)
+		if in_code {
+			if strings.has_prefix(t, fence) && strings.trim_left(t, "`~") == "" { d.blocks[cur].closed = true; in_code = false; cur = -1; continue }
+			line_to(d, cur, line)
+			continue
+		}
+		if strings.has_prefix(t, "```") || strings.has_prefix(t, "~~~") {
+			n := 0
+			for n < len(t) && t[n] == t[0] { n += 1 }
+			fence = t[:n]
+			cur = add(d, {kind = .Code, lang = strings.trim_space(t[n:]), at = at})
+			in_code = true
+			continue
+		}
+		if t == "" { cur = -1; continue }
+		if t == "---" || t == "***" || t == "___" {
+			add(d, {kind = .Rule, at = at})
+			cur = -1
+			continue
+		}
+		if t[0] == '#' {
+			lvl := 0
+			for lvl < len(t) && t[lvl] == '#' { lvl += 1 }
+			if lvl <= HEADING_LEVEL_MAX && lvl < len(t) && t[lvl] == ' ' {
+				h := add(d, {kind = .Heading, level = lvl, at = at})
+				line_to(d, h, strings.trim_space(t[lvl:]))
+				cur = -1
+				continue
+			}
+		}
+		if t[0] == '|' {
+			if cur < 0 || d.blocks[cur].kind != .Table { cur = add(d, {kind = .Table, at = at}) }
+			line_to(d, cur, t)
+			continue
+		}
+		if t[0] == '>' {
+			q := strings.trim_left(t[1:], " ")
+			if cur < 0 || d.blocks[cur].kind != .Quote { cur = add(d, {kind = .Quote, at = at}) }
+			line_to(d, cur, q)
+			continue
+		}
+		if indent, marker, rest, ok := list_item(line); ok {
+			cur = add(d, {kind = marker == "•" ? .Bullet : .Number, level = indent, marker = marker, at = at})
+			line_to(d, cur, rest)
+			continue
+		}
+		// continuation of a paragraph or a list item, or a new paragraph
+		if cur >= 0 && (d.blocks[cur].kind == .Para || d.blocks[cur].kind == .Bullet || d.blocks[cur].kind == .Number || d.blocks[cur].kind == .Quote) {
+			line_to(d, cur, t)
+			continue
+		}
+		cur = add(d, {kind = .Para, at = at})
+		line_to(d, cur, t)
+	}
+}
+
+// What a block shows as one text: its lines joined (code: as lines; a heading: its line). Made once for a final block, in the doc's
+// memory; the last one's in the tail buffer, made again when the text grew.
+md_text :: proc(d: ^Md_Doc, n: int) -> string {
+	bl := &d.blocks[n]
+	if bl.has_text { return bl.text }
+	lines := md_lines(d, bl)
+	s: string
+	#partial switch bl.kind {
+	case .Heading:              s = len(lines) > 0 ? lines[0] : ""
+	case .Code:                 s = strings.join(lines, "\n", context.temp_allocator)
+	case .Para, .Quote, .Bullet, .Number: s = joined(lines)
+	}
+	if bl.kind != .Heading {
+		if n == len(d.blocks) - 1 {
+			clear(&d.tail_text)
+			append(&d.tail_text, s)
+			s = string(d.tail_text[:])
+		} else {
+			s = strings.clone(s, d.alloc)
+		}
+	}
+	bl.text, bl.has_text = s, true
+	return s
+}
+
+// What the runs of a block were made with: its style, the size of its inline code, the colour of inline code (the theme's).
+@(private = "file")
+md_runs_key :: proc(base: ui.Rich_Style, code_size: f32) -> u64 {
+	code := hex(HEX_INLINE_CODE)
+	h := u64(HASH_MIX_A)
+	for f in ([]f32{base.color[0], base.color[1], base.color[2], base.color[3], code[0], code[1], code[2], code[3], code_size, base.bold ? 1 : 0, base.italic ? 1 : 0}) {
+		h = (h ~ u64(transmute(u32)f)) * HASH_MIX_B
+	}
+	return h | 1
+}
+
+// The inline runs of a block (inline_runs of md_text), made again only when what they are made with changed.
+md_runs :: proc(d: ^Md_Doc, n: int, base: ui.Rich_Style, code_size: f32 = 0) -> []ui.Rich_Run {
+	key := md_runs_key(base, code_size)
+	bl := &d.blocks[n]
+	if bl.runs_key == key { return bl.runs }
+	s := md_text(d, n)
+	if n == len(d.blocks) - 1 {
+		clear(&d.tail_runs)
+		inline_runs(s, base, &d.tail_runs, code_size)
+		bl.runs = d.tail_runs[:]
+	} else {
+		list := make([dynamic]ui.Rich_Run, context.temp_allocator)
+		inline_runs(s, base, &list, code_size)
+		bl.runs = make([]ui.Rich_Run, len(list), d.alloc)
+		copy(bl.runs, list[:])
+	}
+	bl.runs_key = key
+	return bl.runs
+}
+
+// The width of each block's marker column (list_marker_widths), measured again when the text (md_read) or the sizes changed.
+md_markers :: proc(d: ^Md_Doc, measure: proc(s: string, size: f32) -> f32, size, least, gap: f32) -> []f32 {
+	key := [3]f32{size, least, gap}
+	if d.markers_key == key && len(d.markers) == len(d.blocks) { return d.markers[:] }
+	w := list_marker_widths(d.blocks[:], measure, size, least, gap)
+	clear(&d.markers)
+	append(&d.markers, ..w)
+	d.markers_key = key
+	return d.markers[:]
 }
 
 @(private = "file")
@@ -112,80 +311,6 @@ list_item :: proc(l: string) -> (indent: int, marker: string, rest: string, ok: 
 	for j < len(t) && t[j] >= '0' && t[j] <= '9' { j += 1 }
 	if j > 0 && j + 1 < len(t) && (t[j] == '.' || t[j] == ')') && t[j + 1] == ' ' { return indent, t[:j + 1], t[j + 2:], true }
 	return
-}
-
-parse_blocks :: proc(src: string) -> [dynamic]Block {
-	blocks := make([dynamic]Block, context.temp_allocator)
-	cur: ^Block
-	text := src
-	in_code := false
-	fence := ""
-	for raw in strings.split_lines_iterator(&text) {
-		line := strings.trim_right(raw, "\r")
-		t := strings.trim_space(line)
-		if in_code {
-			if strings.has_prefix(t, fence) && strings.trim_left(t, "`~") == "" { cur.closed = true; in_code = false; cur = nil; continue }
-			append(&cur.lines, line)
-			continue
-		}
-		if strings.has_prefix(t, "```") || strings.has_prefix(t, "~~~") {
-			n := 0
-			for n < len(t) && t[n] == t[0] { n += 1 }
-			fence = t[:n]
-			append(&blocks, Block{kind = .Code, lang = strings.trim_space(t[n:]), lines = make([dynamic]string, context.temp_allocator)})
-			cur = &blocks[len(blocks) - 1]
-			in_code = true
-			continue
-		}
-		if t == "" { cur = nil; continue }
-		if t == "---" || t == "***" || t == "___" {
-			append(&blocks, Block{kind = .Rule})
-			cur = nil
-			continue
-		}
-		if t[0] == '#' {
-			lvl := 0
-			for lvl < len(t) && t[lvl] == '#' { lvl += 1 }
-			if lvl <= HEADING_LEVEL_MAX && lvl < len(t) && t[lvl] == ' ' {
-				append(&blocks, Block{kind = .Heading, level = lvl, lines = make([dynamic]string, context.temp_allocator)})
-				append(&blocks[len(blocks) - 1].lines, strings.trim_space(t[lvl:]))
-				cur = nil
-				continue
-			}
-		}
-		if t[0] == '|' {
-			if cur == nil || cur.kind != .Table {
-				append(&blocks, Block{kind = .Table, lines = make([dynamic]string, context.temp_allocator)})
-				cur = &blocks[len(blocks) - 1]
-			}
-			append(&cur.lines, t)
-			continue
-		}
-		if t[0] == '>' {
-			q := strings.trim_left(t[1:], " ")
-			if cur == nil || cur.kind != .Quote {
-				append(&blocks, Block{kind = .Quote, lines = make([dynamic]string, context.temp_allocator)})
-				cur = &blocks[len(blocks) - 1]
-			}
-			append(&cur.lines, q)
-			continue
-		}
-		if indent, marker, rest, ok := list_item(line); ok {
-			append(&blocks, Block{kind = marker == "•" ? .Bullet : .Number, level = indent, marker = marker, lines = make([dynamic]string, context.temp_allocator)})
-			cur = &blocks[len(blocks) - 1]
-			append(&cur.lines, rest)
-			continue
-		}
-		// continuation of a paragraph or a list item, or a new paragraph
-		if cur != nil && (cur.kind == .Para || cur.kind == .Bullet || cur.kind == .Number || cur.kind == .Quote) {
-			append(&cur.lines, t)
-			continue
-		}
-		append(&blocks, Block{kind = .Para, lines = make([dynamic]string, context.temp_allocator)})
-		cur = &blocks[len(blocks) - 1]
-		append(&cur.lines, t)
-	}
-	return blocks
 }
 
 // The lines of a block joined as one paragraph (a line break where the source ends a line with two spaces or "\").
@@ -202,51 +327,51 @@ joined :: proc(lines: []string) -> string {
 	return strings.to_string(b)
 }
 
-// Shows `src` as Markdown in the current column (full width). `id` keys its blocks.
-markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
+// Shows `src` as Markdown in the current column (full width), its blocks read into `doc` (kept: read again only as it changes,
+// md_read). `id` keys its blocks.
+markdown :: proc(doc: ^Md_Doc, id: string, src: string, color: Color, size: f32 = 0) {
 	em := ui.font_size()
 	fs := size > 0 ? size : em
 	// the answers' own face and size; every line the same height, inline code or not; tables stay in the interface's face
 	prose_fs := math.round(fs * the_app.prose_scale)
 	line_h := math.round(prose_fs * PROSE_LINE_RATIO)
-	blocks := parse_blocks(src)
+	md_read(doc, src)
 	measure :: proc(s: string, size: f32) -> f32 { return ui.text_width(the_app.prose, size, s) }
 	// (a marker's column holds its text, the gap and the padding on both sides of a box: LIST_MARKER_EM in all at least)
 	pad := ui.parent_box().text_pad
-	marker_w := list_marker_widths(blocks[:], measure, prose_fs, math.round(em * LIST_MARKER_EM) - 2 * pad, math.round(em * LIST_MARKER_GAP_EM))
-	for &bl, n in blocks {
+	marker_w := md_markers(doc, measure, prose_fs, math.round(em * LIST_MARKER_EM) - 2 * pad, math.round(em * LIST_MARKER_GAP_EM))
+	for &bl, n in doc.blocks {
 		bid := fmt.tprintf("###%s_b%d", id, n)
+		lines := md_lines(doc, &bl)
 		if n > 0 { ui.spacer(ui.px(math.round(em * (bl.kind == .Bullet || bl.kind == .Number ? 0.25 : 0.6)))) }
 		switch bl.kind {
 		case .Rule:
 			groove(bid)
 		case .Code:
-			code := strings.join(bl.lines[:], "\n", context.temp_allocator)
-			version := len(bl.lines) > 0 ? src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], em) : 0
+			code := md_text(doc, n)
+			version := len(lines) > 0 ? src_version(lines[0], lines[len(lines) - 1], em) : 0
 			if bl.lang == "mermaid" { mermaid_block(bid, code, bl.closed, version) } else { code_block(bid, bl.lang, code, version = version) }
 		case .Table:
-			table_block(bid, bl.lines[:], color, fs)
+			table_block(bid, lines, color, fs)
 		case .Heading:
-			runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
 			k := [HEADING_LEVEL_MAX + 1]f32{1, 1.45, 1.25, 1.1, 1, 1, 1}
-			inline_runs(bl.lines[0], {bold = true, color = bl.level <= 2 ? hex(HEX_BRIGHT) : color}, &runs)
+			runs := md_runs(doc, n, {bold = true, color = bl.level <= 2 ? hex(HEX_BRIGHT) : color})
 			if bl.level >= 2 { ui.spacer(ui.px(em * 0.3)) }
 			ui.next({width = ui.fill(), font = the_app.prose, font_size = math.round(prose_fs * k[bl.level]), flags = {.Selectable}})
-			res := ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[0], fs))
+			res := ui.rich_paragraph(bid, runs, version = src_version(lines[0], lines[0], fs))
 			link_clicked(res)
 		case .Para, .Quote:
-			runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
-			inline_runs(joined(bl.lines[:]), {color = bl.kind == .Quote ? hex(HEX_WEAK) : color}, &runs, code_size = fs)
+			runs := md_runs(doc, n, {color = bl.kind == .Quote ? hex(HEX_WEAK) : color}, code_size = fs)
 			if bl.kind == .Quote {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if rail_row(fmt.tprintf("%s_q", bid), with_alpha(accent(), 0.6)) {
 					ui.spacer(ui.px(em * 0.9))
 					ui.next({width = ui.fill(), font = the_app.prose, font_size = prose_fs, flags = {.Selectable}})
-					link_clicked(ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], fs), line_height = line_h))
+					link_clicked(ui.rich_paragraph(bid, runs, version = src_version(lines[0], lines[len(lines) - 1], fs), line_height = line_h))
 				}
 			} else {
 				ui.next({width = ui.fill(), font = the_app.prose, font_size = prose_fs, flags = {.Selectable}})
-				link_clicked(ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], fs), line_height = line_h))
+				link_clicked(ui.rich_paragraph(bid, runs, version = src_version(lines[0], lines[len(lines) - 1], fs), line_height = line_h))
 			}
 		case .Bullet, .Number:
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -259,10 +384,9 @@ markdown :: proc(id: string, src: string, color: Color, size: f32 = 0) {
 				mark := [1]ui.Rich_Run{{text = mk, style = {color = accent()}}}
 				ui.next({width = ui.px(marker_w[n] + 2 * pad), font = the_app.prose, font_size = prose_fs})
 				ui.rich_paragraph(fmt.tprintf("%s_mk", bid), mark[:], line_height = line_h)
-				runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
-				inline_runs(joined(bl.lines[:]), {color = color}, &runs, code_size = fs)
+				runs := md_runs(doc, n, {color = color}, code_size = fs)
 				ui.next({width = ui.fill(), font = the_app.prose, font_size = prose_fs, flags = {.Selectable}})
-				link_clicked(ui.rich_paragraph(bid, runs[:], version = src_version(bl.lines[0], bl.lines[len(bl.lines) - 1], fs), line_height = line_h))
+				link_clicked(ui.rich_paragraph(bid, runs, version = src_version(lines[0], lines[len(lines) - 1], fs), line_height = line_h))
 			}
 		}
 	}

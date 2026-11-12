@@ -1135,10 +1135,10 @@ a_line_that_looks_like_a_header_is_a_line :: proc(t: ^testing.T) {
 @(test)
 what_a_call_counts_is_what_a_diff_shows :: proc(t: ^testing.T) {
 	p: Part
-	part_patch_set(&p, "--- a/f\n+++ b/f\n@@ -1,2 +1,2 @@\n--- x\n+++ y\n z\n")
+	part_patch_set(&p, "--- a/f\n+++ b/f\n@@ -1,2 +1,2 @@\n--- x\n+++ y\n z\n", context.temp_allocator)
 	testing.expect_value(t, p.added, 1)
 	testing.expect_value(t, p.removed, 1)
-	part_patch_set(&p, "---x\n+++y\n")   // (made here: no headers, the lines "--x" and "++y")
+	part_patch_set(&p, "---x\n+++y\n", context.temp_allocator)   // (made here: no headers, the lines "--x" and "++y")
 	testing.expect_value(t, p.added, 1)
 	testing.expect_value(t, p.removed, 1)
 }

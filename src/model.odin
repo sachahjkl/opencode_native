@@ -42,9 +42,24 @@ Part :: struct {
 	tool_id:   string,
 	tool_name: string,
 	status:    Tool_Status,
-	input:     string,        // JSON text
+	input:     string,        // JSON text (copied whole; what views read of it is below, read once by tool_set_input)
 	subject:   string,        // what the tool works on (a path, a command, a pattern), for its header
-	output:    string,
+	// what the input says, read once (tool_set_input): a build never parses the input again
+	command:      string,          // input.command
+	command_line: string,          // "$ command", as a well shows it
+	background:   bool,            // input.background
+	file_path:    string,          // input.filePath, else input.path
+	todos:        []Todo,          // input.todos (has_todos: it has that list)
+	has_todos:    bool,
+	old_text, new_text: string,    // an edit: oldString / old_string, newString / new_string (has_old: it has the old one)
+	has_old:      bool,
+	content:      string,          // a write: input.content (has_content: it has one)
+	has_content:  bool,
+	fields:       []Input_Field,   // all of the input as keys and values, by key (input_object: it is an object)
+	input_object: bool,
+	output:    string,        // (set by tool_set_output: what is read of it goes with it)
+	output_numbered: bool,    // it reads as lines of a file (read_view)
+	moved_shell: string,      // the server's command the output says the call went on as ("... (shell ID: sh_...)")
 	shell_id:  string,        // the command of the server it runs, once it says (output_view.odin)
 	done:      bool,
 	// a sub-agent launched by this call (tool "subagent")
@@ -55,7 +70,21 @@ Part :: struct {
 	// what a call changed in files (tool_views.odin): the server's patch, else made from its input
 	patch:       string,
 	patch_tried: bool,
+	diff:        Diff,   // the patch read (part_patch_set: again only when the patch changes)
 	added, removed: int,
+	// what the views made of its texts, kept with the text they were made from (in the chat's arena, as the part)
+	output_well:  Well_Kept,   // its output in a well
+	command_well: Well_Kept,   // its command_line
+	prompt_well:  Well_Kept,   // a sub-agent's prompt
+	text_runs:    Link_Runs,   // reasoning: its text with its addresses as links
+}
+
+// A key of a tool's input and its value as a line reads it (value_text); `long`: it goes on lines of its own, under its key, in a
+// well (`well`: what that made of it).
+Input_Field :: struct {
+	key, value: string,
+	long:       bool,
+	well:       Well_Kept,
 }
 
 Msg_Kind :: enum u8 { User, Assistant, Synthetic, Shell, Compaction, Idle, Switch, Other }
@@ -75,6 +104,7 @@ Message :: struct {
 	previous:  string,        // a switch: what it was ("": not said)
 	switched:  Switch_What,
 	shell_id:  string,        // shell: its command on the server
+	text_runs: Link_Runs,     // user: its text with its addresses as links, kept with it
 	parts:     [dynamic]Part,
 	tokens_in, tokens_out, reasoning, cache_read: f64,
 	cost:      f64,
@@ -119,6 +149,7 @@ Chat :: struct {
 	live:         map[string]Sub_Live,     // keyed by child session id (keys and strings in the arena)
 	goal:         Goal,                    // its /goal (goal.odin; strings in the arena)
 	has_goal:     bool,
+	markdown:     map[string]^Md_Doc,      // the blocks of each Markdown text shown, by the id it is built under (md_doc; in the arena)
 }
 
 Agent_Info :: struct { id, name, description, mode: string }
@@ -697,9 +728,9 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 				part.started_ms = jnum(p, "time", "created")
 				part.ended_ms = jnum(p, "time", "completed")
 				if part.status == .Error {
-					part.output = strings.clone(error_text(jget(st, "error")), a)
+					tool_set_output(&part, error_text(jget(st, "error")), a)
 				} else {
-					part.output = strings.clone(content_text(jarr(st, "content")), a)
+					tool_set_output(&part, content_text(jarr(st, "content")), a)
 					content_images(&part, jarr(st, "content"), a)
 				}
 			} else {
@@ -817,14 +848,63 @@ tool_set_meta :: proc(p: ^Part, meta: json.Value, a: mem.Allocator) {
 	if files := jarr(meta, "files"); len(files) > 0 {
 		b := strings.builder_make(context.temp_allocator)
 		for f in files { strings.write_string(&b, jstr(f, "patch")) }
-		if strings.builder_len(b) > 0 { part_patch_set(p, strings.clone(strings.to_string(b), a)) }
+		// (each progress event says it again: the same patch is not read again)
+		if patch := strings.to_string(b); patch != "" && patch != p.patch { part_patch_set(p, strings.clone(patch, a), a) }
 	}
 }
 
-// The input of a tool and the one thing it is about (shown in its header).
+// What a call handed back, and the server's command it names when it went on in the background: read here once, not at each build.
+tool_set_output :: proc(p: ^Part, output: string, a: mem.Allocator) {
+	p.output = strings.clone(output, a)
+	p.output_numbered = read_lines_in(p.output)
+	p.moved_shell = ""
+	if at := strings.index(p.output, "(shell ID: "); at >= 0 {
+		rest := p.output[at + len("(shell ID: "):]
+		if end := strings.index_byte(rest, ')'); end > 0 { p.moved_shell = rest[:end] }
+	}
+}
+
+// The input of a tool, the one thing it is about (shown in its header), and the fields the views read: read here once, a build
+// never parses the input.
 tool_set_input :: proc(p: ^Part, input: json.Value, a: mem.Allocator) {
 	if input == nil { return }
 	p.input = strings.clone(jtext(input), a)
+	p.fields, p.input_object = nil, false
+	if obj, is := input.(json.Object); is {
+		p.input_object = true
+		p.fields = make([]Input_Field, len(obj), a)
+		i := 0
+		for k, v in obj {
+			s := value_text(v)
+			p.fields[i] = {key = strings.clone(k, a), value = strings.clone(s, a), long = strings.index_byte(s, '\n') >= 0 || len(s) > TOOL_LINE_CHARS}
+			i += 1
+		}
+		slice.sort_by(p.fields, proc(x, y: Input_Field) -> bool { return x.key < y.key })
+	}
+	// The first of `keys` whose value is a string: the field's own text (a write's content is not copied again). Only a string
+	// counts: what an edit or a write made is made from it (part_patch).
+	text_of :: proc(p: ^Part, v: json.Value, keys: ..string) -> (s: string, ok: bool) {
+		for k in keys {
+			if _, is := jget(v, k).(json.String); !is { continue }
+			for f in p.fields { if f.key == k { return f.value, true } }
+		}
+		return
+	}
+	p.command, _ = text_of(p, input, "command")
+	p.command_line = ""
+	if p.command != "" { p.command_line = strings.concatenate({"$ ", p.command}, a) }
+	p.background = jbool(input, "background")
+	p.file_path, _ = text_of(p, input, "filePath")
+	if p.file_path == "" { p.file_path, _ = text_of(p, input, "path") }
+	p.todos, p.has_todos = nil, false
+	if list := jarr(input, "todos"); list != nil {
+		p.todos = make([]Todo, len(list), a)
+		for t, i in list { p.todos[i] = Todo{strings.clone(jstr(t, "content"), a), strings.clone(jstr(t, "status"), a)} }
+		p.has_todos = true
+	}
+	p.old_text, p.has_old = text_of(p, input, "oldString", "old_string")
+	p.new_text, _ = text_of(p, input, "newString", "new_string")
+	p.content, p.has_content = text_of(p, input, "content")
 	if p.tool_name == "subagent" || (jstr(input, "agent") != "" && jstr(input, "prompt") != "") {
 		p.sub_agent = strings.clone(jstr(input, "agent"), a)
 		p.sub_desc = strings.clone(jstr(input, "description"), a)
@@ -1057,8 +1137,12 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 			return
 		}
 		p := text_part(c, m, k, int(jnum(d, "ordinal")))
-		clear(&p.text)
-		append(&p.text, t)
+		// (another text than the deltas made: another buffer. What was read from a text is kept by its place and its length, and a
+		// text only grows in its buffer: md_read, link_runs)
+		if string(p.text[:]) != t {
+			p.text = make([dynamic]u8, 0, len(t), a)
+			append(&p.text, t)
+		}
 		p.done = true
 	case "session.tool.input.started":
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
@@ -1077,7 +1161,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
 		p.status = .Done
 		p.done = true
-		p.output = strings.clone(content_text(jarr(d, "content")), a)
+		tool_set_output(p, content_text(jarr(d, "content")), a)
 		content_images(p, jarr(d, "content"), a)
 		p.ended_ms = jnum(ev, "created")
 		tool_set_meta(p, jget(d, "metadata"), a)
@@ -1086,7 +1170,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
 		p.status = .Error
 		p.done = true
-		p.output = strings.clone(error_text(jget(d, "error")), a)
+		tool_set_output(p, error_text(jget(d, "error")), a)
 	case "session.step.ended":
 		m := assistant(c, mid)
 		m.streaming = false

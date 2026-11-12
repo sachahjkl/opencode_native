@@ -17,7 +17,7 @@ a_session_s_todo_list_comes_back_at_once :: proc(t: ^testing.T) {
 		activity_reset(app)
 		if list != "" {
 			parts := make([dynamic]Part)
-			append(&parts, Part{kind = .Tool, tool_name = "todowrite", input = list})
+			append(&parts, test_tool("todowrite", list))
 			append(&app.chat.messages, Message{id = "m1", kind = .Assistant, parts = parts})
 		}
 		todos_update(app)

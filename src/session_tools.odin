@@ -88,6 +88,7 @@ session_import_conflict :: proc(app: ^App, id: string) {
 
 File_Change :: struct {
 	file, patch, status: string,
+	diff:      Diff,   // the patch read once, as it came (changes_fill)
 	additions, deletions: int,
 	more, open: bool,
 }
@@ -267,8 +268,9 @@ changes_fill :: proc(c: ^Changes, list: json.Array) {
 	a := virtual.arena_allocator(&c.arena)
 	for it, i in list {
 		more, _ := jget(it, "more").(json.Boolean)
+		patch := strings.clone(jstr(it, "patch"), a)
 		append(&c.files, File_Change{
-			file = strings.clone(jstr(it, "file"), a), patch = strings.clone(jstr(it, "patch"), a), status = strings.clone(jstr(it, "status"), a),
+			file = strings.clone(jstr(it, "file"), a), patch = patch, diff = diff_read(patch, a), status = strings.clone(jstr(it, "status"), a),
 			additions = int(jnum(it, "additions")), deletions = int(jnum(it, "deletions")), more = bool(more), open = i < CHANGES_OPEN_FILES,
 		})
 	}
@@ -464,7 +466,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 							text("d", fmt.tprintf("-%d", f.deletions), hex(HEX_RED), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 						}
 						if f.open {
-							diff_view(app, "###fd", f.patch, em, CHANGES_DIFF_LINES, f.file)
+							diff_view(app, "###fd", f.diff, f.patch, em, CHANGES_DIFF_LINES, f.file)
 							if f.more { text("m", "The server gave only the beginning of this file.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)}, ui.fill()) }
 						}
 						ui.spacer(ui.px(em * 0.4))

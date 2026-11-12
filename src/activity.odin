@@ -28,7 +28,7 @@ Shell_Job :: struct {
 	seen:          bool,                // in the last answer of the list
 }
 
-Todo :: struct { content, status: string }   // (in Activity.todo_arena's allocator: context of todos_read)
+Todo :: struct { content, status: string }   // (in Activity.todo_arena's allocator: context of todos_read; a Part's: the chat's arena)
 
 // Which todos the list shows: all of them (what remains first), what remains, or what is over (done or cancelled).
 Todo_Filter :: enum u8 { All, Active, Done }
@@ -318,13 +318,8 @@ background_session :: proc(app: ^App, session: string) {
 part_background :: proc(app: ^App, p: ^Part) -> (background, running: bool) {
 	if tool_kind(p.tool_name) != .Shell { return }
 	id := p.shell_id
-	if at := strings.index(p.output, "(shell ID: "); at >= 0 {
-		rest := p.output[at + len("(shell ID: "):]
-		if end := strings.index_byte(rest, ')'); end > 0 { id, background = rest[:end], true }
-	}
-	if v, err := json.parse_string(p.input, allocator = context.temp_allocator); err == nil {
-		if b, ok := jget(v, "background").(json.Boolean); ok && bool(b) { background = true }
-	}
+	if p.moved_shell != "" { id, background = p.moved_shell, true }
+	if p.background { background = true }
 	j := id != "" ? job_find(&app.activity, id) : nil
 	if j != nil && j.background { background = true }
 	running = background && j != nil && j.status == .Running
@@ -479,13 +474,9 @@ todos_update :: proc(app: ^App) {
 	a.todos_sig = sig
 	#reverse for &m in c.messages {
 		#reverse for &p in m.parts {
-			if p.kind != .Tool || !strings.contains(p.tool_name, "todo") || p.input == "" { continue }
-			v, err := json.parse_string(p.input, allocator = context.temp_allocator)
-			if err != nil { continue }
-			list := jarr(v, "todos")
-			if list == nil { continue }
+			if p.kind != .Tool || !strings.contains(p.tool_name, "todo") || !p.has_todos { continue }
 			todos_clear(a)
-			for t in list { append(&a.todos, Todo{strings.clone(jstr(t, "content")), strings.clone(jstr(t, "status"))}) }
+			for t in p.todos { append(&a.todos, Todo{strings.clone(t.content), strings.clone(t.status)}) }
 			todos_remember(a, c.id)
 			return
 		}
@@ -590,8 +581,7 @@ foreground_command :: proc(app: ^App) -> bool {
 	for &m in c.messages[max(0, len(c.messages) - ACT_PEEK_LINES):] {
 		for &p in m.parts {
 			if !shell_call_running(&p) { continue }
-			v, _ := json.parse_string(p.input, allocator = context.temp_allocator)
-			command := jstr(v, "command")
+			command := p.command
 			background := false
 			for &j in app.activity.jobs { if j.command == command && j.background { background = true } }
 			if !background { return true }
@@ -607,8 +597,7 @@ tool_rows :: proc(app: ^App, rows: ^[dynamic]Act_Row) {
 	for &m in c.messages[first:] {
 		for &p in m.parts {
 			if !shell_call_running(&p) { continue }
-			v, _ := json.parse_string(p.input, allocator = context.temp_allocator)
-			command := jstr(v, "command")
+			command := p.command
 			listed := false
 			for &j in app.activity.jobs { if j.command == command { listed = true } }
 			if listed { continue }
