@@ -22,17 +22,13 @@ foreign libc {
 	localtime_r :: proc(t: ^c.long, out: ^Tm) -> ^Tm ---
 }
 
-// Minutes to add to UTC for the machine's local time (daylight saving included).
-local_offset_minutes :: proc() -> int {
-	@(static) cached: int
-	@(static) known: bool
-	if !known {
-		now := time(nil)
-		tm: Tm
-		if localtime_r(&now, &tm) != nil { cached = int(tm.gmtoff) / 60 }
-		known = true
-	}
-	return cached
+// Minutes to add to UTC for the machine's local time now (daylight saving included). It may read the zone's file: never on the
+// interface's thread (clock.odin).
+local_offset_read :: proc() -> int {
+	now := time(nil)
+	tm: Tm
+	if localtime_r(&now, &tm) == nil { return 0 }
+	return int(tm.gmtoff) / 60
 }
 
 // (no taskbar button to flash: the toast tells)

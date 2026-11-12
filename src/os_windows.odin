@@ -33,17 +33,13 @@ foreign user32_flash {
 	FlashWindowEx :: proc(fi: ^FLASHWINFO) -> win.BOOL ---
 }
 
-// Minutes to add to UTC for the machine's local time (daylight saving included).
-local_offset_minutes :: proc() -> int {
-	@(static) cached: int
-	@(static) known: bool
-	if !known {
-		tzi: win.TIME_ZONE_INFORMATION
-		r := GetTimeZoneInformation(&tzi)
-		bias := int(tzi.Bias) + (r == 2 ? int(tzi.DaylightBias) : int(tzi.StandardBias))
-		cached, known = -bias, true
-	}
-	return cached
+// Minutes to add to UTC for the machine's local time now (daylight saving included). A system call: never on the interface's
+// thread (clock.odin).
+local_offset_read :: proc() -> int {
+	tzi: win.TIME_ZONE_INFORMATION
+	r := GetTimeZoneInformation(&tzi)
+	bias := int(tzi.Bias) + (r == 2 ? int(tzi.DaylightBias) : int(tzi.StandardBias))
+	return -bias
 }
 
 FLASH_COUNT :: 3   // of the taskbar button

@@ -695,6 +695,7 @@ fonts_init :: proc(app: ^App) -> bool {
 
 main :: proc() {
 	cli_check()   // (--help, --version, a line not understood: said, no window)
+	clock_watch_start()   // (the local time's offset, read here and then by a thread of its own: clock.odin)
 	started := time.tick_now()
 	frames := -1   // --frames=N: N frames of the hidden window, then exit (a check that it runs)
 	forced_scale: f32 = 0   // --scale=<factor>
