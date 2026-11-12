@@ -227,10 +227,10 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			}
 			busy := app.busy[s.id] or_else false
 			if depth > 0 {
-				// a sub-agent: its state as a lamp, its agent in its colour
+				// a sub-agent: its state's mark (a lamp while it runs, a sign once it ended), its agent in its colour
 				st, _ := state_of_word(s.outcome)
-				if busy { st = .Running; animate(app) }
-				state_mark("###st", sub_state_color(st), busy, size = em * 0.75)
+				if busy { st = .Running }
+				state_mark("###st", st, size = em * 0.75)
 				ui.spacer(ui.px(em * 0.3))
 				text("ag", s.agent, hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.35))

@@ -4,6 +4,8 @@ import "core:os"
 import "core:strings"
 import "core:testing"
 import setup "gt:setup"
+import "gt:ui"
+import lucide "gt:lucide"
 
 _ :: os        // (the tests of Windows)
 _ :: strings
@@ -56,13 +58,34 @@ previews_read_as_text :: proc(t: ^testing.T) {
 @(test)
 the_card_says_its_state_once :: proc(t: ^testing.T) {
 	v := Sub_View{state = .Running, started = 1000, model = "anthropic/m1"}
-	testing.expect_value(t, card_when(&v, 61000), "1m 00s")
+	testing.expect_value(t, state_when(v.state, v.started, 61000), "1m 00s")   // (its lamp says it runs)
 	testing.expect_value(t, card_meta(&v, true), "m1")
 	v.state = .Failed
-	testing.expect_value(t, card_when(&v, 61000), "failed · 1m 00s")
+	testing.expect_value(t, state_when(v.state, v.started, 61000), "failed · 1m 00s")
 	testing.expect_value(t, card_meta(&v, false), "m1")
 	v.state = .Done
-	testing.expect_value(t, card_when(&v, 61000), "1m 00s")
+	testing.expect_value(t, state_when(v.state, v.started, 61000), "done · 1m 00s")
+	v.state = .Cancelled
+	testing.expect_value(t, state_when(v.state, v.started, 61000), "stopped · 1m 00s")
+	v.state = .Finishing
+	testing.expect_value(t, state_when(v.state, v.started, 61000), "finishing · 1m 00s")
+	v.state = .Background
+	testing.expect_value(t, state_when(v.state, v.started, 0), "in background")
+}
+
+// Each state that ended has its sign and its intent; what goes on has none (a lamp).
+@(test)
+an_ended_state_has_its_sign :: proc(t: ^testing.T) {
+	testing.expect_value(t, sub_state_sign(.Done), lucide.CHECK)
+	testing.expect_value(t, sub_state_sign(.Failed), lucide.X)
+	testing.expect_value(t, sub_state_sign(.Cancelled), lucide.SQUARE)
+	testing.expect_value(t, sub_state_intent(.Done), ui.Intent.Success)
+	testing.expect_value(t, sub_state_intent(.Failed), ui.Intent.Danger)
+	testing.expect_value(t, sub_state_intent(.Cancelled), ui.Intent.Warning)
+	for st in ([]Sub_State{.Starting, .Running, .Finishing}) {
+		testing.expectf(t, sub_live(st) && sub_state_sign(st) == "" && sub_state_intent(st) == .Neutral, "%v goes on: a lamp", st)
+	}
+	for st in ([]Sub_State{.Done, .Failed, .Cancelled, .Background, .Unknown}) { testing.expectf(t, !sub_live(st), "%v: no lamp", st) }
 }
 
 @(test)

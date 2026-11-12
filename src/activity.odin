@@ -669,7 +669,7 @@ row_act :: proc(app: ^App, r: Act_Row) {
 
 @(private = "file")
 row_stop :: proc(app: ^App, r: Act_Row) {
-	if r.state != .Running && r.state != .Starting { return }
+	if !sub_live(r.state) { return }
 	switch r.kind {
 	case .Agent: interrupt_session(app, r.id)
 	case .Shell:
@@ -797,7 +797,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 	a := &app.activity
 	selected := a.open && i == a.sel
 	opened := r.kind == .Shell && a.opened == r.id
-	running := r.state == .Running || r.state == .Starting
+	running := sub_live(r.state)
 	if running { animate(app) }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	ui.a11y({role = .Button, name = fmt.tprintf("%s, %s: %s", sub_state_label(r.state), r.name, r.title)})
@@ -814,7 +814,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###l1") {
 			ui.spacer(ui.px(em * TRAY_PAD_EM))
-			state_mark("###st", sub_state_color(r.state), running, size = em * 0.8)
+			state_mark("###st", r.state, size = em * 0.8)
 			ui.spacer(ui.px(em * 0.4))
 			text("n", r.name, running ? hex(HEX_WEAK) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.5))
@@ -825,8 +825,8 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 				ui.spacer(ui.px(em * 0.5))
 			}
 			end := r.ended > 0 ? r.ended : (running ? now : 0)
-			if dur := duration_text(r.started, end); dur != "" {
-				text("d", dur, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			if dur := state_when(r.state, r.started, end); dur != "" {
+				text("d", dur, sub_state_ink(r.state), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.4))
 			}
 			if selected || sig.hovering {
@@ -885,8 +885,7 @@ todo_row :: proc(app: ^App, t: Todo, k: int, em: f32) {
 			case "completed": glyph(lucide.CHECK, hex(HEX_GREEN), math.round(em * ICON_SMALL), em * 1.1)
 			case "cancelled": glyph(lucide.X, hex(HEX_FAINT), math.round(em * ICON_SMALL), em * 1.1)
 			case "in_progress":
-				state_mark("###s", hex(HEX_YELLOW), true, size = em * 0.8)
-				animate(app)
+				state_mark("###s", .Running, size = em * 0.8)
 			case: glyph(lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
 			}
 		}
@@ -941,7 +940,7 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	a := &app.activity
 	rows := activity_rows(app)
 	running := 0
-	for r in rows { if r.state == .Running || r.state == .Starting { running += 1 } }
+	for r in rows { if sub_live(r.state) { running += 1 } }
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###act_head") {
 		ui.spacer(ui.px(em * TRAY_PAD_EM))

@@ -106,3 +106,27 @@ a_tool_call_says_when :: proc(t: ^testing.T) {
 	when_ := tool_when(&p, false, start + 2 * day, true)
 	testing.expectf(t, strings.contains(when_, ", 01:01:01") && when_ != "Started 01:01:01, ended 01:01:13", "another day, its date: %s", when_)
 }
+
+// One place says how a sub-agent stands: a call that returned while its session is still busy is finishing (not running
+// again); a background call that returned, nothing known yet of its end, is in background (not "launched").
+@(test)
+a_returned_call_whose_session_is_busy_is_finishing :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	open_chat(app, "s")
+	bench_clear(app)
+	p := Part{kind = .Tool, tool_name = "subagent", status = .Done, sub_session = "child1", sub_agent = "general", started_ms = 1_000, ended_ms = 9_000}
+	testing.expect_value(t, sub_view(app, "child1", &p).state, Sub_State.Done)
+	app.busy["child1"] = true
+	v := sub_view(app, "child1", &p)
+	testing.expect_value(t, v.state, Sub_State.Finishing)
+	testing.expect(t, sub_live(v.state) && v.ended == 0, "finishing goes on: a lamp, its time still counted")
+	testing.expect_value(t, sub_state_label(v.state), "finishing")
+	bg := Part{kind = .Tool, tool_name = "subagent", status = .Done, sub_session = "child2", sub_background = true}
+	testing.expect_value(t, sub_view(app, "child2", &bg).state, Sub_State.Background)
+	testing.expect_value(t, sub_state_label(.Background), "in background")
+	app.busy["child2"] = true
+	testing.expect_value(t, sub_view(app, "child2", &bg).state, Sub_State.Running)   // (a background one at work runs: it did not return)
+	delete_key(&app.busy, "child1")
+	delete_key(&app.busy, "child2")
+}

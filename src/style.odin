@@ -267,8 +267,8 @@ draw_groove :: proc(dc: ^draw.Context, a, b: Vec2, vertical := false) { ui.machi
 // A status lamp: a glass bead with a halo when lit (`glow`: its halo; < 0: as `lit`).
 draw_lamp :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color, lit: f32 = 1, glow: f32 = -1) { ui.machined_lamp(dc, c, d, col, lit, glow) }
 
-// A pip: what is over (done, failed, stopped); only what is live gets a glowing lamp, so the lamps stay rare enough to mean
-// something.
+// A pip: a state at rest (connected, nothing known); only what is live gets a glowing lamp, so the lamps stay rare enough
+// to mean something. (What ended has its sign: state_mark.)
 draw_pip :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color) { ui.machined_pip(dc, c, d, col) }
 
 ////////////////////////////////
@@ -501,11 +501,6 @@ scanner :: proc(id: string, color: Color, width, height: f32) {
 	}
 	b.custom_user = d
 	animate(the_app)
-}
-
-// A live state as a pulsing lamp, a finished one as a pip.
-state_mark :: proc(id: string, color: Color, live: bool, size: f32 = 0) {
-	if live { lamp(id, color, 1, pulse = true, size = size); animate(the_app) } else { pip(id, color, size) }
 }
 
 @(private = "file")
