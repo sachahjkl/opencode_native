@@ -651,7 +651,9 @@ term_made_failed :: proc(app: ^App) -> (told: bool) {
 }
 
 // A shell made on a server left, with nobody to use it: it does not stay there.
-term_made_left :: proc(app: ^App, r: ^Request, v: json.Value) {
+pty_made_on_left :: proc(app: ^App, r: ^Request) {
+	if !r.ok || r.status >= 400 { return }
+	v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
 	id := jstr(v, "data", "id")
 	if id == "" { return }
 	q := location_query(r.tag)
@@ -1594,4 +1596,25 @@ term_zoom_forget :: proc(app: ^App, id: string) {
 	key, _ := delete_key(&z.by_id, id)
 	delete(key)
 	store.remove(&app.stores.zooms, id)
+}
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+pty_list_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { terminals_load(app, r.tag, v) }
+
+pty_list_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	return app.cx.terms.open   // (the panel says it, with its Try again)
+}
+
+pty_made_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { term_made(app, r.tag, v) }
+
+pty_made_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) { return term_made_failed(app) }
+
+pty_size_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { term_size_answered(app, r.tag) }
+
+// The grid has its size; a server that refuses it says nothing worth a toast at each step of a drag.
+pty_size_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	term_size_answered(app, r.tag)
+	return true
 }

@@ -468,7 +468,7 @@ integration_page :: proc(app: ^App, it: ^Integration, em: f32) {
 		set_text(&n.failed, "")
 		return
 	}
-	section(strings.to_upper(it.name, context.temp_allocator), em)
+	section(app, strings.to_upper(it.name, context.temp_allocator), em)
 	for &c, i in it.connections { connection_row(app, &c, i, em) }
 	if len(it.connections) > 0 { ui.spacer(ui.px(em * 0.6)) }
 	fill :: proc(app: ^App, it: ^Integration, method: int, em: f32) {
@@ -550,7 +550,7 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 connect_fill :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int, em: f32) {
 	n := &app.cx.integrations
 	go := false
-	section(strings.to_upper(method_title(m), context.temp_allocator), em)
+	section(app, strings.to_upper(method_title(m), context.temp_allocator), em)
 	if m.kind == .Command {
 		info_line(app, "###int_cmd", fmt.tprintf("The server will run: %s", strings.join(m.names, " ", context.temp_allocator)), em)
 		ui.spacer(ui.px(em * 0.4))
@@ -599,7 +599,7 @@ connect_wait :: proc(app: ^App, em: f32) {
 	case Connect_Waiting:   w = s
 	case Connect_Finishing: w, finishing = s.wait, true
 	}
-	section(w.by_code ? "PASTE THE CODE" : "WAITING", em)
+	section(app, w.by_code ? "PASTE THE CODE" : "WAITING", em)
 	ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Text_Wrap, .Selectable}, fg = hex(HEX_TEXT), text_pad = 0})
 	ui.paragraph(fmt.tprintf("%s###int_say", label_safe(w.instructions != "" ? w.instructions : "It goes on in the browser.")))
 	ui.spacer(ui.px(em * 0.5))
@@ -633,4 +633,36 @@ connect_wait :: proc(app: ^App, em: f32) {
 		}
 	}
 	if finish { connect_finish(app) }
+}
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+integrations_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { integrations_load(app, v) }
+
+credentials_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { credentials_load(app, v) }
+
+credential_done_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { integrations_changed(app) }
+
+connected_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { connect_done(app) }
+
+connect_begin_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { connect_begun(app, v) }
+
+connect_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	connect_failed(app, message)
+	return true
+}
+
+// A login begun that nobody waits for any more goes on running: it is ended, on the server it went to.
+connect_begin_on_left :: proc(app: ^App, r: ^Request) {
+	if !r.ok || r.status >= 400 { return }
+	v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
+	if id := jstr(v, "data", "attemptID"); id != "" { request(app, .Action, "DELETE", fmt.tprintf("%s/%s", r.path, url_escape(id)), conn = r.conn) }
+}
+
+connect_status_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { connect_status(app, v) }
+
+connect_status_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	connect_poll_failed(app)
+	return true
 }

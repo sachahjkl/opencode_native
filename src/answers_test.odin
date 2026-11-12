@@ -1384,26 +1384,22 @@ a_choice_made_elsewhere_shows_at_once :: proc(t: ^testing.T) {
 @(test)
 a_goal_s_reset_time_is_said_for_a_person :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	app.prefs.clock24 = true
-	the_app = app   // (clock_text reads the 24-hour preference there)
-	defer the_app = nil
 	reason := "The session failed: You've hit your 5-hour limit · resets 12:20pm (Europe/Paris) Resets at 2026-11-10T11:20:00.000Z."
-	text, at := reason_and_reset(reason)
+	text, at := reason_and_reset(reason, true)
 	testing.expect_value(t, text, "The session failed: You've hit your 5-hour limit · resets 12:20pm (Europe/Paris)")
 	testing.expect_value(t, at, 1794309600000.0)   // (2026-11-10 11:20 UTC)
-	testing.expect_value(t, reset_text(at, at - 42 * 60_000 - 5_000), fmt.tprintf("  ·  resets at %s  ·  in 43 min", clock_text(at)))
-	testing.expect_value(t, reset_text(at, at - 65 * 60_000), fmt.tprintf("  ·  resets at %s  ·  in 1h 05", clock_text(at)))
-	testing.expect_value(t, reset_text(at, at + 1), fmt.tprintf("  ·  limit reset at %s", clock_text(at)))
+	testing.expect_value(t, reset_text(at, at - 42 * 60_000 - 5_000, true), fmt.tprintf("  ·  resets at %s  ·  in 43 min", clock_text(at, true)))
+	testing.expect_value(t, reset_text(at, at - 65 * 60_000, true), fmt.tprintf("  ·  resets at %s  ·  in 1h 05", clock_text(at, true)))
+	testing.expect_value(t, reset_text(at, at + 1, true), fmt.tprintf("  ·  limit reset at %s", clock_text(at, true)))
 	// another day: its date, and the time left in days
 	later := at + 3 * 86_400_000
-	testing.expect(t, strings.has_prefix(reset_text(later, at), "  ·  resets on Nov 13 at ") || strings.has_prefix(reset_text(later, at), "  ·  resets on Nov 14 at "), reset_text(later, at))
-	testing.expect(t, strings.has_suffix(reset_text(later, at), "  ·  in 3d 00h"), reset_text(later, at))
+	testing.expect(t, strings.has_prefix(reset_text(later, at, true), "  ·  resets on Nov 13 at ") || strings.has_prefix(reset_text(later, at, true), "  ·  resets on Nov 14 at "), reset_text(later, at, true))
+	testing.expect(t, strings.has_suffix(reset_text(later, at, true), "  ·  in 3d 00h"), reset_text(later, at, true))
 	// a time in the middle of a sentence: the local clock's, in its place
-	text, at = reason_and_reset("Paused until 2026-11-10T11:20:00Z by the user.")
-	testing.expect_value(t, text, fmt.tprintf("Paused until %s by the user.", clock_text(1794309600000)))
+	text, at = reason_and_reset("Paused until 2026-11-10T11:20:00Z by the user.", true)
+	testing.expect_value(t, text, fmt.tprintf("Paused until %s by the user.", clock_text(1794309600000, true)))
 	testing.expect_value(t, at, 1794309600000.0)
-	text, at = reason_and_reset("The session failed: no time here.")
+	text, at = reason_and_reset("The session failed: no time here.", true)
 	testing.expect_value(t, text, "The session failed: no time here.")
 	testing.expect_value(t, at, 0)
 }
@@ -1428,4 +1424,36 @@ archiving_asks_the_server_and_shows_at_once :: proc(t: ^testing.T) {
 	session_archive(app, "s1", false)
 	testing.expect_value(t, bench_take(t, .Action).body, `{"archived":false}`)
 	testing.expect(t, !session_is_archived(app, "s1"))
+}
+
+// What a failure leaves undone is the procedure its kind registers (REQ_FACTS on_fail), and what it says decides the toast: a pairing
+// refused is said in its dialog, not by a toast.
+@(test)
+a_failure_runs_the_procedure_its_kind_registers :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	testing.expect(t, REQ_FACTS[.Pair].on_fail == pair_on_fail, "the pairing's own")
+	request(app, .Pair, "POST", "/api/pair")
+	bench_answer(app, bench_take(t, .Pair), 500, `{"message":"no pairing here"}`)
+	testing.expect_value(t, app.pair.failed, "no pairing here")
+	for x in app.state.toasts { testing.expect(t, !x.alive, "no toast: the dialog says it") }
+}
+
+// An event the model applies records what the interface must show: the model reaches no toast, and needs no interface state.
+@(test)
+an_event_records_its_toast_without_an_interface :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	ui.use(nil)
+	app := new(App)
+	chat_reset(&app.chat)
+	app.chat.id = strings.clone("s", app.chat.alloc)
+	bench_event(app, `{"type":"session.execution.failed","data":{"sessionID":"s"}}`)
+	if testing.expect_value(t, len(app.cx.effects), 1) {
+		e, is := app.cx.effects[0].(Effect_Toast)
+		testing.expect(t, is, "a toast")
+		testing.expect_value(t, e.kind, ui.Toast_Kind.Bad)
+		testing.expect_value(t, e.text, "The run failed")
+	}
+	effects_clear(app)
+	testing.expect_value(t, len(app.cx.effects), 0)
 }

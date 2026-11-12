@@ -156,6 +156,63 @@ outgoing_replaced :: proc(app: ^App, out: u64, go: bool) {
 	ui.toast(.Warn, "That message was delivered meanwhile: what you wrote is in the composer")
 }
 
+// What the answers to the prompt's requests do (net.odin REQ_FACTS).
+created_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	if id := jstr(v, "data", "id"); id != "" {
+		outgoing_created(app, r, id)
+	} else {
+		answer_failed(app, r, .Unreadable, "Unreadable answer")
+	}
+}
+
+created_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	outgoing_answered(app, r, false)
+	return false
+}
+
+prompt_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	// (the stream may say a prompt without its files: what was attached shows as soon as it is stored)
+	if strings.contains(r.body, `"files":`) && r.gen == app.chat.gen && r.tag == app.chat.id { load_messages(app, r.tag) }
+	queue_prompt_answered(app, r.tag, v)
+	outgoing_answered(app, r, true)
+}
+
+prompt_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	outgoing_answered(app, r, false)
+	return false
+}
+
+// A server left while it was on its way: it still has to say whether it got there. (A prompt has no reading and lives as long as its
+// server: only a server left comes here.)
+prompt_on_left :: proc(app: ^App, r: ^Request) { outgoing_answered(app, r, r.ok && r.status < 400) }
+
+// The steps of a new session: one that failed goes on all the same, with what the session has.
+session_agent_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { outgoing_setup(app, r.out, .Model) }
+
+session_agent_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	outgoing_setup(app, r.out, .Model)
+	return false
+}
+
+session_model_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { outgoing_setup(app, r.out, .Sending) }
+
+session_model_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	outgoing_setup(app, r.out, .Sending)
+	return false
+}
+
+// Stored: it was delivered.
+queue_check_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { outgoing_replaced(app, r.out, false) }
+
+// 404: not stored, so it really left the inbox. Anything else says nothing: what was written comes back rather than go twice.
+queue_check_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	if r.status == 404 { outgoing_replaced(app, r.out, true) } else { outgoing_answered(app, r, false) }
+	return true
+}
+
+// (taken out or not, that server is left: what was written comes back)
+queue_check_on_left :: proc(app: ^App, r: ^Request) { outgoing_answered(app, r, false) }
+
 // "/name what follows": its text comes back if it fails, what is attached stays in the composer (a command does not take it).
 outgoing_command :: proc(app: ^App, text, name, rest: string, fields := "") {
 	o := outgoing_new(app, .Sending, app.chat.id, text)
@@ -200,7 +257,7 @@ outgoing_catalog :: proc(app: ^App) {
 	outgoing_return(app)
 }
 
-// A prompt out of the inbox (net.odin inbox_send): `body` goes as it is, what it says is what would come back.
+// A prompt out of the inbox (queue.odin inbox_take_on_ok): `body` goes as it is, what it says is what would come back.
 outgoing_inbox :: proc(app: ^App, session, body: string) {
 	v := json_of_own(app, "inbox prompt", body)
 	o := outgoing_new(app, .Sending, session, jstr(v, "text"))

@@ -491,7 +491,7 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 	stats_figures(totals, used, window, em)
 	stats_context(app, used, window, em)
 	stats_tokens(totals, em)
-	stats_time(c, s, l, now, em)
+	stats_time(c, s, l, now, app.prefs.clock24, em)
 	stats_rankings(app, l, em)
 	stats_children(app, c, em)
 	stats_project(app, now, em)
@@ -721,11 +721,11 @@ stats_tokens :: proc(t: Totals, em: f32) {
 }
 
 @(private = "file")
-stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local_Stats, now: f64, em: f32) {
+stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local_Stats, now: f64, clock24: bool, em: f32) {
 	heading("Time", em, HEX_PURPLE)
 	if s != nil {
-		kv("###d1", "created", fmt.tprintf("%s  (%s ago)", clock_text(s.created), duration_text(s.created, now)), em)
-		if s.updated > 0 { kv("###d2", "last change", fmt.tprintf("%s  (%s ago)", clock_text(s.updated), duration_text(s.updated, now)), em) }
+		kv("###d1", "created", fmt.tprintf("%s  (%s ago)", clock_text(s.created, clock24), duration_text(s.created, now)), em)
+		if s.updated > 0 { kv("###d2", "last change", fmt.tprintf("%s  (%s ago)", clock_text(s.updated, clock24), duration_text(s.updated, now)), em) }
 	}
 	if l.active_ms > 0 {
 		kv("###d3", "model at work", fmt.tprintf("%s over %d steps (%s a step)", duration_text(DURATION_ORIGIN_MS, l.active_ms), l.steps, duration_text(DURATION_ORIGIN_MS, l.active_ms / f64(max(l.steps, 1)))), em)
@@ -830,3 +830,10 @@ pill_button :: proc(id: string, label: string, color := Color{}, icon := "") -> 
 	}
 	return sig
 }
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+stats_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { stats_load(app, v) }
+
+context_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { context_load(app, r.tag, v) }

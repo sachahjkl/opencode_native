@@ -376,10 +376,12 @@ activity_output_load :: proc(app: ^App, v: json.Value, id: string) {
 	if c := int(jnum(v, "data", "cursor")); c > j.cursor { j.cursor = c }
 }
 
-activity_request_failed :: proc(app: ^App, r: ^Request) {
+// What runs behind the conversation: a server without it says nothing about it.
+activity_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
 	// (the server no longer knows it: it is over, however it ended. Not reached says nothing: the next list asks again)
-	if r.kind != .Shell_One || r.status != 404 { return }
+	if r.kind != .Shell_One || r.status != 404 { return true }
 	if j := job_find(&app.activity, r.tag); j != nil { j.status = .Exited }
+	return true
 }
 
 // The last things a sub-agent did: its tool calls in a line each, the end of what it wrote.
@@ -1025,4 +1027,27 @@ activity_tray :: proc(app: ^App, em: f32) {
 			}
 		}
 	}
+}
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+shell_list_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { activity_shells_load(app, v, r.tag) }
+
+job_list_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { activity_jobs_load(app, v, r.tag) }
+
+background_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { background_load(app, v) }
+
+shell_one_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { activity_shell_load(app, v, r.tag) }
+
+shell_output_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { activity_output_load(app, v, r.tag) }
+
+peek_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { activity_peek_load(app, v, r.tag) }
+
+todo_scan_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	if r.tag == app.activity.scan.session {
+		app.activity.scan.busy, app.activity.scan.over = false, true   // (not again: the list stays as the pages read say)
+		app.activity.todos_sig = 0
+	}
+	return false
 }

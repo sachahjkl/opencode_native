@@ -113,7 +113,6 @@ PREF_DEFS := [?]config.Def{
 
 // The preferences as plain values (read on every frame: no lookups by name there).
 Prefs :: struct {
-	accent:       Color,   // the theme's (theme.odin)
 	accent_hex:   u32,
 	finish:       ui.Finish,   // appearance.style
 	mode:         string,  // appearance.mode: system, dark, light (the preference's own text: not owned)
@@ -182,7 +181,6 @@ prefs_refresh :: proc(app: ^App) {
 	theme_set(app, theme_index(app, config.string_of(p, "appearance.theme")), theme_wants_light(s.mode))
 	theme_windows(app)
 	s.accent_hex = themed(HEX_PEACH)
-	s.accent = hex(HEX_PEACH)
 	s.font_size = f32(config.int_of(p, "appearance.font_size"))
 	s.zoom = f32(config.float_of(p, "appearance.zoom"))
 	s.density = config.string_of(p, "appearance.density") == "compact" ? COMPACT_DENSITY : 1
@@ -257,8 +255,8 @@ pref_set :: proc(app: ^App, name, value: string) {
 	prefs_refresh(app)
 }
 
-// The accent colour (buttons, selection, lamps of attention).
-accent :: proc() -> Color { return the_app.prefs.accent }
+// The accent colour (buttons, selection, lamps of attention): the theme's, as every colour of hex (prefs_refresh sets the theme).
+accent :: proc() -> Color { return hex(HEX_PEACH) }
 
 // Ctrl + wheel changed the zoom: keep it.
 prefs_track_zoom :: proc(app: ^App) {
@@ -571,6 +569,34 @@ shell_failed :: proc(app: ^App, was: string) {
 	facts_soon(app)
 }
 
+// What the answers to the settings' requests do (net.odin REQ_FACTS). A page that could not be read says it where it would have been
+// (read_shown): those fail quietly.
+server_facts_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { server_facts_answer(app, r.kind, v) }
+
+shell_set_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	ui.toast(.Good, "Shell set")
+	facts_soon(app)   // (a reading that crossed it said the one before)
+}
+
+shell_set_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	shell_failed(app, r.tag)
+	return false
+}
+
+mcp_done_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { mcp_done(app, r.tag) }
+
+mcp_done_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	mcp_done(app, r.tag)
+	return false
+}
+
+saved_done_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { saved_revoke_done(app, r.tag) }
+
+saved_done_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	saved_revoke_done(app, r.tag)
+	return false
+}
+
 ////////////////////////////////
 // The sizes of the dialogs
 
@@ -648,10 +674,10 @@ settings_dialog :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), height = ui.fill()})
 				if ui.scroll_y("###settings_nav_list") {
 					ui.spacer(ui.px(em * 0.6))
-					if !narrow { nav_heading("CLIENT", em) }
+					if !narrow { nav_heading("CLIENT", app.mono_bold, em) }
 					for page in Settings_Page {
 						info := SETTINGS_PAGES[page]
-						if page == .Server { ui.spacer(ui.px(em * 0.6)); if !narrow { nav_heading("OPENCODE", em) } }
+						if page == .Server { ui.spacer(ui.px(em * 0.6)); if !narrow { nav_heading("OPENCODE", app.mono_bold, em) } }
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 						if ui.row(id = fmt.tprintf("###nv%d", int(page))) {
 							ui.spacer(ui.px(em * 0.7))
@@ -760,17 +786,17 @@ settings_page_draw :: proc(app: ^App, page: Settings_Page, em: f32) {
 	}
 
 @(private = "file")
-nav_heading :: proc(s: string, em: f32) {
+nav_heading :: proc(s: string, face: Face_Id, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###nh_%s", s)) {
 		ui.spacer(ui.px(em * 1.1))
-		text("h", s, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+		text("h", s, hex(HEX_FAINT), ui.Style_Mod{font = face, font_size = math.round(em * FS_CAPTION)})
 	}
 }
 
 // `if setting(name) { control }`: a row with the preference's title and description on the left, its control on the
 // right, and a reset button when it is not at its default.
-@(deferred_none = setting_end)
+@(deferred_in = setting_end)
 setting :: proc(app: ^App, name: string, em: f32) -> bool {
 	p := &app.cfg_prefs
 	show, heading := config.search_shows(&app.settings_search, p, name)
@@ -803,8 +829,8 @@ setting :: proc(app: ^App, name: string, em: f32) -> bool {
 }
 
 @(private = "file")
-setting_end :: proc() {
-	if the_app.setting_hidden { the_app.setting_hidden = false; return }
+setting_end :: proc(app: ^App, name: string, _: f32) {
+	if app.setting_hidden { app.setting_hidden = false; return }
 	ui.pop_parent()   // ###line
 	em := ui.font_size()
 	ui.spacer(ui.px(em * 0.5))
@@ -1084,13 +1110,13 @@ page_updates :: proc(app: ^App, em: f32) {
 }
 
 page_advanced :: proc(app: ^App, em: f32) {
-	section("PREVIEW", em)
+	section(app, "PREVIEW", em)
 	if setting(app, "browser.tools", em) { pref_switch(app, "browser.tools", em) }
-	section("ABOUT", em)
+	section(app, "ABOUT", em)
 	if !settings_searching(app) { info_line(app, "###adv_about", fmt.tprintf("%s %s, a client of the OpenCode server. %s", APP_NAME, APP_VERSION, APP_NOT_THEIRS), em) }
-	section("SERVER", em)
+	section(app, "SERVER", em)
 	if setting(app, "advanced.experimental", em) { pref_switch(app, "advanced.experimental", em) }
-	section("DIAGNOSTICS", em)
+	section(app, "DIAGNOSTICS", em)
 	if setting(app, "advanced.fps", em) { pref_switch(app, "advanced.fps", em) }
 	if setting(app, "advanced.frame_rate", em) { pref_choice(app, "advanced.frame_rate", {"Screen", "30", "60", "120", "240", "Uncapped"}, em, em * 24) }
 	if !settings_searching(app) {   // (the folder, the licence: not settings)
@@ -1105,7 +1131,7 @@ page_advanced :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.5))
 			info_line(app, "###adv_lic_say", "The terminal's emulation is Ghostty's, through libghostty-vt.", em)
 			ui.spacer(ui.px(em * 0.3))
-			code_block("###adv_lic_text", "text", GHOSTTY_LICENSE, version = 1)
+			code_block("###adv_lic_text", "text", GHOSTTY_LICENSE, app.mono, version = 1)
 		}
 	}
 }
@@ -1122,8 +1148,8 @@ fact :: proc(id, k, v: string, em: f32, col := Color{}) {
 	kv_row(id, k, v, em, {h = 1.5, key_w = 8.5, key_fs = FS_SMALL, val_fs = FS_SMALL, pad_l = 0.8, pad_r = 0.6, val = HEX_FACT_VALUE}, col)
 }
 
-section :: proc(s: string, em: f32) {
-	if settings_searching(the_app) { return }   // (a search shows the pages' titles, not their groups)
+section :: proc(app: ^App, s: string, em: f32) {
+	if settings_searching(app) { return }   // (a search shows the pages' titles, not their groups)
 	section_draw(s, em)
 }
 
@@ -1147,7 +1173,7 @@ config_file_shaped :: proc(path: string) -> bool {
 
 page_server :: proc(app: ^App, em: f32) {
 	f := &app.facts
-	section("SERVER", em)
+	section(app, "SERVER", em)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well("###srv", radius = 7, base = HEX_FACTS_WELL) {
 		ui.spacer(ui.px(em * 0.4))
@@ -1160,7 +1186,7 @@ page_server :: proc(app: ^App, em: f32) {
 		fact("###s6", "client", fmt.tprintf("opencode native %s", APP_VERSION), em)
 		ui.spacer(ui.px(em * 0.4))
 	}
-	section("SHELL", em)
+	section(app, "SHELL", em)
 	info_line(app, "###shh", "The shell the agents run their commands in (written to the configuration's \"shell\").", em)
 	ui.spacer(ui.px(em * 0.4))
 	if read_shown(app, "###sh_read", &f.reads[.Shells], em, server_facts_load) {
@@ -1177,7 +1203,7 @@ page_server :: proc(app: ^App, em: f32) {
 		}
 		if sel < 0 { info_line(app, "###shd", "None set: the server picks one.", em, hex(HEX_FAINT)) }
 	}
-	section("CONFIGURATION FILES", em)
+	section(app, "CONFIGURATION FILES", em)
 	if !read_shown(app, "###cf_read", &f.reads[.Cfg], em, server_facts_load) { return }
 	for c, i in f.files {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
@@ -1264,7 +1290,7 @@ page_usage :: proc(app: ^App, em: f32) {
 		}
 	}
 	now := now_epoch_ms()
-	if len(f.limits) > 0 { section("OPENCODE GO", em) }
+	if len(f.limits) > 0 { section(app, "OPENCODE GO", em) }
 	for l, i in f.limits {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = fmt.tprintf("###lim%d", i)) {
@@ -1277,7 +1303,7 @@ page_usage :: proc(app: ^App, em: f32) {
 			text("r", l.resets > now ? fmt.tprintf("resets in %s", duration_text(now, l.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
 		}
 	}
-	if len(f.budgets) > 0 { section("BUDGETS", em) }
+	if len(f.budgets) > 0 { section(app, "BUDGETS", em) }
 	for b, i in f.budgets {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = fmt.tprintf("###bud%d", i)) {
@@ -1336,7 +1362,7 @@ page_permissions :: proc(app: ^App, em: f32) {
 			}
 		}
 	}
-	section("RULES OF THE AGENTS", em)
+	section(app, "RULES OF THE AGENTS", em)
 	for a in app.agents {
 		info_line(app, fmt.tprintf("###ag_%s", a.id), fmt.tprintf("%s (%s): %s", a.name != "" ? a.name : a.id, a.mode, first_line(a.description)), em)
 		ui.spacer(ui.px(em * 0.3))
@@ -1346,12 +1372,12 @@ page_permissions :: proc(app: ^App, em: f32) {
 page_catalog :: proc(app: ^App, em: f32) {
 	f := &app.facts
 	list :: proc(app: ^App, title: string, items: []Named, em: f32, read: ^Remote = nil) {
-		section(fmt.tprintf("%s (%d)", title, len(items)), em)
+		section(app, fmt.tprintf("%s (%d)", title, len(items)), em)
 		if read != nil && !read_shown(app, fmt.tprintf("###%s_read", title), read, em, server_facts_load) { return }
 		for it, i in items {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row(id = fmt.tprintf("###%s%d", title, i)) {
-				text("n", it.name, hex(HEX_CATALOG_NAME), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}, ui.px(em * 13))
+				text("n", it.name, hex(HEX_CATALOG_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}, ui.px(em * 13))
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Text_Wrap}, fg = hex(HEX_WEAK), text_pad = 0})
 				ui.paragraph(fmt.tprintf("%s###d", label_safe(it.detail)))
 			}

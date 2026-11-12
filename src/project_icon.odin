@@ -4,6 +4,7 @@
 package ocn
 
 import "core:encoding/base64"
+import "core:encoding/json"
 import "core:fmt"
 import "core:os"
 import "core:strings"
@@ -57,6 +58,9 @@ project_icon_remove :: proc(app: ^App, project: string) {
 	if project == "" { return }
 	request(app, .Project_Icon, "PATCH", fmt.tprintf("/api/project/%s", project), project_icon_body(""), project)
 }
+
+// (shown at once, as project.updated would)
+project_icon_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { request(app, .Projects, "GET", "/api/project") }
 
 // Whether the user gave the project an icon of their own.
 project_icon_overridden :: proc(app: ^App, project: string) -> bool {

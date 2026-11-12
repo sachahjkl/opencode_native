@@ -519,3 +519,19 @@ form_line :: proc(fd: ^Form_Field, em: f32, placeholder: string, done: ^bool) {
 	}
 	if ui.field_string(&fd.text) != "" { fd.choice = -1 }   // (one's own words instead of an option)
 }
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+forms_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { forms_replace(app, r.tag, jarr(v, "data"), r.asked_at) }
+
+// A reply or a dismissal (the tag: the form).
+form_answer_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	waits_gone(app, r.tag)
+	form_remove(app, r.tag)
+}
+
+form_answer_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	if fr := form_find(app, r.tag); fr != nil { fr.sending = false }
+	return false
+}
