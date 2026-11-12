@@ -1706,3 +1706,43 @@ the_palettes_keys_are_apart_from_its_list :: proc(t: ^testing.T) {
 		palette_toggle(app)
 	})
 }
+
+// A shell's scroll bar is the toolkit's: it is there once the scrollback is longer than the grid, and its thumb dragged up
+// moves the grid's view up the scrollback (the press is the bar's, not the shell's selection).
+@(test)
+a_shells_scroll_bar_can_be_dragged :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		if app.conn == nil { app.conn = new(Conn) }
+		clear(&bench_sent)
+		terminal_toggle(app)
+		bench_answer(app, bench_take(t, .Pty_List), 200, `{"data":[{"id":"a","title":"bash","status":"running"}]}`)
+		for sh in app.cx.terms.list { term_link_set(app, sh, .Attached) }
+		bench_clear(app)
+		if !testing.expect(t, len(app.cx.terms.list) == 1, "a shell") { return }
+		sh := app.cx.terms.list[0]
+		b := strings.builder_make(context.temp_allocator)
+		for i in 0 ..< 200 { fmt.sbprintf(&b, "line %d\r\n", i) }
+		term_feed(sh, strings.to_string(b))
+		session.wait_idle(s)
+		box := session.get(s, "term_box")
+		_, thumb, ok := ui.scrollbar_rects(box)
+		if !testing.expect(t, ok, "a scroll bar") { return }
+		bar: Vt_Scrollbar
+		ghostty_terminal_get(sh.vt, VT_DATA_SCROLLBAR, &bar)
+		at_bottom := bar.offset
+		from := (thumb.min + thumb.max) * 0.5
+		session.move(s, from)
+		session.event(s, {kind = .Mouse_Press, button = .Left, pos = from})
+		session.frames(s, 1)
+		to := [2]f32{from.x, box.rect.min.y + 2}
+		session.move(s, to)
+		session.frames(s, 2)
+		session.event(s, {kind = .Mouse_Release, button = .Left, pos = to})
+		session.wait_idle(s)
+		ghostty_terminal_get(sh.vt, VT_DATA_SCROLLBAR, &bar)
+		testing.expectf(t, bar.offset < at_bottom / 2, "the view went up the scrollback: %d, then %d", at_bottom, bar.offset)
+		testing.expect(t, !term_has_selection(sh), "no selection made by that press")
+	})
+}

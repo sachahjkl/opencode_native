@@ -89,9 +89,6 @@ HEX_PAL_SELECTED    :: 0x0c0c0cff
 ZOOM_FACTOR :: 1.1
 TERM_ZOOM_MIN :: 0.5   // a shell's own zoom, times the program's size
 TERM_ZOOM_MAX :: 3
-TERM_BAR_HIT_PX :: 14   // a shell's scroll bar takes a press this far from the grid's right edge
-TERM_BAR_W_PX :: 6      // its thumb at rest
-TERM_BAR_HOT_W_PX :: 10 // under the pointer, held
 TOOL_ELAPSED_TENTHS_S :: 10   // a tool call's time with its tenths under this many seconds (tool_elapsed)
 TERM_ZOOM_REST_MS :: 150   // a shell's zoom at rest after this long without a notch: its grid takes its new size (term_fit)
 
