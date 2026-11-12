@@ -340,7 +340,9 @@ activity_shells_load :: proc(app: ^App, v: json.Value, dir: string) {
 			j = &a.jobs[len(a.jobs) - 1]
 			job_read(app, j)
 		}
+		was := j.status
 		job_fill(j, it)
+		job_ended(app, j, was)
 		j.seen = true
 	}
 	q := location_query(a.dir)
@@ -360,7 +362,9 @@ activity_shells_load :: proc(app: ^App, v: json.Value, dir: string) {
 activity_shell_load :: proc(app: ^App, v: json.Value, id: string) {
 	j := job_find(&app.activity, id)
 	if j == nil { return }
+	was := j.status
 	job_fill(j, jget(v, "data"))
+	job_ended(app, j, was)
 	job_read(app, j)   // (what it printed last)
 }
 
@@ -374,6 +378,14 @@ activity_output_load :: proc(app: ^App, v: json.Value, id: string) {
 		if over := len(j.tail) - ACT_TAIL_BYTES; over > 0 { remove_range(&j.tail, 0, over) }
 	}
 	if c := int(jnum(v, "data", "cursor")); c > j.cursor { j.cursor = c }
+}
+
+// A command of the background that was running and is no longer: what was missed has it. (One that holds its session's turn
+// ends with the turn: the run's end says it.)
+@(private = "file")
+job_ended :: proc(app: ^App, j: ^Shell_Job, was: Job_Status) {
+	if was != .Running || j.status == .Running || !j.background { return }
+	missed_shell_ended(app, j.id, j.session, j.command, job_state(j))
 }
 
 // What runs behind the conversation: a server without it says nothing about it.

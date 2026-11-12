@@ -84,6 +84,7 @@ App :: struct {
 	ctx_menu:         Ctx_Menu,       // context_menus.odin
 	quote:            Quote_Chip,     // context_menus.odin
 	notices:          Notices,        // settings.odin
+	missed:           Missed,         // what the person missed: its log and its view (missed.odin, missed_view.odin)
 	film:             Film,           // film.odin
 	start_session:    string,
 	cli:              Cli_Options,    // the command line, read once at start (cli_options.odin)
@@ -329,6 +330,7 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 		ui.set_scrollbar_autohide(&app.state, app.prefs.autohide_scrollbars)
 		app.state.post_budget = again ? 0 : POSTS_PER_BUILD
 		ui.begin_build(&app.state, build_params(app, app.win, size, events, dt))
+		missed_sync(app)     // (after the events, before their effects: a notification finds its entry)
 		effects_apply(app)   // (what the events begin_build ran asked for: shown in this very build)
 		app.conversation.scroll_box = nil   // (only now: the answers begin_build ran read the last build's, a page placed by chat_load above all)
 		build_ui(app)

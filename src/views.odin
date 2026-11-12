@@ -52,6 +52,7 @@ build_ui :: proc(app: ^App) {
 	output_view_dialog(app, em)
 	files_dialog(app, em)
 	palette_dialog(app, em)
+	missed_dialog(app, em)
 	context_menu(app, em)
 	// (only this way: a dialog opened by what was built after it, a menu, is open and not built until the next build)
 	when ODIN_DEBUG { assert(len(app.state.modals_built) == 0 || overlay_open(app), "a dialog built that is not in App_Context.open: the program's keys would act behind it") }
@@ -78,6 +79,7 @@ app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 		if preview_available() {
 			if ui.menu_item("Preview panel", "Ctrl+Shift+B", app.preview.open, icon = lucide.GLOBE).clicked { command_run(app, command_find("view.preview")) }
 		}
+		if ui.menu_item("What you missed", "Ctrl+Shift+N", icon = lucide.BELL).clicked { command_run(app, command_find("view.notices")) }
 		if ui.menu_item("Keyboard shortcuts", "F1", icon = lucide.KEYBOARD).clicked { app.cx.open[.Help] = true }
 		if ui.menu_item("Sub-agent sessions in the list", "", app.prefs.subagents == "flat", icon = lucide.BOT).clicked { pref_set(app, "sidebar.subagents", app.prefs.subagents == "flat" ? "nested" : "flat") }
 		ui.menu_separator()
