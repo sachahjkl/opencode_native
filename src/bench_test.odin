@@ -464,6 +464,25 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		app.cx.open[.Palette] = false
 		session.frames(s, 2)
 
+		// a command's output in its terminal grid, over the conversation: a line in colour comes at each frame, then it rests
+		{
+			v := output_view_open_shell(app, "sh_bench", "cargo build", "C:/code/project_0")
+			session.frames(s, 3)
+			for k in 0 ..< 2 {
+				out := Bench_Case{name = k == 0 ? "term_out" : "term_rest"}
+				profile_begin()
+				for i in 0 ..< BENCH_FRAMES {
+					if k == 0 { output_view_feed(v, fmt.tprintf("\x1b[32m   Compiling\x1b[0m crate_%d v0.%d.0 (\x1b[1m/code/project/crates/crate_%d\x1b[0m)\n", i, i % 10, i)) }
+					bench_frame(s, &out)
+				}
+				profile_end(out.name)
+				bench_report(&out)
+			}
+			testing.expect(t, session.find(s, "term_box") != nil, "the grid")
+			output_view_close(app, v)
+			session.frames(s, 3)
+		}
+
 		// the tray, opening and closing without end, over the conversation
 		tray := Bench_Case{name = "tray"}
 		profile_begin()

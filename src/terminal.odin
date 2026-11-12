@@ -913,11 +913,11 @@ term_encode_mouse :: proc(data: rawptr, m: term.Mouse_Input, buf: []u8) -> int {
 	t := (^Term)(data)
 	if t.vt == nil { return 0 }
 	ghostty_mouse_encoder_set_from_terminal(t.mouse_enc, t.vt)
-	pad := u32(m.pad)
 	size := Vt_Mouse_Size{
 		size = size_of(Vt_Mouse_Size), screen_width = u32(m.size.x), screen_height = u32(m.size.y),
 		cell_width = u32(m.cell.x), cell_height = u32(m.cell.y),
-		padding_top = pad, padding_bottom = pad, padding_right = pad, padding_left = pad,
+		// (the grid is centered in its box: its margins are not alike)
+		padding_left = u32(m.pad_lo.x), padding_top = u32(m.pad_lo.y), padding_right = u32(m.pad_hi.x), padding_bottom = u32(m.pad_hi.y),
 	}
 	ghostty_mouse_encoder_set(t.mouse_enc, VT_MOUSE_OPT_SIZE, &size)
 	any := m.held

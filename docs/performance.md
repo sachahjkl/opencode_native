@@ -24,6 +24,8 @@ the sessions it shows and the last one once scrolled to it, typing and streaming
 | palette | the palette open, a character typed |
 | pal_slips | the palette at rest on words typed with slips that find few (`frmae pacnig`), 300 models: the pointer moves a pixel |
 | pal_all | the palette at rest on `@`: every session found |
+| term_out | a command's output open in its grid, a line in colour coming at each frame |
+| term_rest | the same grid at rest (a frame the program draws only when something moves) |
 | find | the find bar open, its needle typed |
 | search | the sidebar's search typed |
 
