@@ -20,6 +20,7 @@ Session_Info :: struct {
 	cost:            f64,
 	tokens_in, tokens_out, reasoning, cache_read, cache_write: f64,
 	approval:        Approval,   // its own permission rules, as a preset (approval.odin)
+	lazy_id:         string,     // its id in the sidebar's lazy column, made once with the list (sessions_changed)
 }
 
 // What a sub-agent does while it runs, from the event stream (its session is not the one shown).
@@ -150,6 +151,21 @@ Chat :: struct {
 	goal:         Goal,                    // its /goal (goal.odin; strings in the arena)
 	has_goal:     bool,
 	markdown:     map[string]^Md_Doc,      // the blocks of each Markdown text shown, by the id it is built under (md_doc; in the arena)
+	// What is made from the messages is kept until one of these moves.
+	changes:      u64,                     // any change of the messages or of their parts (chat_changed)
+	subs_seq:     u64,                     // a change of what says which session is whose: a page read, a message gone, a call naming its session (subs_changed)
+	subs:         Sub_Index,               // what the conversation says of its sub-agents (subagents.odin sub_index; in subs_arena)
+	subs_arena:   virtual.Arena,
+}
+
+// The messages or their parts changed: what is made from them is made again when next asked (Local_Kept).
+chat_changed :: proc(c: ^Chat) { c.changes += 1 }
+
+// Which message is a sub-agent's result, or which session a call names, may have changed: the index of them is read again (sub_index).
+// Messages added at the end move no index; a page read or a message gone does.
+subs_changed :: proc(c: ^Chat) {
+	c.subs_seq += 1
+	c.changes += 1
 }
 
 Agent_Info :: struct { id, name, description, mode: string }
@@ -174,6 +190,7 @@ Permission :: struct {
 
 chat_reset :: proc(c: ^Chat) {
 	if c.alloc.procedure != nil { virtual.arena_destroy(&c.arena); virtual.arena_destroy(&c.children_arena) }
+	virtual.arena_destroy(&c.subs_arena)   // (zero when nothing asked for the index: destroying it does nothing)
 	gen := c.gen
 	c^ = {}
 	c.gen = gen + 1
@@ -296,10 +313,27 @@ chat_shown_changed :: proc(app: ^App) {
 	outgoing_return(app)
 }
 
+// (by the index sessions_changed keeps: some thirty places ask it, some at every build)
 find_session :: proc(app: ^App, id: string) -> ^Session_Info {
-	for &s in app.sessions { if s.id == id { return &s } }
+	if i, ok := app.session_at[id]; ok { return &app.sessions[i] }
 	return nil
 }
+
+// The list of sessions changed (read, or made by a test): its index by id made again, and the id of each row in the sidebar's lazy column,
+// once. What the sidebar keeps of it is made again (Side_Kept). Every change of app.sessions comes through here.
+sessions_changed :: proc(app: ^App) {
+	a := virtual.arena_allocator(&app.sess_arena)
+	app.session_at = make(map[string]int, len(app.sessions), a)
+	for &s, i in app.sessions {
+		app.session_at[s.id] = i
+		if s.lazy_id == "" { s.lazy_id = fmt.aprintf("###ls_%s", s.id, allocator = a) }
+	}
+	app.cx.sessions_ver += 1
+}
+
+// What deals a session into a section of the sidebar, or lights its row, changed: a run started or ended, a wait came or went, an end
+// was seen, it was archived. (What the list says comes through sessions_changed.)
+marks_changed :: proc(app: ^App) { app.cx.marks_ver += 1 }
 
 ////////////////////////////////
 // Loading
@@ -397,6 +431,7 @@ sessions_load :: proc(app: ^App, v: json.Value) {
 	app.sessions = make([dynamic]Session_Info, a)
 	for it in jarr(v, "data") { append(&app.sessions, session_from_json(it, a)) }
 	slice.sort_by(app.sessions[:], proc(x, y: Session_Info) -> bool { return x.updated > y.updated })
+	sessions_changed(app)
 	app.sessions_loaded = true
 	sessions_seen_shown(app)
 	if app.cx.reopen.id != "" {
@@ -507,6 +542,7 @@ busy_forget :: proc(app: ^App) {
 	clear(&app.busy)
 	for k in app.cx.busy_seq { delete(k) }
 	clear(&app.cx.busy_seq)
+	marks_changed(app)
 }
 
 // The stream says a session started or ended.
@@ -521,6 +557,7 @@ busy_event :: proc(app: ^App, id: string, busy: bool) {
 permissions_clear :: proc(app: ^App) {
 	for p in app.permissions { permission_free(p) }
 	clear(&app.permissions)
+	marks_changed(app)
 }
 
 permission_free :: proc(p: Permission) {
@@ -540,6 +577,7 @@ permission_add :: proc(app: ^App, v: json.Value) {
 		id = strings.clone(id), session = strings.clone(jstr(v, "sessionID")), action = strings.clone(jstr(v, "action")),
 		message = strings.clone(jstr(v, "message")), resources = list, born = app.cx.stream_seq,
 	})
+	marks_changed(app)
 }
 
 // What the server says a session waits for: it replaces what is shown for that session, so that a card whose event was missed
@@ -550,7 +588,7 @@ permissions_replace :: proc(app: ^App, session: string, list: json.Array, asked_
 		if p.session != session || p.replying || newer(p.born, asked_at) { continue }
 		listed := false
 		for it in list { if jstr(it, "id") == p.id { listed = true; break } }
-		if !listed { permission_free(p); ordered_remove(&app.permissions, i) }
+		if !listed { permission_free(p); ordered_remove(&app.permissions, i); marks_changed(app) }
 	}
 	for it in list { permission_add(app, it) }
 }
@@ -576,7 +614,7 @@ waits_sessions :: proc(app: ^App) -> []string {
 
 permission_remove :: proc(app: ^App, id: string) {
 	for p, i in app.permissions {
-		if p.id == id { permission_free(p); ordered_remove(&app.permissions, i); return }
+		if p.id == id { permission_free(p); ordered_remove(&app.permissions, i); marks_changed(app); return }
 	}
 }
 
@@ -639,6 +677,7 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(Seq)) {
 		if m.kind == .Switch && m.switched == .Model && m.model != "" { c.model, c.provider, c.variant = m.model, m.provider, m.variant }
 		if m.kind == .Switch && m.switched == .Agent && m.agent != "" { c.agent = m.agent }
 	}
+	subs_changed(c)   // (a page: messages before the others, results of sub-agents, calls with their sessions)
 }
 
 // `m` was read from a page, `old` was streamed into since it was asked for: each part keeps the further along of the two (the
@@ -935,7 +974,7 @@ find_message :: proc(c: ^Chat, id: string) -> ^Message {
 // Out of the conversation: it has not been sent, or it no longer will be.
 chat_drop :: proc(c: ^Chat, id: string) {
 	for m, i in c.messages {
-		if m.id == id { ordered_remove(&c.messages, i); return }
+		if m.id == id { ordered_remove(&c.messages, i); subs_changed(c); return }
 	}
 }
 
@@ -1080,7 +1119,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		form_add(app, form)
 		asker := jstr(form, "sessionID")
 		detail := form_words(form)
-		if asker != c.id && !is_child(c, asker) { toast_session(app, .Warn, asker, "Question", detail) }
+		if asker != "" && asker != c.id && !is_child(c, asker) { toast_session(app, .Warn, asker, "Question", detail) }   // (no session: shown in the conversation, no toast)
 		notify_waiting(app, asker, "Question", detail)
 	case "form.replied", "form.cancelled":
 		waits_gone(app, jstr(d, "id"))
@@ -1091,6 +1130,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		return
 	}
 	if !mine { return }
+	chat_changed(c)   // (what follows changes the messages, or their parts)
 
 	mid := jstr(d, "assistantMessageID")
 	switch kind {
@@ -1150,12 +1190,16 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		p.status = .Pending
 	case "session.tool.called":
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
+		had := p.sub_session
 		tool_set_input(p, jget(d, "input"), a)
+		if p.sub_session != had { subs_changed(c) }   // (a sub-agent resumed: its session is named)
 		p.status = .Running
 		p.started_ms = jnum(ev, "created")
 	case "session.tool.progress":
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
+		had := p.sub_session
 		tool_set_meta(p, jget(d, "metadata"), a)
+		if p.sub_session != had { subs_changed(c) }
 		if p.sub_session != "" { children_soon(app) }
 	case "session.tool.success":
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
@@ -1164,7 +1208,9 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		tool_set_output(p, content_text(jarr(d, "content")), a)
 		content_images(p, jarr(d, "content"), a)
 		p.ended_ms = jnum(ev, "created")
+		had := p.sub_session
 		tool_set_meta(p, jget(d, "metadata"), a)
+		if p.sub_session != had { subs_changed(c) }
 		if p.sub_session != "" { children_soon(app) }
 	case "session.tool.failed":
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
@@ -1193,11 +1239,8 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 
 // A session the shown one launched: one of its children, or the session of one of its sub-agent calls.
 is_child :: proc(c: ^Chat, sid: string) -> bool {
-	if find_child(c, sid) != nil { return true }
-	for &m in c.messages {
-		for &p in m.parts { if p.sub_session == sid { return true } }
-	}
-	return false
+	if sid == "" { return false }
+	return find_child(c, sid) != nil || sid in sub_index(c).claimed
 }
 
 // An event of a sub-agent of the session shown: what it is doing now, what it has cost.
@@ -1242,10 +1285,11 @@ child_event :: proc(app: ^App, kind, sid: string, d, ev: json.Value) {
 set_busy :: proc(app: ^App, id: string, busy: bool) {
 	if id == "" { return }
 	if busy {
-		if id not_in app.busy { app.busy[strings.clone(id)] = true }
+		if id not_in app.busy { app.busy[strings.clone(id)] = true; marks_changed(app) }
 	} else if id in app.busy {
 		key, _ := delete_key(&app.busy, id)
 		delete(key)
+		marks_changed(app)
 	}
 	if id == app.chat.id { app.chat.busy = busy }
 }

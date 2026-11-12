@@ -9,6 +9,7 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:hash"
 import "core:math"
+import "core:mem"
 import "core:mem/virtual"
 import "core:slice"
 import "core:strings"
@@ -245,8 +246,7 @@ stats_load :: proc(app: ^App, v: json.Value) {
 }
 
 // What the loaded messages of the session did.
-@(private = "file")
-Local :: struct {
+Local_Stats :: struct {
 	prompts, steps, msgs: int,
 	calls, failed:        int,
 	tools:                [dynamic]Tool_Count,
@@ -258,11 +258,32 @@ Local :: struct {
 	first, last:          f64,
 }
 
+// The figures of the loaded messages, kept until they change (Chat.changes) or another conversation opens (Chat.gen): the panel went
+// through every message and part at every build while it was open.
+Local_Kept :: struct {
+	arena:    virtual.Arena,   // its lists
+	made:     bool,
+	gen:      u64,             // Chat.gen and Chat.changes it was made at
+	changes:  u64,
+	stats:    Local_Stats,     // (its names are the conversation's: read only while gen is the chat's)
+	computed: int,             // times it was made (tests)
+}
+
+local_stats :: proc(app: ^App) -> ^Local_Stats {
+	k := &app.cx.local_stats
+	c := &app.chat
+	if k.made && k.gen == c.gen && k.changes == c.changes { return &k.stats }
+	k.stats = local_stats_of(c, arena_renew(&k.arena))
+	k.made, k.gen, k.changes = true, c.gen, c.changes
+	k.computed += 1
+	return &k.stats
+}
+
 @(private = "file")
-local_stats :: proc(app: ^App) -> (l: Local) {
-	l.tools = make([dynamic]Tool_Count, context.temp_allocator)
-	l.models = make([dynamic]Model_Count, context.temp_allocator)
-	for &m in app.chat.messages {
+local_stats_of :: proc(c: ^Chat, a: mem.Allocator) -> (l: Local_Stats) {
+	l.tools = make([dynamic]Tool_Count, a)
+	l.models = make([dynamic]Model_Count, a)
+	for &m in c.messages {
 		l.msgs += 1
 		if m.created > 0 && (l.first == 0 || m.created < l.first) { l.first = m.created }
 		if m.created > l.last { l.last = m.created }
@@ -466,12 +487,12 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 		text("t", s != nil && s.title != "" ? s.title : "Session", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE)}, ui.fill())
 	}
 	totals := stats_totals(c, s)
-	used, window := context_used(app, c, &l)
+	used, window := context_used(app, c, l)
 	stats_figures(totals, used, window, em)
 	stats_context(app, used, window, em)
 	stats_tokens(totals, em)
-	stats_time(c, s, &l, now, em)
-	stats_rankings(app, &l, em)
+	stats_time(c, s, l, now, em)
+	stats_rankings(app, l, em)
 	stats_children(app, c, em)
 	stats_project(app, now, em)
 	ui.spacer(ui.px(em * 1.3))
@@ -492,7 +513,7 @@ stats_totals :: proc(c: ^Chat, s: ^Session_Info) -> (t: Totals) {
 
 // The context filled, and the model's window (0: not known). The server's word for it first, what the loaded messages say else.
 @(private = "file")
-context_used :: proc(app: ^App, c: ^Chat, l: ^Local) -> (used, window: f64) {
+context_used :: proc(app: ^App, c: ^Chat, l: ^Local_Stats) -> (used, window: f64) {
 	x := &app.cx.stats_context
 	used = x.total > 0 ? x.total : l.last_context
 	model := x.model != "" ? x.model : l.last_model != "" ? l.last_model : c.model
@@ -700,7 +721,7 @@ stats_tokens :: proc(t: Totals, em: f32) {
 }
 
 @(private = "file")
-stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local, now: f64, em: f32) {
+stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local_Stats, now: f64, em: f32) {
 	heading("Time", em, HEX_PURPLE)
 	if s != nil {
 		kv("###d1", "created", fmt.tprintf("%s  (%s ago)", clock_time(s.created), duration(s.created, now)), em)
@@ -715,7 +736,7 @@ stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local, now: f64, em: f32) {
 
 // What the loaded messages called, and which models answered.
 @(private = "file")
-stats_rankings :: proc(app: ^App, l: ^Local, em: f32) {
+stats_rankings :: proc(app: ^App, l: ^Local_Stats, em: f32) {
 	heading("Tools", em, HEX_GREEN, fmt.tprintf("%d calls, %d failed", l.calls, l.failed))
 	max_t := len(l.tools) > 0 ? l.tools[0].calls : 0
 	for t, i in l.tools {

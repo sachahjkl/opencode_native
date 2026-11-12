@@ -1,6 +1,7 @@
 package ocn
 
 import "base:runtime"
+import "core:encoding/json"
 import "core:strings"
 import "core:testing"
 
@@ -23,12 +24,60 @@ a_running_card_finds_its_session :: proc(t: ^testing.T) {
 	parts := make([dynamic]Part, context.temp_allocator)
 	append(&parts, Part{kind = .Tool, tool_name = "subagent", sub_session = "ses_a"})
 	append(&c.messages, Message{id = "m1", kind = .Assistant, parts = parts})
+	subs_changed(&c)   // (as a page read does)
 	testing.expect_value(t, sub_session_guess(&c, &a), "ses_a2")
 	other := Part{kind = .Tool, tool_name = "subagent", sub_agent = "build", sub_desc = "Research interface type systems", started_ms = 100_050}
 	testing.expect_value(t, sub_session_guess(&c, &other), "")   // (another agent's)
 	testing.expect_value(t, sub_session_guess(&c, &Part{kind = .Tool, tool_name = "subagent"}), "")
 	delete(c.children)
 	delete(c.messages)
+}
+
+// What the conversation says of its sub-agents and its figures are read once per change of it: a call that ends names its session and
+// hands back its result at once, a page brings the result message; a build that changes nothing reads nothing again.
+@(test)
+a_sub_agents_end_shows_and_nothing_is_read_again_meanwhile :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	open_chat(app, "s")
+	bench_clear(app)
+	c := &app.chat
+	bench_event(app, `{"type":"session.tool.called","data":{"sessionID":"s","assistantMessageID":"a1","id":"t1","input":{"agent":"general","description":"Look","prompt":"go"}}}`)
+	testing.expect(t, !is_child(c, "child1"))
+	p := &c.messages[0].parts[0]
+	testing.expect_value(t, sub_view(app, "", p).state, Sub_State.Running)
+	read := c.subs.computed
+	stats := local_stats(app)
+	testing.expect_value(t, stats.calls, 1)
+	figured := app.cx.local_stats.computed
+	for _ in 0 ..< 3 {
+		testing.expect(t, sub_result(c, "child1") == nil && !is_child(c, "child1"))
+		_ = local_stats(app)
+	}
+	testing.expect_value(t, c.subs.computed, read)
+	testing.expect_value(t, app.cx.local_stats.computed, figured)
+
+	bench_event(app, `{"type":"session.tool.success","data":{"sessionID":"s","assistantMessageID":"a1","id":"t1","content":[{"type":"text","text":"found it"}],"metadata":{"sessionID":"child1"}}}`)
+	testing.expect(t, is_child(c, "child1"), "the call names it now")
+	p = &c.messages[0].parts[0]
+	v := sub_view(app, p.sub_session, p)
+	testing.expect_value(t, v.state, Sub_State.Done)
+	testing.expect_value(t, v.result, "found it")
+	bench_event(app, `{"type":"session.step.ended","data":{"sessionID":"s","assistantMessageID":"a1","finish":"stop","tokens":{"output":7}}}`)
+	testing.expect_value(t, local_stats(app).out_tokens, 7)
+
+	page := `{"data":[{"id":"m2","type":"synthetic","text":"<subagent sessionID=\"child1\">all done</subagent>","description":"Look","metadata":{"source":"subagent","childID":"child1","state":"failed","agent":"general"},"time":{"created":5}}]}`
+	v2, _ := json.parse_string(page, parse_integers = true, allocator = context.temp_allocator)
+	chat_load(app, v2, false)
+	m := sub_result(c, "child1")
+	testing.expect(t, m != nil && m.text == "all done", "the result message of the page")
+	testing.expect_value(t, sub_view(app, "child1").state, Sub_State.Failed)
+	testing.expect_value(t, local_stats(app).msgs, len(c.messages))
+	read, figured = c.subs.computed, app.cx.local_stats.computed
+	_ = sub_result(c, "child1")
+	_ = local_stats(app)
+	testing.expect_value(t, c.subs.computed, read)
+	testing.expect_value(t, app.cx.local_stats.computed, figured)
 }
 
 // A tool call's time: tenths while short, minutes later; while it runs, up to now; nothing when its times are not known.

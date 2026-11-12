@@ -531,6 +531,7 @@ a_sub_agents_call_goes_to_its_sessions_page :: proc(t: ^testing.T) {
 	root := fake(fr(app))
 	with_page(app, "b", "http://b.local/", "B")
 	append(&app.sessions, Session_Info{id = "child", parent = "root"})
+	sessions_changed(app)
 	agent_call(app, l, 1, "navigate", "child", url = "http://r.local/2")
 	testing.expect_value(t, root.urls[len(root.urls) - 1], "http://r.local/2")
 }
@@ -1144,6 +1145,7 @@ a_folder_at_work_keeps_its_link :: proc(t: ^testing.T) {
 	app.link = .Online
 	app.sessions = make([dynamic]Session_Info)
 	append(&app.sessions, Session_Info{id = "a", directory = "C:/a"})
+	sessions_changed(app)
 	with_page(app, "a", "http://a.local/", "A")
 	app.chat.self.directory = strings.clone("C:/a", app.chat.alloc)
 	browser_tick(app)
