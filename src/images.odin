@@ -351,7 +351,7 @@ image_view_open :: proc(app: ^App, ref: Image_Ref) {
 	app.view_ref = image_ref_clone(ref)
 	delete(app.view_diagram)
 	app.view_diagram = ""
-	app.view_open = true
+	app.cx.open[.Viewer] = true
 	app.view_zoom, app.view_pan = 1, {}
 	app.view_resize_from = {}
 	app.view_grown = false
@@ -448,7 +448,7 @@ view_zoom_to :: proc(app: ^App, zoom, max_zoom: f32, at: [2]f32) {
 @(private = "file")
 image_viewer_wait :: proc(app: ^App, em: f32) {
 	animate(app)
-	if ui.modal("image_view", em * 12, &app.view_open) {
+	if ui.modal("image_view", em * 12, &app.cx.open[.Viewer]) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
@@ -459,19 +459,19 @@ image_viewer_wait :: proc(app: ^App, em: f32) {
 
 image_viewer :: proc(app: ^App, em: f32) {
 	image_view_wait(app)
-	if !app.view_open { return }
+	if !app.cx.open[.Viewer] { return }
 	sc := ui.scale()
 	// what is shown: its pixels (a diagram's: at the conversation's size), and what draws it
 	source: [2]f32
 	shown: View_Draw
 	if app.view_diagram != "" {
 		d := diagram_of(app, app.view_diagram, !app.cx.theme.light)
-		if d == nil || d.why != "" { app.view_open = false; return }
+		if d == nil || d.why != "" { app.cx.open[.Viewer] = false; return }
 		shown.doc = &d.doc
 		source = {d.doc.view[2], d.doc.view[3]} * diagram_scale(em) / sc
 	} else {
 		e, ok := &app.images[app.view_key]
-		if !ok || e.state == .Failed { app.view_open = false; return }
+		if !ok || e.state == .Failed { app.cx.open[.Viewer] = false; return }
 		e.used = app.frame_no
 		if e.state == .Pending { image_viewer_wait(app, em); return }
 		shown.tex = e.tex
@@ -489,7 +489,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 	asked := f.panel / sc
 	size := asked
 	closing := false
-	if ui.modal_sized("image_view", viewer_frame(source, room, chrome, sc, 1, math.round(em * VIEWER_MIN_W_EM)).panel, &size, &app.view_open) {
+	if ui.modal_sized("image_view", viewer_frame(source, room, chrome, sc, 1, math.round(em * VIEWER_MIN_W_EM)).panel, &size, &app.cx.open[.Viewer]) {
 		dialog_backdrop()
 		// a press around the picture closes the viewer, as one outside the dialog does (the buttons and the grips are over it)
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
@@ -553,13 +553,13 @@ image_viewer :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.3))
 				if bevel_button("###zoom_fit", "Fit", "", .Normal, height = bh).clicked { app.view_zoom, app.view_pan = 1, {} }
 				ui.spacer(ui.px(em * 0.8))
-				if bevel_button("###close", "Close", lucide.X, .Normal, height = bh).clicked { app.view_open = false }
+				if bevel_button("###close", "Close", lucide.X, .Normal, height = bh).clicked { app.cx.open[.Viewer] = false }
 				ui.spacer(ui.px(em))
 			}
 		}
 	}
 	// (a press that closes the menu over the viewer is the menu's)
-	if closing && !ui.ctx_menu_any_open() { app.view_open = false }
+	if closing && !ui.ctx_menu_any_open() { app.cx.open[.Viewer] = false }
 	viewer_resized(app, size, asked, f)
 }
 

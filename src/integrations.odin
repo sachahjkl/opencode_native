@@ -382,7 +382,7 @@ connect_finish :: proc(app: ^App) {
 // A login left open when the settings close would wait for nothing.
 integrations_watch :: proc(app: ^App) {
 	n := &app.cx.integrations
-	if !app.settings_open && !connect_idle(n) { connect_cancel(app) }
+	if !app.cx.open[.Settings] && !connect_idle(n) { connect_cancel(app) }
 }
 
 @(private = "file")

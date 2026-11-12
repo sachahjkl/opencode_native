@@ -93,7 +93,6 @@ model_tip :: proc(app: ^App, m: Model_Info, em: f32) {
 }
 
 Picker :: struct {
-	open:   bool,
 	id:     string,
 	anchor: Rect,
 	field:  ui.Text_Field,
@@ -108,8 +107,9 @@ PICK_ROWS :: 10
 
 HEX_PICK_SELECTED :: 0x0c0c0cff
 
-picker_open :: proc(p: ^Picker, id: string, anchor: Rect) {
-	p.open, p.id, p.anchor, p.fresh = true, id, anchor, true
+picker_open :: proc(app: ^App, id: string, anchor: Rect) {
+	p := &app.picker
+	app.cx.open[.Picker], p.id, p.anchor, p.fresh = true, id, anchor, true
 	p.sel = 0
 	ui.field_set(&p.field, "")
 }
@@ -161,7 +161,7 @@ picker_rows :: proc(p: ^Picker, items: []Pick_Item, hits: []Hit, typed: bool) ->
 // Builds the picker `id` while it is open; returns the index in `items` of the one chosen in this frame (-1: none).
 picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_Item, em: f32, align_right := false) -> (chosen: int) {
 	chosen = -1
-	if !p.open || p.id != id { return }
+	if !app.cx.open[.Picker] || p.id != id { return }
 	needle := ui.field_string(&p.field)
 	hits := make([dynamic]Hit, context.temp_allocator)
 	for it, i in items {
@@ -223,7 +223,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 					if p.fresh { ui.set_focus(res.box.key) }
 					if res.changed { p.sel = 0; p.reveal = true }
 					if res.committed && n > 0 { chosen = picker_take(p, items, hits[:], rows, p.sel) }
-					if res.cancelled { p.open = false }
+					if res.cancelled { app.cx.open[.Picker] = false }
 				}
 				text("pn", fmt.tprintf("%d", len(hits)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.6))
@@ -306,13 +306,13 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 		}
 		ui.spacer(ui.px(em * 0.4))
 	}
-	if n > 0 && p.open && !p.fresh && ui.key_press(.Return) && chosen < 0 { chosen = picker_take(p, items, hits[:], rows, p.sel) }
+	if n > 0 && app.cx.open[.Picker] && !p.fresh && ui.key_press(.Return) && chosen < 0 { chosen = picker_take(p, items, hits[:], rows, p.sel) }
 	// a press outside closes it (the button that opened it toggles it: its own click closes it)
 	if !p.fresh && ui.mouse_pressed(.Left) {
-		if r, ok := ui.popover_rect(fmt.tprintf("###pick_%s", id)); ok && !rect_has(r, mouse) && !rect_has(p.anchor, mouse) { p.open = false }
+		if r, ok := ui.popover_rect(fmt.tprintf("###pick_%s", id)); ok && !rect_has(r, mouse) && !rect_has(p.anchor, mouse) { app.cx.open[.Picker] = false }
 	}
-	if ui.key_press(.Escape) { p.open = false }
-	if chosen >= 0 { p.open = false }
+	if ui.key_press(.Escape) { app.cx.open[.Picker] = false }
+	if chosen >= 0 { app.cx.open[.Picker] = false }
 	p.fresh = false
 	return
 }

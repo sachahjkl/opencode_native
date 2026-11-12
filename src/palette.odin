@@ -36,7 +36,6 @@ Pal_Hit :: struct { item: int, score: f64, ranges: []ui.Fuzzy_Range }
 Usage :: struct { weight: f64, last_ms: f64 }
 
 Palette :: struct {
-	open:    bool,
 	fresh:   bool,
 	field:   ui.Text_Field,
 	sel:     int,
@@ -92,8 +91,8 @@ usage_note :: proc(p: ^Palette, it: ^Pal_Item) {
 
 palette_toggle :: proc(app: ^App) {
 	p := &app.palette
-	if p.open { p.open = false; return }
-	p.open, p.fresh, p.sel = true, true, 0
+	if app.cx.open[.Palette] { app.cx.open[.Palette] = false; return }
+	app.cx.open[.Palette], p.fresh, p.sel = true, true, 0
 	ui.field_set(&p.field, "")
 	if !app.cx.have_slash { request(app, .Slash, "GET", "/api/command") }
 }
@@ -167,7 +166,7 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 @(private = "file")
 palette_choose :: proc(app: ^App, it: ^Pal_Item) {
 	usage_note(&app.palette, it)
-	app.palette.open = false
+	app.cx.open[.Palette] = false
 	switch it.kind {
 	case .Command: command_run(app, it.cmd)
 	case .Session: open_root(app, it.id)
@@ -190,7 +189,7 @@ Pal_Row_Draw :: struct { selected: bool }
 
 palette_dialog :: proc(app: ^App, em: f32) {
 	p := &app.palette
-	if !p.open { return }
+	if !app.cx.open[.Palette] { return }
 	text_in := ui.field_string(&p.field)
 	only: rune
 	needle := text_in
@@ -216,7 +215,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 	chosen := -1
 	row_h := math.round(em * 2.1)
 	// (resizable, its size kept as the dialogs' are; its top held where a palette is)
-	if ui.modal_sized("palette", DIALOG_PREFERRED_EM[.Palette] * em, &app.cx.dialogs[.Palette], &p.open, DIALOG_MIN_EM[.Palette] * em, top = PALETTE_TOP) {
+	if ui.modal_sized("palette", DIALOG_PREFERRED_EM[.Palette] * em, &app.cx.dialogs[.Palette], &app.cx.open[.Palette], DIALOG_MIN_EM[.Palette] * em, top = PALETTE_TOP) {
 		dialog_backdrop()
 		// the search: flush with the palette's top and sides, no frame of its own; a line under it parts it from the list
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
@@ -229,7 +228,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 				if p.fresh { ui.set_focus(res.box.key) }
 				if res.changed { p.sel = 0; p.reveal = true }
 				if res.committed && n > 0 { chosen = hits[p.sel].item }
-				if res.cancelled { p.open = false }
+				if res.cancelled { app.cx.open[.Palette] = false }
 			}
 			text("n", fmt.tprintf("%d", len(hits)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.9))

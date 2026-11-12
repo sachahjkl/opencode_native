@@ -206,9 +206,9 @@ a_failed_check_is_no_news_of_the_update :: proc(t: ^testing.T) {
 leaving_a_server_closes_what_acts_on_its_sessions :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	app.delete_open, app.rename.open = true, true
+	app.cx.open[.Delete], app.cx.open[.Rename] = true, true
 	server_forget(app)
-	testing.expect(t, !app.delete_open && !app.rename.open)
+	testing.expect(t, !app.cx.open[.Delete] && !app.cx.open[.Rename])
 }
 
 // A window's own needs reach the loop, which looks at the main state alone.

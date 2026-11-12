@@ -628,7 +628,7 @@ a_drag_ends_when_a_menu_opens :: proc(t: ^testing.T) {
 	ev := []platform.Event{{kind = .Mouse_Press, pos = {10, 10}, button = .Left}}
 	_ = term_events(app, ev)
 	testing.expect(t, s.selecting, "it began")
-	app.cx.help_open = true
+	app.cx.open[.Help] = true
 	_ = term_events(app, nil)
 	testing.expect(t, !s.selecting, "the release will not come here")
 	testing.expect_value(t, app.cx.terms.press, Term_Press.None)

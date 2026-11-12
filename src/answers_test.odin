@@ -875,15 +875,15 @@ what_is_open_has_the_keys :: proc(t: ^testing.T) {
 	palette := command_find("app.palette")
 	help := command_find("app.help")
 	testing.expect(t, command_keyed(app, new_one) && command_keyed(app, palette))
-	app.settings_open = true
+	app.cx.open[.Settings] = true
 	testing.expect(t, !command_keyed(app, new_one), "a shortcut does not act behind a dialog")
 	testing.expect(t, !command_keyed(app, palette))
-	app.settings_open = false
-	app.palette.open = true
+	app.cx.open[.Settings] = false
+	app.cx.open[.Palette] = true
 	testing.expect(t, command_keyed(app, palette), "its key closes it")
 	testing.expect(t, !command_keyed(app, help))
-	app.palette.open = false
-	app.cx.help_open = true
+	app.cx.open[.Palette] = false
+	app.cx.open[.Help] = true
 	testing.expect(t, command_keyed(app, help))
 }
 
@@ -894,7 +894,7 @@ commands_asked_together_all_run :: proc(t: ^testing.T) {
 	command_run(app, command_find("view.sidebar"))
 	command_run(app, command_find("app.help"))
 	commands_apply(app)
-	testing.expect(t, app.cx.sidebar_hidden && app.cx.help_open)
+	testing.expect(t, app.cx.sidebar_hidden && app.cx.open[.Help])
 	testing.expect_value(t, len(app.cx.commands_due), 0)
 }
 

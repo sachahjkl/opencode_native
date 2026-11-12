@@ -81,7 +81,6 @@ App :: struct {
 	prefs_file:       string,         // where they are saved ("": nowhere)
 	prefs:            Prefs,          // their plain values
 	facts:            Server_Facts,   // what the server said for the settings pages
-	settings_open:    bool,
 	settings_page:    Settings_Page,
 	// the settings' slider held (its preference, a constant name; "": none) and where it is: ui.slider moves its value only
 	// while the button is down, so the value is kept here between frames and written at the release
@@ -95,7 +94,6 @@ App :: struct {
 	expanded:         map[u64]bool,   // tool and reasoning parts opened by the user (hash of their id)
 	folded:           map[u64]bool,   // sidebar groups folded (hash of the directory)
 	delete_id:        string,
-	delete_open:      bool,
 	menu_session:     string,         // the session the context menu is about (owned)
 	menu_project:     string,         // the project the project menu is about (owned)
 	logo:             Logo,
@@ -105,8 +103,7 @@ App :: struct {
 	proj_stats:       Project_Stats,
 	images:           map[u64]Image_Entry,   // decoded images, by key and size (images.odin)
 	frame_no:         u64,
-	view_open:        bool,                  // the image viewer
-	view_key:         u64,
+	view_key:         u64,                   // the image viewer (open: Dialog.Viewer)
 	view_ref:         Image_Ref,             // what is shown: what Copy decodes again whole (its data and name owned)
 	view_diagram:     string,                // or the text of the Mermaid diagram shown (owned; "": an image)
 	view_zoom:        f32,                   // times what fits (image_viewer)
@@ -194,7 +191,9 @@ App_Context :: struct {
 	gliding:        bool,              // a panel's height moves in this build
 	was_gliding:    bool,              // ... it did in the last one
 	docked_w:       f32,               // the conversation's room as a panel of the dock (0: it is not one)
-	help_open:      bool,              // the keyboard's dialog (commands.odin)
+	// the dialogs over the window, the one place that says which (overlay_open). Bools, not a bit_set: ui.modal closes one
+	// through a ^bool, which it keeps until modal_end
+	open:           [Dialog]bool,
 	themes_open:    bool,              // the settings' themes as a grid, not one line (theme_cards)
 	dialogs:        [Dialog]Vec2,      // the sizes given to the dialogs (logical pixels, {}: what they prefer)
 	dialogs_saved:  [Dialog]Vec2,
@@ -478,7 +477,7 @@ frame_held_ms :: proc(app: ^App, size: draw.Vec2) -> int {
 due_run :: proc(app: ^App, k: Due) {
 	switch k {
 	case .Refresh:   refresh_sessions(app)
-	case .Facts:     if app.settings_open { server_facts_load(app) }   // (an action of the settings: connect an MCP server, revoke a permission)
+	case .Facts:     if app.cx.open[.Settings] { server_facts_load(app) }   // (an action of the settings: connect an MCP server, revoke a permission)
 	case .Children:  load_children(app)
 	case .Context:   if app.stats_open { context_ask(app) }
 	case .Restore:   nav_restore_clear(app)

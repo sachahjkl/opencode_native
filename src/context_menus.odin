@@ -207,15 +207,15 @@ context_menu :: proc(app: ^App, em: f32) {
 			if m := find_msg(app, app.cx.ctx.msg); m != nil && app.cx.ctx.part < len(m.parts) { tool_menu(app, m, &m.parts[app.cx.ctx.part]) }
 		case .Image:
 			image := app.cx.ctx.image
-			if ui.menu_item("Copy image", app.view_open ? "Ctrl+C" : "", icon = lucide.COPY).clicked { image_copy(app, image) }
-			if !app.view_open {
+			if ui.menu_item("Copy image", app.cx.open[.Viewer] ? "Ctrl+C" : "", icon = lucide.COPY).clicked { image_copy(app, image) }
+			if !app.cx.open[.Viewer] {
 				if ui.menu_item("Open in the viewer", icon = lucide.ZOOM_IN).clicked { image_view_open(app, image) }
 			}
 		case .Diagram:
 			code := app.cx.ctx.msg
-			if ui.menu_item("Copy as PNG", app.view_open ? "Ctrl+C" : "", icon = lucide.IMAGE).clicked { diagram_copy_png(app, code) }
+			if ui.menu_item("Copy as PNG", app.cx.open[.Viewer] ? "Ctrl+C" : "", icon = lucide.IMAGE).clicked { diagram_copy_png(app, code) }
 			if ui.menu_item("Copy the text", icon = lucide.COPY).clicked { clip_set(code); ui.toast(.Good, "Copied") }
-			if !app.view_open {
+			if !app.cx.open[.Viewer] {
 				if ui.menu_item("Open in the viewer", icon = lucide.ZOOM_IN).clicked { diagram_view_open(app, code) }
 			}
 		}
@@ -291,8 +291,7 @@ quote_chip :: proc(app: ^App, em: f32) {
 // Rename
 
 Rename :: struct {
-	open:  bool,        // the dialog
-	at:    Rename_At,   // or in place, where the title is (a double click on it)
+	at:    Rename_At,   // in place, where the title is (a double click on it); or the dialog (Dialog.Rename)
 	fresh: bool,
 	held:  bool,        // in place: the field had the keyboard (losing it commits, as a click elsewhere)
 	shown: bool,        // in place: its field was built in this build (or it began in it)
@@ -306,7 +305,7 @@ rename_open :: proc(app: ^App, id: string) {
 	r := &app.rename
 	delete(r.id)
 	r.id = strings.clone(id)
-	r.open, r.fresh, r.at = true, true, .None
+	app.cx.open[.Rename], r.fresh, r.at = true, true, .None
 	s := find_session(app, id)
 	if s == nil && app.chat.have_self && app.chat.self.id == id { s = &app.chat.self }
 	ui.field_set(&r.field, s != nil ? s.title : "")
@@ -316,7 +315,7 @@ rename_open :: proc(app: ^App, id: string) {
 // The title of session `id`, edited where it is shown (`at`): Enter or a click elsewhere keeps it, Escape leaves it as it was.
 rename_inline :: proc(app: ^App, id: string, at: Rename_At) {
 	rename_open(app, id)
-	app.rename.open, app.rename.at, app.rename.held, app.rename.shown = false, at, false, true
+	app.cx.open[.Rename], app.rename.at, app.rename.held, app.rename.shown = false, at, false, true
 }
 
 // Whether session `id`'s title is being edited at `at`: then rename_in_place stands where its words would.
@@ -353,7 +352,7 @@ rename_dialog :: proc(app: ^App, em: f32) {
 	// scrolled away - is left as it was)
 	if r.at != .None && !r.shown { r.at = .None }
 	r.shown = false
-	if ui.modal("rename", em * 28, &r.open) {
+	if ui.modal("rename", em * 28, &app.cx.open[.Rename]) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -370,14 +369,14 @@ rename_dialog :: proc(app: ^App, em: f32) {
 						res := ui.line_edit("###ren_f", &r.field, "Title")
 						if r.fresh { ui.set_focus(res.box.key); r.fresh = false }
 						if res.committed { rename_commit(app) }
-						if res.cancelled { r.open = false }
+						if res.cancelled { app.cx.open[.Rename] = false }
 					}
 				}
 				ui.spacer(ui.px(em * 0.9))
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 				if ui.row(.Center, id = "###ren_b") {
 					ui.spacer(ui.fill())
-					if bevel_button("###c", "Cancel", "", .Normal).clicked { r.open = false }
+					if bevel_button("###c", "Cancel", "", .Normal).clicked { app.cx.open[.Rename] = false }
 					ui.spacer(ui.px(em * 0.5))
 					if bevel_button("###ok", "Rename", lucide.CHECK, .Accent).clicked { rename_commit(app) }
 				}
@@ -392,7 +391,7 @@ rename_dialog :: proc(app: ^App, em: f32) {
 rename_commit :: proc(app: ^App) {
 	r := &app.rename
 	t := strings.trim_space(ui.field_string(&r.field))
-	r.open, r.at = false, .None
+	app.cx.open[.Rename], r.at = false, .None
 	if t == "" { return }
 	if s := find_session(app, r.id); s != nil && s.title == t { return }   // (nothing changed: nothing to ask)
 	rename_session(app, r.id, t)

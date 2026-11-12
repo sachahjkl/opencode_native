@@ -20,7 +20,6 @@ diff_layout_name :: proc(l: Diff_Layout) -> string { return l == .Split ? "split
 Split_Row :: struct { left, right: int }
 
 Diff_Full :: struct {
-	open:           bool,
 	title, patch:   string,
 	lines:          []Diff_Line,
 	rows:           []Split_Row,
@@ -63,7 +62,7 @@ diff_full_open :: proc(app: ^App, title, patch: string) {
 		if l.sign == '+' { d.added += 1 }
 		if l.sign == '-' { d.removed += 1 }
 	}
-	d.open = true
+	app.cx.open[.Diff] = true
 }
 
 diff_full_open_file :: proc(app: ^App, path: string) {
@@ -185,9 +184,9 @@ diff_full_rows :: proc(app: ^App, d: ^Diff_Full, layout: Diff_Layout, view: ^ui.
 
 diff_full_dialog :: proc(app: ^App, em: f32) {
 	d := &app.cx.diff_full
-	if !d.open { return }
-	open := true
-	if ui.modal_sized("diff_full", DIALOG_PREFERRED_EM[.Diff] * em, &app.cx.dialogs[.Diff], &open, DIALOG_MIN_EM[.Diff] * em) {
+	open := &app.cx.open[.Diff]
+	if !open^ { return }
+	if ui.modal_sized("diff_full", DIALOG_PREFERRED_EM[.Diff] * em, &app.cx.dialogs[.Diff], open, DIALOG_MIN_EM[.Diff] * em) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em * 0.9))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
@@ -215,7 +214,7 @@ diff_full_dialog :: proc(app: ^App, em: f32) {
 		_ = ui.signal(view)
 		if ui.parent(view) { diff_full_rows(app, d, app.prefs.diff_layout, view, em) }
 		ui.spacer(ui.px(em * 0.6))
-		dialog_close(&open)
+		dialog_close(open)
 	}
-	if !open { diff_full_close(d) }
+	if !open^ { diff_full_close(d) }
 }
