@@ -215,12 +215,9 @@ schedules_dialog :: proc(app: ^App, em: f32) {
 	w := min(math.round(em * SCHEDULES_W_EM), win.x - 2 * margin)
 	if ui.modal("schedules", w, &app.cx.open[.Schedules], SCHEDULES_TOP) {
 		dialog_backdrop()
-		ui.spacer(ui.px(em * 0.9))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row(id = "###sc_head") {
+		if dialog_header("###sc_head") {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			text("t", "Schedules of this session", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
-			ui.spacer(ui.px(em * 3))
 		}
 		ui.spacer(ui.px(em * 0.4))
 		// (what it held at the last build: this one is not laid out yet. The title and the gaps are what the window keeps.)
@@ -573,12 +570,9 @@ artifacts_dialog :: proc(app: ^App, em: f32) {
 	if !app.cx.open[.Artifacts] { return }
 	if ui.modal_sized("artifacts", DIALOG_PREFERRED_EM[.Artifacts] * em, &app.cx.dialogs[.Artifacts], &app.cx.open[.Artifacts], DIALOG_MIN_EM[.Artifacts] * em) {
 		dialog_backdrop()
-		ui.spacer(ui.px(em * 0.9))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row(id = "###ar_head") {
+		if dialog_header("###ar_head") {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			text("t", "Artifacts of this folder", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
-			ui.spacer(ui.px(em * 3))
 		}
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})

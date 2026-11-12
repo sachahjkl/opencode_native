@@ -46,9 +46,7 @@ diff_full_dialog :: proc(app: ^App, em: f32) {
 	if !open^ { return }
 	if ui.modal_sized("diff_full", DIALOG_PREFERRED_EM[.Diff] * em, &app.cx.dialogs[.Diff], open, DIALOG_MIN_EM[.Diff] * em) {
 		dialog_backdrop()
-		ui.spacer(ui.px(em * 0.9))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-		if ui.row(.Center, id = "###df_head") {
+		if dialog_header("###df_head") {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			text("t", d.title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2), flags = {.Selectable}}, ui.fill())   // (a path: to copy, to go to)
 			text("a", fmt.tprintf("+%d", d.doc.added), hex(HEX_GREEN), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
@@ -64,7 +62,6 @@ diff_full_dialog :: proc(app: ^App, em: f32) {
 			labels := []string{"Stacked", "Split"}
 			ui.next({width = ui.px(em * 12), height = ui.px(em * 2)})
 			if choice("###df_mode", labels, &sel) { pref_set(app, "conversation.diff_layout", diff_layout_name(diff.Layout(sel))) }
-			ui.spacer(ui.px(em * 3.2))   // (the dialog's close button is there)
 		}
 		ui.spacer(ui.px(em * 0.6))
 		o := diff_options(app, em, d.title)

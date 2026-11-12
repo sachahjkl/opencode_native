@@ -457,10 +457,8 @@ server_dialog :: proc(app: ^App, em: f32) {
 	e := &app.server_edit
 	if ui.modal("server", em * 32, &app.cx.open[.Server], SERVER_DIALOG_TOP) {
 		dialog_backdrop()
-		ui.spacer(ui.px(em * 1.2))
 		pad :: proc(em: f32) { ui.spacer(ui.px(em * DIALOG_MARGIN_EM)) }
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-		if ui.row(.Center) {
+		if dialog_header("###sv_head") {
 			pad(em)
 			glyph(lucide.GLOBE, accent(), math.round(em * ICON_LARGE))
 			ui.spacer(ui.px(em * 0.5))
