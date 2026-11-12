@@ -14,6 +14,7 @@ import "core:strings"
 import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
+import remote "gt:remote"
 
 ////////////////////////////////
 // Schedules
@@ -50,8 +51,8 @@ WHEN_MODES := [When_Mode]struct { label, key, hint, unit: string }{
 
 Schedules :: struct {
 	session:  string,   // (owned)
-	read:     Remote,   // the list
-	making:   Remote,   // a new one on its way: the form sends nothing else until it is answered, and says why it failed
+	read:     remote.Remote,   // the list
+	making:   remote.Remote,   // a new one on its way: the form sends nothing else until it is answered, and says why it failed
 	problem:  string,   // what the form lacks (owned)
 	removing: string,   // the one asked about (owned)
 	list:     [dynamic]Schedule,
@@ -84,22 +85,22 @@ schedules_open :: proc(app: ^App, id: string) {
 	s := &app.cx.schedules
 	if id != s.session {
 		schedule_form_clear(s)
-		remote_reset(&s.making)
+		remote.reset(&s.making)
 	} else if s.making.state != .Loading {
-		remote_reset(&s.making)
+		remote.reset(&s.making)
 	}
 	set_text(&s.session, id)
 	set_text(&s.problem, ""); set_text(&s.removing, "")
 	schedules_clear(s)
-	remote_reset(&s.read)
+	remote.reset(&s.read)
 	app.cx.open[.Schedules], s.fresh = true, true
 	schedules_ask(app)
 }
 
 schedules_ask :: proc(app: ^App) {
 	s := &app.cx.schedules
-	remote_begin(&s.read)
-	request(app, .Schedules, "GET", fmt.tprintf("/api/experimental/schedule?sessionID=%s", url_escape(s.session)), remote = &s.read)
+	remote.begin(&s.read)
+	request(app, .Schedules, "GET", fmt.tprintf("/api/experimental/schedule?sessionID=%s", url_escape(s.session)), reading = &s.read)
 }
 
 schedules_forget :: proc(app: ^App) {
@@ -108,8 +109,8 @@ schedules_forget :: proc(app: ^App) {
 	set_text(&s.session, ""); set_text(&s.removing, "")
 	schedule_form_clear(s)
 	schedules_clear(s)
-	remote_reset(&s.read)
-	remote_reset(&s.making)
+	remote.reset(&s.read)
+	remote.reset(&s.making)
 	app.cx.no_schedules = false   // (what the next server offers is for it to say: experimental_check)
 }
 
@@ -155,8 +156,8 @@ schedule_submit :: proc(app: ^App) {
 	body, problem := schedule_body(s.session, ui.field_string(&s.prompt), "", ui.field_string(&s.value), s.mode)
 	set_text(&s.problem, problem)
 	if problem != "" { return }
-	remote_begin(&s.making)
-	request(app, .Schedule_Made, "POST", "/api/experimental/schedule", body, remote = &s.making)
+	remote.begin(&s.making)
+	request(app, .Schedule_Made, "POST", "/api/experimental/schedule", body, reading = &s.making)
 }
 
 // The body of a schedule; what is missing, if something is.
@@ -344,7 +345,7 @@ schedule_form :: proc(app: ^App, w, em: f32) {
 		making := s.making.state == .Loading
 		if bevel_button("###sc_go", making ? "Planning…" : "Plan it", lucide.CHECK, .Accent, height = math.round(em * FIELD_H_EM), disabled = making).clicked { go = true }
 	}
-	if s.problem != "" || remote_failed(&s.making) {
+	if s.problem != "" || remote.failed(&s.making) {
 		ui.spacer(ui.px(em * 0.4))
 		info_line(app, "###sc_failed", s.problem != "" ? s.problem : s.making.message, em, hex(HEX_RED))
 	}
@@ -359,8 +360,8 @@ Artifact_File :: struct { path, content: string }
 
 Artifacts :: struct {
 	dir:      string,   // the folder (owned)
-	read:     Remote,   // the list
-	file_read: Remote,  // the files of `shown`: they are its own, or there are none
+	read:     remote.Remote,   // the list
+	file_read: remote.Remote,  // the files of `shown`: they are its own, or there are none
 	removing: string,   // (owned)
 	shown:    string,   // the artifact read (owned)
 	list:     [dynamic]Artifact,
@@ -377,8 +378,8 @@ artifacts_clear :: proc(a: ^Artifacts) {
 	clear(&a.list)
 	set_text(&a.removing, ""); set_text(&a.shown, "")
 	artifact_files_clear(a)
-	remote_reset(&a.read)
-	remote_reset(&a.file_read)
+	remote.reset(&a.read)
+	remote.reset(&a.file_read)
 }
 
 artifacts_open :: proc(app: ^App) {
@@ -393,8 +394,8 @@ artifacts_open :: proc(app: ^App) {
 artifacts_ask :: proc(app: ^App) {
 	a := &app.cx.artifacts
 	q := location_query(a.dir)
-	remote_begin(&a.read)
-	request(app, .Artifacts, "GET", fmt.tprintf("/api/experimental/artifacts%s%s", q != "" ? "?" : "", q), remote = &a.read)
+	remote.begin(&a.read)
+	request(app, .Artifacts, "GET", fmt.tprintf("/api/experimental/artifacts%s%s", q != "" ? "?" : "", q), reading = &a.read)
 }
 
 artifacts_forget :: proc(app: ^App) {
@@ -420,7 +421,7 @@ artifact_show :: proc(app: ^App, id: string) {
 	set_text(&a.shown, id)
 	set_text(&a.removing, "")
 	artifact_files_clear(a)
-	remote_reset(&a.file_read)
+	remote.reset(&a.file_read)
 	artifact_read(app)
 }
 
@@ -428,8 +429,8 @@ artifact_show :: proc(app: ^App, id: string) {
 artifact_read :: proc(app: ^App) {
 	a := &app.cx.artifacts
 	q := location_query(a.dir)
-	remote_begin(&a.file_read)
-	request(app, .Artifact_Read, "GET", fmt.tprintf("/api/experimental/artifacts/%s%s%s", url_escape(a.shown), q != "" ? "?" : "", q), remote = &a.file_read)
+	remote.begin(&a.file_read)
+	request(app, .Artifact_Read, "GET", fmt.tprintf("/api/experimental/artifacts/%s%s%s", url_escape(a.shown), q != "" ? "?" : "", q), reading = &a.file_read)
 }
 
 artifacts_changed :: proc(app: ^App) {
@@ -627,7 +628,7 @@ artifact_right :: proc(app: ^App, em: f32) {
 				request(app, .Artifact_Done, "DELETE", fmt.tprintf("/api/experimental/artifacts/%s%s%s", url_escape(it.id), q != "" ? "?" : "", q))
 				set_text(&a.removing, ""); set_text(&a.shown, "")
 				artifact_files_clear(a)
-				remote_reset(&a.file_read)
+				remote.reset(&a.file_read)
 				return
 			}
 			ui.spacer(ui.px(em * 0.3))
@@ -670,8 +671,8 @@ Plugin :: struct {
 }
 
 Plugins :: struct {
-	read:     Remote,   // the list
-	check:    Remote,   // Check for updates, on its way
+	read:     remote.Remote,   // the list
+	check:    remote.Remote,   // Check for updates, on its way
 	builtin:  bool,
 	list:     [dynamic]Plugin,
 	arena:    virtual.Arena,
@@ -679,16 +680,16 @@ Plugins :: struct {
 
 plugins_ask :: proc(app: ^App) {
 	p := &app.cx.plugins
-	remote_begin(&p.read)
-	request(app, .Plugins, "GET", "/api/plugin", remote = &p.read)
+	remote.begin(&p.read)
+	request(app, .Plugins, "GET", "/api/plugin", reading = &p.read)
 }
 
 plugins_forget :: proc(app: ^App) {
 	p := &app.cx.plugins
 	virtual.arena_destroy(&p.arena)
 	clear(&p.list)
-	remote_reset(&p.read)
-	remote_reset(&p.check)
+	remote.reset(&p.read)
+	remote.reset(&p.check)
 }
 
 // Those one chose first: what is built in is the server's own.
@@ -748,8 +749,8 @@ page_plugins :: proc(app: ^App, em: f32) {
 		small := math.round(em * BUTTON_COMPACT_H_EM)
 		checking := p.check.state == .Loading
 		if bevel_button("###pl_check", checking ? "Checking…" : "Check for updates", lucide.REFRESH_CW, .Normal, height = small, disabled = checking).clicked {
-			remote_begin(&p.check)
-			request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", remote = &p.check)
+			remote.begin(&p.check)
+			request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", reading = &p.check)
 		}
 		ui.spacer(ui.px(em * 0.4))
 		if bevel_button("###pl_built", fmt.tprintf("%s the %d built in", p.builtin ? "Hide" : "Show", built), "", .Ghost, height = small).clicked { p.builtin = !p.builtin }

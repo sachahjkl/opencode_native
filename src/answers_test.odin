@@ -22,6 +22,7 @@ import "gt:config"
 import fsx "gt:fsx"
 import "gt:png"
 import "gt:ui"
+import remote "gt:remote"
 
 // The requests of this thread's test, oldest first.
 @(thread_local) bench_sent: [dynamic]^Request
@@ -167,19 +168,19 @@ JSON_MODEL :: `{"id":"m1","providerID":"p1","name":"M1"}`
 a_reading_replaced_drops_its_answer :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	x: Remote
-	remote_begin(&x)
-	request(app, .Agents, "GET", "/a", remote = &x)
+	x: remote.Remote
+	remote.begin(&x)
+	request(app, .Agents, "GET", "/a", reading = &x)
 	first := bench_take(t, .Agents)
-	remote_begin(&x)
-	request(app, .Agents, "GET", "/a", remote = &x)
+	remote.begin(&x)
+	request(app, .Agents, "GET", "/a", reading = &x)
 	second := bench_take(t, .Agents)
 
 	bench_answer(app, first, 200, `{"data":[{"id":"old"}]}`)
 	testing.expect_value(t, len(app.agents), 0)
-	testing.expect_value(t, x.state, Load_State.Loading)
+	testing.expect_value(t, x.state, remote.State.Loading)
 	bench_answer(app, second, 200, `{"data":[{"id":"new"}]}`)
-	testing.expect_value(t, x.state, Load_State.Ready)
+	testing.expect_value(t, x.state, remote.State.Ready)
 	testing.expect_value(t, app.agents[0].id, "new")
 }
 
@@ -187,24 +188,24 @@ a_reading_replaced_drops_its_answer :: proc(t: ^testing.T) {
 every_way_of_failing_settles_a_reading :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	x: Remote
-	ask :: proc(app: ^App, t: ^testing.T, x: ^Remote) -> ^Request {
-		remote_begin(x)
-		request(app, .Sessions, "GET", "/s", remote = x)
+	x: remote.Remote
+	ask :: proc(app: ^App, t: ^testing.T, x: ^remote.Remote) -> ^Request {
+		remote.begin(x)
+		request(app, .Sessions, "GET", "/s", reading = x)
 		return bench_take(t, .Sessions)
 	}
 	bench_lost(app, ask(app, t, &x))
-	testing.expect_value(t, x.state, Load_State.Failed)
+	testing.expect_value(t, x.state, remote.State.Failed)
 	testing.expect(t, x.message != "")
 	bench_answer(app, ask(app, t, &x), 401, "")
-	testing.expect_value(t, x.state, Load_State.Failed)
+	testing.expect_value(t, x.state, remote.State.Failed)
 	bench_answer(app, ask(app, t, &x), 500, `{"message":"it broke"}`)
-	testing.expect_value(t, x.state, Load_State.Refused)
+	testing.expect_value(t, x.state, remote.State.Refused)
 	testing.expect_value(t, x.message, "it broke")
 	bench_answer(app, ask(app, t, &x), 200, "not json")
-	testing.expect_value(t, x.state, Load_State.Failed)
+	testing.expect_value(t, x.state, remote.State.Failed)
 	bench_answer(app, ask(app, t, &x), 200, `{"data":[]}`)
-	testing.expect_value(t, x.state, Load_State.Ready)
+	testing.expect_value(t, x.state, remote.State.Ready)
 	testing.expect_value(t, x.message, "")
 }
 
@@ -213,13 +214,13 @@ every_way_of_failing_settles_a_reading :: proc(t: ^testing.T) {
 a_reading_of_a_server_left_does_not_stay_loading :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	x: Remote
-	remote_begin(&x)
-	request(app, .Agents, "GET", "/a", remote = &x)
+	x: remote.Remote
+	remote.begin(&x)
+	request(app, .Agents, "GET", "/a", reading = &x)
 	r := bench_take(t, .Agents)
 	app.conn = bench_conn(app)
 	bench_answer(app, r, 200, `{"data":[{"id":"theirs"}]}`)
-	testing.expect_value(t, x.state, Load_State.Idle)
+	testing.expect_value(t, x.state, remote.State.Idle)
 	testing.expect_value(t, len(app.agents), 0)
 }
 
@@ -644,7 +645,7 @@ a_deferred_read_comes_after_the_last_asking_and_not_never :: proc(t: ^testing.T)
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	refresh_soon(app)
-	testing.expect(t, deferred_in_ms(&app.cx.due[.Refresh]) > 0, "a wake is due")
+	testing.expect(t, ui.deferred_in_ms(&app.cx.due[.Refresh]) > 0, "a wake is due")
 	bench_clock += REFRESH_DEBOUNCE_MS - 1
 	refresh_soon(app)   // (another event: it moves back)
 	bench_clock += 2    // (past the first deadline: that one would race what the event followed)
@@ -653,7 +654,7 @@ a_deferred_read_comes_after_the_last_asking_and_not_never :: proc(t: ^testing.T)
 	bench_clock += REFRESH_DEBOUNCE_MS
 	deferred_tick(app)
 	testing.expect_value(t, bench_count(.Sessions), 1)
-	testing.expect_value(t, deferred_in_ms(&app.cx.due[.Refresh]), 0)
+	testing.expect_value(t, ui.deferred_in_ms(&app.cx.due[.Refresh]), 0)
 	bench_clear(app)
 	// events without end
 	for _ in 0 ..< 100 {
@@ -730,7 +731,7 @@ a_conversation_that_could_not_be_read_says_so_and_a_retry_reads_it :: proc(t: ^t
 	testing.expect_value(t, chat_view(app), Chat_View.Loading)
 	bench_answer(app, bench_take(t, .Messages), 404, `{"message":"no such session"}`)
 	testing.expect_value(t, chat_view(app), Chat_View.Failed)
-	testing.expect_value(t, app.cx.chat_read.state, Load_State.Refused)
+	testing.expect_value(t, app.cx.chat_read.state, remote.State.Refused)
 	testing.expect_value(t, app.cx.chat_read.message, "no such session")
 	bench_clear(app)
 	chat_read(app)

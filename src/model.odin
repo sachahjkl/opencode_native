@@ -11,6 +11,7 @@ import "core:strings"
 import "core:sync"
 import "gt:config"
 import "gt:ui"
+import diff "gt:diff"
 
 Session_Info :: struct {
 	id, title, parent, directory, agent, model, provider, outcome, project: string,
@@ -72,7 +73,7 @@ Part :: struct {
 	// what a call changed in files (tool_views.odin): the server's patch, else made from its input
 	patch:       string,
 	patch_tried: bool,
-	diff:        Diff,   // the patch read (part_patch_set: again only when the patch changes)
+	diff:        diff.Parsed,   // the patch read (part_patch_set: again only when the patch changes)
 	added, removed: int,
 	// what the views made of its texts, kept with the text they were made from (in the chat's arena, as the part)
 	output_well:  Well_Kept,   // its output in a well

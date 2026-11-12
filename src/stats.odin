@@ -16,6 +16,7 @@ import "core:strings"
 import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
+import remote "gt:remote"
 
 Tool_Count :: struct { name: string, calls, failed: int, p50: f64 }
 Model_Count :: struct { name: string, steps: int, tokens_in, tokens_out, cost: f64 }
@@ -81,11 +82,11 @@ stats_ask :: proc(app: ^App) {
 	virtual.arena_destroy(&ps.arena)
 	ps^ = {}
 	_ = virtual.arena_init_growing(&ps.arena)
-	remote_reset(&app.cx.stats_read)
+	remote.reset(&app.cx.stats_read)
 	if p == "" { return }
 	ps.project = strings.clone(p, virtual.arena_allocator(&ps.arena))
-	remote_begin(&app.cx.stats_read)
-	request(app, .Stats, "GET", fmt.tprintf("/api/experimental/session/stats?project=%s&tools=detail", url_escape(p)), remote = &app.cx.stats_read)
+	remote.begin(&app.cx.stats_read)
+	request(app, .Stats, "GET", fmt.tprintf("/api/experimental/session/stats?project=%s&tools=detail", url_escape(p)), reading = &app.cx.stats_read)
 }
 
 // The panel stays on the session shown: its project comes after it opened (.Self), or the conversation changed under it.
@@ -99,9 +100,9 @@ stats_forget :: proc(app: ^App) {
 	ps := &app.proj_stats
 	virtual.arena_destroy(&ps.arena)
 	ps^ = {}
-	remote_reset(&app.cx.stats_read)
+	remote.reset(&app.cx.stats_read)
 	context_clear(app)
-	remote_reset(&app.cx.context_read)
+	remote.reset(&app.cx.context_read)
 }
 
 @(private = "file")
@@ -120,16 +121,16 @@ context_ask :: proc(app: ^App) {
 	if x.session != id {
 		context_clear(app)
 		x.session = strings.clone(id)
-		remote_reset(&app.cx.context_read)
+		remote.reset(&app.cx.context_read)
 	}
 	if id == "" { return }
-	remote_begin(&app.cx.context_read)
-	request(app, .Context, "GET", fmt.tprintf("/api/session/%s/context", id), tag = id, remote = &app.cx.context_read)
+	remote.begin(&app.cx.context_read)
+	request(app, .Context, "GET", fmt.tprintf("/api/session/%s/context", id), tag = id, reading = &app.cx.context_read)
 }
 
 // The stream has no event for it: a step that ended is when the context changed. Nothing is read while the panel is closed.
 stats_context_soon :: proc(app: ^App) {
-	if app.stats_open { deferred_ask(&app.cx.due[.Context], CONTEXT_DEBOUNCE_MS, CONTEXT_DEBOUNCE_MS * DEFERRED_MOST) }
+	if app.stats_open { ui.deferred_ask(&app.cx.due[.Context], CONTEXT_DEBOUNCE_MS, CONTEXT_DEBOUNCE_MS * DEFERRED_MOST) }
 }
 
 @(private = "file")

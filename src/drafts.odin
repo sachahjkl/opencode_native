@@ -18,7 +18,7 @@ DRAFTS_SAVE_MS      :: 1000
 DRAFTS_SAVE_MOST_MS :: 5000
 
 // The composer changed: the texts go to disk in a moment.
-drafts_save_soon :: proc(app: ^App) { deferred_ask(&app.cx.due[.Drafts], DRAFTS_SAVE_MS, DRAFTS_SAVE_MOST_MS) }
+drafts_save_soon :: proc(app: ^App) { ui.deferred_ask(&app.cx.due[.Drafts], DRAFTS_SAVE_MS, DRAFTS_SAVE_MOST_MS) }
 
 // Each frame the composer is built: what it holds against what it held, so that whatever changed it (a key, a prompt sent and
 // the composer emptied, a prompt that came back) reaches the disk. (A sent prompt left on disk came back at the next start.)

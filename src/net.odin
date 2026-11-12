@@ -15,6 +15,7 @@ import "core:time"
 import "core:unicode/utf8"
 import "gt:ascii"
 import "gt:ui"
+import remote "gt:remote"
 
 Server_Config :: struct {
 	host:     string,
@@ -309,7 +310,7 @@ Request :: struct {
 	gen:    u64,       // the chat generation it was made for (answers for a chat since left are dropped)
 	conn:   ^Conn,     // the connection it goes by (answers from a server since left are dropped)
 	app:    ^App,      // (for its thread: the_app is the interface's)
-	remote: ^Remote,   // the reading it is (nil: none), and which one: answer settles it
+	reading: ^remote.Remote,   // the reading it is (nil: none), and which one: answer settles it
 	ticket: u64,
 	out:    u64,       // the prompt on its way it carries (outgoing.odin, 0: none)
 	prompt: Maybe(Prompt_Parts),   // what its body is made of, built on its thread (outgoing_send: megabytes to quote; nil: `body`)
@@ -352,16 +353,16 @@ flight_ends :: proc(app: ^App, r: ^Request) {
 // A request goes to its connection's workers (`delay` ms from now: it waits in their timed queue, no thread sleeps for it). It holds the
 // connection until its answer ran. The workers give no order: what must follow another is asked when the other's answer comes
 // (outgoing.odin, a shell's size).
-request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "", delay := 0, remote: ^Remote = nil, out: u64 = 0, conn: ^Conn = nil, prompt: Maybe(Prompt_Parts) = nil) {
+request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "", delay := 0, reading: ^remote.Remote = nil, out: u64 = 0, conn: ^Conn = nil, prompt: Maybe(Prompt_Parts) = nil) {
 	to := conn != nil ? conn : app.conn
 	if to == nil {   // (no server yet: nothing to ask)
-		if remote != nil { remote_settle(remote, .Failed, "Not connected") }
+		if reading != nil { remote.settle(reading, .Failed, "Not connected") }
 		return
 	}
 	r := new(Request)
-	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = to, app = app, delay = delay, remote = remote, out = out, asked_at = app.cx.stream_seq, prompt = prompt}
+	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = to, app = app, delay = delay, reading = reading, out = out, asked_at = app.cx.stream_seq, prompt = prompt}
 	r.life, r.chat_mark = REQ_FACTS[kind].life, sync.atomic_load(&app.chat_mark)
-	if remote != nil { r.ticket = remote.ticket }
+	if reading != nil { r.ticket = reading.ticket }
 	sync.atomic_add(&app.pending, 1)
 	append(&app.cx.flights, Flight{kind, strings.clone(tag), to})
 	conn_hold(to)
@@ -404,8 +405,8 @@ request_body :: proc(r: ^Request) {
 }
 
 // A GET in a while: what is being waited for costs neither a frame nor a sleeping thread.
-request_later :: proc(app: ^App, kind: Req_Kind, path: string, ms: int, tag: string, remote: ^Remote = nil) {
-	request(app, kind, "GET", path, tag = tag, delay = ms, remote = remote)
+request_later :: proc(app: ^App, kind: Req_Kind, path: string, ms: int, tag: string, reading: ^remote.Remote = nil) {
+	request(app, kind, "GET", path, tag = tag, delay = ms, reading = reading)
 }
 
 // Whether what it says is read at all. (A prompt's answer says more when it can: queue_prompt_answered.)
@@ -611,11 +612,11 @@ answer :: proc(app: ^App, r: ^Request) {
 	flight_ends(app, r)
 	if r.conn != app.conn {
 		// a server left: server_forget cleaned up what depends on it. A reading it forgot does not stay Loading.
-		if x := r.remote; x != nil && x.ticket == r.ticket { remote_reset(x) }
+		if x := r.reading; x != nil && remote.current(x, r.ticket) { remote.reset(x) }
 		answer_left(app, r)
 		return
 	}
-	if (r.remote != nil && r.remote.ticket != r.ticket) || r.dropped || req_outlived(app, r) {   // a reading given up, a conversation left
+	if (r.reading != nil && !remote.current(r.reading, r.ticket)) || r.dropped || req_outlived(app, r) {   // a reading given up, a conversation left
 		answer_left(app, r)
 		return
 	}
@@ -635,7 +636,7 @@ answer :: proc(app: ^App, r: ^Request) {
 		unreadable = err != nil
 	}
 	if unreadable && REQ_FACTS[r.kind].json { answer_failed(app, r, .Unreadable, "Unreadable answer"); return }
-	if r.remote != nil { remote_settle(r.remote, .Ready, "") }
+	if r.reading != nil { remote.settle(r.reading, .Ready, "") }
 	if ok := REQ_FACTS[r.kind].on_ok; ok != nil { ok(app, r, v) }
 }
 
@@ -649,7 +650,7 @@ Failure :: enum u8 {
 
 // Every failure comes here: its Remote, what it leaves undone (the kind's on_fail), what the reader is told.
 answer_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) {
-	if r.remote != nil { remote_settle(r.remote, f == .Refused ? .Refused : .Failed, message) }
+	if r.reading != nil { remote.settle(r.reading, f == .Refused ? .Refused : .Failed, message) }
 	if f == .Auth { conn_auth_refused(app) }
 	if f == .Unreadable { unreadable_note(app, fmt.tprintf("answer %v", r.kind), r.resp) }   // (counted before on_fail: it may tell no one)
 	if fail := REQ_FACTS[r.kind].on_fail; fail != nil && fail(app, r, f, message) { return }
@@ -672,8 +673,8 @@ refresh_sessions :: proc(app: ^App) {
 // A new reading replaces the one on its way: what it brings is the newer one.
 load_messages :: proc(app: ^App, id: string) {
 	if !app.chat.loaded { app.chat.loading = true }
-	remote_begin(&app.cx.chat_read)
-	request(app, .Messages, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&order=desc", id, app.prefs.page_size), tag = id, remote = &app.cx.chat_read)
+	remote.begin(&app.cx.chat_read)
+	request(app, .Messages, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&order=desc", id, app.prefs.page_size), tag = id, reading = &app.cx.chat_read)
 }
 
 // Everything the session shown needs from the server: when it opens, on Try again, when the stream comes back.
@@ -836,11 +837,11 @@ dialogs_reread :: proc(app: ^App) {
 	if app.cx.open[.Settings] { server_facts_load(app) }
 	integrations_reread(app)
 	plugins_changed(app)
-	if cx.open[.Schedules] && remote_failed(&cx.schedules.read) { schedules_ask(app) }
-	if cx.open[.Artifacts] && remote_failed(&cx.artifacts.read) { artifacts_ask(app) }
-	if cx.open[.Files] && remote_failed(&cx.files.read) { files_list(app) }
+	if cx.open[.Schedules] && remote.failed(&cx.schedules.read) { schedules_ask(app) }
+	if cx.open[.Artifacts] && remote.failed(&cx.artifacts.read) { artifacts_ask(app) }
+	if cx.open[.Files] && remote.failed(&cx.files.read) { files_list(app) }
 	if app.stats_open {
-		if remote_failed(&cx.stats_read) { stats_ask(app) }
+		if remote.failed(&cx.stats_read) { stats_ask(app) }
 		context_ask(app)   // (what a step added was missed)
 	}
 	changes_reread(app)
@@ -859,11 +860,11 @@ conn_auth_refused :: proc(app: ^App) {
 }
 
 // A session changed: the list is read again once things are quiet.
-refresh_soon :: proc(app: ^App) { deferred_ask(&app.cx.due[.Refresh], REFRESH_DEBOUNCE_MS, REFRESH_DEBOUNCE_MS * DEFERRED_MOST) }
+refresh_soon :: proc(app: ^App) { ui.deferred_ask(&app.cx.due[.Refresh], REFRESH_DEBOUNCE_MS, REFRESH_DEBOUNCE_MS * DEFERRED_MOST) }
 
-children_soon :: proc(app: ^App) { deferred_ask(&app.cx.due[.Children], CHILDREN_DEBOUNCE_MS, CHILDREN_DEBOUNCE_MS * DEFERRED_MOST) }
+children_soon :: proc(app: ^App) { ui.deferred_ask(&app.cx.due[.Children], CHILDREN_DEBOUNCE_MS, CHILDREN_DEBOUNCE_MS * DEFERRED_MOST) }
 
-facts_soon :: proc(app: ^App) { deferred_ask(&app.cx.due[.Facts], FACTS_DEBOUNCE_MS, FACTS_DEBOUNCE_MS * DEFERRED_MOST) }
+facts_soon :: proc(app: ^App) { ui.deferred_ask(&app.cx.due[.Facts], FACTS_DEBOUNCE_MS, FACTS_DEBOUNCE_MS * DEFERRED_MOST) }
 
 on_event :: proc(data: rawptr, word: u64) { event_take(the_app, (^Event_Msg)(data)) }
 

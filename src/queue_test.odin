@@ -9,6 +9,7 @@ import "core:strings"
 import "core:testing"
 import "gt:config"
 import "gt:ui"
+import remote "gt:remote"
 
 @(private = "file")
 show :: proc(app: ^App, id: string) {
@@ -262,10 +263,10 @@ a_failed_reading_can_be_tried_again_and_a_refusal_says_nothing :: proc(t: ^testi
 	app := bench_new()
 	open_chat(app, "s")
 	bench_lost(app, bench_take(t, .Queue_List))
-	testing.expect_value(t, app.cx.queue.read.state, Load_State.Failed)
+	testing.expect_value(t, app.cx.queue.read.state, remote.State.Failed)
 	queue_read(app)
 	bench_answer(app, bench_take(t, .Queue_List), 404, `{"message":"no"}`)
-	testing.expect_value(t, app.cx.queue.read.state, Load_State.Refused)
+	testing.expect_value(t, app.cx.queue.read.state, remote.State.Refused)
 }
 
 @(test)
@@ -537,7 +538,7 @@ leaving_a_session_or_a_server_cancels_the_edit :: proc(t: ^testing.T) {
 	queue_forget(app)
 	testing.expect(t, !queue_editing(app))
 	testing.expect_value(t, len(app.cx.queue.items), 0)
-	testing.expect_value(t, app.cx.queue.read.state, Load_State.Idle)
+	testing.expect_value(t, app.cx.queue.read.state, remote.State.Idle)
 }
 
 ////////////////////////////////
@@ -709,11 +710,11 @@ the_context_is_read_when_a_step_ends_and_only_with_the_panel_open :: proc(t: ^te
 	show(app, "s")
 	STEP :: `{"type":"session.step.ended","data":{"sessionID":"s","assistantMessageID":"m","finish":"stop","tokens":{"input":1,"output":1,"reasoning":0,"cache":{"read":0}}}}`
 	bench_event(app, STEP)
-	testing.expect_value(t, deferred_in_ms(&app.cx.due[.Context]), 0)
+	testing.expect_value(t, ui.deferred_in_ms(&app.cx.due[.Context]), 0)
 	stats_open(app)
 	bench_clear(app)
 	bench_event(app, STEP)
-	testing.expect(t, deferred_in_ms(&app.cx.due[.Context]) > 0, "a wake is due")
+	testing.expect(t, ui.deferred_in_ms(&app.cx.due[.Context]) > 0, "a wake is due")
 	testing.expect_value(t, bench_count(.Context), 0)   // (once, a little after)
 	bench_clock += CONTEXT_DEBOUNCE_MS + 1
 	deferred_tick(app)
@@ -749,7 +750,7 @@ leaving_a_server_closes_the_panel :: proc(t: ^testing.T) {
 	testing.expect(t, !app.stats_open)
 	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Stats)))
 	testing.expect_value(t, len(app.cx.stats_context.groups), 0)
-	testing.expect_value(t, app.cx.context_read.state, Load_State.Idle)
+	testing.expect_value(t, app.cx.context_read.state, remote.State.Idle)
 }
 
 // Sizes are saved by position: Statistics was the second dialog.

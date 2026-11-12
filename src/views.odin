@@ -13,6 +13,7 @@ import "core:strings"
 import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
+import remote "gt:remote"
 
 
 TOAST_TOP_EM          :: 5.5
@@ -129,7 +130,7 @@ new_session :: proc(app: ^App) {
 	dir := ""
 	if s := find_session(app, app.chat.id); s != nil { dir = s.directory } else if len(app.sessions) > 0 { dir = app.sessions[0].directory }
 	chat_home(app)
-	remote_reset(&app.cx.chat_read)
+	remote.reset(&app.cx.chat_read)
 	chat_view_start(app, 0)   // (a way back under way ends: its place is in the conversation left)
 	app.chat.new_dir = strings.clone(dir, app.chat.alloc)
 	chat_shown_changed(app)

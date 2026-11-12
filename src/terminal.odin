@@ -30,6 +30,7 @@ import "gt:platform"
 import store "gt:store"
 import "gt:ui"
 import lucide "gt:lucide"
+import remote "gt:remote"
 
 // In the program, which is one file: the licence asks to go with the code.
 GHOSTTY_LICENSE :: #load("../assets/GHOSTTY-LICENSE.txt", string)
@@ -122,8 +123,8 @@ Term_Focus_Ask :: struct { on: bool, panel: u32, from: ui.Key }
 Terminals :: struct {
 	only:    ^Term,            // while a window of its own is built: the one shell input may reach
 	open:    bool,             // the shells have their tabs (hidden: they run on, out of the dock)
-	read:    Remote,           // the list of the server's shells
-	made:    Remote,           // a new shell on its way
+	read:    remote.Remote,           // the list of the server's shells
+	made:    remote.Remote,           // a new shell on its way
 	make_after: bool,          // one was asked for while the list was read: what it says comes first
 	list:    [dynamic]^Term,
 	gone:    [dynamic]^Term,   // closed in this frame: what was built for them is still to be drawn (terminals_reap)
@@ -400,7 +401,7 @@ term_news :: proc(data: rawptr, word: u64) {
 	t := term_of_conn(app, d.conn)
 	if t == nil { return }   // (a shell closed, a server left)
 	if d.is_link { term_link_set(app, t, d.link, d.given_up) } else { term_feed(t, d.text) }
-	if t.told_ms != 0 { deferred_ask(&app.cx.due[.Term_Size], TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS) }
+	if t.told_ms != 0 { ui.deferred_ask(&app.cx.due[.Term_Size], TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS) }
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
@@ -454,8 +455,8 @@ term_list_path :: proc(dir: string) -> string {
 terminals_ask :: proc(app: ^App) {
 	s := &app.cx.terms
 	dir := chat_dir(app)
-	remote_begin(&s.read)
-	request(app, .Pty_List, "GET", term_list_path(dir), tag = dir, remote = &s.read)
+	remote.begin(&s.read)
+	request(app, .Pty_List, "GET", term_list_path(dir), tag = dir, reading = &s.read)
 }
 
 // The next shell built, or `panel`'s, takes the keyboard. Only the user asks.
@@ -544,7 +545,7 @@ terminals_show :: proc(app: ^App) {
 	if panel != 0 { ui.dock_activate(&app.dock, panel) }
 	switch {
 	case s.read.state == .Loading:
-	case !remote_shows(&s.read):  terminals_ask(app)
+	case !remote.shows(&s.read):  terminals_ask(app)
 	case len(s.list) == 0:        term_create(app)
 	}
 }
@@ -615,15 +616,15 @@ term_create :: proc(app: ^App) {
 term_make :: proc(app: ^App, dir, title: string) {
 	s := &app.cx.terms
 	if s.made.state == .Loading { return }
-	remote_begin(&s.made)
-	request(app, .Pty_Made, "POST", term_list_path(dir), fmt.tprintf(`{{"title":%s}}`, jquote(title)), dir, remote = &s.made)
+	remote.begin(&s.made)
+	request(app, .Pty_Made, "POST", term_list_path(dir), fmt.tprintf(`{{"title":%s}}`, jquote(title)), dir, reading = &s.made)
 }
 
 term_made :: proc(app: ^App, dir: string, v: json.Value) {
 	s := &app.cx.terms
 	t := term_add(app, jget(v, "data"), dir)
 	if t == nil {
-		remote_settle(&s.made, .Failed, "Unreadable answer")
+		remote.settle(&s.made, .Failed, "Unreadable answer")
 		s.replaces = 0
 		return
 	}
@@ -709,7 +710,7 @@ term_reconnect :: proc(app: ^App, t: ^Term) {
 // The server answers again: what was not read is, and the sockets given up on are tried again.
 terminals_reread :: proc(app: ^App) {
 	s := &app.cx.terms
-	if s.open && remote_failed(&s.read) { terminals_ask(app) }
+	if s.open && remote.failed(&s.read) { terminals_ask(app) }
 	for t in s.list { term_reconnect(app, t) }
 }
 
@@ -726,8 +727,8 @@ terminals_forget :: proc(app: ^App) {
 	s.ask = {}
 	s.make_after = false
 	s.last_panel, s.replaces, s.close_due = 0, 0, 0
-	remote_reset(&s.read)
-	remote_reset(&s.made)
+	remote.reset(&s.read)
+	remote.reset(&s.made)
 }
 
 // After the frame: what was closed in it has been drawn.
@@ -1271,7 +1272,7 @@ term_resize :: proc(app: ^App, t: ^Term, cols, rows: u16, cell_w, cell_h: u32) {
 		ghostty_terminal_resize(t.vt, cols, rows, cell_w, cell_h)
 		t.grid_ms = ui.now_ms()
 		app.cx.due[.Term_Size] = {}   // (from this step, the last so far: an earlier wake would find the grid not rested, and nothing would come after it)
-		deferred_ask(&app.cx.due[.Term_Size], TERM_SIZE_QUIET_MS)
+		ui.deferred_ask(&app.cx.due[.Term_Size], TERM_SIZE_QUIET_MS)
 	}
 	term_size_send(app, t)
 }
@@ -1303,7 +1304,7 @@ term_size_answered :: proc(app: ^App, id: string) {
 	if t == nil { return }
 	t.size_flying, t.size_sent = false, t.size_asked
 	t.told_ms, t.asked_ms = ui.now_ms(), 0
-	deferred_ask(&app.cx.due[.Term_Size], TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS)
+	ui.deferred_ask(&app.cx.due[.Term_Size], TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS)
 	term_size_send(app, t)
 }
 
@@ -1323,7 +1324,7 @@ terms_size_due :: proc(app: ^App) {
 		term_size_send(app, t)
 		if t.told_ms == 0 { continue }
 		if term_painting(now, t.told_ms, t.fed_ms, t.asked_ms) {
-			deferred_ask(&app.cx.due[.Term_Size], TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS)
+			ui.deferred_ask(&app.cx.due[.Term_Size], TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS)
 		} else {
 			t.told_ms = 0
 		}
@@ -1581,7 +1582,7 @@ term_zoom_set :: proc(app: ^App, t: ^Term, zoom: f32) {
 	// (a frame when it rests: the grid takes its new columns and rows then, term_fit)
 	t.zoom_ms = ui.now_ms()
 	app.cx.due[.Term_Size] = {}
-	deferred_ask(&app.cx.due[.Term_Size], TERM_ZOOM_REST_MS)
+	ui.deferred_ask(&app.cx.due[.Term_Size], TERM_ZOOM_REST_MS)
 	if term_find(app, t.id) != t { return }
 	z := &app.term_zooms
 	if t.zoom == 1 {

@@ -1,17 +1,17 @@
 // What a tool call shows when it is open, by what the tool does: a diff for what edits a file (the server's own patch, else
-// one made here with core:diff from the call's input), the lines of a file with their numbers, matches under their file,
+// one made here with gt:diff from the call's input), the lines of a file with their numbers, matches under their file,
 // a command and what it printed, a checklist. The rest shows its input as keys and values, never as raw JSON.
 package ocn
 
-import "core:diff"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
-import "core:slice"
 import "core:strconv"
 import "core:strings"
 import "gt:ui"
+import diff "gt:diff"
 import lucide "gt:lucide"
+import syntax "gt:syntax"
 
 Tool_Kind :: enum u8 { Other, Edit, Read, Search, Shell, Todo }
 
@@ -29,41 +29,14 @@ tool_kind :: proc(name: string) -> Tool_Kind {
 ////////////////////////////////
 // The patch of a call
 
-@(private = "file")
-bit_set_at :: proc(bits: []u64, i: int) -> bool { return bits[i / 64] & (u64(1) << uint(i % 64)) != 0 }
-
-// `old` to `new` as the lines of a unified diff, without its headers (a whole snippet: no numbers to give, no hunks).
-diff_lines :: proc(old, new: string, allocator := context.allocator) -> string {
-	a := strings.split_lines(old, context.temp_allocator)
-	b := strings.split_lines(new, context.temp_allocator)
-	c, err := diff.diff(a, b, context.temp_allocator, context.temp_allocator)
-	if err != nil { return "" }
-	out := strings.builder_make(allocator)
-	line :: proc(out: ^strings.Builder, sign: byte, s: string) {
-		strings.write_byte(out, sign)
-		strings.write_string(out, s)
-		strings.write_byte(out, '\n')
-	}
-	b_bits := c.bits[(c.n + 63) / 64:]
-	i, j := 0, 0
-	for i < c.n || j < c.m {
-		if i < c.n && bit_set_at(c.bits, i) { line(&out, '-', a[i]); i += 1; continue }
-		if j < c.m && bit_set_at(b_bits, j) { line(&out, '+', b[j]); j += 1; continue }
-		if i < c.n { line(&out, ' ', a[i]) }
-		i += 1
-		j += 1
-	}
-	return strings.to_string(out)
-}
-
 // The diff of a call: the server's, else made once from what it was asked (a call still running, an older server).
 part_patch :: proc(p: ^Part, a := context.allocator) -> string {
 	if p.patch != "" || p.patch_tried || p.input == "" { return p.patch }
 	p.patch_tried = true
 	if p.has_old {
-		part_patch_set(p, diff_lines(p.old_text, p.new_text, a), a)
+		part_patch_set(p, diff.between(p.old_text, p.new_text, a), a)
 	} else if p.has_content {
-		part_patch_set(p, diff_lines("", p.content, a), a)
+		part_patch_set(p, diff.between("", p.content, a), a)
 	}
 	return p.patch
 }
@@ -71,152 +44,12 @@ part_patch :: proc(p: ^Part, a := context.allocator) -> string {
 // `patch` is the call's: read once, here (its lines, what it adds and removes), not at each build. (In `a`: the patch's.)
 part_patch_set :: proc(p: ^Part, patch: string, a := context.allocator) {
 	p.patch = patch
-	p.diff = diff_read(patch, a)
-	p.added, p.removed = 0, 0
-	for l in p.diff.lines {
-		if l.sign == '+' { p.added += 1 } else if l.sign == '-' { p.removed += 1 }
-	}
+	p.diff = diff.parse(patch, a)
+	p.added, p.removed = p.diff.added, p.diff.removed
 }
 
 ////////////////////////////////
 // A diff
-
-Diff_Line :: struct {
-	sign:   byte,       // ' ', '+', '-', '@' (a hunk begins)
-	text:   string,
-	old_no, new_no: int,
-	lo, hi: int,        // what changed in it, in bytes of `text` (lo == hi: nothing to mark)
-}
-
-// The number after `mark` in a hunk's header, "@@ -12,3 +14,4 @@".
-@(private = "file")
-hunk_start :: proc(h: string, mark: byte) -> int {
-	i := strings.index_byte(h, mark)
-	if i < 0 { return 0 }
-	end := i + 1
-	for end < len(h) && h[end] >= '0' && h[end] <= '9' { end += 1 }
-	n, _ := strconv.parse_int(h[i + 1:end])
-	return n
-}
-
-// The count after `mark`'s number in a hunk's header: "-12,3". (None said: one line.)
-@(private = "file")
-hunk_count :: proc(h: string, mark: byte) -> int {
-	i := strings.index_byte(h, mark)
-	if i < 0 { return 0 }
-	end := i + 1
-	for end < len(h) && h[end] >= '0' && h[end] <= '9' { end += 1 }
-	if end >= len(h) || h[end] != ',' { return 1 }
-	stop := end + 1
-	for stop < len(h) && h[stop] >= '0' && h[stop] <= '9' { stop += 1 }
-	n, _ := strconv.parse_int(h[end + 1:stop])
-	return n
-}
-
-// What comes before a file's first hunk. (The line "Binary files … differ" says something, and stays.)
-@(private = "file")
-file_header :: proc(l: string) -> bool {
-	for p in ([]string{"diff --git ", "index ", "new file mode ", "deleted file mode ", "old mode ", "new mode ", "similarity index ", "rename from ", "rename to ", "Index: ", "====="}) {
-		if strings.has_prefix(l, p) { return true }
-	}
-	return false
-}
-
-// A patch read: its lines (their texts are the patch's), what changed in each marked (diff_mark), whether they have numbers. Read
-// when the patch is set, kept with it: a build only shows it.
-Diff :: struct {
-	lines:    []Diff_Line,
-	numbered: bool,
-}
-
-diff_read :: proc(patch: string, a := context.allocator) -> Diff {
-	lines := diff_parse(patch)
-	diff_mark(lines)
-	d := Diff{lines = slice.clone(lines, a)}
-	for l in lines { if l.old_no > 0 || l.new_no > 0 { d.numbered = true; break } }
-	return d
-}
-
-// A line of a hunk begins with a sign, and only the counts of its header say where it ends: "--- x" there is the line "-- x" removed. Out
-// of a hunk, "--- x" is a file's header. What diff_lines writes has neither headers nor hunks: it is all lines, whatever they look like.
-Diff_Mode :: enum u8 { Header, Hunk }
-
-diff_parse :: proc(patch: string) -> []Diff_Line {
-	out := make([dynamic]Diff_Line, context.temp_allocator)
-	old_no, new_no := 0, 0
-	old_left, new_left := 0, 0
-	mode := Diff_Mode.Header
-	// (a line of diff_lines always has its sign first: a header or a hunk's start can only be the real thing)
-	headers := false
-	scan := patch
-	for l in strings.split_lines_iterator(&scan) {
-		if strings.has_prefix(l, "@@") || file_header(l) { headers = true; break }
-	}
-	line :: proc(out: ^[dynamic]Diff_Line, l: string, old_no, new_no: ^int) {
-		switch {
-		case strings.has_prefix(l, "+"):
-			append(out, Diff_Line{sign = '+', text = l[1:], new_no = new_no^})
-			if new_no^ > 0 { new_no^ += 1 }
-		case strings.has_prefix(l, "-"):
-			append(out, Diff_Line{sign = '-', text = l[1:], old_no = old_no^})
-			if old_no^ > 0 { old_no^ += 1 }
-		case:
-			append(out, Diff_Line{sign = ' ', text = strings.trim_prefix(l, " "), old_no = old_no^, new_no = new_no^})
-			if old_no^ > 0 { old_no^ += 1 }
-			if new_no^ > 0 { new_no^ += 1 }
-		}
-	}
-	rest := patch
-	for l in strings.split_lines_iterator(&rest) {
-		if strings.has_prefix(l, "\\ ") { continue }
-		switch mode {
-		case .Hunk:
-			line(&out, l, &old_no, &new_no)
-			if !strings.has_prefix(l, "+") { old_left -= 1 }
-			if !strings.has_prefix(l, "-") { new_left -= 1 }
-			if old_left <= 0 && new_left <= 0 { mode = .Header }
-		case .Header:
-			switch {
-			case strings.has_prefix(l, "@@"):
-				old_no, new_no = hunk_start(l, '-'), hunk_start(l, '+')
-				old_left, new_left = hunk_count(l, '-'), hunk_count(l, '+')
-				if len(out) > 0 { append(&out, Diff_Line{sign = '@'}) }
-				if old_left > 0 || new_left > 0 { mode = .Hunk }
-			case !headers:
-				line(&out, l, &old_no, &new_no)
-			case file_header(l), strings.has_prefix(l, "--- "), strings.has_prefix(l, "+++ "):
-			case:
-				line(&out, l, &old_no, &new_no)
-			}
-		}
-	}
-	return out[:]
-}
-
-// In a block of lines removed then added, the k-th of each are the same line changed: what they share at each end is
-// left plain, what is between is what the eye looks for.
-diff_mark :: proc(lines: []Diff_Line) {
-	i := 0
-	for i < len(lines) {
-		if lines[i].sign != '-' { i += 1; continue }
-		d0 := i
-		for i < len(lines) && lines[i].sign == '-' { i += 1 }
-		a0 := i
-		for i < len(lines) && lines[i].sign == '+' { i += 1 }
-		for k in 0 ..< min(a0 - d0, i - a0) {
-			x, y := &lines[d0 + k], &lines[a0 + k]
-			p := 0
-			for p < len(x.text) && p < len(y.text) && x.text[p] == y.text[p] { p += 1 }
-			for p > 0 && p < len(x.text) && x.text[p] & 0xC0 == 0x80 { p -= 1 }   // (not inside a character)
-			s := 0
-			for s < len(x.text) - p && s < len(y.text) - p && x.text[len(x.text) - 1 - s] == y.text[len(y.text) - 1 - s] { s += 1 }
-			for s > 0 && x.text[len(x.text) - s] & 0xC0 == 0x80 { s -= 1 }
-			if p == 0 && s == 0 { continue }   // (nothing shared: the whole line is the change)
-			x.lo, x.hi = p, len(x.text) - s
-			y.lo, y.hi = p, len(y.text) - s
-		}
-	}
-}
 
 // A line's text with its tabs opened and its length bounded (`s` is one line).
 @(private = "file")
@@ -230,58 +63,30 @@ gutter :: proc(id: string, n: int, em: f32) {
 	text(id, s, hex(HEX_DIFF_LINE_NO), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION), text_align = .Right}, ui.px(em * GUTTER_EM))
 }
 
-@(private = "file")
-diff_row :: proc(app: ^App, l: Diff_Line, k: int, numbered: bool, em: f32) {
-	h := math.round(em * 1.3)
-	fs := math.round(em * FS_SMALL)
-	if l.sign == '@' {
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 0.9)), axis = .X, cross = .Center})
-		if ui.row(.Center, id = fmt.tprintf("###dh%d", k)) {
-			ui.spacer(ui.px(em * 0.6))
-			text("h", "⋯", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = fs})
-		}
-		return
+// A diff's rows at our sizes, the code in its colours when `file` names a language.
+diff_options :: proc(app: ^App, em: f32, file := "") -> diff.Options {
+	o := diff.Options{
+		font = app.mono, sign_font = app.mono_bold, number_font = app.mono,
+		size = math.round(em * FS_SMALL), number_size = math.round(em * FS_CAPTION),
+		row_height = math.round(em * 1.3), gap_height = math.round(em * 0.9),
+		gutter_width = em * GUTTER_EM, sign_width = em, indent = em * 0.4, tab = TOOL_TAB,
 	}
-	bg := CLEAR
-	col := hex(HEX_TOOL_OUTPUT)
-	mark := CLEAR
-	if l.sign == '+' { bg, col, mark = hex(HEX_DIFF_ADD_BG), hex(HEX_DIFF_ADD_TEXT), hex(HEX_DIFF_ADD_MARK) }
-	if l.sign == '-' { bg, col, mark = hex(HEX_DIFF_DEL_BG), hex(HEX_DIFF_DEL_TEXT), hex(HEX_DIFF_DEL_MARK) }
-	ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center, bg = bg, radius = 0})
-	b := ui.build_box({.Draw_Background, .Clip}, fmt.tprintf("###dl%d", k))
-	if ui.parent(b) {
-		if numbered {
-			gutter("o", l.old_no, em)
-			gutter("n", l.new_no, em)
-			ui.spacer(ui.px(em * 0.4))
-		} else {
-			ui.spacer(ui.px(em * 0.5))
-		}
-		sign := l.sign == ' ' ? " " : l.sign == '+' ? "+" : "−"
-		text("s", sign, l.sign == '+' ? hex(HEX_GREEN) : l.sign == '-' ? hex(HEX_RED) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = fs}, ui.px(em * 1))
-		st := ui.Style_Mod{font = app.mono, font_size = fs}
-		if l.hi > l.lo {
-			if l.lo > 0 { text("a", line_shown(l.text[:l.lo]), col, st) }
-			ui.next({width = ui.text_size(0), height = ui.px(h), font = app.mono, font_size = fs, bg = mark, fg = hex(HEX_BRIGHT), radius = 2 * ui.scale(), text_pad = 0})
-			ui.build_box({.Draw_Text, .Draw_Background}, fmt.tprintf("%s###b", label_safe(line_shown(l.text[l.lo:l.hi]))))
-			text("c", line_shown(l.text[l.hi:]), col, st, ui.fill())
-		} else {
-			text("t", line_shown(l.text), col, st, ui.fill())
-		}
-	}
+	if file != "" { if l, ok := syntax.language_of_file(file); ok { o.language = l } }
+	return o
 }
 
 // The lines of a patch (`d`, read from `patch`) in a well, at most `max_lines` of them (the rest is counted, and the whole opens
 // in its own window).
-diff_view :: proc(app: ^App, id: string, d: Diff, patch: string, em: f32, max_lines: int, title := "Diff") {
+diff_view :: proc(app: ^App, id: string, d: diff.Parsed, patch: string, em: f32, max_lines: int, title := "Diff") {
 	lines := d.lines
 	if len(lines) == 0 { return }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well(id, radius = 6, base = HEX_CODE_WELL) {
 		ui.spacer(ui.px(em * 0.3))
-		shown := min(len(lines), max_lines)
-		for l, k in lines[:shown] { diff_row(app, l, k, d.numbered, em) }
-		if diff_more(len(lines) - shown, em) { diff_full_open(app, title, patch) }
+		o := diff_options(app, em, title)
+		o.max_bytes = TOOL_LINE_CHARS
+		diff.lines_view("###lines", lines[:min(len(lines), max_lines)], d.numbered, o)
+		if diff_more(len(lines) - min(len(lines), max_lines), em) { diff_full_open(app, title, patch) }
 		ui.spacer(ui.px(em * 0.3))
 	}
 }

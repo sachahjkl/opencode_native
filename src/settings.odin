@@ -18,7 +18,9 @@ import "gt:draw"
 import "gt:font"
 import "gt:platform"
 import "gt:ui"
+import diff "gt:diff"
 import lucide "gt:lucide"
+import remote "gt:remote"
 
 ////////////////////////////////
 // The preferences
@@ -136,7 +138,7 @@ Prefs :: struct {
 	steer_first:  bool,   // while a turn runs, Enter sends into it (conversation.while_running)
 	subagents:    string,
 	sidebar_mode: Sidebar_Mode,
-	diff_layout:  Diff_Layout,
+	diff_layout:  diff.Layout,
 	notify:       string,
 	notify_perm:  bool,
 	content_zoom: f32,
@@ -412,7 +414,7 @@ FACT_READS := [Fact]struct { kind: Req_Kind, path: string }{
 }
 
 Server_Facts :: struct {
-	reads:     [Fact]Remote,
+	reads:     [Fact]remote.Remote,
 	arenas:    [Fact]virtual.Arena,
 	shells:    [dynamic]Shell_Info,
 	shell:     string,              // the one set in the configuration ("" : the server's choice)
@@ -454,7 +456,7 @@ server_facts_forget :: proc(app: ^App) {
 	f := &app.facts
 	for k in Fact {
 		_ = fact_clear(f, k)
-		remote_reset(&f.reads[k])
+		remote.reset(&f.reads[k])
 	}
 	for g in f.going { delete(g.name) }
 	clear(&f.going)
@@ -466,8 +468,8 @@ server_facts_forget :: proc(app: ^App) {
 server_facts_load :: proc(app: ^App) {
 	f := &app.facts
 	for k in Fact {
-		remote_begin(&f.reads[k])
-		request(app, FACT_READS[k].kind, "GET", FACT_READS[k].path, remote = &f.reads[k])
+		remote.begin(&f.reads[k])
+		request(app, FACT_READS[k].kind, "GET", FACT_READS[k].path, reading = &f.reads[k])
 	}
 }
 
@@ -1371,7 +1373,7 @@ page_permissions :: proc(app: ^App, em: f32) {
 
 page_catalog :: proc(app: ^App, em: f32) {
 	f := &app.facts
-	list :: proc(app: ^App, title: string, items: []Named, em: f32, read: ^Remote = nil) {
+	list :: proc(app: ^App, title: string, items: []Named, em: f32, read: ^remote.Remote = nil) {
 		section(app, fmt.tprintf("%s (%d)", title, len(items)), em)
 		if read != nil && !read_shown(app, fmt.tprintf("###%s_read", title), read, em, server_facts_load) { return }
 		for it, i in items {

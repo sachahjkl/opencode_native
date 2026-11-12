@@ -21,6 +21,7 @@ import "core:math"
 import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
+import remote "gt:remote"
 
 Delivery :: enum u8 { Steer, Queue }
 
@@ -50,7 +51,7 @@ Queue :: struct {
 	session: string,   // whose it is (owned)
 	items:   [dynamic]Queue_Item,
 	gone:    Gone_List,   // what left it lately
-	read:    Remote,
+	read:    remote.Remote,
 	edit:    Queue_Edit,
 }
 
@@ -150,8 +151,8 @@ queue_read :: proc(app: ^App) {
 	q := &app.cx.queue
 	if q.session != app.chat.id { queue_switch(app) }
 	if app.chat.id == "" { return }
-	remote_begin(&q.read)
-	request(app, .Queue_List, "GET", fmt.tprintf("/api/session/%s/inbox", app.chat.id), tag = app.chat.id, remote = &q.read)
+	remote.begin(&q.read)
+	request(app, .Queue_List, "GET", fmt.tprintf("/api/session/%s/inbox", app.chat.id), tag = app.chat.id, reading = &q.read)
 }
 
 // The answer replaces the list. Not what the stream said since it was asked for: what came since stays, what went does not return.
@@ -195,7 +196,7 @@ queue_switch :: proc(app: ^App) {
 	for it in q.items { item_free(it) }
 	clear(&q.items)
 	gone_clear(&q.gone)
-	remote_reset(&q.read)
+	remote.reset(&q.read)
 	delete(q.session)
 	q.session = strings.clone(app.chat.id)
 }

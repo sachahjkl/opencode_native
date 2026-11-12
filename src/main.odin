@@ -20,6 +20,7 @@ import "gt:render"
 import setup "gt:setup"
 import "gt:ui"
 import lucide "gt:lucide"
+import remote "gt:remote"
 
 // A face of the fonts. (Inside App, `font` names the face of the interface, from host.Shared: not the package.)
 Face_Id :: font.Font_Id
@@ -177,13 +178,13 @@ App_Context :: struct {
 	stream_seq:     Seq,               // events applied so far: the clock of what is newer than an answer (Request.asked_at)
 	busy_seq:       map[string]Seq,    // when the stream last said a session started or ended (keys owned)
 	waits_gone:     Gone_List,         // permissions and forms answered, the last WAITS_GONE_MAX
-	chat_read:      Remote,            // the newest page of the conversation shown
-	stats_read:     Remote,            // the project's totals (stats.odin)
+	chat_read:      remote.Remote,            // the newest page of the conversation shown
+	stats_read:     remote.Remote,            // the project's totals (stats.odin)
 	stats_context:  Stats_Context,     // what fills the context of the session shown
-	context_read:   Remote,            // ... its reading
+	context_read:   remote.Remote,            // ... its reading
 	stats_w:        f32,               // the panel's width, at this build
 	queue:          Queue,             // what waits in the inbox of the session shown (queue.odin)
-	due:            [Due]Deferred,     // what was put off (remote.odin)
+	due:            [Due]ui.Deferred,     // what was put off (remote.odin)
 	reopen:         Nav_Place,         // what was shown when this computer's server moved (servers_rediscover), owned, id "": none
 	quote_open:     bool,              // the chip at the end of a selection (context_menus.odin)
 	quote_at:       Rect,
@@ -499,7 +500,7 @@ due_run :: proc(app: ^App, k: Due) {
 }
 
 due_tick :: proc(app: ^App, k: Due) {
-	if !deferred_take(&app.cx.due[k]) { return }
+	if !ui.deferred_take(&app.cx.due[k]) { return }
 	due_run(app, k)
 	app.cx.shared_moved = true
 }
@@ -510,7 +511,7 @@ deferred_tick :: proc(app: ^App) {
 	cx := &app.cx
 	for k in Due { due_tick(app, k) }
 	soonest := 0
-	for &d in cx.due { if ms := deferred_in_ms(&d); ms > 0 { soonest = soonest == 0 ? ms : min(soonest, ms) } }
+	for &d in cx.due { if ms := ui.deferred_in_ms(&d); ms > 0 { soonest = soonest == 0 ? ms : min(soonest, ms) } }
 	for ms in ([?]int{activity_in_ms(app), rediscover_in_ms(app), browser_in_ms(app)}) {
 		if ms > 0 { soonest = soonest == 0 ? ms : min(soonest, ms) }
 	}

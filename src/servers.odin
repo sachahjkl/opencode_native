@@ -11,6 +11,7 @@ import "core:thread"
 import store "gt:store"
 import "gt:ui"
 import lucide "gt:lucide"
+import remote "gt:remote"
 
 Server :: struct {
 	name:     string,
@@ -282,7 +283,7 @@ server_forget :: proc(app: ^App) {
 @(private = "file")
 server_view_forget :: proc(app: ^App) {
 	chat_home(app)
-	remote_reset(&app.cx.chat_read)
+	remote.reset(&app.cx.chat_read)
 	for id in app.nav { delete(id) }
 	clear(&app.nav)
 	for st in app.nav_steps { delete(st.id) }

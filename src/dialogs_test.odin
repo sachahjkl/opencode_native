@@ -7,6 +7,7 @@ import "base:runtime"
 import "core:strings"
 import "core:testing"
 import "gt:ui"
+import remote "gt:remote"
 
 @(private = "file")
 show :: proc(app: ^App, id: string) {
@@ -49,8 +50,8 @@ step_is :: proc(n: ^Integrations, $T: typeid) -> bool {
 a_reading_says_where_it_stands_the_same_everywhere :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	x: Remote
-	testing.expect(t, !remote_shows(&x), "nothing read")
+	x: remote.Remote
+	testing.expect(t, !remote.shows(&x), "nothing read")
 	words, _, again := read_words(app, &x)
 	testing.expect_value(t, words, "Reading…")
 	testing.expect(t, !again)
@@ -59,15 +60,15 @@ a_reading_says_where_it_stands_the_same_everywhere :: proc(t: ^testing.T) {
 	testing.expect(t, strings.has_prefix(words, "Not connected"), "not a reading that nothing will end")
 	app.link = .Online
 
-	remote_begin(&x)
-	request(app, .Stats, "GET", "/x", remote = &x)
+	remote.begin(&x)
+	request(app, .Stats, "GET", "/x", reading = &x)
 	bench_answer(app, bench_take(t, .Stats), 403, `{"message":"set it in config"}`)
 	words, _, again = read_words(app, &x)
 	testing.expect_value(t, words, "set it in config")
 	testing.expect(t, again, "it can be tried again")
 
-	remote_begin(&x)
-	request(app, .Stats, "GET", "/x", remote = &x)
+	remote.begin(&x)
+	request(app, .Stats, "GET", "/x", reading = &x)
 	bench_lost(app, bench_take(t, .Stats))
 	words, _, again = read_words(app, &x)
 	testing.expect_value(t, words, "Server unreachable")
@@ -79,20 +80,20 @@ a_reading_says_where_it_stands_the_same_everywhere :: proc(t: ^testing.T) {
 a_refresh_leaves_what_is_shown_until_it_ends :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	x: Remote
-	remote_begin(&x)
-	testing.expect(t, !remote_shows(&x), "the first time there is nothing to show")
-	request(app, .Stats, "GET", "/x", remote = &x)
+	x: remote.Remote
+	remote.begin(&x)
+	testing.expect(t, !remote.shows(&x), "the first time there is nothing to show")
+	request(app, .Stats, "GET", "/x", reading = &x)
 	bench_answer(app, bench_take(t, .Stats), 200, `{"data":{}}`)
-	testing.expect(t, remote_shows(&x))
-	remote_begin(&x)
-	testing.expect(t, remote_shows(&x), "it stays")
-	request(app, .Stats, "GET", "/x", remote = &x)
+	testing.expect(t, remote.shows(&x))
+	remote.begin(&x)
+	testing.expect(t, remote.shows(&x), "it stays")
+	request(app, .Stats, "GET", "/x", reading = &x)
 	bench_lost(app, bench_take(t, .Stats))
-	testing.expect(t, !remote_shows(&x), "it says so")
-	remote_reset(&x)
-	remote_begin(&x)
-	testing.expect(t, !remote_shows(&x), "something else is being read")
+	testing.expect(t, !remote.shows(&x), "it says so")
+	remote.reset(&x)
+	remote.begin(&x)
+	testing.expect(t, !remote.shows(&x), "something else is being read")
 }
 
 ////////////////////////////////
@@ -362,7 +363,7 @@ what_changed_says_why_it_could_not_be_read_and_tries_again :: proc(t: ^testing.T
 	changes_open(app, "s")
 	bench_lost(app, bench_take(t, .Changes_Range))
 	testing.expect(t, changes_shown(c), "the dialog stays, and says it")
-	testing.expect_value(t, c.read.state, Load_State.Failed)
+	testing.expect_value(t, c.read.state, remote.State.Failed)
 	stream_down(app, 0)
 	stream_up(app)
 	bench_answer(app, bench_take(t, .Changes_Range), 200, `{"data":[{"id":"first"}]}`)
@@ -370,7 +371,7 @@ what_changed_says_why_it_could_not_be_read_and_tries_again :: proc(t: ^testing.T
 	testing.expect(t, strings.contains(bench_sent_path(.Changes), "from=first&to=last"))
 	// a range over a change of folder: the last turn then
 	bench_answer(app, bench_take(t, .Changes), 400, `{"message":"no range"}`)
-	testing.expect_value(t, c.read.state, Load_State.Loading)
+	testing.expect_value(t, c.read.state, remote.State.Loading)
 	bench_answer(app, bench_take(t, .Changes), 200, `{"data":[{"file":"a.txt"}]}`)
 	testing.expect(t, strings.contains(changes_say(c), "in the last turn only"))
 }
@@ -414,12 +415,12 @@ the_accounts_of_a_server_left_go_with_it :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	n := connections_read(app, t)
-	testing.expect_value(t, n.read.state, Load_State.Ready)
+	testing.expect_value(t, n.read.state, remote.State.Ready)
 	integrations_ask(app)
 	late := bench_take(t, .Integrations)
 	server_forget(app)
 	app.conn = bench_conn(app)
-	testing.expect_value(t, n.read.state, Load_State.Idle)
+	testing.expect_value(t, n.read.state, remote.State.Idle)
 	testing.expect_value(t, len(n.list), 0)
 	testing.expect_value(t, n.shown, "")
 	bench_answer(app, late, 200, INTEGRATIONS)
@@ -434,13 +435,13 @@ a_list_that_failed_says_so_and_is_read_again_when_the_server_comes_back :: proc(
 	n := &app.cx.integrations
 	integrations_ask(app)
 	bench_lost(app, bench_take(t, .Integrations))
-	testing.expect_value(t, n.read.state, Load_State.Failed)
-	testing.expect(t, !remote_shows(&n.read), "no empty list")
+	testing.expect_value(t, n.read.state, remote.State.Failed)
+	testing.expect(t, !remote.shows(&n.read), "no empty list")
 	stream_down(app, 0)
 	stream_up(app)
 	testing.expect_value(t, bench_count(.Integrations), 1)
 	bench_answer(app, bench_take(t, .Integrations), 200, INTEGRATIONS)
-	testing.expect(t, remote_shows(&n.read))
+	testing.expect(t, remote.shows(&n.read))
 }
 
 @(test)
@@ -574,11 +575,11 @@ a_login_whose_status_cannot_be_read_says_so_and_can_go_on :: proc(t: ^testing.T)
 	bench_answer(app, login_sent(app, t, n), 200, LOGIN_BEGUN)
 	for _ in 0 ..< CONNECT_POLL_MISSES - 1 {
 		bench_lost(app, bench_take(t, .Connect_Status))
-		testing.expect_value(t, n.poll.state, Load_State.Loading)
+		testing.expect_value(t, n.poll.state, remote.State.Loading)
 	}
 	bench_answer(app, bench_take(t, .Connect_Status), 500, `{"message":"it broke"}`)
 	testing.expect_value(t, bench_count(.Connect_Status), 0)
-	testing.expect(t, remote_failed(&n.poll), "the readings stopped, and it shows")
+	testing.expect(t, remote.failed(&n.poll), "the readings stopped, and it shows")
 	testing.expect(t, step_is(n, Connect_Waiting), "the login may still end")
 	connect_poll_again(app)
 	bench_answer(app, bench_take(t, .Connect_Status), 200, `{"data":{"status":"complete"}}`)
@@ -665,11 +666,11 @@ plugins_that_could_not_be_read_are_not_an_empty_list :: proc(t: ^testing.T) {
 	p := &app.cx.plugins
 	plugins_ask(app)
 	bench_answer(app, bench_take(t, .Plugins), 500, `{"message":"no plugins here"}`)
-	testing.expect(t, !remote_shows(&p.read))
+	testing.expect(t, !remote.shows(&p.read))
 	testing.expect_value(t, p.read.message, "no plugins here")
 	plugins_ask(app)
 	bench_answer(app, bench_take(t, .Plugins), 200, PLUGINS)
-	testing.expect(t, remote_shows(&p.read))
+	testing.expect(t, remote.shows(&p.read))
 }
 
 // One kind for both: any list that came said the check was over, and a check across a server switch stayed Checking.
@@ -680,19 +681,19 @@ a_check_ends_by_its_own_answer :: proc(t: ^testing.T) {
 	p := &app.cx.plugins
 	plugins_ask(app)
 	list := bench_take(t, .Plugins)
-	remote_begin(&p.check)
-	request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", remote = &p.check)
+	remote.begin(&p.check)
+	request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", reading = &p.check)
 	bench_answer(app, list, 200, PLUGINS)
-	testing.expect_value(t, p.check.state, Load_State.Loading)
+	testing.expect_value(t, p.check.state, remote.State.Loading)
 	bench_lost(app, bench_take(t, .Plugins_Check))
-	testing.expect_value(t, p.check.state, Load_State.Failed)
+	testing.expect_value(t, p.check.state, remote.State.Failed)
 
-	remote_begin(&p.check)
-	request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", remote = &p.check)
+	remote.begin(&p.check)
+	request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", reading = &p.check)
 	r := bench_take(t, .Plugins_Check)
 	server_forget(app)
 	app.conn = bench_conn(app)
-	testing.expect_value(t, p.check.state, Load_State.Idle)
+	testing.expect_value(t, p.check.state, remote.State.Idle)
 	bench_answer(app, r, 200, PLUGINS)
 	testing.expect_value(t, len(p.list), 0)
 }
@@ -704,8 +705,8 @@ a_check_answered_replaces_a_reading_asked_before_it :: proc(t: ^testing.T) {
 	p := &app.cx.plugins
 	plugins_ask(app)
 	older := bench_take(t, .Plugins)
-	remote_begin(&p.check)
-	request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", remote = &p.check)
+	remote.begin(&p.check)
+	request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", reading = &p.check)
 	bench_answer(app, bench_take(t, .Plugins_Check), 200, PLUGINS)
 	bench_answer(app, older, 200, `{"data":[]}`)
 	testing.expect_value(t, len(p.list), 1)
@@ -724,18 +725,18 @@ every_way_of_failing_ends_the_reading_of_the_schedules :: proc(t: ^testing.T) {
 	s := &app.cx.schedules
 	schedules_open(app, "a")
 	bench_lost(app, bench_take(t, .Schedules))
-	testing.expect_value(t, s.read.state, Load_State.Failed)
+	testing.expect_value(t, s.read.state, remote.State.Failed)
 	schedules_open(app, "a")
 	bench_answer(app, bench_take(t, .Schedules), 401, "")
-	testing.expect_value(t, s.read.state, Load_State.Failed)
+	testing.expect_value(t, s.read.state, remote.State.Failed)
 	schedules_open(app, "a")
 	bench_answer(app, bench_take(t, .Schedules), 200, "<html>")
-	testing.expect_value(t, s.read.state, Load_State.Failed)
+	testing.expect_value(t, s.read.state, remote.State.Failed)
 	// (a refusal with no words was taken for a list)
 	schedules_open(app, "a")
 	bench_answer(app, bench_take(t, .Schedules), 404, "")
-	testing.expect_value(t, s.read.state, Load_State.Refused)
-	testing.expect(t, !remote_shows(&s.read))
+	testing.expect_value(t, s.read.state, remote.State.Refused)
+	testing.expect(t, !remote.shows(&s.read))
 	testing.expect_value(t, s.read.message, "status 404")
 }
 
@@ -749,7 +750,7 @@ the_rows_of_a_session_do_not_show_under_another :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(s.list), 4)
 	schedules_open(app, "b")
 	testing.expect_value(t, len(s.list), 0)
-	testing.expect(t, !remote_shows(&s.read))
+	testing.expect(t, !remote.shows(&s.read))
 	schedules_open(app, "c")
 	late := bench_take(t, .Schedules)
 	schedules_open(app, "d")
@@ -800,7 +801,7 @@ a_second_enter_plans_nothing_more :: proc(t: ^testing.T) {
 	schedule_submit(app)
 	testing.expect_value(t, bench_count(.Schedule_Made), 1)
 	bench_lost(app, bench_take(t, .Schedule_Made))
-	testing.expect_value(t, s.making.state, Load_State.Failed)
+	testing.expect_value(t, s.making.state, remote.State.Failed)
 	testing.expect_value(t, ui.field_string(&s.prompt), "again")
 }
 
@@ -859,12 +860,12 @@ an_older_folders_artifacts_do_not_land_in_the_new_dialog :: proc(t: ^testing.T) 
 	artifacts_open(app)
 	bench_answer(app, old, 200, ARTIFACTS)
 	testing.expect_value(t, len(a.list), 0)
-	testing.expect_value(t, a.read.state, Load_State.Loading)
+	testing.expect_value(t, a.read.state, remote.State.Loading)
 	bench_answer(app, bench_take(t, .Artifacts), 403, `{"message":"set experimental.artifacts"}`)
-	testing.expect_value(t, a.read.state, Load_State.Refused)
+	testing.expect_value(t, a.read.state, remote.State.Refused)
 	artifacts_open(app)
 	bench_lost(app, bench_take(t, .Artifacts))
-	testing.expect_value(t, a.read.state, Load_State.Failed)
+	testing.expect_value(t, a.read.state, remote.State.Failed)
 }
 
 @(private = "file")
@@ -895,7 +896,7 @@ the_files_shown_are_those_of_the_artifact_named :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(a.files), 0)
 
 	bench_lost(app, bench_take(t, .Artifact_Read))
-	testing.expect_value(t, a.file_read.state, Load_State.Failed)
+	testing.expect_value(t, a.file_read.state, remote.State.Failed)
 	testing.expect(t, !artifact_can_open(a, &a.list[1]))
 }
 
@@ -916,12 +917,12 @@ the_rows_of_a_folder_are_of_that_folder :: proc(t: ^testing.T) {
 
 	files_open(app)
 	testing.expect_value(t, len(f.rows), 0)
-	testing.expect(t, !remote_shows(&f.read), "not 'This folder is empty.' before any answer")
+	testing.expect(t, !remote.shows(&f.read), "not 'This folder is empty.' before any answer")
 	bench_lost(app, bench_take(t, .Files_List))
-	testing.expect_value(t, f.read.state, Load_State.Failed)
+	testing.expect_value(t, f.read.state, remote.State.Failed)
 	files_list(app)
 	bench_answer(app, bench_take(t, .Files_List), 200, `{"data":[]}`)
-	testing.expect(t, remote_shows(&f.read), "now it is empty")
+	testing.expect(t, remote.shows(&f.read), "now it is empty")
 }
 
 // The root of a folder had no tag: an old root listing matched the new one.
@@ -956,7 +957,7 @@ a_search_given_up_does_not_answer_for_the_folder :: proc(t: ^testing.T) {
 	ui.field_set(&f.field, "x")
 	files_list(app)
 	testing.expect(t, f.searching)
-	testing.expect(t, remote_shows(&f.read), "what was there stays while one types")
+	testing.expect(t, remote.shows(&f.read), "what was there stays while one types")
 	search := bench_take(t, .Files_List)
 	ui.field_set(&f.field, "")
 	files_list(app)
@@ -1002,7 +1003,7 @@ a_file_of_the_folder_before_does_not_show_in_this_one :: proc(t: ^testing.T) {
 	testing.expect_value(t, f.content, "")
 	bench_answer(app, bench_take(t, .File_Read), 404, `{"message":"no such file"}`)
 	testing.expect_value(t, f.file_read.message, "no such file")
-	testing.expect(t, !remote_shows(&f.file_read))
+	testing.expect(t, !remote.shows(&f.file_read))
 }
 
 @(test)
@@ -1102,11 +1103,11 @@ the_project_says_why_it_could_not_be_read :: proc(t: ^testing.T) {
 	described(app, t, "a", "D:/a", "p1")
 	stats_open(app)
 	bench_lost(app, bench_take(t, .Stats))
-	testing.expect_value(t, app.cx.stats_read.state, Load_State.Failed)
+	testing.expect_value(t, app.cx.stats_read.state, remote.State.Failed)
 	stats_ask(app)
 	bench_answer(app, bench_take(t, .Stats), 200, STATS)
 	testing.expect_value(t, app.proj_stats.sessions, 7)
-	testing.expect(t, remote_shows(&app.cx.stats_read))
+	testing.expect(t, remote.shows(&app.cx.stats_read))
 }
 
 @(test)
@@ -1123,7 +1124,7 @@ an_earlier_projects_totals_do_not_fill_the_dialog :: proc(t: ^testing.T) {
 	stats_open(app)
 	bench_answer(app, old, 200, STATS)
 	testing.expect_value(t, app.proj_stats.sessions, 0)
-	testing.expect_value(t, app.cx.stats_read.state, Load_State.Loading)
+	testing.expect_value(t, app.cx.stats_read.state, remote.State.Loading)
 }
 
 // The project was looked at once, on opening: not known yet, the section was hidden for good.
@@ -1179,12 +1180,12 @@ a_page_that_failed_is_not_an_empty_page :: proc(t: ^testing.T) {
 	bench_lost(app, bench_take(t, .Saved))
 	bench_answer(app, bench_take(t, .Usage), 200, "<html>")
 	bench_answer(app, bench_take(t, .Skills), 200, `{"data":[{"name":"s"}]}`)
-	testing.expect_value(t, f.reads[.Mcp].state, Load_State.Refused)
+	testing.expect_value(t, f.reads[.Mcp].state, remote.State.Refused)
 	testing.expect_value(t, f.reads[.Mcp].message, "mcp is down")
-	testing.expect_value(t, f.reads[.Saved].state, Load_State.Failed)
-	testing.expect_value(t, f.reads[.Usage].state, Load_State.Failed)
-	testing.expect_value(t, f.reads[.Skills].state, Load_State.Ready)
-	testing.expect_value(t, f.reads[.Shells].state, Load_State.Loading)
+	testing.expect_value(t, f.reads[.Saved].state, remote.State.Failed)
+	testing.expect_value(t, f.reads[.Usage].state, remote.State.Failed)
+	testing.expect_value(t, f.reads[.Skills].state, remote.State.Ready)
+	testing.expect_value(t, f.reads[.Shells].state, remote.State.Loading)
 }
 
 // 'Asking the server...' depended on everything in flight anywhere: a sleeping poll, an image being decoded.
@@ -1196,7 +1197,7 @@ what_a_page_says_is_of_its_own_reading :: proc(t: ^testing.T) {
 	settings_open(app)
 	facts_answered(app, t)
 	app.pending = 5
-	for k in Fact { testing.expect(t, remote_shows(&f.reads[k])) }
+	for k in Fact { testing.expect(t, remote.shows(&f.reads[k])) }
 }
 
 // The settings open across a change of server: nothing read them again.
@@ -1210,7 +1211,7 @@ the_pages_are_read_again_for_the_next_server :: proc(t: ^testing.T) {
 	bench_clear(app)
 	server_forget(app)
 	app.conn = bench_conn(app)
-	testing.expect_value(t, f.reads[.Mcp].state, Load_State.Idle)
+	testing.expect_value(t, f.reads[.Mcp].state, remote.State.Idle)
 	bench_answer(app, late, 200, `{"data":[{"name":"theirs"}]}`)
 	testing.expect_value(t, len(f.mcp), 0)
 	stream_up(app)
@@ -1296,7 +1297,7 @@ a_shell_the_server_refused_is_not_shown_as_set :: proc(t: ^testing.T) {
 	testing.expect_value(t, f.shell, "/bin/new")
 	bench_answer(app, bench_take(t, .Shell_Set), 400, `{"message":"no"}`)
 	testing.expect_value(t, f.shell, "/bin/old")
-	testing.expect(t, deferred_in_ms(&app.cx.due[.Facts]) > 0, "what it says is read")
+	testing.expect(t, ui.deferred_in_ms(&app.cx.due[.Facts]) > 0, "what it says is read")
 	shell_set(app, Shell_Info{"new", "/bin/new", true})
 	bench_answer(app, bench_take(t, .Shell_Set), 200, "")
 	testing.expect_value(t, f.shell, "/bin/new")
@@ -1336,8 +1337,8 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	bench_answer(app, login_sent(app, t, n), 200, LOGIN_BEGUN)
 	plugins_ask(app)
 	bench_answer(app, bench_take(t, .Plugins), 200, PLUGINS)
-	remote_begin(&cx.plugins.check)
-	request(app, .Plugins_Check, "POST", "/c", "{}", remote = &cx.plugins.check)
+	remote.begin(&cx.plugins.check)
+	request(app, .Plugins_Check, "POST", "/c", "{}", reading = &cx.plugins.check)
 	schedules_open(app, "s")
 	bench_answer(app, bench_take(t, .Schedules), 200, SCHEDULES)
 	schedule_typed(&cx.schedules, "typed")
@@ -1369,28 +1370,28 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	c := &cx.changes
 	testing.expect(t, state_is(c, Changes_Closed))
 	testing.expect_value(t, len(c.files), 0)
-	testing.expect_value(t, c.revert.state, Load_State.Idle)
+	testing.expect_value(t, c.revert.state, remote.State.Idle)
 
 	testing.expect_value(t, len(n.list), 0)
 	testing.expect(t, step_is(n, Connect_Choose))
 	testing.expect_value(t, n.shown, "")
-	testing.expect_value(t, n.read.state, Load_State.Idle)
-	testing.expect_value(t, n.active.state, Load_State.Idle)
-	testing.expect_value(t, n.poll.state, Load_State.Idle)
-	testing.expect_value(t, n.sending.state, Load_State.Idle)
+	testing.expect_value(t, n.read.state, remote.State.Idle)
+	testing.expect_value(t, n.active.state, remote.State.Idle)
+	testing.expect_value(t, n.poll.state, remote.State.Idle)
+	testing.expect_value(t, n.sending.state, remote.State.Idle)
 
 	p := &cx.plugins
 	testing.expect_value(t, len(p.list), 0)
-	testing.expect_value(t, p.read.state, Load_State.Idle)
-	testing.expect_value(t, p.check.state, Load_State.Idle)
+	testing.expect_value(t, p.read.state, remote.State.Idle)
+	testing.expect_value(t, p.check.state, remote.State.Idle)
 
 	s := &cx.schedules
 	testing.expect(t, !cx.open[.Schedules])
 	testing.expect_value(t, s.session, "")
 	testing.expect_value(t, len(s.list), 0)
 	testing.expect_value(t, ui.field_string(&s.prompt), "")
-	testing.expect_value(t, s.read.state, Load_State.Idle)
-	testing.expect_value(t, s.making.state, Load_State.Idle)
+	testing.expect_value(t, s.read.state, remote.State.Idle)
+	testing.expect_value(t, s.making.state, remote.State.Idle)
 	testing.expect(t, !cx.no_schedules && !cx.no_artifacts)
 
 	a := &cx.artifacts
@@ -1399,8 +1400,8 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	testing.expect_value(t, a.shown, "")
 	testing.expect_value(t, len(a.list), 0)
 	testing.expect_value(t, len(a.files), 0)
-	testing.expect_value(t, a.read.state, Load_State.Idle)
-	testing.expect_value(t, a.file_read.state, Load_State.Idle)
+	testing.expect_value(t, a.read.state, remote.State.Idle)
+	testing.expect_value(t, a.file_read.state, remote.State.Idle)
 
 	f := &cx.files
 	testing.expect(t, !cx.open[.Files])
@@ -1408,23 +1409,23 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	testing.expect_value(t, f.file, "")
 	testing.expect_value(t, f.content, "")
 	testing.expect_value(t, len(f.rows), 0)
-	testing.expect_value(t, f.read.state, Load_State.Idle)
-	testing.expect_value(t, f.file_read.state, Load_State.Idle)
+	testing.expect_value(t, f.read.state, remote.State.Idle)
+	testing.expect_value(t, f.file_read.state, remote.State.Idle)
 
 	m := &cx.mentions
 	testing.expect(t, !m.open)
 	testing.expect_value(t, len(m.hits), 0)
 	testing.expect_value(t, m.dir, "")
 	testing.expect_value(t, m.folder, "")
-	testing.expect_value(t, m.read.state, Load_State.Idle)
+	testing.expect_value(t, m.read.state, remote.State.Idle)
 
 	testing.expect(t, !app.stats_open)
 	testing.expect_value(t, app.proj_stats.project, "")
 	testing.expect_value(t, app.proj_stats.sessions, 0)
-	testing.expect_value(t, cx.stats_read.state, Load_State.Idle)
+	testing.expect_value(t, cx.stats_read.state, remote.State.Idle)
 
 	facts := &app.facts
-	for k in Fact { testing.expect_value(t, facts.reads[k].state, Load_State.Idle) }
+	for k in Fact { testing.expect_value(t, facts.reads[k].state, remote.State.Idle) }
 	testing.expect_value(t, len(facts.mcp), 0)
 	testing.expect_value(t, len(facts.saved), 0)
 	testing.expect_value(t, len(facts.files), 0)
