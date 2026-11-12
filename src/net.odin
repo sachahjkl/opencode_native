@@ -23,11 +23,12 @@ Server_Config :: struct {
 
 DEFAULT_PORT :: 4096
 
-// This computer's opencode server, unless --url= / --password= say otherwise. Where it really runs first: the state the
+// This computer's opencode server, unless `url` / `password` (--url=, --password=; "": not given) say otherwise. Where it
+// really runs first: the state the
 // background service writes while it runs (~/.local/state/opencode/service.json: its url and password, what
 // `opencode service status` prints); else what its configuration asks for (~/.config/opencode/service.json: a port
 // that may be stale or absent); else the default port.
-discover_server :: proc() -> Server_Config {
+discover_server :: proc(url := "", password := "") -> Server_Config {
 	cfg := Server_Config{host = "127.0.0.1", port = DEFAULT_PORT}
 	home := os.get_env("USERPROFILE", context.temp_allocator)
 	if home == "" { home = os.get_env("HOME", context.temp_allocator) }
@@ -59,26 +60,21 @@ discover_server :: proc() -> Server_Config {
 	// a server listening everywhere is reached here
 	if cfg.host == "0.0.0.0" || cfg.host == "::" || cfg.host == "[::]" { cfg.host = "127.0.0.1" }
 	local := cfg
-	url_given, password_given := false, false
-	for a in os.args[1:] {
-		if strings.has_prefix(a, "--password=") { cfg.password = a[len("--password="):]; password_given = true }
-		if strings.has_prefix(a, "--url=") {
-			u := a[len("--url="):]
-			url_given = true
-			cfg.tls = strings.has_prefix(u, "https://")
-			u = strings.trim_prefix(strings.trim_prefix(u, "http://"), "https://")
-			u = strings.trim_suffix(u, "/")
-			if i := strings.last_index_byte(u, ':'); i >= 0 {
-				if p, ok := strconv.parse_int(u[i + 1:]); ok { cfg.port = u16(p) }
-				cfg.host = u[:i]
-			} else {
-				cfg.host = u
-				cfg.port = 0   // the default port of the scheme
-			}
+	if password != "" { cfg.password = password }
+	if url != "" {
+		cfg.tls = strings.has_prefix(url, "https://")
+		u := strings.trim_prefix(strings.trim_prefix(url, "http://"), "https://")
+		u = strings.trim_suffix(u, "/")
+		if i := strings.last_index_byte(u, ':'); i >= 0 {
+			if p, ok := strconv.parse_int(u[i + 1:]); ok { cfg.port = u16(p) }
+			cfg.host = u[:i]
+		} else {
+			cfg.host = u
+			cfg.port = 0   // the default port of the scheme
 		}
 	}
 	// the password of this computer's server goes to that server only
-	if url_given && !password_given && !same_server(local.host, local.port, cfg.host, cfg.port) { cfg.password = "" }
+	if url != "" && password == "" && !same_server(local.host, local.port, cfg.host, cfg.port) { cfg.password = "" }
 	cfg.host = strings.clone(cfg.host)
 	cfg.password = strings.clone(cfg.password)
 	return cfg

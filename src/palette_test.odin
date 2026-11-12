@@ -49,7 +49,7 @@ the_palette_finds_words_not_scattered_letters :: proc(t: ^testing.T) {
 	}
 	hits := palette_hits(app, items, "terminal")
 	testing.expect_value(t, len(hits), 2)
-	if len(hits) == 2 { testing.expect_value(t, items[hits[0].item].id, "d") }   // (at the start of its text)
+	if len(hits) == 2 { testing.expect_value(t, items[hits[0].index].id, "d") }   // (at the start of its text)
 	hits = palette_hits(app, items, "kesh")
 	testing.expect_value(t, len(hits), 1)   // (keyboard shortcuts: pieces that begin its words)
 	testing.expect_value(t, len(palette_hits(app, items, "pvsc")), 0)   // (scattered in its words: nothing)
@@ -77,7 +77,7 @@ the_palette_finds_a_command_by_its_tags_or_a_slip :: proc(t: ^testing.T) {
 	for &c in COMMANDS { append(&items, Pal_Item{kind = .Command, id = c.id, title = c.title, cmd = &c, tags = strings.fields(c.tags, context.temp_allocator)}) }
 	app := new(App)
 	defer free(app)
-	first :: proc(hits: []Pal_Hit, items: []Pal_Item) -> string { return len(hits) > 0 ? items[hits[0].item].id : "" }
+	first :: proc(hits: []ui.Rank_Hit, items: []Pal_Item) -> string { return len(hits) > 0 ? items[hits[0].index].id : "" }
 	testing.expect_value(t, first(palette_hits(app, items[:], "exit"), items[:]), "app.quit")
 	testing.expect_value(t, first(palette_hits(app, items[:], "Qestart pencode native"), items[:]), "app.restart")
 	testing.expect_value(t, first(palette_hits(app, items[:], "restart opencode"), items[:]), "app.restart")

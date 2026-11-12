@@ -305,7 +305,7 @@ CONTEXT_WARN_SHARE  :: 0.6
 TOOLS_SHOWN         :: 14
 PROJECT_TOOLS_SHOWN :: 12
 RANK_NAME_CHARS     :: 28
-DURATION_ORIGIN_MS  :: 0.001   // duration() takes a start of 0 as unknown; a sum of steps starts there
+DURATION_ORIGIN_MS  :: 0.001   // duration_text() takes a start of 0 as unknown; a sum of steps starts there
 
 HEX_METER_WELL  :: 0x0a0a0aff
 HEX_STAT_VALUE  :: 0xdadadaff
@@ -703,11 +703,11 @@ stats_tokens :: proc(t: Totals, em: f32) {
 stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local, now: f64, em: f32) {
 	heading("Time", em, HEX_PURPLE)
 	if s != nil {
-		kv("###d1", "created", fmt.tprintf("%s  (%s ago)", clock_time(s.created), duration(s.created, now)), em)
-		if s.updated > 0 { kv("###d2", "last change", fmt.tprintf("%s  (%s ago)", clock_time(s.updated), duration(s.updated, now)), em) }
+		kv("###d1", "created", fmt.tprintf("%s  (%s ago)", clock_text(s.created), duration_text(s.created, now)), em)
+		if s.updated > 0 { kv("###d2", "last change", fmt.tprintf("%s  (%s ago)", clock_text(s.updated), duration_text(s.updated, now)), em) }
 	}
 	if l.active_ms > 0 {
-		kv("###d3", "model at work", fmt.tprintf("%s over %d steps (%s a step)", duration(DURATION_ORIGIN_MS, l.active_ms), l.steps, duration(DURATION_ORIGIN_MS, l.active_ms / f64(max(l.steps, 1)))), em)
+		kv("###d3", "model at work", fmt.tprintf("%s over %d steps (%s a step)", duration_text(DURATION_ORIGIN_MS, l.active_ms), l.steps, duration_text(DURATION_ORIGIN_MS, l.active_ms / f64(max(l.steps, 1)))), em)
 		if l.out_tokens > 0 { kv("###d4", "output pace", fmt.tprintf("%.0f tokens / s", l.out_tokens / (l.active_ms / MS_PER_S)), em) }
 	}
 	kv("###d5", "loaded", fmt.tprintf("%d messages · %d prompts · %d steps%s", l.msgs, l.prompts, l.steps, c.older != "" ? " (earlier ones not loaded)" : ""), em)
@@ -760,7 +760,7 @@ stats_project :: proc(app: ^App, now: f64, em: f32) {
 			kv("###p3", "tokens", fmt.tprintf("%s in · %s out · %s reasoning", kfmt(ps.tokens_in + ps.cache_read), kfmt(ps.tokens_out), kfmt(ps.reasoning)), em)
 			if ps.cost > 0 { kv("###p4", "cost", fmt.tprintf("$%.2f", ps.cost), em) }
 			kv("###p5", "active days", fmt.tprintf("%d  (streak %d)", ps.active_days, ps.streak), em)
-			if ps.from > 0 { kv("###p6", "since", fmt.tprintf("%s ago", duration(ps.from, now)), em) }
+			if ps.from > 0 { kv("###p6", "since", fmt.tprintf("%s ago", duration_text(ps.from, now)), em) }
 			kv("###p7", "tool calls", fmt.tprintf("%d  (%d failed)", ps.calls, ps.failed), em, ps.failed > 0 ? hex(HEX_STAT_FAILED) : {})
 			if len(ps.tools) > 0 {
 				ui.spacer(ui.px(em * 0.4))
@@ -781,11 +781,6 @@ stats_project :: proc(app: ^App, now: f64, em: f32) {
 			}
 		}
 	}
-}
-
-ms_text :: proc(ms: f64) -> string {
-	if ms < MS_PER_S { return fmt.tprintf("%.0f ms", ms) }
-	return fmt.tprintf("%.1f s", ms / MS_PER_S)
 }
 
 // A pill of text that is a button (the header's token count): sunken, lit under the pointer.

@@ -152,37 +152,11 @@ reason_and_reset :: proc(reason: string) -> (text: string, resets_ms: f64) {
 			text = strings.trim_space(strings.concatenate({strings.trim_right_space(text[:start]), after}, context.temp_allocator))
 			return text, ms
 		}
-		text = strings.concatenate({text[:i], clock_time(ms), after}, context.temp_allocator)
+		text = strings.concatenate({text[:i], clock_text(ms), after}, context.temp_allocator)
 		resets_ms = ms
 		i += 1
 	}
 	return
-}
-
-// What the line over the reason says of that time: "resets at 12:20 · in 42 min"; once past, "limit reset at 12:20".
-reset_text :: proc(resets_ms, now_ms: f64) -> string {
-	if resets_ms <= now_ms { return fmt.tprintf("  ·  limit reset at %s", clock_time(resets_ms)) }
-	mins := int(math.ceil((resets_ms - now_ms) / (60 * MS_PER_S)))
-	left: string
-	switch {
-	case mins < 60:             left = fmt.tprintf("%d min", mins)
-	case mins < MINUTES_PER_DAY: left = fmt.tprintf("%dh %02d", mins / 60, mins % 60)
-	case:                       left = fmt.tprintf("%dd %02dh", mins / MINUTES_PER_DAY, (mins % MINUTES_PER_DAY) / 60)
-	}
-	// (another day than today's: its date before the time)
-	if day, same := local_day(resets_ms), local_day(now_ms); day != same {
-		t := time.unix(0, i64((resets_ms + f64(local_offset_minutes()) * 60 * MS_PER_S) * NS_PER_MS))
-		_, month, d := time.date(t)
-		return fmt.tprintf("  ·  resets on %s %d at %s  ·  in %s", MONTHS_SHORT[int(month) - 1], d, clock_time(resets_ms), left)
-	}
-	return fmt.tprintf("  ·  resets at %s  ·  in %s", clock_time(resets_ms), left)
-}
-
-MONTHS_SHORT := [12]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
-
-// The day on the local clock (days since 1970) of a time in ms since 1970.
-local_day :: proc(ms: f64) -> int {
-	return int(math.floor((ms / (60 * MS_PER_S) + f64(local_offset_minutes())) / MINUTES_PER_DAY))
 }
 
 ISO_DATE_LEN :: len("2026-11-10T11:20:00Z")

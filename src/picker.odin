@@ -6,7 +6,6 @@ package ocn
 
 import "core:fmt"
 import "core:math"
-import "core:slice"
 import "core:strings"
 import "core:time"
 import "gt:draw"
@@ -114,8 +113,6 @@ picker_open :: proc(app: ^App, id: string, anchor: Rect) {
 	ui.field_set(&p.field, "")
 }
 
-Hit :: struct { index, score: int, ranges: []ui.Fuzzy_Range }
-
 // A row of the list: an item (`hit` in the hits), or the header of `group` (`hit` -1).
 Pick_Row :: struct {
 	hit:   int,
@@ -137,7 +134,7 @@ picker_fold :: proc(p: ^Picker, group: string, open: bool) {
 
 // What the list shows. With nothing typed, the items of groups go under their header, in the order they come (a group's items are
 // together); else, or with no groups, the hits as they are.
-picker_rows :: proc(p: ^Picker, items: []Pick_Item, hits: []Hit, typed: bool) -> []Pick_Row {
+picker_rows :: proc(p: ^Picker, items: []Pick_Item, hits: []ui.Rank_Hit, typed: bool) -> []Pick_Row {
 	rows := make([dynamic]Pick_Row, 0, len(hits), context.temp_allocator)
 	grouped := false
 	if !typed { for h in hits { if items[h.index].group != "" { grouped = true; break } } }
@@ -163,16 +160,10 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 	chosen = -1
 	if !app.cx.open[.Picker] || p.id != id { return }
 	needle := ui.field_string(&p.field)
-	hits := make([dynamic]Hit, context.temp_allocator)
-	for it, i in items {
-		hay := it.group != "" ? fmt.tprintf("%s  %s", it.label, it.group) : it.label
-		score, ranges, ok := ui.fuzzy_score(needle, hay)
-		if ok { append(&hits, Hit{i, score, ranges}) }
-	}
-	if needle != "" { slice.stable_sort_by(hits[:], proc(a, b: Hit) -> bool { return a.score > b.score }) }
+	hits := ui.rank(needle, items, proc(it: ^Pick_Item, _: rawptr) -> ui.Rank_Entry { return {label = it.label, group = it.group} }, match = ui.fuzzy_match)
 	if p.fresh { for h in hits { if it := items[h.index]; it.current && it.group != "" { picker_fold(p, it.group, true) } } }
 	typed := needle != ""
-	rows := picker_rows(p, items, hits[:], typed)
+	rows := picker_rows(p, items, hits, typed)
 	n := len(rows)
 	if p.fresh {
 		for r, k in rows { if r.hit >= 0 && items[hits[r.hit].index].current { p.sel = k } }
@@ -184,12 +175,12 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 			at := rows[clamp(p.sel, 0, n - 1)]
 			if at.group != "" && ui.key_press(.Right) && !picker_unfolded(p, at.group) {
 				picker_fold(p, at.group, true)
-				rows = picker_rows(p, items, hits[:], typed)
+				rows = picker_rows(p, items, hits, typed)
 				n = len(rows)
 			}
 			if at.group != "" && ui.key_press(.Left) && picker_unfolded(p, at.group) {
 				picker_fold(p, at.group, false)
-				rows = picker_rows(p, items, hits[:], typed)
+				rows = picker_rows(p, items, hits, typed)
 				n = len(rows)
 				for r, k in rows { if r.hit < 0 && r.group == at.group { p.sel = k } }
 				p.reveal = true
@@ -222,7 +213,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 					res := ui.line_edit("###pf", &p.field, fmt.tprintf("Search %s", title))
 					if p.fresh { ui.set_focus(res.box.key) }
 					if res.changed { p.sel = 0; p.reveal = true }
-					if res.committed && n > 0 { chosen = picker_take(p, items, hits[:], rows, p.sel) }
+					if res.committed && n > 0 { chosen = picker_take(p, items, hits, rows, p.sel) }
 					if res.cancelled { app.cx.open[.Picker] = false }
 				}
 				text("pn", fmt.tprintf("%d", len(hits)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
@@ -260,7 +251,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 				rb.custom_user = rd
 				rs := ui.signal(rb)
 				if rs.hovering && moved { p.sel = k }
-				if rs.clicked { chosen = picker_take(p, items, hits[:], rows, k) }
+				if rs.clicked { chosen = picker_take(p, items, hits, rows, k) }
 				if row.hit < 0 {
 					if ui.parent(rb) {
 						ui.spacer(ui.px(em * 0.6))
@@ -306,7 +297,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 		}
 		ui.spacer(ui.px(em * 0.4))
 	}
-	if n > 0 && app.cx.open[.Picker] && !p.fresh && ui.key_press(.Return) && chosen < 0 { chosen = picker_take(p, items, hits[:], rows, p.sel) }
+	if n > 0 && app.cx.open[.Picker] && !p.fresh && ui.key_press(.Return) && chosen < 0 { chosen = picker_take(p, items, hits, rows, p.sel) }
 	// a press outside closes it (the button that opened it toggles it: its own click closes it)
 	if !p.fresh && ui.mouse_pressed(.Left) {
 		if r, ok := ui.popover_rect(fmt.tprintf("###pick_%s", id)); ok && !rect_has(r, mouse) && !rect_has(p.anchor, mouse) { app.cx.open[.Picker] = false }
@@ -318,7 +309,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 }
 
 // Row `k` taken: an item is chosen; a header folds or unfolds, and nothing is.
-picker_take :: proc(p: ^Picker, items: []Pick_Item, hits: []Hit, rows: []Pick_Row, k: int) -> int {
+picker_take :: proc(p: ^Picker, items: []Pick_Item, hits: []ui.Rank_Hit, rows: []Pick_Row, k: int) -> int {
 	if k < 0 || k >= len(rows) { return -1 }
 	r := rows[k]
 	if r.hit >= 0 { return hits[r.hit].index }

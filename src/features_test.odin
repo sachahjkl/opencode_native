@@ -631,7 +631,7 @@ a_pickers_groups_fold_while_nothing_is_typed :: proc(t: ^testing.T) {
 	p: Picker
 	defer { for k in p.unfolded { delete(k) }; delete(p.unfolded) }
 	items := []Pick_Item{{label = "a1", group = "alpha"}, {label = "a2", group = "alpha"}, {label = "b1", group = "beta"}}
-	hits := []Hit{{index = 0}, {index = 1}, {index = 2}}
+	hits := []ui.Rank_Hit{{index = 0}, {index = 1}, {index = 2}}
 	rows := picker_rows(&p, items, hits, false)
 	testing.expect_value(t, len(rows), 2)   // (two headers)
 	testing.expect_value(t, rows[0].count, 2)

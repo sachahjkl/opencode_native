@@ -823,7 +823,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 				ui.spacer(ui.px(em * 0.5))
 			}
 			end := r.ended > 0 ? r.ended : (running ? now : 0)
-			if dur := duration(r.started, end); dur != "" {
+			if dur := duration_text(r.started, end); dur != "" {
 				text("d", dur, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.4))
 			}

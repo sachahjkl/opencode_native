@@ -41,7 +41,7 @@ home_session :: proc(app: ^App, s: ^Session_Info, em, now: f64, busy: bool) {
 		ui.spacer(ui.px(e * 0.5))
 		text("d", base_name(s.directory), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(e * FS_CAPTION)})
 		ui.spacer(ui.px(e * 0.8))
-		text("a", rel_time(now, s.updated), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(e * FS_CAPTION)})
+		text("a", age_text(now, s.updated), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(e * FS_CAPTION)})
 		ui.spacer(ui.px(e * 0.6))
 	}
 }

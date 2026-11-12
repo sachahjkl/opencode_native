@@ -160,7 +160,7 @@ mention_track :: proc(app: ^App) {
 	mention_ask(app)
 }
 
-// The answer of the list or the search, if it is still what is looked for; sub-agents that match come first.
+// The answer of the list or the search, if it is still what is looked for; sub-agents that match come first, the best first.
 mention_load :: proc(app: ^App, v: json.Value) {
 	m := &app.cx.mentions
 	if !m.open { return }
@@ -170,9 +170,8 @@ mention_load :: proc(app: ^App, v: json.Value) {
 	_ = virtual.arena_init_growing(&m.arena)
 	a := virtual.arena_allocator(&m.arena)
 	m.dir = strings.clone(jstr(v, "location", "directory"))
-	for ag in app.agents {
-		if ag.mode != "subagent" { continue }
-		if _, _, match := ui.fuzzy_score(m.query, ag.id); !match { continue }
+	for h in ui.rank(m.query, app.agents[:], proc(ag: ^Agent_Info, _: rawptr) -> ui.Rank_Entry { return {label = ag.id, skip = ag.mode != "subagent"} }, match = ui.fuzzy_match) {
+		ag := &app.agents[h.index]
 		append(&m.hits, Mention_Hit{.Agent, strings.clone(ag.id, a), strings.clone(ag.description, a)})
 	}
 	for it in jarr(v, "data") {

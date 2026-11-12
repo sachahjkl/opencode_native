@@ -10,7 +10,6 @@ import "core:math"
 import "core:mem"
 import "core:slice"
 import "core:strings"
-import "core:time"
 import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -544,7 +543,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				sub_list = sub_toggle(app, s.id, len(kids), running, em)
 				ui.spacer(ui.px(em * 0.35))
 			}
-			text("a", rel_time(now, s.updated), quiet, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("a", age_text(now, s.updated), quiet, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.7))
 		}
 		ui.spacer(ui.px(em * 0.5))
@@ -638,46 +637,6 @@ delete_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 1.2))
 		}
 	}
-}
-
-MS_PER_S         :: 1000
-NS_PER_MS        :: 1e6
-SECS_PER_MINUTE  :: 60
-SECS_PER_HOUR    :: 3600
-SECS_PER_DAY     :: 86400
-SECS_PER_WEEK    :: 86400 * 7
-MINUTES_PER_HOUR :: 60
-MINUTES_PER_DAY  :: 24 * 60
-HOURS_HALF_DAY   :: 12
-
-now_epoch_ms :: proc() -> f64 { return f64(time.time_to_unix_nano(time.now())) / NS_PER_MS }
-
-rel_time :: proc(now, t: f64) -> string {
-	if t <= 0 { return "" }
-	d := (now - t) / MS_PER_S
-	switch {
-	case d < SECS_PER_MINUTE:        return "now"
-	case d < SECS_PER_HOUR:      return fmt.tprintf("%dm", int(d / SECS_PER_MINUTE))
-	case d < SECS_PER_DAY:     return fmt.tprintf("%dh", int(d / SECS_PER_HOUR))
-	case d < SECS_PER_WEEK: return fmt.tprintf("%dd", int(d / SECS_PER_DAY))
-	}
-	return fmt.tprintf("%dw", int(d / SECS_PER_WEEK))
-}
-
-// The local time of `t` (epoch ms): "14:32", "2:32 pm" (the clock24 preference); `seconds`: "14:32:05".
-clock_time :: proc(t: f64, seconds := false) -> string {
-	if t <= 0 { return "" }
-	tm := time.unix(0, i64(t * NS_PER_MS))
-	h, m, sec := time.clock_from_time(tm)
-	// (UTC + the machine's offset: Windows' local time)
-	off := local_offset_minutes()
-	total := (h * MINUTES_PER_HOUR + m + off + MINUTES_PER_DAY) % MINUTES_PER_DAY
-	ss := seconds ? fmt.tprintf(":%02d", sec) : ""
-	if !the_app.prefs.clock24 {
-		hh := (total / MINUTES_PER_HOUR) % HOURS_HALF_DAY
-		return fmt.tprintf("%d:%02d%s %s", hh == 0 ? HOURS_HALF_DAY : hh, total % MINUTES_PER_HOUR, ss, total / MINUTES_PER_HOUR < HOURS_HALF_DAY ? "am" : "pm")
-	}
-	return fmt.tprintf("%02d:%02d%s", total / MINUTES_PER_HOUR, total % MINUTES_PER_HOUR, ss)
 }
 
 ////////////////////////////////
@@ -1162,7 +1121,7 @@ user_message :: proc(app: ^App, m: ^Message, em: f32) {
 					ui.spacer(ui.px(em * 0.2))
 					text("you", "You", accent(), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 					ui.spacer(ui.fill())
-					text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					text("at", clock_text(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}
 				ui.spacer(ui.px(em * 0.35))
 				runs := link_runs(&m.text_runs, m.text, {color = hex(HEX_USER_TEXT)}, app.chat.alloc)
@@ -1238,7 +1197,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 				text("md", m.model, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			}
 			ui.spacer(ui.fill())
-			text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("at", clock_text(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
 		ui.spacer(ui.px(em * 0.4))
 		}
@@ -1347,34 +1306,6 @@ TOOL_IMAGE_OPEN_W_PX    :: 520
 TOOL_IMAGE_OPEN_H_PX    :: 360
 TOOL_IMAGE_W_PX         :: 240
 TOOL_IMAGE_H_PX         :: 150
-
-// How long a tool call took ("0.4s", "12s", "4m 12s"), or has taken so far while it runs (`now`, epoch ms). Tenths under
-// TOOL_ELAPSED_TENTHS_S: there the difference between two runs is in them. "": its times are not known.
-// When it ran, on the local clock to the second: "Started 14:32:05, ended 14:32:17", a day other than today's with its date
-// ("Started Nov 10, 14:32:05"); while it runs, "running".
-tool_when :: proc(p: ^Part, running: bool, now: f64) -> string {
-	at :: proc(ms, now: f64) -> string {
-		clock := clock_time(ms, seconds = true)
-		if local_day(ms) == local_day(now) { return clock }
-		t := time.unix(0, i64((ms + f64(local_offset_minutes()) * 60 * MS_PER_S) * NS_PER_MS))
-		_, month, d := time.date(t)
-		return fmt.tprintf("%s %d, %s", MONTHS_SHORT[int(month) - 1], d, clock)
-	}
-	start := fmt.tprintf("Started %s", at(p.started_ms, now))
-	if running { return fmt.tprintf("%s, running", start) }
-	if p.ended_ms <= 0 { return start }
-	return fmt.tprintf("%s, ended %s", start, at(p.ended_ms, now))
-}
-
-tool_elapsed :: proc(p: ^Part, running: bool, now: f64) -> string {
-	if p.started_ms <= 0 { return "" }
-	end := running ? now : p.ended_ms
-	if end <= 0 { return "" }
-	ms := max(end - p.started_ms, 0)   // (the server's clock a little ahead of this one: 0, not less)
-	if ms < MS_PER_S / 10 { return "<0.1s" }   // ("0.0s" says nothing)
-	if ms < TOOL_ELAPSED_TENTHS_S * MS_PER_S { return fmt.tprintf("%.1fs", ms / MS_PER_S) }
-	return duration(p.started_ms, end)
-}
 
 // A tool call on the timeline: a flat row (its header lights under the pointer), its input and output in wells when
 // open. `above`, `below`: calls right before and after it, joined by the rail.

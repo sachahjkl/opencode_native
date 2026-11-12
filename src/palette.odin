@@ -6,7 +6,6 @@ package ocn
 
 import "core:fmt"
 import "core:math"
-import "core:slice"
 import "core:strconv"
 import "core:strings"
 import "gt:config"
@@ -30,8 +29,6 @@ Pal_Item :: struct {
 	on:     bool,     // a switch's state
 	toggle: bool,     // it is a switch
 }
-
-Pal_Hit :: struct { item: int, score: f64, ranges: []ui.Fuzzy_Range }
 
 Usage :: struct { weight: f64, last_ms: f64 }
 
@@ -215,7 +212,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 				res := ui.line_edit("###pal_field", &p.field, "Search commands, sessions, agents, models…")
 				if p.fresh { ui.set_focus(res.box.key) }
 				if res.changed { p.sel = 0; p.reveal = true }
-				if res.committed && n > 0 { chosen = hits[p.sel].item }
+				if res.committed && n > 0 { chosen = hits[p.sel].index }
 				if res.cancelled { app.cx.open[.Palette] = false }
 			}
 			text("n", fmt.tprintf("%d", len(hits)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
@@ -241,7 +238,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 			}
 			for k in 0 ..< n {
 				h := hits[k]
-				it := &items[h.item]
+				it := &items[h.index]
 				ui.next({width = ui.fill(), height = ui.px(row_h), axis = .X, cross = .Center})
 				rb := ui.build_box({.Clickable}, fmt.tprintf("###pal_%d_%s", int(it.kind), label_safe(it.id)))
 				sel := k == p.sel
@@ -258,7 +255,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 				rb.custom_user = rd
 				rs := ui.signal(rb)
 				if rs.hovering && moved { p.sel = k }
-				if rs.clicked { chosen = h.item }
+				if rs.clicked { chosen = h.index }
 				if ui.parent(rb) {
 					ui.spacer(ui.px(em * 1))
 					glyph(it.icon, sel ? accent() : hex(HEX_FAINT), math.round(em * ICON_REGULAR), em * 1.3)
@@ -302,24 +299,20 @@ setting_query :: proc(name: string) -> string {
 	return name
 }
 
+// What the usage bonus reads (palette_hits): the counts, and now.
+@(private = "file")
+Usage_Now :: struct { palette: ^Palette, now: f64 }
+
 // What `needle` finds among the items, best first (temp memory), as the toolkit's palette ranks its commands (ui.palette_match):
 // a title whole or at the starts of its words, then its tags, then with a slip or two in each word; what was chosen lately higher.
-palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string) -> []Pal_Hit {
-	p := &app.palette
-	now := now_epoch_ms()
-	hits := make([dynamic]Pal_Hit, context.temp_allocator)
-	for &it, i in items {
-		score, ranges, ok := ui.palette_match(needle, it.title, "", it.tags)
-		if !ok && (it.kind == .Switch || it.kind == .Setting) {
-			// a switch is found by its name too ("appearance.system_title"), its title then shown without marks
-			score, _, ok = ui.fuzzy_words(needle, it.id)
-			ranges = nil
-		}
-		if !ok { continue }
-		s := f64(score)
-		if u, known := p.usage[usage_key(&it)]; known { s += usage_now(u, now) * USAGE_SCORE }
-		append(&hits, Pal_Hit{i, s, ranges})
-	}
-	slice.stable_sort_by(hits[:], proc(a, b: Pal_Hit) -> bool { return a.score > b.score })
-	return hits[:]
+palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string) -> []ui.Rank_Hit {
+	at := Usage_Now{&app.palette, now_epoch_ms()}
+	return ui.rank(needle, items, proc(it: ^Pal_Item, _: rawptr) -> ui.Rank_Entry {
+		// a switch is found by its name too ("appearance.system_title"), its title then shown without marks
+		return {label = it.title, tags = it.tags, last = it.kind == .Switch || it.kind == .Setting ? it.id : ""}
+	}, &at, bonus = proc(it: ^Pal_Item, user: rawptr) -> f64 {
+		at := (^Usage_Now)(user)
+		u, known := at.palette.usage[usage_key(it)]
+		return known ? usage_now(u, at.now) * USAGE_SCORE : 0
+	})
 }

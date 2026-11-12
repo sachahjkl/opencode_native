@@ -166,7 +166,9 @@ prefs_init :: proc(app: ^App, file: string) {
 	config.register(&app.cfg_prefs, PREF_DEFS[:])
 	app.prefs_file = strings.clone(file)
 	if file != "" { config.load_file(&app.cfg_prefs, file, .User) }
-	config.apply_args(&app.cfg_prefs, os.args[1:])   // --pref name=value
+	for spec in app.cli.prefs {   // --pref name=value (a value out of range or unknown: the preference keeps its own)
+		if eq := strings.index_byte(spec, '='); eq > 0 { config.set_from_string(&app.cfg_prefs, spec[:eq], spec[eq + 1:], .Command_Line) }
+	}
 	prefs_refresh(app)
 }
 
@@ -1272,7 +1274,7 @@ page_usage :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.7))
 			col := l.limited ? hex(HEX_RED) : l.percent >= USAGE_WARN_PERCENT ? hex(HEX_YELLOW) : hex(HEX_WEAK)
 			text("p", fmt.tprintf("%.0f %%", l.percent), col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 3.5))
-			text("r", l.resets > now ? fmt.tprintf("resets in %s", duration(now, l.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
+			text("r", l.resets > now ? fmt.tprintf("resets in %s", duration_text(now, l.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
 		}
 	}
 	if len(f.budgets) > 0 { section("BUDGETS", em) }
@@ -1285,7 +1287,7 @@ page_usage :: proc(app: ^App, em: f32) {
 			ui.progress("###bar", t)
 			ui.spacer(ui.px(em * 0.7))
 			text("p", fmt.tprintf("$%.2f / $%.0f", b.spent, b.limit), t >= BUDGET_WARN_SHARE ? hex(HEX_YELLOW) : hex(HEX_GREEN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 8))
-			text("r", b.resets > now ? fmt.tprintf("resets in %s", duration(now, b.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
+			text("r", b.resets > now ? fmt.tprintf("resets in %s", duration_text(now, b.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
 		}
 	}
 }

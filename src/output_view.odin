@@ -320,7 +320,7 @@ output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
 		state_mark("###st", color, running, size = em * 0.7)
 		ui.spacer(ui.px(em * 0.45))
 		text("s", word, color, note)
-		if dur := duration(v.started, v.ended > 0 ? v.ended : (running ? now_epoch_ms() : 0)); dur != "" {
+		if dur := duration_text(v.started, v.ended > 0 ? v.ended : (running ? now_epoch_ms() : 0)); dur != "" {
 			ui.spacer(ui.px(em * 0.6))
 			text("e", dur, hex(HEX_FAINT), note)
 		}

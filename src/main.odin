@@ -8,8 +8,6 @@ import "core:fmt"
 import "core:mem/virtual"
 import "core:math"
 import "core:os"
-import "core:slice"
-import "core:strconv"
 import "core:strings"
 import "core:time"
 import "gt:config"
@@ -77,6 +75,7 @@ App :: struct {
 	nav_steps:        [dynamic]Nav_Step, // navigation asked for in this frame (subagents.odin)
 	sub_open:         map[u64]bool,   // sidebar: sessions whose sub-agents are listed under them
 	start_session:    string,
+	cli:              Cli_Options,    // the command line, read once at start (cli_options.odin)
 	cfg_prefs:        config.Prefs,   // the preferences (settings.odin)
 	prefs_file:       string,         // where they are saved ("": nowhere)
 	prefs:            Prefs,          // their plain values
@@ -584,8 +583,7 @@ WEIGHT_REGULAR   :: 400
 // prose-italic, prose-bold-italic (.ttf). A file that is not there leaves what the preferences gave.
 @(private = "file")
 fonts_from_dir :: proc(app: ^App) {
-	dir := ""
-	for a in os.args[1:] { if strings.has_prefix(a, "--font-dir=") { dir = a[len("--font-dir="):] } }
+	dir := app.cli.font_dir
 	if dir == "" { return }
 	face :: proc(app: ^App, dir, name: string, or_else_face: font.Font_Id) -> font.Font_Id {
 		f, ok := font.load_from_file(&app.fonts, pjoin({dir, fmt.tprintf("%s.ttf", name)}))
@@ -693,19 +691,11 @@ fonts_init :: proc(app: ^App) -> bool {
 }
 
 main :: proc() {
-	cli_check()   // (--help, --version, a line not understood: said, no window)
+	opts := cli_start()   // (--help, --version, a line not understood: said, no window; everything else reads app.cli)
 	clock_watch_start()   // (the local time's offset, read here and then by a thread of its own: clock.odin)
 	started := time.tick_now()
-	frames := -1   // --frames=N: N frames of the hidden window, then exit (a check that it runs)
-	forced_scale: f32 = 0   // --scale=<factor>
-	start_session := ""   // --session=<id>: the session opened at start (else the latest)
-	for a in os.args[1:] {
-		if strings.has_prefix(a, "--frames=") { frames, _ = strconv.parse_int(a[len("--frames="):]) }
-		if strings.has_prefix(a, "--session=") { start_session = a[len("--session="):] }
-		if strings.has_prefix(a, "--scale=") { if v, ok := strconv.parse_f32(a[len("--scale="):]); ok && v >= SCALE_MIN && v <= SCALE_MAX { forced_scale = v } }
-	}
 	// --install / --uninstall / --status: the desktop integration, without a window
-	if handled, code := desktop_cli(); handled { os.exit(code) }
+	if handled, code := desktop_cli(opts); handled { os.exit(code) }
 	// the graphics device on a thread of its own while the rest starts (the driver's load is the longest step: 160 ms here)
 	render.preload_device()
 	set_app_id()           // (before the first window: the taskbar groups it under the shortcuts)
@@ -714,9 +704,10 @@ main :: proc() {
 	app := new(App)
 	the_app = app
 	app.sidebar_w = SIDEBAR_W_DEFAULT
-	app.start_session = start_session
-	app.scale = forced_scale
-	app.seek_subagent = slice.contains(os.args, "--seek-subagent")
+	app.cli = opts
+	app.start_session = opts.session   // --session=<id>: the session opened at start (else the latest)
+	app.scale = opts.scale
+	app.seek_subagent = opts.seek_subagent
 	app.stick_bottom = true
 	chat_home(app)
 
@@ -730,16 +721,11 @@ main :: proc() {
 	if app.win == nil { fmt.eprintln("opencode-native: no window"); os.exit(1) }
 	title_apply(app)   // (the preferences were read before the window was there)
 	if !fonts_init(app) { fmt.eprintln("opencode-native: no UI font"); os.exit(1) }
-	for a in os.args[1:] {   // --size=<w>x<h>: the window's size in pixels, whichever screen it opens on (ocntools shots)
-		if !strings.has_prefix(a, "--size=") { continue }
-		wh := strings.split(a[len("--size="):], "x", context.temp_allocator)
-		if len(wh) != 2 { continue }
-		w, w_ok := strconv.parse_f32(wh[0])
-		h, h_ok := strconv.parse_f32(wh[1])
-		if w_ok && h_ok { platform.set_size(app.win, {int(math.round(w / app.win.dpi_scale)), int(math.round(h / app.win.dpi_scale))}) }
+	if wh, ok := opts.size.?; ok {   // --size=<w>x<h>: the window's size in pixels, whichever screen it opens on (ocntools shots)
+		platform.set_size(app.win, {int(math.round(wh.x / app.win.dpi_scale)), int(math.round(wh.y / app.win.dpi_scale))})
 	}
 	if !render.init_window(&app.r, app.win, app.win.size, transparent = true) { fmt.eprintln("opencode-native: no renderer"); os.exit(1) }
-	if !slice.contains(os.args, "--no-fixed-surface") { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
+	if !opts.no_fixed_surface { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
 	_ = platform.drop_target_enable(app.win, true)   // (files dropped on the window are attached: attach_drop)
 	app_init(app, prefs_path())
 	placement_restore(app)
@@ -756,7 +742,7 @@ main :: proc() {
 	server_connect(app, app.server)
 	if app.conn == nil { fmt.eprintln("opencode-native: the HTTP client failed to start"); os.exit(1) }
 
-	if frames >= 0 {
+	if frames := opts.frames; frames >= 0 {   // --frames=N: N frames of the hidden window, then exit (a check that it runs)
 		first: time.Duration   // from the start of main to the end of the first frame
 		for i in 0 ..< frames {
 			frame(app)
@@ -770,21 +756,18 @@ main :: proc() {
 
 	update_startup(app)   // (a server or none: a check of this program's own version)
 	setup_offer_at_start(app)
-	for a in os.args[1:] {   // --search=<text>: the sidebar's search, filled at start; --setup: the Setup dialog
-		if strings.has_prefix(a, "--search=") { ui.field_set(&app.search, a[len("--search="):]) }
-		if a == "--setup" { setup_open(app) }
-		if a == "--add-server" { server_edit_open(app, -1) }
-		if strings.has_prefix(a, "--find=") { find_open(app); ui.field_set(&app.find.field, a[len("--find="):]) }
-		if strings.has_prefix(a, "--image=") { image_view_start(app, a[len("--image="):]) }
-		if strings.has_prefix(a, "--attach=") { attach_path(app, a[len("--attach="):]) }   // (what a paste gives, without the clipboard)
-		if strings.has_prefix(a, "--diff=") { diff_full_open_file(app, a[len("--diff="):]) }   // (a patch in the full view)
-		if strings.has_prefix(a, "--slow-motion=") { if n, ok := strconv.parse_f64(a[len("--slow-motion="):]); ok { film_slow_start(app, n) } }
-	}
-	for a in os.args[1:] {   // --settings[=page number]: the settings open at start
-		if a == "--settings" || strings.has_prefix(a, "--settings=") {
-			settings_open(app)
-			if n, ok := strconv.parse_int(strings.trim_prefix(a, "--settings=")); ok && n >= 0 && n < len(Settings_Page) { app.settings_page = Settings_Page(n) }
-		}
+	// what the line asks to see at start
+	if opts.search != "" { ui.field_set(&app.search, opts.search) }
+	if opts.setup { setup_open(app) }
+	if opts.add_server { server_edit_open(app, -1) }
+	if opts.find != "" { find_open(app); ui.field_set(&app.find.field, opts.find) }
+	if opts.image != "" { image_view_start(app, opts.image) }
+	for file in opts.attach { attach_path(app, file) }   // (what a paste gives, without the clipboard)
+	if opts.diff != "" { diff_full_open_file(app, opts.diff) }   // (a patch in the full view)
+	if opts.slow_motion != 0 { film_slow_start(app, opts.slow_motion) }
+	if opts.settings {   // --settings[=page number]
+		settings_open(app)
+		if opts.settings_page >= 0 { app.settings_page = Settings_Page(opts.settings_page) }
 	}
 	platform.show_window(app.win)
 	for !platform.is_closed(app.win) && !app.quit {
@@ -808,11 +791,11 @@ main :: proc() {
 // for a size. Before it is shown; the surface then takes that monitor's size. (Wayland: the compositor places it; only
 // maximized comes back.)
 placement_restore :: proc(app: ^App) {
-	for a in os.args[1:] { if strings.has_prefix(a, "--size=") { return } }
+	if app.cli.size != nil { return }
 	p, ok := platform.placement_parse(config.string_of(&app.cfg_prefs, "window.placement"))
 	if !ok { return }
 	platform.set_placement(app.win, p)
-	if !slice.contains(os.args, "--no-fixed-surface") { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
+	if !app.cli.no_fixed_surface { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
 	app.cx.placement_seen = strings.clone(platform.placement_text(p))
 }
 

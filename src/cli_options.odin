@@ -3,6 +3,8 @@
 package ocn
 
 import "core:os"
+import "core:strconv"
+import "core:strings"
 import cli "gt:cli"
 
 OPTIONS := []cli.Option{
@@ -34,8 +36,9 @@ OPTIONS := []cli.Option{
 	{name = "no-fixed-surface", hidden = true},
 }
 
-// --help, --version, or an option this program does not have: said, and the process ends (no window).
-cli_check :: proc() {
+// The command line, read once at start: --help, --version, or an option this program does not have is said, and the
+// process ends (no window); else what it asks (cli_read).
+cli_start :: proc() -> Cli_Options {
 	program := cli.Program{name = "opencode-native", summary = "a native desktop client for opencode", version = APP_VERSION,
 		examples = {
 			{"opencode-native --session=ses_abc", "open that session"},
@@ -53,4 +56,69 @@ cli_check :: proc() {
 		say("%s", out)
 		os.exit(code)
 	}
+	return cli_read(os.args[1:])
+}
+
+// What the command line asks, read once at start (cli_start) and kept in the App: each place reads its field, nothing reads
+// os.args again. A value not given is its zero, unless said.
+Cli_Options :: struct {
+	url, password, server: string,    // another server and its password; a saved server
+	session, search, find: string,    // the session opened, the sidebar's search, the find bar's text
+	settings:      bool,              // the settings open at start ...
+	settings_page: int,               // ... on this page (-1: the last one)
+	setup, add_server: bool,          // Setup, the dialog that adds a server
+	image:         string,            // a file in the image viewer
+	prefs:         []string,          // "name=value", each --pref in order
+	scale:         f32,               // the interface's scale, within SCALE_MIN..SCALE_MAX (0: the screen's)
+	size:          Maybe([2]f32),     // the window's size in pixels
+	install, desktop, uninstall, quiet, status: bool,
+	frames:        int,               // a check: this many frames, then exit (-1: run)
+	font_dir:      string,            // faces from files (fonts_from_dir)
+	attach:        []string,          // files attached at start, in order
+	diff:          string,            // a patch in the full view
+	slow_motion:   f64,               // the film's slowing (0: none)
+	seek_subagent: bool,
+	no_fixed_surface: bool,
+}
+
+// The options of `args` (the line without the program; cli.check accepted it). The strings are slices of `args`; the lists
+// are in the default allocator, for the program's life.
+cli_read :: proc(args: []string) -> (o: Cli_Options) {
+	given := cli.parse(OPTIONS, args, context.temp_allocator)
+	o.url, _ = cli.value(given, "url")
+	o.password, _ = cli.value(given, "password")
+	o.server, _ = cli.value(given, "server")
+	o.session, _ = cli.value(given, "session")
+	o.search, _ = cli.value(given, "search")
+	o.find, _ = cli.value(given, "find")
+	o.settings = cli.has(given, "settings")
+	o.settings_page = -1
+	if v, ok := cli.value(given, "settings"); ok {
+		if n, n_ok := strconv.parse_int(v); n_ok && n >= 0 && n < len(Settings_Page) { o.settings_page = n }
+	}
+	o.setup = cli.has(given, "setup")
+	o.add_server = cli.has(given, "add-server")
+	o.image, _ = cli.value(given, "image")
+	o.prefs = cli.values(given, "pref", context.allocator)
+	if v, ok := cli.value(given, "scale"); ok {
+		if f, f_ok := strconv.parse_f32(v); f_ok && f >= SCALE_MIN && f <= SCALE_MAX { o.scale = f }
+	}
+	if v, ok := cli.value(given, "size"); ok {   // "<w>x<h>"
+		w_text, _, h_text := strings.partition(v, "x")
+		w, w_ok := strconv.parse_f32(w_text)
+		h, h_ok := strconv.parse_f32(h_text)
+		if w_ok && h_ok { o.size = [2]f32{w, h} }
+	}
+	o.install, o.desktop = cli.has(given, "install"), cli.has(given, "desktop")
+	o.uninstall, o.quiet = cli.has(given, "uninstall"), cli.has(given, "quiet")
+	o.status = cli.has(given, "status")
+	o.frames = -1
+	if v, ok := cli.value(given, "frames"); ok { o.frames, _ = strconv.parse_int(v) }   // (not a number: 0 frames, the check fails)
+	o.font_dir, _ = cli.value(given, "font-dir")
+	o.attach = cli.values(given, "attach", context.allocator)
+	o.diff, _ = cli.value(given, "diff")
+	if v, ok := cli.value(given, "slow-motion"); ok { o.slow_motion, _ = strconv.parse_f64(v) }
+	o.seek_subagent = cli.has(given, "seek-subagent")
+	o.no_fixed_surface = cli.has(given, "no-fixed-surface")
+	return
 }

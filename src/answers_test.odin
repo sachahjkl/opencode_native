@@ -1351,22 +1351,22 @@ a_goal_s_reset_time_is_said_for_a_person :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	app.prefs.clock24 = true
-	the_app = app   // (clock_time reads the 24-hour preference there)
+	the_app = app   // (clock_text reads the 24-hour preference there)
 	defer the_app = nil
 	reason := "The session failed: You've hit your 5-hour limit · resets 12:20pm (Europe/Paris) Resets at 2026-11-10T11:20:00.000Z."
 	text, at := reason_and_reset(reason)
 	testing.expect_value(t, text, "The session failed: You've hit your 5-hour limit · resets 12:20pm (Europe/Paris)")
 	testing.expect_value(t, at, 1794309600000.0)   // (2026-11-10 11:20 UTC)
-	testing.expect_value(t, reset_text(at, at - 42 * 60_000 - 5_000), fmt.tprintf("  ·  resets at %s  ·  in 43 min", clock_time(at)))
-	testing.expect_value(t, reset_text(at, at - 65 * 60_000), fmt.tprintf("  ·  resets at %s  ·  in 1h 05", clock_time(at)))
-	testing.expect_value(t, reset_text(at, at + 1), fmt.tprintf("  ·  limit reset at %s", clock_time(at)))
+	testing.expect_value(t, reset_text(at, at - 42 * 60_000 - 5_000), fmt.tprintf("  ·  resets at %s  ·  in 43 min", clock_text(at)))
+	testing.expect_value(t, reset_text(at, at - 65 * 60_000), fmt.tprintf("  ·  resets at %s  ·  in 1h 05", clock_text(at)))
+	testing.expect_value(t, reset_text(at, at + 1), fmt.tprintf("  ·  limit reset at %s", clock_text(at)))
 	// another day: its date, and the time left in days
 	later := at + 3 * 86_400_000
 	testing.expect(t, strings.has_prefix(reset_text(later, at), "  ·  resets on Nov 13 at ") || strings.has_prefix(reset_text(later, at), "  ·  resets on Nov 14 at "), reset_text(later, at))
 	testing.expect(t, strings.has_suffix(reset_text(later, at), "  ·  in 3d 00h"), reset_text(later, at))
 	// a time in the middle of a sentence: the local clock's, in its place
 	text, at = reason_and_reset("Paused until 2026-11-10T11:20:00Z by the user.")
-	testing.expect_value(t, text, fmt.tprintf("Paused until %s by the user.", clock_time(1794309600000)))
+	testing.expect_value(t, text, fmt.tprintf("Paused until %s by the user.", clock_text(1794309600000)))
 	testing.expect_value(t, at, 1794309600000.0)
 	text, at = reason_and_reset("The session failed: no time here.")
 	testing.expect_value(t, text, "The session failed: no time here.")

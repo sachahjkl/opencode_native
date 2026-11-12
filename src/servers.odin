@@ -6,7 +6,6 @@ package ocn
 import "core:fmt"
 import "core:math"
 import "core:mem/virtual"
-import "core:os"
 import "core:strings"
 import "core:sync"
 import "core:thread"
@@ -48,10 +47,9 @@ password_from_field :: proc(name, field: string) -> (password, stored: string, c
 
 // The list at start: this computer's server, the saved ones (a line "name<TAB>url<TAB>protected password"), then --url's.
 servers_init :: proc(app: ^App) {
-	cfg := discover_server()
-	argv := false
-	for a in os.args[1:] { if strings.has_prefix(a, "--url=") { argv = true } }
-	local := argv ? local_server_config() : cfg
+	cfg := discover_server(app.cli.url, app.cli.password)
+	argv := app.cli.url != ""
+	local := argv ? discover_server() : cfg   // (this computer's server as its files say, whatever --url says)
 	append(&app.servers, Server{name = strings.clone("This computer"), url = server_url(local), password = strings.clone(local.password), local = true})
 	for e in store.list(&app.stores.servers) {   // (read at the start, stores_open: the name, then "url<TAB>field")
 		if strings.trim_space(e.key) == "" { continue }
@@ -67,19 +65,9 @@ servers_init :: proc(app: ^App) {
 	} else if last := settings_get(app, "server"); last != "" {
 		for s, i in app.servers { if s.name == last { app.server = i } }
 	}
-	for a in os.args[1:] {   // --server=<name>: that one at start
-		if strings.has_prefix(a, "--server=") {
-			for s, i in app.servers { if s.name == a[len("--server="):] { app.server = i } }
-		}
+	if name := app.cli.server; name != "" {   // --server=<name>: that one at start
+		for s, i in app.servers { if s.name == name { app.server = i } }
 	}
-}
-
-// This computer's server as its files say now, whatever --url / --password say.
-local_server_config :: proc() -> Server_Config {
-	saved_args := os.args
-	os.args = os.args[:1]
-	defer os.args = saved_args
-	return discover_server()
 }
 
 REDISCOVER_MS :: 2500
@@ -91,7 +79,7 @@ servers_rediscover :: proc(app: ^App) {
 	now := ui.now_ms()
 	if now - app.rediscover_ms < REDISCOVER_MS { return }
 	app.rediscover_ms = now
-	cfg := local_server_config()
+	cfg := discover_server()
 	defer { delete(cfg.host); delete(cfg.password) }
 	url := server_url(cfg)
 	s := &app.servers[app.server]

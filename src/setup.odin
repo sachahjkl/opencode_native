@@ -5,7 +5,6 @@ package ocn
 import "core:fmt"
 import "core:image/png"
 import "core:os"
-import "core:slice"
 import desktop "gt:desktop"
 import "gt:draw"
 import "gt:render"
@@ -19,16 +18,15 @@ LOGO_PNG :: #load("../assets/logo_256.png")
 ////////////////////////////////
 // Command line: --install [--desktop], --uninstall, --status (no window; exit code 0 = done / installed)
 
-desktop_cli :: proc() -> (handled: bool, code: int) {
-	args := os.args[1:]
+desktop_cli :: proc(o: Cli_Options) -> (handled: bool, code: int) {
 	switch {
-	case slice.contains(args, "--install"):
-		ok, msg := setup.install(setup_config(), slice.contains(args, "--desktop"))
+	case o.install:
+		ok, msg := setup.install(setup_config(), o.desktop)
 		say(ok ? "installed: %s\n" : "install failed: %s\n", msg)
 		if desktop.is_nixos() { say("%s\n", NIXOS_ADVICE) }
 		return true, ok ? 0 : 1
-	case slice.contains(args, "--uninstall"):
-		quiet := slice.contains(args, "--quiet")
+	case o.uninstall:
+		quiet := o.quiet
 		if !quiet && message_box("Remove opencode native from this computer?\n\n" + LBL_PIECES + " and the program are removed. Nothing on the opencode server changes.", true) != 6 { return true, 1 }
 		ok, leftovers, msg := setup.uninstall(setup_config())
 		if ok { desktop_copy_remove() }
@@ -36,7 +34,7 @@ desktop_cli :: proc() -> (handled: bool, code: int) {
 		if len(leftovers) > 0 && !setup.remove_later(setup_config(), leftovers[:]) { ok, msg = false, "cannot schedule the removal of the program" }
 		if !quiet { message_box(ok ? "opencode native was removed." : fmt.tprintf("The removal failed: %s", msg), false) }
 		return true, ok ? 0 : 1
-	case slice.contains(args, "--status"):
+	case o.status:
 		f := setup.facts(setup_config())
 		say("%v %s\n", f.state, f.exe)
 		#partial switch f.state {

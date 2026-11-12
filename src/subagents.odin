@@ -28,7 +28,6 @@ CARD_INDENT_EM   :: CARD_PAD_EM + CARD_MARK_EM + CARD_MARK_GAP_EM
 SEEK_ANCHOR_EM     :: 7      // --seek-subagent: how far down the view it lands
 PROMPT_LINES_MAX   :: 18
 FINISHED_SHOWN     :: 40     // in the menu of the sub-agents
-DURATION_HOURS_MAX :: 48     // from there on a duration is told in days
 
 // What the menu and the chips keep of a title or an activity, in characters.
 MENU_TITLE_CHARS    :: 40
@@ -132,18 +131,6 @@ sub_view :: proc(app: ^App, child: string, p: ^Part = nil) -> (v: Sub_View) {
 	if l, ok := c.live[child]; ok { v.live, v.has_live = l, true }
 	if app.busy[child] or_else false { v.state = .Running; v.ended = 0 }
 	return
-}
-
-// "4m 12s", "1h 03m": the time from `a` to `b` (epoch ms).
-duration :: proc(a, b: f64) -> string {
-	if a <= 0 || b <= a { return "" }
-	s := int((b - a) / MS_PER_S)
-	switch {
-	case s < SECS_PER_MINUTE:   return fmt.tprintf("%ds", s)
-	case s < SECS_PER_HOUR: return fmt.tprintf("%dm %02ds", s / SECS_PER_MINUTE, s % SECS_PER_MINUTE)
-	}
-	if s < DURATION_HOURS_MAX * SECS_PER_HOUR { return fmt.tprintf("%dh %02dm", s / SECS_PER_HOUR, (s / SECS_PER_MINUTE) % MINUTES_PER_HOUR) }
-	return fmt.tprintf("%dd %02dh", s / SECS_PER_DAY, (s / SECS_PER_HOUR) % 24)
 }
 
 ////////////////////////////////
@@ -502,7 +489,7 @@ card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: b
 
 // What a card keeps on its first line, at its right: the state where it needs words (the mark says the others), how long.
 card_when :: proc(v: ^Sub_View, end: f64) -> string {
-	d := duration(v.started, end)
+	d := duration_text(v.started, end)
 	if v.state != .Failed && v.state != .Cancelled { return d }
 	return d != "" ? fmt.tprintf("%s · %s", sub_state_label(v.state), d) : sub_state_label(v.state)
 }
@@ -585,8 +572,8 @@ sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 		}
 		row("###f1", "session", s.id, em)
 		row("###f2", "title", s.title, em)
-		row("###f3", "started", fmt.tprintf("%s  (%s ago)", clock_time(s.created), duration(s.created, now_epoch_ms())), em)
-		if s.idle > 0 { row("###f4", "finished", fmt.tprintf("%s  after %s", clock_time(s.idle), duration(s.created, s.idle)), em) }
+		row("###f3", "started", fmt.tprintf("%s  (%s ago)", clock_text(s.created), duration_text(s.created, now_epoch_ms())), em)
+		if s.idle > 0 { row("###f4", "finished", fmt.tprintf("%s  after %s", clock_text(s.idle), duration_text(s.created, s.idle)), em) }
 		if s.outcome != "" {
 			row("###f5", "outcome", s.outcome, em)
 		}
@@ -622,7 +609,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 			ui.spacer(ui.px(em * 0.6))
 			desc := m.sub_desc != "" ? m.sub_desc : v.desc
 			text("d", desc, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
-			text("at", clock_time(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("at", clock_text(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.5))
 			if m.sub_child != "" {
 				if bevel_button("###open", "Open", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true).clicked { drill_down(app, m.sub_child) }
@@ -691,7 +678,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 				parent := c.parent_title != "" ? c.parent_title : s.parent
 				text("p", fmt.tprintf("launched by “%s”", parent), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.4)}, ui.fill())
 				end := s.idle > 0 && st != .Running ? s.idle : now_epoch_ms()
-				facts := fmt.tprintf("started %s · %s · %s in · %s out%s", clock_time(s.created), duration(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out), s.cost > 0 ? fmt.tprintf(" · $%.2f", s.cost) : "")
+				facts := fmt.tprintf("started %s · %s · %s in · %s out%s", clock_text(s.created), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out), s.cost > 0 ? fmt.tprintf(" · $%.2f", s.cost) : "")
 				text("f", facts, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
@@ -738,7 +725,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 			for s in active {
 				v := sub_view(app, s.id)
 				what := v.has_live && v.live.activity != "" ? v.live.activity : s.agent
-				if ui.menu_item(fmt.tprintf("▶  %s  —  %s", label_safe(ellipsize(s.title, MENU_TITLE_CHARS)), label_safe(ellipsize(what, MENU_ACTIVITY_CHARS))), duration(s.created, now_epoch_ms())).clicked { drill_down(app, s.id) }
+				if ui.menu_item(fmt.tprintf("▶  %s  —  %s", label_safe(ellipsize(s.title, MENU_TITLE_CHARS)), label_safe(ellipsize(what, MENU_ACTIVITY_CHARS))), duration_text(s.created, now_epoch_ms())).clicked { drill_down(app, s.id) }
 			}
 			ui.menu_separator()
 		}
@@ -755,7 +742,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 			case .Cancelled: mark = "■"
 			}
 			end := v.ended > 0 ? v.ended : s.updated
-			if ui.menu_item(fmt.tprintf("%s  %s · %s", mark, label_safe(ellipsize(s.title, MENU_FINISHED_CHARS)), label_safe(s.agent)), duration(s.created, end)).clicked { drill_down(app, s.id) }
+			if ui.menu_item(fmt.tprintf("%s  %s · %s", mark, label_safe(ellipsize(s.title, MENU_FINISHED_CHARS)), label_safe(s.agent)), duration_text(s.created, end)).clicked { drill_down(app, s.id) }
 			shown += 1
 		}
 	}
@@ -805,7 +792,7 @@ active_strip :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.45))
 				text("t", ellipsize(s.title, CHIP_TITLE_CHARS), hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 				ui.spacer(ui.px(em * 0.5))
-				what := duration(s.created, now)
+				what := duration_text(s.created, now)
 				if v.has_live && v.live.activity != "" { what = fmt.tprintf("%s · %s", ellipsize(v.live.activity, CHIP_ACTIVITY_CHARS), what) }
 				text("w", what, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.6))

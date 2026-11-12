@@ -3,7 +3,6 @@
 // Escape closes it for this word. Enter on a name typed in full sends it, as before (slash_send).
 package ocn
 
-import "core:slice"
 import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -26,17 +25,11 @@ slash_word :: proc(text: string, cursor: int) -> (query: string, ok: bool) {
 
 // The commands that match `query`, best first (indices into app.cx.slash), at most MENTION_ROWS.
 slash_matches :: proc(app: ^App, query: string) -> []int {
-	Hit :: struct { at, score: int }
-	hits := make([dynamic]Hit, context.temp_allocator)
-	for s, i in app.cx.slash {
-		score, _, ok := ui.fuzzy_score(query, s.name)
-		if ok { append(&hits, Hit{i, score}) }
-	}
-	slice.stable_sort_by(hits[:], proc(a, b: Hit) -> bool { return a.score > b.score })
+	hits := ui.rank(query, app.cx.slash[:], proc(s: ^Slash, _: rawptr) -> ui.Rank_Entry { return {label = s.name} }, match = ui.fuzzy_match)
 	out := make([dynamic]int, context.temp_allocator)
 	for h in hits {
 		if len(out) == MENTION_ROWS { break }
-		append(&out, h.at)
+		append(&out, h.index)
 	}
 	return out[:]
 }
