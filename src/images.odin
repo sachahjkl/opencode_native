@@ -524,7 +524,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 				b := ui.build_box({.Clickable, .Scroll_Self}, "###view")
 				sig := ui.signal(b)
 				if sig.pressed && viewer_outside(sig.mouse, view, picture, app.viewer.pan) { closing = true }
-				if ui.mouse_pressed(.Right) && rect_contains(b.rect, ui.mouse_pos()) && !app.ctx_menu.taken {
+				if ui.mouse_pressed(.Right) && ui.pointer_on(b) && !app.ctx_menu.taken {
 					if diagram { ctx_open(app, .Diagram, msg = app.viewer.diagram) } else { ctx_open(app, .Image, image = app.viewer.ref) }
 				}
 				if sig.scrolled.y != 0 {
