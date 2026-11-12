@@ -82,3 +82,17 @@ the_palette_finds_a_command_by_its_tags_or_a_slip :: proc(t: ^testing.T) {
 	testing.expect_value(t, first(palette_hits(app, items[:], "Qestart pencode native"), items[:]), "app.restart")
 	testing.expect_value(t, first(palette_hits(app, items[:], "restart opencode"), items[:]), "app.restart")
 }
+
+// A session's command says which session it acts on: the one shown, by its title, beside it.
+@(test)
+a_session_command_names_its_session :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	append(&app.sessions, Session_Info{id = "s1", title = "The blend of the pane"})
+	sessions_changed(app)
+	app.chat.id = "s1"
+	items := palette_items(app, 0, false)
+	fork := ""
+	for it in items { if it.id == "session.fork" { fork = it.detail } }
+	testing.expect_value(t, fork, "Session · The blend of the pane")
+}

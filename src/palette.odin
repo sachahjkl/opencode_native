@@ -95,14 +95,17 @@ slash_forget :: proc(app: ^App) {
 	app.cx.have_slash = false
 }
 
-@(private = "file")
 palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 	items := make([dynamic]Pal_Item, context.temp_allocator)
 	want :: proc(only, mark: rune) -> bool { return only == 0 || only == mark }
 	if want(only, '>') {
+		// (what a session's command acts on: the session shown, named beside it; "Fork the session" said which one)
+		shown := ""
+		if s := find_session(app, app.chat.id); s != nil { shown = fmt.tprintf("Session · %s", ellipsize(s.title != "" ? s.title : "Untitled", PALETTE_SESSION_CHARS)) }
 		for &c in COMMANDS {
 			if !command_enabled(app, &c) || c.id == "app.palette" { continue }
 			it := Pal_Item{kind = .Command, id = c.id, title = c.title, detail = c.group, keys = c.keys, icon = c.icon, cmd = &c, tags = strings.fields(c.tags, context.temp_allocator)}
+			if c.group == "Session" && shown != "" { it.detail = shown }
 			if c.checked != nil { it.toggle, it.on = true, c.checked(app) }
 			append(&items, it)
 		}
