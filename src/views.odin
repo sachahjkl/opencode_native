@@ -1713,7 +1713,7 @@ composer :: proc(app: ^App, em: f32) {
 			held := composer_held(app)
 			if app.column_w > em * COMPOSER_HINT_MIN_EM && fit < 1 {   // (room for it beside the agent and model buttons)
 				if held {
-					text("hint", "starting the session…", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					text("hint", attaching(app) ? "reading the attachment…" : "starting the session…", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				} else if history_browsing(app) {
 					text("hint", fmt.tprintf("history %d/%d   ·   ", app.history.at, len(app.history.view)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 					if hint_action("###hist_back", "Esc  back to your text", em, app.mono) { history_leave(app, true) }

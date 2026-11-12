@@ -117,6 +117,29 @@ draft_enter :: proc(app: ^App) {
 	draft_drop(app, app.chat.id)
 }
 
+// What came for the composer of session `chat` (an attachment read on its thread, a file's path for the text): in the
+// composer when that session is shown, else in its draft, which its composer gets when it is shown again.
+composer_take :: proc(app: ^App, chat: string, a: Maybe(Attachment), text: string) {
+	c := &app.cx
+	if chat == app.chat.id {
+		if x, ok := a.?; ok { append(&c.attachments, x) }
+		if text != "" { area_insert(&app.composer, text) }
+		return
+	}
+	d, known := &c.drafts[chat]
+	if !known {
+		c.drafts[strings.clone(chat)] = {}
+		d = &c.drafts[chat]
+	}
+	if x, ok := a.?; ok { append(&d.attachments, x) }
+	if text != "" {
+		joined := strings.concatenate({d.text, text})
+		delete(d.text)
+		d.text = joined
+	}
+	drafts_save_soon(app)
+}
+
 @(private = "file")
 draft_free :: proc(d: ^Draft) {
 	delete(d.text)

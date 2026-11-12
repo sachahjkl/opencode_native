@@ -36,8 +36,9 @@ Outgoing :: struct {
 	fields:   string,              // more for the prompt's JSON: how it is delivered (not owned: a literal)
 }
 
-// Starting a session from the composer shown: nothing more goes from it until that is done.
+// Starting a session from the composer shown, or reading a file for it: nothing more goes from it until that is done.
 composer_held :: proc(app: ^App) -> bool {
+	if attaching(app) { return true }
 	for o in app.cx.outgoing {
 		if o.stage <= .Model && o.session == app.chat.id { return true }
 	}
@@ -80,12 +81,39 @@ outgoing_takes_composer :: proc(app: ^App, o: ^Outgoing) {
 	clear(&app.cx.mentions.chosen)
 }
 
+// A prompt of the composer has its body built on its request's thread (Prompt_Parts): its files' data URLs are megabytes to
+// quote. From here until its answer nothing changes the Outgoing (its stage is Sending), whose memory that thread reads.
 @(private = "file")
 outgoing_send :: proc(app: ^App, o: ^Outgoing) {
 	o.stage = .Sending
 	path := o.path != "" ? o.path : fmt.tprintf("/api/session/%s/prompt", o.session)
-	body := o.body != "" ? o.body : fmt.tprintf(`{{"text":%s%s%s}}`, jquote(o.text), prompt_fields(o.files[:], o.mentions[:], o.text), o.fields)
-	request(app, .Prompt, "POST", path, body, o.session, out = o.id)
+	if o.body != "" { request(app, .Prompt, "POST", path, o.body, o.session, out = o.id); return }
+	request(app, .Prompt, "POST", path, tag = o.session, out = o.id, prompt = Prompt_Parts{o.text, o.files[:], o.mentions[:], o.fields})
+}
+
+// What a prompt's body is made of (the Outgoing's, not copied: outgoing_send).
+Prompt_Parts :: struct {
+	text:     string,
+	files:    []Attachment,
+	mentions: []Mention,
+	fields:   string,
+}
+
+// The bytes of a body past its texts: its keys, its quotes and a few escapes, before the builder grows.
+@(private = "file") PROMPT_BODY_SPARE_BYTES :: 64
+@(private = "file") PROMPT_FILE_SPARE_BYTES :: 32
+
+// A prompt's JSON: its text, what goes with it, how it is delivered. (On its request's thread: request.)
+prompt_body :: proc(p: Prompt_Parts, allocator := context.allocator) -> string {
+	size := len(p.text) + len(p.fields) + PROMPT_BODY_SPARE_BYTES
+	for a in p.files { size += len(a.uri) + len(a.name) + PROMPT_FILE_SPARE_BYTES }
+	b := strings.builder_make(0, size, allocator)
+	strings.write_string(&b, `{"text":`)
+	jquote_into(&b, p.text)
+	prompt_fields_into(&b, p.files, p.mentions, p.text)
+	strings.write_string(&b, p.fields)
+	strings.write_byte(&b, '}')
+	return strings.to_string(b)
 }
 
 // The composer's prompt, to the session shown, or to a new one in `directory` from the home page. (`fields`: send_as_fields)

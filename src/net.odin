@@ -12,6 +12,8 @@ import "core:mem/virtual"
 import "core:sync"
 import "core:thread"
 import "core:time"
+import "core:unicode/utf8"
+import "gt:ascii"
 import "gt:ui"
 
 Server_Config :: struct {
@@ -146,20 +148,49 @@ JQUOTE_SPARE_BYTES :: 8   // the quotes and a few escapes before the builder gro
 // A JSON string literal (quotes included).
 jquote :: proc(s: string, allocator := context.temp_allocator) -> string {
 	b := strings.builder_make(0, len(s) + JQUOTE_SPARE_BYTES, allocator)
-	strings.write_byte(&b, '"')
-	for r in s {
-		switch r {
-		case '"':  strings.write_string(&b, `\"`)
-		case '\\': strings.write_string(&b, `\\`)
-		case '\n': strings.write_string(&b, `\n`)
-		case '\r': strings.write_string(&b, `\r`)
-		case '\t': strings.write_string(&b, `\t`)
-		case:
-			if r < 0x20 { fmt.sbprintf(&b, `\u%04x`, int(r)) } else { strings.write_rune(&b, r) }
-		}
-	}
-	strings.write_byte(&b, '"')
+	jquote_into(&b, s)
 	return strings.to_string(b)
+}
+
+// jquote, written to `b`. What needs nothing is copied a run at a time (an attached file's data URL is megabytes of it): the
+// next byte to escape, or past ASCII, is found 16 bytes at a time (ascii.index_any_byte). A byte that is no UTF-8 goes as
+// U+FFFD, as it always went.
+jquote_into :: proc(b: ^strings.Builder, s: string) {
+	strings.write_byte(b, '"')
+	rest := s
+	for len(rest) > 0 {
+		k := ascii.index_any_byte(rest, "\"\\", below = 0x20, non_ascii = true)
+		if k < 0 { strings.write_string(b, rest); break }
+		strings.write_string(b, rest[:k])
+		rest = rest[k:]
+		if rest[0] >= 0x80 {
+			// (runes past ASCII: the run copied whole, but for a byte that is no UTF-8)
+			run := 0
+			for run < len(rest) && rest[run] >= 0x80 {
+				r, w := utf8.decode_rune_in_string(rest[run:])
+				if r == utf8.RUNE_ERROR && w == 1 {
+					strings.write_string(b, rest[:run])
+					strings.write_string(b, "\uFFFD")
+					rest, run = rest[run + 1:], 0
+					continue
+				}
+				run += w
+			}
+			strings.write_string(b, rest[:run])
+			rest = rest[run:]
+			continue
+		}
+		switch c := rest[0]; c {
+		case '"':  strings.write_string(b, `\"`)
+		case '\\': strings.write_string(b, `\\`)
+		case '\n': strings.write_string(b, `\n`)
+		case '\r': strings.write_string(b, `\r`)
+		case '\t': strings.write_string(b, `\t`)
+		case:       fmt.sbprintf(b, `\u%04x`, int(c))
+		}
+		rest = rest[1:]
+	}
+	strings.write_byte(b, '"')
 }
 
 // Indented JSON text of a value (tool inputs shown to the user).
@@ -281,6 +312,7 @@ Request :: struct {
 	remote: ^Remote,   // the reading it is (nil: none), and which one: answer settles it
 	ticket: u64,
 	out:    u64,       // the prompt on its way it carries (outgoing.odin, 0: none)
+	prompt: Maybe(Prompt_Parts),   // what its body is made of, built on its thread (outgoing_send: megabytes to quote; nil: `body`)
 	asked_at: Seq,     // App_Context.stream_seq when it left: what the stream said after that is newer than its answer
 	// the answer
 	status: int,
@@ -314,27 +346,39 @@ flight_ends :: proc(app: ^App, r: ^Request) {
 	}
 }
 
-request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "", delay := 0, remote: ^Remote = nil, out: u64 = 0, conn: ^Conn = nil) {
+request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "", delay := 0, remote: ^Remote = nil, out: u64 = 0, conn: ^Conn = nil, prompt: Maybe(Prompt_Parts) = nil) {
 	to := conn != nil ? conn : app.conn
 	if to == nil {   // (no server yet: nothing to ask)
 		if remote != nil { remote_settle(remote, .Failed, "Not connected") }
 		return
 	}
 	r := new(Request)
-	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = to, app = app, delay = delay, remote = remote, out = out, asked_at = app.cx.stream_seq}
+	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = to, app = app, delay = delay, remote = remote, out = out, asked_at = app.cx.stream_seq, prompt = prompt}
 	if remote != nil { r.ticket = remote.ticket }
 	sync.atomic_add(&app.pending, 1)
 	append(&app.cx.flights, Flight{kind, strings.clone(tag), to})
-	when ODIN_TEST {   // (answers_test.odin: kept for the test to answer, in the order it wants)
+	when ODIN_TEST {   // (answers_test.odin: kept for the test to answer, in the order it wants; its body as its thread makes it)
+		request_body(r)
 		bench_sent_add(r)
 		return
 	}
 	thread.create_and_start_with_poly_data(r, proc(r: ^Request) {
 		if r.delay > 0 { time.sleep(time.Duration(r.delay) * time.Millisecond) }
+		request_body(r)
 		r.status, r.resp, r.ok = http_request(&r.conn.http, r.method, r.path, r.body)
 		req_read(r)
 		if !ui.post(&r.app.state, on_answer, r) { request_free(r) }
 	}, self_cleanup = true)
+}
+
+// A prompt's body, on the request's thread (in a test, at once). Its parts are no longer read after it: the answer may free them.
+@(private = "file")
+request_body :: proc(r: ^Request) {
+	p, ok := r.prompt.?
+	if !ok { return }
+	delete(r.body)
+	r.body = prompt_body(p)
+	r.prompt = nil
 }
 
 // A GET in a while: what is being waited for costs a sleeping thread, no frame.
