@@ -1887,6 +1887,28 @@ the_palette_at_rest_builds_only_its_rows_in_view :: proc(t: ^testing.T) {
 	})
 }
 
+// The palette's search is on a field's darker background, the strip of the toolkit's palette and menus: it was the dialog's own
+// colour, a line under it, unlike every other search.
+@(test)
+the_palettes_search_is_on_a_darker_strip :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		command_run(app, command_find("app.palette"))
+		session.frames(s, 3)
+		top, list := session.find(s, "pal_top"), session.find(s, "pal_list")
+		if !testing.expect(t, top != nil && list != nil, "the strip and the list") { return }
+		img := session.capture(s)
+		light :: proc(c: session.Color) -> int { return int(c.r) + int(c.g) + int(c.b) }
+		x := int(top.rect.max.x) - 6   // (past the count: nothing drawn there but the background)
+		strip := session.pixel(img, x, int((top.rect.min.y + top.rect.max.y) * 0.5))
+		dialog := session.pixel(img, x, int((top.rect.max.y + list.rect.min.y) * 0.5) + 1)   // (the gap under the strip)
+		testing.expectf(t, light(strip) < light(dialog) - 6, "the strip %v darker than the dialog %v", strip, dialog)
+		app.cx.open[.Palette] = false
+		session.frames(s, 2)
+	})
+}
+
 // The palette's arrows move its selection: they are read inside its dialog, which holds the keys while it is open.
 @(test)
 the_palette_arrows_move_the_selection :: proc(t: ^testing.T) {

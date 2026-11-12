@@ -11,10 +11,14 @@ import "core:slice"
 import "core:strings"
 import toolbox "gt:toolbox"
 
-// What the program needs on Linux, built or tested: the text backend is the toolkit's native one, inside the Rust library (no
-// DirectWrite here); wgpu-native is a second Rust library: both carry Rust's standard library, whose few unmangled symbols
+// What the program needs on Linux, built or tested: the text backend is the toolkit's native one (its default there), inside
+// the Rust library; wgpu-native is a second Rust library: both carry Rust's standard library, whose few unmangled symbols
 // (rust_eh_personality) are the same code.
-LINUX_FLAGS :: [?]string{"-define:FONT_BACKEND=native", "-define:FONT_NATIVE_LINK=false", "-extra-linker-flags:-Wl,--allow-multiple-definition"}
+LINUX_LINK  :: "-Wl,--allow-multiple-definition"
+LINUX_FLAGS :: [?]string{"-define:FONT_NATIVE_LINK=false", "-extra-linker-flags:" + LINUX_LINK}
+// A release on Linux is stripped: its symbol table is a quarter of the file, and nothing reads it (a panic says its place
+// from #caller_location, not from symbols). Windows' has none without -debug.
+LINUX_RELEASE_FLAGS :: [?]string{"-define:FONT_NATIVE_LINK=false", "-extra-linker-flags:" + LINUX_LINK + " -s"}
 // On every system: the toolkit's Mermaid diagrams are built into native/ocn_native (gt_mermaid), not linked on their own.
 NATIVE_FLAGS :: [?]string{"-define:MERMAID_NATIVE_LINK=false"}
 
@@ -248,7 +252,8 @@ build_program :: proc(b: Build) -> bool {
 		if b.mode != .Debug { append(&cmd, "-subsystem:windows") }
 	} else {
 		flags := LINUX_FLAGS
-		append(&cmd, ..flags[:])
+		release := LINUX_RELEASE_FLAGS
+		append(&cmd, ..(b.mode == .Release ? release[:] : flags[:]))
 	}
 	switch b.mode {
 	case .Dev:     append(&cmd, "-o:minimal")

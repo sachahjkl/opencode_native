@@ -280,9 +280,11 @@ palette_dialog :: proc(app: ^App, em: f32) {
 		}
 		vl.sel = clamp(vl.sel, 0, max(n - 1, 0))
 		dialog_backdrop()
-		// the search: flush with the palette's top and sides, no frame of its own; a line under it parts it from the list
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
+		// the search: flush with the palette's top and sides, on a field's darker background, a line under it (the toolkit's
+		// strip, as every palette and menu that searches has it: ui.dialog_top_draw), its top corners the dialog's
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center, radius = ui.parent_box().radius})
 		if ui.row(.Center, id = "###pal_top") {
+			ui.parent_box().custom = ui.dialog_top_draw
 			ui.spacer(ui.px(em * 0.9))
 			glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 			if ui.tags("bare") {
@@ -296,7 +298,6 @@ palette_dialog :: proc(app: ^App, em: f32) {
 			text("n", fmt.tprintf("%d", n), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.9))
 		}
-		edge_line("###pal_rule")
 		ui.spacer(ui.px(em * 0.45))
 		if p.reveal && n > 0 { ui.list_select(&vl.list, vl.sel); p.reveal = false }
 		vl.no_typeahead = true   // (letters are the field's)
