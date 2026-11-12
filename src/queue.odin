@@ -308,8 +308,8 @@ queue_edit :: proc(app: ^App, id: string) {
 	clear(&app.cx.attachments)
 	append(&e.mentions, ..app.cx.mentions.chosen[:])
 	clear(&app.cx.mentions.chosen)
-	v, _ := json.parse_string(it.payload, parse_integers = true, allocator = context.temp_allocator)
-	body, _ := json.parse_string(prompt_of_payload(v), parse_integers = true, allocator = context.temp_allocator)
+	v := json_of_own(app, "queued payload", it.payload)
+	body := json_of_own(app, "queued prompt", prompt_of_payload(v))
 	prompt_parts(body, &app.cx.attachments, &app.cx.mentions.chosen)
 	ui.area_set(&app.composer, it.text)
 	app.cx.focus_composer = true

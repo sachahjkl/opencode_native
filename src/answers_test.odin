@@ -83,10 +83,12 @@ bench_lost :: proc(app: ^App, r: ^Request) {
 	answer(app, r)
 }
 
+// As the stream gives it: read as its thread reads it, applied, then its memory freed before the next (what the model keeps of it
+// must be its own copy).
 bench_event :: proc(app: ^App, text: string) {
-	v, err := json.parse_string(text, parse_integers = true, allocator = context.temp_allocator)
-	assert(err == nil, text)
-	apply_event(app, v)
+	e := event_read(app.conn, text)
+	assert(!e.unreadable, text)
+	event_take(app, e)
 }
 
 @(private = "file")

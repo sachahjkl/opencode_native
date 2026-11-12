@@ -1988,6 +1988,10 @@ status_bar :: proc(app: ^App, em: f32) {
 			fps := app.cx.frame_ms > 0 ? 1000 / app.cx.frame_ms : 0
 			text("fps", fmt.tprintf("%3.0f fps  %.1f ms", fps, app.cx.work_ms), hex(HEX_FAINT), small)
 			ui.spacer(ui.px(em * 0.8))
+			if n := app.cx.unreadable.count; n > 0 {   // (unreadable.odin: the log says what they were)
+				text("unr", fmt.tprintf("%d unreadable", n), hex(HEX_YELLOW), small)
+				ui.spacer(ui.px(em * 0.8))
+			}
 		}
 	}
 }

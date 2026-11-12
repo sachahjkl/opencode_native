@@ -202,7 +202,7 @@ outgoing_catalog :: proc(app: ^App) {
 
 // A prompt out of the inbox (net.odin inbox_send): `body` goes as it is, what it says is what would come back.
 outgoing_inbox :: proc(app: ^App, session, body: string) {
-	v, _ := json.parse_string(body, parse_integers = true, allocator = context.temp_allocator)
+	v := json_of_own(app, "inbox prompt", body)
 	o := outgoing_new(app, .Sending, session, jstr(v, "text"))
 	o.body = strings.clone(body)
 	prompt_parts(v, &o.files, &o.mentions)
