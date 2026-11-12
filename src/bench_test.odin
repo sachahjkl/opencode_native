@@ -41,6 +41,8 @@ BENCH_DELTA       :: "Each `delta` adds a few words to the answer, **as a model 
 BENCH_TYPED       :: "the quick brown fox jumps over the lazy dog "
 BENCH_FIND        :: "lazy column"
 BENCH_SEARCH      :: "project"
+BENCH_PALETTE_SLIPS :: "frmae pacnig"   // words typed with slips: few items have them, most go through the search for slips
+BENCH_MODELS      :: 300
 BENCH_CHAT_ID     :: "ses_bench"
 LAST_SESSION      :: "ls_ses_395"      // the last session of the last group (project_11), not a sub-agent
 SIDEBAR_WHEEL     :: 10
@@ -440,6 +442,25 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		}
 		profile_end("palette")
 		bench_report(&pal)
+
+		// the palette at rest, nothing typed nor changed: only the pointer moves a pixel. Its frames cost as much as typing
+		// did: each one matched and ranked every item again (a query that finds few: most items went on to the slips' search),
+		// and built every row it found, in view or not.
+		for i in 0 ..< BENCH_MODELS {
+			append(&app.models, Model_Info{id = fmt.aprintf("model-%d", i), provider = fmt.aprintf("provider-%d", i % 12), name = fmt.aprintf("Model %d of the bench", i)})
+		}
+		for query in ([]string{BENCH_PALETTE_SLIPS, "@"}) {
+			ui.field_set(&app.palette.field, query)
+			session.frames(s, 3)
+			rest := Bench_Case{name = query == "@" ? "pal_all" : "pal_slips"}
+			profile_begin()
+			for i in 0 ..< BENCH_FRAMES {
+				session.move(s, {800 + f32(i % 2), 120})
+				bench_frame(s, &rest)
+			}
+			profile_end(rest.name)
+			bench_report(&rest)
+		}
 		app.cx.open[.Palette] = false
 		session.frames(s, 2)
 
@@ -1771,6 +1792,41 @@ a_recent_folder_tells_and_copies_its_path :: proc(t: ^testing.T) {
 	})
 }
 
+// The palette over hundreds of sessions builds the rows in view only, and at rest makes nothing again: it built two hundred
+// rows and matched and ranked every item at each frame, the pointer moving over it enough. A session that comes makes the list again.
+@(test)
+the_palette_at_rest_builds_only_its_rows_in_view :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		command_run(app, command_find("app.palette"))
+		session.frames(s, 3)
+		ui.field_set(&app.palette.field, "@")
+		session.frames(s, 3)
+		found := len(app.palette.hits)
+		testing.expectf(t, found >= 300, "the sessions found: %d", found)
+		rows := 0
+		list := session.find(s, "pal_list")
+		if testing.expect(t, list != nil, "the list") {
+			for c := list.first; c != nil; c = c.next { if strings.has_prefix(c.name, "###lrow_") || strings.contains(c.name, "lrow_") { rows += 1 } }
+		}
+		testing.expectf(t, rows > 5 && rows < 60, "the rows in view and a margin: %d built", rows)
+		stamp, kept := app.palette.stamp, raw_data(app.palette.hits)
+		for i in 0 ..< 4 {
+			session.move(s, {800 + f32(i % 2), 120})
+			session.frames(s, 1)
+		}
+		testing.expect_value(t, app.palette.stamp, stamp)
+		testing.expect(t, raw_data(app.palette.hits) == kept, "the same hits: not ranked again")
+		append(&app.sessions, Session_Info{id = "ses_new", title = "A session that just came", directory = "C:/code/new"})
+		sessions_changed(app)
+		session.frames(s, 2)
+		testing.expect_value(t, len(app.palette.hits), found + 1)
+		app.cx.open[.Palette] = false
+		session.frames(s, 2)
+	})
+}
+
 // The palette's arrows move its selection: they are read inside its dialog, which holds the keys while it is open.
 @(test)
 the_palette_arrows_move_the_selection :: proc(t: ^testing.T) {
@@ -1779,17 +1835,17 @@ the_palette_arrows_move_the_selection :: proc(t: ^testing.T) {
 		app, s := bench_app(t)
 		command_run(app, command_find("app.palette"))
 		session.frames(s, 3)
-		testing.expect_value(t, app.palette.sel, 0)
+		testing.expect_value(t, app.palette.vl.sel, 0)
 		session.key(s, .Down)
 		session.frames(s, 2)
-		testing.expect_value(t, app.palette.sel, 1)
+		testing.expect_value(t, app.palette.vl.sel, 1)
 		session.key(s, .Down)
 		session.key(s, .Up)
 		session.frames(s, 2)
-		testing.expect_value(t, app.palette.sel, 1)
+		testing.expect_value(t, app.palette.vl.sel, 1)
 		session.key(s, .Up)
 		session.frames(s, 2)
-		testing.expect_value(t, app.palette.sel, 0)
+		testing.expect_value(t, app.palette.vl.sel, 0)
 		app.cx.open[.Palette] = false
 		session.frames(s, 2)
 	})

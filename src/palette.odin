@@ -5,7 +5,9 @@
 package ocn
 
 import "core:fmt"
+import "core:hash"
 import "core:math"
+import "core:mem/virtual"
 import "core:strconv"
 import "core:strings"
 import "gt:config"
@@ -26,21 +28,26 @@ Pal_Item :: struct {
 	tags:   []string, // other words it is found by (a command's, a setting's)
 	cmd:    ^Command,
 	index:  int,      // in app.models
-	on:     bool,     // a switch's state
-	toggle: bool,     // it is a switch
+	toggle: bool,     // it is a switch (its state: pal_item_on, read for the rows shown)
 }
 
 Usage :: struct { weight: f64, last_ms: f64 }
 
+// The list is made when what it is made of changes (palette_stamp), not at each frame: a palette at rest, the pointer moving
+// over it, cost as much as typing in it, every item matched and ranked again and every row found built.
 Palette :: struct {
 	fresh:   bool,
 	field:   ui.Text_Field,
-	sel:     int,
 	reveal:  bool,
 	mouse:   Vec2,
-	view_h:  f32,                // the list's height at the last frame: a page of Page Up / Down
 	usage:   map[string]Usage,   // by "kind:id" (keys owned); palette_usage.txt keeps them (app.stores.palette)
-	search:  ui.Fuzzy_Cache,     // the query and the items folded, from one frame to the next: the list is made again each frame
+	search:  ui.Fuzzy_Cache,     // the query and the items folded, and the hits of the last stamp (ui.rank's version)
+	stamp:   u64,                // what the items and the hits were made from (palette_stamp)
+	items:   []Pal_Item,         // (in `arena`)
+	hits:    []ui.Rank_Hit,      // (the search's)
+	ids:     [dynamic]u64,       // each hit's identity, for its rows (the list measures them by it)
+	arena:   virtual.Arena,
+	vl:      ui.Virtual_List,    // only the rows in view are built; `vl.sel`: the row chosen
 }
 
 Slash :: struct { name, description: string }   // a command of the server (owned)
@@ -78,7 +85,7 @@ usage_note :: proc(app: ^App, it: ^Pal_Item) {
 palette_toggle :: proc(app: ^App) {
 	p := &app.palette
 	if app.cx.open[.Palette] { app.cx.open[.Palette] = false; return }
-	app.cx.open[.Palette], p.fresh, p.sel = true, true, 0
+	app.cx.open[.Palette], p.fresh, p.vl.sel, p.stamp = true, true, 0, 0
 	ui.field_set(&p.field, "")
 	if !app.cx.have_slash { request(app, .Slash, "GET", "/api/command") }
 }
@@ -107,7 +114,7 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 			if !command_enabled(app, &c) || c.id == "app.palette" { continue }
 			it := Pal_Item{kind = .Command, id = c.id, title = c.title, detail = c.group, keys = c.keys, icon = c.icon, cmd = &c, tags = strings.fields(c.tags, context.temp_allocator)}
 			if c.group == "Session" && shown != "" { it.detail = shown }
-			if c.checked != nil { it.toggle, it.on = true, c.checked(app) }
+			if c.checked != nil { it.toggle = true }
 			append(&items, it)
 		}
 	}
@@ -127,13 +134,12 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 		if want(only, '@') {
 			for a in app.agents {
 				if a.mode == "subagent" { continue }
-				append(&items, Pal_Item{kind = .Agent, id = a.id, title = fmt.tprintf("Agent: %s", a.name != "" ? a.name : a.id), detail = a.description, icon = lucide.BOT, toggle = true, on = a.id == shown_agent(app)})
+				append(&items, Pal_Item{kind = .Agent, id = a.id, title = fmt.tprintf("Agent: %s", a.name != "" ? a.name : a.id), detail = a.description, icon = lucide.BOT, toggle = true})
 			}
 		}
 		if want(only, '#') {
-			shown, shown_provider := shown_model(app)
 			for m, i in app.models {
-				append(&items, Pal_Item{kind = .Model, id = fmt.tprintf("%s/%s", m.provider, m.id), title = m.name != "" ? m.name : m.id, detail = m.provider, icon = lucide.CPU, index = i, toggle = true, on = m.id == shown && m.provider == shown_provider})
+				append(&items, Pal_Item{kind = .Model, id = fmt.tprintf("%s/%s", m.provider, m.id), title = m.name != "" ? m.name : m.id, detail = m.provider, icon = lucide.CPU, index = i, toggle = true})
 			}
 		}
 		if want(only, ':') {
@@ -144,11 +150,82 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 					append(&items, Pal_Item{kind = .Setting, id = d.name, title = setting_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, tags = d.tags})
 					continue
 				}
-				append(&items, Pal_Item{kind = .Switch, id = d.name, title = setting_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, on = config.bool_of(&app.cfg_prefs, d.name), tags = d.tags})
+				append(&items, Pal_Item{kind = .Switch, id = d.name, title = setting_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, tags = d.tags})
 			}
 		}
 	}
 	return items[:]
+}
+
+// A switch's state now: read for the rows shown only (a command's `checked` may walk the conversation).
+pal_item_on :: proc(app: ^App, it: ^Pal_Item) -> bool {
+	if !it.toggle { return false }
+	switch it.kind {
+	case .Command: return it.cmd != nil && it.cmd.checked != nil && it.cmd.checked(app)
+	case .Agent: return it.id == shown_agent(app)
+	case .Model:
+		if it.index >= len(app.models) { return false }
+		shown, provider := shown_model(app)
+		m := app.models[it.index]
+		return m.id == shown && m.provider == provider
+	case .Switch: return config.bool_of(&app.cfg_prefs, it.id)
+	case .Session, .Slash, .Setting: return false
+	}
+	return false
+}
+
+// What the list is made from: what is typed, and a count of each thing its items are read from. The same stamp, the same
+// list: it is made again only when one of them moves (never 0: ui.rank keeps nothing for 0).
+palette_stamp :: proc(app: ^App, text: string) -> u64 {
+	h := hash.fnv64a(transmute([]u8)text)
+	mix :: proc(h: ^u64, v: u64) { h^ = (h^ ~ v) * 0x100000001b3 }
+	mix(&h, app.cx.events_run)
+	mix(&h, app.cx.sessions_ver)
+	mix(&h, app.cfg_prefs.version)
+	mix(&h, u64(len(app.models)))
+	mix(&h, u64(uintptr(raw_data(app.models))))
+	mix(&h, u64(len(app.agents)))
+	mix(&h, u64(uintptr(raw_data(app.agents))))
+	mix(&h, u64(len(app.cx.slash)))
+	mix(&h, hash.fnv64a(transmute([]u8)app.chat.id))
+	// (which commands can act now: a command that cannot is not listed)
+	for &c, i in COMMANDS { mix(&h, u64(i) << 1 | u64(command_enabled(app, &c))) }
+	return h | 1
+}
+
+// The items and their hits for what is typed, made again when the stamp moved: the items copied into the palette's arena
+// (they outlive the frame), ranked with the stamp as their version.
+@(private = "file")
+palette_refresh :: proc(app: ^App, text: string) {
+	p := &app.palette
+	stamp := palette_stamp(app, text)
+	if stamp == p.stamp { return }
+	p.stamp = stamp
+	only: rune
+	needle := text
+	if len(text) > 0 && strings.contains_rune(">@/#:", rune(text[0])) {
+		only = rune(text[0])
+		needle = text[1:]
+	}
+	virtual.arena_free_all(&p.arena)
+	a := virtual.arena_allocator(&p.arena)
+	made := palette_items(app, only, needle != "")
+	items := make([]Pal_Item, len(made), a)
+	for it, i in made {
+		items[i] = it
+		items[i].id, items[i].title, items[i].detail = strings.clone(it.id, a), strings.clone(it.title, a), strings.clone(it.detail, a)
+		items[i].keys, items[i].icon = strings.clone(it.keys, a), strings.clone(it.icon, a)
+		tags := make([]string, len(it.tags), a)
+		for t, k in it.tags { tags[k] = strings.clone(t, a) }
+		items[i].tags = tags
+	}
+	p.items = items
+	p.hits = palette_hits(app, items, needle, stamp)
+	resize(&p.ids, len(p.hits))
+	for h, i in p.hits {
+		it := &items[h.index]
+		p.ids[i] = hash.fnv64a(transmute([]u8)it.id, u64(it.kind) + 1)
+	}
 }
 
 // Done when it is chosen. (open_root and command_run wait for the end of the frame; the others only note a value.)
@@ -165,7 +242,7 @@ palette_choose :: proc(app: ^App, it: ^Pal_Item) {
 		ui.area_set(&app.composer.area, fmt.tprintf("/%s ", it.id))
 		app.composer.focus_next = true
 	case .Switch:
-		pref_set(app, it.id, it.on ? "false" : "true")
+		pref_set(app, it.id, pal_item_on(app, it) ? "false" : "true")
 	case .Setting:
 		// the settings, searching for it: it shows alone, with its control
 		settings_open(app)
@@ -179,33 +256,29 @@ Pal_Row_Draw :: struct { selected: bool }
 palette_dialog :: proc(app: ^App, em: f32) {
 	p := &app.palette
 	if !app.cx.open[.Palette] { return }
-	text_in := ui.field_string(&p.field)
-	only: rune
-	needle := text_in
-	if len(text_in) > 0 && strings.contains_rune(">@/#:", rune(text_in[0])) {
-		only = rune(text_in[0])
-		needle = text_in[1:]
-	}
-	items := palette_items(app, only, needle != "")
-	hits := palette_hits(app, items, needle)
-	n := min(len(hits), PALETTE_ROWS_MAX)
+	palette_refresh(app, ui.field_string(&p.field))
+	items, hits := p.items, p.hits
+	n := len(hits)
 	mouse := ui.mouse_pos()
 	moved := abs(mouse.x - p.mouse.x) + abs(mouse.y - p.mouse.y) > 0.5
 	p.mouse = mouse
 	chosen := -1
 	row_h := math.round(em * 2.1)
+	vl := &p.vl
 	// (resizable, its size kept as the dialogs' are; its top held where a palette is)
 	if ui.modal_sized("palette", DIALOG_PREFERRED_EM[.Palette] * em, &app.cx.dialogs[.Palette], &app.cx.open[.Palette], DIALOG_MIN_EM[.Palette] * em, top = PALETTE_TOP) {
-		// (read inside the dialog: an open dialog holds the keys from the code built outside it)
+		// (read inside the dialog: an open dialog holds the keys from the code built outside it. The field keeps the keyboard:
+		// the list's keys are read here; a click on the list gives it the keys, and it reads them itself)
 		if n > 0 {
-			if ui.key_press(.Down) { p.sel = (p.sel + 1) % n; p.reveal = true }
-			if ui.key_press(.Up) { p.sel = (p.sel + n - 1) % n; p.reveal = true }
-			// (a page: the rows the list showed at the last frame, as large as the person made the palette)
-			page := max(int(p.view_h / math.round(em * 2.1)), 1)
-			if ui.key_press(.Page_Down) { p.sel = min(p.sel + page, n - 1); p.reveal = true }
-			if ui.key_press(.Page_Up) { p.sel = max(p.sel - page, 0); p.reveal = true }
+			sel := vl.sel
+			if ui.key_press(.Down) { sel = (sel + 1) % n; p.reveal = true }
+			if ui.key_press(.Up) { sel = (sel + n - 1) % n; p.reveal = true }
+			page := max(vl.page_rows, 1)   // (the rows the list showed at the last frame, as large as the person made the palette)
+			if ui.key_press(.Page_Down) { sel = min(sel + page, n - 1); p.reveal = true }
+			if ui.key_press(.Page_Up) { sel = max(sel - page, 0); p.reveal = true }
+			vl.sel = sel
 		}
-		p.sel = clamp(p.sel, 0, max(n - 1, 0))
+		vl.sel = clamp(vl.sel, 0, max(n - 1, 0))
 		dialog_backdrop()
 		// the search: flush with the palette's top and sides, no frame of its own; a line under it parts it from the list
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
@@ -216,37 +289,31 @@ palette_dialog :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.45, font_size = math.round(em * FS_BODY)})
 				res := ui.line_edit("###pal_field", &p.field, "Search commands, sessions, agents, models…")
 				if p.fresh { ui.set_focus(res.box.key) }
-				if res.changed { p.sel = 0; p.reveal = true }
-				if res.committed && n > 0 { chosen = hits[p.sel].index }
+				if res.changed { vl.sel = 0; p.reveal = true }
+				if res.committed && n > 0 { chosen = hits[vl.sel].index }
 				if res.cancelled { app.cx.open[.Palette] = false }
 			}
-			text("n", fmt.tprintf("%d", len(hits)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("n", fmt.tprintf("%d", n), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.9))
 		}
 		edge_line("###pal_rule")
 		ui.spacer(ui.px(em * 0.45))
+		if p.reveal && n > 0 { ui.list_select(&vl.list, vl.sel); p.reveal = false }
+		vl.no_typeahead = true   // (letters are the field's)
 		ui.next({width = ui.fill(), height = ui.fill()})
-		if ui.scroll_y("###pal_list") {
-			lb := ui.parent_box()
-			// (its height: the last frame's, as the dialog's size and the window make it)
-			view_h := lb.rect.max.y - lb.rect.min.y
-			if view_h < row_h { view_h = f32(PALETTE_ROWS) * row_h }
-			p.view_h = view_h
-			if p.reveal {
-				top := f32(p.sel) * row_h
-				lb.view_target.y = ui.view_reveal_offset(lb.view_target.y, top, top + row_h, view_h)
-				p.reveal = false
-			}
+		if rows, ok := ui.vlist("###pal_list", vl, p.ids[:], ids_version = p.stamp); ok {
 			if n == 0 {
 				ui.next({width = ui.fill(), height = ui.px(row_h), text_align = .Center})
 				if ui.tags("weak") { ui.label("Nothing matches###none") }
 			}
-			for k in 0 ..< n {
+			if vl.activated && n > 0 { chosen = hits[vl.sel].index }
+			if vl.cancelled { app.cx.open[.Palette] = false }
+			for k in rows.first ..< rows.last {
 				h := hits[k]
 				it := &items[h.index]
 				ui.next({width = ui.fill(), height = ui.px(row_h), axis = .X, cross = .Center})
-				rb := ui.build_box({.Clickable}, fmt.tprintf("###pal_%d_%s", int(it.kind), label_safe(it.id)))
-				sel := k == p.sel
+				rb := ui.build_box({.Clickable}, ui.vlist_row_name(k))   // (its name: the list measures it)
+				sel := k == vl.sel
 				rd := ui.frame_new(Pal_Row_Draw)
 				rd.selected = sel
 				rb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
@@ -259,7 +326,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 				}
 				rb.custom_user = rd
 				rs := ui.signal(rb)
-				if rs.hovering && moved { p.sel = k }
+				if rs.hovering && moved { vl.sel = k }
 				if rs.clicked { chosen = h.index }
 				if ui.parent(rb) {
 					ui.spacer(ui.px(em * 1))
@@ -269,7 +336,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 					ui.spacer(ui.px(em * 0.7))
 					if it.detail != "" { text("d", it.detail, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill()) } else { ui.spacer(ui.fill()) }
 					ui.spacer(ui.px(em * 0.5))
-					if it.toggle && it.on { glyph(lucide.CHECK, accent(), math.round(em * ICON_SMALL)); ui.spacer(ui.px(em * 0.4)) }
+					if pal_item_on(app, it) { glyph(lucide.CHECK, accent(), math.round(em * ICON_SMALL)); ui.spacer(ui.px(em * 0.4)) }
 					if it.keys != "" {
 						text("k", it.keys, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 					}
@@ -308,9 +375,10 @@ setting_query :: proc(name: string) -> string {
 @(private = "file")
 Usage_Now :: struct { palette: ^Palette, now: f64 }
 
-// What `needle` finds among the items, best first (temp memory), as the toolkit's palette ranks its commands (ui.palette_match):
+// What `needle` finds among the items, best first (temp memory; with a `version`, the search's: ui.rank), as the toolkit's palette
+// ranks its commands (ui.palette_match):
 // a title whole or at the starts of its words, then its tags, then with a slip or two in each word; what was chosen lately higher.
-palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string) -> []ui.Rank_Hit {
+palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string, version: u64 = 0) -> []ui.Rank_Hit {
 	at := Usage_Now{&app.palette, now_epoch_ms()}
 	return ui.rank(needle, items, proc(it: ^Pal_Item, _: rawptr) -> ui.Rank_Entry {
 		// a switch is found by its name too ("appearance.system_title"), its title then shown without marks
@@ -319,5 +387,5 @@ palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string) -> []ui.Rank_
 		at := (^Usage_Now)(user)
 		u, known := at.palette.usage[usage_key(it)]
 		return known ? usage_now(u, at.now) * USAGE_SCORE : 0
-	}, cache = &app.palette.search)
+	}, cache = &app.palette.search, version = version)
 }

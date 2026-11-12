@@ -76,8 +76,6 @@ HEX_ACT_WELL         :: 0x0a0a0aff
 // The command palette
 
 PALETTE_TOP         :: 0.13     // of the window
-PALETTE_ROWS        :: 11
-PALETTE_ROWS_MAX    :: 200      // built at most: past that, one types
 PALETTE_SESSIONS    :: 6        // shown with an empty field
 USAGE_HALF_LIFE_MS  :: 14 * 24 * 3600 * 1000.0
 USAGE_SCORE         :: 150.0    // of one recent choice, in ui.fuzzy_words' units: more than a word's start (100), less than the whole text over pieces (400)
