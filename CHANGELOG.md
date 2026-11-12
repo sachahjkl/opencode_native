@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.47.10] - 2026-11-12
+
+### Fixed
+- **The palette's search is as dark as a menu's**: its strip had the palette's own colour; it is now a field's, the colour of the search in a right-click menu.
+
 ## [0.47.9] - 2026-11-12
 
 ### Changed
@@ -1468,6 +1473,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.47.10]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.10
 [0.47.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.9
 [0.47.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.8
 [0.47.7]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.7
