@@ -206,7 +206,7 @@ nav_mark :: proc(app: ^App) {
 	p := &cx.nav_hist[cx.nav_at]
 	if p.id != app.chat.id || p.id == "" { return }
 	delete(p.msg)
-	p.msg, p.dy, p.bottom = strings.clone(app.chat.view_msg), app.chat.view_dy, app.stick_bottom
+	p.msg, p.dy, p.bottom = strings.clone(app.chat.view_msg), app.chat.view_dy, chat_following(app)
 }
 
 // Where one has been, as in a browser: every session opened and the home page ("") go here, whichever way they were reached (the
@@ -241,82 +241,25 @@ nav_step :: proc(app: ^App, d: int) {
 	append(&app.nav_steps, Nav_Step{.History, strings.clone(app.cx.nav_hist[app.cx.nav_at].id)})
 }
 
-// The view goes back to where it was in the place reached (messages does it, once the message is there and laid out).
+// The view goes back to where it was in the place reached (messages does it, once the message is there and laid out). (The same
+// session: open_chat did not start the view over, and a way back under way ends here.)
 @(private = "file")
 nav_restore :: proc(app: ^App, id: string) {
 	cx := &app.cx
-	nav_restore_clear(app)
-	if cx.nav_at >= len(cx.nav_hist) { return }
-	p := cx.nav_hist[cx.nav_at]
-	if p.id != id || id == "" || p.bottom || p.msg == "" { return }
-	nav_restore_begin(app, p.msg, p.dy)
-	app.stick_bottom = false
-}
-
-// Its limit runs on the clock: the message may never be built, and until the view has
-// arrived the bottom is not followed.
-nav_restore_begin :: proc(app: ^App, msg: string, dy: f32) {
-	cx := &app.cx
-	nav_restore_clear(app)
-	cx.restore_msg, cx.restore_dy = strings.clone(msg), dy
-	cx.restore_still = 0
-	deferred_ask(&cx.due[.Restore], NAV_RESTORE_WAIT_MS)
-}
-
-// A page came: the way to the message goes on, a whole wait from now. (A long history takes many pages: the limit is on a view that
-// no longer gets anywhere. Asked again as it stands, a Deferred would keep its first bound.)
-nav_restore_page :: proc(app: ^App) {
-	if app.cx.restore_msg == "" { return }
-	app.cx.due[.Restore] = {}
-	deferred_ask(&app.cx.due[.Restore], NAV_RESTORE_WAIT_MS)
-}
-
-// What the reader asks for wins over a view going back: Latest, a prompt sent.
-view_to_bottom :: proc(app: ^App) {
-	nav_restore_clear(app)
-	app.stick_bottom = true
+	if cx.nav_at < len(cx.nav_hist) {
+		p := cx.nav_hist[cx.nav_at]
+		if p.id == id && id != "" && !p.bottom && p.msg != "" {
+			chat_scroll_event(app, Scroll_Restore{p.msg, p.dy})
+			return
+		}
+	}
+	chat_scroll_event(app, Scroll_Signal.Restore_End)
 }
 
 // The conversation's scroll bar is held.
 scrollbar_held :: proc(app: ^App, sb: ^ui.Box) -> bool {
 	owner, held := app.state.sb_owner[ui.active_key()]
 	return held && owner == sb.key
-}
-
-// The conversation is built anew where it stands: the view stays on what was being read.
-nav_hold_view :: proc(app: ^App) {
-	if app.stick_bottom {
-		app.snap_bottom = true
-		return
-	}
-	if app.chat.view_msg == "" { return }
-	nav_restore_begin(app, app.chat.view_msg, app.chat.view_dy)
-}
-
-// The column holds the view on the message (ui.lazy_pin): what the first layouts say of the heights around it is not what the next ones find.
-// Once it stayed a few builds without moving, the view is the reader's again.
-nav_restore_held :: proc(app: ^App, found, moved: bool) {
-	cx := &app.cx
-	app.stick_bottom = false
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
-	cx.restore_still = found && !moved ? cx.restore_still + 1 : 0
-	if cx.restore_still >= NAV_RESTORE_STILL { nav_restore_clear(app) }
-}
-
-nav_restore_clear :: proc(app: ^App) {
-	delete(app.cx.restore_msg)
-	app.cx.restore_msg = ""
-	app.cx.due[.Restore] = {}
-}
-
-// After a page was read: a message that is in none of them (its session changed) gives up, and the view takes the end.
-nav_restore_check :: proc(app: ^App) {
-	c := &app.chat
-	if app.cx.restore_msg == "" || c.older != "" { return }
-	for m in c.messages { if m.id == app.cx.restore_msg { return } }
-	nav_restore_clear(app)
-	app.stick_bottom = true
-	app.snap_bottom = true
 }
 
 // A session that is gone leaves the history, and what it separated does not stand twice in a row.
@@ -340,7 +283,7 @@ nav_clear :: proc(app: ^App) {
 	clear(&app.cx.nav_hist)
 	app.cx.nav_at = 0
 	app.chat.view_msg = ""
-	nav_restore_clear(app)
+	chat_scroll_event(app, Scroll_Signal.Restore_End)
 }
 
 // The session to go back to: the one drilled down from, else the parent.
@@ -427,12 +370,10 @@ card_head :: proc(app: ^App, v: ^Sub_View, part_id: string, open, running: bool,
 	head.custom = card_head_draw
 	hs := ui.signal(head)
 	if hs.clicked { part_toggle(app, part_id, head) }
-	if app.seek_subagent && app.anchor == nil && head.rect.max.y != head.rect.min.y && app.chat.loaded {
+	if app.seek_subagent && !chat_anchored(app) && head.rect.max.y != head.rect.min.y && app.chat.loaded {
 		// --seek-subagent (tests): bring the first card near the top, as an anchor does
 		app.seek_subagent = false
-		app.anchor = head
-		app.anchor_y = math.round(em * SEEK_ANCHOR_EM)
-		app.stick_bottom = false
+		chat_scroll_event(app, Scroll_Anchor{head, math.round(em * SEEK_ANCHOR_EM)})
 	}
 	if hs.double_clicked && v.id != "" { drill_down(app, v.id) }
 	if ui.parent(head) { card_lines(app, v, name, desc, open, running, end, em) }
@@ -647,11 +588,9 @@ subagent_banner :: proc(app: ^App, em: f32) {
 	ui.spacer(ui.px(em * 0.4))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if plate("###sub_banner", radius = CARD_RADIUS, shadow = 3) {
-		if bx := ui.parent_box(); app.seek_subagent && app.anchor == nil && bx.rect.max.y > 0 && c.loaded {
+		if bx := ui.parent_box(); app.seek_subagent && !chat_anchored(app) && bx.rect.max.y > 0 && c.loaded {
 			app.seek_subagent = false   // --seek-subagent (tests): bring the banner into view
-			app.anchor = bx
-			app.anchor_y = math.round(em * SEEK_ANCHOR_EM)
-			app.stick_bottom = false
+			chat_scroll_event(app, Scroll_Anchor{bx, math.round(em * SEEK_ANCHOR_EM)})
 		}
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})

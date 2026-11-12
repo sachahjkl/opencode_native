@@ -562,14 +562,13 @@ answer :: proc(app: ^App, r: ^Request) {
 	case .Messages:
 		first := !app.chat.loaded
 		chat_load(app, v, false, r.asked_at)
-		if first && app.stick_bottom { app.snap_bottom = true }   // (shown at its bottom in the very frame it arrives: frame)
-		nav_restore_check(app)
+		if first { chat_scroll_event(app, Scroll_Signal.Snap) }   // (followed: shown at its bottom in the very frame it arrives)
+		chat_scroll_restore_check(app)
 	case .Todo_Scan:
 		todos_scan_load(app, r, v)
 	case .Older:
-		chat_load(app, v, true)
-		nav_restore_page(app)
-		nav_restore_check(app)
+		chat_load(app, v, true)   // (Scroll_Older_Page: a way back under way gets a whole wait again)
+		chat_scroll_restore_check(app)
 	case .Agents:      agents_load(app, v)
 	case .Models:      models_load(app, v)
 	case .Info:
@@ -721,7 +720,7 @@ request_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (
 		outgoing_answered(app, r, false)
 	case .Messages:
 		app.chat.loading = false
-		nav_restore_clear(app)   // (what it would go back to will not come)
+		chat_scroll_event(app, Scroll_Signal.Restore_End)   // (what it would go back to will not come)
 	case .Older:
 		older_failed(app, r)
 	case .Todo_Scan:
@@ -815,7 +814,7 @@ older_failed :: proc(app: ^App, r: ^Request) {
 	if r.gen != app.chat.gen || r.tag != app.chat.id { return }
 	app.chat.loading_older = false
 	app.chat.older_failed = ui.now_ms()
-	nav_restore_clear(app)   // (the place it would go back to is on that page: the view is the reader's again)
+	chat_scroll_event(app, Scroll_Signal.Restore_End)   // (the place it would go back to is on that page: the view is the reader's again)
 }
 
 SESSIONS_LIMIT :: "200"   // most sessions read at a time (text of the query)

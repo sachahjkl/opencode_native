@@ -112,7 +112,7 @@ find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 			if y0 < sb.view_off.y + em || y1 > sb.view_off.y + h - em * FIND_BOTTOM_MARGIN_EM {
 				limit := max(0, sb.view_bounds.y - h)
 				sb.view_target.y = clamp(y0 - h * FIND_REVEAL_AT, 0, limit)
-				app.stick_bottom = false
+				chat_scroll_event(app, Scroll_Signal.Moved_Up)
 				app.settle = max(app.settle, FRAMES_AFTER_INPUT)   // (the sweep's answer comes with no input: the glide needs its frames)
 			}
 			break

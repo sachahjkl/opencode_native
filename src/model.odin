@@ -131,7 +131,6 @@ Chat :: struct {
 	view_msg:  string,             // the message at the top of the view (of the arena) and how far into it
 	view_dy:   f32,
 	view_box:  ^ui.Box,            // view_msg's box at the last build (an answer arrives before the next one: begin_build)
-	keep_id:   string,             // the message built whatever while the page before it comes in (the view stays on it)
 	new_dir:   string,             // the folder of the session about to be made
 	loaded:    bool,
 	busy:      bool,
@@ -272,7 +271,7 @@ open_chat :: proc(app: ^App, session_id: string) {
 	draft_enter(app)
 	last_session_keep(app)
 	app.chat.loading = true
-	app.view = {opened_ms = ui.now_ms(), stick_bottom = true}
+	chat_view_start(app, ui.now_ms())
 	app.chat.busy = app.busy[id] or_else false
 	if s := find_session(app, id); s != nil {
 		app.chat.model = strings.clone(s.model, app.chat.alloc)
@@ -405,7 +404,7 @@ sessions_load :: proc(app: ^App, v: json.Value) {
 		if app.chat.id == "" && find_session(app, p.id) != nil {
 			app.opened_first = true
 			open_chat(app, p.id)
-			if !p.bottom && p.msg != "" { nav_restore_begin(app, p.msg, p.dy); app.stick_bottom = false }
+			if !p.bottom { chat_scroll_event(app, Scroll_Restore{p.msg, p.dy}) }   // (no message: nothing to go back to)
 		}
 		reopen_clear(app)
 	}
@@ -605,16 +604,10 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(Seq)) {
 	if older {
 		c.loading_older = false
 		c.older = cursor
-		// the view stays on the message it shows at its top (frame builds it whatever, and moves the view by as much as the page
-		// pushed it down). The lazy column does not: what it builds is reckoned where the view now stands, in the new page, and
-		// the message it was on is not among it; a wheel turned up past the top went on to the top of the new page. (A view sent
-		// to the start (Home), or on its way to a message of an older page, stays at the top instead: that is what reads the
-		// pages up to it.)
-		if b, sb := c.view_box, app.chat_sb; b != nil && sb != nil && !app.stick_bottom && app.cx.restore_msg == "" && !sb.view_top_held[1] {
-			c.keep_id = c.view_msg
-			app.anchor = b
-			app.anchor_y = b.rect.min.y
-		}
+		// the view stays on the message it shows at its top (scroll.odin). The lazy column does not: what it builds is reckoned
+		// where the view now stands, in the new page, and the message it was on is not among it; a wheel turned up past the top
+		// went on to the top of the new page.
+		chat_scroll_event(app, Scroll_Older_Page{c.view_msg})
 		inject_at(&page, len(page), ..c.messages[:])
 		c.messages = page
 		find_page_added(app)   // (text a find has not read)
@@ -926,7 +919,6 @@ tool_set_input :: proc(p: ^Part, input: json.Value, a: mem.Allocator) {
 ////////////////////////////////
 // The event stream
 
-@(private = "file")
 find_message :: proc(c: ^Chat, id: string) -> ^Message {
 	#reverse for &m in c.messages { if m.id == id { return &m } }
 	return nil
