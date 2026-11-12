@@ -43,6 +43,8 @@ Palette :: struct {
 	mouse:   Vec2,
 	view_h:  f32,                // the list's height at the last frame: a page of Page Up / Down
 	usage:   map[string]Usage,   // by "kind:id" (keys owned); palette_usage.txt keeps them (app.stores.palette)
+	search:  ui.Fuzzy_Cache,     // what is typed and the items' titles and tags, folded once while they stay the same (palette_hits)
+	names:   ui.Fuzzy_Cache,     // ... a setting's name
 }
 
 Slash :: struct { name, description: string }   // a command of the server (owned)
@@ -308,11 +310,15 @@ palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string) -> []Pal_Hit 
 	p := &app.palette
 	now := now_epoch_ms()
 	hits := make([dynamic]Pal_Hit, context.temp_allocator)
+	folded := ui.fuzzy_cache_needle(&p.search, needle)
 	for &it, i in items {
-		score, ranges, ok := ui.palette_match(needle, it.title, "", it.tags)
+		// (nothing to look for: everything matches, with nothing folded)
+		e: ui.Palette_Entry
+		if folded.want != "" { e = ui.palette_entry_cached(&p.search, i, it.title, "", it.tags) }
+		score, ranges, ok := ui.palette_match(folded, e)
 		if !ok && (it.kind == .Switch || it.kind == .Setting) {
 			// a switch is found by its name too ("appearance.system_title"), its title then shown without marks
-			score, _, ok = ui.fuzzy_words(needle, it.id)
+			score, _, ok = ui.fuzzy_words(folded, ui.fuzzy_cache_text(&p.names, i, it.id))
 			ranges = nil
 		}
 		if !ok { continue }
@@ -320,6 +326,8 @@ palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string) -> []Pal_Hit 
 		if u, known := p.usage[usage_key(&it)]; known { s += usage_now(u, now) * USAGE_SCORE }
 		append(&hits, Pal_Hit{i, s, ranges})
 	}
+	ui.fuzzy_cache_keep(&p.search, 3 * len(items))
+	ui.fuzzy_cache_keep(&p.names, len(items))
 	slice.stable_sort_by(hits[:], proc(a, b: Pal_Hit) -> bool { return a.score > b.score })
 	return hits[:]
 }

@@ -4,12 +4,15 @@
 // can read on its own machine.
 package ocn
 
+import "base:runtime"
 import "core:encoding/base64"
 import "core:fmt"
 import "core:math"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
+import "core:sync"
+import "core:thread"
 import "core:unicode/utf8"
 import "gt:platform"
 import "gt:ui"
@@ -22,15 +25,135 @@ Attachment :: struct {
 	ref:  Image_Ref,   // an image's thumbnail (zero: not an image)
 }
 
+// A file on its way to a composer: read, typed and encoded on a thread of its own, its attachment posted back (attach_done).
+// A file of megabytes takes longer to read and encode than a frame lasts. Its memory is the heap's on both sides.
+Attach_Job :: struct {
+	app:   ^App,
+	chat:  string,                     // the session whose composer it goes to ("": the home page's) (owned)
+	path:  string,                     // the file to read ("": `data` or `image` is given) (owned)
+	name:  string,                     // (owned)
+	mime:  string,                     // of `data` (a literal); a file's: by its extension and its bytes (attach_mime)
+	data:  []u8,                       // (owned)
+	image: platform.Clipboard_Image,   // pasted: encoded as PNG first (owned)
+	// what came of it
+	outcome: Attach_Outcome,
+	uri:     string,                   // the data URL (owned)
+	size:    int,                      // of the file, in bytes
+}
+
+Attach_Outcome :: enum u8 {
+	Attached,
+	Too_Large,        // past ATTACH_MAX_BYTES
+	Not_Attachable,   // not an image, a PDF or text: its path goes in the text
+	Unread,           // a folder, or a file that could not be read: its path goes in the text
+	Bad_Image,        // a pasted image that could not be encoded
+	Failed,           // the encoding failed (out of memory): nothing is said, as before
+}
+
+// Whether a file for the composer shown is still being read: it does not send yet (composer_held), what it sends would
+// leave the file behind.
+attaching :: proc(app: ^App) -> bool {
+	for job in app.cx.attaching { if job.chat == app.chat.id { return true } }
+	return false
+}
+
+// `job` goes to its thread, for the composer shown.
+@(private = "file")
+attach_start :: proc(app: ^App, job: ^Attach_Job) {
+	job.app = app
+	job.chat = strings.clone(app.chat.id, runtime.heap_allocator())
+	append(&app.cx.attaching, job)
+	sync.atomic_add(&app.pending, 1)
+	thread.create_and_start_with_poly_data(job, attach_run, self_cleanup = true)
+}
+
+// The bytes `data` (copied: the caller keeps them) as a file `name` of type `mime`.
 @(private = "file")
 attach_bytes :: proc(app: ^App, data: []u8, mime, name: string) {
-	if len(data) > ATTACH_MAX_BYTES { ui.toast(.Warn, "%s is too large to attach", name); return }
-	b64, err := base64.encode(data, allocator = context.temp_allocator)
-	if err != nil { return }
-	uri := strings.concatenate({"data:", mime, ";base64,", b64})
-	stored_name := strings.clone(name)
-	ref := strings.has_prefix(mime, "image/") ? image_ref(uri, .Data_Url, mime, stored_name) : Image_Ref{}
-	append(&app.cx.attachments, Attachment{name = stored_name, uri = uri, size = len(data), ref = ref})
+	h := runtime.heap_allocator()
+	job := new(Attach_Job, h)
+	job^ = {name = strings.clone(name, h), mime = mime, data = slice_clone(data, h)}
+	attach_start(app, job)
+}
+
+@(private = "file")
+slice_clone :: proc(data: []u8, allocator: runtime.Allocator) -> []u8 {
+	out := make([]u8, len(data), allocator)
+	copy(out, data)
+	return out
+}
+
+// On the job's thread: the file read, its type, the size it may have, its data URL.
+@(private = "file")
+attach_run :: proc(job: ^Attach_Job) {
+	h := runtime.heap_allocator()
+	defer free_all(context.temp_allocator)
+	switch {
+	case job.path != "":
+		if os.is_dir(job.path) { job.outcome = .Unread; break }
+		data, err := os.read_entire_file(job.path, h)
+		if err != nil { job.outcome = .Unread; break }
+		job.data = data
+		job.mime = attach_mime(job.path, data)
+		if job.mime == "" { job.outcome = .Not_Attachable }
+	case job.image.rgba != nil:
+		job.data = platform.png_encode(job.image, h)
+		platform.clipboard_image_destroy(&job.image, h)
+		if len(job.data) == 0 { job.outcome = .Bad_Image }
+	}
+	if job.outcome == .Attached {
+		if len(job.data) > ATTACH_MAX_BYTES {
+			job.outcome = .Too_Large
+		} else if b64, err := base64.encode(job.data, allocator = h); err != nil {
+			job.outcome = .Failed
+		} else {
+			job.uri = strings.concatenate({"data:", job.mime, ";base64,", b64}, h)
+			job.size = len(job.data)
+			delete(b64, h)
+		}
+	}
+	delete(job.data, h)
+	job.data = nil
+	if !ui.post(&job.app.state, attach_done, job) { attach_job_free(job) }
+}
+
+@(private = "file")
+attach_job_free :: proc(job: ^Attach_Job) {
+	h := runtime.heap_allocator()
+	delete(job.chat, h)
+	delete(job.path, h)
+	delete(job.name, h)
+	delete(job.data, h)
+	delete(job.uri, h)
+	platform.clipboard_image_destroy(&job.image, h)
+	free(job, h)
+}
+
+// On the interface's thread: the attachment goes to the composer of its session, or what is said of the file.
+@(private = "file")
+attach_done :: proc(data: rawptr, word: u64) {
+	app := the_app
+	job := (^Attach_Job)(data)
+	defer attach_job_free(job)
+	sync.atomic_sub(&app.pending, 1)
+	for j, i in app.cx.attaching { if j == job { ordered_remove(&app.cx.attaching, i); break } }
+	switch job.outcome {
+	case .Attached:
+		a := Attachment{name = strings.clone(job.name), uri = job.uri, size = job.size}
+		job.uri = ""   // (the attachment's now)
+		if strings.has_prefix(job.mime, "image/") { a.ref = image_ref(a.uri, .Data_Url, job.mime, a.name) }
+		composer_take(app, job.chat, a, "")
+	case .Too_Large:
+		ui.toast(.Warn, "%s is too large to attach", job.name)
+	case .Not_Attachable:
+		ui.toast(.Warn, "%s is not an image, a PDF or text: its path goes in the prompt", job.name)
+		composer_take(app, job.chat, nil, fmt.tprintf("%s ", job.path))
+	case .Unread:
+		composer_take(app, job.chat, nil, fmt.tprintf("%s ", job.path))
+	case .Bad_Image:
+		ui.toast(.Bad, "The image could not be read")
+	case .Failed:
+	}
 }
 
 // An image's type by its extension, among those this program shows ("": none of them).
@@ -55,16 +178,12 @@ attach_mime :: proc(path: string, data: []u8) -> string {
 }
 
 // A file given to the composer (pasted, dropped, picked): attached when it can go as a data URL (attach_mime), else its
-// path goes in the text.
+// path goes in the text. It is read on a thread of its own (attach_run).
 attach_path :: proc(app: ^App, path: string) {
-	if !os.is_dir(path) {
-		data, err := os.read_entire_file(path, context.temp_allocator)
-		if err == nil {
-			if mime := attach_mime(path, data); mime != "" { attach_bytes(app, data, mime, base_name(path)); return }
-			ui.toast(.Warn, "%s is not an image, a PDF or text: its path goes in the prompt", base_name(path))
-		}
-	}
-	area_insert(&app.composer, fmt.tprintf("%s ", path))
+	h := runtime.heap_allocator()
+	job := new(Attach_Job, h)
+	job^ = {path = strings.clone(path, h), name = strings.clone(base_name(path), h)}
+	attach_start(app, job)
 }
 
 // The paperclip: the system's dialog, several files at once.
@@ -90,7 +209,7 @@ attach_drop_event :: proc(app: ^App, e: platform.Event) {
 		if d == nil || overlay_open(app) { return }
 		switch {
 		case len(d.files) > 0: for p in d.files { attach_path(app, p) }
-		case len(d.image) > 0: attach_bytes(app, d.image, "image/png", fmt.tprintf("dropped-%d.png", len(app.cx.attachments) + 1))
+		case len(d.image) > 0: attach_bytes(app, d.image, "image/png", fmt.tprintf("dropped-%d.png", attach_number(app)))
 		case d.text != "":     area_insert(&app.composer, d.text)
 		}
 	}
@@ -107,16 +226,21 @@ attach_paste :: proc(app: ^App) -> bool {
 		}
 	}
 	if .Image in fmts && .Text not_in fmts {
-		img, ok := platform.clipboard_get_image(app.win)
+		h := runtime.heap_allocator()
+		img, ok := platform.clipboard_get_image(app.win, h)
 		if !ok { return false }
-		defer platform.clipboard_image_destroy(&img)
-		png := platform.png_encode(img, context.temp_allocator)
-		if len(png) == 0 { ui.toast(.Bad, "The image could not be read"); return true }
-		attach_bytes(app, png, "image/png", fmt.tprintf("pasted-%d.png", len(app.cx.attachments) + 1))
+		// (the pixels go to the job's thread as they are: it encodes them as PNG, then as a data URL)
+		job := new(Attach_Job, h)
+		job^ = {name = fmt.aprintf("pasted-%d.png", attach_number(app), allocator = h), mime = "image/png", image = img}
+		attach_start(app, job)
 		return true
 	}
 	return false
 }
+
+// The number in the name of an image pasted or dropped: past those attached and those on their way.
+@(private = "file")
+attach_number :: proc(app: ^App) -> int { return len(app.cx.attachments) + len(app.cx.attaching) + 1 }
 
 // An attachment read back from a prompt's JSON (outgoing.odin).
 attachment_of :: proc(uri, name: string) -> Attachment {
@@ -131,27 +255,43 @@ attachment_of :: proc(uri, name: string) -> Attachment {
 
 // What the JSON of a prompt says of these and of the files and agents named in `text` (empty: none).
 prompt_fields :: proc(attachments: []Attachment, mentions: []Mention, text: string) -> string {
-	files := strings.builder_make(context.temp_allocator)
-	agents := strings.builder_make(context.temp_allocator)
+	b := strings.builder_make(context.temp_allocator)
+	prompt_fields_into(&b, attachments, mentions, text)
+	return strings.to_string(b)
+}
+
+// prompt_fields, written to `b`: an attachment's data URL is quoted there once, not copied again into a list and then a
+// string (it is megabytes).
+prompt_fields_into :: proc(b: ^strings.Builder, attachments: []Attachment, mentions: []Mention, text: string) {
+	files := 0
 	for a in attachments {
-		if strings.builder_len(files) > 0 { strings.write_byte(&files, ',') }
-		fmt.sbprintf(&files, `{{"uri":%s,"name":%s}}`, jquote(a.uri), jquote(a.name))
+		strings.write_string(b, files == 0 ? `,"files":[` : ",")
+		strings.write_string(b, `{"uri":`)
+		jquote_into(b, a.uri)
+		strings.write_string(b, `,"name":`)
+		jquote_into(b, a.name)
+		strings.write_byte(b, '}')
+		files += 1
 	}
 	for &m in mentions {
+		if m.kind != .File { continue }
 		mention, ok := mention_json(&m, text)
 		if !ok { continue }   // (taken out of the text since)
-		list := m.kind == .File ? &files : &agents
-		if strings.builder_len(list^) > 0 { strings.write_byte(list, ',') }
-		if m.kind == .File {
-			fmt.sbprintf(list, `{{"uri":%s,"name":%s,"mention":%s}}`, jquote(m.target), jquote(m.name), mention)
-		} else {
-			fmt.sbprintf(list, `{{"name":%s,"mention":%s}}`, jquote(m.target), mention)
-		}
+		strings.write_string(b, files == 0 ? `,"files":[` : ",")
+		fmt.sbprintf(b, `{{"uri":%s,"name":%s,"mention":%s}}`, jquote(m.target), jquote(m.name), mention)
+		files += 1
 	}
-	out := ""
-	if strings.builder_len(files) > 0 { out = fmt.tprintf(`,"files":[%s]`, strings.to_string(files)) }
-	if strings.builder_len(agents) > 0 { out = fmt.tprintf(`%s,"agents":[%s]`, out, strings.to_string(agents)) }
-	return out
+	if files > 0 { strings.write_byte(b, ']') }
+	agents := 0
+	for &m in mentions {
+		if m.kind == .File { continue }
+		mention, ok := mention_json(&m, text)
+		if !ok { continue }
+		strings.write_string(b, agents == 0 ? `,"agents":[` : ",")
+		fmt.sbprintf(b, `{{"name":%s,"mention":%s}}`, jquote(m.target), mention)
+		agents += 1
+	}
+	if agents > 0 { strings.write_byte(b, ']') }
 }
 
 

@@ -101,6 +101,7 @@ Picker :: struct {
 	reveal: bool,      // bring the selected row into view (the keyboard moved it, it was opened, the search changed)
 	fresh:  bool,      // opened in this frame: focus the field, select the current item
 	mouse:  Vec2,
+	search: ui.Fuzzy_Cache,   // what is typed and the items, folded once while they stay the same
 }
 
 PICK_ROWS :: 10
@@ -164,11 +165,16 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 	if !app.cx.open[.Picker] || p.id != id { return }
 	needle := ui.field_string(&p.field)
 	hits := make([dynamic]Hit, context.temp_allocator)
+	folded := ui.fuzzy_cache_needle(&p.search, needle)
 	for it, i in items {
-		hay := it.group != "" ? fmt.tprintf("%s  %s", it.label, it.group) : it.label
-		score, ranges, ok := ui.fuzzy_score(needle, hay)
+		// (nothing to look for: everything matches, with nothing folded)
+		if folded.want == "" { append(&hits, Hit{i, 0, nil}); continue }
+		hay: ui.Fuzzy_Text
+		if it.group != "" { hay = ui.fuzzy_cache_text(&p.search, i, it.label, "  ", it.group) } else { hay = ui.fuzzy_cache_text(&p.search, i, it.label) }
+		score, ranges, ok := ui.fuzzy_score(folded, hay)
 		if ok { append(&hits, Hit{i, score, ranges}) }
 	}
+	ui.fuzzy_cache_keep(&p.search, len(items))
 	if needle != "" { slice.stable_sort_by(hits[:], proc(a, b: Hit) -> bool { return a.score > b.score }) }
 	if p.fresh { for h in hits { if it := items[h.index]; it.current && it.group != "" { picker_fold(p, it.group, true) } } }
 	typed := needle != ""

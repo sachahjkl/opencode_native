@@ -302,6 +302,32 @@ what_failed_comes_back_whole :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(app.cx.outgoing), 0)
 }
 
+// A prompt's body is made on its request's thread now (prompt_body): it is the body the interface's thread made, its text,
+// its images (a data URL of megabytes), the files and agents it names, how it is delivered.
+@(test)
+a_prompt_body_made_on_its_thread_is_the_same :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	show(app, "s")
+	text := "look at \"this\" \\ café \U0001F600 @f.txt and @explore\nthen a line"
+	ui.area_set(&app.composer, text)
+	uri := strings.concatenate({"data:image/png;base64,", strings.repeat("iVBORw0KGgo+/=", 200_000, context.temp_allocator)}, context.temp_allocator)
+	append(&app.cx.attachments, Attachment{name = strings.clone("shôt \"1\".png"), uri = strings.clone(uri)})
+	attach(app, "two.png")
+	append(&app.cx.mentions.chosen, Mention{.File, strings.clone("@f.txt"), strings.clone("file:///d/f.txt"), strings.clone("f.txt")})
+	append(&app.cx.mentions.chosen, Mention{.Agent, strings.clone("@explore"), strings.clone("explore"), strings.clone("")})
+	submit_prompt(app)
+	if !testing.expect_value(t, len(app.cx.outgoing), 1) { return }
+	o := app.cx.outgoing[0]
+	testing.expect_value(t, o.text, text)
+	want := prompt_body_reference(text, o.files[:], o.mentions[:], o.fields)
+	r := bench_take(t, .Prompt)
+	testing.expect(t, r.body == want, r.body[:min(len(r.body), 120)])
+	testing.expect(t, strings.contains(r.body, `"agents":[{"name":"explore"`), "its agent")
+	bench_answer(app, r, 200, "")
+	testing.expect_value(t, len(app.cx.outgoing), 0)
+}
+
 @(test)
 what_failed_waits_for_its_session :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()

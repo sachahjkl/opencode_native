@@ -240,6 +240,7 @@ App_Context :: struct {
 	placement_seen: string,   // the window's placement as last kept (window.placement), and when it was looked at
 	placement_ms:   f64,
 	attachments:    [dynamic]Attachment,   // what goes with the prompt (attachments.odin)
+	attaching:      [dynamic]^Attach_Job,  // files being read and encoded for a composer, on threads (attach_done takes them out)
 	ctx:            Ctx_Target,        // what the menu of a right click is about (context_menus.odin)
 	ctx_taken:      bool,              // a right press of this build found its target
 	focus_composer: bool,              // the composer takes the focus at its next build
