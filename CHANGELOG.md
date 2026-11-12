@@ -4,6 +4,16 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.47.1] - 2026-11-12
+
+### Changed
+- **Each session has its own zoom**: Ctrl+= and Ctrl+- (or Ctrl and the wheel over the conversation) zoom the session shown alone, and it finds its zoom again when it is opened later, the program started again. A session with no zoom of its own follows the setting "Conversation zoom", which the home page sets too; Ctrl+0 brings the session back to it.
+
+### Fixed
+- **A paste no longer waits for the clipboard**: Ctrl+V and Shift+Insert in the composer, its menu's Paste, and a paste in a shell ask the clipboard and take its text when it comes; a slow or hung program that holds the clipboard no longer freezes the window.
+- **Shift+Insert pastes in the composer**: the composer and every text of several lines take Ctrl+Insert to copy, Shift+Delete to cut and Shift+Insert to paste, as the one-line fields and the shells already did.
+- **The window no longer waits for the keyring or the server's files**: at the start, where this computer's server runs and the saved servers' passwords are read in the background, and the connection starts once they are known; the server dialog asks whether a keyring is there in the background too, and the log is written there. A locked or slow keyring no longer delays the first frame or freezes the dialog.
+
 ## [0.47.0] - 2026-11-12
 
 ### Added
@@ -1409,6 +1419,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.47.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.1
 [0.47.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.0
 [0.46.9]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.9
 [0.46.8]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.46.8
