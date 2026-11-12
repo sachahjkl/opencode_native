@@ -887,8 +887,9 @@ a_shell_keeps_its_columns_across_colours :: proc(t: ^testing.T) {
 			}
 			return last
 		}
-		plain := end_of(img, sh.view.rect, sh.view.rect.min.y, sh.view.metrics.cell_h)
-		coloured := end_of(img, sh.view.rect, sh.view.rect.min.y + sh.view.metrics.cell_h, sh.view.metrics.cell_h)
+		// (each row where it is drawn: the grid is centered in its box, term.grid_origin)
+		plain := end_of(img, sh.view.rect, sh.view.origin.y, sh.view.metrics.cell_h)
+		coloured := end_of(img, sh.view.rect, sh.view.origin.y + sh.view.metrics.cell_h, sh.view.metrics.cell_h)
 		testing.expect(t, plain > int(sh.view.rect.min.x), "the first line is drawn")
 		testing.expectf(t, abs(plain - coloured) <= 1, "both lines end at one column: %d and %d", plain, coloured)
 	})
