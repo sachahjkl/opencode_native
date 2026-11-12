@@ -4,6 +4,12 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.47.4] - 2026-11-12
+
+### Fixed
+- **The composer's menu on all of the composer**: a right click on the composer, its focus there or not, opens its menu (Undo, Cut, Copy, Paste, Select all) on its text and around it; it opened the menu of the last message, which the conversation scrolls under it.
+- **A screenshot pastes whole**: a screenshot pasted in the composer came cut, its thumbnail "image unreadable", when the program that holds it wrote it in one go (an image copied from a browser passed). The clipboard is now read as such a program writes it.
+
 ## [0.47.3] - 2026-11-12
 
 ### Fixed
@@ -1430,6 +1436,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.47.4]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.4
 [0.47.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.3
 [0.47.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.2
 [0.47.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.1
