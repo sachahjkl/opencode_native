@@ -23,6 +23,10 @@ import svg "gt:svg"
 import "gt:ui"
 import lucide "gt:lucide"
 
+// Odd 64-bit constants that spread the bits of what they multiply.
+HASH_MIX_A :: 0x9e3779b97f4a7c15
+HASH_MIX_B :: 0xc2b2ae3d27d4eb4f
+
 Image_Encoding :: enum i32 { Bytes = 0, Base64 = 1, Data_Url = 2 }
 
 // An image somewhere in the data: its text (base64 or a data URL, owned by whoever holds the reference), its key.

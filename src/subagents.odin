@@ -9,6 +9,7 @@ import "core:hash"
 import "core:math"
 import "core:strings"
 import "gt:draw"
+import "gt:markdown"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -474,7 +475,7 @@ card_body :: proc(app: ^App, v: ^Sub_View, p: ^Part, pid: string, running: bool,
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})   // (as the prompt: in the card, no box of its own)
 				if ui.column(id = "###result") {
 					id := fmt.tprintf("%s_res", pid)
-					markdown(md_doc(&app.chat, id), id, v.result, hex(HEX_CARD_RESULT), md_style(app), math.round(em * FS_LABEL))
+					markdown.view(md_doc(&app.chat, id), id, v.result, md_config(app, hex(HEX_CARD_RESULT)), math.round(em * FS_LABEL))
 				}
 				ui.spacer(ui.px(em * 0.4))
 			} else if running {
@@ -584,7 +585,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 				if ui.column() {
 					ui.spacer(ui.px(em * 0.3))
 					id := fmt.tprintf("%s_sr", m.id)
-					markdown(md_doc(&app.chat, id), id, m.text, hex(HEX_RETURNED_TEXT), md_style(app), math.round(em * FS_LABEL))
+					markdown.view(md_doc(&app.chat, id), id, m.text, md_config(app, hex(HEX_RETURNED_TEXT)), math.round(em * FS_LABEL))
 					ui.spacer(ui.px(em * 0.3))
 				}
 			}

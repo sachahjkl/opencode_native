@@ -11,6 +11,7 @@ import "core:mem"
 import "core:slice"
 import "core:strings"
 import "gt:draw"
+import "gt:markdown"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -1183,7 +1184,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 			switch p.kind {
 			case .Text:
 				if len(p.text) > 0 {
-					markdown(md_doc(&app.chat, pid), pid, string(p.text[:]), hex(HEX_ANSWER_TEXT), md_style(app))
+					markdown.view(md_doc(&app.chat, pid), pid, string(p.text[:]), md_config(app, hex(HEX_ANSWER_TEXT)))
 					ui.spacer(ui.px(em * 0.6))
 				}
 			case .Reasoning: reasoning_part(app, &p, pid, em)

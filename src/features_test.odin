@@ -702,27 +702,3 @@ a_slash_proposes_the_commands :: proc(t: ^testing.T) {
 	if len(hits) == 1 { testing.expect_value(t, app.cx.slash[hits[0]].name, "review") }
 	testing.expect_value(t, len(slash_matches(app, "")), 3)
 }
-
-// A table copied: a plain HTML grid (no colour, no font), the header row as th, each column aligned as written, bold and code kept,
-// what is HTML in a cell escaped.
-@(test)
-a_table_copies_as_a_plain_grid :: proc(t: ^testing.T) {
-	cell :: proc(runs: ..ui.Rich_Run) -> [dynamic]ui.Rich_Run {
-		out := make([dynamic]ui.Rich_Run, context.temp_allocator)
-		append(&out, ..runs)
-		return out
-	}
-	cells := [][][dynamic]ui.Rich_Run{
-		{cell({text = "Name", style = {bold = true}}), cell({text = "Size", style = {bold = true}})},
-		{cell({text = "a<b & c"}), cell({text = "12", style = {code = true}})},
-		{cell({text = "big", style = {bold = true}}), cell({text = "3"})},
-	}
-	html := table_html(cells, {.Left, .Right})
-	testing.expect(t, strings.has_prefix(html, `<table style="border-collapse:collapse"><thead><tr><th style="border:1px solid #bbb;padding:4px 8px;text-align:left">Name</th>`), html)
-	testing.expect(t, strings.contains(html, `text-align:right">Size</th>`), html)
-	testing.expect(t, strings.contains(html, `>a&lt;b &amp; c</td>`), html)
-	testing.expect(t, strings.contains(html, `<code>12</code>`), html)
-	testing.expect(t, strings.contains(html, `<b>big</b>`), html)
-	testing.expect(t, !strings.contains(html, "color") && !strings.contains(html, "font"), "no colour, no font: the program it is pasted in gives them")
-	testing.expect(t, strings.has_suffix(html, "</tbody></table>"), html)
-}

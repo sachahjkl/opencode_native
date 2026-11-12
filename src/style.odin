@@ -376,12 +376,17 @@ well_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 well :: proc(id: string, axis := ui.Axis.Y, radius: f32 = 7, base: u32 = HEX_WELL, focus: f32 = 0, flags: ui.Box_Flags = {}) -> bool {
 	b := ui.build_box(flags, id)
 	b.layout_axis = axis
+	well_paint(b, radius, base, focus)
+	ui.push_parent(b)
+	return true
+}
+
+// Paints `b` as a well: for a box another builds (the Markdown package's frames).
+well_paint :: proc(b: ^ui.Box, radius: f32 = 7, base: u32 = HEX_WELL, focus: f32 = 0) {
 	d := ui.frame_new(Well_Draw)
 	d^ = {radius = radius, base = hex(base), focus = focus}
 	b.custom = well_box_draw
 	b.custom_user = d
-	ui.push_parent(b)
-	return true
 }
 
 @(private = "file")
