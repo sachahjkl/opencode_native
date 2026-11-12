@@ -1887,26 +1887,32 @@ the_palette_at_rest_builds_only_its_rows_in_view :: proc(t: ^testing.T) {
 	})
 }
 
-// The palette's search is on a field's darker background, the strip of the toolkit's palette and menus: it was the dialog's own
-// colour, a line under it, unlike every other search. (Dark, as the request was: in a light theme a field is the lighter one,
-// and the system's mode, which "system" follows, is the machine's.)
+// The palette's search is on a field's background, the very colour of a menu's search band: it was the dialog's own colour
+// (the toolkit's strip took the box's background, which in a dialog is the dialog's), lighter than the menu's. (Dark, as the
+// request was: the system's mode, which "system" follows, is the machine's.)
 @(test)
-the_palettes_search_is_on_a_darker_strip :: proc(t: ^testing.T) {
+the_palettes_search_is_a_menus_search_band :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pref_set(app, "appearance.theme", "OpenCode")
 		pref_set(app, "appearance.mode", "dark")
 		defer pref_set(app, "appearance.mode", "system")
 		command_run(app, command_find("app.palette"))
 		session.frames(s, 3)
-		top, list := session.find(s, "pal_top"), session.find(s, "pal_list")
-		if !testing.expect(t, top != nil && list != nil, "the strip and the list") { return }
+		// a menu over it, something typed in it: its search band shows
+		ui.ctx_menu_open(ui.key_from_string(0, "app_menu"), {900, 300})
+		session.frames(s, 3)
+		session.event(s, {kind = .Text, text = 's'})
+		session.frames(s, 3)
+		top, band, list := session.find(s, "pal_top"), session.find(s, "menu_search"), session.find(s, "pal_list")
+		if !testing.expect(t, top != nil && band != nil && list != nil, "the palette's strip, the menu's band, the list") { return }
 		img := session.capture(s)
-		light :: proc(c: session.Color) -> int { return int(c.r) + int(c.g) + int(c.b) }
-		x := int(top.rect.max.x) - 6   // (past the count: nothing drawn there but the background)
-		strip := session.pixel(img, x, int((top.rect.min.y + top.rect.max.y) * 0.5))
-		dialog := session.pixel(img, x, int((top.rect.max.y + list.rect.min.y) * 0.5) + 1)   // (the gap under the strip)
-		testing.expectf(t, light(strip) < light(dialog) - 6, "the strip %v darker than the dialog %v", strip, dialog)
+		at :: proc(img: session.Image, b: ^ui.Box) -> session.Color { return session.pixel(img, int(b.rect.min.x) + 6, int((b.rect.min.y + b.rect.max.y) * 0.5)) }
+		strip, menu, dialog := at(img, top), at(img, band), at(img, list)
+		testing.expectf(t, session.near(strip, menu, 2), "the strip %v, the menu's band %v", strip, menu)
+		testing.expectf(t, !session.near(strip, dialog, 4), "the strip %v apart from the dialog %v", strip, dialog)
+		ui.ctx_menu_close()
 		app.cx.open[.Palette] = false
 		session.frames(s, 2)
 	})
@@ -1951,7 +1957,7 @@ a_paste_in_the_composer_waits_for_no_clipboard :: proc(t: ^testing.T) {
 		testing.expect_value(t, ui.area_string(&app.composer.area), "pasted words")
 		// an image alone: attached, read and encoded on a thread
 		px := []u8{255, 0, 0, 255, 0, 0, 255, 255}
-		testing.expect(t, platform.clipboard_set_image(app.win, {px, {2, 1}}))
+		testing.expect(t, platform.clipboard_set_image(app.win, {rgba = px, size = {2, 1}}))
 		session.key(s, .V, {.Ctrl})
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return len((^App)(s.user).composer.attachments) == 1 }, "the image attached")
 		testing.expect(t, strings.has_prefix(app.composer.attachments[0].uri, "data:image/png;base64,"), "as a PNG")
