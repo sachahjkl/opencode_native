@@ -1097,7 +1097,7 @@ term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 
 @(private = "file")
 term_paste :: proc(app: ^App, t: ^Term) {
-	term.paste(&t.view, platform.get_clipboard(app.win, context.temp_allocator))
+	ui.paste_request(t.view.box)   // (the clipboard's owner may be slow: its text comes in a later build, terminal_panel)
 }
 
 ////////////////////////////////
@@ -1161,6 +1161,7 @@ terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
 	// (the picture read last holds the screen from before the shell's new size, until it has painted the new one)
 	t.view.hold = term_painting(ui.now_ms(), t.told_ms, t.fed_ms, t.asked_ms)
 	term.build(&t.view, term_style(app, em), term_takes_focus(s, t, ui.focus_key()))
+	if text, ok := ui.paste_answer(t.view.box); ok { term.paste(&t.view, text) }
 	t.shown = true
 	menu := ui.key_from_string(t.view.box, "term_menu")
 	if s.menu_for == t { ui.ctx_menu_open(menu, s.menu_at); s.menu_for = nil }

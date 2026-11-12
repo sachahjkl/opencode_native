@@ -18,6 +18,7 @@ HEX_COMPOSER_WELL     :: 0x080808ff
 // The composer: its text and focus, what goes with the prompt, and what each session's composer keeps while another is shown.
 Composer :: struct {
 	area:        ui.Text_Area,
+	key:         ui.Key,                  // the area's box, at its last build: what a paste asked from a menu is for (ui.paste_request)
 	focused:     bool,
 	focus_next:  bool,                    // the composer takes the focus at its next build
 	fit:         struct { level: int, at: [2]f32 },   // what the toolbar leaves out, and at which widths (composer_fit)
@@ -144,6 +145,7 @@ composer :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_BODY), text_pad = em * 0.5})
 				res := ui.text_edit("###composer", &app.composer.area, "Ask anything…", wrap = true, auto_height = true, min_lines = 2, max_lines = COMPOSER_MAX_LINES)
 				app.composer.focused = res.focused
+				app.composer.key = res.box.key
 				mention_track(app)
 				slash_track(app)
 				if app.composer.focus_next { ui.set_focus(res.box.key); app.composer.focus_next = false }

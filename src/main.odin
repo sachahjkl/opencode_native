@@ -204,7 +204,6 @@ Frame_Times :: struct {
 @(thread_local) the_app: ^App   // (the interface's thread: a thread of work is given its App)
 
 // (the window being built's, or the main one's)
-clip_get :: proc() -> string { return ui.window_clipboard_get() }
 clip_set :: proc(text: string) { ui.window_clipboard_set(text) }
 
 // The main window is a host.Host (host_adopt: the window, the device loaded on a thread and the fonts are this program's own start). Its
@@ -281,7 +280,7 @@ build_params :: proc(app: ^App, win: ^platform.Window, size: draw.Vec2, events: 
 		smooth_scroll = app.prefs.smooth_scroll ? .On : .Off,
 		dpi_scale = app.scale > 0 ? app.scale : win.dpi_scale, window = win,
 		base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(30)}, font = app.font, font_size = app.prefs.font_size, text_pad = 6, cursor = .Arrow, radius = 6},
-		clipboard_get = clip_get, clipboard_set = clip_set,
+		clipboard_set = clip_set,   // (no clipboard_get: a paste asks the window's clipboard and waits for nothing, ui.paste_request)
 	}
 }
 
