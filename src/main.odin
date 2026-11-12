@@ -170,6 +170,7 @@ App_Context :: struct {
 	waits_unread:   bool,              // the stream just came up: what sessions wait on, asked before it, is read from the next list
 	built:          ^ui.State,         // the state of a window of its own, while it is built (nil: the main one)
 	answers_spent:  [dynamic]^virtual.Arena,   // what this frame's answers were read into (net.odin)
+	effects:        [dynamic]Effect,   // what the model asked of the interface, done by the build (effects.odin)
 	image_queue:    [dynamic]^Decode_Job,      // images waiting for a decoder, the last asked for first (images.odin)
 	image_decoding: int,                       // ... decoders at work
 	flights:        [dynamic]Flight,   // what is on its way (net.odin)
@@ -228,7 +229,9 @@ App_Context :: struct {
 	nav_at:         int,                  // where one is in it
 	nav_moving:     bool,                 // a step of the history: nothing to add to it
 	shared_moved:   bool,                 // something of what every window shows may have changed this frame (detached_still)
-	posts_run_seen: u64,                  // ... the count of posts run at the last frame
+	posts_run_seen: u64,                  // ... the count of posts run at the last frame, the events of the stream left out (posts_moved)
+	events_run:     u64,                  // the events of the stream applied (event_take: each says itself whether it moved anything)
+	unreadable:     Unreadable_Log,       // what could not be read as JSON (unreadable.odin)
 	commands_due:   [dynamic]^Command, // to run after this frame, in order (commands.odin)
 	slash:          [dynamic]Slash,    // the server's commands
 	have_slash:     bool,
@@ -391,6 +394,7 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 		ui.set_scrollbar_autohide(&app.state, app.prefs.autohide_scrollbars)
 		app.state.post_budget = again ? 0 : POSTS_PER_BUILD
 		ui.begin_build(&app.state, build_params(app, app.win, size, events, dt))
+		effects_apply(app)   // (what the events begin_build ran asked for: shown in this very build)
 		app.chat_sb = nil   // (only now: the answers begin_build ran read the last build's, a page placed by chat_load above all)
 		build_ui(app)
 		ui.end_build()
@@ -447,10 +451,7 @@ main_after_frame :: proc(h: ^host.Host) {
 	app.cx.work_ms += (work - app.cx.work_ms) * FPS_SMOOTH
 	h.times = {}   // (a frame held draws nothing: it costs nothing either)
 	answers_spent_free(app)
-	if run := ui.post_stats(&app.state).run; run != app.cx.posts_run_seen {   // (an answer, a shell's output, an event of the server)
-		app.cx.posts_run_seen = run
-		app.cx.shared_moved = true
-	}
+	posts_moved(app, ui.post_stats(&app.state).run)
 	terminals_reap(app)
 	output_views_tick(app)
 	web_events_drain(app)   // (the one place: what the page said during the frame, a modal dialog's message loop included)
@@ -464,6 +465,15 @@ main_after_frame :: proc(h: ^host.Host) {
 	activity_tick(app)
 	deferred_tick(app)
 	detached_frames(app)
+}
+
+// What the posts run in this frame may have changed in every window: an answer, a shell's output, a word of the stream's link. An event of the
+// stream is left out: it says itself (event_take), and most of them are another session's deltas that no window shows.
+posts_moved :: proc(app: ^App, run: u64) {
+	others := run - app.cx.events_run
+	if others == app.cx.posts_run_seen { return }
+	app.cx.posts_run_seen = others
+	app.cx.shared_moved = true
 }
 
 // A conversation just opened, its first page on its way: an empty page shown for the instant that takes is a blink, from what was there to

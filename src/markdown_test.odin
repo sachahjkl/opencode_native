@@ -18,8 +18,8 @@ a_list_takes_the_width_of_its_widest_number :: proc(t: ^testing.T) {
 	doc := Md_Doc{alloc = context.temp_allocator}
 	md_read(&doc, strings.to_string(b))
 	blocks := doc.blocks
-	measure :: proc(s: string, size: f32) -> f32 { return f32(len(s)) * 8 }   // (8 px a character)
-	w := list_marker_widths(blocks[:], measure, 16, 20, 4)
+	measure :: proc(face: Face_Id, s: string, size: f32) -> f32 { return f32(len(s)) * 8 }   // (8 px a character)
+	w := list_marker_widths(blocks[:], measure, 0, 16, 20, 4)
 	kinds := make([dynamic]string, context.temp_allocator)
 	for bl in blocks { append(&kinds, fmt.tprintf("%v", bl.kind)) }
 	if !testing.expectf(t, len(blocks) == 14, "the blocks: %v", kinds) { return }

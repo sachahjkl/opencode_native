@@ -3,6 +3,7 @@
 // Escape closes it for this word. Enter on a name typed in full sends it, as before (slash_send).
 package ocn
 
+import "core:encoding/json"
 import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -13,6 +14,7 @@ Slash_Pick :: struct {
 	query:     string,    // what follows the `/` (owned)
 	sel:       int,
 	list:      ui.Key,    // its box
+	search:    ui.Fuzzy_Cache,   // the query and the names folded: the list is ranked several times a frame
 }
 
 // The command being typed: the composer starts with `/` and the caret is in its first word.
@@ -25,7 +27,7 @@ slash_word :: proc(text: string, cursor: int) -> (query: string, ok: bool) {
 
 // The commands that match `query`, best first (indices into app.cx.slash), at most MENTION_ROWS.
 slash_matches :: proc(app: ^App, query: string) -> []int {
-	hits := ui.rank(query, app.cx.slash[:], proc(s: ^Slash, _: rawptr) -> ui.Rank_Entry { return {label = s.name} }, match = ui.fuzzy_match)
+	hits := ui.rank(query, app.cx.slash[:], proc(s: ^Slash, _: rawptr) -> ui.Rank_Entry { return {label = s.name} }, match = ui.rank_fuzzy, cache = &app.cx.slash_pick.search)
 	out := make([dynamic]int, context.temp_allocator)
 	for h in hits {
 		if len(out) == MENTION_ROWS { break }
@@ -97,4 +99,19 @@ slash_list :: proc(app: ^App, em: f32) {
 	clicked: int
 	clicked, p.list = completion_list(app, "###slash_list", rows, p.sel, em)
 	if clicked >= 0 { slash_choose(app, hits[clicked]) }
+}
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+slash_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	list := make([dynamic]Slash, context.temp_allocator)
+	for it in jarr(v, "data") { append(&list, Slash{strings.clone(jstr(it, "name")), strings.clone(jstr(it, "description"))}) }
+	slash_load(app, list[:])
+	outgoing_catalog(app)
+}
+
+slash_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	outgoing_catalog(app)   // (what waited for the commands goes as a prompt: nothing is lost)
+	return false
 }

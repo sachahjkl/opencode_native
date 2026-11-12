@@ -59,7 +59,7 @@ build_ui :: proc(app: ^App) {
 				groove_y: f32
 				if ui.parent(ui.prev_box("###sidebar")) { if g := ui.prev_box("###sg"); g != nil { groove_y = (g.rect.min.y + g.rect.max.y) * 0.5 } }
 				split := ui.splitter("###side_split", .X, &app.sidebar_w, SIDEBAR_W_MIN, SIDEBAR_W_MAX, {default_size = SIDEBAR_W_DEFAULT, total = room, min_other = CONVERSATION_MIN_PX})
-				side_handle(split, groove_y)
+				side_handle(split, groove_y, app.state.focus_visible)
 			}
 			main_area(app, em)
 		}
@@ -165,9 +165,9 @@ Side_Handle_Draw :: struct { hot: bool, groove_y: f32 }
 // The sidebar's edge and the handle that resizes it are one thing: the handle goes on with the sidebar's surface, and the one
 // line between the sidebar and the conversation is at its right. The sidebar's own groove comes all the way to that line.
 @(private = "file")
-side_handle :: proc(split: ui.Splitter_Result, groove_y: f32) {
+side_handle :: proc(split: ui.Splitter_Result, groove_y: f32, focus_visible: bool) {
 	d := ui.frame_new(Side_Handle_Draw)
-	d^ = {split.hovering || split.dragging || split.focused && the_app.state.focus_visible, groove_y}   // (focused by the keys only: a drag leaves the focus on it, not the colour)
+	d^ = {split.hovering || split.dragging || split.focused && focus_visible, groove_y}   // (focused by the keys only: a drag leaves the focus on it, not the colour)
 	split.box.custom_user = d
 	split.box.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		d := (^Side_Handle_Draw)(user)
@@ -189,8 +189,8 @@ side_handle :: proc(split: ui.Splitter_Result, groove_y: f32) {
 // The line between the sidebar and the conversation goes on through the title bar and the status bar: after what a bar puts
 // over the sidebar (`last`, its last box), at least `gap` then the line; a bar with more than the sidebar's width pushes it on.
 @(private = "file")
-side_line :: proc(id: string, last: ^ui.Box, gap: f32) {
-	x := ui.parent_box().rect.min.x + math.round(the_app.sidebar_w * ui.scale()) + math.round(SPLITTER_W_PX * ui.scale()) - 2 * px1()
+side_line :: proc(id: string, last: ^ui.Box, gap, sidebar_w: f32) {
+	x := ui.parent_box().rect.min.x + math.round(sidebar_w * ui.scale()) + math.round(SPLITTER_W_PX * ui.scale()) - 2 * px1()
 	ui.spacer(ui.px(max(gap, x - last.rect.max.x)))
 	edge_line(id, vertical = true)
 }
@@ -236,7 +236,7 @@ title_bar :: proc(app: ^App, em: f32) {
 		}
 		if hsig.clicked { command_run(app, command_find("nav.home")) }
 		if ui.hovered_for(hsig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Home  (Ctrl+H)") } }
-		side_line("###tg", b.last, em * 0.9)
+		side_line("###tg", b.last, em * 0.9, app.sidebar_w)
 		ui.spacer(ui.px(em * 1.3))
 		if !app.servers[app.server].local {   // another computer's server: its name first
 			glyph(lucide.GLOBE, ink(hex(HEX_CYAN)), math.round(em * ICON_SMALL))
@@ -436,7 +436,7 @@ session_badge :: proc(app: ^App, s: ^Session_Info, size, em: f32) {
 	}
 	c := hex(SESSION_BADGE_HEX[session_badge_index(s.id)])
 	ui.next({width = ui.px(size), height = ui.px(size), bg = with_alpha(c, SESSION_BADGE_ALPHA), fg = c, radius = math.round(size * 0.3 * corners()),
-		text_align = .Center, font = ui.styled_face(the_app.font, true, false), font_size = math.round(size * 0.55), text_pad = 0})
+		text_align = .Center, font = ui.styled_face(app.font, true, false), font_size = math.round(size * 0.55), text_pad = 0})
 	ui.build_box({.Draw_Background, .Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###badge", letter))
 }
 
@@ -1098,7 +1098,7 @@ user_message :: proc(app: ^App, m: ^Message, em: f32) {
 					ui.spacer(ui.px(em * 0.2))
 					text("you", "You", accent(), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 					ui.spacer(ui.fill())
-					text("at", clock_text(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					text("at", clock_text(m.created, app.prefs.clock24), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}
 				ui.spacer(ui.px(em * 0.35))
 				runs := link_runs(&m.text_runs, m.text, {color = hex(HEX_USER_TEXT)}, app.chat.alloc)
@@ -1137,7 +1137,7 @@ continues :: proc(prev, m: ^Message) -> bool {
 plain_tool :: proc(p: ^Part) -> bool { return p.kind == .Tool && p.tool_name != "subagent" && p.sub_agent == "" }
 
 @(private = "file")
-Who_Draw :: struct { col: Color, live: bool }
+Who_Draw :: struct { col: Color, live, glow: bool }   // (glow: the preference, read at the build)
 
 // `cont`: it goes on from the step before (no header); `next`: the step after when it goes on from this one.
 assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: ^Message = nil, prev: ^Message = nil) {
@@ -1151,13 +1151,13 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 			ui.next({width = ui.px(math.round(em * 0.5)), height = ui.px(math.round(em * 1.0))})
 			rb := ui.build_box({}, "###al")
 			wd := ui.frame_new(Who_Draw)
-			wd^ = {agent_color(m.agent), m.streaming}
+			wd^ = {agent_color(m.agent), m.streaming, app.prefs.glow}
 			rb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 				d := (^Who_Draw)(user)
 				s := ui.scale()
 				c := draw.rect_center(b.rect)
 				r := Rect{{c.x - 1.5 * s, b.rect.min.y}, {c.x + 1.5 * s, b.rect.max.y}}
-				if d.live && the_app.prefs.glow {
+				if d.live && d.glow {
 					a := 0.15 + 0.15 * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * PULSE_RATE))
 					draw.box_shadow(dc, r, radii4(1.5 * s), 4 * s, with_alpha(d.col, a))
 				}
@@ -1174,7 +1174,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 				text("md", m.model, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			}
 			ui.spacer(ui.fill())
-			text("at", clock_text(m.created), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("at", clock_text(m.created, app.prefs.clock24), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
 		ui.spacer(ui.px(em * 0.4))
 		}
@@ -1183,7 +1183,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 			switch p.kind {
 			case .Text:
 				if len(p.text) > 0 {
-					markdown(md_doc(&app.chat, pid), pid, string(p.text[:]), hex(HEX_ANSWER_TEXT))
+					markdown(md_doc(&app.chat, pid), pid, string(p.text[:]), hex(HEX_ANSWER_TEXT), md_style(app))
 					ui.spacer(ui.px(em * 0.6))
 				}
 			case .Reasoning: reasoning_part(app, &p, pid, em)
@@ -1328,7 +1328,7 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 				ui.next({width = ui.text_size(0), height = ui.pct(1), fg = running ? hex(HEX_TEXT_SOFT) : hex(HEX_FAINT), font = app.mono, font_size = math.round(em * FS_CAPTION), text_pad = 0})
 				tk := ui.signal(ui.build_box({.Draw_Text, .Clickable}, fmt.tprintf("%s###tk", took)))
 				if tk.clicked { part_toggle(app, p.tool_id != "" ? p.tool_id : pid, hb) }
-				if ui.hovered_for(tk, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(tool_when(p, running, now_epoch_ms())) } }
+				if ui.hovered_for(tk, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(tool_when(p, running, now_epoch_ms(), app.prefs.clock24)) } }
 				ui.spacer(ui.px(em * 0.5))
 			}
 			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY))
@@ -1965,7 +1965,7 @@ status_bar :: proc(app: ^App, em: f32) {
 		}
 		server_menu(app, skey, em)
 		if app.server_version != "" {
-			side_line("###sg_status", sb, em * 0.8)
+			side_line("###sg_status", sb, em * 0.8, app.sidebar_w)
 			ui.spacer(ui.px(em * 1.3))
 			text("v", fmt.tprintf("opencode %s", app.server_version), hex(HEX_FAINT), small)
 		}
@@ -1988,6 +1988,10 @@ status_bar :: proc(app: ^App, em: f32) {
 			fps := app.cx.frame_ms > 0 ? 1000 / app.cx.frame_ms : 0
 			text("fps", fmt.tprintf("%3.0f fps  %.1f ms", fps, app.cx.work_ms), hex(HEX_FAINT), small)
 			ui.spacer(ui.px(em * 0.8))
+			if n := app.cx.unreadable.count; n > 0 {   // (unreadable.odin: the log says what they were)
+				text("unr", fmt.tprintf("%d unreadable", n), hex(HEX_YELLOW), small)
+				ui.spacer(ui.px(em * 0.8))
+			}
 		}
 	}
 }

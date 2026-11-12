@@ -374,3 +374,15 @@ output_view_dialog :: proc(app: ^App, em: f32) {
 	}
 	if !open { output_view_close(app, v) }
 }
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+output_read_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { output_view_output_load(app, v, r.tag) }
+
+output_state_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { output_view_state_load(app, v, r.tag) }
+
+output_view_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	output_view_failed(app, r)
+	return true   // (the view says it)
+}

@@ -657,7 +657,7 @@ artifact_right :: proc(app: ^App, em: f32) {
 	shown, is_text := file_text(f.content)
 	if !is_text { info_line(app, "###ar_bin", "Not text.", em); return }
 	ui.next({width = ui.fill(), height = ui.fill()})
-	if ui.scroll_y("###ar_view") { code_block("###ar_code", strings.trim_prefix(filepath.ext(f.path), "."), shown, version = a.version) }
+	if ui.scroll_y("###ar_view") { code_block("###ar_code", strings.trim_prefix(filepath.ext(f.path), "."), shown, app.mono, version = a.version) }
 }
 
 ////////////////////////////////
@@ -736,7 +736,7 @@ page_plugins :: proc(app: ^App, em: f32) {
 	if !read_shown(app, "###pl_read", &p.read, em, plugins_ask) { return }
 	built := 0
 	for it in p.list { if it.kind == "builtin" { built += 1 } }
-	section(fmt.tprintf("INSTALLED (%d)", len(p.list) - built), em)
+	section(app, fmt.tprintf("INSTALLED (%d)", len(p.list) - built), em)
 	if len(p.list) == built { info_line(app, "###pl_none", "No plugin but those of the server.", em) }
 	for &it, i in p.list {
 		if it.kind == "builtin" { continue }
@@ -783,4 +783,35 @@ plugin_row :: proc(app: ^App, it: ^Plugin, i: int, em: f32) {
 	}
 	if it.failed { info_line(app, fmt.tprintf("###ple%d", i), it.error, em, hex(HEX_RED)) }
 	ui.spacer(ui.px(em * 0.15))
+}
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+schedules_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { schedules_load(app, v) }
+
+schedule_made_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { schedule_made(app) }
+
+// ("Invalid duration": under the form, with what was typed)
+schedule_made_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) { return app.cx.open[.Schedules] }
+
+schedule_done_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { schedule_changed(app) }
+
+artifacts_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { artifacts_load(app, v) }
+
+artifact_read_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { artifact_loaded(app, v) }
+
+chat_artifacts_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { chat_artifacts_load(app, r.tag, v) }
+
+artifact_done_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { artifacts_changed(app) }
+
+plugins_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { plugins_load(app, v) }
+
+plugins_check_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { plugins_checked(app, v) }
+
+plugin_update_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { plugins_changed(app) }
+
+plugin_update_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	plugins_changed(app)
+	return false
 }

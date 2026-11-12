@@ -146,6 +146,7 @@ Chat :: struct {
 	have_self:    bool,
 	parent_title: string,
 	children:     [dynamic]Session_Info,   // sessions whose parent is this one (newest first; in children_arena: read often)
+	child_ids:    map[string]bool,         // ... their ids, for is_child: asked of every event of another session (in children_arena)
 	children_arena: virtual.Arena,
 	live:         map[string]Sub_Live,     // keyed by child session id (keys and strings in the arena)
 	goal:         Goal,                    // its /goal (goal.odin; strings in the arena)
@@ -418,8 +419,13 @@ parent_load :: proc(app: ^App, v: json.Value) {
 children_load :: proc(app: ^App, v: json.Value) {
 	c := &app.chat
 	a := arena_renew(&c.children_arena)
-	c.children = make([dynamic]Session_Info, a)
-	for it in jarr(v, "data") { append(&c.children, session_from_json(it, a)) }
+	list := jarr(v, "data")
+	c.children = make([dynamic]Session_Info, 0, len(list), a)
+	c.child_ids = make(map[string]bool, len(list), a)
+	for it in list {
+		append(&c.children, session_from_json(it, a))
+		c.child_ids[c.children[len(c.children) - 1].id] = true
+	}
 }
 
 find_child :: proc(c: ^Chat, id: string) -> ^Session_Info {
@@ -963,6 +969,72 @@ tool_set_input :: proc(p: ^Part, input: json.Value, a: mem.Allocator) {
 }
 
 ////////////////////////////////
+// What the answers to the model's requests do (net.odin REQ_FACTS)
+
+sessions_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { sessions_load(app, v) }
+
+messages_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	first := !app.chat.loaded
+	chat_load(app, v, false, r.asked_at)
+	if first { chat_scroll_event(app, Scroll_Signal.Snap) }   // (followed: shown at its bottom in the very frame it arrives)
+	chat_scroll_restore_check(app)
+}
+
+messages_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	app.chat.loading = false
+	chat_scroll_event(app, Scroll_Signal.Restore_End)   // (what it would go back to will not come)
+	return false
+}
+
+older_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	chat_load(app, v, true)   // (Scroll_Older_Page: a way back under way gets a whole wait again)
+	chat_scroll_restore_check(app)
+}
+
+// The page before the first message was not read: said where it would have been.
+older_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	if r.gen != app.chat.gen || r.tag != app.chat.id { return false }
+	app.chat.loading_older = false
+	app.chat.older_failed = ui.now_ms()
+	chat_scroll_event(app, Scroll_Signal.Restore_End)   // (the place it would go back to is on that page: the view is the reader's again)
+	return false
+}
+
+agents_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { agents_load(app, v) }
+
+models_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { models_load(app, v) }
+
+permissions_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { permissions_replace(app, r.tag, jarr(v, "data"), r.asked_at) }
+
+permission_reply_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	waits_gone(app, r.tag)
+	permission_remove(app, r.tag)
+}
+
+permission_reply_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	for &p in app.permissions { if p.id == r.tag { p.replying = false } }
+	return false
+}
+
+active_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { active_load(app, v, r.asked_at) }
+
+self_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { self_load(app, v, r.asked_at) }
+
+parent_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { parent_load(app, v) }
+
+children_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { children_load(app, v) }
+
+projects_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { projects_load(app, v) }
+
+// The session did not take the agent or the model picked: what is shown goes back to what it uses.
+session_choice_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	if r.gen == app.chat.gen && r.tag == app.chat.id {
+		if strings.has_suffix(r.path, "/agent") { app.chat.chose_agent = "" } else { app.chat.chose_model, app.chat.chose_provider, app.chat.chose_variant = "", "", "" }
+	}
+	return false
+}
+
+////////////////////////////////
 // The event stream
 
 find_message :: proc(c: ^Chat, id: string) -> ^Message {
@@ -996,7 +1068,7 @@ user_message_add :: proc(c: ^Chat, id, text: string, files: json.Array, created:
 queue_delivered :: proc(app: ^App, id: string, created: f64) {
 	c := &app.chat
 	if it := queue_find(app, id); it != nil && find_message(c, id) == nil {
-		v, _ := json.parse_string(it.payload, parse_integers = true, allocator = context.temp_allocator)
+		v := json_of_own(app, "queued payload", it.payload)
 		user_message_add(c, id, it.text, jarr(v, "files"), created)
 	}
 	queue_gone(app, id, true, c.seq)
@@ -1026,7 +1098,10 @@ tool_part :: proc(c: ^Chat, m: ^Message, id: string) -> ^Part {
 	return &m.parts[len(m.parts) - 1]
 }
 
-apply_event :: proc(app: ^App, ev: json.Value) {
+// What an event of the stream changes. `visible`: something any window may show changed, the session shown, the sidebar, the activity,
+// a dialog, a toast; false for what no window shows, a delta of a session nobody looks at above all, the bulk of a busy stream. (Each
+// kind of the first switch is rare and shows somewhere: it counts as seen without a finer rule.)
+apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 	kind := jstr(ev, "type")
 	d := jget(ev, "data")
 	sid := jstr(d, "sessionID")
@@ -1036,13 +1111,14 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 	app.cx.stream_seq += 1
 	c.seq = app.cx.stream_seq
 
+	visible = true
 	switch kind {
 	case "session.execution.started":
 		busy_event(app, sid, true)
 	case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted", "session.idle":
 		if app.busy[sid] or_else false {
 			word := strings.trim_prefix(kind, "session.execution.")
-			notify_finished(app, sid, word)
+			effect_finished(app, sid, word)
 			session_ended(app, sid, word == "failed" ? "failed" : word == "interrupted" ? "interrupted" : "succeeded")
 		}
 		busy_event(app, sid, false)
@@ -1050,7 +1126,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		if mine {
 			load_messages(app, sid)   // the stored page: the stream only gave the pieces
 			stats_context_soon(app)
-			if kind == "session.execution.failed" { ui.toast(.Bad, "The run failed") }
+			if kind == "session.execution.failed" { effect_toast(app, .Bad, "The run failed") }
 		}
 		refresh_soon(app)
 	case "session.viewed":
@@ -1067,7 +1143,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 			outgoing_session_gone(app, sid)
 			preview_session_gone(app, sid)
 			if mine {   // (elsewhere: what is shown no longer is)
-				ui.toast(.Warn, "This session was deleted")
+				effect_toast(app, .Warn, "This session was deleted")
 				append(&app.nav_steps, Nav_Step{kind = .Gone})
 			}
 		}
@@ -1078,7 +1154,7 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		goal_set(app, sid, jget(d, "goal"))
 	case "session.agent.selected", "session.model.selected":
 		// (from here or elsewhere: the composer says it now, the page read again brings its line into the conversation)
-		if !mine { return }
+		if !mine { return false }
 		if kind == "session.agent.selected" {
 			c.agent = strings.clone(jstr(d, "agent"), a)
 		} else {
@@ -1104,8 +1180,8 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		permission_add(app, req)
 		asker := jstr(req, "sessionID")
 		detail := permission_words(req)
-		if asker != c.id { toast_session(app, .Warn, asker, "Permission", detail) }
-		notify_waiting(app, asker, "Permission", detail)
+		if asker != c.id { effect_session_toast(app, .Warn, asker, "Permission", detail) }
+		effect_waiting(app, asker, "Permission", detail)
 	case "session.permissions":   // (a session's approval mode, set here or by another client)
 		approval_seen(app, sid, approval_of(jget(d, "permissions")))
 	case "permission.replied":
@@ -1118,18 +1194,18 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		form_add(app, form)
 		asker := jstr(form, "sessionID")
 		detail := form_words(form)
-		if asker != "" && asker != c.id && !is_child(c, asker) { toast_session(app, .Warn, asker, "Question", detail) }   // (no session: shown in the conversation, no toast)
-		notify_waiting(app, asker, "Question", detail)
+		if asker != "" && asker != c.id && !is_child(c, asker) { effect_session_toast(app, .Warn, asker, "Question", detail) }   // (no session: shown in the conversation, no toast)
+		effect_waiting(app, asker, "Question", detail)
 	case "form.replied", "form.cancelled":
 		waits_gone(app, jstr(d, "id"))
 		form_remove(app, jstr(d, "id"))
+	case:
+		visible = false
 	}
-	if sid != "" && !mine && is_child(c, sid) {
-		child_event(app, kind, sid, d, ev)
-		return
-	}
+	if sid != "" && !mine && is_child(c, sid) { return child_event(app, kind, sid, d, ev) || visible }
 	if !mine { return }
 	chat_changed(c)   // (what follows changes the messages, or their parts)
+	visible = true
 
 	mid := jstr(d, "assistantMessageID")
 	switch kind {
@@ -1234,16 +1310,18 @@ apply_event :: proc(app: ^App, ev: json.Value) {
 		c.tokens_out = jnum(d, "tokens", "output")
 		c.cache_read = jnum(d, "tokens", "cache", "read")
 	}
+	return true   // (an event of the session shown)
 }
 
-// A session the shown one launched: one of its children, or the session of one of its sub-agent calls.
+// A session the shown one launched: one of its children (children_load), or the session of one of its sub-agent calls (the index, made
+// again only when a page or a call names another: subs_changed). Two lookups: every event of another session asks it.
 is_child :: proc(c: ^Chat, sid: string) -> bool {
 	if sid == "" { return false }
-	return find_child(c, sid) != nil || sid in sub_index(c).claimed
+	return sid in c.child_ids || sid in sub_index(c).claimed
 }
 
-// An event of a sub-agent of the session shown: what it is doing now, what it has cost.
-child_event :: proc(app: ^App, kind, sid: string, d, ev: json.Value) {
+// An event of a sub-agent of the session shown: what it is doing now, what it has cost. (false: not one it shows)
+child_event :: proc(app: ^App, kind, sid: string, d, ev: json.Value) -> bool {
 	c := &app.chat
 	a := c.alloc
 	key := sid
@@ -1275,10 +1353,11 @@ child_event :: proc(app: ^App, kind, sid: string, d, ev: json.Value) {
 		live.activity = ""
 		children_soon(app)
 	case:
-		return
+		return false
 	}
 	live.last_ms = now
 	c.live[key] = live
+	return true
 }
 
 set_busy :: proc(app: ^App, id: string, busy: bool) {

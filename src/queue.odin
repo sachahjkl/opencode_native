@@ -308,8 +308,8 @@ queue_edit :: proc(app: ^App, id: string) {
 	clear(&app.cx.attachments)
 	append(&e.mentions, ..app.cx.mentions.chosen[:])
 	clear(&app.cx.mentions.chosen)
-	v, _ := json.parse_string(it.payload, parse_integers = true, allocator = context.temp_allocator)
-	body, _ := json.parse_string(prompt_of_payload(v), parse_integers = true, allocator = context.temp_allocator)
+	v := json_of_own(app, "queued payload", it.payload)
+	body := json_of_own(app, "queued prompt", prompt_of_payload(v))
 	prompt_parts(body, &app.cx.attachments, &app.cx.mentions.chosen)
 	ui.area_set(&app.composer, it.text)
 	app.cx.focus_composer = true
@@ -485,3 +485,59 @@ queue_edit_banner :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.85))
 	}
 }
+
+////////////////////////////////
+// The inbox of a run interrupted
+
+// A run that is interrupted leaves what was steered into it in the session's inbox, where only the next prompt would pick it up,
+// glued to that prompt: it looks lost. The newest goes as a prompt now, which starts a run: the server puts what is left in the
+// inbox before a prompt, so they keep their order. (It has no way to wake an inbox: out of it, then sent.) If the prompt fails its text comes back to the composer; if the
+// taking fails it stays in the inbox. Nothing is lost. What was queued is left where it is: the reader stopped the run, and queued it
+// for after that run, not for a new one started without a word. It stays parked in the list over the composer, Steer at hand.
+inbox_resume :: proc(app: ^App, id: string) {
+	request(app, .Inbox, "GET", fmt.tprintf("/api/session/%s/inbox", id), tag = id)
+}
+
+inbox_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	newest: json.Value
+	last: f64
+	for item in jarr(v, "data") {
+		if jstr(item, "type") != "user" || delivery_of(jstr(item, "delivery")) == .Queue { continue }
+		if t := jnum(item, "time", "created"); t >= last { last, newest = t, item }
+	}
+	if newest == nil { return }
+	request(app, .Inbox_Take, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", r.tag, jstr(newest, "id")), prompt_of_payload(jget(newest, "payload")), r.tag)
+}
+
+// (a server without one: nothing to say)
+inbox_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) { return f == .Refused }
+
+inbox_take_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	// (what shows of it goes: the prompt comes back under its own id)
+	if r.tag == app.chat.id {
+		taken := r.path[strings.last_index_byte(r.path, '/') + 1:]
+		if queue_shown_as_sent(app, taken) { chat_drop(&app.chat, taken) }
+		queue_gone(app, taken, false, app.cx.stream_seq)
+	}
+	outgoing_inbox(app, r.tag, r.body)
+}
+
+////////////////////////////////
+// What the answers to the queue's requests do (net.odin REQ_FACTS)
+
+queue_list_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { queue_load(app, r.tag, v, r.asked_at) }
+
+// A Steer or a Cancel.
+queue_item_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { queue_answered(app, r) }
+
+queue_item_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) { return queue_failed(app, r) }
+
+queue_replace_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { queue_replaced(app, r) }
+
+queue_replace_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	queue_replace_failed(app, r)
+	return true   // (Outgoing says it)
+}
+
+// (taken out or not, that server is left: what was written comes back)
+queue_replace_on_left :: proc(app: ^App, r: ^Request) { outgoing_answered(app, r, false) }

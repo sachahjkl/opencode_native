@@ -170,7 +170,7 @@ mention_load :: proc(app: ^App, v: json.Value) {
 	_ = virtual.arena_init_growing(&m.arena)
 	a := virtual.arena_allocator(&m.arena)
 	m.dir = strings.clone(jstr(v, "location", "directory"))
-	for h in ui.rank(m.query, app.agents[:], proc(ag: ^Agent_Info, _: rawptr) -> ui.Rank_Entry { return {label = ag.id, skip = ag.mode != "subagent"} }, match = ui.fuzzy_match) {
+	for h in ui.rank(m.query, app.agents[:], proc(ag: ^Agent_Info, _: rawptr) -> ui.Rank_Entry { return {label = ag.id, skip = ag.mode != "subagent"} }, match = ui.rank_fuzzy) {
 		ag := &app.agents[h.index]
 		append(&m.hits, Mention_Hit{.Agent, strings.clone(ag.id, a), strings.clone(ag.description, a)})
 	}
@@ -306,6 +306,7 @@ mentions_destroy :: proc(app: ^App) {
 	virtual.arena_destroy(&m.arena)
 	m^ = {}
 	delete(app.cx.slash_pick.query)   // (the other list over the composer: slash.odin)
+	ui.fuzzy_cache_destroy(&app.cx.slash_pick.search)
 	app.cx.slash_pick = {}
 }
 
@@ -592,6 +593,20 @@ files_right :: proc(app: ^App, em: f32) {
 	if f.size > len(f.content) { info_line(app, "###fl_cut", fmt.tprintf("The first %d of %d bytes.", len(f.content), f.size), em) }
 	ui.next({width = ui.fill(), height = ui.fill()})
 	if ui.scroll_y("###fl_view") {
-		code_block("###fl_code", strings.trim_prefix(filepath.ext(f.file), "."), f.content, version = f.version)
+		code_block("###fl_code", strings.trim_prefix(filepath.ext(f.file), "."), f.content, app.mono, version = f.version)
 	}
 }
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+mention_files_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { mention_load(app, v) }
+
+mention_files_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	mention_failed(app)    // (what was proposed is not what is typed any more)
+	return f == .Refused   // (a server without one, a folder gone: nothing to say)
+}
+
+files_list_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { files_load(app, v) }
+
+file_read_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { file_loaded(app, r.resp) }

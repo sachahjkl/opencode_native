@@ -104,7 +104,7 @@ goal_reason_line :: proc(app: ^App, em: f32) {
 	c := &app.chat
 	if !c.has_goal || c.goal.status != .Paused || c.goal.reason == "" { return }
 	small := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
-	why, resets := reason_and_reset(c.goal.reason)
+	why, resets := reason_and_reset(c.goal.reason, app.prefs.clock24)
 	// (past the reset, what stopped it is over: the goal waits only for a word, which the line offers; the reason is history)
 	over := resets > 0 && resets <= now_epoch_ms()
 	ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
@@ -115,7 +115,7 @@ goal_reason_line :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.35))
 		text("w", "goal paused", hex(HEX_WEAK), small)
 		if resets > 0 {
-			text("when", reset_text(resets, now_epoch_ms()), hex(HEX_FAINT), small)
+			text("when", reset_text(resets, now_epoch_ms(), app.prefs.clock24), hex(HEX_FAINT), small)
 			if !over { ui.wake_within(&app.state, GOAL_RESET_TICK_MS) }   // (the time left, minute after minute)
 		}
 		if over {
@@ -134,7 +134,7 @@ GOAL_RESET_TICK_MS :: 30_000
 
 // The server's reason, said for a person: its "Resets at 2026-11-10T11:20:00.000Z." (a time in UTC, after the same time in words)
 // goes, and when that is, in ms since 1970 (0: it says none). A time in the middle of a sentence is the local clock's instead.
-reason_and_reset :: proc(reason: string) -> (text: string, resets_ms: f64) {
+reason_and_reset :: proc(reason: string, clock24: bool) -> (text: string, resets_ms: f64) {
 	text = reason
 	for i := 0; i + ISO_DATE_LEN <= len(text); i += 1 {
 		if !looks_iso(text[i:]) { continue }
@@ -152,7 +152,7 @@ reason_and_reset :: proc(reason: string) -> (text: string, resets_ms: f64) {
 			text = strings.trim_space(strings.concatenate({strings.trim_right_space(text[:start]), after}, context.temp_allocator))
 			return text, ms
 		}
-		text = strings.concatenate({text[:i], clock_text(ms), after}, context.temp_allocator)
+		text = strings.concatenate({text[:i], clock_text(ms, clock24), after}, context.temp_allocator)
 		resets_ms = ms
 		i += 1
 	}
@@ -167,3 +167,8 @@ looks_iso :: proc(s: string) -> bool {
 	digit :: proc(c: u8) -> bool { return c >= '0' && c <= '9' }
 	return len(s) >= 11 && digit(s[0]) && digit(s[1]) && digit(s[2]) && digit(s[3]) && s[4] == '-' && digit(s[5]) && digit(s[6]) && s[7] == '-' && digit(s[8]) && digit(s[9]) && (s[10] == 'T' || s[10] == 't')
 }
+
+////////////////////////////////
+// What the answers to its requests do (net.odin REQ_FACTS)
+
+goal_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { goal_set(app, r.tag, jget(v, "output")) }
