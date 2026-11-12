@@ -151,6 +151,11 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 				} else if hint_action("###bgpush", "push to background", em, app.mono, lucide.SEND_TO_BACK) {
 					background_session(app, app.chat.id)
 				}
+				// (what it prints, as it prints it: the command at work, whether it holds the turn or runs in the background)
+				if output_view_can(p) {
+					ui.spacer(ui.px(em * 1.2))
+					if hint_action("###bginspect", "inspect", em, app.mono, lucide.SQUARE_TERMINAL) { output_view_open_part(app, p) }
+				}
 			}
 		}
 		show_error := p.status == .Error && p.output != ""

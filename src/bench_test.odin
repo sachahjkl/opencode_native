@@ -1838,3 +1838,30 @@ the_composer_has_its_menu_all_over_it :: proc(t: ^testing.T) {
 		}
 	})
 }
+
+// A command at work can be inspected from its row, as a background one can from the tray: its output, as it prints it.
+@(test)
+a_running_command_is_inspected_from_its_row :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		// (the last call of the conversation, a command at work)
+		call: ^Part
+		#reverse for &m in app.chat.messages {
+			#reverse for &p in m.parts { if p.kind == .Tool { call = &p; break } }
+			if call != nil { break }
+		}
+		if !testing.expect(t, call != nil, "a call") { return }
+		call.tool_name = strings.clone("bash", app.chat.alloc)
+		call.status = .Running
+		call.shell_id = strings.clone("sh_7", app.chat.alloc)
+		app.chat.seq += 1
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "bginspect") != nil }, "its row says it can be inspected")
+		testing.expect(t, session.find(s, "bgpush") != nil, "and pushed to the background")
+		session.wait_idle(s)   // (the conversation follows its end, which the row made longer: what is clicked stands still)
+		session.click(s, "bginspect")
+		session.frames(s, 2)
+		v := app.cx.outputs.shown
+		testing.expect(t, v != nil && v.shell == "sh_7", "its output, in its view")
+	})
+}
