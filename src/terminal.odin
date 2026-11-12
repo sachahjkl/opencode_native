@@ -18,7 +18,6 @@ import "base:runtime"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
-import "core:os"
 import "core:strconv"
 import "core:strings"
 import "core:sync"
@@ -28,6 +27,7 @@ import "core:unicode/utf8"
 import "gt:draw"
 import "gt:font"
 import "gt:platform"
+import store "gt:store"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -1555,23 +1555,17 @@ term_on_bar :: proc(t: ^Term, p: [2]f32) -> bool {
 
 // The shells' zooms, by their id on the server: a shell found again (the program started again, the server come back) has
 // its own. The server keeps a shell's title and size only: the zooms are the client's, in terminal_zoom.txt beside the
-// preferences, one "id<TAB>zoom" a line. A shell closed from here leaves the file.
+// preferences, one "id<TAB>zoom" a line (app.stores.zooms, stores.odin). A shell closed from here leaves the file.
 Term_Zooms :: struct {
-	file:  string,              // ("": nowhere, as in the tests)
 	by_id: map[string]f32,      // (keys owned; 1 is not kept)
 }
 
-term_zooms_load :: proc(app: ^App, file: string) {
+// From terminal_zoom.txt as read at the start: kept here as numbers, read whenever a shell is made.
+term_zooms_load :: proc(app: ^App) {
 	z := &app.term_zooms
-	z.file = strings.clone(file)
-	if file == "" { return }
-	data, err := os.read_entire_file(file, context.temp_allocator)
-	if err != nil { return }
-	rest := string(data)
-	for line in strings.split_lines_iterator(&rest) {
-		id, _, value := strings.partition(line, "\t")
-		v, ok := strconv.parse_f32(value)
-		if id != "" && ok && v != 1 && id not_in z.by_id { z.by_id[strings.clone(id)] = clamp(v, TERM_ZOOM_MIN, TERM_ZOOM_MAX) }
+	for e in store.list(&app.stores.zooms) {
+		v, ok := strconv.parse_f32(e.value)
+		if ok && v != 1 { z.by_id[strings.clone(e.key)] = clamp(v, TERM_ZOOM_MIN, TERM_ZOOM_MAX) }
 	}
 }
 
@@ -1591,7 +1585,7 @@ term_zoom_set :: proc(app: ^App, t: ^Term, zoom: f32) {
 		return
 	}
 	if t.id not_in z.by_id { z.by_id[strings.clone(t.id)] = t.zoom } else { z.by_id[t.id] = t.zoom }
-	term_zooms_save(z)
+	store.set(&app.stores.zooms, t.id, fmt.tprintf("%v", t.zoom))   // (%v: read back, the same number)
 }
 
 term_zoom_forget :: proc(app: ^App, id: string) {
@@ -1599,13 +1593,5 @@ term_zoom_forget :: proc(app: ^App, id: string) {
 	if id not_in z.by_id { return }
 	key, _ := delete_key(&z.by_id, id)
 	delete(key)
-	term_zooms_save(z)
-}
-
-@(private = "file")
-term_zooms_save :: proc(z: ^Term_Zooms) {
-	if z.file == "" { return }
-	b := strings.builder_make(context.temp_allocator)
-	for id, v in z.by_id { fmt.sbprintf(&b, "%s\t%v\n", id, v) }   // (%v: read back, the same number)
-	_ = os.write_entire_file(z.file, transmute([]u8)strings.to_string(b))
+	store.remove(&app.stores.zooms, id)
 }

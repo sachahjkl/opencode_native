@@ -3,21 +3,19 @@
 // from the inbox, or a step through the history, gives the composer back its own text first.
 //
 // The texts are kept on disk too (drafts.json, beside the preferences), a second after the typing stops (at most every
-// DRAFTS_SAVE_MOST_MS while it goes on), and when the program closes: a crash loses that second at most. Only the texts:
-// an attachment is an image's data, and a mention's file is the server's; they live as long as the program.
+// DRAFTS_SAVE_MOST_MS while it goes on), and when the program closes: a crash loses that second at most. The file is read at
+// the start and written by a worker (app.stores.drafts, stores.odin). Only the texts: an attachment is an image's data, and
+// a mention's file is the server's; they live as long as the program.
 package ocn
 
 import "core:encoding/json"
 import "core:fmt"
-import "core:os"
-import "core:path/filepath"
 import "core:strings"
+import store "gt:store"
 import "gt:ui"
 
 DRAFTS_SAVE_MS      :: 1000
 DRAFTS_SAVE_MOST_MS :: 5000
-
-drafts_path :: proc() -> string { return pjoin({filepath.dir(prefs_path()), "drafts.json"}) }
 
 // The composer changed: the texts go to disk in a moment.
 drafts_save_soon :: proc(app: ^App) { deferred_ask(&app.cx.due[.Drafts], DRAFTS_SAVE_MS, DRAFTS_SAVE_MOST_MS) }
@@ -49,21 +47,20 @@ drafts_json :: proc(app: ^App) -> string {
 	return strings.to_string(b)
 }
 
-// To disk: written beside, then put in place (a crash in the middle leaves the last whole one).
+// To disk, by the drafts' worker: written beside, then put in place (a crash in the middle leaves the last whole one).
 drafts_save :: proc(app: ^App) {
 	if app.prefs_file == "" { return }   // (a test: nothing on disk)
-	path := drafts_path()
-	tmp := fmt.tprintf("%s.tmp", path)
-	if err := os.write_entire_file(tmp, transmute([]u8)drafts_json(app)); err != nil { return }
-	_ = os.rename(tmp, path)
+	store.writer_put(&app.stores.drafts, transmute([]u8)drafts_json(app))
 }
 
-// At start: the texts of last time, each in its session's draft; the home page's in the composer.
+// At start: the texts of last time (read with the other stores, before the window), each in its session's draft; the home
+// page's in the composer.
 drafts_load :: proc(app: ^App) {
-	if app.prefs_file == "" { return }
-	data, err := os.read_entire_file(drafts_path(), context.temp_allocator)
-	if err != nil { return }
-	drafts_load_json(app, string(data))
+	text := app.stores.drafts_read
+	app.stores.drafts_read = ""
+	defer delete(text)
+	if app.prefs_file == "" || text == "" { return }
+	drafts_load_json(app, text)
 }
 
 drafts_load_json :: proc(app: ^App, text: string) {
