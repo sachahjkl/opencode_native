@@ -298,6 +298,7 @@ main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
 		if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() }
 		if e.kind == .Scroll || e.kind == .Key_Press { chat_scroll_event(app, Scroll_Signal.Restore_End) }   // (the reader goes elsewhere: the view is theirs)
 		attach_drop_event(app, e)
+		composer_paste_event(app, e)
 		notify_event(app, e)
 		// the side buttons of the mouse, as in a browser
 		if e.kind == .Mouse_Press && !overlay_open(app) {

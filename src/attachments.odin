@@ -14,6 +14,7 @@ import "core:strings"
 import "core:sync"
 import "core:thread"
 import "core:unicode/utf8"
+import "gt:ascii"
 import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -35,6 +36,7 @@ Attach_Job :: struct {
 	mime:  string,                     // of `data` (a literal); a file's: by its extension and its bytes (attach_mime)
 	data:  []u8,                       // (owned)
 	image: platform.Clipboard_Image,   // pasted: encoded as PNG first (owned)
+	decode: string,                    // `data` is a clipboard's image of this type (BMP, a DIB): decoded, then encoded as PNG (owned)
 	// what came of it
 	outcome: Attach_Outcome,
 	uri:     string,                   // the data URL (owned)
@@ -100,6 +102,14 @@ attach_run :: proc(job: ^Attach_Job) {
 		job.data = platform.png_encode(job.image, h)
 		platform.clipboard_image_destroy(&job.image, h)
 		if len(job.data) == 0 { job.outcome = .Bad_Image }
+	case job.decode != "":
+		img, ok := platform.clipboard_image_decode(job.decode, job.data, h)
+		delete(job.data, h)
+		job.data = nil
+		if !ok { job.outcome = .Bad_Image; break }
+		job.data = platform.png_encode(img, h)
+		platform.clipboard_image_destroy(&img, h)
+		if len(job.data) == 0 { job.outcome = .Bad_Image }
 	}
 	if job.outcome == .Attached {
 		if len(job.data) > ATTACH_MAX_BYTES {
@@ -125,6 +135,7 @@ attach_job_free :: proc(job: ^Attach_Job) {
 	delete(job.name, h)
 	delete(job.data, h)
 	delete(job.uri, h)
+	delete(job.decode, h)
 	platform.clipboard_image_destroy(&job.image, h)
 	free(job, h)
 }
@@ -215,27 +226,79 @@ attach_drop_event :: proc(app: ^App, e: platform.Event) {
 	}
 }
 
-// Ctrl+V in the composer, before the editor takes the key. What is on the clipboard decides: an image or files are
-// attached here, text is the editor's own paste. True when it was taken.
-attach_paste :: proc(app: ^App) -> bool {
-	fmts := platform.clipboard_formats()
-	if .Files in fmts {
-		if paths, ok := platform.clipboard_get_files(app.win, context.temp_allocator); ok && len(paths) > 0 {
-			for p in paths { attach_path(app, p) }
-			return true
+// A paste in the composer (Ctrl+V, Shift+Insert, its menu's Paste). The clipboard belongs to another program, which may be slow
+// or hung: its files, its image and its text are asked at once (platform.clipboard_request) and each answer is taken as it
+// comes (composer_paste_event); nothing waits for them. When all three came, what the clipboard held decides: files are
+// attached; an image is attached when no text came with it (a spreadsheet's cells come as both); text goes in at the caret.
+Composer_Paste :: struct {
+	files, image, text: u64,   // the requests not answered yet (0: answered)
+	paths: [dynamic]string,    // (owned)
+	data:  []u8,               // the image, still encoded (owned)
+	mime:  string,             // ... its type (owned)
+	words: string,             // (owned)
+}
+
+composer_paste :: proc(app: ^App) {
+	p := &app.composer.paste
+	composer_paste_clear(p)   // (a paste asked again: the last one's answers are dropped)
+	p.files = platform.clipboard_request(app.win, .Files)
+	p.image = platform.clipboard_request(app.win, .Image)
+	p.text = platform.clipboard_request(app.win, .Text)
+}
+
+// An event of the main window: an answer to the paste waiting is kept (an event's strings live until the next poll).
+composer_paste_event :: proc(app: ^App, e: platform.Event) {
+	if e.kind != .Clipboard_Data { return }
+	p := &app.composer.paste
+	r := e.clipboard
+	switch {
+	case r.id == p.files:
+		p.files = 0
+		if r.ok { for x in r.files { append(&p.paths, strings.clone(x)) } }
+	case r.id == p.image:
+		p.image = 0
+		if r.ok { p.data, p.mime = slice_clone(r.data, context.allocator), strings.clone(r.mime) }
+	case r.id == p.text:
+		p.text = 0
+		if r.ok { p.words = strings.clone(r.text) }
+	case:
+		return
+	}
+	if p.files == 0 && p.image == 0 && p.text == 0 { composer_paste_done(app) }
+}
+
+@(private = "file")
+composer_paste_done :: proc(app: ^App) {
+	p := &app.composer.paste
+	defer composer_paste_clear(p)
+	switch {
+	case len(p.paths) > 0:
+		for x in p.paths { attach_path(app, x) }
+	case len(p.data) > 0 && p.words == "":
+		n := attach_number(app)
+		switch {
+		case ascii.equal_fold(p.mime, "image/png"):  attach_bytes(app, p.data, "image/png", fmt.tprintf("pasted-%d.png", n))
+		case ascii.equal_fold(p.mime, "image/jpeg"): attach_bytes(app, p.data, "image/jpeg", fmt.tprintf("pasted-%d.jpg", n))
+		case:
+			// (another type, a Windows DIB: decoded and encoded as PNG on the job's thread)
+			h := runtime.heap_allocator()
+			job := new(Attach_Job, h)
+			job^ = {name = fmt.aprintf("pasted-%d.png", n, allocator = h), mime = "image/png", data = slice_clone(p.data, h), decode = strings.clone(p.mime, h)}
+			attach_start(app, job)
 		}
+	case p.words != "":
+		// (as the editor's own paste makes them: its line ends and no tabs)
+		text, _ := strings.replace_all(p.words, "\r\n", "\n", context.temp_allocator)
+		text, _ = strings.replace_all(text, "\r", "\n", context.temp_allocator)
+		text, _ = strings.replace_all(text, "\t", "    ", context.temp_allocator)
+		area_insert(&app.composer.area, text)
 	}
-	if .Image in fmts && .Text not_in fmts {
-		h := runtime.heap_allocator()
-		img, ok := platform.clipboard_get_image(app.win, h)
-		if !ok { return false }
-		// (the pixels go to the job's thread as they are: it encodes them as PNG, then as a data URL)
-		job := new(Attach_Job, h)
-		job^ = {name = fmt.aprintf("pasted-%d.png", attach_number(app), allocator = h), mime = "image/png", image = img}
-		attach_start(app, job)
-		return true
-	}
-	return false
+}
+
+composer_paste_clear :: proc(p: ^Composer_Paste) {
+	for x in p.paths { delete(x) }
+	delete(p.paths); delete(p.data); delete(p.mime); delete(p.words)
+	p^ = {}
 }
 
 // The number in the name of an image pasted or dropped: past those attached and those on their way.

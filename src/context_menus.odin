@@ -128,7 +128,7 @@ composer_menu :: proc(app: ^App) {
 	}
 	if ui.menu_item("Copy", "Ctrl+C", icon = lucide.COPY, enabled = hi > lo).clicked { clip_set(string(a.buf[lo:hi])) }
 	if ui.menu_item("Paste", "Ctrl+V", icon = lucide.CLIPBOARD_PASTE).clicked {
-		if !attach_paste(app) { ui.paste_request(app.composer.key) }   // (its text comes in a later build: the area inserts it)
+		composer_paste(app)
 		app.composer.focus_next = true
 	}
 	ui.menu_separator()

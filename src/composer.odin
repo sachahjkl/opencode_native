@@ -18,7 +18,7 @@ HEX_COMPOSER_WELL     :: 0x080808ff
 // The composer: its text and focus, what goes with the prompt, and what each session's composer keeps while another is shown.
 Composer :: struct {
 	area:        ui.Text_Area,
-	key:         ui.Key,                  // the area's box, at its last build: what a paste asked from a menu is for (ui.paste_request)
+	paste:       Composer_Paste,          // a paste whose answers are on their way (attachments.odin)
 	focused:     bool,
 	focus_next:  bool,                    // the composer takes the focus at its next build
 	fit:         struct { level: int, at: [2]f32 },   // what the toolbar leaves out, and at which widths (composer_fit)
@@ -120,7 +120,8 @@ composer :: proc(app: ^App, em: f32) {
 				// of the last line first: what tells is that it did not move.)
 				down := false
 				caret0 := app.composer.area.cursor
-				if keys && ui.key_pressed_peek(.V, {.Ctrl}) && attach_paste(app) { _ = ui.key_press(.V, {.Ctrl}) }
+				// (the composer's own paste, not the editor's: what the clipboard holds may be files or an image)
+				if keys && (ui.key_press(.V, {.Ctrl}) || ui.key_press(.Insert, {.Shift})) { composer_paste(app) }
 				if keys && !app.activity.open {
 					browsing := history_browsing(app)
 					if ui.key_pressed_peek(.Up) && (browsing || composer_on_first_line(app)) {
@@ -145,7 +146,6 @@ composer :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_BODY), text_pad = em * 0.5})
 				res := ui.text_edit("###composer", &app.composer.area, "Ask anything…", wrap = true, auto_height = true, min_lines = 2, max_lines = COMPOSER_MAX_LINES)
 				app.composer.focused = res.focused
-				app.composer.key = res.box.key
 				mention_track(app)
 				slash_track(app)
 				if app.composer.focus_next { ui.set_focus(res.box.key); app.composer.focus_next = false }

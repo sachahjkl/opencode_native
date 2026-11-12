@@ -1794,3 +1794,26 @@ the_palette_arrows_move_the_selection :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 	})
 }
+
+// A paste in the composer asks the clipboard and waits for nothing: text goes in at the caret (Ctrl+V, Shift+Insert), an image
+// without text is attached, files are attached, each once its answers came at a later frame.
+@(test)
+a_paste_in_the_composer_waits_for_no_clipboard :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		session.click(s, "composer")
+		ui.area_set(&app.composer.area, "")
+		session.set_clipboard(s, "pasted words")
+		session.key(s, .Insert, {.Shift})
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.area_string(&(^App)(s.user).composer.area) != "" }, "the text came")
+		testing.expect_value(t, ui.area_string(&app.composer.area), "pasted words")
+		// an image alone: attached, read and encoded on a thread
+		px := []u8{255, 0, 0, 255, 0, 0, 255, 255}
+		testing.expect(t, platform.clipboard_set_image(app.win, {px, {2, 1}}))
+		session.key(s, .V, {.Ctrl})
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return len((^App)(s.user).composer.attachments) == 1 }, "the image attached")
+		testing.expect(t, strings.has_prefix(app.composer.attachments[0].uri, "data:image/png;base64,"), "as a PNG")
+		testing.expect_value(t, ui.area_string(&app.composer.area), "pasted words")
+	})
+}
