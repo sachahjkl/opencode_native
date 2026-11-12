@@ -152,6 +152,40 @@ the_cursor_is_where_the_text_stopped :: proc(t: ^testing.T) {
 	testing.expect_value(t, look, VT_CURSOR_UNDERLINE)
 }
 
+// A frame builds again only the rows libghostty-vt says changed: none when the shell wrote nothing (term_draw then reads no cell).
+@(test)
+a_row_is_built_again_only_when_it_changed :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()   // (the title is set from a callback, on the default allocator)
+	term := term_new("x", "t", "")
+	defer term_free(term)
+	// (what term_draw does before it draws, out of a frame: the rows built by this update)
+	build :: proc(term: ^Term) -> int {
+		before := term.rows_built
+		if ghostty_render_state_update(term.state, term.vt) != VT_OK { return -1 }
+		colors := Vt_Colors{size = size_of(Vt_Colors)}
+		if ghostty_render_state_get(term.state, VT_STATE_COLORS, &colors) != VT_OK { return -1 }
+		term_rows_build(term, &colors)
+		return term.rows_built - before
+	}
+	text_of :: proc(r: Term_Row) -> string {
+		if len(r.runs) != 1 { return "" }
+		return string(r.text[r.runs[0].from:r.runs[0].to])
+	}
+	term_feed(term, "hello\r\nworld")
+	testing.expect_value(t, build(term), int(term.rows))
+	if !testing.expect_value(t, len(term.drawn_rows), int(term.rows)) { return }
+	testing.expect_value(t, text_of(term.drawn_rows[0]), "hello")
+	testing.expect_value(t, text_of(term.drawn_rows[1]), "world")
+	testing.expect_value(t, build(term), 0)   // (nothing written: nothing read)
+	term_feed(term, "!")
+	n := build(term)
+	testing.expect(t, n >= 1 && n < int(term.rows), "only the rows written are built again")
+	testing.expect_value(t, text_of(term.drawn_rows[1]), "world!")
+	testing.expect_value(t, text_of(term.drawn_rows[0]), "hello")
+	term_recolour(term)
+	testing.expect_value(t, build(term), int(term.rows))   // (the colours moved: every row)
+}
+
 // A program's colour by number is the theme's: red (31) is the theme's red, the cube after the 16 made between the
 // background and the text (not Ghostty's console colours).
 @(test)

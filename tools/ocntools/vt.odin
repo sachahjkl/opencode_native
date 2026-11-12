@@ -64,6 +64,10 @@ VT_NUMBERS :: [?]Vt_Number{
 	{"VT_STATE_CURSOR_X", "GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_X"},
 	{"VT_STATE_CURSOR_Y", "GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_Y"},
 	{"VT_STATE_COLORS", "GHOSTTY_RENDER_STATE_DATA_COLORS"},
+	{"VT_STATE_DIRTY", "GHOSTTY_RENDER_STATE_DATA_DIRTY"},
+
+	{"VT_DIRTY_FALSE", "GHOSTTY_RENDER_STATE_DIRTY_FALSE"},
+	{"VT_DIRTY_FULL", "GHOSTTY_RENDER_STATE_DIRTY_FULL"},
 
 	{"VT_CURSOR_BAR", "GHOSTTY_CURSOR_STYLE_BAR"},
 	{"VT_CURSOR_BLOCK", "GHOSTTY_CURSOR_STYLE_BLOCK"},
@@ -71,6 +75,7 @@ VT_NUMBERS :: [?]Vt_Number{
 
 	{"VT_ROW_CELLS", "GHOSTTY_RENDER_STATE_ROW_DATA_CELLS"},
 	{"VT_ROW_SELECTION", "GHOSTTY_RENDER_STATE_ROW_DATA_SELECTION"},
+	{"VT_ROW_DIRTY", "GHOSTTY_RENDER_STATE_ROW_DATA_DIRTY"},
 
 	{"VT_CELL_STYLE", "GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_STYLE"},
 	{"VT_CELL_GRAPHEMES_BUF", "GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_BUF"},
@@ -139,7 +144,8 @@ VT_CALLS :: [?]string{
 	"ghostty_terminal_get", "ghostty_terminal_scroll_viewport",
 	"ghostty_terminal_grid_ref", "ghostty_terminal_grid_ref_track", "ghostty_tracked_grid_ref_snapshot", "ghostty_tracked_grid_ref_free",
 	"ghostty_formatter_terminal_new", "ghostty_formatter_set", "ghostty_formatter_format_buf", "ghostty_formatter_free",
-	"ghostty_render_state_new", "ghostty_render_state_free", "ghostty_render_state_update", "ghostty_render_state_get",
+	"ghostty_render_state_new", "ghostty_render_state_free", "ghostty_render_state_update", "ghostty_render_state_clean",
+	"ghostty_render_state_get",
 	"ghostty_render_state_row_iterator_new", "ghostty_render_state_row_iterator_free", "ghostty_render_state_row_iterator_next",
 	"ghostty_render_state_row_get", "ghostty_render_state_row_cells_new", "ghostty_render_state_row_cells_free",
 	"ghostty_render_state_row_cells_next", "ghostty_render_state_row_cells_get",
