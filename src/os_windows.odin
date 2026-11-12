@@ -85,4 +85,4 @@ password_forget :: proc(name: string) {}   // (it lives in the file)
 password_field_of :: proc(name, field: string) -> string { return field }
 
 // What the server dialog says of where the password goes (nothing to warn of here).
-password_note :: proc() -> string { return "" }
+password_note :: proc(app: ^App) -> string { return "" }

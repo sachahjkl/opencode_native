@@ -622,7 +622,7 @@ answer :: proc(app: ^App, r: ^Request) {
 	}
 	if !r.ok {
 		// (this request failed: whether the connection is down is for the event stream to say, stream_up)
-		fmt.eprintfln("request failed: %s %s: %s", r.method, r.path, r.resp)
+		log_line(app, "request failed: %s %s: %s", r.method, r.path, r.resp)
 		answer_failed(app, r, .Transport, "Server unreachable")
 		return
 	}

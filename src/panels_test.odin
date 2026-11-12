@@ -1331,3 +1331,21 @@ each_shell_has_its_own_zoom_kept_by_its_id :: proc(t: ^testing.T) {
 	data, _ := os.read_entire_file(file, context.temp_allocator)
 	testing.expect_value(t, string(data), "")
 }
+
+// The start reads nothing on the interface's thread: where this computer's server runs (its files) and a saved server's password (the
+// keyring) are read on a chore when a connection needs them (server_connect); until then the field waits as it is in the file.
+@(test)
+the_servers_start_with_nothing_read :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	defer store.close(&app.stores.servers)
+	testing.expect(t, store.set(&app.stores.servers, "Work", "http://work:4096\tsecret-service:v1"))
+	servers_init(app)
+	if !testing.expect_value(t, len(app.servers), 2) { return }
+	here, work := app.servers[0], app.servers[1]
+	testing.expect(t, here.local && here.url == "" && here.password == "", "this computer's address is not read yet")
+	testing.expect_value(t, work.url, "http://work:4096")
+	testing.expect_value(t, work.password, "")
+	testing.expect_value(t, work.stored, "secret-service:v1")
+	testing.expect(t, !app.servers_in_clear)
+}

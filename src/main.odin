@@ -61,6 +61,7 @@ App :: struct {
 	scale:          f32,               // --scale=<factor>: the interface's scale whatever the screen says (0: the screen's)
 	servers_in_clear: bool,            // read passwords in clear from an older version's file: saved protected at start
 	rediscover_ms:  f64,               // when this computer's server was last looked for (servers_rediscover)
+	connect_seq:     u64,              // the connection last asked for (server_connect): one read for an earlier one is not connected
 	rediscover_busy: bool,             // ... a look is under way, on a chore
 	pending:        i32,       // (atomic) requests in flight
 	chat_mark:      u64,       // (atomic) moves when another conversation is shown (chat_marked): what the requests' workers read of it
@@ -675,7 +676,6 @@ main :: proc() {
 	placement_restore(app)
 	drafts_load(app)   // (what was typed before, in each session: the home page's comes back now)
 	app.previews.host = web_host_system()
-	if app.servers_in_clear { servers_save(app) }
 	platform.set_dark_title(app.win, !app.cx.theme.light)
 	app.devtools = devtools.start_from_env(app.win, "opencode")
 	main_window_adopt(app)
@@ -683,8 +683,7 @@ main :: proc() {
 	app.settle = FRAMES_AFTER_INPUT
 
 	// the event stream: its first connection loads everything (stream_up)
-	server_connect(app, app.server)
-	if app.conn == nil { fmt.eprintln("opencode-native: the HTTP client failed to start"); os.exit(1) }
+	server_connect(app, app.server, all = true)   // (once what it needs is read, on a chore)
 
 	if frames := opts.frames; frames >= 0 {   // --frames=N: N frames of the hidden window, then exit (a check that it runs)
 		first: time.Duration   // from the start of main to the end of the first frame

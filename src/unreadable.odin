@@ -5,7 +5,6 @@ package ocn
 // went bad.
 
 import "core:encoding/json"
-import "core:fmt"
 import "core:strings"
 import "gt:ui"
 
@@ -27,7 +26,7 @@ unreadable_note :: proc(app: ^App, kind, text: string) {
 	} else {
 		u.said[strings.clone(kind)] = now
 	}
-	fmt.eprintfln("unreadable %s (%d so far): %q", kind, u.count, text[:min(len(text), UNREADABLE_EXCERPT_BYTES)])
+	log_line(app, "unreadable %s (%d so far): %q", kind, u.count, text[:min(len(text), UNREADABLE_EXCERPT_BYTES)])
 }
 
 // The JSON a caller of this client wrote, read again; what does not read is counted (nil: nothing to read).

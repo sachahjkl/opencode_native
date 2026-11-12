@@ -8,6 +8,7 @@ import "core:strings"
 import "core:sync"
 import "core:time"
 import "gt:dbus"
+import "gt:ui"
 
 @(private = "file") SECRET_BUS        :: "org.freedesktop.secrets"
 @(private = "file") SECRET_PATH       :: "/org/freedesktop/secrets"
@@ -125,16 +126,31 @@ secret_delete :: proc(name: string) {
 	}
 }
 
-// Whether there is a service to speak to. (Asked by the dialog at each frame: not at each one, and not once for good, a service may start.)
-secret_available :: proc() -> bool {
-	@(static) asked: time.Tick
-	@(static) known, available: bool
-	if !known || time.duration_seconds(time.tick_since(asked)) >= SECRET_ASK_S {
-		available = false
-		if conn, _, ok := secret_open(); ok { dbus.conn_close(conn); available = true }
-		known, asked = true, time.tick_now()
+// Whether there is a service to speak to, as the chores last found it: a D-Bus call, never made on the interface's thread. Read by the
+// dialog at each frame, asked again SECRET_ASK_S after the last ask (a service may start), one ask at a time.
+@(private = "file") service_up, service_known, service_asking: bool   // (atomic: a chore writes them)
+@(private = "file") service_asked: time.Tick                          // (the interface's thread only)
+
+secret_available :: proc(app: ^App) -> (up, known: bool) {
+	stale := !sync.atomic_load(&service_known) || time.duration_seconds(time.tick_since(service_asked)) >= SECRET_ASK_S
+	if stale && !sync.atomic_load(&service_asking) {
+		sync.atomic_store(&service_asking, true)
+		service_asked = time.tick_now()
+		pool_add(&app.cx.chores, secret_ask_work, app)
 	}
-	return available
+	return sync.atomic_load(&service_up), sync.atomic_load(&service_known)
+}
+
+@(private = "file")
+secret_ask_work :: proc(data: rawptr) {
+	app := (^App)(data)
+	up := false
+	if conn, _, ok := secret_open(); ok { dbus.conn_close(conn); up = true }
+	changed := !sync.atomic_load(&service_known) || up != sync.atomic_load(&service_up)
+	sync.atomic_store(&service_up, up)
+	sync.atomic_store(&service_known, true)
+	sync.atomic_store(&service_asking, false)
+	if changed { ui.post(&app.state, proc(data: rawptr, word: u64) {}, nil) }   // (a frame: the dialog says what is known now)
 }
 
 @(private = "file") in_clear: map[string]bool   // the servers whose password had to stay in the file, at their last save (keys owned)
@@ -168,10 +184,11 @@ password_field_of :: proc(name, field: string) -> string {
 
 password_forget :: proc(name: string) { secret_delete(name) }
 
-password_note :: proc() -> string {
+password_note :: proc(app: ^App) -> string {
 	sync.lock(&in_clear_lock)
 	none_in_clear := len(in_clear) == 0
 	sync.unlock(&in_clear_lock)
-	if secret_available() && none_in_clear { return "" }
+	up, known := secret_available(app)
+	if !known || (up && none_in_clear) { return "" }   // (not known yet: nothing said rather than a warning that may be wrong)
 	return "No usable Secret Service (none here, or its keyring is locked): the password stays in clear in servers.txt, which only you can read (mode 0600)."
 }

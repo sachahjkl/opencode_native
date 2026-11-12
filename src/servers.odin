@@ -35,22 +35,21 @@ password_from_field :: proc(name, field: string) -> (password, stored: string, c
 	return field, "", true
 }
 
-// The list at start: this computer's server, the saved ones (a line "name<TAB>url<TAB>protected password"), then --url's.
+// The list at start, as far as it is known without reading anything: this computer's server, the saved ones (a line
+// "name<TAB>url<TAB>protected password"), then --url's. Where this computer's server runs (its files), --url's password and the
+// saved passwords (the keyring) are read on a chore when one of them is connected to (server_connect): until then a saved
+// server's field waits in `stored`, as one the keyring would not open.
 servers_init :: proc(app: ^App) {
-	cfg := discover_server(app.cli.url, app.cli.password)
 	argv := app.cli.url != ""
-	local := argv ? discover_server() : cfg   // (this computer's server as its files say, whatever --url says)
-	append(&app.servers, Server{name = strings.clone("This computer"), url = server_url(local), password = strings.clone(local.password), local = true})
+	append(&app.servers, Server{name = strings.clone("This computer"), local = true})
 	for e in store.list(&app.stores.servers) {   // (read at the start, stores_open: the name, then "url<TAB>field")
 		if strings.trim_space(e.key) == "" { continue }
 		url, _, field := strings.partition(e.value, "\t")
-		password, stored, clear_text := password_from_field(e.key, field)
-		append(&app.servers, Server{name = strings.clone(e.key), url = strings.clone(url), password = strings.clone(password), stored = strings.clone(stored)})
-		if clear_text { app.servers_in_clear = true }
+		append(&app.servers, Server{name = strings.clone(e.key), url = strings.clone(url), stored = strings.clone(field)})
 	}
 	app.server = 0
 	if argv {
-		append(&app.servers, Server{name = strings.clone("Command line"), url = server_url(cfg), password = strings.clone(cfg.password), argv = true})
+		append(&app.servers, Server{name = strings.clone("Command line"), argv = true})
 		app.server = len(app.servers) - 1
 	} else if last := settings_get(app, "server"); last != "" {
 		for s, i in app.servers { if s.name == last { app.server = i } }
@@ -189,15 +188,71 @@ servers_save_free :: proc(job: ^Servers_Save) {
 	free(job)
 }
 
-// A password that could not be opened at start (a locked keyring) may open now: asked again when it is needed, the keyring unlocked meanwhile
-// needs no restart. (`stored` stays until then.)
-server_password_retry :: proc(s: ^Server) {
-	if s.password != "" || s.stored == "" { return }
-	p, sealed, ok := password_open(s.name, s.stored)
-	if !sealed || !ok { return }
-	s.password = strings.clone(p)
-	delete(s.stored)
-	s.stored = ""
+// What a connection needs read first, read on a chore (files, the keyring: the interface waits for neither). A password that could not be
+// opened (a locked keyring) is asked again at the next connection: a keyring unlocked meanwhile needs no restart.
+@(private = "file")
+Servers_Read :: struct {
+	app:      ^App,
+	seq:      u64,    // the connection it was read for (App.connect_seq): a later choice connects instead, what was read is kept
+	index:    int,    // the server to connect to once read
+	local:    bool,   // where this computer's server runs: its files
+	argv:     bool,   // --url's address and password (this computer's password, if it is this computer's server)
+	cli_url, cli_password: string,   // (owned)
+	fields:   [dynamic]Field_Read,
+	local_cfg, argv_cfg: Server_Config,
+}
+
+// A saved server's field, and what it holds (all owned).
+@(private = "file")
+Field_Read :: struct { name, field, password, stored: string, clear_text: bool }
+
+@(private = "file")
+servers_read_work :: proc(data: rawptr) {
+	job := (^Servers_Read)(data)
+	if job.local { job.local_cfg = discover_server() }
+	if job.argv { job.argv_cfg = discover_server(job.cli_url, job.cli_password) }
+	for &f in job.fields {
+		password, stored, clear_text := password_from_field(f.name, f.field)
+		f.password, f.stored, f.clear_text = strings.clone(password), strings.clone(stored), clear_text
+	}
+	if !ui.post(&job.app.state, servers_read_done, job) { servers_read_free(job) }
+}
+
+@(private = "file")
+servers_read_free :: proc(job: ^Servers_Read) {
+	for f in job.fields { delete(f.name); delete(f.field); delete(f.password); delete(f.stored) }
+	delete(job.fields)
+	delete(job.cli_url); delete(job.cli_password)
+	delete(job.local_cfg.host); delete(job.local_cfg.password)
+	delete(job.argv_cfg.host); delete(job.argv_cfg.password)
+	free(job)
+}
+
+@(private = "file")
+servers_read_done :: proc(data: rawptr, word: u64) {
+	job := (^Servers_Read)(data)
+	app := job.app
+	defer servers_read_free(job)
+	for &s in app.servers {
+		switch {
+		case s.local && job.local:
+			delete(s.url); delete(s.password)
+			s.url, s.password = server_url(job.local_cfg), strings.clone(job.local_cfg.password)
+		case s.argv && job.argv:
+			delete(s.url); delete(s.password)
+			s.url, s.password = server_url(job.argv_cfg), strings.clone(job.argv_cfg.password)
+		case !s.local && !s.argv && s.password == "":
+			// (by its name and the field read: a server renamed or edited meanwhile keeps what it has now)
+			for f in job.fields {
+				if f.name != s.name || f.field != s.stored { continue }
+				delete(s.stored)
+				s.password, s.stored = strings.clone(f.password), strings.clone(f.stored)
+				if f.clear_text { app.servers_in_clear = true }
+			}
+		}
+	}
+	if app.servers_in_clear { servers_save(app) }   // (an older version's password in clear: protected now)
+	if job.seq == app.connect_seq { server_connect_now(app, job.index) }
 }
 
 // "host:port" or "https://host" as typed: a full address ("http://" when no scheme is said, no trailing slash).
@@ -215,9 +270,34 @@ server_name :: proc(app: ^App) -> string { return app.server >= 0 && app.server 
 
 // Connects to server `i`: the last connection's threads are told to stop, everything read from it is dropped, the App lets go of it
 // (freed once what still uses it ended), and the new one's event stream loads everything when it connects (stream_up).
-server_connect :: proc(app: ^App, i: int) {
+// `all`: every saved password is read, not only this server's (the start: an older version's in clear are protected then).
+server_connect :: proc(app: ^App, i: int, all := false) {
 	if i < 0 || i >= len(app.servers) { return }
-	server_password_retry(&app.servers[i])
+	app.connect_seq += 1
+	job := new(Servers_Read)
+	job^ = {app = app, seq = app.connect_seq, index = i}
+	for s, k in app.servers {
+		if s.local && s.url == "" && (all || k == i) { job.local = true }
+		if s.argv && s.url == "" && (all || k == i) {
+			job.argv = true
+			job.cli_url, job.cli_password = strings.clone(app.cli.url), strings.clone(app.cli.password)
+		}
+		if !s.local && !s.argv && s.password == "" && s.stored != "" && (all || k == i) {
+			append(&job.fields, Field_Read{name = strings.clone(s.name), field = strings.clone(s.stored)})
+		}
+	}
+	if !job.local && !job.argv && len(job.fields) == 0 {
+		servers_read_free(job)
+		server_connect_now(app, i)
+		return
+	}
+	pool_add(&app.cx.chores, servers_read_work, job)
+}
+
+// Connects to server `i`, all it needs known.
+@(private = "file")
+server_connect_now :: proc(app: ^App, i: int) {
+	if i < 0 || i >= len(app.servers) { return }
 	s := app.servers[i]
 	h: Http
 	if !http_init(&h, s.url, "opencode", s.password) {
@@ -415,7 +495,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 				text("h", "the server's OPENCODE_SERVER_PASSWORD, as user opencode", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.3)}, ui.fill())
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			}
-			if note := password_note(); note != "" {
+			if note := password_note(app); note != "" {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if ui.row(id = "###storenote") {
 					ui.spacer(ui.px(em * 7.4))
