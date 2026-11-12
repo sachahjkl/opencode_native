@@ -247,10 +247,7 @@ completion_list :: proc(app: ^App, id: string, rows: []Completion_Row, sel: int,
 			d.selected = k == sel
 			row.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 				if (^Completion_Row_Draw)(user).selected {
-					s := ui.scale()
-					r := draw.rect_pad(b.rect, -1 * s)
-					r.min.x += 6 * s
-					r.max.x -= 6 * s
+					r := b.rect   // (flush: a highlight runs from one edge of the list to the other)
 					draw_well(dc, r, 0, hex(HEX_PAL_SELECTED))   // (square: a row)
 				}
 			}

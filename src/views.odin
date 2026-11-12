@@ -281,10 +281,13 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Item_Draw)(user)
 	// the one shown: a ground of the accent, nothing more (its mark and its lamp say the rest); under the pointer, a lighter
 	// one. Square: a row's ground runs from edge to edge, row under row.
+	// (flush: across the whole row of the sidebar, its indent included, not from where the item begins)
+	r := b.rect
+	if b.parent != nil { r.min.x, r.max.x = b.parent.rect.min.x, b.parent.rect.max.x }
 	if d.selected {
-		draw.rect(dc, b.rect, chosen_ground())
+		draw.rect(dc, r, chosen_ground())
 	} else if b.hot_t > FADE_VISIBLE {
-		draw.rect(dc, b.rect, with_alpha(hex(HEX_TEXT), ITEM_HOVER_TINT * b.hot_t))
+		draw.rect(dc, r, with_alpha(hex(HEX_TEXT), ITEM_HOVER_TINT * b.hot_t))
 	}
 }
 

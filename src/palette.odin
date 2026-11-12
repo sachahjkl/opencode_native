@@ -262,9 +262,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 				rd.selected = sel
 				rb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 					s := ui.scale()
-					r := draw.rect_pad(b.rect, -1 * s)
-					r.min.x += 6 * s
-					r.max.x -= 6 * s
+					r := b.rect   // (flush: a highlight runs from one edge of the list to the other)
 					if (^Pal_Row_Draw)(user).selected {
 						draw_well(dc, r, 0, hex(HEX_PAL_SELECTED))   // (square: a row)
 						draw.rect(dc, {{r.min.x + 2 * s, r.min.y + 6 * s}, {r.min.x + 4 * s, r.max.y - 6 * s}}, accent(), 1 * s)

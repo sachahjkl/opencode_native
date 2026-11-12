@@ -792,9 +792,7 @@ Row_Draw :: struct { selected: bool }
 @(private = "file")
 row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	s := ui.scale()
-	r := draw.rect_pad(b.rect, -1 * s)
-	r.min.x += 6 * s
-	r.max.x -= 6 * s
+	r := b.rect   // (flush: a highlight runs from one edge of the list to the other)
 	if (^Row_Draw)(user).selected {
 		draw.rect(dc, r, hex(HEX_ACT_ROW_SELECTED))   // (square: a row)
 		draw.rect(dc, {{r.min.x + 2 * s, r.min.y + 5 * s}, {r.min.x + 4 * s, r.max.y - 5 * s}}, accent(), 1 * s)
