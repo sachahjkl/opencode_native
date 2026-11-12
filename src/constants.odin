@@ -301,11 +301,8 @@ FPS_RESTED_S :: 0.05           // a longer gap between two frames: the loop rest
 SEGMENT_PAD_EM :: 1.0   // the room around the longest label of a segmented choice (settings.odin pref_choice)
 WIDE_CHOICE_SHARE :: 0.45   // past this share of its line, a segmented choice goes under its words (settings.odin pref_choice)
 INPUT_PAD_EM :: 0.8   // a tool's input in its well: where its keys start, and a long value's text (tool_views.odin input_view)
-TABLE_MEASURE_W :: 1e6   // a table's cell is laid out this wide to measure it: on one line (markdown.odin table_block)
-TABLE_CELL_PAD_Y_EM :: 0.4   // above and under a table cell's words (markdown.odin table_block)
 RENAME_PAD_EM :: 0.5   // a title edited in place: its words from the field's edge (context_menus.odin rename_in_place)
 RENAME_ROOM_EM :: 3   // a title edited in place, beside others: room to type after its words (context_menus.odin rename_in_place)
-TABLE_CODE_SLACK_EM :: 0.5   // a code word in a table cell: the room of its chip around it (markdown.odin table_block)
 TERM_MENU_EM :: 14   // a shell's menu, its width (terminal.odin term_menu)
 OUTPUT_PROMPT      :: "\x1b[2m$\x1b[0m "    // before a command's first line at the head of its output (output_view.odin output_view_echo)
 OUTPUT_PROMPT_MORE :: "\x1b[2m>\x1b[0m "    // before its next lines

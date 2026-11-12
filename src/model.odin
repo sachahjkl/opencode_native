@@ -10,6 +10,7 @@ import "core:slice"
 import "core:strings"
 import "core:sync"
 import "gt:config"
+import "gt:markdown"
 import "gt:ui"
 
 Session_Info :: struct {
@@ -151,7 +152,7 @@ Chat :: struct {
 	live:         map[string]Sub_Live,     // keyed by child session id (keys and strings in the arena)
 	goal:         Goal,                    // its /goal (goal.odin; strings in the arena)
 	has_goal:     bool,
-	markdown:     map[string]^Md_Doc,      // the blocks of each Markdown text shown, by the id it is built under (md_doc; in the arena)
+	markdown:     map[string]^markdown.Doc, // the blocks of each Markdown text shown, by the id it is built under (md_doc; in the arena)
 	// What is made from the messages is kept until one of these moves.
 	changes:      u64,                     // any change of the messages or of their parts (chat_changed)
 	subs_seq:     u64,                     // a change of what says which session is whose: a page read, a message gone, a call naming its session (subs_changed)
@@ -1253,7 +1254,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		}
 		p := text_part(c, m, k, int(jnum(d, "ordinal")))
 		// (another text than the deltas made: another buffer. What was read from a text is kept by its place and its length, and a
-		// text only grows in its buffer: md_read, link_runs)
+		// text only grows in its buffer: markdown.read, link_runs)
 		if string(p.text[:]) != t {
 			p.text = make([dynamic]u8, 0, len(t), a)
 			append(&p.text, t)

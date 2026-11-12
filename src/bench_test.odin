@@ -1073,7 +1073,7 @@ a_table_s_copy_button_is_over_its_rows :: proc(t: ^testing.T) {
 		if !testing.expect(t, rows != nil, "a table in sight") { return }
 		session.move(s, session.center(rows))
 		session.wait_idle(s)
-		copy := session.find(s, "tcopy")
+		copy := session.find(s, "tcorner")
 		if !testing.expect(t, copy != nil, "its copy button, under the pointer") { return }
 		testing.expect(t, copy.parent != nil && copy.parent.last == copy, "the last of the table's boxes: over its rows")
 		session.click_at(s, session.center(copy))
