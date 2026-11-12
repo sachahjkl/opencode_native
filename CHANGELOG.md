@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.47.3] - 2026-11-12
+
+### Fixed
+- **A resizable dialog's corner is clean in the machined finish**: the corner under the resize grip (a diff's full view, the palette) stays square with its frame; the panel's rounded rim was drawn over it.
+
 ## [0.47.2] - 2026-11-12
 
 ### Fixed
@@ -1425,6 +1430,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.47.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.3
 [0.47.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.2
 [0.47.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.1
 [0.47.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.0
