@@ -564,13 +564,13 @@ image_viewer :: proc(app: ^App, em: f32) {
 				text("d", dims, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.8))
 				bh := math.round(em * BUTTON_SMALL_H_EM)
-				if bevel_button("###zoom_out", "−", "", .Normal, height = bh).clicked { view_zoom_to(app, app.viewer.zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
+				if bevel_button("###zoom_out", "−", "", height = bh).clicked { view_zoom_to(app, app.viewer.zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
 				ui.spacer(ui.px(em * 0.3))
-				if bevel_button("###zoom_in", "+", "", .Normal, height = bh).clicked { view_zoom_to(app, app.viewer.zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
+				if bevel_button("###zoom_in", "+", "", height = bh).clicked { view_zoom_to(app, app.viewer.zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
 				ui.spacer(ui.px(em * 0.3))
-				if bevel_button("###zoom_fit", "Fit", "", .Normal, height = bh).clicked { app.viewer.zoom, app.viewer.pan = 1, {} }
+				if bevel_button("###zoom_fit", "Fit", "", height = bh).clicked { app.viewer.zoom, app.viewer.pan = 1, {} }
 				ui.spacer(ui.px(em * 0.8))
-				if bevel_button("###close", "Close", lucide.X, .Normal, height = bh).clicked { app.cx.open[.Viewer] = false }
+				if bevel_button("###close", "Close", lucide.X, height = bh).clicked { app.cx.open[.Viewer] = false }
 				ui.spacer(ui.px(em))
 			}
 		}

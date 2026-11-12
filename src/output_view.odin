@@ -308,17 +308,34 @@ output_view_events :: proc(app: ^App, events: []platform.Event) -> []platform.Ev
 	return left
 }
 
-// What it says of how it stands, in a word, and the colour of that.
-output_view_word :: proc(v: ^Output_View) -> (word: string, color: Color) {
+// How it stands, as a sub-agent's state (its mark: state_mark), as a command of the activity does (job_state).
+output_view_state :: proc(v: ^Output_View) -> Sub_State {
 	switch {
-	case v.lost:                 return "ended", hex(HEX_WEAK)
-	case !v.over:                return "running", hex(HEX_YELLOW)
-	case v.status == .Killed:    return "killed", hex(HEX_RED)
-	case v.status == .Timeout:   return "timed out", hex(HEX_RED)
-	case v.has_exit && v.exit != 0: return fmt.tprintf("exit %d", v.exit), hex(HEX_RED)
-	case v.has_exit:             return "exit 0", hex(HEX_GREEN)
+	case v.lost:                    return .Unknown
+	case !v.over:                   return .Running
+	case v.status == .Killed, v.status == .Timeout: return .Cancelled
+	case v.has_exit && v.exit != 0: return .Failed
 	}
-	return "ended", hex(HEX_GREEN)
+	return .Done
+}
+
+// What it says of how it stands, in a word. (Its colour is the build's, output_view_word_color: an end's ink reads the page.)
+output_view_word :: proc(v: ^Output_View) -> (word: string) {
+	switch {
+	case v.lost:                 word = "ended"
+	case !v.over:                word = "running"
+	case v.status == .Killed:    word = "killed"
+	case v.status == .Timeout:   word = "timed out"
+	case v.has_exit:             word = fmt.tprintf("exit %d", v.exit)
+	case:                        word = "ended"
+	}
+	return
+}
+
+// The colour of that word: an end's, the ink of its state (read from the page: in a build).
+output_view_word_color :: proc(v: ^Output_View) -> Color {
+	st := output_view_state(v)
+	return st == .Running ? hex(HEX_YELLOW) : st == .Unknown ? hex(HEX_WEAK) : sub_state_ink(st)
 }
 
 // A line along its top: the grid above is the view, this is only what goes with it.
@@ -332,14 +349,14 @@ output_bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 @(private = "file")
 output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
 	running := !v.over
-	word, color := output_view_word(v)
+	word, color := output_view_word(v), output_view_word_color(v)
 	note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * OUTPUT_BAR_H_EM)), axis = .X, cross = .Center})
 	bar := ui.build_box({}, "###out_bar")
 	bar.custom = output_bar_draw
 	if ui.parent(bar) {
 		ui.spacer(ui.px(em * 0.8))
-		state_mark("###st", color, running, size = em * 0.7)
+		state_mark("###st", output_view_state(v), size = em * 0.7)
 		ui.spacer(ui.px(em * 0.45))
 		text("s", word, color, note)
 		if dur := duration_text(v.started, v.ended > 0 ? v.ended : (running ? now_epoch_ms() : 0)); dur != "" {
@@ -355,17 +372,17 @@ output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
 		}
 		ui.spacer(ui.px(em * 0.8))
 		h := math.round(em * BUTTON_SMALL_H_EM)
-		if bevel_button("###out_copy", "Copy", lucide.COPY, .Ghost, height = h, disabled = len(v.raw) == 0, quiet = true).clicked {
+		if bevel_button("###out_copy", "Copy", lucide.COPY, height = h, disabled = len(v.raw) == 0, quiet = true, face = .Ghost).clicked {
 			clip_set(plain_output(string(v.raw[:])))
 			ui.toast(.Good, "Output copied")
 		}
 		if !in_window {
 			ui.spacer(ui.px(em * 0.2))
-			if bevel_button("###out_win", "Window", lucide.APP_WINDOW, .Ghost, height = h, quiet = true).clicked { app.cx.outputs.window = v }
+			if bevel_button("###out_win", "Window", lucide.APP_WINDOW, height = h, quiet = true, face = .Ghost).clicked { app.cx.outputs.window = v }
 		}
 		if !in_window || v.seen_end {
 			ui.spacer(ui.px(em * 0.2))
-			if bevel_button("###out_close", "Close", "", v.seen_end ? .Normal : .Ghost, height = h, quiet = !v.seen_end).clicked { output_view_close(app, v) }
+			if bevel_button("###out_close", "Close", "", height = h, quiet = !v.seen_end, face = v.seen_end ? .Raised : .Ghost).clicked { output_view_close(app, v) }
 		}
 		ui.spacer(ui.px(em * 0.5))
 	}

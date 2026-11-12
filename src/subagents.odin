@@ -13,9 +13,6 @@ import "gt:markdown"
 import "gt:ui"
 import lucide "gt:lucide"
 
-HEX_SUB_CANCELLED    :: 0xb08a5aff
-HEX_CARD_OFF_TOP     :: 0x111111ff
-HEX_CARD_OFF_BOTTOM  :: 0x0e0e0eff
 HEX_CARD_RESULT_LINE :: 0xa8a8a8ff
 HEX_CARD_RESULT      :: 0xd8d8d8ff
 HEX_RETURNED_TEXT    :: 0xcfcfcfff
@@ -37,7 +34,9 @@ MENU_FINISHED_CHARS :: 48
 CHIP_TITLE_CHARS    :: 34
 CHIP_ACTIVITY_CHARS :: 30
 
-Sub_State :: enum u8 { Starting, Running, Done, Failed, Cancelled, Unknown }
+// Finishing: its call is over, its session still busy (it hands back what it found). Background: a call that launched it
+// and returned, nothing known yet of how it went.
+Sub_State :: enum u8 { Starting, Running, Finishing, Done, Failed, Cancelled, Background, Unknown }
 
 // Everything known of one sub-agent, gathered from its call, its session, its result message and the live stream.
 Sub_View :: struct {
@@ -57,25 +56,88 @@ Sub_View :: struct {
 
 sub_state_label :: proc(s: Sub_State) -> string {
 	switch s {
-	case .Starting:  return "starting"
-	case .Running:   return "running"
-	case .Done:      return "done"
-	case .Failed:    return "failed"
-	case .Cancelled: return "cancelled"
-	case .Unknown:   return "launched"
+	case .Starting:   return "starting"
+	case .Running:    return "running"
+	case .Finishing:  return "finishing"
+	case .Done:       return "done"
+	case .Failed:     return "failed"
+	case .Cancelled:  return "stopped"
+	case .Background: return "in background"
+	case .Unknown:    return "launched"
 	}
 	return ""
 }
 
-sub_state_color :: proc(s: Sub_State) -> Color {
-	switch s {
-	case .Starting, .Unknown: return hex(HEX_FAINT)
-	case .Running:            return hex(HEX_YELLOW)
-	case .Done:               return hex(HEX_GREEN)
-	case .Failed:             return hex(HEX_RED)
-	case .Cancelled:          return hex(HEX_SUB_CANCELLED)
+// A state that still goes on: its mark is a lamp that breathes.
+sub_live :: proc(s: Sub_State) -> bool { return s == .Starting || s == .Running || s == .Finishing }
+
+// How a state ended, as the toolkit's intent (Neutral: it has not ended).
+sub_state_intent :: proc(s: Sub_State) -> ui.Intent {
+	#partial switch s {
+	case .Done:      return .Success
+	case .Failed:    return .Danger
+	case .Cancelled: return .Warning
 	}
-	return {}
+	return .Neutral
+}
+
+// A state's colour: the lamp's while it goes on, the hue of its intent once it ended. (Read while building: the intent's
+// colours read the page.)
+sub_state_color :: proc(s: Sub_State) -> Color {
+	if i := sub_state_intent(s); i != .Neutral { _, _, hue := intent_colors(i); return hue }
+	if s == .Running || s == .Finishing { return hex(HEX_YELLOW) }
+	return hex(HEX_FAINT)
+}
+
+// The colour of the words that say a state: the ink of its intent once it ended (it reads on the page), quiet before.
+sub_state_ink :: proc(s: Sub_State) -> Color {
+	if i := sub_state_intent(s); i != .Neutral { _, ink, _ := intent_colors(i); return ink }
+	return hex(HEX_FAINT)
+}
+
+// The sign of a state that ended, on its mark.
+sub_state_sign :: proc(s: Sub_State) -> string {
+	#partial switch s {
+	case .Done:      return lucide.CHECK
+	case .Failed:    return lucide.X
+	case .Cancelled: return lucide.SQUARE
+	}
+	return ""
+}
+
+@(private = "file")
+Disc_Draw :: struct { fill: Color }
+
+// A state's mark, the same wherever a sub-agent or a command shows: a lamp that breathes while it goes on; once it ended,
+// its sign (sub_state_sign) in the ink of its intent on a soft disc of the same intent; a dim pip when nothing is known.
+// `size`: its box (em fractions of the font size by default).
+state_mark :: proc(id: string, st: Sub_State, size: f32 = 0) {
+	em := ui.font_size()
+	sz := size > 0 ? size : math.round(em * 0.8)
+	if sub_live(st) {
+		lamp(id, sub_state_color(st), 1, pulse = true, size = sz)
+		animate(the_app)
+		return
+	}
+	sign := sub_state_sign(st)
+	if sign == "" { pip(id, sub_state_color(st), sz); return }
+	fill, ink, _ := intent_colors(sub_state_intent(st))
+	ui.next({width = ui.px(sz), height = ui.px(sz), axis = .X, cross = .Center})
+	b := ui.build_box({}, id)
+	d := ui.frame_new(Disc_Draw)
+	d.fill = fill
+	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		r := b.rect
+		dd := math.round(min(r.max.x - r.min.x, r.max.y - r.min.y))
+		c := draw.rect_center(r)
+		h := dd * 0.5
+		draw.rect(dc, {{c.x - h, c.y - h}, {c.x + h, c.y + h}}, (^Disc_Draw)(user).fill, h)
+	}
+	b.custom_user = d
+	if ui.parent(b) {
+		ui.next({width = ui.fill(), height = ui.fill(), font = the_app.icons, font_size = math.round(sz * 0.7), fg = ink, text_align = .Center, text_pad = 0})
+		ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###sign", sign))
+	}
 }
 
 state_of_word :: proc(w: string) -> (Sub_State, bool) {
@@ -126,6 +188,7 @@ sub_view :: proc(app: ^App, child: string, p: ^Part = nil) -> (v: Sub_View) {
 	c := &app.chat
 	v.id = child
 	v.state = .Unknown
+	call_done := false   // (a foreground call that returned: its session may still be busy a moment, handing back)
 	if p != nil {
 		v.agent, v.desc, v.prompt, v.model, v.background = p.sub_agent, p.sub_desc, p.sub_prompt, p.sub_model, p.sub_background
 		v.started = p.started_ms
@@ -135,12 +198,19 @@ sub_view :: proc(app: ^App, child: string, p: ^Part = nil) -> (v: Sub_View) {
 		case .Error:   v.state = .Failed; v.result = p.output; v.ended = p.ended_ms
 		case .Done:
 			// a foreground call ends with the sub-agent: its output is the result; a background one only launched it
-			if !p.sub_background { v.state = .Done; v.result = p.output; v.ended = p.ended_ms }
+			if p.sub_background {
+				v.state = .Background
+			} else {
+				v.state = .Done; v.result = p.output; v.ended = p.ended_ms
+				call_done = true
+			}
 		case .Unknown:
 		}
 	}
 	if child == "" { return }
-	if s := find_child(c, child); s != nil {
+	s := find_child(c, child)
+	if s == nil && c.have_self && c.self.id == child { s = &c.self }   // (the sub-agent shown: its banner)
+	if s != nil {
 		v.session = s
 		if v.desc == "" { v.desc = s.title }
 		if v.agent == "" { v.agent = s.agent }
@@ -156,7 +226,10 @@ sub_view :: proc(app: ^App, child: string, p: ^Part = nil) -> (v: Sub_View) {
 		if v.ended == 0 { v.ended = m.created }
 	}
 	if l, ok := c.live[child]; ok { v.live, v.has_live = l, true }
-	if app.busy[child] or_else false { v.state = .Running; v.ended = 0 }
+	if app.busy[child] or_else false {
+		v.state = call_done && v.state == .Done ? .Finishing : .Running
+		v.ended = 0
+	}
 	return
 }
 
@@ -348,20 +421,17 @@ card_head_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.012 * b.hot_t}, CARD_RADIUS * ui.scale()) }
 }
 
-// A sub-agent's call: a calm plate of the neutral steps, the only colour its state's, on its mark. One that runs is raised
-// and carries a pulsing lamp; one that is over is flat and dim, one line until it is opened.
+// A sub-agent's call: a calm plate of the neutral steps, the same whatever its state; only its mark (state_mark) and the
+// word of its state say how it stands: a pulsing lamp while it runs; a check, a cross or a square once it ended, with
+// "done", "failed" or "stopped", and the first line of what it handed back even folded.
 subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 	v := sub_view(app, p.sub_session != "" ? p.sub_session : sub_session_guess(&app.chat, p), p)
 	part_id := p.tool_id != "" ? p.tool_id : pid
 	open := part_open(app, part_id)
-	running := v.state == .Running || v.state == .Starting
+	running := sub_live(v.state)
 	if running { animate(app) }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	pt, pb: u32 = HEX_PLATE_TOP, HEX_PLATE_BOTTOM
-	shadow, rim: f32 = 3, 0.07
-	border := Color{0, 0, 0, 0.85}
-	if !running { pt, pb, shadow, rim, border = HEX_CARD_OFF_TOP, HEX_CARD_OFF_BOTTOM, 0, 0.03, {0, 0, 0, 0.7} }
-	if plate(fmt.tprintf("###sa_%s", pid), top = pt, bottom = pb, radius = CARD_RADIUS, shadow = shadow, rim = rim, border = border) {
+	if plate(fmt.tprintf("###sa_%s", pid), radius = CARD_RADIUS, shadow = 3) {
 		card_head(app, &v, part_id, open, running, em)
 		if open { card_body(app, &v, p, pid, running, em) }
 	}
@@ -412,24 +482,25 @@ card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: b
 	compact := !running && !open
 	// (one line unless a second has something to say: how long is on the first, whatever the state)
 	meta := compact ? "" : card_meta(v, running)
-	preview := !compact && !open && v.result != ""
+	// folded: the first line of what it handed back, or has said so far
+	preview := !open && v.result != ""
 	tight := meta == "" && !preview
 	ui.spacer(ui.px(em * (tight ? 0.2 : 0.45)))
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###l1") {
 		ui.spacer(ui.px(em * CARD_PAD_EM))
-		state_mark("###st", sub_state_color(v.state), running, size = em * CARD_MARK_EM)
+		state_mark("###st", v.state, size = em * CARD_MARK_EM)
 		ui.spacer(ui.px(em * CARD_MARK_GAP_EM))
-		text("ag", name, running ? hex(HEX_WEAK) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+		text("ag", name, hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.px(em * 0.6))
-		text("ds", desc, running ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+		text("ds", desc, hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 		ui.spacer(ui.px(em * 0.5))
-		if what := card_when(v, end); what != "" {
-			text("du", what, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+		if what := state_when(v.state, v.started, end); what != "" {
+			text("du", what, sub_state_ink(v.state), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.5))
 		}
 		if v.id != "" {
-			if bevel_button("###open", "Open", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true).clicked { drill_down(app, v.id) }
+			if bevel_button("###open", "Open", "", height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { drill_down(app, v.id) }
 			ui.spacer(ui.px(em * 0.2))
 		}
 		glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
@@ -443,23 +514,24 @@ card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: b
 			ui.spacer(ui.px(em * 0.8))
 		}
 	}
-	// folded while it runs: what it has said so far
 	if preview {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###l3") {
 			ui.spacer(ui.px(em * CARD_INDENT_EM))
-			text("rs", preview_text(v.result), hex(HEX_CARD_RESULT_LINE), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
+			col := v.state == .Failed ? sub_state_ink(.Failed) : hex(HEX_CARD_RESULT_LINE)   // (an error, in the words of its state)
+			text("rs", preview_text(v.result), col, ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 			ui.spacer(ui.px(em * 0.8))
 		}
 	}
 	ui.spacer(ui.px(em * (tight ? 0.2 : 0.5)))
 }
 
-// What a card keeps on its first line, at its right: the state where it needs words (the mark says the others), how long.
-card_when :: proc(v: ^Sub_View, end: f64) -> string {
-	d := duration_text(v.started, end)
-	if v.state != .Failed && v.state != .Cancelled { return d }
-	return d != "" ? fmt.tprintf("%s · %s", sub_state_label(v.state), d) : sub_state_label(v.state)
+// What a row of a state keeps at its right (a card's first line, a row of the activity): how long, after the word of its
+// state unless it is starting or running (its lamp says so): "done · 2m 13s", "failed · 2m 13s", "finishing · 40s".
+state_when :: proc(st: Sub_State, started, end: f64) -> string {
+	d := duration_text(started, end)
+	if st == .Running || st == .Starting { return d }
+	return d != "" ? fmt.tprintf("%s · %s", sub_state_label(st), d) : sub_state_label(st)
 }
 
 // A card opened: what its session says, its prompt (`p`'s), its result.
@@ -570,17 +642,19 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 		if hs.clicked { part_toggle(app, m.id, hb) }
 		if ui.parent(hb) {
 			ui.spacer(ui.px(em * CARD_PAD_EM))
-			pip("###st", sub_state_color(st), em * CARD_MARK_EM)
+			state_mark("###st", st, size = em * CARD_MARK_EM)
 			ui.spacer(ui.px(em * CARD_MARK_GAP_EM))
+			text("ag", v.agent != "" ? v.agent : "sub-agent", hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			ui.spacer(ui.px(em * 0.4))
 			word := st == .Done ? "returned" : sub_state_label(st)
-			text("ag", fmt.tprintf("%s %s", v.agent != "" ? v.agent : "sub-agent", word), hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			text("w", word, sub_state_ink(st), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.6))
 			desc := m.sub_desc != "" ? m.sub_desc : v.desc
 			text("d", desc, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			text("at", clock_text(m.created, app.prefs.clock24), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.5))
 			if m.sub_child != "" {
-				if bevel_button("###open", "Open", "", .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true).clicked { drill_down(app, m.sub_child) }
+				if bevel_button("###open", "Open", "", height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { drill_down(app, m.sub_child) }
 				ui.spacer(ui.px(em * 0.2))
 			}
 			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
@@ -610,8 +684,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 	c := &app.chat
 	if !c.have_self || c.self.parent == "" { return }
 	s := &c.self
-	st, known := state_of_word(s.outcome)
-	if app.busy[s.id] or_else false { st, known = .Running, true }
+	st := sub_view(app, s.id).state
 	ui.spacer(ui.px(em * 0.4))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if plate("###sub_banner", radius = CARD_RADIUS, shadow = 3) {
@@ -632,23 +705,22 @@ subagent_banner :: proc(app: ^App, em: f32) {
 					text("k", "SUB-AGENT", hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 					ui.spacer(ui.px(em * 0.5))
 					text("a", s.agent, hex(HEX_TEXT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-					if known {
+					if st != .Unknown {
 						ui.spacer(ui.px(em * 0.5))
-						state_mark("###l", sub_state_color(st), st == .Running, size = em * 0.75)
-						if st == .Running { animate(app) }
+						state_mark("###l", st, size = em * 0.75)
 						ui.spacer(ui.px(em * 0.25))
-						text("s", sub_state_label(st), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+						text("s", sub_state_label(st), sub_state_ink(st), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 					}
 					ui.spacer(ui.fill())
 				}
 				parent := c.parent_title != "" ? c.parent_title : s.parent
 				text("p", fmt.tprintf("launched by “%s”", parent), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.4)}, ui.fill())
-				end := s.idle > 0 && st != .Running ? s.idle : now_epoch_ms()
+				end := s.idle > 0 && !sub_live(st) ? s.idle : now_epoch_ms()
 				facts := fmt.tprintf("started %s · %s · %s in · %s out%s", clock_text(s.created, app.prefs.clock24), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out), s.cost > 0 ? fmt.tprintf(" · $%.2f", s.cost) : "")
 				text("f", facts, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
-			if bevel_button("###back", "Return to main session", lucide.ARROW_LEFT, .Normal).clicked { go_back(app) }
+			if bevel_button("###back", "Return to main session", lucide.ARROW_LEFT).clicked { go_back(app) }
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -678,7 +750,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 		animate(app)
 		lamp("###sub_lamp", hex(HEX_YELLOW), 1, pulse = true, size = em * 1.0)
 		ui.spacer(ui.px(em * 0.3))
-		sig = bevel_button("###subs", fmt.tprintf("%d active", len(active)), lucide.BOT, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM))
+		sig = bevel_button("###subs", fmt.tprintf("%d active", len(active)), lucide.BOT, height = math.round(em * BUTTON_COMPACT_H_EM))
 		ui.spacer(ui.px(em * 0.3))
 		text("of", fmt.tprintf("/ %d", len(c.children)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 	} else {

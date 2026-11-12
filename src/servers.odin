@@ -521,9 +521,9 @@ server_dialog :: proc(app: ^App, em: f32) {
 			}
 			ui.spacer(ui.fill())
 			if taken { text("tk", "That name is taken", hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
-			if bevel_button("###cancel", "Cancel", "", .Normal).clicked { app.cx.open[.Server] = false }
+			if bevel_button("###cancel", "Cancel", "", .Cancel).clicked { app.cx.open[.Server] = false }
 			ui.spacer(ui.px(em * 0.5))
-			if bevel_button("###ok", e.index >= 0 ? "Save and connect" : "Add and connect", lucide.CHECK, .Accent, disabled = !valid).clicked { save = true }
+			if bevel_button("###ok", e.index >= 0 ? "Save and connect" : "Add and connect", lucide.CHECK, .Success, disabled = !valid).clicked { save = true }
 			pad(em)
 		}
 		if save && valid {

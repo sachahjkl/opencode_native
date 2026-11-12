@@ -1135,12 +1135,12 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 		text("w", words, hex(t.link == .Closed ? HEX_WEAK : HEX_YELLOW), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		h := math.round(em * BUTTON_COMPACT_H_EM)
 		if t.link == .Closed {
-			if bevel_button("###term_restart", "Restart", lucide.REFRESH_CW, .Normal, height = h, disabled = s.made.state == .Loading).clicked { term_restart(app, t) }
+			if bevel_button("###term_restart", "Restart", lucide.REFRESH_CW, height = h, disabled = s.made.state == .Loading).clicked { term_restart(app, t) }
 		} else if t.given_up {
-			if bevel_button("###term_again", "Reconnect", lucide.REFRESH_CW, .Normal, height = h).clicked { term_reconnect(app, t) }
+			if bevel_button("###term_again", "Reconnect", lucide.REFRESH_CW, height = h).clicked { term_reconnect(app, t) }
 		}
 		ui.spacer(ui.px(em * 0.3))
-		if bevel_button("###term_close", "Close", lucide.X, .Ghost, height = h).clicked { s.close_due = t.panel }
+		if bevel_button("###term_close", "Close", lucide.X, height = h, face = .Ghost).clicked { s.close_due = t.panel }
 		ui.spacer(ui.px(em * 0.6))
 	}
 }

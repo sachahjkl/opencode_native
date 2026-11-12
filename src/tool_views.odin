@@ -307,7 +307,7 @@ tool_body :: proc(app: ^App, p: ^Part, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###cmd_more") {
 				ui.spacer(ui.fill())
-				if bevel_button("###inspect", "Inspect the output", lucide.SQUARE_TERMINAL, .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true).clicked { output_view_open_part(app, p) }
+				if bevel_button("###inspect", "Inspect the output", lucide.SQUARE_TERMINAL, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { output_view_open_part(app, p) }
 			}
 		}
 		return

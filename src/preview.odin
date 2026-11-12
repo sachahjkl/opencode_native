@@ -529,7 +529,7 @@ preview_panel :: proc(app: ^App, em: f32) {
 				text("m", msg, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 				if failed {
 					ui.spacer(ui.px(em * 0.5))
-					if bevel_button("###pv_again", "Try again", lucide.REFRESH_CW, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { web_start(app, t) }
+					if bevel_button("###pv_again", "Try again", lucide.REFRESH_CW, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { web_start(app, t) }
 				}
 				ui.spacer(ui.fill())
 			}

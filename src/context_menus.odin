@@ -286,8 +286,8 @@ quote_chip :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.3)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###qr") {
 			ui.spacer(ui.px(em * 0.35))
-			quoted := bevel_button("###q1", "Quote", "", .Ghost, ui.fill(), math.round(em * BUTTON_SMALL_H_EM)).clicked
-			commented := bevel_button("###q2", "Comment", "", .Ghost, ui.fill(), math.round(em * BUTTON_SMALL_H_EM)).clicked
+			quoted := bevel_button("###q1", "Quote", "", width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM), face = .Ghost).clicked
+			commented := bevel_button("###q2", "Comment", "", width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM), face = .Ghost).clicked
 			ui.spacer(ui.px(em * 0.35))
 			if quoted || commented {
 				quote_text(app, q.kept, commented)
@@ -387,9 +387,9 @@ rename_dialog :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 				if ui.row(.Center, id = "###ren_b") {
 					ui.spacer(ui.fill())
-					if bevel_button("###c", "Cancel", "", .Normal).clicked { app.cx.open[.Rename] = false }
+					if bevel_button("###ren_cancel", "Cancel", "", .Cancel).clicked { app.cx.open[.Rename] = false }
 					ui.spacer(ui.px(em * 0.5))
-					if bevel_button("###ok", "Rename", lucide.CHECK, .Accent).clicked { rename_commit(app) }
+					if bevel_button("###ren_ok", "Rename", lucide.CHECK, .Success).clicked { rename_commit(app) }
 				}
 				ui.spacer(ui.px(em))
 			}

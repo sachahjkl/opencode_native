@@ -54,7 +54,6 @@ HEX_BRIGHT          :: 0xffffffff   // text at its brightest: titles, what is se
 HEX_TEXT_SOFT       :: 0xc8c8c8ff   // quiet light text, a step under HEX_TEXT
 HEX_ERROR_TEXT      :: 0xf0a0a6ff   // the words of an error (HEX_RED is its mark)
 HEX_BTN_FACE        :: 0x2a2a2aff
-HEX_BTN_DANGER      :: 0xb8464fff
 HEX_BTN_GHOST       :: 0x222222ff   // a ghost button under the pointer
 HEX_WELL            :: 0x070707ff
 HEX_CODE_WELL       :: 0x060606ff   // code and tool output
@@ -234,7 +233,8 @@ draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, h
 }
 
 // Words that say what can be done are also what does it: quiet like a hint, lit under the pointer. True when clicked.
-hint_action :: proc(id, label: string, em: f32, face: font.Font_Id = 0, icon := "") -> bool {
+// `intent`: what it does, in the words' colour (intent_colors: the words of its soft pair, which read on the page too).
+hint_action :: proc(id, label: string, em: f32, face: font.Font_Id = 0, icon := "", intent := ui.Intent.Neutral) -> bool {
 	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * 1.4)), axis = .X, cross = .Center, cursor = .Hand})
 	ui.a11y({role = .Button, name = label})
 	b := ui.build_box({.Clickable, .Focusable}, id)
@@ -243,6 +243,10 @@ hint_action :: proc(id, label: string, em: f32, face: font.Font_Id = 0, icon := 
 		m := ui.Style_Mod{font_size = math.round(em * (face != 0 ? FS_CAPTION : FS_SMALL))}
 		if face != 0 { m.font = face }
 		col := sig.hovering ? hex(HEX_BRIGHT) : hex(HEX_FAINT)
+		if intent != .Neutral {
+			_, ink, _ := intent_colors(intent)
+			col = sig.hovering ? ink : with_alpha(ink, HINT_INTENT_REST)
+		}
 		if icon != "" {
 			glyph(icon, col, math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.3))
@@ -263,17 +267,32 @@ draw_groove :: proc(dc: ^draw.Context, a, b: Vec2, vertical := false) { ui.machi
 // A status lamp: a glass bead with a halo when lit (`glow`: its halo; < 0: as `lit`).
 draw_lamp :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color, lit: f32 = 1, glow: f32 = -1) { ui.machined_lamp(dc, c, d, col, lit, glow) }
 
-// A pip: what is over (done, failed, stopped); only what is live gets a glowing lamp, so the lamps stay rare enough to mean
-// something.
+// A pip: a state at rest (connected, nothing known); only what is live gets a glowing lamp, so the lamps stay rare enough
+// to mean something. (What ended has its sign: state_mark.)
 draw_pip :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color) { ui.machined_pip(dc, c, d, col) }
 
 ////////////////////////////////
 // Boxes painted by those primitives
 
-Btn_Kind :: enum u8 { Normal, Accent, Danger, Ghost, Toggled }
+// How a button sits, apart from its colour (its colour is what it does: ui.Intent): raised; flat until the pointer is
+// over it (a tool among many); held down (the option chosen).
+Btn_Face :: enum u8 { Raised, Ghost, Toggled }
+
+// A hint's words that say an act (hint_action's intent), away from the pointer: its colour, quieter.
+HINT_INTENT_REST :: 0.75
 
 @(private = "file")
-Bevel_Draw :: struct { kind: Btn_Kind, radius: f32, lit: bool, drawn: bool }   // lit: drawn as under the pointer (its menu is open); drawn: `radius` is frame pixels, as drawn
+Bevel_Draw :: struct { face: Btn_Face, fill, glow: Color, radius: f32, lit: bool, drawn: bool }   // lit: drawn as under the pointer (its menu is open); drawn: `radius` is frame pixels, as drawn
+
+// The face, the words and the halo of a button that does `intent`: the toolkit's soft pair of its hue (the same in every
+// theme, light or dark), or this look's plain button (Neutral). Read while the button is built: soft_pair reads the page.
+intent_colors :: proc(intent: ui.Intent) -> (fill, ink, glow: Color) {
+	if intent == .Neutral { return hex(HEX_BTN_FACE), hex(HEX_TEXT), CLEAR }
+	glow = ui.hue_color(ui.intent_hue(intent))
+	glow.a = 1
+	fill, ink = ui.soft_pair(glow)
+	return
+}
 
 @(private = "file")
 bevel_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
@@ -281,13 +300,11 @@ bevel_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	held := b.active_t * b.hot_t
 	hot := d.lit ? 1 : b.hot_t
 	rad := d.drawn ? d.radius : d.radius * ui.scale()
-	switch d.kind {
-	case .Normal:  draw_bevel(dc, b.rect, rad, hex(HEX_BTN_FACE), hot, held, drawn = d.drawn)
-	case .Accent:  draw_bevel(dc, b.rect, rad, accent(), hot, held, accent(), d.drawn)
-	case .Danger:  draw_bevel(dc, b.rect, rad, hex(HEX_BTN_DANGER), hot, held, hex(HEX_RED), d.drawn)
-	case .Toggled: draw_bevel(dc, b.rect, rad, hex(HEX_BTN_FACE), hot, 1, drawn = d.drawn)
+	switch d.face {
+	case .Raised:  draw_bevel(dc, b.rect, rad, d.fill, hot, held, d.glow, d.drawn)
+	case .Toggled: draw_bevel(dc, b.rect, rad, d.fill, hot, 1, drawn = d.drawn)
 	case .Ghost:
-		if hot > FADE_VISIBLE || held > FADE_VISIBLE { draw_bevel(dc, b.rect, rad, hex(HEX_BTN_GHOST), hot, held, drawn = d.drawn) }
+		if hot > FADE_VISIBLE || held > FADE_VISIBLE { draw_bevel(dc, b.rect, rad, d.fill, hot, held, d.glow, d.drawn) }
 	}
 }
 
@@ -309,7 +326,7 @@ dialog_close :: proc(open: ^bool) {
 	ui.a11y({role = .Button, name = "Close"})
 	b := ui.modal_corner({.Clickable, .Focusable}, "###dialog_close")
 	d := ui.frame_new(Bevel_Draw)
-	d^ = {kind = .Ghost, radius = b.radius, drawn = true}
+	d^ = {face = .Ghost, fill = hex(HEX_BTN_GHOST), radius = b.radius, drawn = true}
 	b.custom, b.custom_user = bevel_box_draw, d
 	sig := ui.signal(b)
 	if ui.parent(b) {
@@ -319,25 +336,29 @@ dialog_close :: proc(open: ^bool) {
 	if sig.clicked { open^ = false }
 }
 
-// A machined push button: an icon (Lucide glyph) and/or a label. `width`: its width (text size by default).
-// `lit`: shown as under the pointer, as long as what it opened is open (a menu, a picker).
+// A machined push button: an icon (Lucide glyph) and/or a label. `intent`: what it does, and so its colour (red to stop
+// or delete, green to confirm or save: intent_colors). `face`: how it sits. `width`: its width (text size by default).
+// `lit`: shown as under the pointer, as long as what it opened is open (a menu, a picker). `quiet`: a secondary action,
+// smaller; a plain one's words are lit only under the pointer, an intent's keep its colour.
 // `wrap`: a label longer than the button's width goes on more lines and the button grows to hold them (it is `height`
 // tall on one line); else it is one line, as wide as its text.
-bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Normal, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false, quiet := false, wrap := false, lit := false, icon_color := Color{}) -> ui.Signal {
+bevel_button :: proc(id: string, label: string, icon := "", intent := ui.Intent.Neutral, width: Maybe(ui.Size) = nil, height: f32 = 0, disabled := false, left := false, quiet := false, wrap := false, lit := false, icon_color := Color{}, face := Btn_Face.Raised) -> ui.Signal {
 	em := ui.font_size()
 	h := height > 0 ? height : math.round(em * BUTTON_H_EM)
-	fg := kind == .Accent ? hex(HEX_ON_ACCENT) : kind == .Danger ? WHITE : hex(HEX_TEXT)
+	fill, fg, glow := intent_colors(intent)
+	// (a plain ghost lights up a step off the page; an intent's ghost shows its own face)
+	if face == .Ghost && intent == .Neutral { fill = hex(HEX_BTN_GHOST) }
 	if disabled { fg = hex(HEX_FAINT) }
 	ui.next({width = width.? or_else ui.children_sum(), height = wrap ? ui.children_sum() : ui.px(h), axis = .X, cross = .Center})
 	flags: ui.Box_Flags = {.Clickable, .Focusable}
 	if disabled { flags = {} }
 	b := ui.build_box(flags, id)
 	d := ui.frame_new(Bevel_Draw)
-	d^ = {kind = disabled ? .Ghost : kind, radius = BUTTON_RADIUS, lit = lit && !disabled}
+	d^ = {face = disabled ? .Ghost : face, fill = fill, glow = glow, radius = BUTTON_RADIUS, lit = lit && !disabled}
 	b.custom = bevel_box_draw
 	b.custom_user = d
 	sig := ui.signal(b)
-	if quiet && !disabled { fg = sig.hovering || lit ? hex(HEX_TEXT) : hex(HEX_WEAK) }   // (a secondary action: lit only under the pointer)
+	if quiet && !disabled && intent == .Neutral { fg = sig.hovering || lit ? hex(HEX_TEXT) : hex(HEX_WEAK) }   // (a secondary action: lit only under the pointer)
 	if ui.parent(b) {
 		pad := label != "" ? em * 0.75 : em * 0.55
 		if _, fixed := width.?; fixed && !left { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(left ? em * 0.8 : pad)) }
@@ -369,13 +390,13 @@ bevel_button :: proc(id: string, label: string, icon := "", kind := Btn_Kind.Nor
 }
 
 // A round, icon-only ghost button (the glyph only lights up under the pointer).
-glyph_button :: proc(id: string, icon: string, size: f32 = 0, color := Color{}, kind := Btn_Kind.Ghost) -> ui.Signal {
+glyph_button :: proc(id: string, icon: string, size: f32 = 0, color := Color{}, face := Btn_Face.Ghost) -> ui.Signal {
 	em := ui.font_size()
 	sz := size > 0 ? size : math.round(em * GLYPH_BUTTON_EM)
 	ui.next({width = ui.px(sz), height = ui.px(sz), axis = .X, cross = .Center})
 	b := ui.build_box({.Clickable, .Focusable}, id)
 	d := ui.frame_new(Bevel_Draw)
-	d^ = {kind = kind, radius = GLYPH_BUTTON_RADIUS}
+	d^ = {face = face, fill = hex(face == .Ghost ? HEX_BTN_GHOST : HEX_BTN_FACE), radius = GLYPH_BUTTON_RADIUS}
 	b.custom = bevel_box_draw
 	b.custom_user = d
 	sig := ui.signal(b)
@@ -480,11 +501,6 @@ scanner :: proc(id: string, color: Color, width, height: f32) {
 	}
 	b.custom_user = d
 	animate(the_app)
-}
-
-// A live state as a pulsing lamp, a finished one as a pip.
-state_mark :: proc(id: string, color: Color, live: bool, size: f32 = 0) {
-	if live { lamp(id, color, 1, pulse = true, size = size); animate(the_app) } else { pip(id, color, size) }
 }
 
 @(private = "file")

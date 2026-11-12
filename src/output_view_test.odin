@@ -48,7 +48,7 @@ a_command_that_runs_is_followed_and_its_end_is_said :: proc(t: ^testing.T) {
 	bench_answer(app, bench_take(t, .Output_Read), 200, output_json("two\n", 8))
 	testing.expect(t, v.over && v.seen_end, "seen as it happened: it says so")
 	testing.expect_value(t, string(v.raw[:]), "one\ntwo\n")
-	word, _ := output_view_word(v)
+	word := output_view_word(v)
 	testing.expect_value(t, word, "exit 0")
 	testing.expect_value(t, bench_count(.Output_Read) + bench_count(.Output_State), 0)   // (nothing more is asked)
 	output_view_close(app, v)
@@ -64,7 +64,7 @@ a_command_ended_before_it_opened_announces_nothing :: proc(t: ^testing.T) {
 	bench_answer(app, bench_take(t, .Output_State), 200, state_json("exited", 3))
 	bench_answer(app, bench_take(t, .Output_Read), 200, output_json("a\n", 2))
 	testing.expect(t, v.over && !v.seen_end)
-	word, _ := output_view_word(v)
+	word := output_view_word(v)
 	testing.expect_value(t, word, "exit 3")
 }
 
@@ -179,7 +179,7 @@ a_call_with_only_its_text_shows_that :: proc(t: ^testing.T) {
 	v := app.cx.outputs.shown
 	testing.expect(t, v != nil && v.over && !v.seen_end)
 	testing.expect_value(t, v.command, "false")
-	word, _ := output_view_word(v)
+	word := output_view_word(v)
 	testing.expect_value(t, word, "exit 1")
 	testing.expect_value(t, bench_count(.Output_Read) + bench_count(.Output_State), 0)
 }

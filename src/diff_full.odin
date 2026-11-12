@@ -53,7 +53,7 @@ diff_full_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.5))
 			text("d", fmt.tprintf("-%d", d.doc.removed), hex(HEX_RED), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
 			ui.spacer(ui.px(em))
-			if bevel_button("###df_copy", "Copy", "", .Normal).clicked {
+			if bevel_button("###df_copy", "Copy", "").clicked {
 				clip_set(d.doc.patch)
 				ui.toast(.Good, "Diff copied")
 			}

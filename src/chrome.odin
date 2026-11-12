@@ -150,7 +150,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		if s == nil && app.chat.have_self { s = &app.chat.self }   // (a sub-agent, or an old session: not in the sidebar's list)
 		if back := back_target(app); back != "" {
 			// the way back up: to the session drilled down from, or the parent
-			if bevel_button("###back", "", lucide.ARROW_LEFT, .Normal, ui.px(math.round(em * BUTTON_H_EM)), math.round(em * BUTTON_H_EM)).clicked { go_back(app) }
+			if bevel_button("###back", "", lucide.ARROW_LEFT, width = ui.px(math.round(em * BUTTON_H_EM)), height = math.round(em * BUTTON_H_EM)).clicked { go_back(app) }
 			ui.spacer(ui.px(em * 0.7))
 		}
 		if logo_of(app, "###hlogo", project_logo(app, chat_project(app)), math.round(em * 2.3)) { ui.spacer(ui.px(em * 0.7)) }
@@ -251,7 +251,8 @@ status_bar :: proc(app: ^App, em: f32) {
 		if ssig.clicked { ui.ctx_menu_open_rect(skey, sb.rect, sb.key) }
 		if ui.parent(sb) {
 			ui.spacer(ui.px(em * 0.45))
-			state_mark("###online", col, !up, size = em * 0.8)   // (connected is the normal state: a pip)
+			// (connected is the normal state: a pip; a lamp breathes while it is not)
+			if up { pip("###online", col, em * 0.8) } else { lamp("###online", col, 1, pulse = true, size = em * 0.8); animate(app) }
 			ui.spacer(ui.px(em * 0.4))
 			if len(app.servers) > 1 || !app.servers[app.server].local {
 				text("sn", server_name(app), up ? hex(HEX_TEXT) : col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})

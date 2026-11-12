@@ -24,6 +24,7 @@ import "gt:png"
 import "gt:render"
 import "gt:term"
 import "gt:ui"
+import lucide "gt:lucide"
 import session "gt:testkit/session"
 import "gt:testkit/unwatched"
 
@@ -1918,6 +1919,47 @@ the_palettes_search_is_a_menus_search_band :: proc(t: ^testing.T) {
 	})
 }
 
+// A button says what it does by its colour, the toolkit's soft pair of its intent's hue: the delete dialog's Delete is red
+// (Danger), the rename dialog's Rename green (Success), their Cancel red too (Cancel). Flat, so the middle of a face is its
+// fill; dark, as the request was (Windows' CI is light).
+@(test)
+a_buttons_colour_says_what_it_does :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		pref_set(app, "appearance.theme", "OpenCode")
+		pref_set(app, "appearance.mode", "dark")
+		defer pref_set(app, "appearance.mode", "system")
+		pref_set(app, "appearance.style", "flat")
+		defer pref_set(app, "appearance.style", "machined")
+		face :: proc(t: ^testing.T, s: ^session.Session, name: string, intent: ui.Intent) {
+			b := session.find(s, name)
+			if !testing.expectf(t, b != nil, "the button %s", name) { return }
+			hue := ui.hue_color(ui.intent_hue(intent))
+			hue.a = 1
+			fill, _ := ui.soft_pair(hue)
+			to8 :: proc(x: f32) -> u8 { return u8(clamp(render.linear_to_srgb(clamp(x, 0, 1)) * 255 + 0.5, 0, 255)) }
+			want := session.Color{to8(fill.r), to8(fill.g), to8(fill.b), 255}
+			img := session.capture(s)
+			got := session.pixel(img, int(b.rect.min.x) + 4, int((b.rect.min.y + b.rect.max.y) * 0.5))
+			testing.expectf(t, session.near(got, want, 3), "%s (%v): its face %v, the soft fill %v", name, intent, got, want)
+		}
+		session.leave(s)   // (a face under the pointer is lit: not its fill)
+		app.cx.open[.Delete] = true
+		session.wait_idle(s)
+		face(t, s, "confirm", .Danger)
+		face(t, s, "cancel", .Cancel)
+		app.cx.open[.Delete] = false
+		session.frames(s, 2)
+		rename_open(app, "ses_colour")
+		session.wait_idle(s)
+		face(t, s, "ren_ok", .Success)
+		face(t, s, "ren_cancel", .Cancel)
+		app.cx.open[.Rename] = false
+		session.frames(s, 2)
+	})
+}
+
 // The palette's arrows move its selection: they are read inside its dialog, which holds the keys while it is open.
 @(test)
 the_palette_arrows_move_the_selection :: proc(t: ^testing.T) {
@@ -2010,5 +2052,60 @@ a_running_command_is_inspected_from_its_row :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		v := app.cx.outputs.shown
 		testing.expect(t, v != nil && v.shell == "sh_7", "its output, in its view")
+	})
+}
+
+// Two sub-agents that ended: one done, one failed, their calls folded.
+@(private = "file")
+ended_subagents_page :: proc() -> string {
+	t := BENCH_EPOCH_MS
+	b := strings.builder_make(context.temp_allocator)
+	fmt.sbprintf(&b, `{{"data":[`)
+	fmt.sbprintf(&b, `{{"id":"sg_1_a","type":"assistant","agent":"build","model":{{"id":"m","providerID":"p"}},"finish":"stop","time":{{"created":%f,"completed":%f}},"content":[`, t + 10, t + 200_000)
+	fmt.sbprintf(&b, `{{"type":"tool","id":"call_ok","name":"subagent","state":{{"status":"completed","input":{{"agent":"explore","description":"Find the loaders","prompt":"go"}},"content":[{{"type":"text","text":"Found three loaders.\nThe second one reads the formats."}}]}},"time":{{"created":%f,"completed":%f}}}},`, t + 11, t + 11 + 133_000)
+	fmt.sbprintf(&b, `{{"type":"tool","id":"call_ko","name":"subagent","state":{{"status":"error","input":{{"agent":"general","description":"Read the formats","prompt":"go"}},"error":{{"message":"The model refused."}}}},"time":{{"created":%f,"completed":%f}}}}`, t + 12, t + 12 + 133_000)
+	fmt.sbprintf(&b, `]}},{{"id":"sg_1_u","type":"user","text":"Look.","time":{{"created":%f}}}}`, t)
+	strings.write_string(&b, `],"cursor":{"next":""}}`)
+	return strings.to_string(b)
+}
+
+// The box named `name` in the tree of `b`, nil: none.
+@(private = "file")
+named_under :: proc(s: ^session.Session, b: ^ui.Box, name: string) -> ^ui.Box {
+	if b == nil || !ui.box_current(s.state, b) { return nil }
+	if b.name == name { return b }
+	for c := b.first; c != nil; c = c.next { if r := named_under(s, c, name); r != nil { return r } }
+	return nil
+}
+
+// A sub-agent that ended says so on its folded card: the sign of its state on its mark, the word of its state before its time,
+// and the first line of what it handed back (a failure's, its error).
+@(test)
+a_finished_sub_agent_says_so_folded :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		v, err := json.parse_string(ended_subagents_page(), allocator = context.temp_allocator)
+		testing.expect(t, err == nil)
+		chat_load(app, v, false)
+		chat_scroll_event(app, Scroll_Signal.Snap)
+		session.wait_idle(s)
+		Want :: struct { card, sign, word, line: string }
+		for w in ([]Want{
+			{"sa_sg_1_a_0", lucide.CHECK, "done · 2m 13s", "Found three loaders."},
+			{"sa_sg_1_a_1", lucide.X, "failed · 2m 13s", "The model refused."},
+		}) {
+			card := session.find(s, w.card)
+			if !testing.expectf(t, card != nil, "the card %s", w.card) { continue }
+			testing.expectf(t, named_under(s, card, "body") == nil, "%s: folded", w.card)
+			mark := named_under(s, card, "st")
+			sign := named_under(s, mark, "sign")
+			testing.expectf(t, sign != nil && ui.box_text(sign) == w.sign, "%s: its mark's sign %q", w.card, w.sign)
+			if sign != nil { testing.expectf(t, sign.rect.max.x > sign.rect.min.x && sign.rect.max.y > sign.rect.min.y, "%s: its sign is shown", w.card) }
+			word := named_under(s, card, "du")
+			testing.expectf(t, word != nil && ui.box_text(word) == w.word, "%s: %q (got %q)", w.card, w.word, word != nil ? ui.box_text(word) : "")
+			line := named_under(s, card, "rs")
+			testing.expectf(t, line != nil && ui.box_text(line) == w.line, "%s: folded, its result's first line %q (got %q)", w.card, w.line, line != nil ? ui.box_text(line) : "")
+		}
 	})
 }

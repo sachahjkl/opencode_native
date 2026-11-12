@@ -485,7 +485,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###ch_foot") {
 				ui.spacer(ui.fill())
-				if bevel_button("###ch_cancel", "Cancel", "", .Normal).clicked { open^ = false }
+				if bevel_button("###ch_cancel", "Cancel", "", .Cancel).clicked { open^ = false }
 				ui.spacer(ui.px(em * 0.5))
 				if bevel_button("###ch_go", "Go back", lucide.UNDO_2, .Danger, disabled = staging).clicked { revert_commit(app) }
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))

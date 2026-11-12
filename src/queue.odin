@@ -366,14 +366,16 @@ queue_replace_failed :: proc(app: ^App, r: ^Request) {
 
 // `id` of its row, and the words or the glyph that say it, as the room allows.
 @(private = "file")
-queue_action :: proc(id, label, icon: string, wide: bool, em: f32) -> bool {
+queue_action :: proc(id, label, icon: string, wide: bool, em: f32, intent := ui.Intent.Neutral) -> bool {
 	if wide {
 		ui.spacer(ui.px(em * 0.7))
-		return hint_action(id, label, em, the_app.mono)
+		return hint_action(id, label, em, the_app.mono, intent = intent)
 	}
 	ui.spacer(ui.px(em * 0.15))
 	ui.a11y({role = .Button, name = label})
-	return glyph_button(id, icon, math.round(em * QUEUE_GLYPH_EM)).clicked
+	ink := Color{}
+	if intent != .Neutral { _, ink, _ = intent_colors(intent) }
+	return glyph_button(id, icon, math.round(em * QUEUE_GLYPH_EM), ink).clicked
 }
 
 @(private = "file")
@@ -407,7 +409,7 @@ queue_row :: proc(app: ^App, it: ^Queue_Item, n: int, em: f32) {
 			if !it.skills && queue_action("###edit", "Edit", lucide.PENCIL, wide, em) { queue_edit(app, id) }
 			if it.delivery == .Queue && queue_action("###steer", "Steer", lucide.ARROW_RIGHT, wide, em) { queue_steer(app, id) }
 			if it.delivery == .Steer && queue_action("###now", "Send now", lucide.SEND_HORIZONTAL, wide, em) { queue_send_now(app, id) }
-			if queue_action("###rm", "Remove", lucide.X, wide, em) { queue_remove(app, id) }
+			if queue_action("###rm", "Remove", lucide.X, wide, em, .Danger) { queue_remove(app, id) }
 		}
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
 	}
@@ -482,7 +484,7 @@ queue_edit_banner :: proc(app: ^App, em: f32) {
 			text("o", "it goes back last", hex(HEX_FAINT), note)
 		}
 		ui.spacer(ui.fill())
-		if hint_action("###q_cancel", "Esc  cancel", em, app.mono) { queue_edit_end(app, .Cancel) }
+		if hint_action("###q_cancel", "Esc  cancel", em, app.mono, intent = .Cancel) { queue_edit_end(app, .Cancel) }
 		ui.spacer(ui.px(em * 0.85))
 	}
 }

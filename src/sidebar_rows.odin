@@ -46,9 +46,9 @@ sidebar :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###side_top") {
 			pad_row(em)
-			if bevel_button("###new", "New session", lucide.PLUS, .Accent, ui.fill()).clicked { new_session(app) }
+			if bevel_button("###new", "New session", lucide.PLUS, .Primary, width = ui.fill()).clicked { new_session(app) }
 			ui.spacer(ui.px(em * 0.45))
-			if bevel_button("###refresh", "", lucide.REFRESH_CW, .Normal).clicked { refresh_sessions(app) }
+			if bevel_button("###refresh", "", lucide.REFRESH_CW).clicked { refresh_sessions(app) }
 			pad_row(em)
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -227,10 +227,10 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			}
 			busy := app.busy[s.id] or_else false
 			if depth > 0 {
-				// a sub-agent: its state as a lamp, its agent in its colour
+				// a sub-agent: its state's mark (a lamp while it runs, a sign once it ended), its agent in its colour
 				st, _ := state_of_word(s.outcome)
-				if busy { st = .Running; animate(app) }
-				state_mark("###st", sub_state_color(st), busy, size = em * 0.75)
+				if busy { st = .Running }
+				state_mark("###st", st, size = em * 0.75)
 				ui.spacer(ui.px(em * 0.3))
 				text("ag", s.agent, hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.35))
@@ -358,7 +358,7 @@ delete_dialog :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if ui.row() {
 					ui.spacer(ui.fill())
-					if bevel_button("###cancel", "Cancel", "", .Normal).clicked { app.cx.open[.Delete] = false }
+					if bevel_button("###cancel", "Cancel", "", .Cancel).clicked { app.cx.open[.Delete] = false }
 					ui.spacer(ui.px(em * 0.6))
 					if bevel_button("###confirm", "Delete", lucide.TRASH_2, .Danger).clicked {
 						delete_session(app, app.sidebar.delete_id)

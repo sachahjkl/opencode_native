@@ -571,11 +571,11 @@ files_right :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###fl_bar") {
 		text("p", f.file, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 		ui.spacer(ui.px(em * 0.5))
-		if bevel_button("###fl_copy", "Copy path", lucide.COPY, .Normal, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
+		if bevel_button("###fl_copy", "Copy path", lucide.COPY, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
 			clip_set(fmt.tprintf("%s/%s", strings.trim_right(f.dir, `\/`), f.file))
 		}
 		ui.spacer(ui.px(em * 0.4))
-		if bevel_button("###fl_mention", "Mention in the prompt", lucide.PENCIL, .Accent, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
+		if bevel_button("###fl_mention", "Mention in the prompt", lucide.PENCIL, .Primary, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
 			a := &app.composer.area
 			a.mark = a.cursor
 			mention_put(app, .File, f.file, file_uri(f.dir, f.file), filepath.base(f.file))

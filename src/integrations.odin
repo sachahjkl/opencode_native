@@ -463,7 +463,7 @@ integration_row :: proc(app: ^App, it: ^Integration, k: int, em: f32) {
 integration_page :: proc(app: ^App, it: ^Integration, em: f32) {
 	n := &app.cx.integrations
 	small := math.round(em * BUTTON_COMPACT_H_EM)
-	if bevel_button("###int_back", "All connections", lucide.ARROW_LEFT, .Ghost, height = small).clicked {
+	if bevel_button("###int_back", "All connections", lucide.ARROW_LEFT, height = small, face = .Ghost).clicked {
 		connect_cancel(app)
 		set_text(&n.shown, "")
 		set_text(&n.failed, "")
@@ -482,7 +482,7 @@ integration_page :: proc(app: ^App, it: ^Integration, em: f32) {
 				info_line(app, fmt.tprintf("###int_env%d", i), fmt.tprintf("Or set %s where the server runs.", strings.join(m.names, " or ", context.temp_allocator)), em)
 				continue
 			}
-			if bevel_button(fmt.tprintf("###int_m%d", i), label_safe(method_title(&m)), lucide.PLUS, .Normal, ui.fill(), math.round(em * BUTTON_H_EM), left = true).clicked {
+			if bevel_button(fmt.tprintf("###int_m%d", i), label_safe(method_title(&m)), lucide.PLUS, width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true).clicked {
 				n.step = Connect_Fill{i}
 				set_text(&n.failed, "")
 			}
@@ -525,24 +525,24 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 					set_text(&n.removing, "")
 				}
 				ui.spacer(ui.px(em * 0.3))
-				if bevel_button("###int_no", "Keep", "", .Normal, height = small).clicked { set_text(&n.removing, "") }
+				if bevel_button("###int_no", "Keep", "", .Cancel, height = small).clicked { set_text(&n.removing, "") }
 			} else {
-				if !c.active && bevel_button("###int_use", "Use", "", .Normal, height = small).clicked {
+				if !c.active && bevel_button("###int_use", "Use", "", .Success, height = small).clicked {
 					request(app, .Credential_Done, "POST", fmt.tprintf("/api/credential/%s/activate", url_escape(c.id)))
 				}
 				ui.spacer(ui.px(em * 0.3))
-				if bevel_button("###int_ren", "Rename", lucide.PENCIL, .Ghost, height = small).clicked {
+				if bevel_button("###int_ren", "Rename", lucide.PENCIL, height = small, face = .Ghost).clicked {
 					set_text(&n.renaming, c.id)
 					ui.field_set(&n.rename, c.label)
 				}
 				ui.spacer(ui.px(em * 0.3))
-				if bevel_button("###int_rem", "Remove", lucide.TRASH_2, .Ghost, height = small).clicked { set_text(&n.removing, c.id) }
+				if bevel_button("###int_rem", "Remove", lucide.TRASH_2, .Danger, height = small, face = .Ghost).clicked { set_text(&n.removing, c.id) }
 			}
 		}
 	}
 	if c.needs_auth {
 		info_line(app, fmt.tprintf("###intm%d", i), c.message != "" ? c.message : "It must sign in again.", em, hex(HEX_YELLOW))
-		if c.url != "" && bevel_button(fmt.tprintf("###into%d", i), "Open", lucide.GLOBE, .Normal, height = small).clicked { _ = platform.open_url(c.url) }
+		if c.url != "" && bevel_button(fmt.tprintf("###into%d", i), "Open", lucide.GLOBE, height = small).clicked { _ = platform.open_url(c.url) }
 	}
 	ui.spacer(ui.px(em * 0.25))
 }
@@ -579,14 +579,14 @@ connect_fill :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int, e
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###int_foot") {
 		ui.spacer(ui.fill())
-		if bevel_button("###int_cancel", "Cancel", "", .Normal).clicked {
+		if bevel_button("###int_cancel", "Cancel", "", .Cancel).clicked {
 			set_text(&n.failed, "")
 			connect_cancel(app)
 			return
 		}
 		ui.spacer(ui.px(em * 0.4))
 		_, sending := n.step.(Connect_Sending)
-		if bevel_button("###int_go", sending ? "Connecting…" : m.kind == .Oauth ? "Continue in the browser" : "Connect", lucide.CHECK, .Accent, disabled = sending).clicked { go = true }
+		if bevel_button("###int_go", sending ? "Connecting…" : m.kind == .Oauth ? "Continue in the browser" : "Connect", lucide.CHECK, .Success, disabled = sending).clicked { go = true }
 	}
 	if _, filling := n.step.(Connect_Fill); go && filling { connect_send(app, it, m, method) }
 }
@@ -617,20 +617,20 @@ connect_wait :: proc(app: ^App, em: f32) {
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###int_wfoot") {
-		if w.url != "" && bevel_button("###int_open", "Open again", lucide.GLOBE, .Normal).clicked { _ = platform.open_url(w.url) }
+		if w.url != "" && bevel_button("###int_open", "Open again", lucide.GLOBE).clicked { _ = platform.open_url(w.url) }
 		if w.instructions != "" {
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###int_copy", "Copy", lucide.COPY, .Normal).clicked { clip_set(w.instructions) }
+			if bevel_button("###int_copy", "Copy", lucide.COPY).clicked { clip_set(w.instructions) }
 		}
 		ui.spacer(ui.fill())
-		if bevel_button("###int_stop", "Cancel", "", .Normal).clicked {
+		if bevel_button("###int_stop", "Cancel", "", .Cancel).clicked {
 			set_text(&n.failed, "")
 			connect_cancel(app)
 			return
 		}
 		if w.by_code {
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###int_finish", finishing ? "Finishing…" : "Finish", lucide.CHECK, .Accent, disabled = finishing).clicked { finish = true }
+			if bevel_button("###int_finish", finishing ? "Finishing…" : "Finish", lucide.CHECK, .Success, disabled = finishing).clicked { finish = true }
 		}
 	}
 	if finish { connect_finish(app) }
