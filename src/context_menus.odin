@@ -22,7 +22,8 @@ Ctx_Target :: struct {
 // The menu of a right click: what it is about, and whether this build's right press found it.
 Ctx_Menu :: struct {
 	target: Ctx_Target,
-	taken:  bool,   // a right press of this build found its target
+	taken:  bool,     // a right press of this build found its target
+	by:     ui.Key,   // ... the box that took it (ctx_check; 0: taken for good, ctx_open from a widget's own press)
 }
 
 // The chip at the end of a selection (quote_chip).
@@ -33,20 +34,31 @@ Quote_Chip :: struct {
 	serial, done: u64,      // which selection, and the last one quoted
 }
 
-// A right press in `b` opens the menu of `kind`, unless something over it or inside it took the press.
+// A right press in `b` opens the menu of `kind`, unless something inside it took the press first (it is checked after what is in
+// it: the innermost keeps it). A box built after the one that took it, and not around it, is over it (the composer over the
+// last message, which the conversation scrolls under it): the press is its.
 ctx_check :: proc(app: ^App, b: ^ui.Box, kind: Ctx_Kind, msg := "", part := 0, image := Image_Ref{}) {
-	if app.ctx_menu.taken || !ui.mouse_pressed(.Right) || b == nil || overlay_open(app) { return }
+	if !ui.mouse_pressed(.Right) || b == nil || overlay_open(app) { return }
 	if !rect_contains(b.rect, ui.mouse_pos()) { return }
+	if app.ctx_menu.taken && (app.ctx_menu.by == 0 || box_holds(b, app.ctx_menu.by)) { return }
 	ctx_open(app, kind, msg, part, image)
+	app.ctx_menu.by = b.key
 }
 
 // The menu of `kind`, where the pointer is (a dialog opens its own: ctx_check leaves what is under a dialog alone).
 ctx_open :: proc(app: ^App, kind: Ctx_Kind, msg := "", part := 0, image := Image_Ref{}) {
-	app.ctx_menu.taken = true
+	app.ctx_menu.taken, app.ctx_menu.by = true, 0
 	delete(app.ctx_menu.target.msg)
 	image_ref_delete(&app.ctx_menu.target.image)
 	app.ctx_menu.target = {kind = kind, msg = strings.clone(msg), part = part, image = image_ref_clone(image)}
 	ui.ctx_menu_open(ui.key_from_string(0, CTX_MENU_KEY), ui.mouse_pos())
+}
+
+// `outer` is `inner`'s box or one around it.
+@(private = "file")
+box_holds :: proc(outer: ^ui.Box, inner: ui.Key) -> bool {
+	for x := ui.box_from_key(inner); x != nil; x = x.parent { if x == outer { return true } }
+	return false
 }
 
 @(private = "file")

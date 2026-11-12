@@ -1817,3 +1817,24 @@ a_paste_in_the_composer_waits_for_no_clipboard :: proc(t: ^testing.T) {
 		testing.expect_value(t, ui.area_string(&app.composer.area), "pasted words")
 	})
 }
+
+// The composer's menu (Undo, Cut, Copy, Paste, Select all) comes on all of the composer, its focus there or not: the last
+// message, which the conversation scrolls under it, does not take the press.
+@(test)
+the_composer_has_its_menu_all_over_it :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		testing.expect(t, !app.composer.focused, "the focus elsewhere")
+		well := session.get(s, "composer_well")
+		for at in ([][2]f32{session.center(session.get(s, "composer")), {well.rect.max.x - 40, well.rect.max.y - 6}}) {
+			session.press(s, at, .Right)
+			session.release(s, at, .Right)
+			session.frames(s, 3)
+			testing.expectf(t, ui.ctx_menu_any_open() && app.ctx_menu.target.kind == .Composer, "the composer's menu at %v, not %v's", at, app.ctx_menu.target.kind)
+			testing.expect(t, session.find_text(s, "Paste") != nil && session.find_text(s, "Select all") != nil, "its actions")
+			session.key(s, .Escape)
+			session.frames(s, 2)
+		}
+	})
+}

@@ -106,6 +106,9 @@ composer :: proc(app: ^App, em: f32) {
 	if app.composer.focused && app.prefs.ctrl_enter && ui.key_press(.Return, {.Ctrl, .Shift}) { submit, other = true, true }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if well("###composer_well", radius = 11, base = HEX_COMPOSER_WELL, focus = app.composer.focused ? 1 : 0) {
+		// (its menu on all of it, the bar of its buttons and around the text too, after what is in it: an image keeps its own)
+		card := ui.parent_box()
+		defer ctx_check(app, card, .Composer)
 		ui.spacer(ui.px(em * 0.45))
 		queue_edit_banner(app, em)
 		mention_list(app, em)
