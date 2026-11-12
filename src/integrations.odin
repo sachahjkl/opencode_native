@@ -13,6 +13,7 @@ import "core:strings"
 import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
+import remote "gt:remote"
 
 Method_Kind :: enum u8 { Key, Oauth, External, Command, Env }
 
@@ -53,16 +54,16 @@ Connect_Finishing :: struct { wait: Connect_Waiting }   // the code is on its wa
 Connect_Step :: union #no_nil { Connect_Choose, Connect_Fill, Connect_Sending, Connect_Waiting, Connect_Finishing }
 
 Integrations :: struct {
-	read:     Remote,            // the list
-	active:   Remote,            // which account is in use
+	read:     remote.Remote,            // the list
+	active:   remote.Remote,            // which account is in use
 	list:     [dynamic]Integration,
 	arena:    virtual.Arena,
 	dirty:    bool,              // changed on the server while something was being filled in
 	search:   ui.Text_Field,
 	shown:    string,            // the integration open (owned, "": the list)
 	step:     Connect_Step,
-	sending:  Remote,            // what Sending and Finishing wait for: its ticket ties the answer to this attempt
-	poll:     Remote,            // the status of a login under way
+	sending:  remote.Remote,            // what Sending and Finishing wait for: its ticket ties the answer to this attempt
+	poll:     remote.Remote,            // the status of a login under way
 	key, label, code: ui.Text_Field,
 	key_shown: bool,             // the key's eye: shown as text
 	failed:   string,            // why it did not work (owned)
@@ -73,8 +74,8 @@ Integrations :: struct {
 
 integrations_ask :: proc(app: ^App) {
 	n := &app.cx.integrations
-	remote_begin(&n.read)
-	request(app, .Integrations, "GET", "/api/integration", remote = &n.read)
+	remote.begin(&n.read)
+	request(app, .Integrations, "GET", "/api/integration", reading = &n.read)
 }
 
 @(private = "file")
@@ -138,8 +139,8 @@ integrations_load :: proc(app: ^App, v: json.Value) {
 			append(&n.list, one)
 		}
 	}
-	remote_begin(&n.active)
-	request(app, .Credentials, "GET", "/api/credential", remote = &n.active)
+	remote.begin(&n.active)
+	request(app, .Credentials, "GET", "/api/credential", reading = &n.active)
 }
 
 // Which account of each integration is in use: the only thing read from this list.
@@ -175,8 +176,8 @@ integrations_forget :: proc(app: ^App) {
 	set_text(&n.shown, ""); set_text(&n.failed, ""); set_text(&n.renaming, ""); set_text(&n.removing, "")
 	ui.field_set(&n.search, "")
 	ui.field_set(&n.rename, "")
-	remote_reset(&n.read)
-	remote_reset(&n.active)
+	remote.reset(&n.read)
+	remote.reset(&n.active)
 }
 
 @(private = "file")
@@ -211,8 +212,8 @@ connect_reset :: proc(app: ^App) {
 	case Connect_Finishing: waiting_free(s.wait)
 	}
 	n.step = Connect_Choose{}
-	remote_reset(&n.sending)
-	remote_reset(&n.poll)
+	remote.reset(&n.sending)
+	remote.reset(&n.poll)
 	if n.dirty { n.dirty = false; integrations_ask(app) }
 }
 
@@ -251,23 +252,23 @@ connect_send :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int) {
 	set_text(&n.failed, "")
 	base := fmt.tprintf("/api/integration/%s/connect", url_escape(it.id))
 	kind := ""
-	remote_begin(&n.sending)
+	remote.begin(&n.sending)
 	switch m.kind {
 	case .Key:
-		request(app, .Connected, "POST", fmt.tprintf("%s/key", base), fmt.tprintf(`{{"key":%s,%s}}`, jquote(key), extra), remote = &n.sending)
+		request(app, .Connected, "POST", fmt.tprintf("%s/key", base), fmt.tprintf(`{{"key":%s,%s}}`, jquote(key), extra), reading = &n.sending)
 		ui.field_set(&n.key, "")
 	case .External:
-		request(app, .Connected, "POST", fmt.tprintf("%s/external", base), fmt.tprintf(`{{"methodID":%s,%s}}`, jquote(m.id), extra), remote = &n.sending)
+		request(app, .Connected, "POST", fmt.tprintf("%s/external", base), fmt.tprintf(`{{"methodID":%s,%s}}`, jquote(m.id), extra), reading = &n.sending)
 	case .Oauth:
 		kind = "oauth"
-		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/oauth", base), fmt.tprintf(`{{"methodID":%s,%s}}`, jquote(m.id), extra), remote = &n.sending)
+		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/oauth", base), fmt.tprintf(`{{"methodID":%s,%s}}`, jquote(m.id), extra), reading = &n.sending)
 	case .Command:
 		kind = "command"
 		trimmed := strings.trim_space(ui.field_string(&n.label))
 		label := trimmed != "" ? fmt.tprintf(`,"label":%s`, jquote(trimmed)) : ""
-		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/command", base), fmt.tprintf(`{{"methodID":%s%s}}`, jquote(m.id), label), remote = &n.sending)
+		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/command", base), fmt.tprintf(`{{"methodID":%s%s}}`, jquote(m.id), label), reading = &n.sending)
 	case .Env:
-		remote_reset(&n.sending)
+		remote.reset(&n.sending)
 		return
 	}
 	n.step = Connect_Sending{method = method, kind = kind}
@@ -284,8 +285,8 @@ connect_poll :: proc(app: ^App) {
 	n := &app.cx.integrations
 	w, waiting := n.step.(Connect_Waiting)
 	if !waiting { return }
-	remote_begin(&n.poll)
-	request_later(app, .Connect_Status, attempt_path(n, w), CONNECT_POLL_MS, "", remote = &n.poll)
+	remote.begin(&n.poll)
+	request_later(app, .Connect_Status, attempt_path(n, w), CONNECT_POLL_MS, "", reading = &n.poll)
 }
 
 // Try again, once the readings have stopped.
@@ -375,8 +376,8 @@ connect_finish :: proc(app: ^App) {
 	if code == "" { set_text(&n.failed, "The code is empty"); return }
 	set_text(&n.failed, "")
 	n.step = Connect_Finishing{wait = w}
-	remote_begin(&n.sending)
-	request(app, .Connected, "POST", fmt.tprintf("%s/complete", attempt_path(n, w)), fmt.tprintf(`{{"code":%s}}`, jquote(code)), remote = &n.sending)
+	remote.begin(&n.sending)
+	request(app, .Connected, "POST", fmt.tprintf("%s/complete", attempt_path(n, w)), fmt.tprintf(`{{"code":%s}}`, jquote(code)), reading = &n.sending)
 }
 
 // A login left open when the settings close would wait for nothing.
@@ -405,7 +406,7 @@ page_connections :: proc(app: ^App, em: f32) {
 	if n.read.state == .Idle { integrations_ask(app) }
 	// (what is being filled in stays whatever a reading does: the list is not what it needs)
 	if connect_idle(n) && !read_shown(app, "###int_read", &n.read, em, integrations_ask) { return }
-	if remote_failed(&n.active) {
+	if remote.failed(&n.active) {
 		read_shown(app, "###int_active", &n.active, em, integrations_ask)   // (which is in use is not known: no row can say)
 		ui.spacer(ui.px(em * 0.4))
 	}
@@ -603,7 +604,7 @@ connect_wait :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Text_Wrap, .Selectable}, fg = hex(HEX_TEXT), text_pad = 0})
 	ui.paragraph(fmt.tprintf("%s###int_say", label_safe(w.instructions != "" ? w.instructions : "It goes on in the browser.")))
 	ui.spacer(ui.px(em * 0.5))
-	if remote_failed(&n.poll) {
+	if remote.failed(&n.poll) {
 		info_line(app, "###int_lost", "The server no longer says how this goes. It may still end: try again, or cancel it.", em, hex(HEX_YELLOW))
 		ui.spacer(ui.px(em * 0.3))
 		read_shown(app, "###int_poll", &n.poll, em, connect_poll_again)

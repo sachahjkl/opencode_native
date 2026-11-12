@@ -96,9 +96,28 @@ theme_setup :: proc(t: ^ui.Theme) {
 	ui.theme_add(t, "floating scrim background", CLEAR)   // (dialog_backdrop paints it; "floating background" made it opaque)
 	ui.theme_add(t, "selection", with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
 	ui.theme_add(t, "selection text", hex(HEX_BRIGHT))   // (over the selection, whatever the text's own colour: a faint one was lost on it)
+	diff_colours(t, false)
 	ui.apply_palette(t, themed_palette())
 	floating_colours(t)
 	t.glow = the_app != nil && the_app.prefs.glow ? 1 : 0
+}
+
+// A diff's colours (gt:diff) in opencode's: ahead of the palette's (those of a kind before the plain ones: the first of two equal
+// patterns wins). `set`: a theme was chosen, they are there.
+@(private = "file")
+diff_colours :: proc(t: ^ui.Theme, set: bool) {
+	Entry :: struct { tags: string, c: u32 }
+	entries := [?]Entry{
+		{"diff_added background", HEX_DIFF_ADD_BG}, {"diff_removed background", HEX_DIFF_DEL_BG},
+		{"diff_added mark", HEX_DIFF_ADD_MARK}, {"diff_removed mark", HEX_DIFF_DEL_MARK},
+		{"diff_added text", HEX_DIFF_ADD_TEXT}, {"diff_removed text", HEX_DIFF_DEL_TEXT},
+		{"diff_added sign", HEX_GREEN}, {"diff_removed sign", HEX_RED},
+		{"diff text", HEX_TOOL_OUTPUT}, {"diff sign", HEX_FAINT}, {"diff mark_text", HEX_BRIGHT},
+		{"diff line_number", HEX_DIFF_LINE_NO}, {"diff gap", HEX_FAINT}, {"diff divider", HEX_FAINT},
+	}
+	for e in entries {
+		if set { ui.theme_set(t, e.tags, hex(e.c)) } else { ui.theme_add(t, e.tags, hex(e.c)) }
+	}
 }
 
 // What floats (dialogs, popovers) in opencode's colours: set on the palette's own entries, after it. An entry of ours ahead of
@@ -116,6 +135,7 @@ theme_refresh :: proc(t: ^ui.Theme) {
 	ui.theme_set(t, "link", hex(HEX_BLUE))
 	ui.theme_set(t, "selection", with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
 	ui.theme_set(t, "selection text", hex(HEX_BRIGHT))
+	diff_colours(t, true)
 	ui.apply_palette(t, themed_palette())
 	floating_colours(t)
 	t.glow = the_app != nil && the_app.prefs.glow ? 1 : 0

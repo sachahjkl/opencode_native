@@ -126,7 +126,7 @@ chat_scroll_event :: proc(app: ^App, e: Chat_Scroll_Event) {
 	#partial switch _ in e { case Scroll_Restore, Scroll_Hold_View, Scroll_Older_Page: again = true }
 	if restoring && (!was_restoring || again) {
 		app.cx.due[.Restore] = {}
-		deferred_ask(&app.cx.due[.Restore], NAV_RESTORE_WAIT_MS)
+		ui.deferred_ask(&app.cx.due[.Restore], NAV_RESTORE_WAIT_MS)
 	}
 	if was_restoring && !restoring { app.cx.due[.Restore] = {} }
 }

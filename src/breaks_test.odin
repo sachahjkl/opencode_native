@@ -49,7 +49,7 @@ told_after_drag :: proc(t: ^testing.T, stop: int) -> bool {
 	next_frame := bench_clock + 17
 	for _ in 0 ..< 3000 {
 		bench_clock += 1
-		if deferred_in_ms(&app.cx.due[.Term_Size]) > 0 && bench_clock >= app.cx.due[.Term_Size].due_ms { due_tick(app, .Term_Size) }
+		if ui.deferred_in_ms(&app.cx.due[.Term_Size]) > 0 && bench_clock >= app.cx.due[.Term_Size].due_ms { due_tick(app, .Term_Size) }
 		if app.settle > 0 && bench_clock >= next_frame {
 			term_resize(app, s, cols, 30, 8, 16)   // (terminal_panel's term_fit, at each build)
 			app.settle -= 1

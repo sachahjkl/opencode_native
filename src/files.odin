@@ -13,6 +13,7 @@ import "core:unicode/utf8"
 import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
+import remote "gt:remote"
 
 // What a request says of the folder: the session's, or the one about to get a session; "": the server's own.
 @(private = "file")
@@ -82,7 +83,7 @@ Mentions :: struct {
 	query:     string,   // what comes after it (owned)
 	sel:       int,
 	list:      ui.Key,   // its box
-	read:      Remote,   // what is proposed for `query`
+	read:      remote.Remote,   // what is proposed for `query`
 	folder:    string,   // the folder that was asked about: what is proposed is of no other (owned)
 	dir:       string,   // the folder the server answered for (owned)
 	hits:      [dynamic]Mention_Hit,
@@ -117,11 +118,11 @@ mention_ask :: proc(app: ^App) {
 	}
 	q := location_query(folder)
 	amp := q != "" ? "&" : ""
-	remote_begin(&m.read)
+	remote.begin(&m.read)
 	if m.query == "" {
-		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/list?%s", q), remote = &m.read)   // (the search wants a word)
+		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/list?%s", q), reading = &m.read)   // (the search wants a word)
 	} else {
-		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&type=file&limit=%d", q, amp, url_escape(m.query), MENTION_ROWS), remote = &m.read)
+		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&type=file&limit=%d", q, amp, url_escape(m.query), MENTION_ROWS), reading = &m.read)
 	}
 }
 
@@ -319,7 +320,7 @@ mentions_forget :: proc(app: ^App) {
 	m.open, m.dismissed = false, nil
 	delete(m.folder); delete(m.query)
 	m.folder, m.query = "", ""
-	remote_reset(&m.read)
+	remote.reset(&m.read)
 }
 
 ////////////////////////////////
@@ -337,11 +338,11 @@ Files :: struct {
 	field:   ui.Text_Field,
 	searching: bool,               // what is read is a search
 	sel:     int,                  // the row the keyboard is on
-	read:    Remote,               // the rows
+	read:    remote.Remote,               // the rows
 	rows:    [dynamic]File_Row,
 	arena:   virtual.Arena,
 	file:    string,               // the file shown (owned, "": none)
-	file_read: Remote,             // it
+	file_read: remote.Remote,             // it
 	binary:  bool,                 // it is not text
 	content: string,               // (owned)
 	size:    int,
@@ -359,7 +360,7 @@ files_rows_clear :: proc(f: ^Files) {
 @(private = "file")
 files_elsewhere :: proc(f: ^Files) {
 	files_rows_clear(f)
-	remote_reset(&f.read)
+	remote.reset(&f.read)
 }
 
 files_list :: proc(app: ^App) {
@@ -368,12 +369,12 @@ files_list :: proc(app: ^App) {
 	f.searching = word != ""
 	q := location_query(f.dir)
 	amp := q != "" ? "&" : ""
-	remote_begin(&f.read)
+	remote.begin(&f.read)
 	if f.searching {
-		request(app, .Files_List, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&limit=%d", q, amp, url_escape(word), FILES_FOUND_MAX), remote = &f.read)
+		request(app, .Files_List, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&limit=%d", q, amp, url_escape(word), FILES_FOUND_MAX), reading = &f.read)
 	} else {
 		path := f.at != "" ? fmt.tprintf("%spath=%s", amp, url_escape(f.at)) : ""
-		request(app, .Files_List, "GET", fmt.tprintf("/api/fs/list?%s%s", q, path), remote = &f.read)
+		request(app, .Files_List, "GET", fmt.tprintf("/api/fs/list?%s%s", q, path), reading = &f.read)
 	}
 }
 
@@ -382,7 +383,7 @@ files_clear :: proc(f: ^Files) {
 	delete(f.dir); delete(f.at); delete(f.file); delete(f.content)
 	f.dir, f.at, f.file, f.content = "", "", "", ""
 	f.binary, f.size = false, 0
-	remote_reset(&f.file_read)
+	remote.reset(&f.file_read)
 	files_elsewhere(f)
 	ui.field_set(&f.field, "")
 }
@@ -431,10 +432,10 @@ file_read :: proc(app: ^App) {
 	f := &app.cx.files
 	delete(f.content)
 	f.content, f.binary, f.size = "", false, 0
-	remote_reset(&f.file_read)
-	remote_begin(&f.file_read)
+	remote.reset(&f.file_read)
+	remote.begin(&f.file_read)
 	q := location_query(f.dir)
-	request(app, .File_Read, "GET", fmt.tprintf("/api/fs/read/%s%s%s", path_escape(f.file), q != "" ? "?" : "", q), remote = &f.file_read)
+	request(app, .File_Read, "GET", fmt.tprintf("/api/fs/read/%s%s%s", path_escape(f.file), q != "" ? "?" : "", q), reading = &f.file_read)
 }
 
 // What is shown of `raw`: its beginning when it is long, nothing when it is no text.
@@ -514,7 +515,7 @@ file_pick :: proc(app: ^App, r: File_Row) -> bool {
 @(private = "file")
 files_left :: proc(app: ^App, em: f32) {
 	f := &app.cx.files
-	shows := remote_shows(&f.read)
+	shows := remote.shows(&f.read)
 	if n := len(f.rows); n > 0 && shows {
 		if ui.key_press(.Down) { f.sel = (f.sel + 1) % n }
 		if ui.key_press(.Up) { f.sel = (f.sel + n - 1) % n }

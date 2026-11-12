@@ -321,7 +321,7 @@ sidebar_hold_wanted :: proc(app: ^App, list: ^ui.Box) -> bool {
 	if !rect_contains(list.rect, ui.mouse_pos()) || since >= SIDEBAR_HOLD_MS { return false }
 	// (at rest nothing draws: this is what ends the hold if the pointer stays where it is)
 	app.cx.due[.Side_Wake] = {}
-	deferred_ask(&app.cx.due[.Side_Wake], SIDEBAR_HOLD_MS - since + 1)
+	ui.deferred_ask(&app.cx.due[.Side_Wake], SIDEBAR_HOLD_MS - since + 1)
 	return true
 }
 

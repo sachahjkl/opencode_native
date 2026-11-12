@@ -12,12 +12,6 @@ import "gt:platform"
 import "gt:ui"
 
 @(test)
-a_changed_line_is_removed_then_added :: proc(t: ^testing.T) {
-	d := diff_lines("a\nb\nc", "a\nx\nc", context.temp_allocator)
-	testing.expect_value(t, d, " a\n-b\n+x\n c\n")
-}
-
-@(test)
 a_server_patch_counts_its_lines_not_its_headers :: proc(t: ^testing.T) {
 	p: Part
 	part_patch_set(&p, "Index: f\n=====\n--- f\n+++ f\n@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n", context.temp_allocator)
@@ -336,15 +330,6 @@ a_question_wants_an_answer :: proc(t: ^testing.T) {
 an_export_is_what_the_import_takes :: proc(t: ^testing.T) {
 	testing.expect_value(t, export_body(`{"data":{"info":{"id":"s"},"messages":[]}}`), `{"info":{"id":"s"},"messages":[]}`)
 	testing.expect_value(t, file_safe(`a/b: "c"?`), `a-b- -c--`)
-}
-
-// A patch from git, as a session's diff gives it: only its lines are shown, from the first one.
-@(test)
-a_git_patch_shows_only_its_lines :: proc(t: ^testing.T) {
-	lines := diff_parse("diff --git a/p.txt b/p.txt\nindex 26af6a8..43dd47e 100644\n--- a/p.txt\n+++ b/p.txt\n@@ -1 +1 @@\n-zero\n+index one\n\\ No newline at end of file\n")
-	testing.expect_value(t, len(lines), 2)
-	testing.expect_value(t, lines[0].sign, '-')
-	testing.expect_value(t, lines[1].text, "index one")
 }
 
 // `@` names something at the start of a word only, up to the caret.

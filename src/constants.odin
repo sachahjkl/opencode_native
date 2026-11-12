@@ -274,7 +274,6 @@ CHANGES_OPEN_FILES :: 6     // the files of a list shown unfolded
 DETACHED_W         :: 900   // a shell's own window, when it opens
 DETACHED_H         :: 560
 DETACHED_DT_S      :: 0.016 // of a frame there: a grid has no animation that a step would show
-DIFF_ROWS_MARGIN   :: 30    // of a diff's full view, built beyond each edge of the view
 CHANGES_DIFF_LINES :: 400   // of a file, before the rest is counted
 
 SETTINGS_NAV_EM       :: 14   // the list of the pages

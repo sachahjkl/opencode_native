@@ -20,7 +20,9 @@ import "core:os"
 import "core:strings"
 import "gt:platform"
 import "gt:ui"
+import diff "gt:diff"
 import lucide "gt:lucide"
+import remote "gt:remote"
 
 session_move_pick :: proc(app: ^App, id: string) {
 	r := platform.pick_folder_dialog({owner = app.win, title = "Move the session to", remember_id = "session_move"})
@@ -88,7 +90,7 @@ session_import_conflict :: proc(app: ^App, id: string) {
 
 File_Change :: struct {
 	file, patch, status: string,
-	diff:      Diff,   // the patch read once, as it came (changes_fill)
+	diff:      diff.Parsed,   // the patch read once, as it came (changes_fill)
 	additions, deletions: int,
 	more, open: bool,
 }
@@ -128,8 +130,8 @@ Changes_State :: union #no_nil { Changes_Closed, Changes_Viewing, Changes_Stagin
 
 Changes :: struct {
 	state:     Changes_State,
-	read:      Remote,          // what Viewing reads, a step at a time
-	revert:    Remote,          // the stage, the commit or the cancel on its way
+	read:      remote.Remote,          // what Viewing reads, a step at a time
+	revert:    remote.Remote,          // the stage, the commit or the cancel on its way
 	gone_seq:  Seq,             // the stream's clock when going back last ended for the session shown: a read asked before that is old
 	files:     [dynamic]File_Change,
 	arena:     virtual.Arena,
@@ -154,8 +156,8 @@ changes_reset :: proc(c: ^Changes) {
 	}
 	c.state = Changes_Closed{}
 	changes_files_clear(c)
-	remote_reset(&c.read)
-	remote_reset(&c.revert)
+	remote.reset(&c.read)
+	remote.reset(&c.revert)
 }
 
 // A stage or what follows it is on its way or on screen: nothing else takes its place, or the prompt it holds would go.
@@ -205,21 +207,21 @@ changes_read :: proc(app: ^App) {
 	changes_files_clear(c)
 	delete(v.first)
 	v.first = ""
-	remote_reset(&c.read)
-	remote_begin(&c.read)
+	remote.reset(&c.read)
+	remote.begin(&c.read)
 	if v.from != "" {
 		v.step = .Diff
-		request(app, .Changes, "GET", fmt.tprintf("/api/session/%s/diff?from=%s", v.session, v.from), remote = &c.read)
+		request(app, .Changes, "GET", fmt.tprintf("/api/session/%s/diff?from=%s", v.session, v.from), reading = &c.read)
 	} else {
 		v.step = .First
-		request(app, .Changes_Range, "GET", fmt.tprintf("/api/session/%s/message?type=user&limit=1&order=asc", v.session), remote = &c.read)
+		request(app, .Changes_Range, "GET", fmt.tprintf("/api/session/%s/message?type=user&limit=1&order=asc", v.session), reading = &c.read)
 	}
 }
 
 // The server answers again, and what is on screen could not be read.
 changes_reread :: proc(app: ^App) {
 	c := &app.cx.changes
-	if _, viewing := c.state.(Changes_Viewing); viewing && remote_failed(&c.read) { changes_read(app) }
+	if _, viewing := c.state.(Changes_Viewing); viewing && remote.failed(&c.read) { changes_read(app) }
 }
 
 changes_range :: proc(app: ^App, v: json.Value) {
@@ -229,15 +231,15 @@ changes_range :: proc(app: ^App, v: json.Value) {
 	list := jarr(v, "data")
 	if len(list) == 0 { return }   // (no prompt yet)
 	msg := jstr(list[0], "id")
-	remote_begin(&c.read)
+	remote.begin(&c.read)
 	if s.step == .First {
 		s.first = strings.clone(msg)
 		s.step = .Last
-		request(app, .Changes_Range, "GET", fmt.tprintf("/api/session/%s/message?type=user&limit=1&order=desc", s.session), remote = &c.read)
+		request(app, .Changes_Range, "GET", fmt.tprintf("/api/session/%s/message?type=user&limit=1&order=desc", s.session), reading = &c.read)
 		return
 	}
 	s.step = .Diff
-	request(app, .Changes, "GET", fmt.tprintf("/api/session/%s/diff?from=%s&to=%s", s.session, s.first, msg), remote = &c.read)
+	request(app, .Changes, "GET", fmt.tprintf("/api/session/%s/diff?from=%s&to=%s", s.session, s.first, msg), reading = &c.read)
 }
 
 // A range over a change of folder is refused: the last turn then, and the dialog says so.
@@ -246,8 +248,8 @@ changes_refused :: proc(app: ^App) {
 	s, viewing := &c.state.(Changes_Viewing)
 	if !viewing || s.step != .Diff || s.first == "" { return }
 	s.step = .Last_Turn
-	remote_begin(&c.read)
-	request(app, .Changes, "GET", fmt.tprintf("/api/session/%s/diff", s.session), remote = &c.read)
+	remote.begin(&c.read)
+	request(app, .Changes, "GET", fmt.tprintf("/api/session/%s/diff", s.session), reading = &c.read)
 }
 
 // Back to the prompt `msg`: from this request on, the files are as they were then, until Go back or Cancel.
@@ -257,8 +259,8 @@ revert_stage :: proc(app: ^App, id, msg, prompt: string) {
 	session, message, words := strings.clone(id), strings.clone(msg), strings.clone(prompt)
 	changes_reset(c)
 	c.state = Changes_Staging{session = session, message = message, prompt = words}
-	remote_begin(&c.revert)
-	request(app, .Revert_Staged, "POST", fmt.tprintf("/api/session/%s/revert/stage", session), fmt.tprintf(`{{"messageID":%s,"files":true}}`, jquote(message)), session, remote = &c.revert)
+	remote.begin(&c.revert)
+	request(app, .Revert_Staged, "POST", fmt.tprintf("/api/session/%s/revert/stage", session), fmt.tprintf(`{{"messageID":%s,"files":true}}`, jquote(message)), session, reading = &c.revert)
 }
 
 @(private = "file")
@@ -270,7 +272,7 @@ changes_fill :: proc(c: ^Changes, list: json.Array) {
 		more, _ := jget(it, "more").(json.Boolean)
 		patch := strings.clone(jstr(it, "patch"), a)
 		append(&c.files, File_Change{
-			file = strings.clone(jstr(it, "file"), a), patch = patch, diff = diff_read(patch, a), status = strings.clone(jstr(it, "status"), a),
+			file = strings.clone(jstr(it, "file"), a), patch = patch, diff = diff.parse(patch, a), status = strings.clone(jstr(it, "status"), a),
 			additions = int(jnum(it, "additions")), deletions = int(jnum(it, "deletions")), more = bool(more), open = i < CHANGES_OPEN_FILES,
 		})
 	}
@@ -328,8 +330,8 @@ revert_commit :: proc(app: ^App) {
 	c.state = Changes_Committing{session = s.session, prompt = s.prompt}
 	changes_files_clear(c)
 	revert_leaving(app, s.session)
-	remote_begin(&c.revert)
-	request(app, .Revert_Done, "POST", fmt.tprintf("/api/session/%s/revert/commit", s.session), "", s.session, remote = &c.revert)
+	remote.begin(&c.revert)
+	request(app, .Revert_Done, "POST", fmt.tprintf("/api/session/%s/revert/commit", s.session), "", s.session, reading = &c.revert)
 }
 
 @(private = "file")
@@ -341,8 +343,8 @@ revert_cancel :: proc(app: ^App) {
 	c.state = Changes_Cancelling{session = s.session}
 	changes_files_clear(c)
 	revert_leaving(app, s.session)
-	remote_begin(&c.revert)
-	request(app, .Revert_Cancelled, "DELETE", fmt.tprintf("/api/session/%s/revert", s.session), "", s.session, remote = &c.revert)
+	remote.begin(&c.revert)
+	request(app, .Revert_Cancelled, "DELETE", fmt.tprintf("/api/session/%s/revert", s.session), "", s.session, reading = &c.revert)
 }
 
 // The conversation without what came after; the prompt back in the composer, unless something is being written there.

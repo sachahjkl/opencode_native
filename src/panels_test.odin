@@ -13,6 +13,7 @@ import "core:testing"
 import "gt:platform"
 import store "gt:store"
 import "gt:ui"
+import remote "gt:remote"
 
 @(thread_local) bench_update_job: ^Update_Job
 
@@ -325,7 +326,7 @@ leaving_a_server_lets_go_of_its_shells :: proc(t: ^testing.T) {
 	testing.expect_value(t, bench_count(.Action), 0)   // (it runs on, there)
 	testing.expect(t, !ui.dock_has(&app.dock, panel), "no tab left")
 	testing.expect(t, !s.open, "and no shell is made on the next server for this")
-	testing.expect_value(t, s.read.state, Load_State.Idle)
+	testing.expect_value(t, s.read.state, remote.State.Idle)
 	terminals_reap(app)
 }
 
@@ -356,7 +357,7 @@ a_list_that_failed_is_read_again_when_the_server_answers :: proc(t: ^testing.T) 
 	app := bench_new()
 	terminal_toggle(app)
 	bench_lost(app, bench_take(t, .Pty_List))
-	testing.expect(t, remote_failed(&app.cx.terms.read), "said in the panel")
+	testing.expect(t, remote.failed(&app.cx.terms.read), "said in the panel")
 	testing.expect_value(t, toasts(app), 0)
 	app.link = .Retrying
 	stream_up(app)
@@ -1120,18 +1121,7 @@ update_channel_seen :: proc(app: ^App, channel: string) {
 
 ////////////////////////////////
 // Diffs
-
-@(private = "file")
-signs :: proc(patch: string) -> string {
-	b := strings.builder_make(context.temp_allocator)
-	for l in diff_parse(patch) { fmt.sbprintf(&b, "%c%s|", l.sign, l.text) }
-	return strings.to_string(b)
-}
-
-@(test)
-a_line_that_looks_like_a_header_is_a_line :: proc(t: ^testing.T) {
-	testing.expect_value(t, signs("--- a/f\n+++ b/f\n@@ -1,2 +1,2 @@\n--- x\n+++ y\n z\n"), "--- x|+++ y| z|")
-}
+// (reading a patch is gt:diff's, tested there: tests/diff)
 
 @(test)
 what_a_call_counts_is_what_a_diff_shows :: proc(t: ^testing.T) {
@@ -1142,42 +1132,6 @@ what_a_call_counts_is_what_a_diff_shows :: proc(t: ^testing.T) {
 	part_patch_set(&p, "---x\n+++y\n", context.temp_allocator)   // (made here: no headers, the lines "--x" and "++y")
 	testing.expect_value(t, p.added, 1)
 	testing.expect_value(t, p.removed, 1)
-}
-
-@(test)
-what_diff_lines_writes_has_no_header_to_skip :: proc(t: ^testing.T) {
-	testing.expect_value(t, signs(diff_lines("-- x\nsame", "++ y\nsame", context.temp_allocator)), "--- x|+++ y| same|")
-}
-
-@(test)
-a_second_file_starts_with_its_headers :: proc(t: ^testing.T) {
-	patch := "diff --git a/a b/a\nindex 1..2 100644\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-one\n+two\ndiff --git a/b b/b\nindex 3..4 100644\n--- a/b\n+++ b/b\n@@ -5 +5 @@\n-three\n+four\n"
-	testing.expect_value(t, signs(patch), "-one|+two|@|-three|+four|")
-}
-
-@(test)
-the_numbers_of_a_hunk_follow_its_lines :: proc(t: ^testing.T) {
-	lines := diff_parse("@@ -3,2 +7,2 @@\n a\n--- b\n+c\n")
-	testing.expect_value(t, len(lines), 3)
-	testing.expect_value(t, lines[1].old_no, 4)
-	testing.expect_value(t, lines[1].text, "-- b")
-	testing.expect_value(t, lines[2].new_no, 8)
-}
-
-@(test)
-a_hunk_with_no_count_is_one_line :: proc(t: ^testing.T) {
-	testing.expect_value(t, signs("--- a/a\n+++ b/a\n@@ -1 +1 @@\n-a\n+b\n--- a/b\n+++ b/b\n@@ -2 +2 @@\n-c\n+d\n"), "-a|+b|@|-c|+d|")
-}
-
-// (no count in its header: one line each, and those lines are lines, whatever they look like)
-@(test)
-a_hunk_of_one_line_holds_it :: proc(t: ^testing.T) {
-	testing.expect_value(t, signs("--- a/a\n+++ b/a\n@@ -1 +1 @@\n--- x\n+++ y\n"), "--- x|+++ y|")
-}
-
-@(test)
-a_hunk_that_only_removes_ends_on_its_count :: proc(t: ^testing.T) {
-	testing.expect_value(t, signs("--- a/a\n+++ b/a\n@@ -1,1 +0,0 @@\n-a\n--- a/b\n+++ b/b\n@@ -0,0 +1,1 @@\n+b\n"), "-a|@|+b|")
 }
 
 ////////////////////////////////
