@@ -21,6 +21,9 @@ the sessions it shows and the last one once scrolled to it, typing and streaming
 | stream | the last answer grows by a delta (a new paragraph every 8) |
 | type | a character typed in the composer |
 | scroll | three notches of the wheel up the conversation |
+| palette | the palette open, a character typed |
+| pal_slips | the palette at rest on words typed with slips that find few (`frmae pacnig`), 300 models: the pointer moves a pixel |
+| pal_all | the palette at rest on `@`: every session found |
 | find | the find bar open, its needle typed |
 | search | the sidebar's search typed |
 
@@ -66,6 +69,11 @@ Runs of one program differ by as much as 0.5 ms outside `idle`: a smaller differ
 moved beyond that. The GPU takes 0.2 to 1 ms and is not what limits a frame, nor is the layout.
 
 What was found and done, by what it brought:
+
+- **The palette at rest** (2026-11, Linux, offscreen, `-o:speed`): `pal_slips` 15.9 ms a frame, `pal_all` 7.7, `palette` 4.9.
+  Each frame matched and ranked every item again (the search for slips allocated for each word of each item it did not
+  find) and built every row it found, two hundred at most. The list is now made when what it lists changes (`palette_stamp`,
+  `ui.rank`'s version), and only the rows in view are built (`ui.vlist`): 3.1, 3.1 and 3.0 ms.
 
 - **Find** built every message at every frame, because the search reads what is built. It reads it once now, when the needle rests
   (`ui.find_sweep`: 80 to 110 ms, once, 80 ms after the last key), and stays lazy between; the indices are those of the sweep.
