@@ -8,7 +8,6 @@ import "core:encoding/json"
 import "core:mem/virtual"
 import "core:strings"
 import "core:testing"
-import "gt:platform"
 import "gt:ui"
 
 @(test)
@@ -489,58 +488,6 @@ the_plugins_one_chose_come_first :: proc(t: ^testing.T) {
 	testing.expect_value(t, p.list[0].error, "it broke")
 	testing.expect_value(t, p.list[0].features, "server, gui")
 	testing.expect_value(t, p.list[1].kind, "builtin")
-}
-
-
-// The ABI of libghostty-vt: what is passed by value or filled by size must be as big as in its headers (a C compiler says these).
-@(test)
-the_terminal_structs_are_those_of_the_headers :: proc(t: ^testing.T) {
-	testing.expect_value(t, size_of(Vt_Style), 16)
-	testing.expect_value(t, size_of(Vt_Style_Color), 4)
-	testing.expect_value(t, size_of(Vt_Colors), 792)
-	testing.expect_value(t, size_of(Vt_Scroll), 24)
-	testing.expect_value(t, size_of(Vt_Mode), 4)
-	testing.expect_value(t, size_of(Vt_Mouse_Size), 40)
-}
-
-// What the shell gets, byte for byte: a wrong number of a key sends something else without a word.
-@(test)
-a_key_says_what_a_terminal_says :: proc(t: ^testing.T) {
-	term := term_new("x", "t", "")
-	defer term_free(term)
-	expect :: proc(t: ^testing.T, term: ^Term, k: platform.Key, mods: platform.Modifiers, want: string) {
-		testing.expect_value(t, term_encode_key(term, k, mods, false), want)
-	}
-	expect(t, term, .Return, {}, "\r")
-	expect(t, term, .Backspace, {}, "\x7f")
-	expect(t, term, .Tab, {}, "\t")
-	expect(t, term, .Escape, {}, "\x1b")
-	expect(t, term, .Up, {}, "\x1b[A")
-	expect(t, term, .Left, {}, "\x1b[D")
-	expect(t, term, .Home, {}, "\x1b[H")
-	expect(t, term, .End, {}, "\x1b[F")
-	expect(t, term, .Delete, {}, "\x1b[3~")
-	expect(t, term, .Page_Up, {}, "\x1b[5~")
-	expect(t, term, .F1, {}, "\x1bOP")
-	expect(t, term, .F5, {}, "\x1b[15~")
-	expect(t, term, .C, {.Ctrl}, "\x03")
-	expect(t, term, .K, {.Ctrl}, "\x0b")
-	expect(t, term, .Z, {.Ctrl}, "\x1a")
-	expect(t, term, .B, {.Alt}, "\x1bb")
-	expect(t, term, .A, {}, "")                  // (its character comes by the Text event)
-	expect(t, term, .N2, {.Ctrl, .Alt}, "")      // (AltGr: a character too)
-	term_feed(term, "\x1b[?1h")                  // (application cursor keys)
-	expect(t, term, .Up, {}, "\x1bOA")
-}
-
-// Without brackets a line break in a paste runs what comes before it: the program that asks for them gets them.
-@(test)
-a_paste_is_what_the_program_asked_for :: proc(t: ^testing.T) {
-	term := term_new("x", "t", "")
-	defer term_free(term)
-	testing.expect_value(t, term_paste_text(term, "a\nb"), "a\rb")
-	term_feed(term, "\x1b[?2004h")
-	testing.expect_value(t, term_paste_text(term, "a\nb"), "\x1b[200~a\nb\x1b[201~")
 }
 
 

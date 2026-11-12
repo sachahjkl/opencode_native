@@ -1,6 +1,7 @@
 // The Terminal panel: shells of the server (its PTYs), wherever the server runs, shown and typed in here. Emulation is libghostty-vt's
 // (vt.odin): the bytes of a PTY go in, the grid comes out, and the keys go through its encoders, so that what programs ask of a terminal
-// is answered as Ghostty answers it.
+// is answered as Ghostty answers it. The grid on the screen is the toolkit's widget (gt:term): this file is its source, the emulation
+// read and told through term.Source.
 //
 // A shell is a tab of the dock (preview.odin): moved, stacked, split and closed like any panel. Its panel id is its own, from
 // TERM_PANEL_BASE; the saved layout names it by the server's id, and a name no shell answers to is dropped there. Panel.Terminal is
@@ -25,9 +26,9 @@ import "core:thread"
 import "core:time"
 import "core:unicode/utf8"
 import "gt:draw"
-import "gt:font"
 import "gt:platform"
 import store "gt:store"
+import "gt:term"
 import "gt:ui"
 import lucide "gt:lucide"
 import remote "gt:remote"
@@ -55,66 +56,37 @@ Term_Conn :: struct {
 Term :: struct {
 	id, title, dir: string,   // (owned)
 	server: ^Conn,            // the server it lives on: what is asked about it goes there
+	app:    ^App,             // what its size is told through (nil: an output's grid, no shell to tell)
 	panel:  u32,              // its tab in the dock
 	link:   Term_Link,
 	given_up: bool,           // Lost, and its thread is over: a click, or the server coming back, starts another
+	// The grid on the screen: what is drawn, selected, typed, scrolled and zoomed (gt:term). Its source is the emulation
+	// below (term_source); its read_only is a command's output (output_view.odin): the keys that are not for reading are
+	// the program's.
+	view:   term.View,
 	vt:     Vt_Terminal,
 	state:  Vt_State,
 	rows_it: Vt_Rows,
 	cells:  Vt_Cells,
+	colors: Vt_Colors,         // of the state read last (term_picture): a cell without its own takes them
 	key_enc: Vt_Key_Encoder,
 	key_ev:  Vt_Key_Event,
 	mouse_enc: Vt_Mouse_Encoder,
 	mouse_ev:  Vt_Mouse_Event,
+	// The selection is the emulation's own (VT_OPT_SELECTION): its ends follow their text as rows come, the view moves, the
+	// scrollback drops its oldest rows or the grid is wrapped again.
+	sel_anchor: Vt_Tracked_Ref, // the cell a drag began on (nil: none)
+	formatter:  Vt_Formatter,  // what a copy reads the text through
 	conn:   ^Term_Conn,
-	cols, rows: u16,
 	size_sent, size_asked: [2]u16,   // what the server was last told, what is on its way
 	size_flying: bool,         // one at a time: the size that goes next is the last one
 	grid_ms:  f64,             // when the grid last changed
 	told_ms:  f64,             // when the shell took a size: what it paints then comes in pieces (0: nothing is awaited)
 	fed_ms:   f64,             // when it last wrote
 	asked_ms: f64,             // when the size on its way left (0: none is)
-	drawn:    bool,            // its state was read once: there is a picture to keep
-	fitted: bool,              // its grid was laid out: until then its size says nothing (a shell found again under another tab has its own)
 	shown:  bool,              // its panel was built in this build
-	read_only: bool,           // nothing goes to it (output_view.odin): the keys that are not for reading are the program's
 	detached: bool,            // in a window of its own (detached.odin): no tab, and no part in the main window's input
-	box:    ui.Key,
-	rect:   draw.Rect,         // the grid, as last laid out
-	// The selection is the emulation's own (VT_OPT_SELECTION): its ends follow their text as rows come, the view moves, the
-	// scrollback drops its oldest rows or the grid is wrapped again. Only typing drops it.
-	selecting: bool,           // the left button is held on the grid
-	sel_anchor: Vt_Tracked_Ref, // the cell the drag began on (nil: none)
-	sel_press:  [2]int,        // that cell, in the view at the press: a selection begins when the pointer leaves it
-	formatter:  Vt_Formatter,  // what a copy reads the text through
-	zoom:    f32,              // its own, times the program's size (Ctrl and the wheel, Ctrl+= - 0): kept by its id (term_zoom_set)
-	zoom_ms: f64,              // when it last changed: the grid keeps its columns and rows until the zoom rests (term_fit)
-	bar_at:  f32,              // where the grid's view put its box's scroll (term_scroll_sync): another place is its bar, moved
-	metrics: Term_Metrics,     // as last laid out
-	// What term_draw draws of each row of the view, in columns: built again only for a row libghostty-vt says changed (its
-	// dirty flags), so that a frame where the shell wrote nothing reads none of its cells.
-	drawn_rows: [dynamic]Term_Row,
-	rows_stale: bool,          // the colours the rows were built with moved (term_recolour): every row is built again
-	rows_built: int,           // rows built since it was made: what a test counts
 }
-
-// A row of the grid as it is drawn, in columns and not in pixels: a new size of face or zoom moves it without building it again.
-Term_Row :: struct {
-	text:  [dynamic]u8,        // the text of all its runs, one after the other (owned: built again in place)
-	runs:  [dynamic]Term_Run,
-	fills: [dynamic]Term_Fill,
-	marks: [dynamic]Term_Mark,
-}
-
-// Cells of the same look go together, so that a row is a few runs of text and not one draw per cell.
-Term_Run :: struct { col: u16, from, to: u32, color: Color, bold: bool }   // (its text: the row's text[from:to])
-// (columns from..<to; `picked`: the selection's colour, the theme's when it is drawn)
-Term_Fill :: struct { from, to: u16, color: Color, picked: bool }
-Term_Mark :: struct { from, to: u16, color: Color, strike: bool }   // an underline, or (strike) a line through
-
-// What the left button (or another, for a program) holds on a grid. Its release comes wherever the pointer is: a program that was told
-// of the press is told of that too.
-Term_Press :: enum u8 { None, Select, Program }
 
 // The user asked for a shell to have the keyboard. It takes it when it is there, unless the focus went elsewhere meanwhile: an answer
 // does not move the keyboard by itself. (`panel` 0: the next shell, the one on its way.)
@@ -134,18 +106,9 @@ Terminals :: struct {
 	close_due:  u32,           // a tab to close once the frame is built
 	focused: ^Term,            // has the keyboard, in the last build (shown, and its grid has the focus)
 	ask:     Term_Focus_Ask,
-	press:   Term_Press,
-	pressed: ^Term,
-	press_button: platform.Mouse_Button,
-	press_pos:    [2]f32,
+	pressed: ^Term,            // a button is held on its grid (Term.view.press): the pointer goes to it until it is let go
 	menu_for: ^Term,           // a right click asked for its menu (at menu_at): its next build opens it
 	menu_at:  [2]f32,
-}
-
-// A grid's cells: its face's size (the program's size times its own zoom) and what follows from it.
-Term_Metrics :: struct {
-	font_size, cell_w, cell_h, ascent: f32,
-	spacing, spacing_bold: f32,   // what a letter of the face (its bold) is short of a cell: a run is drawn on the grid
 }
 
 @(private = "file")
@@ -158,8 +121,7 @@ term_path :: proc(t: ^Term, tail := "") -> string {
 term_new :: proc(id, title, dir: string, cols: u16 = TERM_COLS, rows: u16 = TERM_ROWS) -> ^Term {
 	t := new(Term)
 	t.id, t.title, t.dir = strings.clone(id), strings.clone(title), strings.clone(dir)
-	t.cols, t.rows, t.zoom = cols, rows, 1
-	t.drawn_rows = make([dynamic]Term_Row)   // (its rows take its allocator: they are built in a frame, never in its temp one)
+	term.init(&t.view, term_source(t), int(cols), int(rows))
 	if ghostty_terminal_new(nil, &t.vt, cols, rows) != VT_OK { return t }
 	ghostty_render_state_new(nil, &t.state)
 	ghostty_render_state_row_iterator_new(nil, &t.rows_it)
@@ -196,7 +158,7 @@ term_recolour :: proc(t: ^Term) {
 	ghostty_terminal_set(t.vt, VT_OPT_COLOR_FOREGROUND, &fg)
 	palette := term_palette(bg, fg)
 	ghostty_terminal_set(t.vt, VT_OPT_COLOR_PALETTE, &palette)
-	t.rows_stale = true   // (the rows hold the colours they were built with)
+	term.recolour(&t.view)   // (the rows hold the colours they were built with)
 }
 
 // The 256 colours a program asks for by number, in the theme shown: the 16 named ones are the theme's hues (as the code's and
@@ -241,8 +203,7 @@ term_free :: proc(t: ^Term) {
 		ghostty_render_state_free(t.state)
 		ghostty_terminal_free(t.vt)
 	}
-	for &r in t.drawn_rows { term_row_delete(&r) }
-	delete(t.drawn_rows)
+	term.destroy(&t.view)
 	delete(t.id); delete(t.title); delete(t.dir)
 	free(t)
 }
@@ -570,8 +531,9 @@ term_add :: proc(app: ^App, it: json.Value, dir: string) -> ^Term {
 	id := jstr(it, "id")
 	if id == "" || term_find(app, id) != nil { return nil }
 	t := term_new(id, jstr(it, "title"), dir)
-	t.zoom = app.term_zooms.by_id[id] or_else 1
+	t.view.zoom = app.term_zooms.by_id[id] or_else 1
 	t.server = app.conn
+	t.app = app
 	t.panel = TERM_PANEL_BASE + s.next_panel
 	s.next_panel += 1
 	append(&s.list, t)
@@ -744,39 +706,181 @@ terminals_stop :: proc(app: ^App) {
 }
 
 ////////////////////////////////
-// Input
+// The emulation as the grid's source (term.Source)
 
-// The encoder's key of one of ours (0: none); `printable`: its text comes as a Text event.
-term_key :: proc(k: platform.Key) -> (key: i32, printable: bool, unshifted: u32) {
-	#partial switch k {
-	case .A ..= .Z:    return VT_KEY_A + i32(k) - i32(platform.Key.A), true, 'a' + u32(k) - u32(platform.Key.A)
-	case .N0 ..= .N9:  return VT_KEY_DIGIT_0 + i32(k) - i32(platform.Key.N0), true, '0' + u32(k) - u32(platform.Key.N0)
-	case .F1 ..= .F12: return VT_KEY_F1 + i32(k) - i32(platform.Key.F1), false, 0
-	case .Space:     return VT_KEY_SPACE, true, ' '
-	case .Comma:     return VT_KEY_COMMA, true, ','
-	case .Period:    return VT_KEY_PERIOD, true, '.'
-	case .Slash:     return VT_KEY_SLASH, true, '/'
-	case .Minus:     return VT_KEY_MINUS, true, '-'
-	case .Equal:     return VT_KEY_EQUAL, true, '='
-	case .Num_Add:   return VT_KEY_NUMPAD_ADD, true, '+'
-	case .Num_Subtract: return VT_KEY_NUMPAD_SUBTRACT, true, '-'
-	case .Escape:    return VT_KEY_ESCAPE, false, 0
-	case .Return:    return VT_KEY_ENTER, false, 0
-	case .Tab:       return VT_KEY_TAB, false, 0
-	case .Backspace: return VT_KEY_BACKSPACE, false, 0
-	case .Delete:    return VT_KEY_DELETE, false, 0
-	case .Insert:    return VT_KEY_INSERT, false, 0
-	case .Left:      return VT_KEY_ARROW_LEFT, false, 0
-	case .Right:     return VT_KEY_ARROW_RIGHT, false, 0
-	case .Up:        return VT_KEY_ARROW_UP, false, 0
-	case .Down:      return VT_KEY_ARROW_DOWN, false, 0
-	case .Home:      return VT_KEY_HOME, false, 0
-	case .End:       return VT_KEY_END, false, 0
-	case .Page_Up:   return VT_KEY_PAGE_UP, false, 0
-	case .Page_Down: return VT_KEY_PAGE_DOWN, false, 0
-	case .Menu:      return VT_KEY_CONTEXT_MENU, false, 0
+@(private = "file")
+term_source :: proc(t: ^Term) -> term.Source {
+	return {
+		data           = t,
+		picture        = term_picture,
+		rows           = term_rows,
+		scrollbar      = term_scrollbar,
+		scroll         = term_scroll,
+		resize         = term_grid_resized,
+		write          = proc(data: rawptr, bytes: string) { term_send((^Term)(data), bytes) },
+		modes          = term_modes,
+		encode_key     = term_encode,
+		encode_mouse   = term_encode_mouse,
+		select         = term_select,
+		selection_text = term_selection_text,
 	}
-	return 0, false, 0
+}
+
+// The state of the emulation, read again. Its colours are kept for the cells read after it (term_rows).
+@(private = "file")
+term_picture :: proc(data: rawptr) -> (p: term.Picture, ok: bool) {
+	t := (^Term)(data)
+	if t.vt == nil || ghostty_render_state_update(t.state, t.vt) != VT_OK { return }
+	t.colors = Vt_Colors{size = size_of(Vt_Colors)}
+	if ghostty_render_state_get(t.state, VT_STATE_COLORS, &t.colors) != VT_OK { return }
+	dirty: i32 = VT_DIRTY_FULL
+	ghostty_render_state_get(t.state, VT_STATE_DIRTY, &dirty)
+	p.dirty = dirty == VT_DIRTY_FULL ? .All : dirty == VT_DIRTY_FALSE ? .None : .Rows
+	p.foreground, p.background = color_of(t.colors.foreground), color_of(t.colors.background)
+	visible, in_view: bool
+	ghostty_render_state_get(t.state, VT_STATE_CURSOR_VISIBLE, &visible)
+	ghostty_render_state_get(t.state, VT_STATE_CURSOR_IN_VIEW, &in_view)
+	cx, cy: u16
+	ghostty_render_state_get(t.state, VT_STATE_CURSOR_X, &cx)
+	ghostty_render_state_get(t.state, VT_STATE_CURSOR_Y, &cy)
+	look: i32 = VT_CURSOR_BLOCK
+	ghostty_render_state_get(t.state, VT_STATE_CURSOR_STYLE, &look)
+	p.cursor = {
+		shown = visible && in_view, x = int(cx), y = int(cy),
+		shape = look == VT_CURSOR_BAR ? .Bar : look == VT_CURSOR_UNDERLINE ? .Underline : .Block,
+		color = color_of(t.colors.cursor_has_value ? t.colors.cursor : t.colors.foreground),
+	}
+	return p, true
+}
+
+// The rows of the state, by its dirty flags: a row it says did not change gives none of its cells. Its flags are then taken
+// as read (ghostty_render_state_clean): the next update says only what changed after.
+@(private = "file")
+term_rows :: proc(data: rawptr, sink: ^term.Sink) {
+	t := (^Term)(data)
+	if ghostty_render_state_get(t.state, VT_STATE_ROW_ITERATOR, &t.rows_it) != VT_OK { return }
+	for ghostty_render_state_row_iterator_next(t.rows_it) {
+		changed := true
+		ghostty_render_state_row_get(t.rows_it, VT_ROW_DIRTY, &changed)
+		if !term.sink_row(sink, changed) { continue }
+		if ghostty_render_state_row_get(t.rows_it, VT_ROW_CELLS, &t.cells) != VT_OK { continue }
+		picked := Vt_Row_Selection{size = size_of(Vt_Row_Selection)}
+		has_picked := ghostty_render_state_row_get(t.rows_it, VT_ROW_SELECTION, &picked) == VT_OK
+		x: u16 = 0
+		for ghostty_render_state_row_cells_next(t.cells) {
+			defer x += 1
+			style: Vt_Style
+			ghostty_render_state_row_cells_get(t.cells, VT_CELL_STYLE, &style)
+			fg := t.colors.foreground
+			ghostty_render_state_row_cells_get(t.cells, VT_CELL_FG, &fg)
+			bg := t.colors.background
+			has_bg := ghostty_render_state_row_cells_get(t.cells, VT_CELL_BG, &bg) == VT_OK
+			glyphs: [8]u32
+			read := Vt_Codepoints{ptr = &glyphs[0], cap = len(glyphs)}
+			ghostty_render_state_row_cells_get(t.cells, VT_CELL_GRAPHEMES_BUF, &read)   // (more than it holds: the first of them)
+			utf: [8 * 4]u8
+			n := 0
+			for g in glyphs[:min(read.len, len(glyphs))] {
+				bytes, w := utf8.encode_rune(rune(g))
+				copy(utf[n:], bytes[:w])
+				n += w
+			}
+			flags: term.Cell_Flags
+			if style.flags & VT_STYLE_BOLD != 0 { flags += {.Bold} }
+			if style.flags & VT_STYLE_FAINT != 0 { flags += {.Faint} }
+			if style.flags & VT_STYLE_INVERSE != 0 { flags += {.Inverse} }
+			if style.flags & VT_STYLE_INVISIBLE != 0 { flags += {.Invisible} }
+			if style.flags & VT_STYLE_UNDERLINE != 0 { flags += {.Underline} }
+			if style.flags & VT_STYLE_STRIKETHROUGH != 0 { flags += {.Strike} }
+			if has_picked && x >= picked.start_x && x <= picked.end_x { flags += {.Selected} }
+			term.sink_cell(sink, {text = string(utf[:n]), fg = color_of(fg), bg = color_of(bg), has_bg = has_bg, flags = flags})
+		}
+	}
+	ghostty_render_state_clean(t.state)
+}
+
+@(private = "file")
+term_scrollbar :: proc(data: rawptr) -> (bar: term.Scrollbar, ok: bool) {
+	t := (^Term)(data)
+	b: Vt_Scrollbar
+	if t.vt == nil || ghostty_terminal_get(t.vt, VT_DATA_SCROLLBAR, &b) != VT_OK { return }
+	return {int(b.total), int(b.offset), int(b.len)}, true
+}
+
+@(private = "file")
+term_scroll :: proc(data: rawptr, delta: int, bottom: bool) {
+	t := (^Term)(data)
+	if t.vt == nil { return }
+	ghostty_terminal_scroll_viewport(t.vt, bottom ? Vt_Scroll{tag = .Bottom} : Vt_Scroll{tag = .Delta, value = i64(delta)})
+}
+
+// The grid follows the panel at once. The shell is told the last size, one request at a time, once the grid has rested. A window being
+// dragged would otherwise send one for each step, on as many threads, in no order, and the last to arrive would be any of them; and a
+// shell paints its whole screen again for each size it takes, in pieces, which the grid would show: its text a few rows off, for a frame.
+@(private = "file")
+term_grid_resized :: proc(data: rawptr, cols, rows: int, cell: [2]int, changed: bool) {
+	t := (^Term)(data)
+	app := t.app
+	if t.vt == nil { return }
+	if changed {
+		ghostty_terminal_resize(t.vt, u16(cols), u16(rows), u32(cell.x), u32(cell.y))
+		t.grid_ms = ui.now_ms()
+		if app != nil {
+			app.cx.due[.Term_Size] = {}   // (from this step, the last so far: an earlier wake would find the grid not rested, and nothing would come after it)
+			ui.deferred_ask(&app.cx.due[.Term_Size], TERM_SIZE_QUIET_MS)
+		}
+	}
+	if app != nil { term_size_send(app, t) }
+}
+
+@(private = "file")
+term_mode :: proc(t: ^Term, mode: u16) -> bool {
+	m := Vt_Mode{mode = mode & 0x7FFF}
+	return ghostty_terminal_get(t.vt, VT_DATA_MODE, &m) == VT_OK && m.value
+}
+
+@(private = "file")
+term_modes :: proc(data: rawptr) -> term.Modes {
+	t := (^Term)(data)
+	m: term.Modes
+	if t.vt == nil { return m }
+	if term_mode(t, VT_MODE_BRACKETED_PASTE) { m += {.Bracketed_Paste} }
+	on: bool
+	if ghostty_terminal_get(t.vt, VT_DATA_MOUSE_TRACKING, &on) == VT_OK && on { m += {.Mouse_Tracking} }
+	return m
+}
+
+// The encoder's key of one of ours (0: none), and the character it types without Shift.
+term_key :: proc(k: platform.Key) -> (key: i32, unshifted: u32) {
+	#partial switch k {
+	case .A ..= .Z:    return VT_KEY_A + i32(k) - i32(platform.Key.A), 'a' + u32(k) - u32(platform.Key.A)
+	case .N0 ..= .N9:  return VT_KEY_DIGIT_0 + i32(k) - i32(platform.Key.N0), '0' + u32(k) - u32(platform.Key.N0)
+	case .F1 ..= .F12: return VT_KEY_F1 + i32(k) - i32(platform.Key.F1), 0
+	case .Space:     return VT_KEY_SPACE, ' '
+	case .Comma:     return VT_KEY_COMMA, ','
+	case .Period:    return VT_KEY_PERIOD, '.'
+	case .Slash:     return VT_KEY_SLASH, '/'
+	case .Minus:     return VT_KEY_MINUS, '-'
+	case .Equal:     return VT_KEY_EQUAL, '='
+	case .Num_Add:   return VT_KEY_NUMPAD_ADD, '+'
+	case .Num_Subtract: return VT_KEY_NUMPAD_SUBTRACT, '-'
+	case .Escape:    return VT_KEY_ESCAPE, 0
+	case .Return:    return VT_KEY_ENTER, 0
+	case .Tab:       return VT_KEY_TAB, 0
+	case .Backspace: return VT_KEY_BACKSPACE, 0
+	case .Delete:    return VT_KEY_DELETE, 0
+	case .Insert:    return VT_KEY_INSERT, 0
+	case .Left:      return VT_KEY_ARROW_LEFT, 0
+	case .Right:     return VT_KEY_ARROW_RIGHT, 0
+	case .Up:        return VT_KEY_ARROW_UP, 0
+	case .Down:      return VT_KEY_ARROW_DOWN, 0
+	case .Home:      return VT_KEY_HOME, 0
+	case .End:       return VT_KEY_END, 0
+	case .Page_Up:   return VT_KEY_PAGE_UP, 0
+	case .Page_Down: return VT_KEY_PAGE_DOWN, 0
+	case .Menu:      return VT_KEY_CONTEXT_MENU, 0
+	}
+	return 0, 0
 }
 
 @(private = "file")
@@ -788,98 +892,60 @@ mods_of :: proc(m: platform.Modifiers) -> u16 {
 	return v
 }
 
-// What the shell gets for a key, in the temporary allocator. A printable key alone gives nothing: its Text event says the character,
-// with the layout of the keyboard. Ctrl and Alt together are AltGr on many: a character too.
-term_encode_key :: proc(t: ^Term, k: platform.Key, mods: platform.Modifiers, repeat: bool) -> string {
-	key, printable, unshifted := term_key(k)
-	if key == 0 { return "" }
-	if printable && (mods & {.Ctrl, .Alt} == {} || mods & {.Ctrl, .Alt} == {.Ctrl, .Alt}) { return "" }
+// A key as Ghostty says it, with the modes the program set (application cursor keys, the kitty protocol).
+@(private = "file")
+term_encode :: proc(data: rawptr, k: term.Key_Input, buf: []u8) -> int {
+	t := (^Term)(data)
+	key, unshifted := term_key(k.key)
+	if key == 0 || t.vt == nil { return 0 }
 	ghostty_key_encoder_set_from_terminal(t.key_enc, t.vt)
 	ghostty_key_event_set_key(t.key_ev, key)
-	ghostty_key_event_set_action(t.key_ev, repeat ? VT_ACTION_REPEAT : VT_ACTION_PRESS)
-	ghostty_key_event_set_mods(t.key_ev, mods_of(mods))
+	ghostty_key_event_set_action(t.key_ev, k.repeat ? VT_ACTION_REPEAT : VT_ACTION_PRESS)
+	ghostty_key_event_set_mods(t.key_ev, mods_of(k.mods))
 	ghostty_key_event_set_consumed_mods(t.key_ev, 0)
 	ghostty_key_event_set_unshifted_codepoint(t.key_ev, unshifted)
 	ghostty_key_event_set_utf8(t.key_ev, {})
-	buf := make([]u8, TERM_KEY_BYTES, context.temp_allocator)
 	n: uint
-	if ghostty_key_encoder_encode(t.key_enc, t.key_ev, raw_data(buf), len(buf), &n) != VT_OK { return "" }
-	return string(buf[:n])
+	if ghostty_key_encoder_encode(t.key_enc, t.key_ev, raw_data(buf), len(buf), &n) != VT_OK { return 0 }
+	return int(n)
 }
 
 @(private = "file")
-term_mode :: proc(t: ^Term, mode: u16) -> bool {
-	m := Vt_Mode{mode = mode & 0x7FFF}
-	return ghostty_terminal_get(t.vt, VT_DATA_MODE, &m) == VT_OK && m.value
-}
-
-// What is pasted, as the program wants it. Without the brackets, a line break in a paste runs what comes before it.
-term_paste_text :: proc(t: ^Term, s: string) -> string {
-	if term_mode(t, VT_MODE_BRACKETED_PASTE) { return fmt.tprintf("\x1b[200~%s\x1b[201~", s) }
-	flat, _ := strings.replace_all(s, "\r\n", "\r", context.temp_allocator)
-	flat, _ = strings.replace_all(flat, "\n", "\r", context.temp_allocator)
-	return flat
-}
-
-@(private = "file")
-term_tracks_mouse :: proc(t: ^Term) -> bool {
-	if t.read_only { return false }   // (nobody to tell: the pointer selects)
-	on: bool
-	return ghostty_terminal_get(t.vt, VT_DATA_MOUSE_TRACKING, &on) == VT_OK && on
-}
-
-@(private = "file")
-term_cell_at :: proc(t: ^Term, s: ^Terminals, p: [2]f32) -> [2]int {
-	x := int((p.x - t.rect.min.x - TERM_PAD) / max(t.metrics.cell_w, 1))
-	y := int((p.y - t.rect.min.y - TERM_PAD) / max(t.metrics.cell_h, 1))
-	return {max(x, 0), max(y, 0)}
-}
-
-term_at_bottom :: proc(t: ^Term) -> bool {
-	bar: Vt_Scrollbar
-	if t.vt == nil || ghostty_terminal_get(t.vt, VT_DATA_SCROLLBAR, &bar) != VT_OK { return true }
-	return bar.offset + bar.len >= bar.total
-}
-
-// No selection, and no drag making one.
-term_selection_drop :: proc(t: ^Term) {
-	t.selecting = false
-	ghostty_tracked_grid_ref_free(t.sel_anchor)
-	t.sel_anchor = nil
-	if t.vt != nil { ghostty_terminal_set(t.vt, VT_OPT_SELECTION, nil) }
-}
-
-term_has_selection :: proc(t: ^Term) -> bool {
-	sel: Vt_Selection
-	return t.vt != nil && ghostty_terminal_get(t.vt, VT_DATA_SELECTION, &sel) == VT_OK
-}
-
-// A drag's first press: the cell it began on is followed, whatever comes before the pointer moves.
-term_select_begin :: proc(t: ^Term, cell: [2]int) {
-	term_selection_drop(t)
-	t.selecting, t.sel_press = true, cell
-	ghostty_terminal_grid_ref_track(t.vt, vt_point(VT_POINT_VIEWPORT, cell), &t.sel_anchor)
-}
-
-// The drag is over `cell` (in the view): from where it began to there, once it has left the cell it began on.
-term_select_to :: proc(t: ^Term, cell: [2]int) {
-	if !t.selecting || t.sel_anchor == nil { return }
-	if cell == t.sel_press && !term_has_selection(t) { return }
-	sel: Vt_Selection
-	if ghostty_tracked_grid_ref_snapshot(t.sel_anchor, &sel.start) != VT_OK { return }
-	if ghostty_terminal_grid_ref(t.vt, vt_point(VT_POINT_VIEWPORT, term_cell_clamp(t, cell)), &sel.end) != VT_OK { return }
-	ghostty_terminal_set(t.vt, VT_OPT_SELECTION, &sel)
-}
-
-// All of it, the scrollback with the screen.
-term_select_all :: proc(t: ^Term) {
-	bar: Vt_Scrollbar
-	if t.vt == nil || ghostty_terminal_get(t.vt, VT_DATA_SCROLLBAR, &bar) != VT_OK || bar.total == 0 { return }
-	term_selection_drop(t)
-	sel: Vt_Selection
-	if ghostty_terminal_grid_ref(t.vt, vt_point(VT_POINT_SCREEN, {0, 0}), &sel.start) != VT_OK { return }
-	if ghostty_terminal_grid_ref(t.vt, vt_point(VT_POINT_SCREEN, {max(int(t.cols) - 1, 0), int(bar.total) - 1}), &sel.end) != VT_OK { return }
-	ghostty_terminal_set(t.vt, VT_OPT_SELECTION, &sel)
+term_encode_mouse :: proc(data: rawptr, m: term.Mouse_Input, buf: []u8) -> int {
+	t := (^Term)(data)
+	if t.vt == nil { return 0 }
+	ghostty_mouse_encoder_set_from_terminal(t.mouse_enc, t.vt)
+	pad := u32(m.pad)
+	size := Vt_Mouse_Size{
+		size = size_of(Vt_Mouse_Size), screen_width = u32(m.size.x), screen_height = u32(m.size.y),
+		cell_width = u32(m.cell.x), cell_height = u32(m.cell.y),
+		padding_top = pad, padding_bottom = pad, padding_right = pad, padding_left = pad,
+	}
+	ghostty_mouse_encoder_set(t.mouse_enc, VT_MOUSE_OPT_SIZE, &size)
+	any := m.held
+	ghostty_mouse_encoder_set(t.mouse_enc, VT_MOUSE_OPT_ANY_PRESSED, &any)
+	action: i32
+	switch m.action {
+	case .Press:   action = VT_MOUSE_PRESS
+	case .Release: action = VT_MOUSE_RELEASE
+	case .Motion:  action = VT_MOUSE_MOTION
+	}
+	ghostty_mouse_event_set_action(t.mouse_ev, action)
+	button: i32
+	switch m.button {
+	case .None:
+	case .Left:       button = VT_MOUSE_LEFT
+	case .Right:      button = VT_MOUSE_RIGHT
+	case .Middle:     button = VT_MOUSE_MIDDLE
+	case .Wheel_Up:   button = VT_MOUSE_FOUR
+	case .Wheel_Down: button = VT_MOUSE_FIVE
+	}
+	if button != 0 { ghostty_mouse_event_set_button(t.mouse_ev, button) } else { ghostty_mouse_event_clear_button(t.mouse_ev) }
+	ghostty_mouse_event_set_mods(t.mouse_ev, mods_of(m.mods))
+	ghostty_mouse_event_set_position(t.mouse_ev, {m.pos.x, m.pos.y})
+	n: uint
+	if ghostty_mouse_encoder_encode(t.mouse_enc, t.mouse_ev, raw_data(buf), len(buf), &n) != VT_OK { return 0 }
+	return int(n)
 }
 
 @(private = "file")
@@ -889,218 +955,141 @@ vt_point :: proc(tag: i32, cell: [2]int) -> Vt_Point {
 	return p
 }
 
-// (a cell past the grid's edge is none of its cells: the nearest that is)
 @(private = "file")
-term_cell_clamp :: proc(t: ^Term, cell: [2]int) -> [2]int {
-	return {clamp(cell.x, 0, max(int(t.cols) - 1, 0)), clamp(cell.y, 0, max(int(t.rows) - 1, 0))}
+term_anchor_free :: proc(t: ^Term) {
+	ghostty_tracked_grid_ref_free(t.sel_anchor)
+	t.sel_anchor = nil
 }
+
+// The selection, the emulation's: the cell a drag began on is followed (a tracked reference), whatever comes before the
+// pointer moves.
+@(private = "file")
+term_select :: proc(data: rawptr, op: term.Select_Op, cell: [2]int) -> bool {
+	t := (^Term)(data)
+	if t.vt == nil { return false }
+	switch op {
+	case .Has:
+		sel: Vt_Selection
+		return ghostty_terminal_get(t.vt, VT_DATA_SELECTION, &sel) == VT_OK
+	case .Begin:
+		term_anchor_free(t)
+		ghostty_terminal_set(t.vt, VT_OPT_SELECTION, nil)
+		ghostty_terminal_grid_ref_track(t.vt, vt_point(VT_POINT_VIEWPORT, cell), &t.sel_anchor)
+	case .Extend:
+		if t.sel_anchor == nil { return false }
+		sel: Vt_Selection
+		if ghostty_tracked_grid_ref_snapshot(t.sel_anchor, &sel.start) != VT_OK { return false }
+		if ghostty_terminal_grid_ref(t.vt, vt_point(VT_POINT_VIEWPORT, cell), &sel.end) != VT_OK { return false }
+		ghostty_terminal_set(t.vt, VT_OPT_SELECTION, &sel)
+	case .End:
+		term_anchor_free(t)
+	case .Drop:
+		term_anchor_free(t)
+		ghostty_terminal_set(t.vt, VT_OPT_SELECTION, nil)
+	case .All:
+		bar: Vt_Scrollbar
+		if ghostty_terminal_get(t.vt, VT_DATA_SCROLLBAR, &bar) != VT_OK || bar.total == 0 { return false }
+		term_anchor_free(t)
+		ghostty_terminal_set(t.vt, VT_OPT_SELECTION, nil)
+		sel: Vt_Selection
+		if ghostty_terminal_grid_ref(t.vt, vt_point(VT_POINT_SCREEN, {0, 0}), &sel.start) != VT_OK { return false }
+		if ghostty_terminal_grid_ref(t.vt, vt_point(VT_POINT_SCREEN, {max(t.view.cols - 1, 0), int(bar.total) - 1}), &sel.end) != VT_OK { return false }
+		ghostty_terminal_set(t.vt, VT_OPT_SELECTION, &sel)
+	}
+	return true
+}
+
+// The text selected, wherever it is now (scrolled out of the view too), as the program wrote it.
+@(private = "file")
+term_selection_text :: proc(data: rawptr, allocator: runtime.Allocator) -> string {
+	t := (^Term)(data)
+	sel: Vt_Selection
+	if t.vt == nil || ghostty_terminal_get(t.vt, VT_DATA_SELECTION, &sel) != VT_OK { return "" }
+	ghostty_formatter_set(t.formatter, VT_FORMAT_SELECTION, &sel)
+	defer ghostty_formatter_set(t.formatter, VT_FORMAT_SELECTION, nil)
+	return term_format(t, allocator)
+}
+
+// The text of the screen, its scrollback with it.
+term_text :: proc(t: ^Term) -> string {
+	if t.vt == nil { return "" }
+	return term_format(t, context.temp_allocator)
+}
+
+@(private = "file")
+term_format :: proc(t: ^Term, allocator: runtime.Allocator) -> string {
+	need: uint
+	if ghostty_formatter_format_buf(t.formatter, nil, 0, &need) != VT_OUT_OF_SPACE || need == 0 { return "" }
+	buf := make([]u8, need, allocator)
+	got: uint
+	if ghostty_formatter_format_buf(t.formatter, raw_data(buf), need, &got) != VT_OK { delete(buf, allocator); return "" }
+	return string(buf[:got])
+}
+
+////////////////////////////////
+// Input
 
 // The shell whose grid is under `p`: shown, and no floating panel over it.
 term_at :: proc(app: ^App, p: [2]f32) -> ^Term {
 	d := &app.dock
-	if t := app.cx.terms.only; t != nil { return draw.rect_contains(t.rect, p) ? t : nil }
+	if t := app.cx.terms.only; t != nil { return term.contains(&t.view, p) ? t : nil }
 	for t in app.cx.terms.list {
-		if !t.shown || t.detached || !draw.rect_contains(t.rect, p) { continue }
+		if !t.shown || t.detached || !term.contains(&t.view, p) { continue }
 		leaf := ui.dock_leaf_at(d, p - d.origin)
 		if leaf == ui.DOCK_NONE || leaf == ui.dock_leaf_of(d, t.panel) { return t }
 	}
 	return nil
 }
 
-// What the button held on a grid stops, wherever it was let go or whatever took it away: the selection is what it is by now, and a
-// program told of a press is told of its release.
+// What the button held on a grid stops, wherever it was let go or whatever took it away (term.press_end).
 term_press_end :: proc(s: ^Terminals) {
 	t := s.pressed
-	press := s.press
-	s.press, s.pressed = .None, nil
-	if t == nil { return }
-	switch press {
-	case .None:
-	case .Select:
-		t.selecting = false
-		ghostty_tracked_grid_ref_free(t.sel_anchor)
-		t.sel_anchor = nil
-	case .Program:
-		term_mouse(t, s, VT_MOUSE_RELEASE, mouse_button_of(s.press_button), s.press_pos, {}, false)
-	}
-}
-
-// (a position outside the grid is not one an encoder can say: the nearest in it)
-@(private = "file")
-term_inside :: proc(t: ^Term, p: [2]f32) -> [2]f32 {
-	return {clamp(p.x, t.rect.min.x, t.rect.max.x - 1), clamp(p.y, t.rect.min.y, t.rect.max.y - 1)}
-}
-
-@(private = "file")
-term_mouse :: proc(t: ^Term, s: ^Terminals, action, button: i32, at: [2]f32, mods: platform.Modifiers, held: bool) {
-	if t.vt == nil { return }
-	pos := term_inside(t, at)
-	ghostty_mouse_encoder_set_from_terminal(t.mouse_enc, t.vt)
-	size := Vt_Mouse_Size{
-		size = size_of(Vt_Mouse_Size), screen_width = u32(t.rect.max.x - t.rect.min.x), screen_height = u32(t.rect.max.y - t.rect.min.y),
-		cell_width = u32(t.metrics.cell_w), cell_height = u32(t.metrics.cell_h),
-		padding_top = u32(TERM_PAD), padding_bottom = u32(TERM_PAD), padding_right = u32(TERM_PAD), padding_left = u32(TERM_PAD),
-	}
-	ghostty_mouse_encoder_set(t.mouse_enc, VT_MOUSE_OPT_SIZE, &size)
-	any := held
-	ghostty_mouse_encoder_set(t.mouse_enc, VT_MOUSE_OPT_ANY_PRESSED, &any)
-	ghostty_mouse_event_set_action(t.mouse_ev, action)
-	if button != 0 { ghostty_mouse_event_set_button(t.mouse_ev, button) } else { ghostty_mouse_event_clear_button(t.mouse_ev) }
-	ghostty_mouse_event_set_mods(t.mouse_ev, mods_of(mods))
-	ghostty_mouse_event_set_position(t.mouse_ev, {pos.x - t.rect.min.x, pos.y - t.rect.min.y})
-	buf: [TERM_KEY_BYTES]u8
-	n: uint
-	if ghostty_mouse_encoder_encode(t.mouse_enc, t.mouse_ev, &buf[0], len(buf), &n) == VT_OK && n > 0 { term_send(t, string(buf[:n])) }
-}
-
-@(private = "file")
-mouse_button_of :: proc(b: platform.Mouse_Button) -> i32 {
-	#partial switch b {
-	case .Left:   return VT_MOUSE_LEFT
-	case .Right:  return VT_MOUSE_RIGHT
-	case .Middle: return VT_MOUSE_MIDDLE
-	}
-	return 0
-}
-
-// The text selected, wherever it is now (scrolled out of the view too). "": none.
-term_selection_text :: proc(t: ^Term) -> string {
-	sel: Vt_Selection
-	if t.vt == nil || ghostty_terminal_get(t.vt, VT_DATA_SELECTION, &sel) != VT_OK { return "" }
-	ghostty_formatter_set(t.formatter, VT_FORMAT_SELECTION, &sel)
-	defer ghostty_formatter_set(t.formatter, VT_FORMAT_SELECTION, nil)
-	return term_format(t)
-}
-
-// The text of the screen, its scrollback with it.
-term_text :: proc(t: ^Term) -> string {
-	if t.vt == nil { return "" }
-	return term_format(t)
-}
-
-@(private = "file")
-term_format :: proc(t: ^Term) -> string {
-	need: uint
-	if ghostty_formatter_format_buf(t.formatter, nil, 0, &need) != VT_OUT_OF_SPACE || need == 0 { return "" }
-	buf := make([]u8, need, context.temp_allocator)
-	got: uint
-	if ghostty_formatter_format_buf(t.formatter, raw_data(buf), need, &got) != VT_OK { return "" }
-	return string(buf[:got])
-}
-
-// A key for the shell with the keyboard. False: it is the program's (the key that hides the shells must work from inside them).
-@(private = "file")
-term_key_event :: proc(app: ^App, t: ^Term, e: platform.Event) -> (take: bool) {
-	if e.key == .T && e.mods == {.Ctrl, .Shift} { return false }
-	switch {
-	case (e.key == .C && (e.mods == {.Ctrl, .Shift} || (t.read_only && e.mods == {.Ctrl}))) || (e.key == .Insert && e.mods == {.Ctrl}):   // (Ctrl+C alone is a shell's)
-		if term_has_selection(t) { clip_set(term_selection_text(t)) }
-	case ((e.key == .V && e.mods == {.Ctrl, .Shift}) || (e.key == .Insert && e.mods == {.Shift})) && !t.read_only:   // (Shift+Insert: the terminals' other paste)
-		term_paste(app, t)
-	case e.key == .Page_Up && e.mods == {.Shift}:
-		ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = -i64(t.rows)})
-	case e.key == .Page_Down && e.mods == {.Shift}:
-		ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = i64(t.rows)})
-	case t.read_only:
-		return false
-	case e.key == .Shift || e.key == .Ctrl || e.key == .Alt:
-	case:
-		if s := term_encode_key(t, e.key, e.mods, e.repeat); s != "" {
-			term_send(t, s)
-			ghostty_terminal_scroll_viewport(t.vt, {tag = .Bottom})
-			term_selection_drop(t)
-		}
-	}
-	return true
+	s.pressed = nil
+	if t != nil { term.press_end(&t.view) }
 }
 
 // Before the interface sees them: what goes to a shell is taken out. Returns what is left. The keys go to the shell that has the keyboard,
-// the pointer to the one it is over: both are shown, as the last build says, or there is none.
+// the pointer to the one that holds a press, else to the one it is over: both are shown, as the last build says, or there is none.
 term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 	s := &app.cx.terms
 	if s.only == nil && (!s.open || len(s.list) == 0) { return events }   // (the tabs hidden, a shell in its window still hears; a command's output is no shell of the list)
 	if s.only == nil && overlay_open(app) {
-		if s.pressed == nil || !s.pressed.read_only { term_press_end(s) }   // (a selection in the dialog: that overlay is its own)
+		if s.pressed == nil || !s.pressed.view.read_only { term_press_end(s) }   // (a selection in the dialog: that overlay is its own)
 		return events
 	}
 	kept := 0
 	for e in events {
-		take := false
-		keys := s.focused
-		if keys != nil && keys.vt == nil { keys = nil }
-		typed := keys != nil && !keys.read_only
+		out := term.Outcome.Ignored
+		t: ^Term
 		#partial switch e.kind {
-		case .Key_Press:
-			if keys != nil && e.mods == {.Ctrl} {
-				#partial switch e.key {
-				case .Equal, .Num_Add:      term_zoom_set(app, keys, keys.zoom * ZOOM_FACTOR); take = true
-				case .Minus, .Num_Subtract: term_zoom_set(app, keys, keys.zoom / ZOOM_FACTOR); take = true
-				case .N0:                   term_zoom_set(app, keys, 1); take = true
-				}
-			}
-			if keys != nil && !take { take = term_key_event(app, keys, e) }
-		case .Key_Release:
-			take = typed
-		case .Text:
-			if !typed { break }
-			take = true
-			if e.text >= ' ' && e.text != 127 {
-				b, n := utf8.encode_rune(e.text)
-				term_send(keys, string(b[:n]))
-				ghostty_terminal_scroll_viewport(keys.vt, {tag = .Bottom})
-				term_selection_drop(keys)
-			}
-		case .Scroll:
-			t := term_at(app, e.pos)
-			if t == nil || t.vt == nil { break }
-			take = true
-			if .Ctrl in e.mods {
-				term_zoom_set(app, t, e.delta.y < 0 ? t.zoom * ZOOM_FACTOR : t.zoom / ZOOM_FACTOR)
-			} else if term_tracks_mouse(t) {
-				button: i32 = e.delta.y > 0 ? VT_MOUSE_FIVE : VT_MOUSE_FOUR
-				term_mouse(t, s, VT_MOUSE_PRESS, button, e.pos, e.mods, false)
-				term_mouse(t, s, VT_MOUSE_RELEASE, button, e.pos, e.mods, false)
-			} else {
-				n := platform.wheel_lines()   // (the lines the system says; where it says a page, a page less a line)
-				if n <= 0 { n = f32(max(int(t.rows) - 1, 1)) }
-				ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = i64(math.round(e.delta.y * n))})
-			}
-		case .Mouse_Press:
-			t := term_at(app, e.pos)
-			if t == nil || t.vt == nil { break }
-			if term_on_bar(t, e.pos) {
-				// (the grid's scroll bar is the toolkit's: its press goes to the interface, whatever the program asks of the mouse)
-			} else if e.button == .Right && (!term_tracks_mouse(t) || .Shift in e.mods) {
-				s.menu_for, s.menu_at = t, e.pos
-				take = true
-			} else if term_tracks_mouse(t) && .Shift not_in e.mods {
-				term_mouse(t, s, VT_MOUSE_PRESS, mouse_button_of(e.button), e.pos, e.mods, true)
-				if s.press == .None { s.press, s.pressed, s.press_button, s.press_pos = .Program, t, e.button, e.pos }
-			} else if e.button == .Left && s.press == .None {
-				s.press, s.pressed, s.press_button, s.press_pos = .Select, t, e.button, e.pos
-				term_select_begin(t, term_cell_at(t, s, e.pos))
-			}
-		case .Mouse_Release:
-			if s.press != .None && e.button == s.press_button {
-				s.press_pos = e.pos
+		case .Key_Press, .Key_Release, .Text:
+			t = s.focused
+			if t == nil || t.vt == nil { t = nil; break }
+			if e.kind == .Key_Press && e.key == .T && e.mods == {.Ctrl, .Shift} { break }   // (the key that hides the shells works from inside them)
+			out = term.event(&t.view, e)
+		case .Scroll, .Mouse_Press:
+			t = term_at(app, e.pos)
+			if t == nil || t.vt == nil { t = nil; break }
+			out = term.event(&t.view, e)
+			if t.view.press != .None && s.pressed != t {
 				term_press_end(s)
-			} else if t := term_at(app, e.pos); t != nil && t.vt != nil && term_tracks_mouse(t) {
-				term_mouse(t, s, VT_MOUSE_RELEASE, mouse_button_of(e.button), e.pos, e.mods, false)
+				s.pressed = t
 			}
-		case .Mouse_Move:
-			switch s.press {
-			case .Select:
-				term_select_to(s.pressed, term_cell_at(s.pressed, s, e.pos))
-			case .Program:
-				s.press_pos = e.pos
-				term_mouse(s.pressed, s, VT_MOUSE_MOTION, 0, e.pos, e.mods, true)
-			case .None:
-				if t := term_at(app, e.pos); t != nil && t.vt != nil && term_tracks_mouse(t) {
-					term_mouse(t, s, VT_MOUSE_MOTION, 0, e.pos, e.mods, e.buttons != {})
-				}
-			}
+		case .Mouse_Release, .Mouse_Move:
+			t = s.pressed
+			if t == nil { t = term_at(app, e.pos) }
+			if t == nil || t.vt == nil { t = nil; break }
+			out = term.event(&t.view, e)
+			if s.pressed == t && t.view.press == .None { s.pressed = nil }
 		}
-		if !take {
+		switch out {
+		case .Ignored, .Taken:
+		case .Copy:   clip_set(term.selection_text(&t.view))
+		case .Paste:  term_paste(app, t)
+		case .Menu:   s.menu_for, s.menu_at = t, e.pos
+		case .Zoomed: term_zoom_keep(app, t)
+		}
+		if out == .Ignored {
 			events[kept] = e
 			kept += 1
 		}
@@ -1110,8 +1099,7 @@ term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 
 @(private = "file")
 term_paste :: proc(app: ^App, t: ^Term) {
-	text := platform.get_clipboard(app.win, context.temp_allocator)
-	term_send(t, term_paste_text(t, text))
+	term.paste(&t.view, platform.get_clipboard(app.win, context.temp_allocator))
 }
 
 ////////////////////////////////
@@ -1129,12 +1117,12 @@ terminals_settle :: proc(app: ^App) {
 	s.focused = nil
 	focus := ui.focus_key()
 	for t in s.list {
-		if t.shown && !t.detached && focus != 0 && t.box == focus {
+		if t.shown && !t.detached && focus != 0 && t.view.box == focus {
 			s.focused = t
 			s.last_panel = t.panel
 		}
 	}
-	if t := s.pressed; t != nil && !t.detached && (!t.shown || overlay_open(app) || ui.active_key() != t.box) { term_press_end(s) }
+	if t := s.pressed; t != nil && !t.detached && (!t.shown || overlay_open(app) || ui.active_key() != t.view.box) { term_press_end(s) }
 }
 
 // What says a shell is not there, and what can be done about it.
@@ -1159,34 +1147,24 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 	}
 }
 
+// The look of a grid, the theme's and the program's faces.
+@(private = "file")
+term_style :: proc(app: ^App, em: f32) -> term.Style {
+	return {
+		fonts = &app.fonts, font = app.term_font, font_bold = app.term_font_bold, font_size = em * FS_NOTE, pad = TERM_PAD,
+		background = hex(HEX_TERM_BG), selection = hex(HEX_TERM_SELECTION), faint = TERM_FAINT, cursor_alpha = TERM_CURSOR_ALPHA,
+	}
+}
+
 // A shell, in its panel.
 terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
 	s := &app.cx.terms
 	term_banner(app, t, em)
-	// (a box that scrolls, over a space as tall as the scrollback: its scroll bar is the toolkit's, in the theme's look, held,
-	// pressed in its track, as every list's; term_scroll_sync keeps it and the grid's view together)
-	ui.next({width = ui.fill(), height = ui.fill(), cursor = .Text})
-	b := ui.build_box({.Clickable, .Focusable, .Clip, .View_Scroll_Y, .View_Clamp_Y}, "###term_box")
-	sig := ui.signal(b)
-	if sig.pressed || term_takes_focus(s, t, ui.focus_key()) { ui.set_focus(b.key) }
-	t.box, t.rect, t.shown = b.key, b.rect, true
-	t.metrics.font_size = math.round(em * FS_NOTE * t.zoom)
-	advance := font.text_width(&app.fonts, app.term_font, t.metrics.font_size, "M")
-	t.metrics.cell_w = math.ceil(advance)
-	t.metrics.spacing = t.metrics.cell_w - advance
-	t.metrics.spacing_bold = t.metrics.cell_w - font.text_width(&app.fonts, app.term_font_bold, t.metrics.font_size, "M")
-	m := font.metrics(&app.fonts, app.term_font, t.metrics.font_size)
-	t.metrics.cell_h = math.ceil(m.line_height)
-	t.metrics.ascent = m.ascent
-	term_fit(app, t, b.rect)
-	term_scroll_sync(t, b)
-	// the space the box scrolls over: as tall as the scrollback, the view its part (the bar's thumb)
-	if ui.parent(b) {
-		ui.next({width = ui.fill(), height = ui.px(term_scroll_height(t, b))})
-		ui.build_box({}, "###term_space")
-	}
-	b.custom, b.custom_user = term_draw, t
-	menu := ui.key_from_string(b.key, "term_menu")
+	// (the picture read last holds the screen from before the shell's new size, until it has painted the new one)
+	t.view.hold = term_painting(ui.now_ms(), t.told_ms, t.fed_ms, t.asked_ms)
+	term.build(&t.view, term_style(app, em), term_takes_focus(s, t, ui.focus_key()))
+	t.shown = true
+	menu := ui.key_from_string(t.view.box, "term_menu")
 	if s.menu_for == t { ui.ctx_menu_open(menu, s.menu_at); s.menu_for = nil }
 	if ui.ctx_menu(menu, em * TERM_MENU_EM) { term_menu(app, t) }
 }
@@ -1194,19 +1172,20 @@ terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
 // What a right click on a shell's grid offers: its selection, what the clipboard holds, the whole screen; a command's output, all of it.
 @(private = "file")
 term_menu :: proc(app: ^App, t: ^Term) {
-	if ui.menu_item("Copy", t.read_only ? "Ctrl+C" : "Ctrl+Shift+C", icon = lucide.COPY, enabled = term_has_selection(t)).clicked {
-		clip_set(term_selection_text(t))
+	v := &t.view
+	if ui.menu_item("Copy", v.read_only ? "Ctrl+C" : "Ctrl+Shift+C", icon = lucide.COPY, enabled = term.has_selection(v)).clicked {
+		clip_set(term.selection_text(v))
 	}
-	if !t.read_only && ui.menu_item("Paste", "Ctrl+Shift+V", icon = lucide.CLIPBOARD_PASTE).clicked { term_paste(app, t) }
-	if ui.menu_item("Select all", icon = lucide.TEXT_CURSOR_INPUT, enabled = t.vt != nil).clicked { term_select_all(t) }
+	if !v.read_only && ui.menu_item("Paste", "Ctrl+Shift+V", icon = lucide.CLIPBOARD_PASTE).clicked { term_paste(app, t) }
+	if ui.menu_item("Select all", icon = lucide.TEXT_CURSOR_INPUT, enabled = t.vt != nil).clicked { term.select_all(v) }
 	ui.menu_separator()
-	if ui.menu_item("Zoom in", "Ctrl+=", icon = lucide.PLUS).clicked { term_zoom_set(app, t, t.zoom * ZOOM_FACTOR) }
-	if ui.menu_item("Zoom out", "Ctrl+-", icon = lucide.CHEVRON_DOWN).clicked { term_zoom_set(app, t, t.zoom / ZOOM_FACTOR) }
-	reset := t.zoom != 1 ? fmt.tprintf("Reset the zoom (%d%%)", int(math.round(t.zoom * 100))) : "Reset the zoom"
-	if ui.menu_item(reset, "Ctrl+0", icon = lucide.UNDO_2, enabled = t.zoom != 1).clicked { term_zoom_set(app, t, 1) }
-	if v := output_view_of_term(app, t); v != nil {
+	if ui.menu_item("Zoom in", "Ctrl+=", icon = lucide.PLUS).clicked { term_zoom_set(app, t, v.zoom * term.ZOOM_STEP) }
+	if ui.menu_item("Zoom out", "Ctrl+-", icon = lucide.CHEVRON_DOWN).clicked { term_zoom_set(app, t, v.zoom / term.ZOOM_STEP) }
+	reset := v.zoom != 1 ? fmt.tprintf("Reset the zoom (%d%%)", int(math.round(v.zoom * 100))) : "Reset the zoom"
+	if ui.menu_item(reset, "Ctrl+0", icon = lucide.UNDO_2, enabled = v.zoom != 1).clicked { term_zoom_set(app, t, 1) }
+	if o := output_view_of_term(app, t); o != nil {
 		ui.menu_separator()
-		if ui.menu_item("Copy all the output", icon = lucide.COPY, enabled = len(v.raw) > 0).clicked { clip_set(plain_output(string(v.raw[:]))) }
+		if ui.menu_item("Copy all the output", icon = lucide.COPY, enabled = len(o.raw) > 0).clicked { clip_set(plain_output(string(o.raw[:]))) }
 	}
 }
 
@@ -1250,33 +1229,6 @@ term_label :: proc(t: ^Term) -> string {
 	return ellipsize(fmt.tprintf("%s%s", name, tail), TERM_TAB_CHARS)
 }
 
-// The grid follows the panel at once. The shell is told the last size, one request at a time, once the grid has rested. A window being
-// dragged would otherwise send one for each step, on as many threads, in no order, and the last to arrive would be any of them; and a
-// shell paints its whole screen again for each size it takes, in pieces, which the grid would show: its text a few rows off, for a frame.
-//
-// A zoom that moves (the wheel turned notch after notch) keeps the grid as it is, drawn in the new cells, until it rests: each
-// new number of columns rewraps every row of the scrollback, thousands of them, at every notch.
-@(private = "file")
-term_fit :: proc(app: ^App, t: ^Term, r: draw.Rect) {
-	if t.vt == nil || t.metrics.cell_w <= 0 || r.max.x - r.min.x < 1 { return }
-	if t.fitted && t.zoom_ms != 0 && ui.now_ms() - t.zoom_ms < TERM_ZOOM_REST_MS { return }
-	cols := u16(clamp((r.max.x - r.min.x - 2 * TERM_PAD) / t.metrics.cell_w, 2, 1000))
-	rows := u16(clamp((r.max.y - r.min.y - 2 * TERM_PAD) / t.metrics.cell_h, 2, 1000))
-	term_resize(app, t, cols, rows, u32(t.metrics.cell_w), u32(t.metrics.cell_h))
-}
-
-term_resize :: proc(app: ^App, t: ^Term, cols, rows: u16, cell_w, cell_h: u32) {
-	t.fitted = true
-	if cols != t.cols || rows != t.rows {
-		t.cols, t.rows = cols, rows
-		ghostty_terminal_resize(t.vt, cols, rows, cell_w, cell_h)
-		t.grid_ms = ui.now_ms()
-		app.cx.due[.Term_Size] = {}   // (from this step, the last so far: an earlier wake would find the grid not rested, and nothing would come after it)
-		ui.deferred_ask(&app.cx.due[.Term_Size], TERM_SIZE_QUIET_MS)
-	}
-	term_size_send(app, t)
-}
-
 // Has the grid rested? (The first size goes at once: a shell starts at the size it will have.)
 term_size_rested :: proc(now, grid_ms: f64, told_once: bool) -> bool {
 	return !told_once || now - grid_ms >= TERM_SIZE_QUIET_MS
@@ -1291,11 +1243,11 @@ term_painting :: proc(now, told_ms, fed_ms, asked_ms: f64) -> bool {
 
 // (Only to a shell attached: one that ended has no size to take; what happened meanwhile goes when it is attached, term_link_set.)
 term_size_send :: proc(app: ^App, t: ^Term) {
-	size := [2]u16{t.cols, t.rows}
-	if t.link != .Attached || !t.fitted || t.size_flying || size == t.size_sent { return }
+	size := [2]u16{u16(t.view.cols), u16(t.view.rows)}
+	if t.link != .Attached || !t.view.fitted || t.size_flying || size == t.size_sent { return }
 	if !term_size_rested(ui.now_ms(), t.grid_ms, t.size_sent != {}) { return }
 	t.size_flying, t.size_asked, t.asked_ms = true, size, ui.now_ms()
-	request(app, .Pty_Size, "PUT", term_path(t), fmt.tprintf(`{{"size":{{"rows":%d,"cols":%d}}}}`, t.rows, t.cols), t.id, conn = t.server)
+	request(app, .Pty_Size, "PUT", term_path(t), fmt.tprintf(`{{"size":{{"rows":%d,"cols":%d}}}}`, size[1], size[0]), t.id, conn = t.server)
 }
 
 // Refused, it is not asked again for the same size: the frames would ask for ever.
@@ -1332,229 +1284,6 @@ terms_size_due :: proc(app: ^App) {
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
-// The rows libghostty-vt says changed since they were last built, built again from its cells: none in a frame where the shell
-// wrote nothing, the view did not move and nothing was selected (each of those marks its rows, or all of them). Its dirty flags
-// are then taken as read (ghostty_render_state_clean): the next update says only what changed after.
-term_rows_build :: proc(t: ^Term, colors: ^Vt_Colors) {
-	dirty: i32 = VT_DIRTY_FULL
-	ghostty_render_state_get(t.state, VT_STATE_DIRTY, &dirty)
-	every := t.rows_stale || dirty == VT_DIRTY_FULL
-	if !every && dirty == VT_DIRTY_FALSE { return }
-	if ghostty_render_state_get(t.state, VT_STATE_ROW_ITERATOR, &t.rows_it) != VT_OK { return }
-	y := 0
-	for ghostty_render_state_row_iterator_next(t.rows_it) {
-		defer y += 1
-		fresh := y == len(t.drawn_rows)   // (never built: whatever its flag says)
-		if fresh {
-			a := t.drawn_rows.allocator
-			append(&t.drawn_rows, Term_Row{make([dynamic]u8, a), make([dynamic]Term_Run, a), make([dynamic]Term_Fill, a), make([dynamic]Term_Mark, a)})
-		}
-		if !every && !fresh {
-			changed := true
-			ghostty_render_state_row_get(t.rows_it, VT_ROW_DIRTY, &changed)
-			if !changed { continue }
-		}
-		term_row_build(t, &t.drawn_rows[y], colors)
-	}
-	// (fewer rows: the view is shorter, and only a full update says so)
-	for len(t.drawn_rows) > y { r := pop(&t.drawn_rows); term_row_delete(&r) }
-	ghostty_render_state_clean(t.state)
-	t.rows_stale = false
-}
-
-@(private = "file")
-term_row_delete :: proc(r: ^Term_Row) {
-	delete(r.text); delete(r.runs); delete(r.fills); delete(r.marks)
-}
-
-// One row, from its cells: what is not ASCII stands alone, at the column it belongs to, whatever width the fallback face gives it.
-@(private = "file")
-term_row_build :: proc(t: ^Term, r: ^Term_Row, colors: ^Vt_Colors) {
-	t.rows_built += 1
-	clear(&r.text); clear(&r.runs); clear(&r.fills); clear(&r.marks)
-	if ghostty_render_state_row_get(t.rows_it, VT_ROW_CELLS, &t.cells) != VT_OK { return }
-	picked := Vt_Row_Selection{size = size_of(Vt_Row_Selection)}
-	has_picked := ghostty_render_state_row_get(t.rows_it, VT_ROW_SELECTION, &picked) == VT_OK
-	run_col: u16
-	run_from: int
-	run_color: Color
-	run_bold := false
-	flush :: proc(r: ^Term_Row, from: int, col: u16, color: Color, bold: bool) {
-		trimmed := strings.trim_right_space(string(r.text[from:]))
-		resize(&r.text, from + len(trimmed))   // (the spaces after a run's last letter draw nothing)
-		if trimmed != "" { append(&r.runs, Term_Run{col, u32(from), u32(len(r.text)), color, bold}) }
-	}
-	// (cells side by side of one colour, or one line, are one rectangle)
-	fill :: proc(r: ^Term_Row, x: u16, color: Color, picked: bool) {
-		if n := len(r.fills); n > 0 {
-			last := &r.fills[n - 1]
-			if last.to == x && last.picked == picked && (picked || last.color == color) { last.to = x + 1; return }
-		}
-		append(&r.fills, Term_Fill{x, x + 1, color, picked})
-	}
-	mark :: proc(r: ^Term_Row, x: u16, color: Color, strike: bool) {
-		// (a cell underlined and struck adds two: the one before the last may be of its kind)
-		for i := len(r.marks) - 1; i >= max(len(r.marks) - 2, 0); i -= 1 {
-			m := &r.marks[i]
-			if m.strike == strike && m.to == x && m.color == color { m.to = x + 1; return }
-		}
-		append(&r.marks, Term_Mark{x, x + 1, color, strike})
-	}
-	x: u16 = 0
-	for ghostty_render_state_row_cells_next(t.cells) {
-		defer x += 1
-		style: Vt_Style
-		ghostty_render_state_row_cells_get(t.cells, VT_CELL_STYLE, &style)
-		bold := style.flags & VT_STYLE_BOLD != 0
-		fg := colors.foreground
-		ghostty_render_state_row_cells_get(t.cells, VT_CELL_FG, &fg)
-		bg := colors.background
-		has_bg := ghostty_render_state_row_cells_get(t.cells, VT_CELL_BG, &bg) == VT_OK
-		if style.flags & VT_STYLE_INVERSE != 0 { fg, bg, has_bg = bg, fg, true }
-		if has_picked && x >= picked.start_x && x <= picked.end_x {
-			fill(r, x, {}, true)
-		} else if has_bg {
-			fill(r, x, color_of(bg), false)
-		}
-		color := color_of(fg)
-		if style.flags & VT_STYLE_FAINT != 0 { color.a *= TERM_FAINT }
-		glyphs: [8]u32
-		read := Vt_Codepoints{ptr = &glyphs[0], cap = len(glyphs)}
-		ghostty_render_state_row_cells_get(t.cells, VT_CELL_GRAPHEMES_BUF, &read)   // (more than it holds: the first of them)
-		n := min(read.len, len(glyphs))
-		if style.flags & VT_STYLE_INVISIBLE != 0 { n = 0 }
-		if style.flags & VT_STYLE_UNDERLINE != 0 { mark(r, x, color, false) }
-		if style.flags & VT_STYLE_STRIKETHROUGH != 0 { mark(r, x, color, true) }
-		ascii := n == 1 && glyphs[0] < 0x80
-		started := len(r.text) > run_from
-		if n == 0 {
-			if started { append(&r.text, ' ') }
-			continue
-		}
-		if !ascii || color != run_color || bold != run_bold || !started {
-			flush(r, run_from, run_col, run_color, run_bold)
-			run_from, run_col, run_color, run_bold = len(r.text), x, color, bold
-		}
-		for g in glyphs[:n] {
-			bytes, w := utf8.encode_rune(rune(g))
-			append(&r.text, ..bytes[:w])
-		}
-		if !ascii {
-			flush(r, run_from, run_col, run_color, run_bold)
-			run_from = len(r.text)
-		}
-	}
-	flush(r, run_from, run_col, run_color, run_bold)
-}
-
-@(private = "file")
-term_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	app := the_app
-	s := &app.cx.terms
-	t := (^Term)(user)
-	if t.vt == nil { return }
-	draw.rect(dc, b.rect, hex(HEX_TERM_BG))
-	// (the state read last holds the picture from before the shell's new size)
-	if !term_painting(ui.now_ms(), t.told_ms, t.fed_ms, t.asked_ms) || !t.drawn {
-		if ghostty_render_state_update(t.state, t.vt) != VT_OK { return }
-		t.drawn = true
-	}
-	colors := Vt_Colors{size = size_of(Vt_Colors)}
-	if ghostty_render_state_get(t.state, VT_STATE_COLORS, &colors) != VT_OK { return }
-	term_rows_build(t, &colors)
-	origin := b.rect.min + TERM_PAD
-	m := &t.metrics
-	at :: proc(origin: f32, col: u16, w: f32) -> f32 { return origin + f32(col) * w }
-	for &r, y in t.drawn_rows {
-		top := origin.y + f32(y) * m.cell_h
-		for f in r.fills {
-			draw.rect(dc, {{at(origin.x, f.from, m.cell_w), top}, {at(origin.x, f.to, m.cell_w), top + m.cell_h}}, f.picked ? hex(HEX_TERM_SELECTION) : f.color)
-		}
-		for k in r.marks {
-			lo := k.strike ? top + m.cell_h * 0.55 : top + m.ascent + 1
-			draw.rect(dc, {{at(origin.x, k.from, m.cell_w), lo}, {at(origin.x, k.to, m.cell_w), lo + 1}}, k.color)
-		}
-		// (each letter a cell wide: at the face's own advance a run fell behind the grid, and the next run, at its cell,
-		// left a gap after every change of colour)
-		for run in r.runs {
-			text := string(r.text[run.from:run.to])
-			draw.text_ex(dc, run.bold ? app.term_font_bold : app.term_font, m.font_size, {at(origin.x, run.col, m.cell_w), top + m.ascent}, run.color, text, {letter_spacing = run.bold ? m.spacing_bold : m.spacing})
-		}
-	}
-	term_draw_cursor(t, s, dc, origin, &colors)
-}
-
-@(private = "file")
-term_draw_cursor :: proc(t: ^Term, s: ^Terminals, dc: ^draw.Context, origin: [2]f32, colors: ^Vt_Colors) {
-	visible, in_view: bool
-	ghostty_render_state_get(t.state, VT_STATE_CURSOR_VISIBLE, &visible)
-	ghostty_render_state_get(t.state, VT_STATE_CURSOR_IN_VIEW, &in_view)
-	if !visible || !in_view { return }
-	cx, cy: u16
-	ghostty_render_state_get(t.state, VT_STATE_CURSOR_X, &cx)
-	ghostty_render_state_get(t.state, VT_STATE_CURSOR_Y, &cy)
-	look: i32
-	ghostty_render_state_get(t.state, VT_STATE_CURSOR_STYLE, &look)
-	color := color_of(colors.cursor_has_value ? colors.cursor : colors.foreground)
-	left, top := origin.x + f32(cx) * t.metrics.cell_w, origin.y + f32(cy) * t.metrics.cell_h
-	r := draw.Rect{{left, top}, {left + t.metrics.cell_w, top + t.metrics.cell_h}}
-	switch {
-	case s.focused != t:
-		t1 := px1()
-		draw.rect(dc, {r.min, {r.max.x, r.min.y + t1}}, color)
-		draw.rect(dc, {{r.min.x, r.max.y - t1}, r.max}, color)
-		draw.rect(dc, {r.min, {r.min.x + t1, r.max.y}}, color)
-		draw.rect(dc, {{r.max.x - t1, r.min.y}, r.max}, color)
-	case look == VT_CURSOR_BAR:       draw.rect(dc, {r.min, {r.min.x + 2 * px1(), r.max.y}}, color)
-	case look == VT_CURSOR_UNDERLINE: draw.rect(dc, {{r.min.x, r.max.y - 2 * px1()}, r.max}, color)
-	case:
-		color.a *= TERM_CURSOR_ALPHA
-		draw.rect(dc, r, color)
-	}
-}
-
-////////////////////////////////
-// The grid's scroll bar
-
-// How tall the space the grid's box scrolls over is: the box as many times as the scrollback holds its view (the box's own
-// height: nothing to scroll).
-@(private = "file")
-term_scroll_height :: proc(t: ^Term, b: ^ui.Box) -> f32 {
-	bar: Vt_Scrollbar
-	h := max(b.size.y, 1)
-	if t.vt == nil || ghostty_terminal_get(t.vt, VT_DATA_SCROLLBAR, &bar) != VT_OK || bar.total <= bar.len || bar.len == 0 { return h }
-	return h * f32(bar.total) / f32(bar.len)
-}
-
-// The box's scroll and the grid's view, together: the bar moved (held, pressed in its track) moves the view to the row it says;
-// else the view (the wheel, what the shell writes, Shift+Page Up) puts the box's scroll where it is.
-@(private = "file")
-term_scroll_sync :: proc(t: ^Term, b: ^ui.Box) {
-	bar: Vt_Scrollbar
-	if t.vt == nil || ghostty_terminal_get(t.vt, VT_DATA_SCROLLBAR, &bar) != VT_OK || bar.total <= bar.len { t.bar_at = 0; return }
-	limit := ui.view_limit(b)
-	if limit <= 0 { return }
-	room := f32(bar.total - bar.len)
-	if abs(b.view_target.y - t.bar_at) > 0.5 {
-		want := i64(math.round(clamp(b.view_target.y / limit, 0, 1) * room))
-		ghostty_terminal_scroll_viewport(t.vt, {tag = .Delta, value = want - i64(bar.offset)})
-		t.bar_at = b.view_target.y
-		return
-	}
-	y := limit * f32(bar.offset) / room
-	ui.view_jump(b, y)
-	t.bar_at = y
-}
-
-// Whether `p` is on the grid's scroll bar (where the toolkit takes a press on it): that press is the interface's, not the shell's.
-@(private = "file")
-term_on_bar :: proc(t: ^Term, p: [2]f32) -> bool {
-	b := ui.box_from_key(t.box)
-	if b == nil { return false }
-	_, on := ui.scrollbar_under(b, p)
-	return on
-}
-
 ////////////////////////////////
 // Each shell's zoom
 
@@ -1570,27 +1299,31 @@ term_zooms_load :: proc(app: ^App) {
 	z := &app.term_zooms
 	for e in store.list(&app.stores.zooms) {
 		v, ok := strconv.parse_f32(e.value)
-		if ok && v != 1 { z.by_id[strings.clone(e.key)] = clamp(v, TERM_ZOOM_MIN, TERM_ZOOM_MAX) }
+		if ok && v != 1 { z.by_id[strings.clone(e.key)] = clamp(v, term.ZOOM_MIN, term.ZOOM_MAX) }
 	}
 }
 
-// A shell's zoom, within its bounds; kept when the shell is one of the server's (an output's grid has its own for the time
-// it is open).
+// A shell's zoom (term.zoom_set: within its bounds), kept.
 term_zoom_set :: proc(app: ^App, t: ^Term, zoom: f32) {
-	t.zoom = clamp(zoom, TERM_ZOOM_MIN, TERM_ZOOM_MAX)
-	if abs(t.zoom - 1) < 0.01 { t.zoom = 1 }   // (steps of 1.1 back and forth come back near 1, not to it)
-	// (a frame when it rests: the grid takes its new columns and rows then, term_fit)
-	t.zoom_ms = ui.now_ms()
+	term.zoom_set(&t.view, zoom)
+	term_zoom_keep(app, t)
+}
+
+// The zoom moved: a frame when it rests (the grid takes its new columns and rows then), and kept when the shell is one of
+// the server's (an output's grid has its own for the time it is open).
+@(private = "file")
+term_zoom_keep :: proc(app: ^App, t: ^Term) {
 	app.cx.due[.Term_Size] = {}
-	ui.deferred_ask(&app.cx.due[.Term_Size], TERM_ZOOM_REST_MS)
+	ui.deferred_ask(&app.cx.due[.Term_Size], term.ZOOM_REST_MS)
 	if term_find(app, t.id) != t { return }
+	zoom := t.view.zoom
 	z := &app.term_zooms
-	if t.zoom == 1 {
+	if zoom == 1 {
 		term_zoom_forget(app, t.id)
 		return
 	}
-	if t.id not_in z.by_id { z.by_id[strings.clone(t.id)] = t.zoom } else { z.by_id[t.id] = t.zoom }
-	store.set(&app.stores.zooms, t.id, fmt.tprintf("%v", t.zoom))   // (%v: read back, the same number)
+	if t.id not_in z.by_id { z.by_id[strings.clone(t.id)] = zoom } else { z.by_id[t.id] = zoom }
+	store.set(&app.stores.zooms, t.id, fmt.tprintf("%v", zoom))   // (%v: read back, the same number)
 }
 
 term_zoom_forget :: proc(app: ^App, id: string) {

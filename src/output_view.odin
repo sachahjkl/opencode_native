@@ -4,7 +4,7 @@ package ocn
 // dialog, or a window of its own for a large or a second screen. A command that runs is followed; when it ends the view says so and offers to
 // close, as watching no longer serves. One that has ended shows what it printed.
 //
-// It is a Term of the terminal's, connected to nothing (Term.read_only): the bytes come from GET /api/shell/:id/output, which is the server's
+// It is a Term of the terminal's, connected to nothing (its grid read only: Term.view.read_only): the bytes come from GET /api/shell/:id/output, which is the server's
 // for as long as it keeps the command, or from the call's own text once it does not. A pipe's lines end in a bare newline where a terminal
 // expects the return with it: output_view_feed adds it.
 
@@ -75,7 +75,7 @@ output_view_new :: proc(app: ^App, shell, tool, command, dir: string) -> ^Output
 	v.shell, v.tool, v.command, v.dir = strings.clone(shell), strings.clone(tool), strings.clone(command), strings.clone(dir)
 	v.status = .Running
 	v.term = term_new(shell != "" ? shell : tool, command, dir)
-	v.term.read_only, v.term.detached, v.term.panel = true, true, v.panel   // (detached: no part in the main window's input)
+	v.term.view.read_only, v.term.detached, v.term.panel = true, true, v.panel   // (detached: no part in the main window's input)
 	term_feed(v.term, "\x1b[?25l")   // (nothing is typed here: no cursor)
 	output_view_echo(v)
 	append(&o.list, v)

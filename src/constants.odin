@@ -87,11 +87,8 @@ HEX_PAL_SELECTED    :: 0x0c0c0cff
 // Commands
 
 ZOOM_FACTOR :: 1.1
-TERM_ZOOM_MIN :: 0.5   // a shell's own zoom, times the program's size
-TERM_ZOOM_MAX :: 3
 PALETTE_SESSION_CHARS :: 40   // the session a command acts on, beside it in the palette
 TOOL_ELAPSED_TENTHS_S :: 10   // a tool call's time with its tenths under this many seconds (elapsed_text)
-TERM_ZOOM_REST_MS :: 150   // a shell's zoom at rest after this long without a notch: its grid takes its new size (term_fit)
 
 ////////////////////////////////
 // Context menus
@@ -237,7 +234,6 @@ TERM_COLS            :: 80     // a shell before its panel is laid out
 TERM_ROWS            :: 24
 TERM_SCROLLBACK_LINES :: 10000
 TERM_PAD             :: 6      // between the panel and the grid
-TERM_KEY_BYTES       :: 128
 TERM_TAB_CHARS       :: 24
 TERM_READ_MS         :: 5      // what a key may wait for its shell's thread
 TERM_SIZE_QUIET_MS   :: 150.0  // a shell is told its size once the grid has rested this long: each size it takes, it paints again

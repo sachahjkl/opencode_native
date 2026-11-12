@@ -8,6 +8,7 @@ import "core:fmt"
 import "core:strings"
 import "core:testing"
 import "gt:platform"
+import "gt:term"
 import "gt:ui"
 
 @(private = "file")
@@ -33,7 +34,7 @@ told_after_drag :: proc(t: ^testing.T, stop: int) -> bool {
 	app := bench_new()
 	shells_open(t, app, "a")
 	s := app.cx.terms.list[0]
-	term_resize(app, s, 100, 30, 8, 16)
+	term.size_set(&s.view, 100, 30, {8, 16})
 	bench_answer(app, bench_take(t, .Pty_Size), 200, "")
 	bench_clock += 2000
 	due_tick(app, .Term_Size)
@@ -42,7 +43,7 @@ told_after_drag :: proc(t: ^testing.T, stop: int) -> bool {
 	cols := u16(100)
 	for ms := 0; ms <= stop; ms += 10 {
 		cols += 1
-		term_resize(app, s, cols, 30, 8, 16)
+		term.size_set(&s.view, int(cols), 30, {8, 16})
 		if ms < stop { bench_clock += 10 }
 	}
 	app.settle = FRAMES_AFTER_INPUT
@@ -51,7 +52,7 @@ told_after_drag :: proc(t: ^testing.T, stop: int) -> bool {
 		bench_clock += 1
 		if ui.deferred_in_ms(&app.cx.due[.Term_Size]) > 0 && bench_clock >= app.cx.due[.Term_Size].due_ms { due_tick(app, .Term_Size) }
 		if app.settle > 0 && bench_clock >= next_frame {
-			term_resize(app, s, cols, 30, 8, 16)   // (terminal_panel's term_fit, at each build)
+			term.size_set(&s.view, int(cols), 30, {8, 16})   // (the grid's fit in term.build, at each build)
 			app.settle -= 1
 			next_frame = bench_clock + 17
 		}

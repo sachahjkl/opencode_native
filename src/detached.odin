@@ -128,7 +128,7 @@ detached_stop :: proc(app: ^App) {
 detached_body :: proc(app: ^App, d: ^Detached, size: draw.Vec2, em: f32) {
 	if v := output_view_of_panel(app, d.panel); v != nil {
 		output_view_body(app, v, em, true)
-		ui.set_focus(v.term.box)
+		ui.set_focus(v.term.view.box)
 		return
 	}
 	switch {
@@ -140,7 +140,7 @@ detached_body :: proc(app: ^App, d: ^Detached, size: draw.Vec2, em: f32) {
 	case:
 		if t := term_of_panel(app, d.panel); t != nil {
 			terminal_panel(app, em, t)
-			ui.set_focus(t.box)
+			ui.set_focus(t.view.box)
 		}
 	}
 }
