@@ -1,6 +1,7 @@
 package ocntools
 
-// docs/screenshots/*.png, and the copies of them in site/img: the frames the program rendered, so the mouse, the keyboard and the
+// docs/screenshots/*.webp, which the README shows and the site publishes (site build): the frames the program rendered, in WebP
+// (toolbox.webp_encode: a twentieth of their PNG, the text as sharp), so the mouse, the keyboard and the
 // windows in front are left alone. It runs with an empty settings folder and reads the demo sessions of the local server; nothing is
 // sent to it but the shell of the terminal's picture, closed right after.
 //   ocntools shots [--build] [--only name,name] [--exe file] [--session id] [--work-session id] [--toolkit folder] [--out folder]
@@ -10,7 +11,7 @@ package ocntools
 //     --session      the session to show (only ever one made for pictures: they are published)
 //     --work-session the one that edits a file and keeps a todo list (made for pictures too)
 //     --font-dir     tries these faces (src/main.odin: fonts_from_dir)
-//     --linux        just linux.png: this Linux build of the program, run in WSL (ocntools wsl_client), Windows only
+//     --linux        just linux.webp: this Linux build of the program, run in WSL (ocntools wsl_client), Windows only
 //     --linux-build  the same from this tree, built in WSL with the flake (ocntools wsl_build): no release needed
 
 import "core:encoding/json"
@@ -24,7 +25,6 @@ import toolbox "gt:toolbox"
 
 SHOTS_EXE   :: "build/screenshots" + EXE
 SHOTS_DOCS  :: "docs/screenshots"
-SHOTS_SITE  :: "site/img"
 WSL_PORT    :: 9391
 WSL_LIMIT   :: 60 * time.Second   // (WSL may fetch its libraries first)
 SHOT_LIMIT  :: 15 * time.Second
@@ -46,7 +46,7 @@ Shots :: struct {
 	work_session:      string,
 	font_dir:          string,
 	linux:             string,
-	to_site:           bool,
+	encoder:           string,   // cwebp (toolbox.webp_encoder)
 }
 
 // A picture in the making: the first step that fails is what is said, the steps after it do nothing.
@@ -271,7 +271,7 @@ ready_subagent_session :: proc(s: ^Snap) {
 // (about one pixel of the picture per pixel of the window: sharp)
 @(private = "file")
 ready_viewer :: proc(s: ^Snap) {
-	if s.ok { step(s, cdp.wait_for(s.dt, "conversation.png", SHOT_LIMIT)) }
+	if s.ok { step(s, cdp.wait_for(s.dt, "conversation.webp", SHOT_LIMIT)) }
 	if !s.ok { return }
 	x, y := shot_at(s.dt, 0.45, 0.45)
 	film_wheel(s.dt, x, y, -1)
@@ -403,7 +403,7 @@ take :: proc(s: ^Shots, p: Picture) -> bool {
 	if p.theme != "" { append(&args, "--pref", fmt.tprintf("appearance.theme=%s", p.theme)) }
 	if p.mode != "" { append(&args, "--pref", fmt.tprintf("appearance.mode=%s", p.mode)) }
 	if p.style != "" { append(&args, "--pref", fmt.tprintf("appearance.style=%s", p.style)) }
-	if p.on_conversation { append(&args, fmt.tprintf("--image=%s/conversation.png", s.docs)) }
+	if p.on_conversation { append(&args, fmt.tprintf("--image=%s/conversation.webp", s.docs)) }
 
 	app: App
 	started: bool
@@ -432,18 +432,17 @@ take :: proc(s: ^Shots, p: Picture) -> bool {
 	if !snap.ok { fmt.eprintfln("shots: %s failed", p.name); return false }
 	if secret := leak_of(dt); secret != "" { fmt.eprintfln("shots: %s: \"%s\" would be in the picture", p.name, secret); return false }
 
-	out := fmt.tprintf("%s/%s.png", s.docs, p.name)
-	if !cdp.shot(dt, out) { return false }
-	if s.to_site && p.name != "conversation" {   // (the README's alone)
-		if os.copy_file(fmt.tprintf("%s/%s.png", SHOTS_SITE, p.name), out) != nil { return false }
-	}
+	// (the frame as the program gives it, then in WebP where it is kept)
+	frame := fmt.tprintf("%s/%s.png", LIVE_DIR, p.name)
+	if !cdp.shot(dt, frame) { return false }
+	if !toolbox.webp_encode(s.encoder, frame, fmt.tprintf("%s/%s.webp", s.docs, p.name)) { return false }
 	fmt.printfln("saved %s", p.name)
 	if p.after != nil { p.after(&snap) }
 	return snap.ok
 }
 
 run_shots :: proc(args: []string) -> int {
-	s := Shots{to_site = true, work_session = DEMO_SESSION}
+	s := Shots{work_session = DEMO_SESSION}
 	if !live_setup(&s.live, nil) { return 1 }
 	s.live.session = TOUR_SESSION
 	s.live.exe = SHOTS_EXE
@@ -466,7 +465,7 @@ run_shots :: proc(args: []string) -> int {
 		case "--session":      s.live.session = value
 		case "--work-session": s.work_session = value
 		case "--toolkit":      gt = value
-		case "--out":          s.docs = value; s.to_site = false
+		case "--out":          s.docs = value
 		case "--font-dir":     s.font_dir = value
 		case "--linux":        s.linux = value
 		case:
@@ -478,6 +477,9 @@ run_shots :: proc(args: []string) -> int {
 	if err != nil { return 1 }
 	s.docs = absolute
 	if !make_folder(s.docs) || !make_folder(LIVE_DIR) { return 1 }
+	encoder, why := toolbox.webp_encoder("build")
+	if why != "" { fmt.eprintfln("shots: no WebP encoder: %s", why); return 1 }
+	s.encoder = encoder
 	if linux_build {
 		program, built := wsl_build()
 		if !built { fmt.eprintln("shots: the build in WSL failed"); return 1 }

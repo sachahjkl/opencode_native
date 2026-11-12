@@ -11,7 +11,7 @@
 <a href="https://ocn.froment.software/"><img src="https://img.shields.io/badge/site-ocn.froment.software-56b6c2" alt="site"></a>
 </p>
 
-![A conversation: the tool calls on their timeline, sub-agents at work, the agent's reasoning](docs/screenshots/subagents.png)
+![A conversation: the tool calls on their timeline, sub-agents at work, the agent's reasoning](docs/screenshots/subagents.webp)
 
 One program, no runtime to install, written in [Odin](https://odin-lang.org) on [gui_toolkit](https://github.com/sachahjkl/gui_toolkit),
 with a small Rust library for HTTP and images. It draws with Direct3D 11 on Windows and Vulkan on Linux. It talks to the opencode
@@ -34,25 +34,25 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 
 | | |
 |---|---|
-| ![A conversation: Markdown tables, the answer of an agent](docs/screenshots/conversation.png) | ![Find in the conversation: the matches lit, the current one brighter](docs/screenshots/find.png) |
+| ![A conversation: Markdown tables, the answer of an agent](docs/screenshots/conversation.webp) | ![Find in the conversation: the matches lit, the current one brighter](docs/screenshots/find.webp) |
 | **The conversation**: Markdown, code, tokens per answer | **Find** (Ctrl+F): every match lit, Enter / F3 to the next one |
-| ![The command palette, commands listed](docs/screenshots/palette.png) | ![An edit shown as a diff](docs/screenshots/diff.png) |
+| ![The command palette, commands listed](docs/screenshots/palette.webp) | ![An edit shown as a diff](docs/screenshots/diff.webp) |
 | **The palette** (Ctrl+K): commands, sessions, agents, models, switches | **A diff** for what edits a file: line numbers, what changed in a line |
-| ![The tray under the composer, the todo list](docs/screenshots/activity.png) | ![Settings: updates](docs/screenshots/updates.png) |
+| ![The tray under the composer, the todo list](docs/screenshots/activity.webp) | ![Settings: updates](docs/screenshots/updates.webp) |
 | **What runs in the background** (Down from the composer, Ctrl+J) | **Updates**: signed, stable or beta |
-| ![The conversation of a sub-agent: where it comes from, the way back](docs/screenshots/subagent-session.png) | ![The model picker, searched as one types](docs/screenshots/picker.png) |
+| ![The conversation of a sub-agent: where it comes from, the way back](docs/screenshots/subagent-session.webp) | ![The model picker, searched as one types](docs/screenshots/picker.webp) |
 | **A sub-agent's own conversation**: the breadcrumb, Back | **The model picker**: subsequence search ("sonnet"), the matched letters lit |
-| ![Session statistics](docs/screenshots/statistics.png) | ![Settings: the themes, each in its own colours](docs/screenshots/settings.png) |
+| ![Session statistics](docs/screenshots/statistics.webp) | ![Settings: the themes, each in its own colours](docs/screenshots/settings.webp) |
 | **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Themes**: twenty-seven, dark and light or as the system, machined, edged or flat, and your own in themes.txt |
-| ![Gruvbox, light](docs/screenshots/theme-gruvbox-light.png) | ![Nord, flat](docs/screenshots/theme-nord-flat.png) |
+| ![Gruvbox, light](docs/screenshots/theme-gruvbox-light.webp) | ![Nord, flat](docs/screenshots/theme-nord-flat.webp) |
 | **Gruvbox**, its light version | **Nord** in the flat style: plain surfaces, thin lines |
-| ![Retro: a black that holds, colours that pop](docs/screenshots/theme-retro.png) | ![The conversation](docs/screenshots/conversation.png) |
+| ![Retro: a black that holds, colours that pop](docs/screenshots/theme-retro.webp) | ![The conversation](docs/screenshots/conversation.webp) |
 | **Retro**: a black that holds, colours that pop | **OpenCode**, its own black and peach |
-| ![An image in the viewer, zoomed in](docs/screenshots/viewer.png) | ![On Linux](docs/screenshots/linux.png) |
+| ![An image in the viewer, zoomed in](docs/screenshots/viewer.webp) | ![On Linux](docs/screenshots/linux.webp) |
 | **The image viewer**: zoom where the pointer is, drag to move | **On Linux** (Wayland, Vulkan): the same program |
-| ![The terminal panel under the conversation](docs/screenshots/terminal.png) | ![@ in the composer, the files of the folder proposed](docs/screenshots/mention.png) |
+| ![The terminal panel under the conversation](docs/screenshots/terminal.webp) | ![@ in the composer, the files of the folder proposed](docs/screenshots/mention.webp) |
 | **A terminal** (Ctrl+Shift+T): Ghostty's emulation, the shells of the server | **@** names a file or a sub-agent, as you type |
-| ![The files of the session's folder, one of them read](docs/screenshots/files.png) | ![Settings: the integrations of the server](docs/screenshots/connections.png) |
+| ![The files of the session's folder, one of them read](docs/screenshots/files.webp) | ![Settings: the integrations of the server](docs/screenshots/connections.webp) |
 | **The files of a session** (Ctrl+P): browse, search, read, mention | **Connections**: every integration of the server, several accounts of each |
 
 ## What it does

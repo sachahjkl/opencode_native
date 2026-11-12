@@ -1,7 +1,8 @@
 // The site, made when it is deployed (.github/workflows/pages.yml) so that it cannot be behind a release. The steps are the
 // toolkit's (gt:site); this file says what this site is: its address, names, colours, and its own check (the download each system's
 // browser is offered).
-//   ocntools site build <site> <out>       the two steps below, then the screenshots in WebP: <out> is what is published
+//   ocntools site build <site> <out>       the two steps below, then the screenshots (docs/screenshots, in WebP) at the widths
+//                                          the page shows them: <out> is what is published
 //   ocntools site changelog <site> <out>   <out> gets a copy of <site>, the history and the classic pages
 //   ocntools site meta <site> <out>        what a page says when it is shared, the files around the pages
 //   ocntools site card                     draws site/img/card.png, once, by hand
@@ -12,7 +13,10 @@
 package ocntools
 
 import "core:fmt"
+import "core:os"
+import "core:strings"
 import cdp "gt:cdp"
+import toolbox "gt:toolbox"
 import tk_site "gt:site"
 
 SITE_DIR     :: "site"
@@ -50,8 +54,8 @@ SITE_LD :: [?][2]string{
 	{"license", "https://opensource.org/license/mit"},
 }
 
-// The screenshots in WebP, at their width and at the two the page shows them at most (a gallery's column, the main column),
-// each twice for a screen of twice the pixels. The logo, the sharing card and the maker's mark stay PNG: other sites read them.
+// The screenshots at their width and at the two the page shows them at most (a gallery's column, the main column), each twice
+// for a screen of twice the pixels. The logo, the sharing card and the maker's mark stay PNG: other sites read them.
 SITE_IMAGE_WIDTHS :: [?]int{720, 1100}
 SITE_IMAGE_KEEP   :: [?]string{"logo.png", "card.png", "froment-software-64.png"}
 
@@ -63,6 +67,22 @@ site_images :: proc() -> tk_site.Images_Options {
 	o.keep = make([]string, len(keep), context.temp_allocator)
 	copy(o.keep, keep[:])
 	return o
+}
+
+// The screenshots, kept once in the repository (docs/screenshots, which the README shows too), in the published site's img.
+// (conversation.webp is the README's alone.)
+@(private = "file")
+site_screenshots :: proc(out: string) -> bool {
+	entries, err := os.read_all_directory_by_path(SHOTS_DOCS, context.temp_allocator)
+	if err != nil { fmt.eprintfln("site: no %s", SHOTS_DOCS); return false }
+	for e in entries {
+		if !strings.has_suffix(e.name, ".webp") || e.name == "conversation.webp" { continue }
+		if os.copy_file(fmt.tprintf("%s/img/%s", out, e.name), fmt.tprintf("%s/%s", SHOTS_DOCS, e.name)) != nil {
+			fmt.eprintfln("site: %s not copied", e.name)
+			return false
+		}
+	}
+	return true
 }
 
 site_meta :: proc() -> tk_site.Meta {
@@ -88,7 +108,11 @@ run_site :: proc(args: []string) -> int {
 		if what == "meta" { return tk_site.build_meta(site_meta(), site, out) ? 0 : 1 }
 		if !site_changelog(site, out) { return 1 }
 		if !tk_site.build_meta(site_meta(), out, out) { return 1 }
-		return tk_site.build_images(out, site_images()) ? 0 : 1
+		if !site_screenshots(out) { return 1 }
+		o := site_images()
+		why: string
+		if o.encoder, why = toolbox.webp_encoder("build"); why != "" { fmt.eprintfln("site: no WebP encoder: %s", why); return 1 }
+		return tk_site.build_images(out, o) ? 0 : 1
 	case "card":
 		if len(args) == 1 { return tk_site.draw_card(site_meta(), SITE_DIR) ? 0 : 1 }
 	case "check":
