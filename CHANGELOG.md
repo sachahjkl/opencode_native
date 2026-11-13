@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.47.13] - 2026-11-13
+
+### Fixed
+- **The themes' line shows it scrolls**: its scroll bar was drawn over the cards; it is under them now, and the side that hides themes fades out.
+
 ## [0.47.12] - 2026-11-12
 
 ### Added
@@ -1490,6 +1495,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.47.13]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.13
 [0.47.12]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.12
 [0.47.11]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.11
 [0.47.10]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.10
