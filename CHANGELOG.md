@@ -4,6 +4,33 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.48.0] - 2026-11-13
+
+### Added
+- **opencode native in French**: the window, its menus, dialogs, the command palette, the messages and the settings read in French. Settings › General › Language chooses: System follows the language of the system, English and Français force one. A change takes effect at the next start. What the server sends (session titles, models, tool output, the messages of a conversation) stays as the server writes it.
+- **A rail of your prompts beside the conversation**: a dot for each prompt you sent, and a band over the part in view. The pointer over a dot shows the prompt; a click goes to it at once and gives it the keyboard. A filter at the top of the rail keeps the prompts that contain what you type. Turn it on or off in Settings › Conversation › Prompt rail, or with "Show or hide the prompt rail" in the palette.
+- **A report when the program crashes**: the program writes it to its state folder with the last lines of its log. At the next start, a message says so; a click on it opens the report. Nothing is sent anywhere.
+- **A licence to support the program**: Settings › Advanced shows who the licence is registered to, or how to get one. Paste a key or choose a licence file to register it; no network is used. The program works the same without a licence.
+
+### Changed
+- **Mermaid diagrams open in a viewer of their own**: a click on a diagram opens it in a dialog that you resize freely in both directions, inside the window; the diagram fits it.
+  - The wheel moves the diagram. Ctrl with the wheel zooms it (on Windows, a pinch on a touchpad too). A drag and the arrow keys move it.
+  - Its buttons zoom in, zoom out, show it at its size in the conversation, and fit it again.
+  - A flowchart, a class, state, ER or requirement diagram can be laid out from top to bottom, left to right, bottom to top or right to left.
+- **One sidebar in Settings**: the settings of the program and the pages of the server are in one list, under CLIENT and OPENCODE, with one search. `--settings=<page>` opens a page by its name (`--settings=connections`).
+  - The settings of the look, the text and fonts, scrolling, input, delays, menus, rendering and updates have the same names and places as in the other programs of the same toolkit.
+  - The less common settings of a page are folded under Advanced. The settings file shows as a link, and Export and Import save the settings to a file and read them back.
+  - A setting you changed under its old name goes back to its default: `appearance.style` is now `appearance.finish`, the fonts are under `appearance.text`, the density and the glow are numbers. The scroll bars no longer hide by default.
+- **Messages follow the Messages setting**: every message (Copied, Exported, Forked, a failure, an update ready) goes where Settings › General › Messages says: a notification of the system, a message in the window, or nowhere. A failure is always shown. A message that you can click (an update to install, a session to open) stays in the window.
+- **The command palette learns your choices from zero**: what you choose ranks first the next time, and the advantage fades over two weeks. The choices are kept in `palette_choices.txt`. The order learned before, in `palette_usage.txt`, is not read: you can delete that file.
+- **Menus, the palette and the pickers search alike**: the application menu, the server menu and the sub-agents menu filter their items as you type. The search of the palette and of the pickers is a band across the top in the colour of a field, as in the menus: its hint shows while nothing is typed, and the number of results is at its end.
+- **Dialogs are centred and alike**: every dialog sits in the middle of the window; the pairing dialog and the wait of the image viewer sat higher. Deleting and renaming a session use the same confirmation and question as the other dialogs, and every dialog header has the same close button. The size of a dialog is now kept in text units: a dialog that you resized before opens as large as the window once; resize it again.
+- **The image viewer zooms as the diagram viewer does**: its keys (+, −, 0, the arrows) act when the picture has the keyboard. The picture has it when the viewer opens, and gets it back from a click. Shift with = zooms in too. At an interface scale over 100 %, a double click on a large picture shows its pixels one to one on the screen. The black behind the picture has corners that follow the dialog's round ones.
+
+### Fixed
+- **The window no longer freezes on the disk or the system**: the file dialogs, opening a link, a file or a folder, exporting or importing a session, reading the icon of a project, writing the files of an artifact, the restart after an update, a notification and saving the preferences no longer stop the window.
+- **The activity line over the composer** shows the pointer over it in a light theme too.
+
 ## [0.47.13] - 2026-11-13
 
 ### Fixed
@@ -1495,6 +1522,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.48.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.48.0
 [0.47.13]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.13
 [0.47.12]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.12
 [0.47.11]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.11
