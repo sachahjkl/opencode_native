@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.48.1] - 2026-11-13
+
+### Changed
+- **One licence at one price, and a new pricing page**: the opencode native licence is now one edition at 15 €, paid once, taxes included; the Patron edition is gone. The pricing page shows opencode native's icon and name, one card with the price, what the licence gives as a list, one button, then "Before you buy". The licence is named "opencode native licence" on the site, at checkout and in the licence file.
+
 ## [0.48.0] - 2026-11-13
 
 ### Added
@@ -1522,6 +1527,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.48.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.48.1
 [0.48.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.48.0
 [0.47.13]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.13
 [0.47.12]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.12
