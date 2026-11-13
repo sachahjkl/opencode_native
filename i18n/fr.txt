@@ -686,6 +686,27 @@ fr Afficher son texte
 en A diagram
 fr Un diagramme
 
+en Mermaid diagram
+fr Diagramme Mermaid
+
+en Laying out…
+fr Mise en page…
+
+en Top to bottom
+fr De haut en bas
+
+en Left to right
+fr De gauche à droite
+
+en Bottom to top
+fr De bas en haut
+
+en Right to left
+fr De droite à gauche
+
+en Direction
+fr Sens
+
 en The diagram could not be copied: it is not a diagram
 fr Impossible de copier le diagramme : ce n'est pas un diagramme
 
@@ -861,9 +882,6 @@ fr image illisible : le fichier est vide
 
 en Opening the image…
 fr Ouverture de l'image…
-
-en Mermaid diagram
-fr Diagramme Mermaid
 
 en image
 fr image

@@ -83,6 +83,7 @@ App :: struct {
 	settings:         Settings_View,  // settings.odin
 	stats:            Stats_View,     // stats.odin
 	viewer:           Image_Viewer,   // images.odin
+	diagram_view:     Diagram_Viewer, // diagrams.odin
 	previews:         Previews,       // preview_views.odin
 	ctx_menu:         Ctx_Menu,       // context_menus.odin
 	quote:            Quote_Chip,     // context_menus.odin

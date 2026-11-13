@@ -163,7 +163,8 @@ content_zoom_events :: proc(app: ^App, events: []platform.Event) {
 	for &e in events {
 		#partial switch e.kind {
 		case .Scroll:
-			if .Ctrl not_in e.mods || !draw.rect_contains(app.conversation.rect, e.pos) { continue }
+			// (a dialog over the conversation has the wheel: the diagram viewer's zooms its diagram)
+			if .Ctrl not_in e.mods || overlay_open(app) || !draw.rect_contains(app.conversation.rect, e.pos) { continue }
 			z := content_zoom(app)
 			content_zoom_set(app, e.delta.y < 0 ? z * ui.feel(&app.state).zoom_step : z / ui.feel(&app.state).zoom_step)
 			e.kind = .None

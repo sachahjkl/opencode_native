@@ -208,9 +208,10 @@ context_menu :: proc(app: ^App, em: f32) {
 			if ui.menu_item(i18n.tr("Copy the path"), icon = lucide.COPY).clicked { clip_set(app.ctx_menu.target.msg); ui.announce(&app.announcer, .Good, i18n.tr("Copied")) }
 		case .Diagram:
 			code := app.ctx_menu.target.msg
-			if ui.menu_item(i18n.tr("Copy as PNG"), app.cx.open[.Viewer] ? "Ctrl+C" : "", icon = lucide.IMAGE).clicked { diagram_copy_png(app, code) }
+			viewed := app.cx.open[.Diagram]
+			if ui.menu_item(i18n.tr("Copy as PNG"), viewed ? "Ctrl+C" : "", icon = lucide.IMAGE).clicked { diagram_copy_png(app, code, viewed ? app.diagram_view.direction : .Text) }
 			if ui.menu_item(i18n.tr("Copy the text"), icon = lucide.COPY).clicked { clip_set(code); ui.announce(&app.announcer, .Good, i18n.tr("Copied")) }
-			if !app.cx.open[.Viewer] {
+			if !viewed {
 				if ui.menu_item(i18n.tr("Open in the viewer"), icon = lucide.ZOOM_IN).clicked { diagram_view_open(app, code) }
 			}
 		}

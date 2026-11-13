@@ -18,6 +18,7 @@ import "core:time"
 import "gt:config"
 import "gt:draw"
 import "gt:font"
+import mermaid "gt:mermaid"
 import paint "gt:paint"
 import "gt:platform"
 import "gt:png"
@@ -1532,10 +1533,11 @@ a_mermaid_block_is_a_diagram :: proc(t: ^testing.T) {
 	})
 }
 
-// A diagram opens in the viewer on a click: the wheel zooms it where the pointer is, a drag moves it, + and 0; its menu copies it
-// as a picture, at twice its size in the conversation, on the colour of code.
+// A diagram opens in its viewer on a click, larger than in the conversation: Ctrl and the wheel zoom it where the pointer is,
+// the wheel and a drag move it, 0 fits it again; laid out from top to bottom, it is taller than wide; its menu copies it as a
+// picture, at twice its size in the conversation, on the colour of code.
 @(test)
-a_diagram_is_zoomed_and_moved_in_the_viewer :: proc(t: ^testing.T) {
+a_diagram_is_zoomed_moved_and_laid_out_in_the_viewer :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
@@ -1546,45 +1548,61 @@ a_diagram_is_zoomed_and_moved_in_the_viewer :: proc(t: ^testing.T) {
 		chat_scroll_event(app, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		if !testing.expect(t, session.find(s, "diagram") != nil, "drawn") { return }
+		small := session.find(s, "diagram").rect
 		session.click(s, "diagram")
 		session.wait_idle(s)
-		testing.expect(t, app.cx.open[.Viewer] && app.viewer.diagram != "", "a click opens the viewer on it")
-		view := session.find(s, "view")
+		dv := &app.diagram_view
+		testing.expect(t, app.cx.open[.Diagram] && dv.code != "", "a click opens the viewer on it")
+		testing.expect_value(t, dv.own, mermaid.Direction.Left_Right)
+		view := session.find(s, "dv_view")
 		if !testing.expect(t, view != nil, "the view") { return }
-		em := ui.font_size()
-		room := app.state.window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
+		testing.expect(t, app.state.focus_key == view.key, "the view has the keyboard")
 		vs := view.rect.max - view.rect.min
-		testing.expectf(t, vs.x > room.x * app.prefs.viewer_scale - 2 * em || vs.y > room.y * app.prefs.viewer_scale - 4 * em, "larger than in the conversation: the share of the room (%v of %v)", vs, room)
+		testing.expectf(t, vs.x > small.max.x - small.min.x, "larger than in the conversation: %v", vs)
 		at := session.center(view) + {30, 10}
 		session.move(s, at)
-		session.wheel(s, at, {0, -3})
+		session.wheel(s, at, {0, -3}, {.Ctrl})
 		session.frames(s, 2)
-		testing.expectf(t, app.viewer.zoom > 1.9, "the wheel zooms: %v", app.viewer.zoom)
-		testing.expectf(t, app.viewer.pan.x < 0 && app.viewer.pan.y < 0, "toward the pointer: %v", app.viewer.pan)
+		testing.expectf(t, dv.preview.zoom > 1.9, "Ctrl and the wheel zoom: %v", dv.preview.zoom)
+		testing.expectf(t, dv.preview.pan.x < 0 || dv.preview.pan.y < 0, "toward the pointer: %v", dv.preview.pan)
 		session.save_png(s, "diagram_viewer.png")
-		from := app.viewer.pan
+		from := dv.preview.pan
+		session.wheel(s, at, {0, 1})
+		session.frames(s, 2)
+		testing.expect(t, dv.preview.pan != from, "the wheel moves it")
+		from = dv.preview.pan
 		c := session.center(view)
 		session.press(s, c)
 		session.move(s, c + {20, 10})
 		session.move(s, c + {40, 20})
 		session.release(s, c + {40, 20})
 		session.frames(s, 2)
-		testing.expectf(t, abs(app.viewer.pan.x - from.x - 40) < 1 && abs(app.viewer.pan.y - from.y - 20) < 1, "a drag moves it: %v from %v", app.viewer.pan, from)
+		testing.expectf(t, dv.preview.pan != from, "a drag moves it: %v from %v", dv.preview.pan, from)
 		session.event(s, {kind = .Key_Press, key = .N0})
 		session.frames(s, 2)
-		testing.expect(t, app.viewer.zoom == 1 && app.viewer.pan == {}, "0: back to what fits")
+		testing.expect(t, dv.preview.zoom == 1 && dv.preview.pan == {}, "0: back to what fits")
+
+		dv.direction = .Top_Down
+		session.wait_until(s, proc(s: ^session.Session) -> bool {
+			app := the_app
+			return app.diagram_view.shown == diagram_key(app.diagram_view.code, !app.cx.theme.light, .Top_Down)
+		}, "the layout from top to bottom")
+		tall := diagram_laid_out(app, dv.code, !app.cx.theme.light, .Top_Down)
+		if !testing.expect(t, tall != nil && tall.why == "", "laid out") { return }
+		testing.expectf(t, tall.doc.view[3] > tall.doc.view[2], "from top to bottom, taller than wide: %v", tall.doc.view)
+		session.save_png(s, "diagram_viewer_top_down.png")
+
 		session.click_at(s, session.center(view), .Right)
 		session.frames(s, 2)
 		testing.expect(t, session.find_text(s, "Copy as PNG") != nil, "Copy as PNG")
 		testing.expect(t, session.find_text(s, "Copy the text") != nil, "Copy the text")
 		session.event(s, {kind = .Key_Press, key = .Escape})
 		session.frames(s, 2)
-		pic, ok := diagram_picture(app, app.viewer.diagram)
+		pic, ok := diagram_picture(app, dv.code, dv.direction)
 		defer paint.canvas_destroy(&pic)
 		if !testing.expect(t, ok, "its picture") { return }
-		d := diagram_of(app, app.viewer.diagram, !app.cx.theme.light)
-		want := d.doc.view[2] * DIAGRAM_COPY_SCALE * diagram_scale(ui.font_size())
-		testing.expectf(t, abs(f32(pic.width) - math.ceil(want)) < 1, "twice its size: %d for %v", pic.width, want)
+		want := tall.doc.view[2] * DIAGRAM_COPY_SCALE * diagram_scale(ui.font_size())
+		testing.expectf(t, abs(f32(pic.width) - math.ceil(want)) < 1, "the layout shown, twice its size: %d for %v", pic.width, want)
 		well := themed(HEX_CODE_WELL)
 		testing.expectf(t, abs(pic.pixels[0].r - f32(well >> 24) / 255) < 0.01, "on the colour of code: %v", pic.pixels[0])
 		inked := 0
@@ -1592,7 +1610,7 @@ a_diagram_is_zoomed_and_moved_in_the_viewer :: proc(t: ^testing.T) {
 		testing.expectf(t, inked > len(pic.pixels) / 50, "its boxes, lines and words: %d", inked)
 		session.event(s, {kind = .Key_Press, key = .Escape})
 		session.frames(s, 3)
-		testing.expect(t, !app.cx.open[.Viewer], "Escape closes it")
+		testing.expect(t, !app.cx.open[.Diagram], "Escape closes it")
 	})
 }
 

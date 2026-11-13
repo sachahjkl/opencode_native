@@ -42,6 +42,7 @@ build_ui :: proc(app: ^App) {
 	server_dialog(app, em)
 	settings_dialog(app, em)
 	image_viewer(app, em)
+	diagram_viewer(app, em)
 	rename_dialog(app, em)
 	help_dialog(app, em)
 	pair_dialog(app, em)
