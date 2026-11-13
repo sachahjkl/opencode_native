@@ -4,6 +4,28 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.49.0] - 2026-11-13
+
+### Added
+- **Windows: `opencode-native` works from a terminal.** If the install puts opencode native on the PATH, `opencode-native --help`, `--version` and `--status` print in cmd or PowerShell and give their exit code. The other command lines open the window and give the prompt back. After an update, opencode native comes back in front with the keyboard. Paths longer than 260 characters and UTF-8 text work.
+- **A Diagnostics page in the settings, with a Copy button**, also in the palette. It shows the versions, the system, the graphics adapter (and whether a software rasterizer draws), the window's size and scale, the last frames' times and how much partial redraw drew. If opencode native is slow, copy it and send it.
+
+### Changed
+- **The licence has its own page in the settings, worded as in the other programs.** It says whether opencode native is registered. It offers Buy a licence, a field to paste a key, Choose a licence file… and Remove the licence.
+- **A crash of the last session shows in a bar under the title bar**, in place of a message to click. The bar says what happened and offers Open the report, Copy and Report on GitHub (a new issue with the report in it). Its cross dismisses it.
+- **The install is in the settings: an Installation page.** It says where the installed copy is, its version, and whether this copy is the installed one. It shows the menu entry, Settings › Apps, the start with the session and the PATH, with Install, Repair, Upgrade and Uninstall. About opencode native and the palette's "Installation and about" open it. Setup… is gone from the title bar's menu.
+The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in the other programs. `--desktop` and `--quiet` are gone, and `--uninstall` no longer asks first.
+- **A change of language shows at once**: the window, the menus and the settings take the new language without a restart.
+- **opencode native has the same settings and look as the other programs of Froment Software.** Only its theme, OpenCode, is its own. Short messages now show at the bottom right by default; Settings › Window › Where messages show puts them elsewhere. Under the pointer, a choice such as System, Dark or Light shows a soft rounded fill in the shape of the selected choice.
+- **Your prompts are marked on the conversation's scroll bar, with a preview card.** The separate rail of dots is gone. Each prompt is a thin mark on the scroll bar, and the marks of the prompts in view are a little brighter. Prompts that are too close together share one mark. The pointer over a mark shows a card with the prompt's number, when it was sent ("today 14:32", "yesterday") and its first lines; for a shared mark, one line for each prompt. A click goes to the prompt at once. The magnifier above the bar filters the prompts by what you type. The setting is Settings › Conversation › Prompt marks.
+- **opencode native updates as the other programs of Froment Software, and installs updates by itself.** With "Update by itself" on, it looks for a new version a while after the start and then every day, and installs it. The new version runs at the next start, or at once with Restart now. The Updates page shows the state with Check now, Install and Restart now. The Stable and Beta channels stay, and a change of channel takes effect at once. The status bar's button says what there is to do.
+
+### Fixed
+- **Fields are light again in a light theme.** The fields, the switches, the sliders' numbers and the choices' tracks are no longer black, and their text is readable.
+- **Buttons and titles never cut their text.** The Quote and Comment buttons over a selection are as wide as their words. The settings sidebar is as wide as its longest title. In a narrow window, "Connecting to…" has its own line under the logo. Cancel buttons are no longer red.
+- **French done right.** Menus, the palette, the shortcuts sheet and the composer's hints name the keys as a French keyboard prints them ("Ctrl+Maj+N"). Numbers, percents and costs use the language's decimal mark and percent sign ("0,42 $", "34 %"). French texts agree in gender and say "Rechercher" and "Zoom avant", as in the other programs. The server's facts start with a capital.
+- **What you read stays in place while the agent answers.** If you scrolled up in a conversation, the view no longer moves while the answer streams in, a tool's output arrives or a message above is measured.
+
 ## [0.48.1] - 2026-11-13
 
 ### Changed
@@ -1527,6 +1549,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.49.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.49.0
 [0.48.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.48.1
 [0.48.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.48.0
 [0.47.13]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.47.13
