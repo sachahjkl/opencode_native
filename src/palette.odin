@@ -248,7 +248,6 @@ palette_choose :: proc(app: ^App, it: ^Pal_Item) {
 	case .Setting:
 		// the settings, searching for it: it shows alone, with its control
 		settings_open(app)
-		app.settings.page = .Preferences
 		prefs_page.show(&app.settings.prefs, &app.cfg_prefs, settings_options(app), it.id)
 	}
 }

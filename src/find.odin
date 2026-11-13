@@ -130,8 +130,8 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 	// One box: the field and its buttons in a single well, its focus ring around all of it. (The plate under it is only its shadow:
 	// the same size and the same corners, all of it covered; a well inside a plate showed the plate's edge beside it.)
 	if plate("###findbar", radius = FIND_RADIUS, shadow = 8, rim = 0, border = CLEAR) {
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), axis = .X, cross = .Center})
-		if focus_well("###fw", .X, radius = FIND_RADIUS, focus = 1) {
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), cross = .Center, radius = FIND_RADIUS * ui.scale()})
+		if ui.well("###fw", .X, flags = {.Focus_Within, .Draw_Focus_Ring}) {
 			ui.spacer(ui.px(em * 0.6))
 			glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 			if ui.tags("bare") {

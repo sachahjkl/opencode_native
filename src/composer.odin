@@ -13,7 +13,6 @@ import lucide "gt:lucide"
 HEX_PERM_TOP          :: 0x2a2116ff
 HEX_PERM_BOTTOM       :: 0x1d170fff
 HEX_PERM_DETAIL       :: 0xd8c8b0ff
-HEX_COMPOSER_WELL     :: 0x080808ff
 
 // The composer: its text and focus, what goes with the prompt, and what each session's composer keeps while another is shown.
 Composer :: struct {
@@ -105,8 +104,8 @@ composer :: proc(app: ^App, em: f32) {
 		if ui.key_press(.Return, {.Shift}) { area_insert(&app.composer.area, "\n") }
 	}
 	if app.composer.focused && app.prefs.ctrl_enter && ui.key_press(.Return, {.Ctrl, .Shift}) { submit, other = true, true }
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if focus_well("###composer_well", radius = 11, base = HEX_COMPOSER_WELL, focus = app.composer.focused ? 1 : 0) {
+	ui.next({width = ui.fill(), height = ui.children_sum(), radius = 11 * ui.scale()})
+	if ui.well("###composer_well", .Y, flags = {.Focus_Within, .Draw_Focus_Ring}) {
 		// (its menu on all of it, the bar of its buttons and around the text too, after what is in it: an image keeps its own)
 		card := ui.parent_box()
 		defer ctx_check(app, card, .Composer)

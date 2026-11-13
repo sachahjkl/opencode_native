@@ -223,8 +223,8 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###ps") {
 			ui.spacer(ui.px(em * 0.5))
-			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
-			if focus_well("###psw", .X, radius = 7, focus = 1) {
+			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), cross = .Center, radius = 7 * ui.scale()})
+			if ui.well("###psw", .X, flags = {.Focus_Within, .Draw_Focus_Ring}) {
 				ui.spacer(ui.px(em * 0.5))
 				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {

@@ -14,7 +14,7 @@ OPTIONS := []cli.Option{
 	{name = "session", group = "Start", value = "id", help = "open that session at start"},
 	{name = "search", value = "text", help = "the sidebar's search, filled at start"},
 	{name = "find", value = "text", help = "open the find bar with that text"},
-	{name = "settings", value = "n", optional = true, help = "open the settings at start (on page n)"},
+	{name = "settings", value = "page", optional = true, help = "open the settings at start (on that page: general, connections...)"},
 	{name = "setup", help = "open Setup at start"},
 	{name = "add-server", help = "open the dialog that adds a server at start"},
 	{name = "image", value = "file", help = "open the image viewer on a file"},
@@ -44,7 +44,7 @@ cli_start :: proc() -> Cli_Options {
 			{"opencode-native --session=ses_abc", "open that session"},
 			{"opencode-native --url=http://host:4096 --password=…", "another server, for this run"},
 			{"opencode-native --pref appearance.theme=Kernel", "a preference, for this run"},
-			{"opencode-native --settings=1", "the settings, on their second page"},
+			{"opencode-native --settings=connections", "the settings, on their page Connections"},
 			{"opencode-native --status", "is it installed? (exit code)"},
 		},
 		environment = {
@@ -65,7 +65,7 @@ Cli_Options :: struct {
 	url, password, server: string,    // another server and its password; a saved server
 	session, search, find: string,    // the session opened, the sidebar's search, the find bar's text
 	settings:      bool,              // the settings open at start ...
-	settings_page: int,               // ... on this page (-1: the last one)
+	settings_page: string,            // ... on this page (its category; "": the last one)
 	setup, add_server: bool,          // Setup, the dialog that adds a server
 	image:         string,            // a file in the image viewer
 	prefs:         []string,          // "name=value", each --pref in order
@@ -92,10 +92,7 @@ cli_read :: proc(args: []string) -> (o: Cli_Options) {
 	o.search, _ = cli.value(given, "search")
 	o.find, _ = cli.value(given, "find")
 	o.settings = cli.has(given, "settings")
-	o.settings_page = -1
-	if v, ok := cli.value(given, "settings"); ok {
-		if n, n_ok := strconv.parse_int(v); n_ok && n >= 0 && n < len(Settings_Page) { o.settings_page = n }
-	}
+	o.settings_page, _ = cli.value(given, "settings")
 	o.setup = cli.has(given, "setup")
 	o.add_server = cli.has(given, "add-server")
 	o.image, _ = cli.value(given, "image")

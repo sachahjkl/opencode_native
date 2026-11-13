@@ -258,9 +258,8 @@ ready_connections :: proc(s: ^Snap) {
 }
 
 // (it looks at start)
-// (the settings open on the client's page: its Updates page is chosen in its sidebar)
+// (the settings open on their Updates page: --settings=update)
 @(private = "file") ready_updates :: proc(s: ^Snap) {
-	click_exact(s, "Updates", 0)
 	if s.ok { step(s, cdp.wait_for(s.dt, "Up to date", SHOT_LIMIT)) }
 }
 
@@ -306,9 +305,9 @@ PICTURES :: [?]Picture{
 	{name = "mention", work = true, ready = ready_mention},
 	{name = "files", work = true, ready = ready_files},
 	{name = "schedules", work = true, ready = ready_schedules},
-	{name = "connections", extra = "--settings=2", ready = ready_connections},
-	{name = "updates", extra = "--settings=0", ready = ready_updates},
-	{name = "settings", extra = "--settings=0"},
+	{name = "connections", extra = "--settings=connections", ready = ready_connections},
+	{name = "updates", extra = "--settings=update", ready = ready_updates},
+	{name = "settings", extra = "--settings=general"},
 	{name = "subagent-session", ready = ready_subagent_session},
 	{name = "viewer", on_conversation = true, ready = ready_viewer},
 	// the themes: a light one, a flat one, a black one with its own colours, the edged one

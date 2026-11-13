@@ -92,7 +92,7 @@ a_session_command_names_its_session :: proc(t: ^testing.T) {
 	testing.expect_value(t, fork, "Session · The blend of the pane")
 }
 
-// Every setting the palette lists (not a hidden one) is on a page of the settings (SETTINGS_PREF_PAGES), where
+// Every setting the palette lists (not a hidden one) is on a page of the settings (SETTINGS_PAGES), where
 // prefs_page.show finds it; a hidden one is on none.
 @(test)
 every_setting_of_the_palette_is_on_a_page :: proc(t: ^testing.T) {
@@ -101,7 +101,7 @@ every_setting_of_the_palette_is_on_a_page :: proc(t: ^testing.T) {
 	prefs_register(&p)
 	for &e in p.entries {
 		found := false
-		for pg in SETTINGS_PREF_PAGES {
+		for pg in SETTINGS_PAGES {
 			for name in prefs_page.page_names(&p, pg) { if name == e.def.name { found = true } }
 		}
 		if e.def.hidden {

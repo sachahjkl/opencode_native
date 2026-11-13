@@ -237,7 +237,7 @@ hint_action :: proc(id, label: string, em: f32, face: font.Font_Id = 0, icon := 
 	return false
 }
 
-// A sunken well (fields, code, the composer); `focus` lights a ring of `accent` around it.
+// A sunken well drawn by hand (code, a meter, a selected row); `focus` lights a ring of `accent` around it.
 draw_well :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, focus: f32 = 0, accent := Color{}) {
 	ui.machined_well(dc, r, radius_asked * corners(), base, focus, accent)
 }
@@ -267,30 +267,18 @@ intent_colors :: proc(intent: ui.Intent) -> (fill, ink, glow: Color) {
 }
 
 @(private = "file")
-Well_Draw :: struct { radius: f32, base: Color, focus: f32 }
+Well_Draw :: struct { radius: f32, base: Color }
 
 @(private = "file")
 well_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Well_Draw)(user)
-	draw_well(dc, b.rect, d.radius * ui.scale(), d.base, d.focus, accent())
-}
-
-// `if focus_well("###id", ...) { ... }`: a sunken container (size it with `next`) whose ring of the accent says that a
-// field in it has the keyboard (`focus`, 0 to 1: the composer's, a search's). ui.well has no such ring: its focus is its
-// own box's, never a field's inside it.
-@(deferred_none = ui.pop_parent)
-focus_well :: proc(id: string, axis := ui.Axis.Y, radius: f32 = 7, base: u32 = HEX_WELL, focus: f32 = 0, flags: ui.Box_Flags = {}) -> bool {
-	b := ui.build_box(flags, id)
-	b.layout_axis = axis
-	well_paint(b, radius, base, focus)
-	ui.push_parent(b)
-	return true
+	draw_well(dc, b.rect, d.radius * ui.scale(), d.base)
 }
 
 // Paints `b` as a well: for a box another builds (the Markdown package's frames).
-well_paint :: proc(b: ^ui.Box, radius: f32 = 7, base: u32 = HEX_WELL, focus: f32 = 0) {
+well_paint :: proc(b: ^ui.Box, radius: f32 = 7, base: u32 = HEX_WELL) {
 	d := ui.frame_new(Well_Draw)
-	d^ = {radius = radius, base = hex(base), focus = focus}
+	d^ = {radius = radius, base = hex(base)}
 	b.custom = well_box_draw
 	b.custom_user = d
 }

@@ -272,10 +272,6 @@ DETACHED_H         :: 560
 DETACHED_DT_S      :: 0.016 // of a frame there: a grid has no animation that a step would show
 CHANGES_DIFF_LINES :: 400   // of a file, before the rest is counted
 
-SETTINGS_NAV_EM       :: 14   // the list of the pages
-SETTINGS_NAV_ICONS_EM :: 4    // the same with its icons alone
-SETTINGS_NARROW_EM    :: 40   // a dialog narrower than this has them alone
-
 FORM_BODY_H_EM     :: 20     // the most what a form asks takes, then it scrolls
 FORM_BODY_WINDOW   :: 0.45   // and of the height of the window
 FORM_LINE_EM       :: 2.2    // a line of it (form_height: what it would take)

@@ -636,30 +636,17 @@ dialogs_track :: proc(app: ^App) {
 ////////////////////////////////
 // The dialog
 
-Settings_Page :: enum u8 { Preferences, Server, Connections, Mcp, Plugins, Usage, Permissions, Catalog }
-
-// The settings dialog: its page, and the client's preferences (prefs_page, from the registry).
+// The settings dialog: its pages (prefs_page: the client's preferences, from the registry, and the server's pages).
 Settings_View :: struct {
-	page:         Settings_Page,
 	prefs:        prefs_page.Page,
 	show_licence: bool,   // Ghostty's
 }
 
-SETTINGS_PAGES := [Settings_Page]struct { title, icon: string, opencode: bool }{
-	.Preferences  = {"Settings", lucide.SLIDERS_HORIZONTAL, false},
-	.Server       = {"Server & shell", lucide.SQUARE_TERMINAL, true},
-	.Connections  = {"Connections", lucide.USER, true},
-	.Mcp          = {"MCP servers", lucide.PLUG, true},
-	.Plugins      = {"Plugins", lucide.ZAP, true},
-	.Usage        = {"Usage & limits", lucide.GAUGE, true},
-	.Permissions  = {"Permissions", lucide.SHIELD, true},
-	.Catalog      = {"Providers & skills", lucide.LIST, true},
-}
-
-// The pages of the client's preferences, in their order: the toolkit's groups and this program's (Behaviour and Advanced
-// gather small groups of its own by name).
-SETTINGS_PREF_PAGES := [?]prefs_page.Page_Info{
-	{category = "general", title = "General", icon = lucide.SETTINGS},
+// The pages of the settings, in their order. The client's preferences first: the toolkit's groups and this program's
+// (Behaviour and Advanced gather small groups of its own by name). Then what the opencode server shows: pages of this
+// program's own, which the search does not look in. A category names its page (settings_open_on, --settings=<page>).
+SETTINGS_PAGES := [?]prefs_page.Page_Info{
+	{category = "general", title = "General", icon = lucide.SETTINGS, heading = "CLIENT"},
 	{category = "appearance", title = "Appearance", icon = lucide.PALETTE},
 	{category = "window", title = "Window", icon = lucide.APP_WINDOW},
 	{category = "conversation", title = "Conversation", icon = lucide.MESSAGE_SQUARE},
@@ -670,6 +657,13 @@ SETTINGS_PREF_PAGES := [?]prefs_page.Page_Info{
 	{category = "update", title = "Updates", icon = lucide.REFRESH_CW},
 	{category = "rendering", title = "Rendering", icon = lucide.MONITOR},
 	{category = "advanced", title = "Advanced", icon = lucide.WRENCH, names = {"browser.tools", "advanced.experimental", "advanced.fps", "advanced.frame_rate"}},
+	{category = "server", title = "Server & shell", icon = lucide.SQUARE_TERMINAL, heading = "OPENCODE", build = proc(user: rawptr, em: f32) { page_server((^App)(user), em) }},
+	{category = "connections", title = "Connections", icon = lucide.USER, build = proc(user: rawptr, em: f32) { page_connections((^App)(user), em) }},
+	{category = "mcp", title = "MCP servers", icon = lucide.PLUG, build = proc(user: rawptr, em: f32) { page_mcp((^App)(user), em) }},
+	{category = "plugins", title = "Plugins", icon = lucide.ZAP, build = proc(user: rawptr, em: f32) { page_plugins((^App)(user), em) }},
+	{category = "usage", title = "Usage & limits", icon = lucide.GAUGE, build = proc(user: rawptr, em: f32) { page_usage((^App)(user), em) }},
+	{category = "permissions", title = "Permissions", icon = lucide.SHIELD, build = proc(user: rawptr, em: f32) { page_permissions((^App)(user), em) }},
+	{category = "catalog", title = "Providers & skills", icon = lucide.LIST, build = proc(user: rawptr, em: f32) { page_catalog((^App)(user), em) }},
 }
 
 // The channels this program's releases come on (update.channel: the toolkit's, a free text without them).
@@ -686,12 +680,21 @@ settings_open :: proc(app: ^App) {
 	server_facts_load(app)
 }
 
+// The settings open on the page `category` (its Page_Info.category), as a click on it in the sidebar shows it.
+settings_open_on :: proc(app: ^App, category: string) {
+	p := &app.settings.prefs
+	delete(p.current)
+	p.current = strings.clone(category)
+	ui.field_set(&p.query, "")   // (a search would hide the page)
+	settings_open(app)
+}
+
 // What the client's settings page is given (prefs_page.Options).
 settings_options :: proc(app: ^App) -> prefs_page.Options {
 	return {
 		user = app,
 		changed = proc(user: rawptr, _: string) { prefs_refresh((^App)(user)) },   // (main_after_frame's writer saves)
-		pages = SETTINGS_PREF_PAGES[:],
+		pages = SETTINGS_PAGES[:],
 		icon_font = app.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
 		file = app.prefs_file,
 		version = fmt.tprintf("%s %s", APP_NAME, APP_VERSION),
@@ -710,84 +713,10 @@ settings_options :: proc(app: ^App) -> prefs_page.Options {
 settings_dialog :: proc(app: ^App, em: f32) {
 	if ui.modal_sized("settings", DIALOG_PREFERRED_EM[.Settings] * em, &app.cx.dialogs[.Settings], &app.cx.open[.Settings], DIALOG_MIN_EM[.Settings] * em) {
 		dialog_backdrop()
-		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
-		if ui.row(id = "###settings_body") {
-			// the pages (their icons alone in a narrow dialog: the page needs the room more)
-			narrow := ui.parent_box().size.x < em * SETTINGS_NARROW_EM
-			ui.next({width = ui.px(em * (narrow ? SETTINGS_NAV_ICONS_EM : SETTINGS_NAV_EM)), height = ui.fill(), axis = .Y})
-			if ui.column(id = "###settings_nav") {
-				// (the list scrolls: a short window must not push it out of the dialog)
-				ui.spacer(ui.px(em * 1.1))
-				ui.next({width = ui.fill(), height = ui.fill()})
-				if ui.scroll_y("###settings_nav_list") {
-					ui.spacer(ui.px(em * 0.6))
-					if !narrow { nav_heading("CLIENT", app.mono_bold, em) }
-					for page in Settings_Page {
-						info := SETTINGS_PAGES[page]
-						if page == .Server { ui.spacer(ui.px(em * 0.6)); if !narrow { nav_heading("OPENCODE", app.mono_bold, em) } }
-						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-						if ui.row(id = fmt.tprintf("###nv%d", int(page))) {
-							ui.spacer(ui.px(em * 0.7))
-							current := app.settings.page == page
-							if ui.button_icon(fmt.tprintf("###nav%d", int(page)), info.icon, ui.text_shown(narrow ? "" : info.title), width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true, face = current ? .Toggled : .Ghost).clicked {
-								app.settings.page = page
-							}
-							ui.spacer(ui.px(em * 0.9))   // (the scroll bar's place)
-						}
-						ui.spacer(ui.px(em * 0.2))
-					}
-				}
-			}
-			groove("###settings_div")
-			// the page: its title in the header, beside the close cross (it stays as the page scrolls under it)
-			ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
-			if ui.column(id = "###settings_side") {
-				if ui.dialog_header("settings_head", SETTINGS_PAGES[app.settings.page].title, {close = true}) {}
-				if app.settings.page == .Preferences {
-					// the client's preferences: the toolkit's page (its own search, its pages, the file, export and import)
-					ui.next({width = ui.fill(), height = ui.fill()})
-					prefs_page.build(&app.settings.prefs, &app.cfg_prefs, settings_options(app))
-				} else {
-					ui.next({width = ui.fill(), height = ui.fill()})
-					if ui.scroll_y("###settings_page") {
-						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-						if ui.row(id = "###pg") {
-							ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-							ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-							if ui.column() {
-								ui.spacer(ui.px(em * 0.6))
-								settings_page_draw(app, app.settings.page, em)
-								ui.spacer(ui.px(em * 1.5))
-							}
-							ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-@(private = "file")
-settings_page_draw :: proc(app: ^App, page: Settings_Page, em: f32) {
-	switch page {
-	case .Preferences:
-	case .Server:       page_server(app, em)
-	case .Connections:  page_connections(app, em)
-	case .Mcp:          page_mcp(app, em)
-	case .Plugins:      page_plugins(app, em)
-	case .Usage:        page_usage(app, em)
-	case .Permissions:  page_permissions(app, em)
-	case .Catalog:      page_catalog(app, em)
-	}
-}
-
-@(private = "file")
-nav_heading :: proc(s: string, face: Face_Id, em: f32) {
-	ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
-	if ui.row(.Center, id = fmt.tprintf("###nh_%s", s)) {
-		ui.spacer(ui.px(em * 1.1))
-		text("h", s, hex(HEX_FAINT), ui.Style_Mod{font = face, font_size = math.round(em * FS_CAPTION)})
+		if ui.dialog_header("settings_head", "Settings", {close = true}) {}
+		// one sidebar for every page: the toolkit's page holds the client's preferences and the server's pages alike
+		ui.next({width = ui.fill(), height = ui.fill()})
+		prefs_page.build(&app.settings.prefs, &app.cfg_prefs, settings_options(app))
 	}
 }
 

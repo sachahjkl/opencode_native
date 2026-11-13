@@ -325,8 +325,8 @@ rename_in_place :: proc(app: ^App, em, font_size, height: f32, fit := false) {
 	pad := math.round(em * RENAME_PAD_EM)
 	w := ui.fill()
 	if fit { w = ui.px(math.round(ui.text_width(app.font, font_size, ui.field_string(&r.field)) + 2 * pad + em * RENAME_ROOM_EM), 0) }
-	ui.next({width = w, height = ui.px(height), axis = .X, cross = .Center})
-	if focus_well("###ren_in", .X, radius = 5, focus = 1) {
+	ui.next({width = w, height = ui.px(height), cross = .Center, radius = 5 * ui.scale()})
+	if ui.well("###ren_in", .X, flags = {.Focus_Within, .Draw_Focus_Ring}) {
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), font_size = font_size, text_pad = pad})
 			res := ui.line_edit("###ren_f", &r.field, "Title")

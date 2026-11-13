@@ -739,8 +739,7 @@ main :: proc() {
 	if opts.diff != "" { diff_full_open_file(app, opts.diff) }   // (a patch in the full view)
 	if opts.slow_motion != 0 { film_slow_start(app, opts.slow_motion) }
 	if opts.settings {   // --settings[=page number]
-		settings_open(app)
-		if opts.settings_page >= 0 { app.settings.page = Settings_Page(opts.settings_page) }
+		if opts.settings_page != "" { settings_open_on(app, opts.settings_page) } else { settings_open(app) }
 	}
 	platform.show_window(app.win)
 	for !platform.is_closed(app.win) && !app.quit {

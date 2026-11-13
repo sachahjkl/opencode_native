@@ -514,8 +514,8 @@ files_left :: proc(app: ^App, em: f32) {
 		if ui.key_press(.Down) { f.sel = (f.sel + 1) % n }
 		if ui.key_press(.Up) { f.sel = (f.sel + n - 1) % n }
 	}
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
-	if focus_well("###fl_well", .X, radius = 8, focus = 1) {
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), cross = .Center, radius = 8 * ui.scale()})
+	if ui.well("###fl_well", .X, flags = {.Focus_Within, .Draw_Focus_Ring}) {
 		ui.spacer(ui.px(em * 0.6))
 		glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 		if ui.tags("bare") {

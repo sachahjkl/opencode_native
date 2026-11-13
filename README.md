@@ -157,7 +157,7 @@ TLS is rustls, checked against the system's trust store.
 | `--image=<file>` | open the image viewer on a file |
 | `--font-dir=<folder>` | try faces from files, nothing installed (`ocntools font_proposals`) |
 | `--pref name=value` | set a preference for the run (names in Settings, e.g. `appearance.theme=Nord`) |
-| `--settings[=n]` | open the settings at start (on page n) |
+| `--settings[=page]` | open the settings at start (on that page: general, connections...) |
 | `--frames=N` | N frames of a hidden window, then exit (a check that it runs; it says how long the first frame took) |
 
 Preferences live in `%APPDATA%\opencode-native\prefs.txt` on Windows, `~/.config/opencode-native/prefs.txt` on Linux (only
