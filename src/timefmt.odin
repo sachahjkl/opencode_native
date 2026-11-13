@@ -61,15 +61,16 @@ duration_text :: proc(a, b: f64) -> string {
 elapsed_text :: proc(a, b: f64) -> string {
 	if a <= 0 { return "" }
 	ms := max(b - a, 0)
-	if ms < MS_PER_S / 10 { return i18n.tr("<0.1s") }
-	if ms < TOOL_ELAPSED_TENTHS_S * MS_PER_S { return fmt.tprintf(i18n.tr("%.1fs"), ms / MS_PER_S) }
+	// (the language's decimal mark: "1,2s" in French)
+	if ms < MS_PER_S / 10 { return i18n.decimal_marks(i18n.tr("<0.1s")) }
+	if ms < TOOL_ELAPSED_TENTHS_S * MS_PER_S { return i18n.decimal_marks(fmt.tprintf(i18n.tr("%.1fs"), ms / MS_PER_S)) }
 	return duration_text(a, b)
 }
 
 // A time the server measured: "350 ms", "1.2 s".
 ms_text :: proc(ms: f64) -> string {
 	if ms < MS_PER_S { return fmt.tprintf(i18n.tr("%.0f ms"), ms) }
-	return fmt.tprintf(i18n.tr("%.1f s"), ms / MS_PER_S)
+	return i18n.decimal_marks(fmt.tprintf(i18n.tr("%.1f s"), ms / MS_PER_S))
 }
 
 // The time left until `t` (epoch ms) from `now`, in whole minutes rounded up: "42 min", "1h 05", "3d 00h".

@@ -550,14 +550,14 @@ stats_figures :: proc(t: Totals, used, window: f64, em: f32) {
 	if ui.flow({em * 0.5, em * 0.7}, "###figures") {
 		if used > 0 && window > 0 {
 			share := f32(used / window)
-			figure("###f0", fmt.tprintf("%.0f %%", share * 100), i18n.tr("context"), context_color(share), em)
+			figure("###f0", i18n.percent(f64(share)), i18n.tr("context"), context_color(share), em)
 		}
 		figure("###f1", kfmt(tin + cread), i18n.tr("tokens in"), plain, em)
 		figure("###f2", kfmt(tout), i18n.tr("tokens out"), plain, em)
 		figure("###f3", kfmt(reas), i18n.tr("reasoning"), plain, em)
-		figure("###f4", cost > 0 ? fmt.tprintf("$%.2f", cost) : "$0", i18n.tr("cost"), plain, em)
+		figure("###f4", cost > 0 ? dollars(cost) : "$0", i18n.tr("cost"), plain, em)
 		hit := tin + cread > 0 ? cread / (tin + cread) : 0
-		figure("###f5", fmt.tprintf("%.0f %%", hit * 100), i18n.tr("cache hits"), plain, em)
+		figure("###f5", i18n.percent(f64(hit)), i18n.tr("cache hits"), plain, em)
 	}
 }
 
@@ -668,7 +668,7 @@ context_list :: proc(app: ^App, used: f64, em: f32) {
 	whole := max(used, 1)
 	size_of :: proc(tokens, whole: f64) -> string {
 		if the_app.stats.width <= ui.font_size() * STATS_STACK_EM { return fmt.tprintf("~%s", kfmt(tokens)) }   // (the name needs the room)
-		return fmt.tprintf("~%s  %.0f %%", kfmt(tokens), tokens / whole * 100)
+		return fmt.tprintf("~%s  %s", kfmt(tokens), i18n.percent(f64(tokens / whole)))
 	}
 	for &g, i in x.groups {
 		key := fmt.tprintf("ctxg_%s", g.name)
@@ -699,7 +699,7 @@ stats_context :: proc(app: ^App, used, window: f64, em: f32) {
 	heading(i18n.tr("Context"), em, HEX_CYAN)
 	if used > 0 {
 		t := f32(window > 0 ? used / window : 0)
-		wrapped("###ctx", window > 0 ? fmt.tprintf("%.0f %%  ·  %s / %s", t * 100, kfmt(used), kfmt(window)) : fmt.tprintf(i18n.tr("%s  (the model's window is not listed)"), kfmt(used)), context_color(t), em)
+		wrapped("###ctx", window > 0 ? fmt.tprintf("%s  ·  %s / %s", i18n.percent(f64(t)), kfmt(used), kfmt(window)) : fmt.tprintf(i18n.tr("%s  (the model's window is not listed)"), kfmt(used)), context_color(t), em)
 		ui.spacer(ui.px(em * 0.35))
 		context_bar(app, used, window, em)
 		ui.spacer(ui.px(em * 0.5))
@@ -731,7 +731,7 @@ stats_tokens :: proc(t: Totals, em: f32) {
 	kv("###k3", i18n.tr("cache write"), kfmt(cwrite), em, hex(HEX_PURPLE))
 	kv("###k4", "output", kfmt(tout), em, hex(HEX_GREEN))
 	kv("###k5", "reasoning", kfmt(reas), em, hex(HEX_YELLOW))
-	kv("###k6", "cost", fmt.tprintf("$%.4f", cost), em)
+	kv("###k6", "cost", dollars(cost, 4), em)
 }
 
 @(private = "file")
@@ -779,7 +779,7 @@ stats_children :: proc(app: ^App, c: ^Chat, em: f32) {
 		}
 		kv("###s1", i18n.tr("launched"), fmt.tprintf(i18n.tr("%d  (%d running)"), len(c.children), running), em, running > 0 ? hex(HEX_YELLOW) : {})
 		kv("###s2", i18n.tr("their tokens"), fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(sin), kfmt(sout)), em)
-		if scost > 0 { kv("###s3", i18n.tr("their cost"), fmt.tprintf("$%.2f", scost), em) }
+		if scost > 0 { kv("###s3", i18n.tr("their cost"), dollars(scost), em) }
 	}
 }
 
@@ -793,7 +793,7 @@ stats_project :: proc(app: ^App, now: f64, em: f32) {
 			kv("###p1", i18n.tr("sessions"), fmt.tprintf(i18n.tr("%d  (+ %d sub-agents)"), ps.sessions, ps.subagents), em)
 			kv("###p2", i18n.tr("prompts · steps"), fmt.tprintf("%d · %d", ps.prompts, ps.steps), em)
 			kv("###p3", i18n.tr("tokens"), fmt.tprintf(i18n.tr("%s in · %s out · %s reasoning"), kfmt(ps.tokens_in + ps.cache_read), kfmt(ps.tokens_out), kfmt(ps.reasoning)), em)
-			if ps.cost > 0 { kv("###p4", "cost", fmt.tprintf("$%.2f", ps.cost), em) }
+			if ps.cost > 0 { kv("###p4", "cost", dollars(ps.cost), em) }
 			kv("###p5", i18n.tr("active days"), fmt.tprintf(i18n.tr("%d  (streak %d)"), ps.active_days, ps.streak), em)
 			if ps.from > 0 { kv("###p6", i18n.tr("since"), fmt.tprintf(i18n.tr("%s ago"), duration_text(ps.from, now)), em) }
 			kv("###p7", i18n.tr("tool calls"), fmt.tprintf(i18n.tr("%d  (%d failed)"), ps.calls, ps.failed), em, ps.failed > 0 ? hex(HEX_STAT_FAILED) : {})
@@ -811,7 +811,7 @@ stats_project :: proc(app: ^App, now: f64, em: f32) {
 				max_s := 0
 				for m in ps.models { max_s = max(max_s, m.steps) }
 				for m, i in ps.models {
-					rank_row(fmt.tprintf("###pm%d", i), m.name, m.steps, max_s, 0, m.cost > 0 ? fmt.tprintf("$%.2f", m.cost) : fmt.tprintf(i18n.tr("%s out"), kfmt(m.tokens_out)), em, hex(HEX_WEAK))
+					rank_row(fmt.tprintf("###pm%d", i), m.name, m.steps, max_s, 0, m.cost > 0 ? dollars(m.cost) : fmt.tprintf(i18n.tr("%s out"), kfmt(m.tokens_out)), em, hex(HEX_WEAK))
 				}
 			}
 		}

@@ -1173,15 +1173,15 @@ terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
 @(private = "file")
 term_menu :: proc(app: ^App, t: ^Term) {
 	v := &t.view
-	if ui.menu_item(i18n.tr("Copy"), v.read_only ? "Ctrl+C" : "Ctrl+Shift+C", icon = lucide.COPY, disabled = !term.has_selection(v)).clicked {
+	if ui.menu_item(i18n.tr("Copy"), v.read_only ? "Ctrl+C" : keys_shown("Ctrl+Shift+C"), icon = lucide.COPY, disabled = !term.has_selection(v)).clicked {
 		clip_set(term.selection_text(v))
 	}
-	if !v.read_only && ui.menu_item(i18n.tr("Paste"), "Ctrl+Shift+V", icon = lucide.CLIPBOARD_PASTE).clicked { term_paste(app, t) }
+	if !v.read_only && ui.menu_item(i18n.tr("Paste"), keys_shown("Ctrl+Shift+V"), icon = lucide.CLIPBOARD_PASTE).clicked { term_paste(app, t) }
 	if ui.menu_item(i18n.tr("Select all"), icon = lucide.TEXT_CURSOR_INPUT, disabled = t.vt == nil).clicked { term.select_all(v) }
 	ui.menu_separator()
 	if ui.menu_item(i18n.tr("Zoom in"), "Ctrl+=", icon = lucide.PLUS).clicked { term_zoom_set(app, t, v.zoom * term.ZOOM_STEP) }
 	if ui.menu_item(i18n.tr("Zoom out"), "Ctrl+-", icon = lucide.CHEVRON_DOWN).clicked { term_zoom_set(app, t, v.zoom / term.ZOOM_STEP) }
-	reset := v.zoom != 1 ? fmt.tprintf(i18n.tr("Reset the zoom (%d%%)"), int(math.round(v.zoom * 100))) : i18n.tr("Reset the zoom")
+	reset := v.zoom != 1 ? fmt.tprintf(i18n.tr("Reset the zoom (%s)"), i18n.percent(math.round(f64(v.zoom) * 100) / 100)) : i18n.tr("Reset the zoom")
 	if ui.menu_item(reset, "Ctrl+0", icon = lucide.UNDO_2, disabled = v.zoom == 1).clicked { term_zoom_set(app, t, 1) }
 	if o := output_view_of_term(app, t); o != nil {
 		ui.menu_separator()

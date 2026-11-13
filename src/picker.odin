@@ -27,7 +27,8 @@ Pick_Item :: struct {
 price_text :: proc(x: f64) -> string {
 	s := fmt.tprintf("%.3f", x)
 	if strings.has_suffix(s, ".000") { return s[:len(s) - 4] }
-	return strings.has_suffix(s, "0") ? s[:len(s) - 1] : s
+	// (with the language's decimal mark: "0,075" in French)
+	return i18n.decimal_marks(strings.has_suffix(s, "0") ? s[:len(s) - 1] : s)
 }
 
 // A size as sizes read: 1M, 128k.

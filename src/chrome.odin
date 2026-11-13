@@ -208,7 +208,7 @@ chat_header :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.4))
 		}
 		if !narrow && c.cost > 0 {
-			if pill_button("###cost", fmt.tprintf("$%.2f", c.cost), hex(HEX_GREEN)).clicked { stats_toggle(app) }
+			if pill_button("###cost", dollars(c.cost), hex(HEX_GREEN)).clicked { stats_toggle(app) }
 			ui.spacer(ui.px(em * 0.4))
 		}
 		if c.busy {
@@ -220,13 +220,17 @@ chat_header :: proc(app: ^App, em: f32) {
 	edge_line("###hdredge")
 }
 
+// (every number a person reads with the language's decimal mark: "1,5k" in French; i18n.decimal, i18n.percent)
 kfmt :: proc(v: f64) -> string {
 	switch {
-	case v >= 1e6: return fmt.tprintf("%.1fM", v / 1e6)
-	case v >= 1e3: return fmt.tprintf("%.1fk", v / 1e3)
+	case v >= 1e6: return fmt.tprintf("%sM", i18n.decimal(v / 1e6, 1))
+	case v >= 1e3: return fmt.tprintf("%sk", i18n.decimal(v / 1e3, 1))
 	}
 	return fmt.tprintf("%d", int(v))
 }
+
+// A cost in dollars, as the servers count it, written as the language writes an amount: "$0.42", "0,42 $" in French.
+dollars :: proc(v: f64, decimals := 2) -> string { return fmt.tprintf(i18n.tr("$%s"), i18n.decimal(v, decimals)) }
 
 ////////////////////////////////
 // Status bar
@@ -298,7 +302,7 @@ status_bar :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.8))
 		if app.prefs.show_fps {
 			fps := app.chrome.frame_ms > 0 ? 1000 / app.chrome.frame_ms : 0
-			text("fps", fmt.tprintf(i18n.tr("%3.0f fps  %.1f ms"), fps, app.chrome.work_ms), hex(HEX_FAINT), small)
+			text("fps", i18n.decimal_marks(fmt.tprintf(i18n.tr("%3.0f fps  %.1f ms"), fps, app.chrome.work_ms)), hex(HEX_FAINT), small)
 			ui.spacer(ui.px(em * 0.8))
 			if n := app.cx.unreadable.count; n > 0 {   // (unreadable.odin: the log says what they were)
 				text("unr", fmt.tprintf(i18n.tr(n, "%d unreadable", "%d unreadable"), n), hex(HEX_YELLOW), small)

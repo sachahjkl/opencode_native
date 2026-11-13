@@ -25,6 +25,36 @@ Command :: struct {
 	over:    proc(app: ^App) -> bool,   // its key with a dialog over the window (overlay_open): when it still works; nil: never
 }
 
+// A command's keys as written in COMMANDS ("Ctrl+Shift+N, Ctrl+K") in the words of the keyboards of the language
+// ("Ctrl+Maj+N"): each modifier and named key goes through the toolkit's "key" words, which ui.chord_text uses too; a
+// letter, a digit or a sign stays as it is.
+keys_shown :: proc(keys: string, allocator := context.temp_allocator) -> string {
+	if keys == "" { return "" }
+	b := strings.builder_make(allocator)
+	start := 0
+	for i := 0; i <= len(keys); i += 1 {
+		// (a key's name ends at a "+" that is not itself the key, at a ",", a space or the end)
+		if i < len(keys) && !(keys[i] == '+' && i > start) && keys[i] != ',' && keys[i] != ' ' { continue }
+		strings.write_string(&b, key_word(keys[start:i]))
+		if i < len(keys) { strings.write_byte(&b, keys[i]) }
+		start = i + 1
+	}
+	return strings.to_string(b)
+}
+
+@(private = "file")
+key_word :: proc(word: string) -> string {
+	switch word {
+	case "Ctrl", "Shift", "Alt", "Tab", "Space", "Backspace", "Delete", "Insert", "Left", "Right", "Up", "Down", "Home", "End", "Menu":
+		return i18n.tr("key", word)
+	case "Enter":       return i18n.tr("key", "Enter")
+	case "Esc", "Escape": return i18n.tr("key", "Escape")
+	case "PageUp":      return i18n.tr("key", "Page Up")
+	case "PageDown":    return i18n.tr("key", "Page Down")
+	}
+	return word
+}
+
 @(private = "file") has_session :: proc(app: ^App) -> bool { return app.chat.id != "" }
 @(private = "file") is_busy :: proc(app: ^App) -> bool { return app.chat.busy }
 @(private = "file") can_go_back :: proc(app: ^App) -> bool { return nav_can(app, -1) || back_target(app) != "" }
@@ -212,7 +242,7 @@ help_dialog :: proc(app: ^App, em: f32) {
 						ui.spacer(ui.px(em * 0.4))
 						section_label(fmt.tprintf("g%d", i), strings.to_upper(i18n.tr(group), context.temp_allocator), em)
 					}
-					row(app, fmt.tprintf("###h%d", i), c.keys, i18n.tr(c.title), em)
+					row(app, fmt.tprintf("###h%d", i), keys_shown(c.keys), i18n.tr(c.title), em)
 				}
 				ui.spacer(ui.px(em * 0.4))
 				section_label("gc", strings.to_upper(i18n.tr("Composer"), context.temp_allocator), em)
@@ -220,7 +250,7 @@ help_dialog :: proc(app: ^App, em: f32) {
 				row(app, "###hc2", i18n.tr("Down"), i18n.tr("On the last line: what runs in the background"), em)
 				row(app, "###hc3", "Ctrl+V", i18n.tr("Paste text, an image or files"), em)
 				row(app, "###hc4", i18n.tr("Middle click"), i18n.tr("Scroll by the pointer"), em)
-				row(app, "###hc5", "Esc", i18n.tr("Stop the run, what was sent during it goes next"), em)
+				row(app, "###hc5", keys_shown("Esc"), i18n.tr("Stop the run, what was sent during it goes next"), em)
 				ui.spacer(ui.px(em))
 			}
 			ui.spacer(ui.px(em * 1.2))

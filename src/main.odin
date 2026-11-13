@@ -99,7 +99,7 @@ App :: struct {
 	cfg_prefs:        config.Prefs,   // the preferences (settings.odin)
 	prefs_file:       string,         // where they are saved ("": nowhere)
 	announcer:        ui.Announcer,     // says what an act did (Copied, Exported): the system's notifications or the window's toasts (general.messages)
-	licence:          Licence_View,     // the licence that supports the program (licence.odin)
+	licence:          prefs_page.Licence,   // the licence that supports the program (licence.odin): the settings' Licence page
 	standard:         prefs_page.Standard_Watch,   // applies the toolkit's settings as they change (settings.odin prefs_init)
 	prefs_writer:     config.User_Writer,   // writes them off the loop, once a round when they changed (main_after_frame)
 	prefs:            Prefs,          // their plain values

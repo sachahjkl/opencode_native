@@ -305,7 +305,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 					ui.spacer(ui.px(em * 0.5))
 					if pal_item_on(app, it) { glyph(lucide.CHECK, accent(), math.round(em * ICON_SMALL)); ui.spacer(ui.px(em * 0.4)) }
 					if it.keys != "" {
-						text("k", it.keys, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+						text("k", keys_shown(it.keys), hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 					}
 					ui.spacer(ui.px(em * 1))
 				}

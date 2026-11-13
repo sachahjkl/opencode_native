@@ -81,9 +81,9 @@ app_menu :: proc(app: ^App, key: string, em: f32) {
 		if ui.menu_item(i18n.tr("Add a server…"), icon = lucide.PLUG).clicked { server_edit_open(app, -1) }
 		if ui.menu_item(i18n.tr("Statistics panel"), "Ctrl+I", app.stats.open, icon = lucide.GAUGE, disabled = app.chat.id == "").clicked { stats_toggle(app) }
 		if preview_available() {
-			if ui.menu_item(i18n.tr("Preview panel"), "Ctrl+Shift+B", app.preview.open, icon = lucide.GLOBE).clicked { command_run(app, command_find("view.preview")) }
+			if ui.menu_item(i18n.tr("Preview panel"), keys_shown("Ctrl+Shift+B"), app.preview.open, icon = lucide.GLOBE).clicked { command_run(app, command_find("view.preview")) }
 		}
-		if ui.menu_item(i18n.tr("What you missed"), "Ctrl+Shift+N", icon = lucide.BELL).clicked { command_run(app, command_find("view.notices")) }
+		if ui.menu_item(i18n.tr("What you missed"), keys_shown("Ctrl+Shift+N"), icon = lucide.BELL).clicked { command_run(app, command_find("view.notices")) }
 		if ui.menu_item(i18n.tr("Keyboard shortcuts"), "F1", icon = lucide.KEYBOARD).clicked { app.cx.open[.Help] = true }
 		if ui.menu_item(i18n.tr("Sub-agent sessions in the list"), "", app.prefs.subagents == "flat", icon = lucide.BOT).clicked { pref_set(app, "sidebar.subagents", app.prefs.subagents == "flat" ? "nested" : "flat") }
 		ui.menu_separator()

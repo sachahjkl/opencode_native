@@ -104,10 +104,11 @@ home :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.6))
 		text("l3", "native", accent(), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_WORDMARK * 0.8)})
 		ui.spacer(ui.fill())
-		if !online(app) {
-			refused := app.link == .Auth_Refused
-			text("c", fmt.tprintf(refused ? i18n.tr("%s refused the password") : i18n.tr("Connecting to %s…"), server_base(app)), refused ? hex(HEX_RED) : hex(HEX_YELLOW), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
-		}
+	}
+	// (on a line of its own under the logo: beside it, a narrow window ran the address into the word "native")
+	if !online(app) {
+		refused := app.link == .Auth_Refused
+		info_line(app, "###h_link", fmt.tprintf(refused ? i18n.tr("%s refused the password") : i18n.tr("Connecting to %s…"), server_base(app)), em, refused ? hex(HEX_RED) : hex(HEX_YELLOW))
 	}
 	info_line(app, "###h_not_theirs", i18n.tr(APP_NOT_THEIRS), em, hex(HEX_FAINT))
 	ui.spacer(ui.px(em * 0.8))

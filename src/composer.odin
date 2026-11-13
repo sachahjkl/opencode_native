@@ -200,9 +200,9 @@ composer :: proc(app: ^App, em: f32) {
 				} else if as := composer_send_as(app); as != .Idle {
 					// (each says what it does, and does it)
 					first, second := as == .Queue ? i18n.tr("queue") : i18n.tr("steer"), as == .Queue ? i18n.tr("steer") : i18n.tr("queue")
-					if hint_action("###h_first", fmt.tprintf("%s  %s", app.prefs.ctrl_enter ? "Ctrl+Enter" : "Enter", first), em, app.mono) { submit = true }
+					if hint_action("###h_first", fmt.tprintf("%s  %s", keys_shown(app.prefs.ctrl_enter ? "Ctrl+Enter" : "Enter"), first), em, app.mono) { submit = true }
 					text("h_dot", "   ·   ", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-					if hint_action("###h_second", fmt.tprintf("%s  %s", app.prefs.ctrl_enter ? "Ctrl+Shift+Enter" : "Ctrl+Enter", second), em, app.mono) { submit, other = true, true }
+					if hint_action("###h_second", fmt.tprintf("%s  %s", keys_shown(app.prefs.ctrl_enter ? "Ctrl+Shift+Enter" : "Ctrl+Enter"), second), em, app.mono) { submit, other = true, true }
 				} else {
 					text("hint", app.prefs.ctrl_enter ? i18n.tr("Ctrl+Enter  send   ·   Enter  new line") : i18n.tr("Enter  send   ·   Shift+Enter  new line"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}

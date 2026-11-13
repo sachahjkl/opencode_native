@@ -142,7 +142,9 @@ theme_refresh :: proc(t: ^ui.Theme) {
 // opencode's palette for the toolkit, as the theme shown has it; flat in the flat style.
 themed_palette :: proc() -> ui.Palette {
 	p := OPENCODE_PALETTE
-	for c in ([]^u32{&p.bg, &p.panel, &p.panel2, &p.text, &p.weak, &p.border, &p.accent, &p.accent_text, &p.good, &p.warn, &p.bad, &p.bar}) { c^ = themed(c^) }
+	// (the well too: left in opencode's black, every field, track and switch of a light version was a black hole with its
+	// dark text on it)
+	for c in ([]^u32{&p.bg, &p.panel, &p.panel2, &p.text, &p.weak, &p.border, &p.accent, &p.accent_text, &p.good, &p.warn, &p.bad, &p.bar, &p.well}) { c^ = themed(c^) }
 	if app := the_app; app != nil {
 		// the style asked for, unless the theme is made for one (Kernel: edged); a light version: apply_palette makes it flat
 		p.finish = app.prefs.finish

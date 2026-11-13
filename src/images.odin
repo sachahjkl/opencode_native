@@ -511,7 +511,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 				text("n", ellipsize(name, IMAGE_NAME_CHARS), hex(HEX_VIEWER_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 				ui.spacer(ui.px(em * 0.6))
 				zoom := f.fit * app.viewer.view.zoom / sc * 100
-				dims := fmt.tprintf("%d × %d  ·  %.0f %%", int(source.x), int(source.y), zoom)
+				dims := fmt.tprintf("%d × %d  ·  %s", int(source.x), int(source.y), i18n.percent(f64(zoom) / 100))
 				text("d", dims, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.8))
 				bh := math.round(em * BUTTON_SMALL_H_EM)

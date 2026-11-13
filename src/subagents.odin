@@ -579,7 +579,7 @@ card_meta :: proc(v: ^Sub_View, running: bool) -> string {
 	if v.live.tools > 0 { append(&parts, fmt.tprintf(i18n.tr(v.live.tools, "%d tools", "%d tools"), v.live.tools)) }
 	tin, tout, cost := sub_totals(v)
 	if tin + tout > 0 { append(&parts, fmt.tprintf(i18n.tr("%s in"), kfmt(tin)), fmt.tprintf(i18n.tr("%s out"), kfmt(tout))) }
-	if cost > 0 { append(&parts, fmt.tprintf("$%.2f", cost)) }
+	if cost > 0 { append(&parts, dollars(cost)) }
 	return strings.join(parts[:], " · ", context.temp_allocator)
 }
 
@@ -619,7 +619,7 @@ sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 			row("###f5", i18n.tr("outcome"), s.outcome, em)
 		}
 		row("###f6", i18n.tr("tokens"), fmt.tprintf(i18n.tr("in %s · out %s · reasoning %s · cache read %s · cache write %s"), kfmt(s.tokens_in), kfmt(s.tokens_out), kfmt(s.reasoning), kfmt(s.cache_read), kfmt(s.cache_write)), em)
-		if s.cost > 0 { row("###f7", i18n.tr("cost"), fmt.tprintf("$%.4f", s.cost), em) }
+		if s.cost > 0 { row("###f7", i18n.tr("cost"), dollars(s.cost, 4), em) }
 		if v.has_live && v.live.steps + v.live.tools > 0 { row("###f8", i18n.tr("seen live"), fmt.tprintf(i18n.tr("%d steps · %d tool calls"), v.live.steps, v.live.tools), em) }
 		ui.spacer(ui.px(em * 0.45))
 	}
@@ -717,7 +717,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 				parent := c.parent_title != "" ? c.parent_title : s.parent
 				text("p", fmt.tprintf(i18n.tr("launched by “%s”"), parent), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.4)}, ui.fill())
 				end := s.idle > 0 && !sub_live(st) ? s.idle : now_epoch_ms()
-				facts := s.cost > 0 ? fmt.tprintf(i18n.tr("started %s · %s · %s in · %s out · $%.2f"), clock_text(s.created, app.prefs.clock24), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out), s.cost) : fmt.tprintf(i18n.tr("started %s · %s · %s in · %s out"), clock_text(s.created, app.prefs.clock24), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out))
+				facts := s.cost > 0 ? fmt.tprintf(i18n.tr("started %s · %s · %s in · %s out · %s"), clock_text(s.created, app.prefs.clock24), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out), dollars(s.cost)) : fmt.tprintf(i18n.tr("started %s · %s · %s in · %s out"), clock_text(s.created, app.prefs.clock24), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out))
 				text("f", facts, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))

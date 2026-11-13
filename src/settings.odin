@@ -72,7 +72,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "conversation.image_viewer_size", title = i18n.later("Image viewer size"), description = i18n.later("The size of the image viewer, as a share of the most the window gives a picture. A picture opens no larger than its pixels; drag the viewer's edges or corners to make it larger or smaller."), kind = .Float, default = {f = 1}, bounded = true, min = VIEWER_SCALE_MIN, max = 1},
 	{name = "conversation.clock", title = i18n.later("Clock"), description = i18n.later("Times of messages in 24-hour or 12-hour form."), kind = .String, default = {s = "24h"}, choices = {"24h", "12h"}},
 	{name = "composer.send", title = i18n.later("Send"), description = i18n.later("The key that sends: Enter (Shift+Enter breaks the line) or Ctrl+Enter (Enter breaks the line)."), kind = .String, default = {s = "enter"}, choices = {"enter", "ctrl+enter"}, choice_labels = {i18n.later("Enter"), i18n.later("Ctrl+enter")}},
-	{name = "sidebar.subagents", title = i18n.later("Subagents"), description = i18n.later("Sub-agent sessions: under their parent, in the list with the others, or not shown."), kind = .String, default = {s = "nested"}, choices = {"nested", "flat", "hidden"}, choice_labels = {i18n.later("Nested"), i18n.later("Flat"), i18n.later("Hidden")}},
+	{name = "sidebar.subagents", title = i18n.later("Subagents"), description = i18n.later("Sub-agent sessions: under their parent, in the list with the others, or not shown."), kind = .String, default = {s = "nested"}, choices = {"nested", "flat", "hidden"}, choice_labels = {i18n.later("Nested"), i18n.later("Flat"), i18n.later("Not shown")}},   // ("Not shown", not the reasoning's "Hidden": in French these words agree with the sub-agents' sessions, a feminine plural)
 	{name = "sidebar.mode", title = i18n.later("Mode"), description = i18n.later("What the sidebar shows: what needs you first across projects (what waits for you, what finished and you have not seen, what runs, the rest), or sessions by project."), kind = .String, default = {s = "inbox"}, choices = {"inbox", "projects"}, choice_labels = {i18n.later("Inbox"), i18n.later("Projects")}},
 	{name = "notify.finished", title = i18n.later("Finished"), description = i18n.later("When a session that is not in front of you ends its run: nothing, a toast, a toast and the taskbar button flashing, or a notification of the system (a click on it opens the session)."), kind = .String, default = {s = "system"}, choices = {"off", "toast", "flash", "system"}, choice_labels = {i18n.later("Off"), i18n.later("Toast"), i18n.later("Flash"), i18n.later("System")}},
 	{name = "permission.new_sessions", title = i18n.later("New sessions"), description = i18n.later("The approvals a session made here starts with, set on the server (the composer's shield changes them for one session): the server's configured rules, file edits allowed, everything allowed (a policy's deny stays), or every action asked."), kind = .String, default = {s = "configured"}, choices = {"configured", "allow_edits", "allow_all", "ask_all"}, choice_labels = {i18n.later("Configured"), i18n.later("Allow edits"), i18n.later("Allow all"), i18n.later("Ask all")}},
@@ -738,7 +738,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 		custom_names = FONT_PREFS[:],
 		custom = proc(user: rawptr, name: string, em: f32) { font_button((^App)(user), name, em) },
 		page_foot = settings_page_foot,
-		install = &app.install, diagnostics = &app.window,
+		licence = licence_page(app), install = &app.install, diagnostics = &app.window,
 	}
 }
 
@@ -761,7 +761,6 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 	case "advanced":
 		ui.spacer(ui.px(em * 0.6))
 		info_line(app, "###adv_about", fmt.tprintf(i18n.tr("%s %s, a client of the OpenCode server. %s"), APP_NAME, APP_VERSION, i18n.tr(APP_NOT_THEIRS)), em)
-		licence_section(app, em)
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###adv_b") {
@@ -854,13 +853,15 @@ page_server :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.well("###srv") {
 		ui.spacer(ui.px(em * 0.4))
-		fact("###s1", i18n.tr("address"), server_base(app), em)
-		fact("###s2", i18n.tr("status"), online(app) ? i18n.tr("connected") : i18n.tr("not connected"), em, online(app) ? hex(HEX_GREEN) : hex(HEX_YELLOW))
-		fact("###s3", i18n.tr("version"), app.server_version != "" ? app.server_version : "?", em)
-		fact("###s0", i18n.tr("name"), i18n.tr(server_name(app)), em)
-		fact("###s4", i18n.tr("auth"), app.servers[app.server].password == "" ? i18n.tr("none") : app.servers[app.server].local ? i18n.tr("Basic (password from service.json)") : "Basic", em)
-		fact("###s5", i18n.tr("sessions"), fmt.tprintf(i18n.tr("%d loaded · %d running"), len(app.sessions), len(app.busy)), em)
-		fact("###s6", i18n.tr("client"), fmt.tprintf("opencode native %s", APP_VERSION), em)
+		// (labels with a capital, as every other label of the settings)
+		fact("###s1", i18n.tr("Address"), server_base(app), em)
+		fact("###s2", i18n.tr("Status"), online(app) ? i18n.tr("connected") : i18n.tr("not connected"), em, online(app) ? hex(HEX_GREEN) : hex(HEX_YELLOW))
+		fact("###s3", i18n.tr("Version"), app.server_version != "" ? app.server_version : "?", em)
+		fact("###s0", i18n.tr("Name"), i18n.tr(server_name(app)), em)
+		// (its own context: "none" here is an authentication's, a feminine word in French)
+		fact("###s4", i18n.tr("Authentication"), app.servers[app.server].password == "" ? i18n.tr("authentication", "none") : app.servers[app.server].local ? i18n.tr("Basic (password from service.json)") : "Basic", em)
+		fact("###s5", i18n.tr("Sessions"), fmt.tprintf(i18n.tr("%d loaded · %d running"), len(app.sessions), len(app.busy)), em)
+		fact("###s6", i18n.tr("Client"), fmt.tprintf("opencode native %s", APP_VERSION), em)
 		ui.spacer(ui.px(em * 0.4))
 	}
 	section(app, i18n.tr("SHELL"), em)
@@ -976,7 +977,7 @@ page_usage :: proc(app: ^App, em: f32) {
 			ui.progress("###bar", f32(l.percent / 100))
 			ui.spacer(ui.px(em * 0.7))
 			col := l.limited ? hex(HEX_RED) : l.percent >= USAGE_WARN_PERCENT ? hex(HEX_YELLOW) : hex(HEX_WEAK)
-			text("p", fmt.tprintf("%.0f %%", l.percent), col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 3.5))
+			text("p", i18n.percent(f64(l.percent) / 100), col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 3.5))
 			text("r", l.resets > now ? fmt.tprintf(i18n.tr("resets in %s"), duration_text(now, l.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
 		}
 	}
@@ -989,7 +990,7 @@ page_usage :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 0.7))})
 			ui.progress("###bar", t)
 			ui.spacer(ui.px(em * 0.7))
-			text("p", fmt.tprintf("$%.2f / $%.0f", b.spent, b.limit), t >= BUDGET_WARN_SHARE ? hex(HEX_YELLOW) : hex(HEX_GREEN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 8))
+			text("p", fmt.tprintf("%s / %s", dollars(b.spent), dollars(b.limit, 0)), t >= BUDGET_WARN_SHARE ? hex(HEX_YELLOW) : hex(HEX_GREEN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 8))
 			text("r", b.resets > now ? fmt.tprintf(i18n.tr("resets in %s"), duration_text(now, b.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
 		}
 	}

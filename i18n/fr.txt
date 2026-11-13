@@ -194,6 +194,9 @@ fr dossier par défaut
 en %s in · %s out
 fr %s en entrée · %s en sortie
 
+en $%s
+fr %s $
+
 en connecting
 fr connexion
 
@@ -223,6 +226,22 @@ en %d unreadable
 en+ %d unreadable
 fr %d illisible
 fr+ %d illisibles
+
+ctx key
+en Enter
+fr Entrée
+
+ctx key
+en Escape
+fr Échap
+
+ctx key
+en Page Up
+fr Pg préc
+
+ctx key
+en Page Down
+fr Pg suiv
 
 en Command palette
 fr Palette de commandes
@@ -294,10 +313,10 @@ en Quote what is selected
 fr Citer la sélection
 
 en Find in the conversation
-fr Chercher dans la conversation
+fr Rechercher dans la conversation
 
 en Show or hide the Statistics panel
-fr Afficher ou masquer le panneau Statistiques
+fr Afficher ou masquer le panneau des statistiques
 
 en Rename the session…
 fr Renommer la session…
@@ -384,19 +403,19 @@ en Switch the sidebar's mode (inbox, projects)
 fr Changer le mode de la barre latérale (réception, projets)
 
 en Zoom in the conversation
-fr Agrandir la conversation
+fr Zoom avant sur la conversation
 
 en Zoom out the conversation
-fr Réduire la conversation
+fr Zoom arrière sur la conversation
 
 en Reset the conversation's zoom
 fr Rétablir le zoom de la conversation
 
 en Zoom in the interface
-fr Agrandir l'interface
+fr Zoom avant sur l'interface
 
 en Zoom out the interface
-fr Réduire l'interface
+fr Zoom arrière sur l'interface
 
 en Reset the interface's zoom
 fr Rétablir le zoom de l'interface
@@ -447,7 +466,7 @@ en Attach files: images, PDF, text  (or paste, or drop them here)
 fr Joindre des fichiers : images, PDF, texte  (ou collez-les, ou déposez-les ici)
 
 en default model
-fr modèle par défaut
+fr par défaut
 
 en reading the attachment…
 fr lecture de la pièce jointe…
@@ -498,10 +517,10 @@ en Terminal  (Ctrl+Shift+T)
 fr Terminal  (Ctrl+Maj+T)
 
 en Search agents
-fr Chercher un agent
+fr Rechercher un agent
 
 en Search models
-fr Chercher un modèle
+fr Rechercher un modèle
 
 en Thinking
 fr Réflexion
@@ -665,8 +684,8 @@ fr Conversation compactée
 en You
 fr Vous
 
-en %s in · %s out · $%.3f
-fr %s en entrée · %s en sortie · %.3f $
+en %s in · %s out · %s
+fr %s en entrée · %s en sortie · %s
 
 en An independent project: not built by the OpenCode team, and not affiliated with them.
 fr Un projet indépendant : ni conçu par l'équipe d'OpenCode, ni affilié à elle.
@@ -729,7 +748,7 @@ en The server's experimental options are on
 fr Les options expérimentales du serveur sont activées
 
 en Find a file
-fr Chercher un fichier
+fr Rechercher un fichier
 
 en Nothing matches.
 fr Aucun résultat.
@@ -929,7 +948,7 @@ en The accounts the server signs in with: what you connect here gives you its mo
 fr Les comptes avec lesquels le serveur se connecte : ce que vous connectez ici vous donne ses modèles.
 
 en Find an integration
-fr Chercher une intégration
+fr Rechercher une intégration
 
 en %d more: search to find them.
 en+ %d more: search to find them.
@@ -1016,44 +1035,8 @@ fr Finalisation…
 en Finish
 fr Terminer
 
-en Thank you: the licence is registered
-fr Merci : la licence est enregistrée
-
-en The licence was removed
-fr La licence a été supprimée
-
-en LICENCE
-fr LICENCE
-
-en Registered to %s (%s). Thank you for supporting %s.
-fr Enregistrée au nom de %s (%s). Merci de soutenir %s.
-
-en Remove the licence
-fr Supprimer la licence
-
-en Unregistered: %s works the same. A licence supports its work.
-fr Non enregistré : %s fonctionne de la même façon. Une licence soutient son développement.
-
-en Support opencode native
-fr Soutenir opencode native
-
-en Paste a licence key
-fr Collez une clé de licence
-
-en Register
-fr Enregistrer
-
-en Choose a file…
-fr Choisir un fichier…
-
-en Choose a licence file
-fr Choisissez un fichier de licence
-
-en opencode native licence
-fr licence opencode native
-
 en The preferences could not be saved
-fr Impossible d'enregistrer les préférences
+fr Impossible d'enregistrer les réglages
 
 en Copy the table
 fr Copier le tableau
@@ -1233,7 +1216,7 @@ en Agent: %s
 fr Agent : %s
 
 en Search commands, sessions, agents, models…
-fr Chercher des commandes, des sessions, des agents, des modèles…
+fr Rechercher des commandes, des sessions, des agents, des modèles…
 
 en Nothing matches
 fr Aucun résultat
@@ -1281,7 +1264,7 @@ en Released
 fr Sortie
 
 en Status
-fr Statut
+fr État
 
 en Open in a window
 fr Ouvrir dans une fenêtre
@@ -1753,6 +1736,9 @@ fr Imbriquées
 en Flat
 fr À plat
 
+en Not shown
+fr Masquées
+
 en Mode
 fr Mode
 
@@ -1970,43 +1956,38 @@ en the system's usual face
 fr la police habituelle du système
 
 en Search code fonts
-fr Chercher une police de code
+fr Rechercher une police de code
 
 en Search fonts
-fr Chercher une police
+fr Rechercher une police
 
 en SERVER
 fr SERVEUR
 
-en address
-fr adresse
-
-en status
-fr statut
-
 en not connected
 fr non connecté
 
-en version
-fr version
+en Version
+fr Version
 
-en name
-fr nom
+en Authentication
+fr Authentification
 
-en auth
-fr authentification
+ctx authentication
+en none
+fr aucune
 
 en Basic (password from service.json)
 fr Basic (mot de passe de service.json)
 
-en sessions
-fr sessions
+en Sessions
+fr Sessions
 
 en %d loaded · %d running
 fr %d chargées · %d en cours
 
-en client
-fr client
+en Client
+fr Client
 
 en SHELL
 fr SHELL
@@ -2093,7 +2074,7 @@ en Running
 fr En cours
 
 en Recent
-fr Récent
+fr Récents
 
 en Archived
 fr Archivées
@@ -2105,7 +2086,7 @@ en Mark as seen
 fr Marquer comme vu
 
 en Search sessions
-fr Chercher une session
+fr Rechercher une session
 
 en Loading…
 fr Chargement…
@@ -2317,6 +2298,9 @@ fr leur coût
 en The project
 fr Le projet
 
+en sessions
+fr sessions
+
 en %d  (+ %d sub-agents)
 fr %d  (+ %d sous-agents)
 
@@ -2433,8 +2417,8 @@ fr SOUS-AGENT
 en launched by “%s”
 fr lancé par « %s »
 
-en started %s · %s · %s in · %s out · $%.2f
-fr démarré à %s · %s · %s en entrée · %s en sortie · %.2f $
+en started %s · %s · %s in · %s out · %s
+fr démarré à %s · %s · %s en entrée · %s en sortie · %s
 
 en started %s · %s · %s in · %s out
 fr démarré à %s · %s · %s en entrée · %s en sortie
@@ -2483,8 +2467,8 @@ fr Agrandir
 en Zoom out
 fr Réduire
 
-en Reset the zoom (%d%%)
-fr Rétablir le zoom (%d %%)
+en Reset the zoom (%s)
+fr Rétablir le zoom (%s)
 
 en Reset the zoom
 fr Rétablir le zoom
@@ -2564,7 +2548,7 @@ en Settings…
 fr Réglages…
 
 en Statistics panel
-fr Panneau Statistiques
+fr Panneau des statistiques
 
 en Sub-agent sessions in the list
 fr Sessions des sous-agents dans la liste

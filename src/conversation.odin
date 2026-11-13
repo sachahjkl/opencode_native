@@ -523,7 +523,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 		if app.prefs.usage && !m.streaming && m.tokens_out > 0 && m.finish == "stop" {
 			ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###foot") {
-				text("tk", m.cost > 0 ? fmt.tprintf(i18n.tr("%s in · %s out · $%.3f"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), m.cost) : fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				text("tk", m.cost > 0 ? fmt.tprintf(i18n.tr("%s in · %s out · %s"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), dollars(m.cost, 3)) : fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			}
 		}
 	}
