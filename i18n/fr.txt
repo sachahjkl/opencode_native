@@ -227,22 +227,6 @@ en+ %d unreadable
 fr %d illisible
 fr+ %d illisibles
 
-ctx key
-en Enter
-fr Entrée
-
-ctx key
-en Escape
-fr Échap
-
-ctx key
-en Page Up
-fr Pg préc
-
-ctx key
-en Page Down
-fr Pg suiv
-
 en Command palette
 fr Palette de commandes
 

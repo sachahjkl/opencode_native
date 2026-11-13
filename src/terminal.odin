@@ -1173,10 +1173,10 @@ terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
 @(private = "file")
 term_menu :: proc(app: ^App, t: ^Term) {
 	v := &t.view
-	if ui.menu_item(i18n.tr("Copy"), v.read_only ? "Ctrl+C" : keys_shown("Ctrl+Shift+C"), icon = lucide.COPY, disabled = !term.has_selection(v)).clicked {
+	if ui.menu_item(i18n.tr("Copy"), v.read_only ? "Ctrl+C" : platform.key_text("Ctrl+Shift+C"), icon = lucide.COPY, disabled = !term.has_selection(v)).clicked {
 		clip_set(term.selection_text(v))
 	}
-	if !v.read_only && ui.menu_item(i18n.tr("Paste"), keys_shown("Ctrl+Shift+V"), icon = lucide.CLIPBOARD_PASTE).clicked { term_paste(app, t) }
+	if !v.read_only && ui.menu_item(i18n.tr("Paste"), platform.key_text("Ctrl+Shift+V"), icon = lucide.CLIPBOARD_PASTE).clicked { term_paste(app, t) }
 	if ui.menu_item(i18n.tr("Select all"), icon = lucide.TEXT_CURSOR_INPUT, disabled = t.vt == nil).clicked { term.select_all(v) }
 	ui.menu_separator()
 	if ui.menu_item(i18n.tr("Zoom in"), "Ctrl+=", icon = lucide.PLUS).clicked { term_zoom_set(app, t, v.zoom * term.ZOOM_STEP) }
