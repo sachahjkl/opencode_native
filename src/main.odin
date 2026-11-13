@@ -641,7 +641,6 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	app.state.icon_font = app.icons   // (Lucide: the menus' icons are its characters)
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
 	licence_init(app)
-	palette_init(app)      // (from app.stores, read at the start: a test's are empty)
 	term_zooms_load(app)
 	zooms_load(&app.session_zooms, &app.stores.session_zooms, CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX)
 	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
@@ -697,6 +696,7 @@ main :: proc() {
 	if !opts.no_fixed_surface { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
 	_ = platform.drop_target_enable(app.win, true)   // (files dropped on the window are attached: attach_drop)
 	app_init(app, prefs_path())
+	palette_open(app)   // (after app_init: the memory is read by a task of the state; a test opens none)
 	placement_restore(app)
 	drafts_load(app)   // (what was typed before, in each session: the home page's comes back now)
 	app.previews.host = web_host_system()

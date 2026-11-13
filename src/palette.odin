@@ -1,19 +1,17 @@
 // The command palette (Ctrl+K): one field that reaches everything. What the program does (commands.odin), the sessions, the
 // agents, the models, the server's own commands and the settings (a switch flips; the others open the settings on themselves).
 // A first character narrows it: > commands, @ sessions, / the server's commands, # models, : settings. What was chosen before
-// comes first (it fades with a half-life of two weeks, palette_usage.txt beside the preferences).
+// comes first (ui.Choice_Memory: it fades with a half-life of two weeks, palette_choices.txt beside the preferences).
 package ocn
 
 import "core:fmt"
 import "core:hash"
 import "core:math"
 import "core:mem/virtual"
-import "core:strconv"
 import "core:strings"
 import prefs_page "gt:prefs_page"
 import "gt:config"
 import "gt:draw"
-import store "gt:store"
 import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
@@ -33,8 +31,6 @@ Pal_Item :: struct {
 	toggle: bool,     // it is a switch (its state: pal_item_on, read for the rows shown)
 }
 
-Usage :: struct { weight: f64, last_ms: f64 }
-
 // The list is made when what it is made of changes (palette_stamp), not at each frame: a palette at rest, the pointer moving
 // over it, cost as much as typing in it, every item matched and ranked again and every row found built.
 Palette :: struct {
@@ -42,7 +38,7 @@ Palette :: struct {
 	field:   ui.Line_Edit,
 	reveal:  bool,
 	mouse:   Vec2,
-	usage:   map[string]Usage,   // by "kind:id" (keys owned); palette_usage.txt keeps them (app.stores.palette)
+	choices: ui.Choice_Memory,   // by "kind:id" (choice_key); palette_choices.txt keeps them (stores_open)
 	search:  ui.Fuzzy_Cache,     // the query and the items folded, and the hits of the last stamp (ui.rank's version)
 	stamp:   u64,                // what the items and the hits were made from (palette_stamp)
 	items:   []Pal_Item,         // (in `arena`)
@@ -54,35 +50,13 @@ Palette :: struct {
 
 Slash :: struct { name, description: string }   // a command of the server (owned)
 
-// What the palette ranks first, from palette_usage.txt as read at the start (stores.odin): kept here as numbers, since the
-// list's order reads them at each search.
-palette_init :: proc(app: ^App) {
-	p := &app.palette
-	for e in store.list(&app.stores.palette) {
-		weight, _, last := strings.partition(e.value, "\t")
-		w, w_ok := strconv.parse_f64(weight)
-		t, t_ok := strconv.parse_f64(last)
-		if w_ok && t_ok { p.usage[strings.clone(e.key)] = {w, t} }
-	}
+// What the palette ranks first, read on the chores and merged at a next build (the choices made meanwhile are kept).
+palette_open :: proc(app: ^App) {
+	ui.choice_memory_open(&app.palette.choices, &app.state, pjoin({config_dir(), "palette_choices.txt"}))
 }
 
-// What choosing this before is worth now.
 @(private = "file")
-usage_now :: proc(u: Usage, now: f64) -> f64 { return u.weight * math.pow(0.5, (now - u.last_ms) / USAGE_HALF_LIFE_MS) }
-
-@(private = "file")
-usage_key :: proc(it: ^Pal_Item) -> string { return fmt.tprintf("%d:%s", int(it.kind), it.id) }
-
-@(private = "file")
-usage_note :: proc(app: ^App, it: ^Pal_Item) {
-	p := &app.palette
-	k := usage_key(it)
-	now := now_epoch_ms()
-	u, known := p.usage[k]
-	if !known { k = strings.clone(k) }
-	p.usage[k] = {usage_now(u, now) + 1, now}
-	store.set(&app.stores.palette, k, fmt.tprintf("%f\t%f", p.usage[k].weight, now))
-}
+choice_key :: proc(it: ^Pal_Item) -> string { return fmt.tprintf("%d:%s", int(it.kind), it.id) }
 
 palette_toggle :: proc(app: ^App) {
 	p := &app.palette
@@ -191,6 +165,7 @@ palette_stamp :: proc(app: ^App, text: string) -> u64 {
 	mix(&h, u64(uintptr(raw_data(app.agents))))
 	mix(&h, u64(len(app.cx.slash)))
 	mix(&h, hash.fnv64a(transmute([]u8)app.chat.id))
+	mix(&h, app.palette.choices.version)   // (the file read after the start, a choice made: the order moves)
 	// (which commands can act now: a command that cannot is not listed)
 	for &c, i in COMMANDS { mix(&h, u64(i) << 1 | u64(command_enabled(app, &c))) }
 	return h | 1
@@ -234,7 +209,7 @@ palette_refresh :: proc(app: ^App, text: string) {
 // Done when it is chosen. (open_root and command_run wait for the end of the frame; the others only note a value.)
 @(private = "file")
 palette_choose :: proc(app: ^App, it: ^Pal_Item) {
-	usage_note(app, it)
+	ui.choice_note(&app.palette.choices, choice_key(it))
 	app.cx.open[.Palette] = false
 	switch it.kind {
 	case .Command: command_run(app, it.cmd)
@@ -368,21 +343,20 @@ setting_title :: proc(p: ^config.Prefs, d: config.Def) -> string {
 	return fmt.tprintf("%s › %s", i18n.tr(config.group_title(p, group)), i18n.tr(config.title_of(d)))
 }
 
-// What the usage bonus reads (palette_hits): the counts, and now.
+// What the choices' bonus reads (palette_hits): the memory, and now.
 @(private = "file")
-Usage_Now :: struct { palette: ^Palette, now: f64 }
+Choices_Now :: struct { memory: ^ui.Choice_Memory, now_ms: i64 }
 
 // What `needle` finds among the items, best first (temp memory; with a `version`, the search's: ui.rank), as the toolkit's palette
 // ranks its commands (ui.palette_match):
 // a title whole or at the starts of its words, then its tags, then with a slip or two in each word; what was chosen lately higher.
 palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string, version: u64 = 0) -> []ui.Rank_Hit {
-	at := Usage_Now{&app.palette, now_epoch_ms()}
+	at := Choices_Now{&app.palette.choices, i64(now_epoch_ms())}
 	return ui.rank(needle, items, proc(it: ^Pal_Item, _: rawptr) -> ui.Rank_Entry {
 		// a switch is found by its name too ("window.system_title"), its title then shown without marks
 		return {label = it.title, tags = it.tags, last = it.kind == .Switch || it.kind == .Setting ? it.id : ""}
 	}, &at, bonus = proc(it: ^Pal_Item, user: rawptr) -> f64 {
-		at := (^Usage_Now)(user)
-		u, known := at.palette.usage[usage_key(it)]
-		return known ? usage_now(u, at.now) * USAGE_SCORE : 0
+		at := (^Choices_Now)(user)
+		return ui.choice_weight(at.memory, choice_key(it), at.now_ms) * USAGE_SCORE
 	}, cache = &app.palette.search, version = version)
 }

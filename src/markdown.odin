@@ -26,7 +26,7 @@ md_doc :: proc(c: ^Chat, id: string) -> ^markdown.Doc {
 }
 
 // How Markdown is shown in the conversation, its text in `color`: the answers' face and size, tables in the interface's.
-md_config :: proc(app: ^App, color: Color) -> markdown.Config {
+md_config :: proc(app: ^App, color: Color) -> markdown.View_Options {
 	return {
 		prose = app.prose, face = app.font, mono = app.mono,
 		prose_scale = app.prose_scale, line_ratio = PROSE_LINE_RATIO, cell_scale = FS_LABEL,

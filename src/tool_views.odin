@@ -65,8 +65,8 @@ gutter :: proc(id: string, n: int, em: f32) {
 }
 
 // A diff's rows at our sizes, the code in its colours when `file` names a language.
-diff_options :: proc(app: ^App, em: f32, file := "") -> diff.Options {
-	o := diff.Options{
+diff_options :: proc(app: ^App, em: f32, file := "") -> diff.View_Options {
+	o := diff.View_Options{
 		font = app.mono, sign_font = app.mono_bold, number_font = app.mono,
 		size = math.round(em * FS_SMALL), number_size = math.round(em * FS_CAPTION),
 		row_height = math.round(em * 1.3), gap_height = math.round(em * 0.9),

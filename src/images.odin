@@ -355,7 +355,8 @@ image_view_open :: proc(app: ^App, ref: Image_Ref) {
 	image_ref_delete(&app.viewer.ref)
 	app.viewer.ref = image_ref_clone(ref)
 	app.cx.open[.Viewer] = true
-	app.viewer.zoom, app.viewer.pan = 1, {}
+	ui.preview_reset(&app.viewer.view)
+	app.viewer.focus = true
 	app.viewer.resize_from = {}
 	app.viewer.grown = false
 }
@@ -367,11 +368,7 @@ VIEWER_PAD_EM    :: 0.5   // around the picture (the edges' grips are there)
 VIEWER_BAR_EM    :: 2.6   // the name, the size and the buttons, under the picture
 VIEWER_MIN_W_EM  :: 26    // what the bar needs: a small picture gets room on its sides
 VIEWER_SCALE_MIN :: 0.2   // the smallest viewer, of the most the window gives a picture (conversation.image_viewer_size)
-VIEW_ZOOM_MIN    :: 0.5   // times what fits
-VIEW_NATIVE_MAX  :: 8     // times the image's pixels at the interface's scale
-VIEW_ZOOM_STEP   :: 1.25  // a notch of the wheel, a press of + or -
-VIEW_DOUBLE_CLICK :: 2    // what a double click goes to, when what fits is already its pixels
-VIEW_PAN_KEY     :: 0.1   // of the view, an arrow key
+VIEW_NATIVE_MAX  :: 8     // times the image's pixels at the interface's scale (ui.preview's zoom_max)
 
 // Where the viewer is, from the image alone: the panel hugs the picture, so all the black around it is outside the viewer.
 Viewer_Frame :: struct {
@@ -412,45 +409,19 @@ viewer_outside :: proc(p, view, picture, pan: [2]f32) -> bool {
 	return !(p.x >= lo.x && p.x < hi.x && p.y >= lo.y && p.y < hi.y)
 }
 
-// What the view draws: an image's texture.
+// The black behind the picture, where it is zoomed out or moved (ui.preview draws only the picture).
 @(private = "file")
-View_Draw :: struct { tex: render.Texture, size, pan: [2]f32 }
-
-@(private = "file")
-view_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	d := (^View_Draw)(user)
-	r := b.rect
-	draw_well(dc, r, 0, hex(HEX_VIEWER_WELL))
-	c := (r.min + r.max) * 0.5 + d.pan
-	draw.push_clip(dc, r)
-	lo, hi := c - d.size * 0.5, c + d.size * 0.5
-	draw.image(dc, d.tex, {{math.round(lo.x), math.round(lo.y)}, {math.round(hi.x), math.round(hi.y)}})
-	draw.pop_clip(dc)
-}
-
-// How far the picture may go: none across a side it fits, else until its edge meets the view's.
-view_pan_clamp :: proc(pan, picture, view: [2]f32) -> [2]f32 {
-	reach := [2]f32{max(0, (picture.x - view.x) * 0.5), max(0, (picture.y - view.y) * 0.5)}
-	return {clamp(pan.x, -reach.x, reach.x), clamp(pan.y, -reach.y, reach.y)}
-}
+view_well_draw :: proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) { draw_well(dc, b.rect, 0, hex(HEX_VIEWER_WELL)) }
 
 // The image viewer (open: Dialog.Viewer): what it shows, and how it is zoomed, moved and sized.
 Image_Viewer :: struct {
 	key:         u64,
 	ref:         Image_Ref,   // what is shown: what Copy decodes again whole (its data and name owned)
-	zoom:        f32,         // times what fits (image_viewer)
-	pan:         [2]f32,      // of the picture's centre from the view's, frame pixels
-	grab:        [2]f32,      // pan when the drag began
+	view:        ui.Preview,  // the zoom (times what fits) and the pan of the picture
+	focus:       bool,        // just opened: the keyboard goes to the picture (its keys zoom and move it)
 	resize_from: [3]f32,      // a grip of the viewer held: the dialog's size (logical pixels) and scale at its press ({}: none)
 	grown:       bool,        // the viewer's grips were dragged since it opened: its picture may pass its pixels (viewer_frame)
 	start:       Image_Ref,   // --image=<file>: opened in the viewer once it is decoded (its data owned)
-}
-
-// The zoom asked for, within its limits, keeping the point `at` of the view (from its centre) where it is.
-view_zoom_to :: proc(app: ^App, zoom, max_zoom: f32, at: [2]f32) {
-	z := clamp(zoom, VIEW_ZOOM_MIN, max_zoom)
-	app.viewer.pan = at - (at - app.viewer.pan) * (z / app.viewer.zoom)
-	app.viewer.zoom = z
 }
 
 // An image still being decoded: a moment, over the conversation dimmed.
@@ -475,14 +446,12 @@ image_viewer :: proc(app: ^App, em: f32) {
 	if !ok || e.state == .Failed { app.cx.open[.Viewer] = false; return }
 	e.used = app.frame_no
 	if e.state == .Pending { image_viewer_wait(app, em); return }
-	shown := View_Draw{tex = e.tex}
 	source := [2]f32{f32(e.w), f32(e.h)}
 	pad, bar := math.round(em * VIEWER_PAD_EM), math.round(em * VIEWER_BAR_EM)
 	chrome := [2]f32{2 * pad, pad + bar}
 	room := app.state.window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
 	f := viewer_frame(source, room, chrome, sc, app.prefs.viewer_scale, math.round(em * VIEWER_MIN_W_EM), app.viewer.grown)
 	view := f.picture
-	max_zoom := max(1, VIEW_NATIVE_MAX * sc / f.fit)
 	// (the dialog's size in ems, as ui.modal keeps it: its grips write it)
 	asked := f.panel / em
 	size := asked
@@ -499,40 +468,26 @@ image_viewer :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(view.y), axis = .X})
 			if ui.row() {
 				ui.spacer(ui.fill())
-				picture := source * f.fit * app.viewer.zoom
-				pannable := picture.x > view.x || picture.y > view.y
-				ui.next({width = ui.px(view.x), height = ui.px(view.y), cursor = pannable ? (ui.active_key() != 0 ? .Grabbing : .Grab) : .Arrow})
-				ui.a11y({role = .Image, name = app.viewer.ref.name != "" ? app.viewer.ref.name : i18n.tr("Image")})
-				b := ui.build_box({.Clickable, .Scroll_Self}, "###view")
-				sig := ui.signal(b)
-				if sig.pressed && viewer_outside(sig.mouse, view, picture, app.viewer.pan) { closing = true }
-				if ui.mouse_pressed(.Right) && ui.pointer_on(b) && !app.ctx_menu.taken {
-					ctx_open(app, .Image, image = app.viewer.ref)
+				// (the box is the picture's shape: what fits is f.fit, past its pixels as the viewer's size asks: grow)
+				pv := &app.viewer.view
+				pv_o := ui.Preview_Options{grow = true, zoom_max = VIEW_NATIVE_MAX * sc}
+				ui.next({width = ui.px(view.x), height = ui.px(view.y)})
+				well := ui.build_box({}, "###view_well")
+				well.custom = view_well_draw
+				if ui.parent(well) {
+					ui.next({width = ui.fill(), height = ui.fill()})
+					ui.a11y({role = .Image, name = app.viewer.ref.name != "" ? app.viewer.ref.name : i18n.tr("Image")})
+					res := ui.preview_image("###view", pv, e.tex, source, pv_o)
+					if app.viewer.focus { ui.set_focus(res.box.key); app.viewer.focus = false }
+					b := res.box
+					on := ui.pointer_on(b)
+					picture := source * res.fit * pv.zoom
+					if on && ui.mouse_pressed(.Left) && viewer_outside(ui.mouse_pos() - b.rect.min, view, picture, pv.pan) { closing = true }
+					if on && ui.mouse_pressed(.Right) && !app.ctx_menu.taken {
+						ctx_open(app, .Image, image = app.viewer.ref)
+					}
+					if ui.key_press(.C, {.Ctrl}) { image_copy(app, app.viewer.ref) }
 				}
-				if sig.scrolled.y != 0 {
-					view_zoom_to(app, app.viewer.zoom * math.pow(f32(VIEW_ZOOM_STEP), -sig.scrolled.y), max_zoom, sig.mouse - view * 0.5)
-				}
-				if sig.pointer_pressed { app.viewer.grab = app.viewer.pan }
-				if sig.dragging { app.viewer.pan = app.viewer.grab + sig.drag_delta }
-				if sig.double_clicked {
-					native := sc / f.fit
-					view_zoom_to(app, app.viewer.zoom != 1 ? 1 : (native > 1 ? native : VIEW_DOUBLE_CLICK), max_zoom, sig.mouse - view * 0.5)
-				}
-				if ui.key_press(.C, {.Ctrl}) { image_copy(app, app.viewer.ref) }
-				if ui.key_press(.Equal) || ui.key_press(.Num_Add) { view_zoom_to(app, app.viewer.zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
-				if ui.key_press(.Minus) || ui.key_press(.Num_Subtract) { view_zoom_to(app, app.viewer.zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
-				if ui.key_press(.N0) { app.viewer.zoom, app.viewer.pan = 1, {} }
-				if ui.key_press(.Left) { app.viewer.pan.x += view.x * VIEW_PAN_KEY }
-				if ui.key_press(.Right) { app.viewer.pan.x -= view.x * VIEW_PAN_KEY }
-				if ui.key_press(.Up) { app.viewer.pan.y += view.y * VIEW_PAN_KEY }
-				if ui.key_press(.Down) { app.viewer.pan.y -= view.y * VIEW_PAN_KEY }
-				picture = source * f.fit * app.viewer.zoom
-				app.viewer.pan = view_pan_clamp(app.viewer.pan, picture, view)
-				d := ui.frame_new(View_Draw)
-				d^ = shown
-				d.size, d.pan = picture, app.viewer.pan
-				b.custom = view_draw
-				b.custom_user = d
 				ui.spacer(ui.fill())
 			}
 			ui.next({width = ui.fill(), height = ui.px(bar), axis = .X, cross = .Center})
@@ -541,16 +496,17 @@ image_viewer :: proc(app: ^App, em: f32) {
 				name := app.viewer.ref.name != "" ? app.viewer.ref.name : i18n.tr("image")
 				text("n", ellipsize(name, IMAGE_NAME_CHARS), hex(HEX_VIEWER_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 				ui.spacer(ui.px(em * 0.6))
-				zoom := f.fit * app.viewer.zoom / sc * 100
+				zoom := f.fit * app.viewer.view.zoom / sc * 100
 				dims := fmt.tprintf("%d × %d  ·  %.0f %%", int(source.x), int(source.y), zoom)
 				text("d", dims, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.8))
 				bh := math.round(em * BUTTON_SMALL_H_EM)
-				if ui.button("zoom_out", "−", o = {height = bh}).clicked { view_zoom_to(app, app.viewer.zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
+				most := max(1, VIEW_NATIVE_MAX * sc / f.fit)   // (as ui.preview's: its zoom_max over what fits)
+				if ui.button("zoom_out", "−", o = {height = bh}).clicked { ui.preview_zoom_to(&app.viewer.view, app.viewer.view.zoom / ui.PREVIEW_ZOOM_STEP, ui.PREVIEW_ZOOM_MIN, most, {}) }
 				ui.spacer(ui.px(em * 0.3))
-				if ui.button("zoom_in", "+", o = {height = bh}).clicked { view_zoom_to(app, app.viewer.zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
+				if ui.button("zoom_in", "+", o = {height = bh}).clicked { ui.preview_zoom_to(&app.viewer.view, app.viewer.view.zoom * ui.PREVIEW_ZOOM_STEP, ui.PREVIEW_ZOOM_MIN, most, {}) }
 				ui.spacer(ui.px(em * 0.3))
-				if ui.button("zoom_fit", i18n.tr("Fit"), o = {height = bh}).clicked { app.viewer.zoom, app.viewer.pan = 1, {} }
+				if ui.button("zoom_fit", i18n.tr("Fit"), o = {height = bh}).clicked { ui.preview_reset(&app.viewer.view) }
 				ui.spacer(ui.px(em * 0.8))
 				if ui.button("close", i18n.tr("Close"), lucide.X, {height = bh}).clicked { app.cx.open[.Viewer] = false }
 				ui.spacer(ui.px(em))

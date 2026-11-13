@@ -957,7 +957,8 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 			app.viewer.ref = image_ref_clone(image_ref("not decoded here", .Bytes, "image/png", "picture.png"))
 			app.viewer.key = 0x5eed
 			app.images[app.viewer.key] = {state = .Ready, tex = tex, w = W, h = H, used = app.frame_no}
-			app.cx.open[.Viewer], app.viewer.zoom, app.viewer.pan, app.viewer.grown = true, 1, {}, false
+			app.cx.open[.Viewer], app.viewer.grown, app.viewer.focus = true, false, true
+			ui.preview_reset(&app.viewer.view)
 		}
 		open(app, tex)
 		session.frames(s, 3)
@@ -974,9 +975,10 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		// a press on the picture keeps it; zoomed out, a press beside the picture closes it
 		session.click_at(s, view.rect.min + 5)
 		testing.expect(t, app.cx.open[.Viewer], "a press on the picture")
-		app.viewer.zoom = 0.5
+		app.viewer.view.zoom = 0.5
 		session.frames(s, 2)
-		session.click_at(s, view.rect.min + 5)
+		// (the other corner: a second press where the first was would be a double click, which zooms)
+		session.click_at(s, view.rect.max - 5)
 		testing.expect(t, !app.cx.open[.Viewer], "a press beside the picture closes it")
 		// its corner, outward: the picture grows past its pixels, as far as the pointer goes, and the size is kept (a share of the room)
 		open(app, tex)

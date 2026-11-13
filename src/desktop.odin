@@ -71,8 +71,8 @@ nix_package :: proc() -> bool { return desktop.in_nix_store(process.executable_p
 
 // What Setup is given: the identity, this version, the install folder, the icons, the line under the version, and what
 // an install and an uninstall do besides the packages' parts.
-setup_config :: proc() -> setup.Config {
-	return setup.Config{
+setup_config :: proc() -> setup.Setup_Options {
+	return setup.Setup_Options{
 		identity = identity(), version = APP_VERSION, install_folder = INSTALL_FOLDER, icons = desktop_icons(),
 		note = i18n.tr(APP_NOT_THEIRS), prepare = setup_prepare,
 		// (the dialog in opencode's look: its blurred backdrop)
@@ -83,13 +83,13 @@ setup_config :: proc() -> setup.Config {
 // Called by both Install and Uninstall before the packages write or remove: the record of Setup up to 0.20.0 goes, so that
 // an install is in today's form and an uninstall leaves an empty folder (which the package then removes).
 @(private = "file")
-setup_prepare :: proc(o: ^desktop.Options, _: []bool, _: rawptr) {
+setup_prepare :: proc(o: ^desktop.Integration_Options, _: []bool, _: rawptr) {
 	if o.install_dir != "" { _ = os.remove(pjoin({o.install_dir, LEGACY_RECORD})) }
 }
 
 // The installed copy cleans what a replacement left beside it.
 desktop_clean_old :: proc() {
-	o := desktop.Options{identity = identity()}
+	o := desktop.Integration_Options{identity = identity()}
 	desktop.clean_old(&o, process.parent_dir(process.executable_path()))
 }
 

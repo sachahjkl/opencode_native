@@ -13,7 +13,7 @@ import tk_changelog "gt:changelog"
 CHANGELOG_LINK :: "https://github.com/sachahjkl/opencode_native/releases/tag/v%s"
 
 // What opencode native is to the toolkit's changelog: this checkout, its releases' link, where it keeps its version.
-changelog_options :: proc() -> tk_changelog.Options {
+changelog_options :: proc() -> tk_changelog.Project_Options {
 	return {root = ".", link = CHANGELOG_LINK, version = changelog_version, set_version = changelog_set_version}
 }
 

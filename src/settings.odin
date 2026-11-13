@@ -728,8 +728,8 @@ settings_open_on :: proc(app: ^App, category: string) {
 	settings_open(app)
 }
 
-// What the client's settings page is given (prefs_page.Options).
-settings_options :: proc(app: ^App) -> prefs_page.Options {
+// What the client's settings page is given (prefs_page.Page_Options).
+settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 	return {
 		user = app,
 		changed = proc(user: rawptr, _: string) { prefs_refresh((^App)(user)) },   // (main_after_frame's writer saves)

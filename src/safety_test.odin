@@ -147,13 +147,6 @@ setup_keeps_the_users_answer :: proc(t: ^testing.T) {
 	expect(t, .None, none, "", "", false)
 }
 
-@(test)
-the_viewer_stays_within_its_limits :: proc(t: ^testing.T) {
-	testing.expect_value(t, view_pan_clamp({50, 50}, {100, 100}, {200, 200}), [2]f32{0, 0})
-	testing.expect_value(t, view_pan_clamp({500, -500}, {400, 300}, {200, 200}), [2]f32{100, -50})
-	testing.expect_value(t, view_pan_clamp({10, 10}, {400, 300}, {200, 200}), [2]f32{10, 10})
-}
-
 // The viewer is the picture and its chrome, nothing more: the black around a picture smaller than the dialog was taken for the outside,
 // and a click there did not close it.
 @(test)

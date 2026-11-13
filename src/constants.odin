@@ -78,8 +78,7 @@ HEX_ACT_WELL         :: 0x0a0a0aff
 
 PALETTE_TOP         :: 0.13     // of the window
 PALETTE_SESSIONS    :: 6        // shown with an empty field
-USAGE_HALF_LIFE_MS  :: 14 * 24 * 3600 * 1000.0
-USAGE_SCORE         :: 150.0    // of one recent choice, in ui.fuzzy_words' units: more than a word's start (100), less than the whole text over pieces (400)
+USAGE_SCORE         :: 150.0    // of a choice of weight 1 (ui.choice_weight), in ui.fuzzy_words' units: more than a word's start (100), less than the whole text over pieces (400)
 HEX_PAL_SELECTED    :: 0x0c0c0cff
 
 ////////////////////////////////
