@@ -158,8 +158,9 @@ prefs_register :: proc(p: ^config.Prefs) {
 }
 
 // This program's own defaults of standard settings: the messages at the top right (at the bottom they hid the send
-// button: views.odin set_toast_area), each frame repainting only what changed.
-STANDARD_VALUES := [?]prefs_page.Standard_Value{{"window.toast_position", "top_right"}, {"rendering.partial_redraw", "true"}}
+// button: views.odin set_toast_area), each frame repainting only what changed, and scrolling that glides even when the
+// system turns animations off (a conversation read with the wheel: where a jump lands is lost).
+STANDARD_VALUES := [?]prefs_page.Standard_Value{{"window.toast_position", "top_right"}, {"rendering.partial_redraw", "true"}, {"scrolling.smooth", "on"}}
 
 PREF_GROUPS := [?][2]string{
 	{"conversation", i18n.later("Conversation")}, {"composer", i18n.later("Composer")}, {"sidebar", i18n.later("Sidebar")},

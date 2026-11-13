@@ -413,11 +413,15 @@ viewer_outside :: proc(p, view, picture, pan: [2]f32) -> bool {
 // concentric with the dialog's: inset by the padding, a square corner would show a corner in a corner.
 @(private = "file")
 view_well_draw :: proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) {
+	// (the state of the window drawn, as corners(): ui.current_state is the open build's, nil while a frame is drawn)
+	app := the_app
+	if app == nil { ui.machined_well(dc, b.rect, 0, hex(HEX_VIEWER_WELL)); return }
+	state := app.cx.built != nil ? app.cx.built : &app.state
 	radius: f32
 	for a := b.parent; a != nil; a = a.parent {
 		if a.name != "modal_image_view" { continue }
 		inset := max(b.rect.min.x - a.rect.min.x, b.rect.min.y - a.rect.min.y)
-		radius = ui.concentric_radius(ui.box_drawn_radii(ui.current_state(), a)[0], inset)
+		radius = ui.concentric_radius(ui.box_drawn_radii(state, a)[0], inset)
 		break
 	}
 	ui.machined_well(dc, b.rect, radius, hex(HEX_VIEWER_WELL))
