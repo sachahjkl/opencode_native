@@ -326,7 +326,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 				testing.expectf(t, send.rect.max.x <= tools.rect.max.x + 0.5, "at %v, the send button within the toolbar: %v past %v (%q)", w, send.rect.max.x, tools.rect.max.x, send.text)
 			}
 			app.chat.busy, app.prefs.steer_first, app.prefs.column_w = busy, steer, width
-			ui.area_set(&app.composer.area, "")
+			ui.text_edit_set(&app.composer.area, "")
 			session.frames(s, 4)
 		}
 		// a double click on the title edits it in place: Enter keeps it, Escape leaves it, a click elsewhere keeps it
@@ -336,7 +336,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		session.key(s, .A, {.Ctrl})
 		session.type_text(s, "Frame pacing")
 		session.frames(s, 1)
-		testing.expect_value(t, ui.field_string(&app.rename.field), "Frame pacing")
+		testing.expect_value(t, ui.line_edit_string(&app.rename.field), "Frame pacing")
 		session.key(s, .Return)
 		session.frames(s, 2)
 		testing.expect(t, app.rename.at == .None && session.find(s, "ren_f") == nil, "Enter: the words back")
@@ -384,7 +384,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 			bench_frame(s, &typing)
 		}
 		bench_report(&typing)
-		testing.expect_value(t, len(ui.area_string(&app.composer.area)), BENCH_FRAMES)
+		testing.expect_value(t, len(ui.text_edit_string(&app.composer.area)), BENCH_FRAMES)
 
 		// a click of the wheel at the bottom, the pointer then a little above it: the view goes up, slowly, and lets go of the bottom.
 		// Its steps (a pixel a frame or less) were each put back at the bottom it was following, and the lazy column read the error
@@ -439,7 +439,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		profile_begin()
 		for i in 0 ..< BENCH_FRAMES {
 			session.event(s, {kind = .Text, text = char_at(BENCH_FIND, i % 3)})
-			if i % 3 == 2 { ui.field_set(&app.palette.field, "") }
+			if i % 3 == 2 { ui.line_edit_set(&app.palette.field, "") }
 			bench_frame(s, &pal)
 		}
 		profile_end("palette")
@@ -452,7 +452,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 			append(&app.models, Model_Info{id = fmt.aprintf("model-%d", i), provider = fmt.aprintf("provider-%d", i % 12), name = fmt.aprintf("Model %d of the bench", i)})
 		}
 		for query in ([]string{BENCH_PALETTE_SLIPS, "@"}) {
-			ui.field_set(&app.palette.field, query)
+			ui.line_edit_set(&app.palette.field, query)
 			session.frames(s, 3)
 			rest := Bench_Case{name = query == "@" ? "pal_all" : "pal_slips"}
 			profile_begin()
@@ -498,8 +498,8 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		session.frames(s, 30)
 
 		// the pointer sweeping the rows of a menu
-		key := ui.key_from_string(0, "app_menu")
-		ui.ctx_menu_open(key, {40, 40})
+		key := "app_menu"
+		ui.menu_open(key, ui.Vec2{40, 40})
 		session.frames(s, 3)
 		menu := Bench_Case{name = "menu"}
 		profile_begin()
@@ -509,7 +509,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		}
 		profile_end("menu")
 		bench_report(&menu)
-		ui.ctx_menu_close()
+		ui.menu_close()
 		session.frames(s, 2)
 
 		// find: every message built, the needle typed a character a frame
@@ -527,7 +527,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 			for v in finding.total { sweep = max(sweep, v) }
 			fmt.printfln("find: its sweep %.1f ms", sweep)
 		}
-		testing.expect_value(t, ui.field_string(&app.find.field), BENCH_FIND)
+		testing.expect_value(t, ui.line_edit_string(&app.find.field), BENCH_FIND)
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() }, "the needle swept")
 		session.frames(s, 3)
 		found := ui.find_count()
@@ -564,7 +564,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 			bench_frame(s, &search)
 		}
 		bench_report(&search)
-		testing.expect_value(t, ui.field_string(&app.sidebar.search), BENCH_SEARCH)
+		testing.expect_value(t, ui.line_edit_string(&app.sidebar.search), BENCH_SEARCH)
 
 		older_pages_keep_the_view(t, app, s)
 		output_view_built(t, app, s)
@@ -625,7 +625,7 @@ older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session)
 
 	// a find open: the current match stays the same one when a page comes in front of it
 	find_open(app)
-	ui.field_set(&app.find.field, "zebra")
+	ui.line_edit_set(&app.find.field, "zebra")
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() && ui.find_count() == 60 }, "the needle swept")
 	session.frames(s, 2)
 	app.find.index = 10
@@ -703,7 +703,7 @@ an_artifact_of_the_session_is_a_card :: proc(t: ^testing.T) {
 	})
 }
 
-// A right click on the sessions' search opens its menu: Paste puts a value in it (gui_toolkit's field_menu).
+// A right click on the sessions' search opens its menu: Paste puts a value in it (gui_toolkit's edit_menu).
 @(test)
 the_search_has_a_menu :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
@@ -712,16 +712,16 @@ the_search_has_a_menu :: proc(t: ^testing.T) {
 		session.set_clipboard(s, "ses_2")
 		session.click(s, "search", .Right)
 		session.frames(s, 2)
-		testing.expect(t, ui.ctx_menu_any_open(), "its menu")
+		testing.expect(t, ui.menu_any_open(), "its menu")
 		session.save_png(s, "search_menu.png")
 		session.click_text(s, "Paste")
 		session.frames(s, 3)
-		testing.expect_value(t, ui.field_string(&app.sidebar.search), "ses_2")
+		testing.expect_value(t, ui.line_edit_string(&app.sidebar.search), "ses_2")
 		testing.expect(t, session.find(s, "ls_ses_2") != nil, "the search found it by its id")
 		// its cross empties it
 		session.click(s, "clear")
 		session.frames(s, 3)
-		testing.expect_value(t, ui.field_string(&app.sidebar.search), "")
+		testing.expect_value(t, ui.line_edit_string(&app.sidebar.search), "")
 	})
 }
 
@@ -805,11 +805,11 @@ the_console_screens :: proc(t: ^testing.T) {
 		session.click(s, "approval")
 		session.wait_idle(s)
 		session.save_png(s, "console_approvals.png")
-		ui.ctx_menu_close()
+		ui.menu_close()
 		session.frames(s, 2)
 		command_run(app, command_find("app.palette"))
 		session.frames(s, 3)
-		ui.field_set(&app.palette.field, "the")
+		ui.line_edit_set(&app.palette.field, "the")
 		session.wait_idle(s)
 		session.save_png(s, "console_palette.png")
 		app.cx.open[.Palette] = false
@@ -1048,7 +1048,7 @@ a_form_s_long_lines_stay_in_its_card :: proc(t: ^testing.T) {
 		}
 		inside(t, card, session.find(s, "form_o0"), "a long option")
 		f := app.cx.forms[0]
-		ui.field_set(&f.fields[1].text, LONG)
+		ui.line_edit_set(&f.fields[1].text, LONG)
 		f.fields[0].picks[0] = true
 		f.page = 2   // (the review)
 		session.frames(s, 3)
@@ -1308,20 +1308,20 @@ typing_with_nothing_focused_goes_to_the_composer :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		session.type_text(s, " ")
 		session.frames(s, 2)
-		testing.expect_value(t, ui.area_string(&app.composer.area), "")
+		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
 		ui.set_focus(0)
 		session.type_text(s, "hi")
 		session.frames(s, 2)
-		testing.expect_value(t, ui.area_string(&app.composer.area), "hi")
+		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "hi")
 		testing.expect(t, app.composer.focused, "it has the keyboard")
-		ui.area_set(&app.composer.area, "")
+		ui.text_edit_set(&app.composer.area, "")
 		ui.set_focus(0)
 		palette_toggle(app)
 		session.frames(s, 2)
 		ui.set_focus(0)
 		session.type_text(s, "x")
 		session.frames(s, 2)
-		testing.expect_value(t, ui.area_string(&app.composer.area), "")
+		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
 		palette_toggle(app)
 	})
 }
@@ -1334,7 +1334,7 @@ a_password_can_be_shown :: proc(t: ^testing.T) {
 		app, s := bench_app(t)
 		server_edit_open(app, -1)
 		session.frames(s, 3)
-		ui.field_set(&app.server_edit.password, "hunter2")
+		ui.line_edit_set(&app.server_edit.password, "hunter2")
 		session.wait_idle(s)   // (the dialog fades in: a click meanwhile goes through it)
 		eye := session.find(s, "reveal")
 		if !testing.expect(t, eye != nil, "the password's eye") { return }
@@ -1361,7 +1361,7 @@ an_archived_session_is_put_away :: proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
 		id := "ses_2"
-		ui.field_set(&app.sidebar.search, `"Session 2 about"`)   // (it alone: the end of a long list is not built)
+		ui.line_edit_set(&app.sidebar.search, `"Session 2 about"`)   // (it alone: the end of a long list is not built)
 		session.frames(s, 2)
 		testing.expect(t, session.find(s, "ls_ses_2") != nil, "listed")
 		testing.expect(t, session.find_text(s, "ARCHIVED") == nil, "no Archived section while nothing is")
@@ -1380,7 +1380,7 @@ an_archived_session_is_put_away :: proc(t: ^testing.T) {
 		session.frames(s, 3)
 		testing.expect(t, session.find(s, "ls_ses_2") != nil, "back in its section")
 		testing.expect(t, session.find_text(s, "ARCHIVED") == nil, "nothing archived: no section")
-		ui.field_set(&app.sidebar.search, "")
+		ui.line_edit_set(&app.sidebar.search, "")
 	})
 }
 
@@ -1391,7 +1391,7 @@ a_session_archived_under_the_pointer_leaves_at_once :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		ui.field_set(&app.sidebar.search, `"Session 2 about"`)
+		ui.line_edit_set(&app.sidebar.search, `"Session 2 about"`)
 		session.frames(s, 2)
 		row := session.find(s, "ls_ses_2")
 		if !testing.expect(t, row != nil, "listed") { return }
@@ -1409,7 +1409,7 @@ a_session_archived_under_the_pointer_leaves_at_once :: proc(t: ^testing.T) {
 		session.move(s, at + {6, 0})
 		session.frames(s, 2)
 		testing.expect(t, session.find(s, "ls_ses_2") != nil, "brought back: at once too")
-		ui.field_set(&app.sidebar.search, "")
+		ui.line_edit_set(&app.sidebar.search, "")
 	})
 }
 
@@ -1451,13 +1451,13 @@ escape_stops_the_run_and_the_composer_keeps_the_keyboard :: proc(t: ^testing.T) 
 		session.frames(s, 2)
 		testing.expect_value(t, session.focused_name(s), "composer")   // (still writing)
 		session.type_text(s, "no")
-		testing.expect_value(t, ui.area_string(&app.composer.area), "wait, no")
+		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "wait, no")
 		app.chat.busy = false
 		delete_key(&app.busy, app.chat.id)
 		session.key(s, .Escape)
 		session.frames(s, 2)
 		testing.expect(t, session.focused_name(s) != "composer", "nothing runs: it lets go")
-		ui.area_set(&app.composer.area, "")
+		ui.text_edit_set(&app.composer.area, "")
 	})
 }
 
@@ -1635,11 +1635,11 @@ the_sessions_search_lights_what_it_found :: proc(t: ^testing.T) {
 			}
 			return
 		}
-		ui.field_set(&app.sidebar.search, "FRAME project_3")
+		ui.line_edit_set(&app.sidebar.search, "FRAME project_3")
 		session.frames(s, 3)
 		lit, all := lit_titles(s)
 		testing.expectf(t, all > 0 && lit == all, "the titles found are lit: %d of %d", lit, all)
-		ui.field_set(&app.sidebar.search, "")
+		ui.line_edit_set(&app.sidebar.search, "")
 		session.frames(s, 3)
 		lit, all = lit_titles(s)
 		testing.expectf(t, all > 0 && lit == 0, "no search, nothing lit: %d of %d", lit, all)
@@ -1751,7 +1751,7 @@ a_recent_folder_tells_and_copies_its_path :: proc(t: ^testing.T) {
 		testing.expect(t, session.find_text(s, path) != nil, "the tooltip says the whole path")
 		session.click(s, "hf0", .Right)
 		session.frames(s, 2)
-		testing.expect(t, ui.ctx_menu_any_open(), "its menu")
+		testing.expect(t, ui.menu_any_open(), "its menu")
 		session.click_text(s, "Copy the path")
 		session.frames(s, 2)
 		testing.expect_value(t, session.clipboard(s), path)
@@ -1788,7 +1788,7 @@ the_palette_at_rest_builds_only_its_rows_in_view :: proc(t: ^testing.T) {
 		app, s := bench_app(t)
 		command_run(app, command_find("app.palette"))
 		session.frames(s, 3)
-		ui.field_set(&app.palette.field, "@")
+		ui.line_edit_set(&app.palette.field, "@")
 		session.frames(s, 3)
 		found := len(app.palette.hits)
 		testing.expectf(t, found >= 300, "the sessions found: %d", found)
@@ -1828,7 +1828,7 @@ the_palettes_search_is_a_menus_search_band :: proc(t: ^testing.T) {
 		command_run(app, command_find("app.palette"))
 		session.frames(s, 3)
 		// a menu over it, something typed in it: its search band shows
-		ui.ctx_menu_open(ui.key_from_string(0, "app_menu"), {900, 300})
+		ui.menu_open("app_menu", ui.Vec2{900, 300})
 		session.frames(s, 3)
 		session.event(s, {kind = .Text, text = 's'})
 		session.frames(s, 3)
@@ -1839,7 +1839,7 @@ the_palettes_search_is_a_menus_search_band :: proc(t: ^testing.T) {
 		strip, menu, dialog := at(img, top), at(img, band), at(img, list)
 		testing.expectf(t, session.near(strip, menu, 2), "the strip %v, the menu's band %v", strip, menu)
 		testing.expectf(t, !session.near(strip, dialog, 4), "the strip %v apart from the dialog %v", strip, dialog)
-		ui.ctx_menu_close()
+		ui.menu_close()
 		app.cx.open[.Palette] = false
 		session.frames(s, 2)
 	})
@@ -1918,18 +1918,18 @@ a_paste_in_the_composer_waits_for_no_clipboard :: proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
 		session.click(s, "composer")
-		ui.area_set(&app.composer.area, "")
+		ui.text_edit_set(&app.composer.area, "")
 		session.set_clipboard(s, "pasted words")
 		session.key(s, .Insert, {.Shift})
-		session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.area_string(&(^App)(s.user).composer.area) != "" }, "the text came")
-		testing.expect_value(t, ui.area_string(&app.composer.area), "pasted words")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.text_edit_string(&(^App)(s.user).composer.area) != "" }, "the text came")
+		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "pasted words")
 		// an image alone: attached, read and encoded on a thread
 		px := []u8{255, 0, 0, 255, 0, 0, 255, 255}
 		testing.expect(t, platform.clipboard_set_image(app.win, {rgba = px, size = {2, 1}}))
 		session.key(s, .V, {.Ctrl})
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return len((^App)(s.user).composer.attachments) == 1 }, "the image attached")
 		testing.expect(t, strings.has_prefix(app.composer.attachments[0].uri, "data:image/png;base64,"), "as a PNG")
-		testing.expect_value(t, ui.area_string(&app.composer.area), "pasted words")
+		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "pasted words")
 	})
 }
 
@@ -1946,7 +1946,7 @@ the_composer_has_its_menu_all_over_it :: proc(t: ^testing.T) {
 			session.press(s, at, .Right)
 			session.release(s, at, .Right)
 			session.frames(s, 3)
-			testing.expectf(t, ui.ctx_menu_any_open() && app.ctx_menu.target.kind == .Composer, "the composer's menu at %v, not %v's", at, app.ctx_menu.target.kind)
+			testing.expectf(t, ui.menu_any_open() && app.ctx_menu.target.kind == .Composer, "the composer's menu at %v, not %v's", at, app.ctx_menu.target.kind)
 			testing.expect(t, session.find_text(s, "Paste") != nil && session.find_text(s, "Select all") != nil, "its actions")
 			session.key(s, .Escape)
 			session.frames(s, 2)

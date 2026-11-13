@@ -24,7 +24,7 @@ Form_Field :: struct {
 	shown_if: []Form_When,
 	min, max: Maybe(f64),
 	// what the person says
-	text:   ui.Text_Field,   // a line to fill, a number, the answer of one's own
+	text:   ui.Line_Edit,   // a line to fill, a number, the answer of one's own
 	choice: int,             // the option chosen (-1: none)
 	picks:  []bool,          // multiselect: the options ticked
 	on:     bool,
@@ -121,9 +121,9 @@ form_new :: proc(id, session, title: string, question: bool, list: json.Array) -
 			if s == "" { break }
 			known := false
 			for o, k in fd.options { if o.value == s { fd.choice, known = k, true } }
-			if !known { ui.field_set(&fd.text, s) }
+			if !known { ui.line_edit_set(&fd.text, s) }
 		}
-		fd.start_text, fd.start_choice, fd.start_on = strings.clone(ui.field_string(&fd.text), a), fd.choice, fd.on
+		fd.start_text, fd.start_choice, fd.start_on = strings.clone(ui.line_edit_string(&fd.text), a), fd.choice, fd.on
 		fd.start_picks = make([]bool, len(opts), a)
 		copy(fd.start_picks, fd.picks)
 	}
@@ -133,7 +133,7 @@ form_new :: proc(id, session, title: string, question: bool, list: json.Array) -
 // As it came: what was answered goes. (What a way of connecting asks outlives one attempt.)
 form_reset :: proc(f: ^Form_Req) {
 	for &fd in f.fields {
-		ui.field_set(&fd.text, fd.start_text)
+		ui.line_edit_set(&fd.text, fd.start_text)
 		fd.choice, fd.on = fd.start_choice, fd.start_on
 		copy(fd.picks, fd.start_picks)
 	}
@@ -141,7 +141,7 @@ form_reset :: proc(f: ^Form_Req) {
 }
 
 form_free :: proc(f: ^Form_Req) {
-	for &fd in f.fields { ui.field_destroy(&fd.text) }
+	for &fd in f.fields { ui.line_edit_destroy(&fd.text) }
 	virtual.arena_destroy(&f.arena)
 	free(f)
 }
@@ -207,7 +207,7 @@ field_value :: proc(fd: ^Form_Field) -> string {
 	case "boolean": return fd.on ? "true" : "false"
 	case "string":  if fd.choice >= 0 { return fd.options[fd.choice].value }
 	}
-	return strings.trim_space(ui.field_string(&fd.text))
+	return strings.trim_space(ui.line_edit_string(&fd.text))
 }
 
 // Whether the field is asked, given the answers so far.
@@ -288,7 +288,7 @@ form_send :: proc(app: ^App, f: ^Form_Req) {
 	if f.sending { return }
 	body, problem, at := form_answer(f)
 	if problem != "" {
-		ui.toast(.Warn, "%s", problem)
+		ui.announce(&app.announcer, .Warn, problem)
 		f.page = at   // (what is missing, in front of the person)
 		return
 	}
@@ -367,16 +367,16 @@ form_card :: proc(app: ^App, f: ^Form_Req, others: int, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###foot") {
 			ui.spacer(ui.px(em))
-			if ui.button_icon("###form_dismiss", "", i18n.tr("Dismiss"), .Cancel, disabled = f.sending, face = .Ghost).clicked { dismiss = true }
+			if ui.button("form_dismiss", i18n.tr("Dismiss"), o = {intent = .Cancel, face = .Ghost, disabled = f.sending}).clicked { dismiss = true }
 			ui.spacer(ui.fill())
 			if wizard && f.page > 0 {
-				if ui.button_icon("###form_prev", lucide.ARROW_LEFT, i18n.tr("Back")).clicked { f.page -= 1 }
+				if ui.button("form_prev", i18n.tr("Back"), lucide.ARROW_LEFT).clicked { f.page -= 1 }
 				ui.spacer(ui.px(em * 0.4))
 			}
 			if wizard && !reviewing {
-				if ui.button_icon("###form_next", lucide.ARROW_RIGHT, ui.text_shown(f.page == len(pages) - 1 ? i18n.tr("Review") : i18n.tr("Next")), .Primary).clicked { next = true }
+				if ui.button("form_next", ui.text_shown(f.page == len(pages) - 1 ? i18n.tr("Review") : i18n.tr("Next")), lucide.ARROW_RIGHT, {intent = .Primary}).clicked { next = true }
 			} else {
-				if ui.button_icon("###form_send", lucide.CHECK, i18n.tr("Send"), .Primary, disabled = f.sending).clicked { send = true }
+				if ui.button("form_send", i18n.tr("Send"), lucide.CHECK, {intent = .Primary, disabled = f.sending}).clicked { send = true }
 			}
 			ui.spacer(ui.px(em))
 		}
@@ -401,9 +401,9 @@ form_tabs :: proc(f: ^Form_Req, pages: []int, em: f32) {
 			for p, k in pages {
 				fd := &f.fields[p]
 				name := fd.title != "" ? fd.title : fmt.tprintf(i18n.tr("Question %d"), k + 1)
-				if ui.button_icon(fmt.tprintf("###form_tab%d", k), field_answer(fd) != "" ? lucide.CHECK : "", ui.text_shown(label_safe(name)), height = h, face = f.page == k ? .Toggled : .Ghost).clicked { f.page = k }
+				if ui.button(fmt.tprintf("form_tab%d", k), ui.text_shown(label_safe(name)), field_answer(fd) != "" ? lucide.CHECK : "", {face = f.page == k ? .Toggled : .Ghost, height = h}).clicked { f.page = k }
 			}
-			if ui.button_icon("###form_tab_review", "", i18n.tr("Review"), height = h, face = f.page == len(pages) ? .Toggled : .Ghost).clicked { f.page = len(pages) }
+			if ui.button("form_tab_review", i18n.tr("Review"), o = {face = f.page == len(pages) ? .Toggled : .Ghost, height = h}).clicked { f.page = len(pages) }
 		}
 		ui.spacer(ui.px(em))
 	}
@@ -444,7 +444,7 @@ form_page :: proc(app: ^App, f: ^Form_Req, pages: []int, reviewing, wizard: bool
 				ui.spacer(ui.px(em))
 				a := field_answer(fd)
 				name := fd.title != "" ? fd.title : fd.description != "" ? fd.description : fmt.tprintf(i18n.tr("Question %d"), k + 1)
-				if ui.button_icon(fmt.tprintf("###form_rv%d", k), "", ui.text_shown(label_safe(fmt.tprintf("%s:  %s", name, a != "" ? a : i18n.tr("no answer")))), width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true, wrap = true, face = .Ghost).clicked { f.page = k }
+				if ui.button(fmt.tprintf("form_rv%d", k), ui.text_shown(label_safe(fmt.tprintf("%s:  %s", name, a != "" ? a : i18n.tr("no answer")))), o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_H_EM), wrap = true, left = true}).clicked { f.page = k }
 				ui.spacer(ui.px(em))
 			}
 			ui.spacer(ui.px(em * 0.15))
@@ -484,7 +484,7 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 	case "boolean":
 		ui.toggle("###on", "", &fd.on)
 	case "external":
-		if fd.url != "" && ui.button_icon("###open", lucide.GLOBE, i18n.tr("Open")).clicked { ui.open(fd.url, .Url) }
+		if fd.url != "" && ui.button("open", i18n.tr("Open"), lucide.GLOBE).clicked { ui.open(fd.url, .Url) }
 	case "multiselect":
 		for o, k in fd.options {
 			ui.next({width = ui.fill()})
@@ -494,9 +494,9 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 		if fd.custom { form_line(fd, em, i18n.tr("Something else"), done) }
 	case:
 		for o, k in fd.options {
-			if ui.button_icon(fmt.tprintf("###form_o%d", k), "", ui.text_shown(label_safe(option_label(o))), width = ui.fill(), height = h, left = true, wrap = true, face = fd.choice == k ? .Toggled : .Raised).clicked {
+			if ui.button(fmt.tprintf("form_o%d", k), ui.text_shown(label_safe(option_label(o))), o = {face = fd.choice == k ? .Toggled : .Raised, width = ui.fill(), height = h, wrap = true, left = true}).clicked {
 				fd.choice = k
-				ui.field_set(&fd.text, "")
+				ui.line_edit_set(&fd.text, "")
 				done^ = true
 			}
 			ui.spacer(ui.px(em * 0.25))
@@ -514,11 +514,11 @@ form_line :: proc(fd: ^Form_Field, em: f32, placeholder: string, done: ^bool) {
 		ui.spacer(ui.px(em * 0.5))
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-			if ui.line_edit("###form_line", &fd.text, placeholder).committed { done^ = true }
+			if ui.line_edit("###form_line", &fd.text, {placeholder = placeholder}).committed { done^ = true }
 		}
 		ui.spacer(ui.px(em * 0.5))
 	}
-	if ui.field_string(&fd.text) != "" { fd.choice = -1 }   // (one's own words instead of an option)
+	if ui.line_edit_string(&fd.text) != "" { fd.choice = -1 }   // (one's own words instead of an option)
 }
 
 ////////////////////////////////

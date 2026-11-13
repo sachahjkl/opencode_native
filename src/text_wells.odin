@@ -21,7 +21,7 @@ section_label :: proc(id, s: string, em: f32) {
 caption_title :: proc(id, title, note: string, em: f32, color := Color{}) {
 	if ui.edged() {
 		if ui.style({font = the_app.mono, font_size = math.round(em * FS_CAPTION / 0.85)}) {   // (section_header draws its title at 0.85)
-			ui.section_header(fmt.tprintf("###ct_%s", id), title, note, "", color.a > 0 ? color : accent(), inline = true)
+			ui.section_header(fmt.tprintf("###ct_%s", id), title, color.a > 0 ? color : accent(), note, inline = true)
 		}
 		return
 	}

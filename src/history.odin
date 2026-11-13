@@ -37,13 +37,13 @@ history_step :: proc(app: ^App, dir: int) {
 		history_view(app)
 		if len(h.view) == 0 { return }
 		delete(h.draft)
-		h.draft = strings.clone(ui.area_string(&app.composer.area))
+		h.draft = strings.clone(ui.text_edit_string(&app.composer.area))
 	}
 	next := h.at + dir
 	if next > len(h.view) { return }   // (the oldest one stays)
 	if next == 0 { history_leave(app, true); return }
 	h.at = next
-	ui.area_set(&app.composer.area, h.view[next - 1])
+	ui.text_edit_set(&app.composer.area, h.view[next - 1])
 }
 
 // Out of the history; `restore`: what was being typed comes back.
@@ -51,11 +51,11 @@ history_leave :: proc(app: ^App, restore: bool) {
 	h := &app.composer.history
 	if h.at == 0 { return }
 	h.at = 0
-	if restore { ui.area_set(&app.composer.area, h.draft) }
+	if restore { ui.text_edit_set(&app.composer.area, h.draft) }
 }
 
 // The text shown is no longer the prompt it came from: it is the user's now.
 history_track :: proc(app: ^App) {
 	h := &app.composer.history
-	if h.at > 0 && ui.area_string(&app.composer.area) != h.view[h.at - 1] { h.at = 0 }
+	if h.at > 0 && ui.text_edit_string(&app.composer.area) != h.view[h.at - 1] { h.at = 0 }
 }

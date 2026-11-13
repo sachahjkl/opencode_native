@@ -169,7 +169,7 @@ App_Context :: struct {
 	// the dialogs over the window, the one place that says which (overlay_open). Bools, not a bit_set: ui.modal closes one
 	// through a ^bool, which it keeps until modal_end
 	open:           [Dialog]bool,
-	dialogs:        [Dialog]Vec2,      // the sizes given to the dialogs (logical pixels, {}: what they prefer)
+	dialogs:        [Dialog]Vec2,      // the sizes given to the dialogs (ems, {}: what they prefer)
 	dialogs_saved:  [Dialog]Vec2,
 	dialogs_read:   bool,
 	no_schedules, no_artifacts: bool,     // the server does not offer them (experimental.odin)
@@ -226,7 +226,6 @@ main_window_adopt :: proc(app: ^App) {
 	h := &app.window
 	h.after_input = FRAMES_AFTER_INPUT
 	h.background = hex(HEX_BG0)
-	h.partial_redraw = true   // each frame repaints only what changed
 	h.dragging = main_dragging
 	h.before_input = proc(h: ^host.Host) {
 		app := (^App)(h.user)
@@ -405,7 +404,7 @@ main_after_frame :: proc(h: ^host.Host) {
 	h.times = {}   // (a frame held draws nothing: it costs nothing either)
 	answers_spent_free(app)
 	config.user_writer_save(&app.prefs_writer, &app.cfg_prefs)
-	if config.user_writer_failed(&app.prefs_writer) { ui.toast(.Bad, i18n.tr("The preferences could not be saved")) }
+	if config.user_writer_failed(&app.prefs_writer) { ui.announce(&app.announcer, .Bad, i18n.tr("The preferences could not be saved")) }
 	posts_moved(app, ui.post_stats(&app.state).run)
 	terminals_reap(app)
 	output_views_tick(app)
@@ -639,8 +638,6 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	theme_setup(&app.theme)
 	ui.init(&app.state, &app.fonts, &app.theme)
 	app.state.icon_font = app.icons   // (Lucide: the menus' icons are its characters)
-	ui.set_toast_position(&app.state, .Top_Right)
-	ui.set_autoscroll_enabled(&app.state, true)   // a click of the wheel scrolls by the pointer, as in the browsers
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
 	licence_init(app)
 	palette_init(app)      // (from app.stores, read at the start: a test's are empty)
@@ -705,7 +702,7 @@ main :: proc() {
 	platform.set_dark_title(app.win, !app.cx.theme.light)
 	app.devtools = devtools.start_from_env(app.win, "opencode")
 	main_window_adopt(app)
-	app.announcer = {mode = prefs_page.messages_mode(&app.cfg_prefs), window = app.win, state = &app.state}
+	app.announcer = {mode = prefs_page.announce_mode(&app.cfg_prefs), window = app.win, state = &app.state}
 	// (the host was made after the preferences: the user's rendering.partial_redraw, if any, over its own default)
 	prefs_page.standard_apply(&app.cfg_prefs, &app.state, {partial_redraw = &app.window.partial_redraw})
 	crash_say(app, crashed)
@@ -731,10 +728,10 @@ main :: proc() {
 	update_startup(app)   // (a server or none: a check of this program's own version)
 	setup_offer_at_start(app)
 	// what the line asks to see at start
-	if opts.search != "" { ui.field_set(&app.sidebar.search, opts.search) }
+	if opts.search != "" { ui.line_edit_set(&app.sidebar.search, opts.search) }
 	if opts.setup { setup_open(app) }
 	if opts.add_server { server_edit_open(app, -1) }
-	if opts.find != "" { find_open(app); ui.field_set(&app.find.field, opts.find) }
+	if opts.find != "" { find_open(app); ui.line_edit_set(&app.find.field, opts.find) }
 	if opts.image != "" { image_view_start(app, opts.image) }
 	for file in opts.attach { attach_path(app, file) }   // (what a paste gives, without the clipboard)
 	if opts.diff != "" { diff_full_open_file(app, opts.diff) }   // (a patch in the full view)

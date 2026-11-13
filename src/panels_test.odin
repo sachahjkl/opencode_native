@@ -1254,11 +1254,11 @@ a_picture_that_failed_says_why :: proc(t: ^testing.T) {
 what_was_chosen_does_not_cross_to_the_next_server :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	ui.area_set(&app.composer.area, "look at @a.txt")
+	ui.text_edit_set(&app.composer.area, "look at @a.txt")
 	append(&app.composer.mentions.chosen, Mention{.File, strings.clone("@a.txt"), strings.clone("file:///old/a.txt"), strings.clone("a.txt")})
 	server_forget(app)
 	testing.expect_value(t, len(app.composer.mentions.chosen), 0)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "look at @a.txt")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "look at @a.txt")
 }
 
 @(test)

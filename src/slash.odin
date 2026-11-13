@@ -40,7 +40,7 @@ slash_matches :: proc(app: ^App, query: string) -> []int {
 slash_track :: proc(app: ^App) {
 	p := &app.composer.slash_pick
 	a := &app.composer.area
-	query, ok := slash_word(ui.area_string(a), a.cursor)
+	query, ok := slash_word(ui.text_edit_string(a), a.cursor)
 	if !ok || a.cursor != a.mark || app.chat.id == "" {   // (a new session's first prompt is no command: slash_send)
 		p.open, p.dismissed = false, false
 		return

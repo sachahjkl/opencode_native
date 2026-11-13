@@ -126,7 +126,7 @@ check_job :: proc(j: ^Update_Job) {
 	sig, s_ok, _ := fetch(&h, fmt.tprintf("%s%s.sig", j.path, name))
 	if !s_ok { j.err = strings.clone(i18n.tr("the update has no signature: refused")); return }
 	defer delete(sig)
-	m, err := update.check_release(ocn_update.PRODUCT, transmute([]byte)manifest, sig, update.PLATFORM, j.channel, APP_VERSION, "")
+	m, err := update.check_release(ocn_update.PRODUCT, transmute([]byte)manifest, sig, {platform = update.PLATFORM, channel = j.channel, current = APP_VERSION})
 	#partial switch err {
 	case .None:      j.found = m
 	case .Not_Newer: j.nothing_new = true
@@ -165,12 +165,12 @@ update_installed :: proc(app: ^App, j: ^Update_Job) {
 	if !is { return }
 	if j.err != "" {
 		update_go(u, Update_Ready{d.offer})
-		ui.toast(.Bad, i18n.tr("Update: %s"), j.err)
+		ui.announce(&app.announcer, .Bad, fmt.tprintf(i18n.tr("Update: %s"), j.err))
 		return
 	}
 	version := strings.clone(d.offer.manifest.version)
 	update_go(u, Update_Installed{version})
-	ui.toast_action(.Good, proc(user: rawptr) { app_restart((^App)(user)) }, app, i18n.tr("%s is installed: click to restart"), version)
+	ui.announce(&app.announcer, .Good, fmt.tprintf(i18n.tr("%s is installed: click to restart"), version), action = proc(user: rawptr) { app_restart((^App)(user)) }, user = app)
 }
 
 @(private = "file")
@@ -189,7 +189,7 @@ update_checked :: proc(app: ^App, j: ^Update_Job) {
 	switch {
 	case j.err != "":
 		update_result(u, j.err)
-		if c.asked { ui.toast(.Bad, i18n.tr("Update: %s"), j.err) }
+		if c.asked { ui.announce(&app.announcer, .Bad, fmt.tprintf(i18n.tr("Update: %s"), j.err)) }
 		// (a check that failed says nothing against what was on offer)
 		if c.offer != nil { update_go(u, Update_Ready{c.offer}) } else { update_go(u, nil) }
 	case j.nothing_new:
@@ -201,7 +201,7 @@ update_checked :: proc(app: ^App, j: ^Update_Job) {
 		o^ = {j.found, strings.clone(j.path), strings.clone(j.channel)}
 		update_result(u, fmt.tprintf(i18n.tr("Version %s is available"), o.manifest.version))
 		update_go(u, Update_Ready{o})
-		ui.toast_action(.Good, proc(user: rawptr) { update_install((^App)(user)) }, app, i18n.tr("opencode native %s is available: click to install"), o.manifest.version)
+		ui.announce(&app.announcer, .Good, fmt.tprintf(i18n.tr("opencode native %s is available: click to install"), o.manifest.version), action = proc(user: rawptr) { update_install((^App)(user)) }, user = app)
 	}
 }
 
@@ -229,7 +229,7 @@ update_job_start :: proc(app: ^App, j: ^Update_Job) {
 // running takes the asking over, and says what it finds.
 update_check :: proc(app: ^App, asked: bool) {
 	u := &app.updater
-	if nix_package() { if asked { ui.toast(.Warn, i18n.tr("Nix updates this copy: update the Nix package")) }; return }
+	if nix_package() { if asked { ui.announce(&app.announcer, .Warn, i18n.tr("Nix updates this copy: update the Nix package")) }; return }
 	switch &v in u.state {
 	case Update_Checking:
 		v.asked = v.asked || asked
@@ -237,7 +237,7 @@ update_check :: proc(app: ^App, asked: bool) {
 	case Update_Downloading:
 		return
 	case Update_Installed:
-		if asked { ui.toast_action(.Good, proc(user: rawptr) { app_restart((^App)(user)) }, app, i18n.tr("%s is installed: click to restart"), v.version) }
+		if asked { ui.announce(&app.announcer, .Good, fmt.tprintf(i18n.tr("%s is installed: click to restart"), v.version), action = proc(user: rawptr) { app_restart((^App)(user)) }, user = app) }
 		return
 	case Update_Ready:
 		update_go(u, Update_Checking{asked, v.offer})
@@ -289,7 +289,7 @@ app_restart :: proc(app: ^App) {
 		r.ok = err == nil
 	}, proc(data: rawptr, _: u64) {
 		r := (^Restart)(data)
-		if r.ok { r.app.quit = true } else { ui.toast(.Bad, i18n.tr("Restart it by hand: it could not be started")) }
+		if r.ok { r.app.quit = true } else { ui.announce(&r.app.announcer, .Bad, i18n.tr("Restart it by hand: it could not be started")) }
 		free(r, runtime.heap_allocator())
 	}, r, proc(data: rawptr) { free(data, runtime.heap_allocator()) })
 }

@@ -89,20 +89,20 @@ mermaid_block :: proc(id, code: string, closed: bool, version: u64) {
 			if closed && (d == nil || d.why == "") {   // (what is no diagram shows its text already)
 				ui.a11y({role = .Button, name = as_text ? i18n.tr("Show the diagram") : i18n.tr("Show its text")})
 				ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
-				sig := ui.icon_button("as_text", as_text ? lucide.GIT_FORK : lucide.CODE)
+				sig := ui.button("as_text", icon = as_text ? lucide.GIT_FORK : lucide.CODE)
 				if sig.clicked { app.conversation.expanded[k] = !as_text }
 				if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(as_text ? i18n.tr("Show the diagram") : i18n.tr("Show its text")) } }
 			}
 			if ok {
 				ui.a11y({role = .Button, name = i18n.tr("Open in the viewer")})
 				ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
-				sig := ui.icon_button("open", lucide.ZOOM_IN)
+				sig := ui.button("open", icon = lucide.ZOOM_IN)
 				if sig.clicked { diagram_view_open(app, code) }
 				if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Open in the viewer")) } }
 			}
 			ui.a11y({role = .Button, name = i18n.tr("Copy")})
 			ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
-			if ui.icon_button("copy", lucide.COPY).clicked {
+			if ui.button("copy", icon = lucide.COPY).clicked {
 				if ok { ctx_open(app, .Diagram, msg = code) } else { clip_set(code); ui.announce(&app.announcer, .Good, i18n.tr("Copied")) }
 			}
 			ui.spacer(ui.px(em * 0.3))
@@ -149,7 +149,7 @@ diagram_box :: proc(app: ^App, doc: ^svg.Document, code: string, em: f32) {
 		b.custom_user = dd
 		b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 			dd := (^Diagram_Draw)(user)
-			bold := ui.styled_face_of(&the_app.state, the_app.font, true, false)   // (the family's own bold, not a simulated one)
+			bold := ui.styled_face(the_app.font, true, false)   // (the family's own bold, not a simulated one)
 			svg.draw_doc(dc, dd.doc, b.rect.min, dd.scale, {regular = the_app.font, bold = bold})
 		}
 		ui.spacer(ui.fill())
@@ -173,10 +173,10 @@ DIAGRAM_COPY_MOST :: 4096
 // The diagram of `code` as a picture on the clipboard.
 diagram_copy_png :: proc(app: ^App, code: string) {
 	c, ok := diagram_picture(app, code)
-	if !ok { ui.toast(.Bad, i18n.tr("The diagram could not be copied: it is not a diagram")); return }
+	if !ok { ui.announce(&app.announcer, .Bad, i18n.tr("The diagram could not be copied: it is not a diagram")); return }
 	defer paint.canvas_destroy(&c)
 	pixels := platform.Clipboard_Image{rgba = paint.to_rgba8(c, context.temp_allocator), size = {c.width, c.height}}
-	if platform.clipboard_set_image(app.win, pixels) { ui.announce(&app.announcer, .Good, i18n.tr("Diagram copied as a picture")) } else { ui.toast(.Bad, i18n.tr("The diagram could not be copied")) }
+	if platform.clipboard_set_image(app.win, pixels) { ui.announce(&app.announcer, .Good, i18n.tr("Diagram copied as a picture")) } else { ui.announce(&app.announcer, .Bad, i18n.tr("The diagram could not be copied")) }
 }
 
 // The pixels of the diagram of `code`, as diagram_copy_png copies them (the caller's: paint.canvas_destroy).
@@ -187,6 +187,6 @@ diagram_picture :: proc(app: ^App, code: string) -> (c: paint.Canvas, ok: bool) 
 	scale = min(scale, DIAGRAM_COPY_MOST / max(d.doc.view[2], d.doc.view[3], 1))
 	well := themed(HEX_CODE_WELL)
 	bg := svg.Color{f32(well >> 24) / 255, f32((well >> 16) & 0xFF) / 255, f32((well >> 8) & 0xFF) / 255, 1}
-	bold := ui.styled_face_of(&app.state, app.font, true, false)
+	bold := ui.styled_face(app.font, true, false)
 	return svg.raster(&d.doc, scale, &app.fonts, {regular = app.font, bold = bold}, bg), true
 }

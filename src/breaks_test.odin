@@ -171,10 +171,10 @@ what_is_typed_in_the_panels_window_stays_through_a_redirect :: proc(t: ^testing.
 	append(&app.cx.detached, d)
 	app.preview.addr_key = 42
 	d.state.focus_key = 42
-	ui.field_set(&tab.field, "http://typing")
+	ui.line_edit_set(&tab.field, "http://typing")
 	web_event_add(tab.view, .Source, 0, transmute([]u8)string("http://redirected.local/"))
 	web_events_drain(app)
-	testing.expect_value(t, ui.field_string(&tab.field), "http://typing")
+	testing.expect_value(t, ui.line_edit_string(&tab.field), "http://typing")
 	clear(&app.cx.detached)
 }
 

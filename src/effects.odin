@@ -41,7 +41,7 @@ effects_apply :: proc(app: ^App) {
 	if len(app.cx.effects) == 0 { return }
 	for e in app.cx.effects {
 		switch x in e {
-		case Effect_Toast:         ui.toast(x.kind, "%s", x.text)
+		case Effect_Toast:         ui.announce(&app.announcer, x.kind, x.text)
 		case Effect_Session_Toast: toast_session(app, x.kind, x.session, x.what, x.detail)
 		case Effect_Finished:      notify_finished(app, x.key, x.session, x.outcome)
 		case Effect_Waiting:       notify_waiting(app, x.key, x.session, x.what, x.detail)

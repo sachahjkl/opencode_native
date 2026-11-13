@@ -275,19 +275,19 @@ a_server_left_leaves_nothing_behind :: proc(t: ^testing.T) {
 a_second_enter_keeps_the_first_prompt_whole :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	ui.area_set(&app.composer.area, "first")
+	ui.text_edit_set(&app.composer.area, "first")
 	attach(app, "one.png")
 	submit_prompt(app)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
 	testing.expect_value(t, len(app.composer.attachments), 0)
 	testing.expect(t, composer_held(app), "a session is starting from this composer")
 
 	// the second Enter, and what is typed then: nothing leaves, nothing is made
-	ui.area_set(&app.composer.area, "second")
+	ui.text_edit_set(&app.composer.area, "second")
 	attach(app, "two.png")
 	submit_prompt(app)
 	testing.expect_value(t, bench_count(.Created), 1)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "second")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "second")
 	testing.expect_value(t, len(app.composer.attachments), 1)
 
 	// the first goes, with its own image, to its session
@@ -319,7 +319,7 @@ the_steps_of_a_new_session_keep_their_order_and_the_composer_waits :: proc(t: ^t
 	app := bench_new()
 	config.set_from_string(&app.cfg_prefs, "session.agent", "plan", .User)
 	config.set_from_string(&app.cfg_prefs, "session.model", "m1", .User)
-	ui.area_set(&app.composer.area, "go")
+	ui.text_edit_set(&app.composer.area, "go")
 	attach(app, "a.png")
 	submit_prompt(app)
 	bench_answer(app, bench_take(t, .Created), 200, `{"data":{"id":"new"}}`)
@@ -328,9 +328,9 @@ the_steps_of_a_new_session_keep_their_order_and_the_composer_waits :: proc(t: ^t
 	testing.expect_value(t, bench_count(.Prompt), 0)
 
 	// a prompt in the middle of the steps stays where it is: it would overtake the first and take its image
-	ui.area_set(&app.composer.area, "overtaker")
+	ui.text_edit_set(&app.composer.area, "overtaker")
 	submit_prompt(app)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "overtaker")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "overtaker")
 	testing.expect_value(t, bench_count(.Prompt), 0)
 
 	bench_answer(app, bench_take(t, .Session_Agent), 200, "")
@@ -365,7 +365,7 @@ a_prompt_body_made_on_its_thread_is_the_same :: proc(t: ^testing.T) {
 	app := bench_new()
 	show(app, "s")
 	text := "look at \"this\" \\ café \U0001F600 @f.txt and @explore\nthen a line"
-	ui.area_set(&app.composer.area, text)
+	ui.text_edit_set(&app.composer.area, text)
 	uri := strings.concatenate({"data:image/png;base64,", strings.repeat("iVBORw0KGgo+/=", 200_000, context.temp_allocator)}, context.temp_allocator)
 	append(&app.composer.attachments, Attachment{name = strings.clone("shôt \"1\".png"), uri = strings.clone(uri)})
 	attach(app, "two.png")
@@ -388,16 +388,16 @@ what_failed_waits_for_its_session :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	show(app, "a")
-	ui.area_set(&app.composer.area, "for a")
+	ui.text_edit_set(&app.composer.area, "for a")
 	attach(app, "a.png")
 	submit_prompt(app)
 	r := bench_take(t, .Prompt)
 	show(app, "b")
 	bench_answer(app, r, 500, `{"message":"no"}`)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
 	testing.expect_value(t, len(app.composer.attachments), 0)
 	show(app, "a")
-	testing.expect_value(t, ui.area_string(&app.composer.area), "for a")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "for a")
 	testing.expect_value(t, len(app.composer.attachments), 1)
 }
 
@@ -424,28 +424,28 @@ a_command_that_failed_comes_back :: proc(t: ^testing.T) {
 	app := bench_new()
 	slash_load(app, []Slash{{strings.clone("review"), strings.clone("")}})
 	show(app, "s")
-	ui.area_set(&app.composer.area, "/review the rest")
+	ui.text_edit_set(&app.composer.area, "/review the rest")
 	attach(app, "stays.png")
 	submit_prompt(app)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
 	testing.expect_value(t, len(app.composer.attachments), 1)
 	r := bench_take(t, .Prompt)
 	testing.expect(t, strings.has_suffix(r.path, "/command"))
 	bench_lost(app, r)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "/review the rest")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "/review the rest")
 }
 
 @(test)
 a_server_switch_gives_back_what_had_not_gone :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	ui.area_set(&app.composer.area, "mine")
+	ui.text_edit_set(&app.composer.area, "mine")
 	attach(app, "mine.png")
 	submit_prompt(app)
 	r := bench_take(t, .Created)
 	app.conn = bench_conn(app)
 	server_forget(app)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "mine")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "mine")
 	testing.expect_value(t, len(app.composer.attachments), 1)
 	bench_answer(app, r, 200, `{"data":{"id":"theirs"}}`)
 	testing.expect_value(t, app.chat.id, "")
@@ -456,7 +456,7 @@ a_server_switch_gives_back_what_had_not_gone :: proc(t: ^testing.T) {
 a_session_made_late_does_not_move_the_reader :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	ui.area_set(&app.composer.area, "start")
+	ui.text_edit_set(&app.composer.area, "start")
 	submit_prompt(app)
 	r := bench_take(t, .Created)
 	show(app, "elsewhere")
@@ -804,15 +804,15 @@ a_session_deleted_elsewhere_goes_and_what_was_for_it_comes_home :: proc(t: ^test
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	show(app, "s")
-	ui.area_set(&app.composer.area, "for s")
+	ui.text_edit_set(&app.composer.area, "for s")
 	submit_prompt(app)
 	r := bench_take(t, .Prompt)
 	bench_event(app, `{"type":"session.deleted","data":{"sessionID":"s"}}`)
 	bench_lost(app, r)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
 	nav_apply(app)
 	testing.expect_value(t, app.chat.id, "")
-	testing.expect_value(t, ui.area_string(&app.composer.area), "for s")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "for s")
 }
 
 @(test)
@@ -896,7 +896,7 @@ what_the_reader_asks_wins_over_a_view_going_back :: proc(t: ^testing.T) {
 	app := bench_new()
 	show(app, "s")
 	chat_scroll_event(app, Scroll_Restore{"m", 0})
-	ui.area_set(&app.composer.area, "go")
+	ui.text_edit_set(&app.composer.area, "go")
 	submit_prompt(app)
 	testing.expect_value(t, restoring_msg(app), "")
 	testing.expect(t, chat_following(app))
@@ -1188,18 +1188,18 @@ the_composer_is_each_sessions :: proc(t: ^testing.T) {
 	app := bench_new()
 	defer drafts_destroy(app)
 	show(app, "a")
-	ui.area_set(&app.composer.area, "for a")
+	ui.text_edit_set(&app.composer.area, "for a")
 	show(app, "b")
-	testing.expect_value(t, ui.area_string(&app.composer.area), "")
-	ui.area_set(&app.composer.area, "for b")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
+	ui.text_edit_set(&app.composer.area, "for b")
 	show(app, "a")
-	testing.expect_value(t, ui.area_string(&app.composer.area), "for a")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "for a")
 	show(app, "b")
-	testing.expect_value(t, ui.area_string(&app.composer.area), "for b")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "for b")
 	chat_home(app)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
 	show(app, "a")
-	testing.expect_value(t, ui.area_string(&app.composer.area), "for a")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "for a")
 	testing.expect_value(t, len(app.composer.drafts), 1)   // (b's; a's is in the composer, the home page's was empty)
 }
 
@@ -1274,9 +1274,9 @@ the_drafts_survive_a_restart :: proc(t: ^testing.T) {
 	app := bench_new()
 	defer drafts_destroy(app)
 	show(app, "a")
-	ui.area_set(&app.composer.area, "for a")
+	ui.text_edit_set(&app.composer.area, "for a")
 	show(app, "b")
-	ui.area_set(&app.composer.area, "   ")
+	ui.text_edit_set(&app.composer.area, "   ")
 	saved := strings.clone(drafts_json(app), context.temp_allocator)
 	testing.expect(t, strings.contains(saved, `"a":"for a"`), saved)
 	testing.expect(t, !strings.contains(saved, `"b"`), "an empty text is not kept")
@@ -1285,7 +1285,7 @@ the_drafts_survive_a_restart :: proc(t: ^testing.T) {
 	defer drafts_destroy(again)
 	drafts_load_json(again, saved)
 	show(again, "a")
-	testing.expect_value(t, ui.area_string(&again.composer.area), "for a")
+	testing.expect_value(t, ui.text_edit_string(&again.composer.area), "for a")
 }
 
 // A prompt sent empties the composer without a key: the disk hears of it too, and the text does not come back at the next start.
@@ -1295,10 +1295,10 @@ a_sent_prompt_leaves_no_draft :: proc(t: ^testing.T) {
 	app := bench_new()
 	defer drafts_destroy(app)
 	show(app, "a")
-	ui.area_set(&app.composer.area, "hello")
+	ui.text_edit_set(&app.composer.area, "hello")
 	drafts_track(app)
 	app.cx.due[.Drafts] = {}
-	ui.area_set(&app.composer.area, "")   // (as submit_prompt does)
+	ui.text_edit_set(&app.composer.area, "")   // (as submit_prompt does)
 	drafts_track(app)
 	testing.expect(t, app.cx.due[.Drafts].due_ms != 0, "a save is due")
 	testing.expect(t, !strings.contains(drafts_json(app), "hello"), drafts_json(app))
@@ -1357,7 +1357,7 @@ the_thinking_level_goes_with_the_model :: proc(t: ^testing.T) {
 
 	// a new session starts with it
 	show(app, "")
-	ui.area_set(&app.composer.area, "go")
+	ui.text_edit_set(&app.composer.area, "go")
 	submit_prompt(app)
 	bench_answer(app, bench_take(t, .Created), 200, `{"data":{"id":"new"}}`)
 	if bench_count(.Session_Agent) > 0 { bench_answer(app, bench_take(t, .Session_Agent), 200, "") }
@@ -1374,11 +1374,11 @@ a_slash_command_waits_for_the_commands :: proc(t: ^testing.T) {
 	testing.expect(t, !app.cx.have_slash, "no commands read")
 	COMMANDS :: `{"data":[{"name":"goal","description":"Work on an objective until it is met"}]}`
 
-	ui.area_set(&app.composer.area, "/goal ship the kernel")
+	ui.text_edit_set(&app.composer.area, "/goal ship the kernel")
 	attach(app, "a.png")
 	submit_prompt(app)
 	testing.expect_value(t, bench_count(.Prompt), 0)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
 	bench_answer(app, bench_take(t, .Slash), 200, COMMANDS)
 	r := bench_take(t, .Prompt)
 	testing.expect_value(t, r.path, "/api/session/s/command")
@@ -1388,7 +1388,7 @@ a_slash_command_waits_for_the_commands :: proc(t: ^testing.T) {
 
 	// a name the server has not: a prompt
 	slash_forget(app)
-	ui.area_set(&app.composer.area, "/nothing here")
+	ui.text_edit_set(&app.composer.area, "/nothing here")
 	submit_prompt(app)
 	bench_answer(app, bench_take(t, .Slash), 200, COMMANDS)
 	r = bench_take(t, .Prompt)
@@ -1398,7 +1398,7 @@ a_slash_command_waits_for_the_commands :: proc(t: ^testing.T) {
 
 	// the commands could not be read: a prompt all the same, nothing lost
 	slash_forget(app)
-	ui.area_set(&app.composer.area, "/goal pause")
+	ui.text_edit_set(&app.composer.area, "/goal pause")
 	submit_prompt(app)
 	bench_lost(app, bench_take(t, .Slash))
 	r = bench_take(t, .Prompt)
@@ -1407,11 +1407,11 @@ a_slash_command_waits_for_the_commands :: proc(t: ^testing.T) {
 	bench_answer(app, r, 200, "")
 
 	// not read then: asked again, and once read the next one goes at once
-	ui.area_set(&app.composer.area, "/goal resume")
+	ui.text_edit_set(&app.composer.area, "/goal resume")
 	submit_prompt(app)
 	bench_answer(app, bench_take(t, .Slash), 200, COMMANDS)
 	bench_answer(app, bench_take(t, .Prompt), 200, "")
-	ui.area_set(&app.composer.area, "/goal clear")
+	ui.text_edit_set(&app.composer.area, "/goal clear")
 	submit_prompt(app)
 	testing.expect_value(t, bench_count(.Slash), 0)
 	testing.expect_value(t, bench_take(t, .Prompt).body, `{"name":"goal","text":"clear"}`)
@@ -1510,7 +1510,7 @@ later_call :: proc(c: ^Conn, r: ^Request) -> bool {
 }
 
 @(private = "file")
-later_close :: proc(c: ^Conn) { later_joined = tasks.state(&c.pool).threads == 0 ? 1 : 0 }
+later_close :: proc(c: ^Conn) { later_joined = tasks.counts(&c.pool).threads == 0 ? 1 : 0 }
 
 // A request for later waits in its connection's timed queue: its worker waits for work, not for its time, and the request goes when the
 // clock says, not before. No thread sleeps for it.
@@ -1523,27 +1523,27 @@ a_request_later_waits_in_a_queue_not_in_a_thread :: proc(t: ^testing.T) {
 	app.conn = c
 	request_later(app, .Action, "/later", 500, "")
 	testing.expect(t, tasks.wait_rest(&c.pool, REST_BOUND), "its worker rests")
-	st := tasks.state(&c.pool)
+	st := tasks.counts(&c.pool)
 	testing.expect_value(t, st.timed, 1)
 	testing.expect_value(t, st.waiting, 1)   // (on the queue's condition: with a clock of its own it waits for a poke, not a time)
 	look :: proc(c: ^Conn, clock: ^i64, at: i64) -> bool {
-		looks := tasks.state(&c.pool).looks
+		looks := tasks.counts(&c.pool).looks
 		sync.atomic_store(clock, at)
 		tasks.poke(&c.pool)
 		Seen :: struct { c: ^Conn, looks: int }
 		seen := Seen{c, looks}
 		return wait_for(proc(data: rawptr) -> bool {
 			s := (^Seen)(data)
-			st := tasks.state(&s.c.pool)
+			st := tasks.counts(&s.c.pool)
 			return st.looks > s.looks && st.waiting == 1
 		}, &seen)
 	}
 	testing.expect(t, look(c, &clock, 499), "the worker looked")
 	testing.expect_value(t, sync.atomic_load(&later_calls), 0)
-	testing.expect_value(t, tasks.state(&c.pool).timed, 1)
+	testing.expect_value(t, tasks.counts(&c.pool).timed, 1)
 	testing.expect(t, look(c, &clock, 500), "the worker looked again")
 	testing.expect_value(t, sync.atomic_load(&later_calls), 1)
-	testing.expect_value(t, tasks.state(&c.pool).timed, 0)
+	testing.expect_value(t, tasks.counts(&c.pool).timed, 0)
 	// (the worker rests once its answer is posted)
 	testing.expect(t, tasks.wait_rest(&c.pool, REST_BOUND), "it rests again")
 	bench_drain(app)
@@ -1569,7 +1569,7 @@ a_connection_let_go_is_freed_when_its_requests_ended :: proc(t: ^testing.T) {
 		r.status, r.ok, r.resp = 200, true, strings.clone(`{"data":[]}`)
 		return true
 	}
-	c := conn_make(app, {}, Transport{call = answered, fetch = bench_fetch, close = proc(c: ^Conn) { held_joined = tasks.state(&c.pool).threads }}, CONN_WORKERS)
+	c := conn_make(app, {}, Transport{call = answered, fetch = bench_fetch, close = proc(c: ^Conn) { held_joined = tasks.counts(&c.pool).threads }}, CONN_WORKERS)
 	request(app, .Agents, "GET", "/api/agent", conn = c)
 	conn_stop(c)
 	conn_release(app, c)   // (the App's hold: the request has its own)

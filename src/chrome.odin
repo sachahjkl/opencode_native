@@ -72,15 +72,15 @@ title_bar :: proc(app: ^App, em: f32) {
 		ink := ui.caption_ink
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.px(math.round(h * 0.78)), height = ui.px(math.round(h * 0.78)), fg = ink(hex(HEX_WEAK))})
-		msig := ui.icon_button("appmenu", lucide.MENU)
-		menu_key := ui.key_from_string(0, "app_menu")
-		if msig.clicked { ui.ctx_menu_open_rect(menu_key, msig.box.rect, msig.box.key) }
+		msig := ui.button("appmenu", icon = lucide.MENU)
+		menu_key := "app_menu"
+		if msig.clicked { ui.menu_open(menu_key, msig.box.rect, msig.box.key) }
 		app_menu(app, menu_key, em)
 		nav_button :: proc(app: ^App, id, icon, tip: string, d: int, size: f32) {
 			can := nav_can(app, d)
 			ui.a11y({role = .Button, name = tip})
 			ui.next({width = ui.px(size), height = ui.px(size), fg = ui.caption_ink(can ? hex(HEX_WEAK) : hex(HEX_FAINT))})
-			sig := ui.icon_button(id, icon)
+			sig := ui.button(id, icon = icon)
 			if sig.clicked { nav_step(app, d) }
 			if can && ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(tip) } }
 		}
@@ -155,7 +155,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		if s == nil && app.chat.have_self { s = &app.chat.self }   // (a sub-agent, or an old session: not in the sidebar's list)
 		if back := back_target(app); back != "" {
 			// the way back up: to the session drilled down from, or the parent
-			if ui.button_icon("###back", lucide.ARROW_LEFT, "", width = ui.px(math.round(em * BUTTON_H_EM)), height = math.round(em * BUTTON_H_EM)).clicked { go_back(app) }
+			if ui.button("back", icon = lucide.ARROW_LEFT, o = {face = .Raised, width = ui.px(math.round(em * BUTTON_H_EM)), height = math.round(em * BUTTON_H_EM)}).clicked { go_back(app) }
 			ui.spacer(ui.px(em * 0.7))
 		}
 		if logo_of(app, "###hlogo", project_logo(app, chat_project(app)), math.round(em * 2.3)) { ui.spacer(ui.px(em * 0.7)) }
@@ -213,7 +213,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		}
 		if c.busy {
 			ui.spacer(ui.px(em * 0.4))
-			if ui.button_icon("###stop", lucide.SQUARE, i18n.tr("Stop"), .Danger, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { interrupt_session(app, c.id) }
+			if ui.button("stop", i18n.tr("Stop"), lucide.SQUARE, {intent = .Danger, height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { interrupt_session(app, c.id) }
 		}
 		ui.spacer(ui.px(em * 1.2))
 	}
@@ -252,8 +252,8 @@ status_bar :: proc(app: ^App, em: f32) {
 			if b.hot_t > FADE_VISIBLE || b.active_t > FADE_VISIBLE { draw_bevel(dc, b.rect, 5 * ui.scale(), hex(HEX_BG3), b.hot_t, b.active_t * b.hot_t) }
 		}
 		ssig := ui.signal(sb)
-		skey := ui.key_from_string(0, "server_menu")
-		if ssig.clicked { ui.ctx_menu_open_rect(skey, sb.rect, sb.key) }
+		skey := "server_menu"
+		if ssig.clicked { ui.menu_open(skey, sb.rect, sb.key) }
 		if ui.parent(sb) {
 			ui.spacer(ui.px(em * 0.45))
 			// (connected is the normal state: a pip; a lamp breathes while it is not)

@@ -29,5 +29,5 @@ log_stop :: proc(logger: runtime.Logger) {
 crash_say :: proc(app: ^App, report: string) {
 	if report == "" { return }
 	app.cx.crash_report = report
-	ui.toast_action(.Warn, proc(user: rawptr) { ui.open((^App)(user).cx.crash_report) }, app, i18n.tr("opencode native stopped unexpectedly last time: click to open its report"))
+	ui.announce(&app.announcer, .Warn, i18n.tr("opencode native stopped unexpectedly last time: click to open its report"), action = proc(user: rawptr) { ui.open((^App)(user).cx.crash_report) }, user = app)
 }

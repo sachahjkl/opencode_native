@@ -12,7 +12,7 @@ import i18n "gt:i18n"
 Find :: struct {
 	open:   bool,
 	fresh:  bool,           // opened in this frame: focus the field, select its text
-	field:  ui.Text_Field,
+	field:  ui.Line_Edit,
 	index:  int,            // the current occurrence (-1: none yet)
 	needle: string,         // the needle of the last frame (a new one picks the first match from the view's top)
 	reveal: bool,           // scroll the current match into view
@@ -22,7 +22,7 @@ Find :: struct {
 find_open :: proc(app: ^App) {
 	f := &app.find
 	f.open, f.fresh = true, true
-	ui.field_select_all(&f.field)
+	ui.line_edit_select_all(&f.field)
 }
 
 find_close :: proc(app: ^App) {
@@ -72,7 +72,7 @@ FIND_REVEAL_AT        :: 0.35   // where it lands, from the top of the view
 // match, and the scroll that brings the current match into view (from the rects of the last layout).
 find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	f := &app.find
-	needle := f.open ? ui.field_string(&f.field) : ""
+	needle := f.open ? ui.line_edit_string(&f.field) : ""
 	ui.find(needle, sb != nil ? sb.key : 0)
 	if !f.open { return }
 	ms := ui.find_all()   // (of the sweep, in the content: what is far from the view is not built)
@@ -137,22 +137,22 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 			glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-				res := ui.line_edit("###ff", &f.field, i18n.tr("Find in the conversation"))
+				res := ui.line_edit("###ff", &f.field, {placeholder = i18n.tr("Find in the conversation")})
 				if f.fresh { ui.set_focus(res.box.key); f.fresh = false }
 				if ui.key_press(.Return, {.Shift}) { find_step(app, -1) } else if res.committed { find_step(app, 1) }
 				if res.cancelled { find_close(app) }
 			}
-			needle := ui.field_string(&f.field)
+			needle := ui.line_edit_string(&f.field)
 			pending := ui.find_pending()   // (read so far, and how far: "no match" would be a lie before the end; nothing while the needle rests)
 			count := needle == "" ? "" : pending ? (ui.find_progress() < 1 ? fmt.tprintf("%d…  %d %%", n, int(ui.find_progress() * 100)) : "") : n == 0 ? i18n.tr("no match") : fmt.tprintf("%d / %d", max(f.index, 0) + 1, n)
 			text("fc", count, n == 0 && !pending ? hex(HEX_RED) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)})
 			ui.spacer(ui.px(em * 0.4))
 			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
-			if ui.icon_button("fprev", lucide.CHEVRON_UP).clicked { find_step(app, -1) }
+			if ui.button("fprev", icon = lucide.CHEVRON_UP).clicked { find_step(app, -1) }
 			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
-			if ui.icon_button("fnext", lucide.CHEVRON_DOWN).clicked { find_step(app, 1) }
+			if ui.button("fnext", icon = lucide.CHEVRON_DOWN).clicked { find_step(app, 1) }
 			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
-			if ui.icon_button("fclose", lucide.X).clicked { find_close(app) }
+			if ui.button("fclose", icon = lucide.X).clicked { find_close(app) }
 			ui.spacer(ui.px(em * 0.3))
 		}
 	}

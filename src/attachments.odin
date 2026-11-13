@@ -157,14 +157,14 @@ attach_done :: proc(data: rawptr, word: u64) {
 		if strings.has_prefix(job.mime, "image/") { a.ref = image_ref(a.uri, .Data_Url, job.mime, a.name) }
 		composer_take(app, job.chat, a, "")
 	case .Too_Large:
-		ui.toast(.Warn, i18n.tr("%s is too large to attach"), job.name)
+		ui.announce(&app.announcer, .Warn, fmt.tprintf(i18n.tr("%s is too large to attach"), job.name))
 	case .Not_Attachable:
-		ui.toast(.Warn, i18n.tr("%s is not an image, a PDF or text: its path goes in the prompt"), job.name)
+		ui.announce(&app.announcer, .Warn, fmt.tprintf(i18n.tr("%s is not an image, a PDF or text: its path goes in the prompt"), job.name))
 		composer_take(app, job.chat, nil, fmt.tprintf("%s ", job.path))
 	case .Unread:
 		composer_take(app, job.chat, nil, fmt.tprintf("%s ", job.path))
 	case .Bad_Image:
-		ui.toast(.Bad, i18n.tr("The image could not be read"))
+		ui.announce(&app.announcer, .Bad, i18n.tr("The image could not be read"))
 	case .Failed:
 	}
 }
@@ -202,7 +202,7 @@ attach_path :: proc(app: ^App, path: string) {
 // The paperclip: the system's dialog, several files at once.
 attach_pick :: proc(app: ^App) {
 	ui.file_dialog(&app.state, .Open, {owner = app.win, title = i18n.tr("Attach files"), all_files = true, multiple = true, remember_id = "attach"}, proc(r: platform.Dialog_Result, user: rawptr) {
-		if r.status == .Unsupported { ui.toast(.Bad, i18n.tr("This system has no file dialog")); return }
+		if r.status == .Unsupported { ui.announce(&(^App)(user).announcer, .Bad, i18n.tr("This system has no file dialog")); return }
 		if r.status != .Chosen { return }
 		for p in r.paths { attach_path((^App)(user), p) }
 	}, app)
@@ -385,7 +385,7 @@ attachments_row :: proc(app: ^App, em: f32) {
 				text("n", fmt.tprintf("%s  %s", a.name, kfmt(f64(a.size))), hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.2))
 				ui.next({width = ui.px(math.round(em * 1.3)), height = ui.px(math.round(em * 1.3))})
-				if ui.icon_button("x", lucide.X).clicked { gone = i }
+				if ui.button("x", icon = lucide.X).clicked { gone = i }
 			}
 		}
 	}

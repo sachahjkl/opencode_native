@@ -373,17 +373,17 @@ output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
 		}
 		ui.spacer(ui.px(em * 0.8))
 		h := math.round(em * BUTTON_SMALL_H_EM)
-		if ui.button_icon("###out_copy", lucide.COPY, i18n.tr("Copy"), height = h, disabled = len(v.raw) == 0, quiet = true, face = .Ghost).clicked {
+		if ui.button("out_copy", i18n.tr("Copy"), lucide.COPY, {face = .Ghost, height = h, quiet = true, disabled = len(v.raw) == 0}).clicked {
 			clip_set(plain_output(string(v.raw[:])))
 			ui.announce(&app.announcer, .Good, i18n.tr("Output copied"))
 		}
 		if !in_window {
 			ui.spacer(ui.px(em * 0.2))
-			if ui.button_icon("###out_win", lucide.APP_WINDOW, i18n.tr("Window"), height = h, quiet = true, face = .Ghost).clicked { app.cx.outputs.window = v }
+			if ui.button("out_win", i18n.tr("Window"), lucide.APP_WINDOW, {face = .Ghost, height = h, quiet = true}).clicked { app.cx.outputs.window = v }
 		}
 		if !in_window || v.seen_end {
 			ui.spacer(ui.px(em * 0.2))
-			if ui.button_icon("###out_close", "", i18n.tr("Close"), height = h, quiet = !v.seen_end, face = v.seen_end ? .Raised : .Ghost).clicked { output_view_close(app, v) }
+			if ui.button("out_close", i18n.tr("Close"), o = {face = v.seen_end ? .Raised : .Ghost, height = h, quiet = !v.seen_end}).clicked { output_view_close(app, v) }
 		}
 		ui.spacer(ui.px(em * 0.5))
 	}
@@ -408,7 +408,7 @@ output_view_dialog :: proc(app: ^App, em: f32) {
 	v := app.cx.outputs.shown
 	if v == nil { return }
 	open := true
-	if ui.modal_sized("output", DIALOG_PREFERRED_EM[.Output] * em, &app.cx.dialogs[.Output], &open, DIALOG_MIN_EM[.Output] * em) {
+	if ui.modal("output", &open, dialog_options(app, .Output)) {
 		dialog_backdrop()
 		output_view_body(app, v, em, false)   // (its bar has the Close)
 	}

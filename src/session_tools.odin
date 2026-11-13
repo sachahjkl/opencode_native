@@ -77,7 +77,7 @@ session_export_save :: proc(app: ^App, id, raw: string) {
 			f.ok = os.write_entire_file(f.path, transmute([]u8)f.body) == nil
 		}, proc(data: rawptr, _: u64) {
 			f := (^Session_File)(data)
-			if f.ok { ui.announce(&f.app.announcer, .Good, i18n.tr("Session exported")) } else { ui.toast(.Bad, i18n.tr("The file could not be written")) }
+			if f.ok { ui.announce(&f.app.announcer, .Good, i18n.tr("Session exported")) } else { ui.announce(&f.app.announcer, .Bad, i18n.tr("The file could not be written")) }
 			session_file_free(f)
 		}, f, session_file_free)
 	}, session_file_new(app, id, body))
@@ -116,10 +116,10 @@ session_import_file :: proc(app: ^App, path: string) {
 	}, proc(data: rawptr, _: u64) {
 		f := (^Session_File)(data)
 		defer session_file_free(f)
-		if !f.ok { ui.toast(.Bad, i18n.tr("The file could not be read")); return }
+		if !f.ok { ui.announce(&f.app.announcer, .Bad, i18n.tr("The file could not be read")); return }
 		v, bad := json.parse(transmute([]u8)f.body, parse_integers = true, allocator = context.temp_allocator)
 		id := jstr(v, "info", "id")
-		if bad != nil || id == "" { ui.toast(.Bad, i18n.tr("This file is not an exported session")); return }
+		if bad != nil || id == "" { ui.announce(&f.app.announcer, .Bad, i18n.tr("This file is not an exported session")); return }
 		request(f.app, .Session_Import, "POST", "/api/experimental/session/import", f.body, id)
 	}, f, session_file_free)
 }
@@ -127,7 +127,7 @@ session_import_file :: proc(app: ^App, path: string) {
 // The server refuses a session it has already: that one is opened.
 session_import_conflict :: proc(app: ^App, id: string) {
 	open_root(app, id)
-	ui.toast(.Warn, i18n.tr("This session is already here"))
+	ui.announce(&app.announcer, .Warn, i18n.tr("This session is already here"))
 }
 
 ////////////////////////////////
@@ -216,9 +216,9 @@ changes_held :: proc(c: ^Changes) -> bool {
 
 // (What was clicked does not happen: it says why.)
 @(private = "file")
-changes_wait :: proc(c: ^Changes) -> bool {
-	if !changes_held(c) { return false }
-	ui.toast(.Warn, i18n.tr("Going back to a prompt is under way: try again in a moment"))
+changes_wait :: proc(app: ^App) -> bool {
+	if !changes_held(&app.cx.changes) { return false }
+	ui.announce(&app.announcer, .Warn, i18n.tr("Going back to a prompt is under way: try again in a moment"))
 	return true
 }
 
@@ -236,7 +236,7 @@ changes_shown :: proc(c: ^Changes) -> bool {
 // (What was being looked at gives way: its answers no longer count.)
 changes_open :: proc(app: ^App, id: string, from := "") {
 	c := &app.cx.changes
-	if changes_wait(c) { return }
+	if changes_wait(app) { return }
 	view := Changes_Viewing{session = strings.clone(id), from = strings.clone(from)}
 	changes_reset(c)
 	c.state = view
@@ -300,7 +300,7 @@ changes_refused :: proc(app: ^App) {
 // Back to the prompt `msg`: from this request on, the files are as they were then, until Go back or Cancel.
 revert_stage :: proc(app: ^App, id, msg, prompt: string) {
 	c := &app.cx.changes
-	if changes_wait(c) { return }
+	if changes_wait(app) { return }
 	session, message, words := strings.clone(id), strings.clone(msg), strings.clone(prompt)
 	changes_reset(c)
 	c.state = Changes_Staging{session = session, message = message, prompt = words}
@@ -399,8 +399,8 @@ revert_done :: proc(app: ^App) {
 	if !committing { return }
 	if s.session == app.chat.id {
 		load_messages(app, s.session)
-		if s.prompt != "" && strings.trim_space(ui.area_string(&app.composer.area)) == "" {
-			ui.area_set(&app.composer.area, s.prompt)
+		if s.prompt != "" && strings.trim_space(ui.text_edit_string(&app.composer.area)) == "" {
+			ui.text_edit_set(&app.composer.area, s.prompt)
 			app.composer.focus_next = true
 		}
 	}
@@ -468,7 +468,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 	c := &app.cx.changes
 	v, viewing := c.state.(Changes_Viewing)
 	_, staging := c.state.(Changes_Staging)
-	if ui.modal_sized("changes", DIALOG_PREFERRED_EM[.Changes] * em, &app.cx.dialogs[.Changes], open, DIALOG_MIN_EM[.Changes] * em) {
+	if ui.modal("changes", open, dialog_options(app, .Changes)) {
 		dialog_backdrop()
 		if ui.dialog_header("ch_head", !viewing ? i18n.tr("Go back to this prompt") : v.from != "" ? i18n.tr("What this prompt changed") : i18n.tr("What this session changed"), {close = true}) {}
 		// (under the header, as wide as the dialog: the corner is the close cross's only beside the header)
@@ -526,9 +526,9 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###ch_foot") {
 				ui.spacer(ui.fill())
-				if ui.button_icon("###ch_cancel", "", i18n.tr("Cancel"), .Cancel).clicked { open^ = false }
+				if ui.button("ch_cancel", i18n.tr("Cancel"), o = {intent = .Cancel}).clicked { open^ = false }
 				ui.spacer(ui.px(em * 0.5))
-				if ui.button_icon("###ch_go", lucide.UNDO_2, i18n.tr("Go back"), .Danger, disabled = staging).clicked { revert_commit(app) }
+				if ui.button("ch_go", i18n.tr("Go back"), lucide.UNDO_2, {intent = .Danger, disabled = staging}).clicked { revert_commit(app) }
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			}
 		}

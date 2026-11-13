@@ -90,16 +90,16 @@ approval_button :: proc(app: ^App, em: f32) {
 	case .Custom:      color = hex(HEX_PURPLE)
 	}
 	ui.a11y({role = .Button, name = fmt.tprintf(i18n.tr("Approvals: %s"), i18n.tr(APPROVAL_WORDS[mode]))})
-	key := ui.key_from_string(0, "approval_menu")
-	sig := ui.button_icon("###approval", lucide.SHIELD, ui.text_shown(i18n.tr(APPROVAL_SHORT[mode])), height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = ui.ctx_menu_is_open(key), icon_color = color, face = .Ghost)
-	if sig.clicked { ui.ctx_menu_open_rect(key, sig.box.rect, sig.box.key) }
+	key := "approval_menu"
+	sig := ui.button("approval", ui.text_shown(i18n.tr(APPROVAL_SHORT[mode])), lucide.SHIELD, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = ui.menu_is_open(key), icon_color = color})
+	if sig.clicked { ui.menu_open(key, sig.box.rect, sig.box.key, search = false) }
 	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(fmt.tprintf(i18n.tr("Approvals: %s (%s)"), i18n.tr(APPROVAL_WORDS[mode]), i18n.tr(APPROVAL_DETAIL[mode]))) } }
-	if ui.ctx_menu(key) {
+	if ui.menu(key) {
 		ui.menu_heading(i18n.tr("Approvals in this session"))
 		for m in Approval {
 			if m == .Custom && mode != .Custom { continue }   // (shown only when the session has such rules)
 			// (what it does in the shortcut's column: faint, at the right)
-			if ui.menu_item(i18n.tr(APPROVAL_WORDS[m]), i18n.tr(APPROVAL_DETAIL[m]), m == mode, enabled = m != .Custom).clicked {
+			if ui.menu_item(i18n.tr(APPROVAL_WORDS[m]), i18n.tr(APPROVAL_DETAIL[m]), m == mode, disabled = m == .Custom).clicked {
 				approval_set(app, app.chat.id, m)
 			}
 		}

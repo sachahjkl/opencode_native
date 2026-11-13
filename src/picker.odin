@@ -95,7 +95,7 @@ model_tip :: proc(app: ^App, m: Model_Info, em: f32) {
 Picker :: struct {
 	id:     string,
 	anchor: Rect,
-	field:  ui.Text_Field,
+	field:  ui.Line_Edit,
 	sel:    int,       // in the rows shown
 	unfolded: map[string]bool,   // the groups open (keys owned); the current item's opens with the picker
 	reveal: bool,      // bring the selected row into view (the keyboard moved it, it was opened, the search changed)
@@ -122,7 +122,7 @@ picker_open :: proc(app: ^App, id: string, anchor: Rect) {
 	p := &app.picker
 	app.cx.open[.Picker], p.id, p.anchor, p.fresh = true, id, anchor, true
 	p.sel = 0
-	ui.field_set(&p.field, "")
+	ui.line_edit_set(&p.field, "")
 }
 
 // A row of the list: an item (`hit` in the hits), or the header of `group` (`hit` -1).
@@ -174,7 +174,7 @@ picker_rows :: proc(p: ^Picker, items: []Pick_Item, hits: []ui.Rank_Hit, typed: 
 picker :: proc(app: ^App, p: ^Picker, id: string, hint: string, items: []Pick_Item, em: f32, align_right := false, version: u64 = 0) -> (chosen: int) {
 	chosen = -1
 	if !app.cx.open[.Picker] || p.id != id { return }
-	needle := ui.field_string(&p.field)
+	needle := ui.line_edit_string(&p.field)
 	hits := ui.rank(needle, items, proc(it: ^Pick_Item, _: rawptr) -> ui.Rank_Entry { return {label = it.label, group = it.group} }, match = ui.rank_fuzzy, cache = &p.search, version = version)
 	if p.fresh { for h in hits { if it := items[h.index]; it.current && it.group != "" { picker_fold(p, it.group, true) } } }
 	typed := needle != ""
@@ -231,7 +231,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, hint: string, items: []Pick_It
 				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-					res := ui.line_edit("###pf", &p.field, hint)
+					res := ui.line_edit("###pf", &p.field, {placeholder = hint})
 					if p.fresh { ui.set_focus(res.box.key) }
 					if res.changed { p.sel = 0; p.reveal = true }
 					if res.committed && n > 0 { chosen = picker_take(p, items, hits, rows, p.sel) }

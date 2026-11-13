@@ -722,7 +722,7 @@ activity_keys :: proc(app: ^App) {
 	a.sel = clamp(a.sel, 0, max(n - 1, 0))
 	if n == 0 { return }
 	// (a prompt written in the composer goes first: Enter sends it, Delete edits it)
-	if strings.trim_space(ui.area_string(&app.composer.area)) != "" { return }
+	if strings.trim_space(ui.text_edit_string(&app.composer.area)) != "" { return }
 	if ui.key_press(.Return) { row_act(app, rows[a.sel]) }
 	if ui.key_press(.Delete) { row_stop(app, rows[a.sel]) }
 }
@@ -843,17 +843,17 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 					session := app.chat.id
 					if r.kind == .Shell { j := job_find(a, r.id); session = j != nil && !j.background ? j.session : "" }
 					if session != "" {
-						if ui.button_icon("###bg", "", i18n.tr("Background"), height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { background_session(app, session) }
+						if ui.button("bg", i18n.tr("Background"), o = {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true}).clicked { background_session(app, session) }
 						ui.spacer(ui.px(em * 0.2))
 					}
 				}
 				if running {
-					if ui.button_icon("###stop", "", i18n.tr("Stop"), .Danger, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_stop(app, r) }
+					if ui.button("stop", i18n.tr("Stop"), o = {intent = .Danger, face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true}).clicked { row_stop(app, r) }
 					ui.spacer(ui.px(em * 0.2))
 				}
-				if r.kind == .Agent && ui.button_icon("###open", "", i18n.tr("Open"), height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_act(app, r) }
-				if r.kind != .Agent && ui.button_icon("###inspect", "", i18n.tr("Inspect"), height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_inspect(app, r) }
-				if r.kind == .Shell && r.preview != "" && ui.button_icon("###copy", "", i18n.tr("Copy"), height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked {
+				if r.kind == .Agent && ui.button("open", i18n.tr("Open"), o = {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true}).clicked { row_act(app, r) }
+				if r.kind != .Agent && ui.button("inspect", i18n.tr("Inspect"), o = {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true}).clicked { row_inspect(app, r) }
+				if r.kind == .Shell && r.preview != "" && ui.button("copy", i18n.tr("Copy"), o = {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true}).clicked {
 					clip_set(plain_output(r.preview))
 					ui.announce(&app.announcer, .Good, i18n.tr("Output copied"))
 				}

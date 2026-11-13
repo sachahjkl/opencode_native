@@ -449,7 +449,7 @@ missed_next :: proc(app: ^App) {
 		open_root(app, root)
 		return
 	}
-	ui.toast(.Info, i18n.tr("Nothing missed"))
+	ui.announce(&app.announcer, .Info, i18n.tr("Nothing missed"))
 }
 
 // A notification of the system came back: a click opens the session of its entry (the visit acknowledges what it can), in front.

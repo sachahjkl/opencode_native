@@ -39,7 +39,7 @@ Usage :: struct { weight: f64, last_ms: f64 }
 // over it, cost as much as typing in it, every item matched and ranked again and every row found built.
 Palette :: struct {
 	fresh:   bool,
-	field:   ui.Text_Field,
+	field:   ui.Line_Edit,
 	reveal:  bool,
 	mouse:   Vec2,
 	usage:   map[string]Usage,   // by "kind:id" (keys owned); palette_usage.txt keeps them (app.stores.palette)
@@ -88,7 +88,7 @@ palette_toggle :: proc(app: ^App) {
 	p := &app.palette
 	if app.cx.open[.Palette] { app.cx.open[.Palette] = false; return }
 	app.cx.open[.Palette], p.fresh, p.vl.sel, p.stamp = true, true, 0, 0
-	ui.field_set(&p.field, "")
+	ui.line_edit_set(&p.field, "")
 	if !app.cx.have_slash { request(app, .Slash, "GET", "/api/command") }
 }
 
@@ -242,7 +242,7 @@ palette_choose :: proc(app: ^App, it: ^Pal_Item) {
 	case .Agent: choose_agent(app, it.id)
 	case .Model: choose_model(app, app.models[it.index])
 	case .Slash:
-		ui.area_set(&app.composer.area, fmt.tprintf("/%s ", it.id))
+		ui.text_edit_set(&app.composer.area, fmt.tprintf("/%s ", it.id))
 		app.composer.focus_next = true
 	case .Switch:
 		pref_set(app, it.id, pal_item_on(app, it) ? "false" : "true")
@@ -259,7 +259,7 @@ Pal_Row_Draw :: struct { selected: bool }
 palette_dialog :: proc(app: ^App, em: f32) {
 	p := &app.palette
 	if !app.cx.open[.Palette] { return }
-	palette_refresh(app, ui.field_string(&p.field))
+	palette_refresh(app, ui.line_edit_string(&p.field))
 	items, hits := p.items, p.hits
 	n := len(hits)
 	mouse := ui.mouse_pos()
@@ -269,7 +269,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 	row_h := math.round(em * 2.1)
 	vl := &p.vl
 	// (resizable, its size kept as the dialogs' are; its top held where a palette is)
-	if ui.modal_sized("palette", DIALOG_PREFERRED_EM[.Palette] * em, &app.cx.dialogs[.Palette], &app.cx.open[.Palette], DIALOG_MIN_EM[.Palette] * em, top = PALETTE_TOP) {
+	if ui.modal("palette", &app.cx.open[.Palette], dialog_options(app, .Palette, top = PALETTE_TOP)) {
 		// (read inside the dialog: an open dialog holds the keys from the code built outside it. The field keeps the keyboard:
 		// the list's keys are read here; a click on the list gives it the keys, and it reads them itself)
 		if n > 0 {
@@ -292,7 +292,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 			glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.45, font_size = math.round(em * FS_BODY)})
-				res := ui.line_edit("###pal_field", &p.field, i18n.tr("Search commands, sessions, agents, models…"))
+				res := ui.line_edit("###pal_field", &p.field, {placeholder = i18n.tr("Search commands, sessions, agents, models…")})
 				if p.fresh { ui.set_focus(res.box.key) }
 				if res.changed { vl.sel = 0; p.reveal = true }
 				if res.committed && n > 0 { chosen = hits[vl.sel].index }

@@ -221,7 +221,7 @@ tab_free :: proc(app: ^App, t: ^Preview_Tab) {
 	web_close(app, t)
 	delete(t.navs)
 	delete(t.url); delete(t.title); delete(t.id)
-	ui.field_destroy(&t.field)
+	ui.line_edit_destroy(&t.field)
 	free(t)
 }
 

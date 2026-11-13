@@ -31,7 +31,7 @@ diff_full_open :: proc(app: ^App, title, patch: string) {
 
 diff_full_open_file :: proc(app: ^App, path: string) {
 	data, err := os.read_entire_file(path, context.temp_allocator)
-	if err != nil { ui.toast(.Bad, i18n.tr("Cannot read %s"), path); return }
+	if err != nil { ui.announce(&app.announcer, .Bad, fmt.tprintf(i18n.tr("Cannot read %s"), path)); return }
 	diff_full_open(app, filepath.base(path), string(data))
 }
 
@@ -45,14 +45,14 @@ diff_full_dialog :: proc(app: ^App, em: f32) {
 	d := &app.cx.diff_full
 	open := &app.cx.open[.Diff]
 	if !open^ { return }
-	if ui.modal_sized("diff_full", DIALOG_PREFERRED_EM[.Diff] * em, &app.cx.dialogs[.Diff], open, DIALOG_MIN_EM[.Diff] * em) {
+	if ui.modal("diff_full", open, dialog_options(app, .Diff)) {
 		dialog_backdrop()
 		if ui.dialog_header("df_head", d.title, {close = true}) {
 			text("a", fmt.tprintf("+%d", d.doc.added), hex(HEX_GREEN), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
 			ui.spacer(ui.px(em * 0.5))
 			text("d", fmt.tprintf("-%d", d.doc.removed), hex(HEX_RED), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
 			ui.spacer(ui.px(em))
-			if ui.button_icon("###df_copy", "", i18n.tr("Copy")).clicked {
+			if ui.button("df_copy", i18n.tr("Copy")).clicked {
 				clip_set(d.doc.patch)
 				ui.announce(&app.announcer, .Good, i18n.tr("Diff copied"))
 			}

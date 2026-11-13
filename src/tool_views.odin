@@ -308,7 +308,7 @@ tool_body :: proc(app: ^App, p: ^Part, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###cmd_more") {
 				ui.spacer(ui.fill())
-				if ui.button_icon("###inspect", lucide.SQUARE_TERMINAL, i18n.tr("Inspect the output"), height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { output_view_open_part(app, p) }
+				if ui.button("inspect", i18n.tr("Inspect the output"), lucide.SQUARE_TERMINAL, {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true}).clicked { output_view_open_part(app, p) }
 			}
 		}
 		return

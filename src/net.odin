@@ -658,10 +658,10 @@ answer_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) {
 	if f == .Unreadable { unreadable_note(app, fmt.tprintf("answer %v", r.kind), r.resp) }   // (counted before on_fail: it may tell no one)
 	if fail := REQ_FACTS[r.kind].on_fail; fail != nil && fail(app, r, f, message) { return }
 	switch f {
-	case .Transport:  ui.toast(.Bad, i18n.tr("Server unreachable (%s)"), r.path)
-	case .Auth:       ui.toast(.Bad, i18n.tr("Authentication refused by the server"))
-	case .Refused:    ui.toast(.Bad, "%s %s: %d %s", r.method, r.path, r.status, message)
-	case .Unreadable: ui.toast(.Warn, i18n.tr("Unreadable answer (%s)"), r.path)
+	case .Transport:  ui.announce(&app.announcer, .Bad, fmt.tprintf(i18n.tr("Server unreachable (%s)"), r.path))
+	case .Auth:       ui.announce(&app.announcer, .Bad, i18n.tr("Authentication refused by the server"))
+	case .Refused:    ui.announce(&app.announcer, .Bad, fmt.tprintf("%s %s: %d %s", r.method, r.path, r.status, message))
+	case .Unreadable: ui.announce(&app.announcer, .Warn, fmt.tprintf(i18n.tr("Unreadable answer (%s)"), r.path))
 	}
 }
 

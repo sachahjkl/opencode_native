@@ -501,7 +501,7 @@ card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: b
 			ui.spacer(ui.px(em * 0.5))
 		}
 		if v.id != "" {
-			if ui.button_icon("###open", "", i18n.tr("Open"), height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { drill_down(app, v.id) }
+			if ui.button("open", i18n.tr("Open"), o = {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true}).clicked { drill_down(app, v.id) }
 			ui.spacer(ui.px(em * 0.2))
 		}
 		glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
@@ -655,7 +655,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 			text("at", clock_text(m.created, app.prefs.clock24), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.5))
 			if m.sub_child != "" {
-				if ui.button_icon("###open", "", i18n.tr("Open"), height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { drill_down(app, m.sub_child) }
+				if ui.button("open", i18n.tr("Open"), o = {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true}).clicked { drill_down(app, m.sub_child) }
 				ui.spacer(ui.px(em * 0.2))
 			}
 			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
@@ -721,7 +721,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 				text("f", facts, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
-			if ui.button_icon("###back", lucide.ARROW_LEFT, i18n.tr("Return to main session")).clicked { go_back(app) }
+			if ui.button("back", i18n.tr("Return to main session"), lucide.ARROW_LEFT).clicked { go_back(app) }
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -745,20 +745,20 @@ subagents_button :: proc(app: ^App, em: f32) {
 	c := &app.chat
 	if len(c.children) == 0 { return }
 	active := active_children(app)
-	key := ui.key_from_string(0, "subagents_menu")
+	key := "subagents_menu"
 	sig: ui.Signal
 	if len(active) > 0 {
 		animate(app)
 		lamp("###sub_lamp", hex(HEX_YELLOW), 1, pulse = true, size = em * 1.0)
 		ui.spacer(ui.px(em * 0.3))
-		sig = ui.button_icon("###subs", lucide.BOT, ui.text_shown(fmt.tprintf(i18n.tr("%d active"), len(active))), height = math.round(em * BUTTON_COMPACT_H_EM))
+		sig = ui.button("subs", ui.text_shown(fmt.tprintf(i18n.tr("%d active"), len(active))), lucide.BOT, {height = math.round(em * BUTTON_COMPACT_H_EM)})
 		ui.spacer(ui.px(em * 0.3))
 		text("of", fmt.tprintf("/ %d", len(c.children)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 	} else {
 		sig = glyph_label_button(app, "###subs", fmt.tprintf(i18n.tr(len(c.children), "%d past sub-agents", "%d past sub-agents"), len(c.children)), em)
 	}
-	if sig.clicked { ui.ctx_menu_open_rect(key, sig.box.rect, sig.box.key) }
-	if ui.ctx_menu(key, em * 32) {
+	if sig.clicked { ui.menu_open(key, sig.box.rect, sig.box.key) }
+	if ui.menu(key, em * 32) {
 		if len(active) > 0 {
 			ui.menu_heading(fmt.tprintf(i18n.tr("Active now (%d)"), len(active)))
 			for s in active {
@@ -772,7 +772,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 		shown := 0
 		for &s in c.children {
 			if app.busy[s.id] or_else false { continue }
-			if shown == FINISHED_SHOWN { ui.menu_item(fmt.tprintf(i18n.tr(len(c.children) - len(active) - shown, "… and %d more", "… and %d more"), len(c.children) - len(active) - shown), enabled = false); break }
+			if shown == FINISHED_SHOWN { ui.menu_item(fmt.tprintf(i18n.tr(len(c.children) - len(active) - shown, "… and %d more", "… and %d more"), len(c.children) - len(active) - shown), disabled = true); break }
 			v := sub_view(app, s.id)
 			mark := "·"
 			#partial switch v.state {

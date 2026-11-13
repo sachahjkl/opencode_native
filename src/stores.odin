@@ -13,6 +13,7 @@
 package ocn
 
 import "base:runtime"
+import "core:fmt"
 import "core:path/filepath"
 import "core:strings"
 import store "gt:store"
@@ -72,7 +73,7 @@ store_failed :: proc(user: rawptr, path: string) {
 @(private = "file")
 store_failed_say :: proc(data: rawptr, word: u64) {
 	name := strings.string_from_ptr((^u8)(data), int(word))
-	ui.toast(.Bad, i18n.tr("%s could not be saved"), name)
+	ui.announce(&the_app.announcer, .Bad, fmt.tprintf(i18n.tr("%s could not be saved"), name))
 	delete(name, runtime.heap_allocator())
 }
 

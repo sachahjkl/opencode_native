@@ -143,7 +143,7 @@ mention_failed :: proc(app: ^App) { mention_hits_clear(&app.composer.mentions) }
 mention_track :: proc(app: ^App) {
 	m := &app.composer.mentions
 	a := &app.composer.area
-	start, query, ok := mention_word(ui.area_string(a), a.cursor)
+	start, query, ok := mention_word(ui.text_edit_string(a), a.cursor)
 	if !ok || a.cursor != a.mark {
 		m.open, m.dismissed = false, nil
 		return
@@ -336,7 +336,7 @@ Files :: struct {
 	fresh:   bool,
 	dir:     string,               // the session's folder (owned)
 	at:      string,               // the folder shown, from it, "": itself (owned)
-	field:   ui.Text_Field,
+	field:   ui.Line_Edit,
 	searching: bool,               // what is read is a search
 	sel:     int,                  // the row the keyboard is on
 	read:    remote.Remote,               // the rows
@@ -366,7 +366,7 @@ files_elsewhere :: proc(f: ^Files) {
 
 files_list :: proc(app: ^App) {
 	f := &app.cx.files
-	word := strings.trim_space(ui.field_string(&f.field))
+	word := strings.trim_space(ui.line_edit_string(&f.field))
 	f.searching = word != ""
 	q := location_query(f.dir)
 	amp := q != "" ? "&" : ""
@@ -386,7 +386,7 @@ files_clear :: proc(f: ^Files) {
 	f.binary, f.size = false, 0
 	remote.reset(&f.file_read)
 	files_elsewhere(f)
-	ui.field_set(&f.field, "")
+	ui.line_edit_set(&f.field, "")
 }
 
 files_open :: proc(app: ^App) {
@@ -473,7 +473,7 @@ files_up :: proc(app: ^App) {
 files_dialog :: proc(app: ^App, em: f32) {
 	f := &app.cx.files
 	if !app.cx.open[.Files] { return }
-	if ui.modal_sized("files", DIALOG_PREFERRED_EM[.Files] * em, &app.cx.dialogs[.Files], &app.cx.open[.Files], DIALOG_MIN_EM[.Files] * em) {
+	if ui.modal("files", &app.cx.open[.Files], dialog_options(app, .Files)) {
 		dialog_backdrop()
 		if ui.dialog_header("fl_head", f.at != "" && !f.searching ? f.at : base_name(f.dir), {close = true}) {
 		}
@@ -501,7 +501,7 @@ file_pick :: proc(app: ^App, r: File_Row) -> bool {
 	path := strings.clone(r.path)   // (of the arena that goes)
 	delete(f.at)
 	f.at = path
-	ui.field_set(&f.field, "")
+	ui.line_edit_set(&f.field, "")
 	files_elsewhere(f)
 	files_list(app)
 	return false
@@ -521,7 +521,7 @@ files_left :: proc(app: ^App, em: f32) {
 		glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.35, font_size = math.round(em * FS_BODY)})
-			res := ui.line_edit("###fl_find", &f.field, i18n.tr("Find a file"))
+			res := ui.line_edit("###fl_find", &f.field, {placeholder = i18n.tr("Find a file")})
 			if f.fresh { ui.set_focus(res.box.key) }
 			if res.changed { files_list(app) }
 			if res.cancelled { app.cx.open[.Files] = false }
@@ -569,11 +569,11 @@ files_right :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###fl_bar") {
 		text("p", f.file, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 		ui.spacer(ui.px(em * 0.5))
-		if ui.button_icon("###fl_copy", lucide.COPY, i18n.tr("Copy path"), height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
+		if ui.button("fl_copy", i18n.tr("Copy path"), lucide.COPY, {height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked {
 			clip_set(fmt.tprintf("%s/%s", strings.trim_right(f.dir, `\/`), f.file))
 		}
 		ui.spacer(ui.px(em * 0.4))
-		if ui.button_icon("###fl_mention", lucide.PENCIL, i18n.tr("Mention in the prompt"), .Primary, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
+		if ui.button("fl_mention", i18n.tr("Mention in the prompt"), lucide.PENCIL, {intent = .Primary, height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked {
 			a := &app.composer.area
 			a.mark = a.cursor
 			mention_put(app, .File, f.file, file_uri(f.dir, f.file), filepath.base(f.file))

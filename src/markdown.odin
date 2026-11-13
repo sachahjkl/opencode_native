@@ -2,6 +2,7 @@
 // does with a link (link_open), a code block (code_block, a mermaid diagram), a table's frame and its copy button.
 package ocn
 
+import "core:fmt"
 import "core:math"
 import "core:strings"
 import "gt:markdown"
@@ -56,7 +57,7 @@ md_table_copy :: proc(user: rawptr, t: ^markdown.Table, source: []string, size: 
 	app := (^App)(user)
 	ui.a11y({role = .Button, name = i18n.tr("Copy the table")})
 	ui.next({width = ui.px(size), height = ui.px(size)})
-	sig := ui.icon_button("copy", lucide.COPY, face = .Raised)
+	sig := ui.button("copy", icon = lucide.COPY, o = {face = .Raised})
 	if sig.clicked {
 		_ = platform.clipboard_set(app.win, {text = strings.join(source, "\n", context.temp_allocator), html = markdown.table_html(t)})
 		ui.announce(&app.announcer, .Good, i18n.tr("Table copied"))
@@ -79,7 +80,7 @@ link_open :: proc(url: string) {
 	if link_allowed(url) {
 		// (what an agent serves here is what the panel is for)
 		if strings.contains(url, "://localhost") || strings.contains(url, "://127.0.0.1") { preview_open(the_app, url) } else { ui.open(url, .Url) }
-	} else { ui.toast(.Warn, i18n.tr("Link not opened: %s"), ellipsize(url, TOAST_TITLE_CHARS)) }
+	} else { ui.announce(&the_app.announcer, .Warn, fmt.tprintf(i18n.tr("Link not opened: %s"), ellipsize(url, TOAST_TITLE_CHARS))) }
 }
 
 // Code in a sunken well, under a header with its language and a copy button. `runs`: the code highlighted (else one run
@@ -97,7 +98,7 @@ code_block :: proc(id: string, lang: string, code: string, mono: Face_Id, table 
 				text("lang", lang != "" ? lang : "text", hex(HEX_FAINT), ui.Style_Mod{font = mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.fill())
 				ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
-				if ui.icon_button("copy", lucide.COPY).clicked {
+				if ui.button("copy", icon = lucide.COPY).clicked {
 					platform.set_clipboard(the_app.win, code)
 					ui.announce(&the_app.announcer, .Good, i18n.tr("Copied"))
 				}

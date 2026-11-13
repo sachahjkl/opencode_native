@@ -65,7 +65,7 @@ missed_bell :: proc(app: ^App, size, em: f32) {
 	n := app.missed.new_here
 	ui.a11y({role = .Button, name = i18n.tr("What you missed")})
 	ui.next({width = ui.px(size), height = ui.px(size), fg = ui.caption_ink(hex(n > 0 ? HEX_WEAK : HEX_FAINT))})
-	sig := ui.icon_button("bell", lucide.BELL)
+	sig := ui.button("bell", icon = lucide.BELL)
 	if app.prefs.notices_badge { ui.badge(sig.box, n) }
 	if sig.clicked { command_run(app, command_find("view.notices")) }
 	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("What you missed  (Ctrl+Shift+N)")) } }
@@ -101,14 +101,14 @@ missed_dialog :: proc(app: ^App, em: f32) {
 	n := len(m.rows)
 	act := Missed_Act.None
 	act_row := -1
-	if ui.modal_sized("notices", DIALOG_PREFERRED_EM[.Notices] * em, &app.cx.dialogs[.Notices], &app.cx.open[.Notices], DIALOG_MIN_EM[.Notices] * em) {
+	if ui.modal("notices", &app.cx.open[.Notices], dialog_options(app, .Notices)) {
 		dialog_backdrop()
 		if ui.dialog_header("mi_head", i18n.tr("What you missed"), {close = true}) {
 			small := math.round(em * BUTTON_SMALL_H_EM)
 			ui.a11y({role = .Button, name = i18n.tr("Acknowledged")})
-			if ui.button_icon("###mi_hist", lucide.HISTORY, i18n.tr("Acknowledged"), height = small, face = m.history ? .Toggled : .Raised, lit = m.history).clicked { m.history = !m.history }
+			if ui.button("mi_hist", i18n.tr("Acknowledged"), lucide.HISTORY, {face = m.history ? .Toggled : .Raised, height = small, lit = m.history}).clicked { m.history = !m.history }
 			ui.spacer(ui.px(em * 0.4))
-			if ui.button_icon("###mi_all", lucide.CHECK, i18n.tr("Acknowledge all"), .Success, height = small).clicked { act = .Acknowledge_All }
+			if ui.button("mi_all", i18n.tr("Acknowledge all"), lucide.CHECK, {intent = .Success, height = small}).clicked { act = .Acknowledge_All }
 		}
 		// the keys: read in the dialog (its scope holds them), over every row, built or not
 		if n > 0 {
@@ -197,7 +197,7 @@ missed_header :: proc(app: ^App, r: ^Missed_Row, k: int, h, em: f32) -> (acknowl
 		}
 		if r.open > 0 {
 			ui.a11y({role = .Button, name = i18n.tr("Acknowledge the session")})
-			acknowledge = ui.button_icon("###ack_g", lucide.CHECK, i18n.tr("Acknowledge"), height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked
+			acknowledge = ui.button("ack_g", i18n.tr("Acknowledge"), lucide.CHECK, {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true}).clicked
 		}
 		ui.spacer(ui.px(em * 0.8))
 	}
@@ -242,10 +242,10 @@ missed_entry_row :: proc(app: ^App, r: ^Missed_Row, k: int, selected: bool, now:
 		ui.spacer(ui.px(em * 0.5))
 		small := math.round(em * BUTTON_SMALL_H_EM)
 		if missed_is_wait(e) && !acked {
-			button = ui.button_icon("###answer", lucide.ARROW_RIGHT, i18n.tr("Answer"), .Primary, height = small, quiet = true).clicked
+			button = ui.button("answer", i18n.tr("Answer"), lucide.ARROW_RIGHT, {intent = .Primary, height = small, quiet = true}).clicked
 		} else if !acked {
 			ui.a11y({role = .Button, name = i18n.tr("Acknowledge")})
-			button = ui.button_icon("###ack", lucide.CHECK, "", height = small, quiet = true, face = .Ghost).clicked
+			button = ui.button("ack", icon = lucide.CHECK, o = {face = .Ghost, height = small, quiet = true}).clicked
 		}
 		ui.spacer(ui.px(em * 0.8))
 	}

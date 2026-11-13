@@ -47,9 +47,9 @@ sidebar :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###side_top") {
 			pad_row(em)
-			if ui.button_icon("###new", lucide.PLUS, i18n.tr("New session"), .Primary, width = ui.fill()).clicked { new_session(app) }
+			if ui.button("new", i18n.tr("New session"), lucide.PLUS, {intent = .Primary, width = ui.fill()}).clicked { new_session(app) }
 			ui.spacer(ui.px(em * 0.45))
-			if ui.button_icon("###refresh", lucide.REFRESH_CW, "").clicked { refresh_sessions(app) }
+			if ui.button("refresh", icon = lucide.REFRESH_CW, o = {face = .Raised}).clicked { refresh_sessions(app) }
 			pad_row(em)
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -63,7 +63,7 @@ sidebar :: proc(app: ^App, em: f32) {
 				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-					ui.line_edit("###search", &app.sidebar.search, i18n.tr("Search sessions"), clearable = true)
+					ui.line_edit("###search", &app.sidebar.search, {placeholder = i18n.tr("Search sessions"), clearable = true})
 				}
 			}
 			pad_row(em)
@@ -94,7 +94,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 		if ui.tags("weak") { ui.label(online(app) ? i18n.tr("Loading…") : i18n.tr("Connecting…")) }
 		return
 	}
-	sections := sidebar_view(app, ui.field_string(&app.sidebar.search), sidebar_hold_wanted(app, ui.parent_box()))
+	sections := sidebar_view(app, ui.line_edit_string(&app.sidebar.search), sidebar_hold_wanted(app, ui.parent_box()))
 	kids := app.sidebar.kept.kids   // (the sub-agents of each session, listed under it unless the list is flat)
 	mode := app.prefs.sidebar_mode
 	now := now_epoch_ms()
@@ -144,7 +144,7 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 	if hs.right_clicked && len(gr.items) > 0 {
 		delete(app.sidebar.menu_project)
 		app.sidebar.menu_project = strings.clone(app.sessions[gr.items[0]].project)
-		ui.ctx_menu_open(ui.key_from_string(0, "project_menu"), ui.mouse_pos(), hdr.key)
+		ui.menu_open("project_menu", ui.mouse_pos(), hdr.key)
 	}
 	if ui.parent(hdr) {
 		ui.spacer(ui.px(em * 0.8))
@@ -163,7 +163,7 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 		// hot over its button)
 		plus_col := hdr.hot_t > FADE_VISIBLE ? hex(HEX_WEAK) : Color{0, 0, 0, 0.001}
 		ui.next({width = ui.px(math.round(em * 1.5)), height = ui.px(math.round(em * 1.5)), fg = plus_col})
-		if ui.icon_button("gadd", lucide.PLUS).clicked {
+		if ui.button("gadd", icon = lucide.PLUS).clicked {
 			new_session(app)
 			delete(app.chat.new_dir, app.chat.alloc)
 			app.chat.new_dir = strings.clone(gr.dir, app.chat.alloc)
@@ -217,7 +217,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 		}
 		if sig.double_clicked { rename_inline(app, s.id, .Side) }
 		if sig.right_clicked {
-			ui.ctx_menu_open(ui.key_from_string(0, "session_menu"), b.rect.min + sig.mouse)
+			ui.menu_open("session_menu", b.rect.min + sig.mouse)
 			delete(app.sidebar.menu_session)
 			app.sidebar.menu_session = strings.clone(s.id)
 		}
@@ -263,7 +263,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				if ui.column(id = "###words") {
 					ui.spacer(ui.fill())
 					title_style.height = ui.px(math.round(em * 1.3))
-					if renaming_at(app, s.id, .Side) { rename_in_place(app, em, title_style.font_size.?, math.round(em * 1.3)) } else { text_found("t", title, ui.field_string(&app.sidebar.search), tcol, title_style, ui.fill()) }
+					if renaming_at(app, s.id, .Side) { rename_in_place(app, em, title_style.font_size.?, math.round(em * 1.3)) } else { text_found("t", title, ui.line_edit_string(&app.sidebar.search), tcol, title_style, ui.fill()) }
 					where_ := s.directory != "" ? base_name(s.directory) : i18n.tr("(no folder)")
 					if session_unseen(app, s) && s.outcome != "succeeded" && s.outcome != "" { where_ = fmt.tprintf("%s · %s", where_, s.outcome) }
 					text("p", ellipsize(where_, SIDE_PROJECT_CHARS), quiet, ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(math.round(em * 1.1))}, ui.fill())
@@ -272,7 +272,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			} else if renaming_at(app, s.id, .Side) {
 				rename_in_place(app, em, title_style.font_size.?, math.round(em * 1.6))
 			} else {
-				text_found("t", title, ui.field_string(&app.sidebar.search), tcol, title_style, ui.fill())
+				text_found("t", title, ui.line_edit_string(&app.sidebar.search), tcol, title_style, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.4))
 			if len(kids) > 0 {
@@ -307,8 +307,8 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 }
 
 session_menu :: proc(app: ^App, em: f32) {
-	key := ui.key_from_string(0, "session_menu")
-	if ui.ctx_menu(key, em * 17) {
+	key := "session_menu"
+	if ui.menu(key, em * 17) {
 		if ui.menu_item(i18n.tr("Open"), icon = lucide.EXTERNAL_LINK).clicked { open_root(app, app.sidebar.menu_session) }
 		if ui.menu_item(i18n.tr("Rename…"), "F2", icon = lucide.PENCIL).clicked { rename_open(app, app.sidebar.menu_session) }
 		if ui.menu_item(i18n.tr("Fork"), icon = lucide.GIT_FORK).clicked { fork_session(app, app.sidebar.menu_session, "") }
@@ -338,7 +338,7 @@ session_menu :: proc(app: ^App, em: f32) {
 
 // A project's menu (a right click on its header in the sidebar).
 project_menu :: proc(app: ^App, em: f32) {
-	if ui.ctx_menu(ui.key_from_string(0, "project_menu"), em * 17) { project_icon_items(app, app.sidebar.menu_project) }
+	if ui.menu("project_menu", em * 17) { project_icon_items(app, app.sidebar.menu_project) }
 }
 
 delete_dialog :: proc(app: ^App, em: f32) {

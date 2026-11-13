@@ -131,7 +131,7 @@ commands_keys :: proc(app: ^App) {
 // - Changes: its state machine (Changes_State) says whether it is on screen; a bool beside it could disagree with it.
 // - Output: the view shown is the dialog's subject; nil is its being closed.
 // - Setup: the toolkit's setup.Dialog keeps its own `open` (gt:setup opens and closes it).
-// - the toolkit's menus (ui.ctx_menu), which the toolkit's state holds.
+// - the toolkit's menus (ui.menu), which the toolkit's state holds.
 overlay_open :: proc(app: ^App) -> bool {
 	return app.cx.open != {} || changes_shown(&app.cx.changes) || app.cx.outputs.shown != nil || app.setup.open || len(app.state.menus) > 0
 }
@@ -144,7 +144,7 @@ content_zoom :: proc(app: ^App) -> f32 { return zoom_of(&app.session_zooms, app.
 content_zoom_set :: proc(app: ^App, z: f32) {
 	zoom := clamp(z, CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX)
 	if app.chat.id == "" {
-		pref_set(app, "appearance.content_zoom", fmt.tprintf("%.3f", zoom))
+		pref_set_float(app, "appearance.content_zoom", zoom)
 		return
 	}
 	zoom_keep(&app.session_zooms, &app.stores.session_zooms, app.chat.id, zoom, app.prefs.content_zoom)
@@ -182,7 +182,7 @@ content_zoom_events :: proc(app: ^App, events: []platform.Event) {
 
 // The keys of the table as a dialog: what can be done, by group.
 help_dialog :: proc(app: ^App, em: f32) {
-	if ui.modal_sized("help", DIALOG_PREFERRED_EM[.Help] * em, &app.cx.dialogs[.Help], &app.cx.open[.Help], DIALOG_MIN_EM[.Help] * em) {
+	if ui.modal("help", &app.cx.open[.Help], dialog_options(app, .Help)) {
 		dialog_backdrop()
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###help_scroll") {

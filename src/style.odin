@@ -229,11 +229,11 @@ draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, h
 	ui.machined_bevel(dc, r, drawn ? radius_asked : radius_asked * corners(), base, hot, pressed, glow)
 }
 
-// ui.hint_action in this program's hints' face: small, in `face` (the mono face for keys) when given. True when clicked.
+// A Link button (ui.button) in this program's hints' face: small, in `face` (the mono face for keys) when given. True when clicked.
 hint_action :: proc(id, label: string, em: f32, face: font.Font_Id = 0, icon := "", intent := ui.Intent.Neutral) -> bool {
 	m := ui.Style_Mod{font_size = math.round(em * (face != 0 ? FS_CAPTION : FS_SMALL))}
 	if face != 0 { m.font = face }
-	if ui.style(m) { return ui.hint_action(id, label, icon, intent = intent).clicked }
+	if ui.style(m) { return ui.button(id, label, icon, {intent = intent, face = .Link}).clicked }
 	return false
 }
 

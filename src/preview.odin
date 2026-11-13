@@ -50,7 +50,7 @@ VK_F1 :: 0x70
 // A page of a session's browser.
 Preview_Tab :: struct {
 	id:       string,             // what the agents call it: the same for its whole life (owned)
-	field:    ui.Text_Field,      // the address
+	field:    ui.Line_Edit,      // the address
 	url:      string,             // what the page shows (owned)
 	title:    string,             // (owned)
 	navs:     [dynamic]u64,       // the navigations under way: one can begin before the last ends
@@ -125,7 +125,7 @@ strip_end :: proc(user: rawptr, d: ^ui.Dock, leaf: i32) {
 	if p := panel_in_front(app, leaf); p != 0 {
 		ui.a11y({role = .Button, name = i18n.tr("Open in a window")})
 		ui.next({width = ui.px(math.round(em * TERM_NEW_EM)), height = ui.px(math.round(em * TERM_NEW_EM))})
-		if ui.icon_button("panel_win", lucide.APP_WINDOW).clicked { panel_detach(app, p) }
+		if ui.button("panel_win", icon = lucide.APP_WINDOW).clicked { panel_detach(app, p) }
 	}
 	terminal_strip_end(app, d, leaf, em)
 }
@@ -235,9 +235,9 @@ BROWSE_URL :: "https://opencode.ai/extensions/browse"
 
 preview_missing :: proc() {
 	when ODIN_OS == .Linux {
-		ui.toast_action(.Info, proc(_: rawptr) { ui.open(BROWSE_URL, .Url) }, nil, i18n.tr("No Preview panel on Linux: let agents use your own browser with OpenCode Browse. Click to see it"))
+		ui.announce(&the_app.announcer, .Info, i18n.tr("No Preview panel on Linux: let agents use your own browser with OpenCode Browse. Click to see it"), action = proc(_: rawptr) { ui.open(BROWSE_URL, .Url) }, user = nil)
 	} else {
-		ui.toast(.Warn, i18n.tr("The Preview panel needs the WebView2 runtime"))
+		ui.announce(&the_app.announcer, .Warn, i18n.tr("The Preview panel needs the WebView2 runtime"))
 	}
 }
 
@@ -276,7 +276,7 @@ preview_open :: proc(app: ^App, url: string, by := Asked_By.User) {
 preview_go :: proc(app: ^App, t: ^Preview_Tab, url: string) {
 	if preview_tab_shown(app, t) { ui.dock_activate(&app.dock, u32(Panel.Preview)) }
 	web_navigate(app, t, url)
-	ui.field_set(&t.field, url)
+	ui.line_edit_set(&t.field, url)
 }
 
 preview_loading :: proc(t: ^Preview_Tab) -> bool { return len(t.navs) > 0 }
@@ -382,7 +382,7 @@ reveal_path :: proc(path: string) { ui.open(path, .Reveal) }
 
 // The system's terminal, in a session's folder (desktop.open_terminal: $TERMINAL or a common one; Windows Terminal).
 terminal_open :: proc(dir: string) {
-	if dir == "" || !desktop.open_terminal(dir) { ui.toast(.Warn, i18n.tr("No terminal could be started in that folder")) }
+	if dir == "" || !desktop.open_terminal(dir) { ui.announce(&the_app.announcer, .Warn, i18n.tr("No terminal could be started in that folder")) }
 }
 
 // What the address bar was given: an address, a host, or a file.
@@ -407,7 +407,7 @@ preview_state :: proc(app: ^App) -> ^ui.State {
 preview_set_url :: proc(app: ^App, t: ^Preview_Tab, url: string) {
 	delete(t.url)
 	t.url = strings.clone(url)
-	if !preview_tab_shown(app, t) || ui.focus_key_of(preview_state(app)) != app.preview.addr_key { ui.field_set(&t.field, url) }
+	if !preview_tab_shown(app, t) || ui.focus_key_of(preview_state(app)) != app.preview.addr_key { ui.line_edit_set(&t.field, url) }
 }
 
 preview_set_title :: proc(t: ^Preview_Tab, title: string) {
@@ -438,7 +438,7 @@ preview_strip :: proc(app: ^App, p: ^Preview, em: f32) {
 				text("t", ellipsize(title, PREVIEW_TAB_TITLE_MOST), col, ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 				ui.a11y({role = .Button, name = i18n.tr("Close this tab")})
 				ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM * 0.75)), height = ui.px(math.round(em * GLYPH_BUTTON_EM * 0.75))})
-				if ui.icon_button("pv_tab_x", lucide.X).clicked { p.due_close = t }
+				if ui.button("pv_tab_x", icon = lucide.X).clicked { p.due_close = t }
 				ui.spacer(ui.px(em * 0.25))
 			}
 		}
@@ -479,29 +479,29 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 		ui.spacer(ui.px(em * 0.4))
 		size := math.round(em * GLYPH_BUTTON_EM)
 		ui.next({width = ui.px(size), height = ui.px(size)})
-		if ui.icon_button("pv_back", lucide.ARROW_LEFT).clicked { web_act(t, .Back) }
+		if ui.button("pv_back", icon = lucide.ARROW_LEFT).clicked { web_act(t, .Back) }
 		ui.next({width = ui.px(size), height = ui.px(size)})
-		if ui.icon_button("pv_fwd", lucide.CHEVRON_RIGHT).clicked { web_act(t, .Forward) }
+		if ui.button("pv_fwd", icon = lucide.CHEVRON_RIGHT).clicked { web_act(t, .Forward) }
 		ui.next({width = ui.px(size), height = ui.px(size)})
-		if ui.icon_button("pv_reload", preview_loading(t) ? lucide.X : lucide.REFRESH_CW).clicked { web_act(t, preview_loading(t) ? .Stop : .Reload) }
+		if ui.button("pv_reload", icon = preview_loading(t) ? lucide.X : lucide.REFRESH_CW).clicked { web_act(t, preview_loading(t) ? .Stop : .Reload) }
 		ui.spacer(ui.px(em * 0.35))
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), axis = .X, cross = .Center})
 		if ui.well("###pv_addr", .X) {
 			ui.spacer(ui.px(em * 0.4))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3, font = app.mono, font_size = math.round(em * FS_SMALL)})
-				res := ui.line_edit("###pv_url", &t.field, i18n.tr("localhost:3000 or an address"))
+				res := ui.line_edit("###pv_url", &t.field, {placeholder = i18n.tr("localhost:3000 or an address")})
 				p.addr_key = res.box.key
 				if t.focus_address { ui.set_focus(res.box.key); t.focus_address = false }
-				if res.committed { preview_commit(app, t, ui.field_string(&t.field)) }
+				if res.committed { preview_commit(app, t, ui.line_edit_string(&t.field)) }
 			}
 		}
 		ui.spacer(ui.px(em * 0.35))
 		ui.a11y({role = .Button, name = i18n.tr("New browser tab")})
 		ui.next({width = ui.px(size), height = ui.px(size)})
-		if ui.icon_button("pv_new", lucide.PLUS).clicked { p.due_new = true }
+		if ui.button("pv_new", icon = lucide.PLUS).clicked { p.due_new = true }
 		ui.next({width = ui.px(size), height = ui.px(size)})
-		if ui.icon_button("pv_out", lucide.GLOBE).clicked && t.url != "" { ui.open(t.url, .Url) }
+		if ui.button("pv_out", icon = lucide.GLOBE).clicked && t.url != "" { ui.open(t.url, .Url) }
 		ui.spacer(ui.px(em * 0.4))
 	}
 	edge_line("###pv_edge")
@@ -536,7 +536,7 @@ preview_panel :: proc(app: ^App, em: f32) {
 				text("m", msg, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 				if failed {
 					ui.spacer(ui.px(em * 0.5))
-					if ui.button_icon("###pv_again", lucide.REFRESH_CW, i18n.tr("Try again"), height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { web_start(app, t) }
+					if ui.button("pv_again", i18n.tr("Try again"), lucide.REFRESH_CW, {height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { web_start(app, t) }
 				}
 				ui.spacer(ui.fill())
 			}

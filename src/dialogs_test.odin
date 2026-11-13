@@ -269,7 +269,7 @@ looking_while_it_goes_back_keeps_the_prompt_for_the_composer :: proc(t: ^testing
 	testing.expect(t, !changes_shown(c), "closed at once")
 	changes_open(app, "s")
 	bench_answer(app, bench_take(t, .Revert_Done), 200, "")
-	testing.expect_value(t, ui.area_string(&app.composer.area), "the prompt")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "the prompt")
 	testing.expect(t, state_is(c, Changes_Closed))
 }
 
@@ -557,7 +557,7 @@ what_is_late_for_an_attempt_says_nothing_of_the_next :: proc(t: ^testing.T) {
 
 	connect_cancel(app)
 	n.step = Connect_Fill{1}
-	ui.field_set(&n.key, "k")
+	ui.line_edit_set(&n.key, "k")
 	connect_send(app, &n.list[0], &n.list[0].methods[1], 1)
 	key := bench_take(t, .Connected)
 	connect_cancel(app)
@@ -610,7 +610,7 @@ a_code_goes_once_and_a_refusal_gives_it_back :: proc(t: ^testing.T) {
 	testing.expect_value(t, bench_count(.Connect_Status), 0)
 	connect_finish(app)
 	testing.expect_value(t, n.failed, "The code is empty")
-	ui.field_set(&n.code, "ABCD")
+	ui.line_edit_set(&n.code, "ABCD")
 	connect_finish(app)
 	connect_finish(app)
 	testing.expect_value(t, bench_count(.Connected), 1)
@@ -620,11 +620,11 @@ a_code_goes_once_and_a_refusal_gives_it_back :: proc(t: ^testing.T) {
 	bench_answer(app, r, 400, `{"message":"wrong code"}`)
 	testing.expect(t, step_is(n, Connect_Waiting))
 	testing.expect_value(t, n.failed, "wrong code")
-	testing.expect_value(t, ui.field_string(&n.code), "ABCD")
+	testing.expect_value(t, ui.line_edit_string(&n.code), "ABCD")
 	connect_finish(app)
 	bench_answer(app, bench_take(t, .Connected), 200, "")
 	testing.expect(t, step_is(n, Connect_Choose))
-	testing.expect_value(t, ui.field_string(&n.code), "")
+	testing.expect_value(t, ui.line_edit_string(&n.code), "")
 }
 
 @(test)
@@ -634,9 +634,9 @@ what_a_way_of_connecting_asked_goes_with_the_attempt :: proc(t: ^testing.T) {
 	n := connections_read(app, t)
 	n.step = Connect_Fill{0}
 	f := n.list[0].methods[0].form
-	ui.field_set(&f.fields[0].text, "typed.example")
+	ui.line_edit_set(&f.fields[0].text, "typed.example")
 	connect_cancel(app)
-	testing.expect_value(t, ui.field_string(&f.fields[0].text), "a.example")
+	testing.expect_value(t, ui.line_edit_string(&f.fields[0].text), "a.example")
 }
 
 // What is filled in stays in front of the reader: the list comes after.
@@ -773,8 +773,8 @@ a_status_it_does_not_know_is_neither_paused_nor_resumed :: proc(t: ^testing.T) {
 
 @(private = "file")
 schedule_typed :: proc(s: ^Schedules, prompt: string) {
-	ui.field_set(&s.prompt, prompt)
-	ui.field_set(&s.value, "2 hours")
+	ui.line_edit_set(&s.prompt, prompt)
+	ui.line_edit_set(&s.value, "2 hours")
 }
 
 @(test)
@@ -789,7 +789,7 @@ a_second_enter_plans_nothing_more :: proc(t: ^testing.T) {
 	schedule_submit(app)
 	testing.expect_value(t, bench_count(.Schedule_Made), 1)
 	bench_answer(app, bench_take(t, .Schedule_Made), 200, `{"data":{}}`)
-	testing.expect_value(t, ui.field_string(&s.prompt), "")
+	testing.expect_value(t, ui.line_edit_string(&s.prompt), "")
 	testing.expect_value(t, bench_count(.Schedules), 1)
 
 	// refused: what was typed stays, the words are the server's, and it can be sent again
@@ -797,12 +797,12 @@ a_second_enter_plans_nothing_more :: proc(t: ^testing.T) {
 	schedule_submit(app)
 	bench_answer(app, bench_take(t, .Schedule_Made), 400, `{"message":"Invalid duration"}`)
 	testing.expect_value(t, s.making.message, "Invalid duration")
-	testing.expect_value(t, ui.field_string(&s.prompt), "again")
+	testing.expect_value(t, ui.line_edit_string(&s.prompt), "again")
 	schedule_submit(app)
 	testing.expect_value(t, bench_count(.Schedule_Made), 1)
 	bench_lost(app, bench_take(t, .Schedule_Made))
 	testing.expect_value(t, s.making.state, remote.State.Failed)
-	testing.expect_value(t, ui.field_string(&s.prompt), "again")
+	testing.expect_value(t, ui.line_edit_string(&s.prompt), "again")
 }
 
 @(test)
@@ -815,10 +815,10 @@ what_a_session_answers_leaves_what_was_typed_for_another :: proc(t: ^testing.T) 
 	schedule_submit(app)
 	made := bench_take(t, .Schedule_Made)
 	schedules_open(app, "b")
-	testing.expect_value(t, ui.field_string(&s.prompt), "")   // (it would go to b)
+	testing.expect_value(t, ui.line_edit_string(&s.prompt), "")   // (it would go to b)
 	schedule_typed(s, "for b")
 	bench_answer(app, made, 200, `{"data":{}}`)
-	testing.expect_value(t, ui.field_string(&s.prompt), "for b")
+	testing.expect_value(t, ui.line_edit_string(&s.prompt), "for b")
 	schedule_submit(app)
 	testing.expect(t, strings.contains(bench_take(t, .Schedule_Made).body, `"sessionID":"b"`))
 }
@@ -832,7 +832,7 @@ what_was_typed_stays_for_its_session :: proc(t: ^testing.T) {
 	schedule_typed(s, "kept")
 	app.cx.open[.Schedules] = false
 	schedules_open(app, "a")
-	testing.expect_value(t, ui.field_string(&s.prompt), "kept")
+	testing.expect_value(t, ui.line_edit_string(&s.prompt), "kept")
 }
 
 @(test)
@@ -954,12 +954,12 @@ a_search_given_up_does_not_answer_for_the_folder :: proc(t: ^testing.T) {
 	f := &app.cx.files
 	files_open(app)
 	bench_answer(app, bench_take(t, .Files_List), 200, ROWS)
-	ui.field_set(&f.field, "x")
+	ui.line_edit_set(&f.field, "x")
 	files_list(app)
 	testing.expect(t, f.searching)
 	testing.expect(t, remote.shows(&f.read), "what was there stays while one types")
 	search := bench_take(t, .Files_List)
-	ui.field_set(&f.field, "")
+	ui.line_edit_set(&f.field, "")
 	files_list(app)
 	bench_answer(app, search, 200, `{"data":[{"path":"found/x.txt","type":"file"}]}`)
 	testing.expect_value(t, len(f.rows), 2)
@@ -1024,7 +1024,7 @@ a_binary_file_says_so :: proc(t: ^testing.T) {
 
 @(private = "file")
 typed :: proc(app: ^App, text: string) {
-	ui.area_set(&app.composer.area, text)
+	ui.text_edit_set(&app.composer.area, text)
 	app.composer.area.cursor, app.composer.area.mark = len(text), len(text)
 	app.composer.focused = true
 }
@@ -1389,7 +1389,7 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	testing.expect(t, !cx.open[.Schedules])
 	testing.expect_value(t, s.session, "")
 	testing.expect_value(t, len(s.list), 0)
-	testing.expect_value(t, ui.field_string(&s.prompt), "")
+	testing.expect_value(t, ui.line_edit_string(&s.prompt), "")
 	testing.expect_value(t, s.read.state, remote.State.Idle)
 	testing.expect_value(t, s.making.state, remote.State.Idle)
 	testing.expect(t, !cx.no_schedules && !cx.no_artifacts)

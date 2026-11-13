@@ -174,7 +174,7 @@ servers_saved :: proc(data: rawptr, word: u64) {
 	defer servers_save_free(job)
 	app := job.app
 	if job.failed != "" {
-		ui.toast(.Bad, i18n.tr("The password of %s could not be protected: the list of servers was not saved"), label_safe(job.failed))
+		ui.announce(&app.announcer, .Bad, fmt.tprintf(i18n.tr("The password of %s could not be protected: the list of servers was not saved"), label_safe(job.failed)))
 		return
 	}
 	store.replace(&app.stores.servers, job.entries[:])
@@ -303,7 +303,7 @@ server_connect_now :: proc(app: ^App, i: int) {
 	s := app.servers[i]
 	h: Http
 	if !http_init(&h, s.url, "opencode", s.password) {
-		ui.toast(.Bad, i18n.tr("No HTTP client for %s"), s.url)
+		ui.announce(&app.announcer, .Bad, fmt.tprintf(i18n.tr("No HTTP client for %s"), s.url))
 		delete(h.base)
 		return
 	}
@@ -417,9 +417,9 @@ threads_stop :: proc(app: ^App) {
 
 Server_Edit :: struct {
 	index:    int,          // the server edited (-1: a new one)
-	name:     ui.Text_Field,
-	url:      ui.Text_Field,
-	password: ui.Text_Field,
+	name:     ui.Line_Edit,
+	url:      ui.Line_Edit,
+	password: ui.Line_Edit,
 	password_shown: bool,   // the password's eye: shown as text
 }
 
@@ -430,18 +430,18 @@ server_edit_open :: proc(app: ^App, i: int) {
 	e.index = i
 	if i >= 0 {
 		s := app.servers[i]
-		ui.field_set(&e.name, s.name)
-		ui.field_set(&e.url, s.url)
-		ui.field_set(&e.password, s.password)
+		ui.line_edit_set(&e.name, s.name)
+		ui.line_edit_set(&e.url, s.url)
+		ui.line_edit_set(&e.password, s.password)
 	} else {
-		ui.field_set(&e.name, "")
-		ui.field_set(&e.url, "")
-		ui.field_set(&e.password, "")
+		ui.line_edit_set(&e.name, "")
+		ui.line_edit_set(&e.url, "")
+		ui.line_edit_set(&e.password, "")
 	}
 }
 
-server_menu :: proc(app: ^App, key: ui.Key, em: f32) {
-	if ui.ctx_menu(key, em * 26) {
+server_menu :: proc(app: ^App, key: string, em: f32) {
+	if ui.menu(key, em * 26) {
 		for s, i in app.servers {
 			label := fmt.tprintf("%s   %s###srv%d", label_safe(i18n.tr(s.name)), label_safe(s.url), i)
 			if ui.menu_item(label, "", i == app.server, icon = lucide.SERVER).clicked && i != app.server { server_connect(app, i) }
@@ -449,7 +449,7 @@ server_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 		ui.menu_separator()
 		if ui.menu_item(i18n.tr("Add a server…"), icon = lucide.PLUG).clicked { server_edit_open(app, -1) }
 		cur := app.server >= 0 && app.server < len(app.servers) ? app.servers[app.server] : Server{local = true}
-		if ui.menu_item(i18n.tr("Edit this server…"), icon = lucide.PENCIL, enabled = !cur.local && !cur.argv).clicked { server_edit_open(app, app.server) }
+		if ui.menu_item(i18n.tr("Edit this server…"), icon = lucide.PENCIL, disabled = cur.local || cur.argv).clicked { server_edit_open(app, app.server) }
 	}
 }
 
@@ -457,12 +457,12 @@ SERVER_DIALOG_TOP :: 0.2   // of the window's height
 
 server_dialog :: proc(app: ^App, em: f32) {
 	e := &app.server_edit
-	if ui.modal("server", em * 32, &app.cx.open[.Server], SERVER_DIALOG_TOP) {
+	if ui.modal("server", &app.cx.open[.Server], {width_em = 32, top = SERVER_DIALOG_TOP}) {
 		dialog_backdrop()
 		pad :: proc(em: f32) { ui.spacer(ui.px(em * DIALOG_MARGIN_EM)) }
 		if ui.dialog_header("sv_head", e.index >= 0 ? i18n.tr("Edit the server") : i18n.tr("Add a server"), {icon = lucide.GLOBE, close = true}) {}
 		ui.spacer(ui.px(em * 0.9))
-		field :: proc(id, label, hint: string, f: ^ui.Text_Field, em: f32, secret := false, reveal: ^bool = nil) -> ui.Edit_Result {
+		field :: proc(id, label, hint: string, f: ^ui.Line_Edit, em: f32, secret := false, reveal: ^bool = nil) -> ui.Edit_Result {
 			res: ui.Edit_Result
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = id) {
@@ -472,7 +472,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 				if ui.well("###w", .X) {
 					if ui.tags("bare") {
 						ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.5})
-						res = ui.line_edit("###e", f, hint, secret = secret, reveal = reveal)
+						res = ui.line_edit("###e", f, {placeholder = hint, kind = secret ? .Secret : .Plain, reveal = reveal})
 					}
 				}
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
@@ -501,8 +501,8 @@ server_dialog :: proc(app: ^App, em: f32) {
 			}
 		}
 		ui.spacer(ui.px(em * 1.1))
-		name := strings.trim_space(ui.field_string(&e.name))
-		url := strings.trim_space(ui.field_string(&e.url))
+		name := strings.trim_space(ui.line_edit_string(&e.name))
+		url := strings.trim_space(ui.line_edit_string(&e.url))
 		taken := false
 		for s, i in app.servers { if s.name == name && i != e.index { taken = true } }
 		valid := name != "" && url != "" && !taken
@@ -511,20 +511,20 @@ server_dialog :: proc(app: ^App, em: f32) {
 		if ui.row(.Center) {
 			pad(em)
 			if e.index >= 0 {
-				if ui.button_icon("###rm", lucide.TRASH_2, i18n.tr("Remove"), .Danger).clicked {
+				if ui.button("rm", i18n.tr("Remove"), lucide.TRASH_2, {intent = .Danger}).clicked {
 					server_remove(app, e.index)
 					app.cx.open[.Server] = false
 				}
 			}
 			ui.spacer(ui.fill())
 			if taken { text("tk", i18n.tr("That name is taken"), hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
-			if ui.button_icon("###cancel", "", i18n.tr("Cancel"), .Cancel).clicked { app.cx.open[.Server] = false }
+			if ui.button("cancel", i18n.tr("Cancel"), o = {intent = .Cancel}).clicked { app.cx.open[.Server] = false }
 			ui.spacer(ui.px(em * 0.5))
-			if ui.button_icon("###ok", lucide.CHECK, ui.text_shown(e.index >= 0 ? i18n.tr("Save and connect") : i18n.tr("Add and connect")), .Success, disabled = !valid).clicked { save = true }
+			if ui.button("ok", ui.text_shown(e.index >= 0 ? i18n.tr("Save and connect") : i18n.tr("Add and connect")), lucide.CHECK, {intent = .Success, disabled = !valid}).clicked { save = true }
 			pad(em)
 		}
 		if save && valid {
-			s := Server{name = strings.clone(name), url = strings.clone(server_normalize(url)), password = strings.clone(ui.field_string(&e.password))}
+			s := Server{name = strings.clone(name), url = strings.clone(server_normalize(url)), password = strings.clone(ui.line_edit_string(&e.password))}
 			i := e.index
 			forget := ""   // (after the save: what was under the old name goes once it is safe under the new one)
 			if i >= 0 {

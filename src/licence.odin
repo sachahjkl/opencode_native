@@ -22,7 +22,7 @@ Licence_View :: struct {
 	status:  licence.Status,      // the last read (heap)
 	read:    bool,                // a status was read once
 	busy:    bool,                // a task on the store is on its way
-	key:     ui.Text_Field,       // a key pasted
+	key:     ui.Line_Edit,       // a key pasted
 	problem: string,              // what the last install said (a constant; "": nothing)
 }
 
@@ -78,7 +78,7 @@ licence_run :: proc(app: ^App, act: Licence_Act, text := "") {
 		case (j.act == .Install || j.act == .Install_File) && j.err != .None:
 			l.problem = licence.error_text(j.err)
 		case j.act == .Install || j.act == .Install_File:
-			ui.field_wipe(&l.key)
+			ui.line_edit_wipe(&l.key)
 			ui.announce(&j.app.announcer, .Good, i18n.tr("Thank you: the licence is registered"))
 		case j.act == .Remove:
 			ui.announce(&j.app.announcer, .Good, i18n.tr("The licence was removed"))
@@ -102,7 +102,7 @@ licence_section :: proc(app: ^App, em: f32) {
 		edition := licence.edition_title(product.LICENCE, st.licence.edition)
 		info_line(app, "###lic_who", fmt.tprintf(i18n.tr("Registered to %s (%s). Thank you for supporting %s."), st.licence.name, edition, APP_NAME), em)
 		ui.spacer(ui.px(em * 0.5))
-		if ui.button_icon("###lic_remove", lucide.TRASH_2, i18n.tr("Remove the licence"), .Danger, face = .Ghost, disabled = l.busy).clicked { licence_run(app, .Remove) }
+		if ui.button("lic_remove", i18n.tr("Remove the licence"), lucide.TRASH_2, {intent = .Danger, face = .Ghost, disabled = l.busy}).clicked { licence_run(app, .Remove) }
 		return
 	}
 	info_line(app, "###lic_none", fmt.tprintf(i18n.tr("Unregistered: %s works the same. A licence supports its work."), APP_NAME), em)
@@ -112,12 +112,12 @@ licence_section :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###lic_row") {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM))})
-		res := ui.line_edit("###lic_key", &l.key, i18n.tr("Paste a licence key"))
+		res := ui.line_edit("###lic_key", &l.key, {placeholder = i18n.tr("Paste a licence key")})
 		ui.spacer(ui.px(em * 0.5))
-		key := strings.trim_space(ui.field_string(&l.key))
-		if (ui.button_icon("###lic_reg", lucide.CHECK, i18n.tr("Register"), .Success, disabled = key == "" || l.busy).clicked || res.committed) && key != "" { licence_run(app, .Install, key) }
+		key := strings.trim_space(ui.line_edit_string(&l.key))
+		if (ui.button("lic_reg", i18n.tr("Register"), lucide.CHECK, {intent = .Success, disabled = key == "" || l.busy}).clicked || res.committed) && key != "" { licence_run(app, .Install, key) }
 		ui.spacer(ui.px(em * 0.4))
-		if ui.button_icon("###lic_file", lucide.FILE, i18n.tr("Choose a file…"), disabled = l.busy).clicked {
+		if ui.button("lic_file", i18n.tr("Choose a file…"), lucide.FILE, {disabled = l.busy}).clicked {
 			ui.file_dialog(&app.state, .Open, licence.file_dialog(product.LICENCE, i18n.tr("Choose a licence file"), i18n.tr("opencode native licence")), proc(r: platform.Dialog_Result, user: rawptr) {
 				if r.status != .Chosen || len(r.paths) == 0 { return }
 				licence_install_file((^App)(user), r.paths[0])

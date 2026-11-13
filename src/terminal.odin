@@ -1136,12 +1136,12 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 		text("w", words, hex(t.link == .Closed ? HEX_WEAK : HEX_YELLOW), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		h := math.round(em * BUTTON_COMPACT_H_EM)
 		if t.link == .Closed {
-			if ui.button_icon("###term_restart", lucide.REFRESH_CW, i18n.tr("Restart"), height = h, disabled = s.made.state == .Loading).clicked { term_restart(app, t) }
+			if ui.button("term_restart", i18n.tr("Restart"), lucide.REFRESH_CW, {height = h, disabled = s.made.state == .Loading}).clicked { term_restart(app, t) }
 		} else if t.given_up {
-			if ui.button_icon("###term_again", lucide.REFRESH_CW, i18n.tr("Reconnect"), height = h).clicked { term_reconnect(app, t) }
+			if ui.button("term_again", i18n.tr("Reconnect"), lucide.REFRESH_CW, {height = h}).clicked { term_reconnect(app, t) }
 		}
 		ui.spacer(ui.px(em * 0.3))
-		if ui.button_icon("###term_close", lucide.X, i18n.tr("Close"), height = h, face = .Ghost).clicked { s.close_due = t.panel }
+		if ui.button("term_close", i18n.tr("Close"), lucide.X, {face = .Ghost, height = h}).clicked { s.close_due = t.panel }
 		ui.spacer(ui.px(em * 0.6))
 	}
 }
@@ -1164,28 +1164,28 @@ terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
 	term.build(&t.view, term_style(app, em), term_takes_focus(s, t, ui.focus_key()))
 	if text, ok := ui.paste_answer(t.view.box); ok { term.paste(&t.view, text) }
 	t.shown = true
-	menu := ui.key_from_string(t.view.box, "term_menu")
-	if s.menu_for == t { ui.ctx_menu_open(menu, s.menu_at); s.menu_for = nil }
-	if ui.ctx_menu(menu, em * TERM_MENU_EM) { term_menu(app, t) }
+	menu := fmt.tprintf("term_menu_%x", u64(t.view.box))
+	if s.menu_for == t { ui.menu_open(menu, s.menu_at); s.menu_for = nil }
+	if ui.menu(menu, em * TERM_MENU_EM) { term_menu(app, t) }
 }
 
 // What a right click on a shell's grid offers: its selection, what the clipboard holds, the whole screen; a command's output, all of it.
 @(private = "file")
 term_menu :: proc(app: ^App, t: ^Term) {
 	v := &t.view
-	if ui.menu_item(i18n.tr("Copy"), v.read_only ? "Ctrl+C" : "Ctrl+Shift+C", icon = lucide.COPY, enabled = term.has_selection(v)).clicked {
+	if ui.menu_item(i18n.tr("Copy"), v.read_only ? "Ctrl+C" : "Ctrl+Shift+C", icon = lucide.COPY, disabled = !term.has_selection(v)).clicked {
 		clip_set(term.selection_text(v))
 	}
 	if !v.read_only && ui.menu_item(i18n.tr("Paste"), "Ctrl+Shift+V", icon = lucide.CLIPBOARD_PASTE).clicked { term_paste(app, t) }
-	if ui.menu_item(i18n.tr("Select all"), icon = lucide.TEXT_CURSOR_INPUT, enabled = t.vt != nil).clicked { term.select_all(v) }
+	if ui.menu_item(i18n.tr("Select all"), icon = lucide.TEXT_CURSOR_INPUT, disabled = t.vt == nil).clicked { term.select_all(v) }
 	ui.menu_separator()
 	if ui.menu_item(i18n.tr("Zoom in"), "Ctrl+=", icon = lucide.PLUS).clicked { term_zoom_set(app, t, v.zoom * term.ZOOM_STEP) }
 	if ui.menu_item(i18n.tr("Zoom out"), "Ctrl+-", icon = lucide.CHEVRON_DOWN).clicked { term_zoom_set(app, t, v.zoom / term.ZOOM_STEP) }
 	reset := v.zoom != 1 ? fmt.tprintf(i18n.tr("Reset the zoom (%d%%)"), int(math.round(v.zoom * 100))) : i18n.tr("Reset the zoom")
-	if ui.menu_item(reset, "Ctrl+0", icon = lucide.UNDO_2, enabled = v.zoom != 1).clicked { term_zoom_set(app, t, 1) }
+	if ui.menu_item(reset, "Ctrl+0", icon = lucide.UNDO_2, disabled = v.zoom == 1).clicked { term_zoom_set(app, t, 1) }
 	if o := output_view_of_term(app, t); o != nil {
 		ui.menu_separator()
-		if ui.menu_item(i18n.tr("Copy all the output"), icon = lucide.COPY, enabled = len(o.raw) > 0).clicked { clip_set(plain_output(string(o.raw[:]))) }
+		if ui.menu_item(i18n.tr("Copy all the output"), icon = lucide.COPY, disabled = len(o.raw) == 0).clicked { clip_set(plain_output(string(o.raw[:]))) }
 	}
 }
 
@@ -1216,7 +1216,7 @@ terminal_strip_end :: proc(app: ^App, d: ^ui.Dock, leaf: i32, em: f32) {
 	if any == nil && !stand_in { return }
 	ui.a11y({role = .Button, name = i18n.tr("New terminal")})
 	ui.next({width = ui.px(math.round(em * TERM_NEW_EM)), height = ui.px(math.round(em * TERM_NEW_EM))})
-	if ui.icon_button("term_new", lucide.PLUS).clicked {
+	if ui.button("term_new", icon = lucide.PLUS).clicked {
 		if any != nil { s.last_panel = any.panel }   // (in this stack, whichever had the keyboard)
 		term_create(app)
 	}

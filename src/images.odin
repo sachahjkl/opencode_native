@@ -177,8 +177,8 @@ image_decoded :: proc(data: rawptr, word: u64) {
 	if job.copy {
 		pixels := platform.Clipboard_Image{rgba = job.out.ptr[:job.out.len], size = {int(job.w), int(job.h)}}
 		switch {
-		case !job.ok || job.w == 0 || job.h == 0: ui.toast(.Bad, i18n.tr("The image could not be copied: it is unreadable"))
-		case !platform.clipboard_set_image(app.win, pixels): ui.toast(.Bad, i18n.tr("The image could not be copied"))
+		case !job.ok || job.w == 0 || job.h == 0: ui.announce(&app.announcer, .Bad, i18n.tr("The image could not be copied: it is unreadable"))
+		case !platform.clipboard_set_image(app.win, pixels): ui.announce(&app.announcer, .Bad, i18n.tr("The image could not be copied"))
 		case: ui.announce(&app.announcer, .Good, i18n.tr("Image copied"))
 		}
 		return
@@ -328,7 +328,7 @@ logo_of :: proc(app: ^App, id: string, ref: ^Image_Ref, size: f32) -> bool {
 // --image=<file>: the viewer opens on a file, once decoded.
 image_view_start :: proc(app: ^App, path: string) {
 	data, err := os.read_entire_file(path, context.allocator)
-	if err != nil { ui.toast(.Bad, fmt.tprintf(i18n.tr("Cannot read %s"), path)); return }
+	if err != nil { ui.announce(&app.announcer, .Bad, fmt.tprintf(i18n.tr("Cannot read %s"), path)); return }
 	app.viewer.start = image_ref(string(data), .Bytes, "image", strings.clone(filepath.base(path)))
 }
 
@@ -344,7 +344,7 @@ image_view_wait :: proc(app: ^App) {
 	if s != nil && s.state == .Ready {
 		image_view_open(app, app.viewer.start)
 	} else {
-		ui.toast(.Bad, "%s: %s", app.viewer.start.name, s != nil ? image_failed_words(s) : i18n.tr("image unreadable: the file is empty"))
+		ui.announce(&app.announcer, .Bad, fmt.tprintf("%s: %s", app.viewer.start.name, s != nil ? image_failed_words(s) : i18n.tr("image unreadable: the file is empty")))
 	}
 	app.viewer.start.key = 0
 }
@@ -429,7 +429,7 @@ view_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	draw.push_clip(dc, r)
 	lo, hi := c - d.size * 0.5, c + d.size * 0.5
 	if d.doc != nil {
-		bold := ui.styled_face_of(&the_app.state, the_app.font, true, false)
+		bold := ui.styled_face(the_app.font, true, false)
 		svg.draw_doc(dc, d.doc, lo, d.size.x / max(d.doc.view[2], 1), {regular = the_app.font, bold = bold})
 	} else {
 		draw.image(dc, d.tex, {{math.round(lo.x), math.round(lo.y)}, {math.round(hi.x), math.round(hi.y)}})
@@ -467,7 +467,7 @@ view_zoom_to :: proc(app: ^App, zoom, max_zoom: f32, at: [2]f32) {
 @(private = "file")
 image_viewer_wait :: proc(app: ^App, em: f32) {
 	animate(app)
-	if ui.modal("image_view", em * 12, &app.cx.open[.Viewer]) {
+	if ui.modal("image_view", &app.cx.open[.Viewer], {width_em = 12}) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
@@ -504,11 +504,12 @@ image_viewer :: proc(app: ^App, em: f32) {
 	f := viewer_frame(source, room, chrome, sc, app.prefs.viewer_scale, math.round(em * VIEWER_MIN_W_EM), app.viewer.grown || diagram)
 	view := f.picture
 	max_zoom := max(1, VIEW_NATIVE_MAX * sc / f.fit)
-	// (the dialog's size in logical pixels, as modal_sized keeps it: its grips write it)
-	asked := f.panel / sc
+	// (the dialog's size in ems, as ui.modal keeps it: its grips write it)
+	asked := f.panel / em
 	size := asked
 	closing := false
-	if ui.modal_sized("image_view", viewer_frame(source, room, chrome, sc, 1, math.round(em * VIEWER_MIN_W_EM)).panel, &size, &app.cx.open[.Viewer]) {
+	natural := viewer_frame(source, room, chrome, sc, 1, math.round(em * VIEWER_MIN_W_EM)).panel / em
+	if ui.modal("image_view", &app.cx.open[.Viewer], {width_em = natural.x, height_em = natural.y, size = &size}) {
 		dialog_backdrop()
 		// a press around the picture closes the viewer, as one outside the dialog does (the buttons and the grips are over it)
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
@@ -566,27 +567,26 @@ image_viewer :: proc(app: ^App, em: f32) {
 				text("d", dims, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.8))
 				bh := math.round(em * BUTTON_SMALL_H_EM)
-				if ui.button_icon("###zoom_out", "", "−", height = bh).clicked { view_zoom_to(app, app.viewer.zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
+				if ui.button("zoom_out", "−", o = {height = bh}).clicked { view_zoom_to(app, app.viewer.zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
 				ui.spacer(ui.px(em * 0.3))
-				if ui.button_icon("###zoom_in", "", "+", height = bh).clicked { view_zoom_to(app, app.viewer.zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
+				if ui.button("zoom_in", "+", o = {height = bh}).clicked { view_zoom_to(app, app.viewer.zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
 				ui.spacer(ui.px(em * 0.3))
-				if ui.button_icon("###zoom_fit", "", i18n.tr("Fit"), height = bh).clicked { app.viewer.zoom, app.viewer.pan = 1, {} }
+				if ui.button("zoom_fit", i18n.tr("Fit"), o = {height = bh}).clicked { app.viewer.zoom, app.viewer.pan = 1, {} }
 				ui.spacer(ui.px(em * 0.8))
-				if ui.button_icon("###close", lucide.X, i18n.tr("Close"), height = bh).clicked { app.cx.open[.Viewer] = false }
+				if ui.button("close", i18n.tr("Close"), lucide.X, {height = bh}).clicked { app.cx.open[.Viewer] = false }
 				ui.spacer(ui.px(em))
 			}
 		}
 	}
 	// (a press that closes the menu over the viewer is the menu's)
-	if closing && !ui.ctx_menu_any_open() { app.cx.open[.Viewer] = false }
-	viewer_resized(app, size, asked, f)
+	if closing && !ui.menu_any_open() { app.cx.open[.Viewer] = false }
+	viewer_resized(app, size, asked, f, em)
 }
 
 // The grips of the dialog moved (or a double click on one sent it back to its size): the picture takes the new size, its shape kept, and
 // the size chosen is saved once the pointer lets go.
 @(private = "file")
-viewer_resized :: proc(app: ^App, size, asked: [2]f32, f: Viewer_Frame) {
-	sc := ui.scale()
+viewer_resized :: proc(app: ^App, size, asked: [2]f32, f: Viewer_Frame, em: f32) {
 	switch {
 	case size == {}:
 		app.prefs.viewer_scale = 1
@@ -597,11 +597,11 @@ viewer_resized :: proc(app: ^App, size, asked: [2]f32, f: Viewer_Frame) {
 		if app.viewer.resize_from == {} { app.viewer.resize_from = {asked.x, asked.y, f.picture.x / f.full.x} }
 		app.viewer.grown = true
 		from := app.viewer.resize_from
-		app.prefs.viewer_scale = viewer_scale_of((size - from.xy) * sc, f.full, from.z)
+		app.prefs.viewer_scale = viewer_scale_of((size - from.xy) * em, f.full, from.z)
 	}
 	if ui.active_key() != 0 { return }
 	app.viewer.resize_from = {}
 	if abs(f64(app.prefs.viewer_scale) - config.float_of(&app.cfg_prefs, "conversation.image_viewer_size")) > SLIDER_EPSILON {
-		pref_set(app, "conversation.image_viewer_size", fmt.tprintf("%.3f", app.prefs.viewer_scale))
+		pref_set_float(app, "conversation.image_viewer_size", app.prefs.viewer_scale)
 	}
 }

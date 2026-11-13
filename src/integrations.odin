@@ -59,16 +59,16 @@ Integrations :: struct {
 	list:     [dynamic]Integration,
 	arena:    virtual.Arena,
 	dirty:    bool,              // changed on the server while something was being filled in
-	search:   ui.Text_Field,
+	search:   ui.Line_Edit,
 	shown:    string,            // the integration open (owned, "": the list)
 	step:     Connect_Step,
 	sending:  remote.Remote,            // what Sending and Finishing wait for: its ticket ties the answer to this attempt
 	poll:     remote.Remote,            // the status of a login under way
-	key, label, code: ui.Text_Field,
+	key, label, code: ui.Line_Edit,
 	key_shown: bool,             // the key's eye: shown as text
 	failed:   string,            // why it did not work (owned)
 	renaming: string,            // the connection whose label is edited (owned)
-	rename:   ui.Text_Field,
+	rename:   ui.Line_Edit,
 	removing: string,            // the connection asked about (owned)
 }
 
@@ -174,8 +174,8 @@ integrations_forget :: proc(app: ^App) {
 	connect_cancel(app)
 	integrations_free(n)
 	set_text(&n.shown, ""); set_text(&n.failed, ""); set_text(&n.renaming, ""); set_text(&n.removing, "")
-	ui.field_set(&n.search, "")
-	ui.field_set(&n.rename, "")
+	ui.line_edit_set(&n.search, "")
+	ui.line_edit_set(&n.rename, "")
 	remote.reset(&n.read)
 	remote.reset(&n.active)
 }
@@ -200,10 +200,10 @@ waiting_free :: proc(w: Connect_Waiting) { delete(w.attempt); delete(w.url); del
 @(private = "file")
 connect_reset :: proc(app: ^App) {
 	n := &app.cx.integrations
-	ui.field_set(&n.key, "")
+	ui.line_edit_set(&n.key, "")
 	n.key_shown = false
-	ui.field_set(&n.code, "")
-	ui.field_set(&n.label, "")
+	ui.line_edit_set(&n.code, "")
+	ui.line_edit_set(&n.label, "")
 	if it := integration_find(n, n.shown); it != nil {
 		for m in it.methods { if m.form != nil { form_reset(m.form) } }
 	}
@@ -245,9 +245,9 @@ connect_extra :: proc(form: ^Form_Req, label: string) -> (extra, problem: string
 // (`method`: `m`'s place in the integration.)
 connect_send :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int) {
 	n := &app.cx.integrations
-	extra, problem := connect_extra(m.form, ui.field_string(&n.label))
+	extra, problem := connect_extra(m.form, ui.line_edit_string(&n.label))
 	if problem != "" { set_text(&n.failed, problem); return }
-	key := strings.trim_space(ui.field_string(&n.key))
+	key := strings.trim_space(ui.line_edit_string(&n.key))
 	if m.kind == .Key && key == "" { set_text(&n.failed, i18n.tr("The key is empty")); return }
 	set_text(&n.failed, "")
 	base := fmt.tprintf("/api/integration/%s/connect", url_escape(it.id))
@@ -256,7 +256,7 @@ connect_send :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int) {
 	switch m.kind {
 	case .Key:
 		request(app, .Connected, "POST", fmt.tprintf("%s/key", base), fmt.tprintf(`{{"key":%s,%s}}`, jquote(key), extra), reading = &n.sending)
-		ui.field_set(&n.key, "")
+		ui.line_edit_set(&n.key, "")
 	case .External:
 		request(app, .Connected, "POST", fmt.tprintf("%s/external", base), fmt.tprintf(`{{"methodID":%s,%s}}`, jquote(m.id), extra), reading = &n.sending)
 	case .Oauth:
@@ -264,7 +264,7 @@ connect_send :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int) {
 		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/oauth", base), fmt.tprintf(`{{"methodID":%s,%s}}`, jquote(m.id), extra), reading = &n.sending)
 	case .Command:
 		kind = "command"
-		trimmed := strings.trim_space(ui.field_string(&n.label))
+		trimmed := strings.trim_space(ui.line_edit_string(&n.label))
 		label := trimmed != "" ? fmt.tprintf(`,"label":%s`, jquote(trimmed)) : ""
 		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/command", base), fmt.tprintf(`{{"methodID":%s%s}}`, jquote(m.id), label), reading = &n.sending)
 	case .Env:
@@ -372,7 +372,7 @@ connect_finish :: proc(app: ^App) {
 	n := &app.cx.integrations
 	w, waiting := n.step.(Connect_Waiting)
 	if !waiting { return }
-	code := strings.trim_space(ui.field_string(&n.code))
+	code := strings.trim_space(ui.line_edit_string(&n.code))
 	if code == "" { set_text(&n.failed, i18n.tr("The code is empty")); return }
 	set_text(&n.failed, "")
 	n.step = Connect_Finishing{wait = w}
@@ -387,14 +387,14 @@ integrations_watch :: proc(app: ^App) {
 }
 
 @(private = "file")
-line :: proc(id: string, f: ^ui.Text_Field, hint: string, em: f32, secret := false, reveal: ^bool = nil) -> ui.Edit_Result {
+line :: proc(id: string, f: ^ui.Line_Edit, hint: string, em: f32, secret := false, reveal: ^bool = nil) -> ui.Edit_Result {
 	res: ui.Edit_Result
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
 	if ui.well(fmt.tprintf("%s_w", id), .X) {
 		ui.spacer(ui.px(em * 0.5))
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-			res = ui.line_edit(id, f, hint, secret = secret, reveal = reveal)
+			res = ui.line_edit(id, f, {placeholder = hint, kind = secret ? .Secret : .Plain, reveal = reveal})
 		}
 		ui.spacer(ui.px(em * 0.5))
 	}
@@ -422,7 +422,7 @@ page_connections :: proc(app: ^App, em: f32) {
 	ui.spacer(ui.px(em * 0.5))
 	line("###int_find", &n.search, i18n.tr("Find an integration"), em)
 	ui.spacer(ui.px(em * 0.5))
-	word := strings.trim_space(ui.field_string(&n.search))
+	word := strings.trim_space(ui.line_edit_string(&n.search))
 	shown, hidden := 0, 0
 	for &it in n.list {
 		if word != "" {
@@ -463,7 +463,7 @@ integration_row :: proc(app: ^App, it: ^Integration, k: int, em: f32) {
 integration_page :: proc(app: ^App, it: ^Integration, em: f32) {
 	n := &app.cx.integrations
 	small := math.round(em * BUTTON_COMPACT_H_EM)
-	if ui.button_icon("###int_back", lucide.ARROW_LEFT, i18n.tr("All connections"), height = small, face = .Ghost).clicked {
+	if ui.button("int_back", i18n.tr("All connections"), lucide.ARROW_LEFT, {face = .Ghost, height = small}).clicked {
 		connect_cancel(app)
 		set_text(&n.shown, "")
 		set_text(&n.failed, "")
@@ -482,7 +482,7 @@ integration_page :: proc(app: ^App, it: ^Integration, em: f32) {
 				info_line(app, fmt.tprintf("###int_env%d", i), fmt.tprintf(i18n.tr("Or set %s where the server runs."), strings.join(m.names, i18n.tr(" or "), context.temp_allocator)), em)
 				continue
 			}
-			if ui.button_icon(fmt.tprintf("###int_m%d", i), lucide.PLUS, ui.text_shown(label_safe(method_title(&m))), width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true).clicked {
+			if ui.button(fmt.tprintf("int_m%d", i), ui.text_shown(label_safe(method_title(&m))), lucide.PLUS, {width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true}).clicked {
 				n.step = Connect_Fill{i}
 				set_text(&n.failed, "")
 			}
@@ -508,7 +508,7 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 			res := line("###int_rename", &n.rename, i18n.tr("A name"), em)
 			ui.set_focus(res.box.key)
 			if res.committed {
-				request(app, .Credential_Done, "PATCH", fmt.tprintf("/api/credential/%s", url_escape(c.id)), fmt.tprintf(`{{"label":%s}}`, jquote(strings.trim_space(ui.field_string(&n.rename)))))
+				request(app, .Credential_Done, "PATCH", fmt.tprintf("/api/credential/%s", url_escape(c.id)), fmt.tprintf(`{{"label":%s}}`, jquote(strings.trim_space(ui.line_edit_string(&n.rename)))))
 				set_text(&n.renaming, "")
 			}
 			if res.cancelled { set_text(&n.renaming, "") }
@@ -520,29 +520,29 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 			if c.id == n.removing {
 				text("q", i18n.tr("Remove it?"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)})
 				ui.spacer(ui.px(em * 0.4))
-				if ui.button_icon("###int_yes", lucide.TRASH_2, i18n.tr("Remove"), .Danger, height = small).clicked {
+				if ui.button("int_yes", i18n.tr("Remove"), lucide.TRASH_2, {intent = .Danger, height = small}).clicked {
 					request(app, .Credential_Done, "DELETE", fmt.tprintf("/api/credential/%s", url_escape(c.id)))
 					set_text(&n.removing, "")
 				}
 				ui.spacer(ui.px(em * 0.3))
-				if ui.button_icon("###int_no", "", i18n.tr("Keep"), .Cancel, height = small).clicked { set_text(&n.removing, "") }
+				if ui.button("int_no", i18n.tr("Keep"), o = {intent = .Cancel, height = small}).clicked { set_text(&n.removing, "") }
 			} else {
-				if !c.active && ui.button_icon("###int_use", "", i18n.tr("Use"), .Success, height = small).clicked {
+				if !c.active && ui.button("int_use", i18n.tr("Use"), o = {intent = .Success, height = small}).clicked {
 					request(app, .Credential_Done, "POST", fmt.tprintf("/api/credential/%s/activate", url_escape(c.id)))
 				}
 				ui.spacer(ui.px(em * 0.3))
-				if ui.button_icon("###int_ren", lucide.PENCIL, i18n.tr("Rename"), height = small, face = .Ghost).clicked {
+				if ui.button("int_ren", i18n.tr("Rename"), lucide.PENCIL, {face = .Ghost, height = small}).clicked {
 					set_text(&n.renaming, c.id)
-					ui.field_set(&n.rename, c.label)
+					ui.line_edit_set(&n.rename, c.label)
 				}
 				ui.spacer(ui.px(em * 0.3))
-				if ui.button_icon("###int_rem", lucide.TRASH_2, i18n.tr("Remove"), .Danger, height = small, face = .Ghost).clicked { set_text(&n.removing, c.id) }
+				if ui.button("int_rem", i18n.tr("Remove"), lucide.TRASH_2, {intent = .Danger, face = .Ghost, height = small}).clicked { set_text(&n.removing, c.id) }
 			}
 		}
 	}
 	if c.needs_auth {
 		info_line(app, fmt.tprintf("###intm%d", i), c.message != "" ? c.message : i18n.tr("It must sign in again."), em, hex(HEX_YELLOW))
-		if c.url != "" && ui.button_icon(fmt.tprintf("###into%d", i), lucide.GLOBE, i18n.tr("Open"), height = small).clicked { ui.open(c.url, .Url) }
+		if c.url != "" && ui.button(fmt.tprintf("into%d", i), i18n.tr("Open"), lucide.GLOBE, {height = small}).clicked { ui.open(c.url, .Url) }
 	}
 	ui.spacer(ui.px(em * 0.25))
 }
@@ -579,14 +579,14 @@ connect_fill :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int, e
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###int_foot") {
 		ui.spacer(ui.fill())
-		if ui.button_icon("###int_cancel", "", i18n.tr("Cancel"), .Cancel).clicked {
+		if ui.button("int_cancel", i18n.tr("Cancel"), o = {intent = .Cancel}).clicked {
 			set_text(&n.failed, "")
 			connect_cancel(app)
 			return
 		}
 		ui.spacer(ui.px(em * 0.4))
 		_, sending := n.step.(Connect_Sending)
-		if ui.button_icon("###int_go", lucide.CHECK, ui.text_shown(sending ? i18n.tr("Connecting…") : m.kind == .Oauth ? i18n.tr("Continue in the browser") : i18n.tr("Connect")), .Success, disabled = sending).clicked { go = true }
+		if ui.button("int_go", ui.text_shown(sending ? i18n.tr("Connecting…") : m.kind == .Oauth ? i18n.tr("Continue in the browser") : i18n.tr("Connect")), lucide.CHECK, {intent = .Success, disabled = sending}).clicked { go = true }
 	}
 	if _, filling := n.step.(Connect_Fill); go && filling { connect_send(app, it, m, method) }
 }
@@ -617,20 +617,20 @@ connect_wait :: proc(app: ^App, em: f32) {
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###int_wfoot") {
-		if w.url != "" && ui.button_icon("###int_open", lucide.GLOBE, i18n.tr("Open again")).clicked { ui.open(w.url, .Url) }
+		if w.url != "" && ui.button("int_open", i18n.tr("Open again"), lucide.GLOBE).clicked { ui.open(w.url, .Url) }
 		if w.instructions != "" {
 			ui.spacer(ui.px(em * 0.4))
-			if ui.button_icon("###int_copy", lucide.COPY, i18n.tr("Copy")).clicked { clip_set(w.instructions) }
+			if ui.button("int_copy", i18n.tr("Copy"), lucide.COPY).clicked { clip_set(w.instructions) }
 		}
 		ui.spacer(ui.fill())
-		if ui.button_icon("###int_stop", "", i18n.tr("Cancel"), .Cancel).clicked {
+		if ui.button("int_stop", i18n.tr("Cancel"), o = {intent = .Cancel}).clicked {
 			set_text(&n.failed, "")
 			connect_cancel(app)
 			return
 		}
 		if w.by_code {
 			ui.spacer(ui.px(em * 0.4))
-			if ui.button_icon("###int_finish", lucide.CHECK, ui.text_shown(finishing ? i18n.tr("Finishing…") : i18n.tr("Finish")), .Success, disabled = finishing).clicked { finish = true }
+			if ui.button("int_finish", ui.text_shown(finishing ? i18n.tr("Finishing…") : i18n.tr("Finish")), lucide.CHECK, {intent = .Success, disabled = finishing}).clicked { finish = true }
 		}
 	}
 	if finish { connect_finish(app) }

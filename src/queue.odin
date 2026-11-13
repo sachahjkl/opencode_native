@@ -133,7 +133,7 @@ queue_gone :: proc(app: ^App, id: string, delivered: bool, at: Seq) {
 	if id == "" { return }
 	if q.edit.id == id {
 		queue_edit_end(app, .Lost)
-		ui.toast(.Warn, delivered ? i18n.tr("That message was delivered meanwhile: what you wrote stays in the composer") : i18n.tr("That message is no longer waiting: what you wrote stays in the composer"))
+		ui.announce(&app.announcer, .Warn, delivered ? i18n.tr("That message was delivered meanwhile: what you wrote stays in the composer") : i18n.tr("That message is no longer waiting: what you wrote stays in the composer"))
 	}
 	for it, i in q.items {
 		if it.id == id { item_free(it); ordered_remove(&q.items, i); break }
@@ -180,7 +180,7 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: Seq) {
 		if newer(old.born, asked_at) { append(&next, old); continue }
 		if q.edit.id == old.id {
 			queue_edit_end(app, .Lost)
-			ui.toast(.Warn, i18n.tr("That message is no longer waiting: what you wrote stays in the composer"))
+			ui.announce(&app.announcer, .Warn, i18n.tr("That message is no longer waiting: what you wrote stays in the composer"))
 		}
 		item_free(old)
 	}
@@ -305,7 +305,7 @@ queue_edit :: proc(app: ^App, id: string) {
 	it = queue_find(app, id)
 	e := &q.edit
 	e.id = strings.clone(id)
-	e.draft = strings.clone(ui.area_string(&app.composer.area))
+	e.draft = strings.clone(ui.text_edit_string(&app.composer.area))
 	append(&e.files, ..app.composer.attachments[:])
 	clear(&app.composer.attachments)
 	append(&e.mentions, ..app.composer.mentions.chosen[:])
@@ -313,7 +313,7 @@ queue_edit :: proc(app: ^App, id: string) {
 	v := json_of_own(app, "queued payload", it.payload)
 	body := json_of_own(app, "queued prompt", prompt_of_payload(v))
 	prompt_parts(body, &app.composer.attachments, &app.composer.mentions.chosen)
-	ui.area_set(&app.composer.area, it.text)
+	ui.text_edit_set(&app.composer.area, it.text)
 	app.composer.focus_next = true
 	activity_close(app)
 }
@@ -325,7 +325,7 @@ queue_edit_end :: proc(app: ^App, how: Edit_End) {
 		for a in app.composer.attachments { delete(a.name); delete(a.uri) }
 		clear(&app.composer.attachments)
 		mentions_clear(app)
-		ui.area_set(&app.composer.area, "")
+		ui.text_edit_set(&app.composer.area, "")
 	}
 	prompt_restore(app, e.draft)
 	append(&app.composer.attachments, ..e.files[:])
@@ -344,7 +344,7 @@ queue_edit_commit :: proc(app: ^App, text: string) {
 	if it == nil { queue_edit_end(app, .Lost); return }
 	it.act = .Replacing
 	outgoing_replace(app, text, it.id, it.delivery == .Queue ? `,"delivery":"queue","resume":false` : `,"delivery":"steer"`)
-	ui.area_set(&app.composer.area, "")
+	ui.text_edit_set(&app.composer.area, "")
 	queue_edit_end(app, .Done)
 }
 
@@ -377,7 +377,7 @@ queue_action :: proc(id, label, icon: string, wide: bool, em: f32, intent := ui.
 	ink := Color{}
 	if intent != .Neutral { _, ink, _ = intent_colors(intent) }
 	ui.next({width = ui.px(math.round(em * QUEUE_GLYPH_EM)), height = ui.px(math.round(em * QUEUE_GLYPH_EM)), fg = ink})
-	return ui.icon_button(strings.trim_prefix(id, "###"), icon).clicked   // (its name alone: icon_button adds the ###)
+	return ui.button(id, icon = icon).clicked
 }
 
 @(private = "file")

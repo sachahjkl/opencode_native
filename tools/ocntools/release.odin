@@ -85,7 +85,7 @@ release_publish :: proc(tag, folder: string) -> int {
 	append(&files, ..programs[:])
 	append(&files, "SHA256SUMS.txt")
 	append(&files, ..manifests[:])
-	in_folder := toolbox.Run{dir = folder, echo = true}
+	in_folder := toolbox.Run_Options{dir = folder, echo = true}
 	if _, code := toolbox.capture({"gh", "release", "view", tag}); code == 0 {
 		cmd := make([dynamic]string, context.temp_allocator)
 		append(&cmd, "gh", "release", "upload", tag)

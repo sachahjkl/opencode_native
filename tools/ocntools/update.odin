@@ -12,6 +12,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:time"
+import signing "gt:signing"
 import update "gt:update"
 import ocn_update "../../src/update"
 
@@ -36,7 +37,7 @@ in_git_tree :: proc(path: string) -> bool {
 seed_of_env :: proc() -> (seed: [32]byte, ok: bool) {
 	text := os.get_env(KEY_ENV, context.temp_allocator)
 	if text == "" { fmt.eprintfln("update: no update key: set %s", KEY_ENV); return }
-	seed, ok = update.seed_decode(text)
+	seed, ok = signing.key_decode(text)
 	if !ok { fmt.eprintfln("update: %s is not an update private key (32 bytes of base64url)", KEY_ENV) }
 	return
 }
@@ -53,8 +54,8 @@ keygen :: proc(path: string) -> int {
 	if os.exists(path) { fmt.eprintfln("update: %s exists already: a second key would orphan the releases signed with the first", path); return 1 }
 	seed: [32]byte
 	crypto.rand_bytes(seed[:])
-	text := update.seed_encode(seed[:], context.temp_allocator)
-	pub, _ := update.public_key_of(seed[:], context.temp_allocator)
+	text := signing.key_encode(seed[:], context.temp_allocator)
+	pub, _ := signing.public_key_of(seed[:], context.temp_allocator)
 	if os.write_entire_file(path, transmute([]u8)text) != nil { fmt.eprintfln("update: cannot write %s", path); return 1 }
 	fmt.printfln("%s", pub)   // (the public half only: the private one stays in the file)
 	return 0
@@ -70,7 +71,7 @@ manifest :: proc(exe, version, channel, out: string) -> int {
 	if platform == "" { fmt.eprintfln("update: %s is not named as the program of a release of %s", exe, version); return 1 }
 	data, err := os.read_entire_file(exe, context.allocator)
 	if err != nil { fmt.eprintfln("update: cannot read %s", exe); return 1 }
-	m := update.manifest_of(ocn_update.PRODUCT, data, version, platform, channel, today(), context.temp_allocator)
+	m := update.manifest_of(ocn_update.PRODUCT, data, {version = version, platform = platform, channel = channel, published = today()}, context.temp_allocator)
 	bytes := update.manifest_bytes(ocn_update.PRODUCT, m)
 	sig, signed := update.sign(ocn_update.PRODUCT, seed[:], bytes, context.temp_allocator)
 	if !signed { fmt.eprintln("update: cannot sign"); return 1 }
@@ -89,7 +90,7 @@ verify :: proc(file, channel: string) -> int {
 	platform := ""
 	for p in update.PLATFORMS { if filepath.base(file) == update.manifest_name(p, channel, context.temp_allocator) { platform = p } }
 	if platform == "" { fmt.eprintfln("update: %s is not named update-<platform>-<channel>.json for that channel", file); return 1 }
-	m, err := update.verify(ocn_update.PRODUCT, data, string(sig), platform, channel, context.temp_allocator)
+	m, err := update.verify(ocn_update.PRODUCT, data, string(sig), {platform = platform, channel = channel}, context.temp_allocator)
 	if err != .None { fmt.eprintln(update.error_text(err)); return 1 }
 	fmt.printfln("good: %s %s %s", m.channel, m.version, m.file)
 	return 0
@@ -103,7 +104,7 @@ run_update :: proc(args: []string) -> int {
 	case what == "pubkey" && len(args) == 1:
 		seed, ok := seed_of_env()
 		if !ok { return 1 }
-		pub, _ := update.public_key_of(seed[:], context.temp_allocator)
+		pub, _ := signing.public_key_of(seed[:], context.temp_allocator)
 		fmt.println(pub)
 		return 0
 	case what == "manifest" && len(args) == 5:

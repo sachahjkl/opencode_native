@@ -50,7 +50,7 @@ ctx_open :: proc(app: ^App, kind: Ctx_Kind, msg := "", part := 0, image := Image
 	delete(app.ctx_menu.target.msg)
 	image_ref_delete(&app.ctx_menu.target.image)
 	app.ctx_menu.target = {kind = kind, msg = strings.clone(msg), part = part, image = image_ref_clone(image)}
-	ui.ctx_menu_open(ui.key_from_string(0, CTX_MENU_KEY), ui.mouse_pos())
+	ui.menu_open(CTX_MENU_KEY, ui.mouse_pos())
 }
 
 @(private = "file")
@@ -132,35 +132,35 @@ message_menu :: proc(app: ^App, m: ^Message) {
 	case .User:
 		if ui.menu_item(i18n.tr("Copy"), "", icon = lucide.COPY).clicked { copied(m.text, i18n.tr("Prompt copied")) }
 		if ui.menu_item(i18n.tr("Edit in the composer"), icon = lucide.PENCIL).clicked {
-			ui.area_set(&app.composer.area, m.text)
+			ui.text_edit_set(&app.composer.area, m.text)
 			app.composer.focus_next = true
 		}
 		ui.menu_separator()
 		fork_item(app, m)
 		if ui.menu_item(i18n.tr("What this prompt changed"), icon = lucide.FILE).clicked { changes_open(app, app.chat.id, m.id) }
-		if ui.menu_item(i18n.tr("Go back to here…"), icon = lucide.UNDO_2, enabled = !app.chat.busy).clicked { revert_stage(app, app.chat.id, m.id, m.text) }
+		if ui.menu_item(i18n.tr("Go back to here…"), icon = lucide.UNDO_2, disabled = app.chat.busy).clicked { revert_stage(app, app.chat.id, m.id, m.text) }
 	case .Assistant:
 		t := answer_text(m)
-		if ui.menu_item(i18n.tr("Copy the answer"), icon = lucide.COPY, enabled = t != "").clicked { copied(t, i18n.tr("Answer copied")) }
+		if ui.menu_item(i18n.tr("Copy the answer"), icon = lucide.COPY, disabled = t == "").clicked { copied(t, i18n.tr("Answer copied")) }
 		if url := first_url(t); url != "" {
 			if ui.menu_item(i18n.tr("Open the link"), icon = lucide.GLOBE).clicked { preview_open(app, url) }
 		}
 		ui.menu_separator()
 		fork_item(app, m)
 	case .Synthetic, .Shell:
-		if ui.menu_item(i18n.tr("Copy"), icon = lucide.COPY, enabled = m.text != "").clicked { copied(m.text, i18n.tr("Text copied")) }
+		if ui.menu_item(i18n.tr("Copy"), icon = lucide.COPY, disabled = m.text == "").clicked { copied(m.text, i18n.tr("Text copied")) }
 		if m.shell_id != "" { if ui.menu_item(i18n.tr("Inspect the output"), icon = lucide.SQUARE_TERMINAL).clicked { output_view_open_shell(app, m.shell_id, m.text, chat_dir(app)) } }
 		ui.menu_separator()
 		fork_item(app, m)
 	case .Compaction, .Idle, .Switch, .Other:
-		if ui.menu_item(i18n.tr("Copy"), icon = lucide.COPY, enabled = m.text != "").clicked { copied(m.text, i18n.tr("Text copied")) }
+		if ui.menu_item(i18n.tr("Copy"), icon = lucide.COPY, disabled = m.text == "").clicked { copied(m.text, i18n.tr("Text copied")) }
 	}
 }
 
 // (`m` holds the call: most of an answer at work is its tool calls, and a press on one comes here.)
 @(private = "file")
 tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
-	if ui.menu_item(i18n.tr("Copy the output"), icon = lucide.COPY, enabled = p.output != "").clicked { copied(p.output, i18n.tr("Output copied")) }
+	if ui.menu_item(i18n.tr("Copy the output"), icon = lucide.COPY, disabled = p.output == "").clicked { copied(p.output, i18n.tr("Output copied")) }
 	if p.patch != "" { if ui.menu_item(i18n.tr("Copy the diff"), icon = lucide.COPY).clicked { copied(p.patch, i18n.tr("Diff copied")) } }
 	if c := p.command; c != "" {
 		if ui.menu_item(i18n.tr("Copy the command"), icon = lucide.SQUARE_TERMINAL).clicked { copied(c, i18n.tr("Command copied")) }
@@ -172,7 +172,7 @@ tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
 		if ui.menu_item(i18n.tr("Copy the path"), icon = lucide.FILE).clicked { copied(path, i18n.tr("Path copied")) }
 		if ui.menu_item(i18n.tr("Show in the folder"), icon = lucide.FOLDER).clicked { reveal_path(path) }
 	}
-	if ui.menu_item(i18n.tr("Copy the input"), icon = lucide.COPY, enabled = p.input != "").clicked { copied(p.input, i18n.tr("Input copied")) }
+	if ui.menu_item(i18n.tr("Copy the input"), icon = lucide.COPY, disabled = p.input == "").clicked { copied(p.input, i18n.tr("Input copied")) }
 	if url := first_url(p.output); url != "" {
 		ui.menu_separator()
 		if ui.menu_item(i18n.tr("Open the link"), icon = lucide.GLOBE).clicked { preview_open(app, url) }
@@ -185,13 +185,13 @@ tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
 context_menu :: proc(app: ^App, em: f32) {
 	app.ctx_menu.taken = false
 	quote_chip(app, em)
-	key := ui.key_from_string(0, CTX_MENU_KEY)
+	key := CTX_MENU_KEY
 	// (the composer's is a text field's: the toolkit's, on its area)
 	if app.ctx_menu.target.kind == .Composer {
-		ui.field_menu(key, &app.composer.area, app.composer.edit_key)
+		ui.edit_menu(key, &app.composer.area, app.composer.edit_key)
 		return
 	}
-	if ui.ctx_menu(key) {
+	if ui.menu(key) {
 		switch app.ctx_menu.target.kind {
 		case .None, .Composer:
 		case .Message:
@@ -226,12 +226,12 @@ quote_text :: proc(app: ^App, text: string, comment: bool) {
 	t := strings.trim_space(text)
 	if t == "" { return }
 	b := strings.builder_make(context.temp_allocator)
-	had := strings.trim_space(ui.area_string(&app.composer.area))
+	had := strings.trim_space(ui.text_edit_string(&app.composer.area))
 	if had != "" { fmt.sbprintf(&b, "%s\n\n", had) }
 	rest := t
 	for line in strings.split_lines_iterator(&rest) { fmt.sbprintf(&b, "> %s\n", strings.trim_right_space(line)) }
 	strings.write_byte(&b, '\n')
-	ui.area_set(&app.composer.area, strings.to_string(b))
+	ui.text_edit_set(&app.composer.area, strings.to_string(b))
 	if comment { app.composer.focus_next = true } else { ui.announce(&app.announcer, .Good, i18n.tr("Quoted in the composer")) }
 }
 
@@ -270,8 +270,8 @@ quote_chip :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.3)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###qr") {
 			ui.spacer(ui.px(em * 0.35))
-			quoted := ui.button_icon("###q1", "", i18n.tr("Quote"), width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM), face = .Ghost).clicked
-			commented := ui.button_icon("###q2", "", i18n.tr("Comment"), width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM), face = .Ghost).clicked
+			quoted := ui.button("q1", i18n.tr("Quote"), o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM)}).clicked
+			commented := ui.button("q2", i18n.tr("Comment"), o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM)}).clicked
 			ui.spacer(ui.px(em * 0.35))
 			if quoted || commented {
 				quote_text(app, q.kept, commented)
@@ -291,7 +291,7 @@ Rename :: struct {
 	held:  bool,        // in place: the field had the keyboard (losing it commits, as a click elsewhere)
 	shown: bool,        // in place: its field was built in this build (or it began in it)
 	id:    string,      // (owned)
-	field: ui.Text_Field,
+	field: ui.Line_Edit,
 }
 
 Rename_At :: enum u8 { None, Header, Side }
@@ -303,8 +303,8 @@ rename_open :: proc(app: ^App, id: string) {
 	app.cx.open[.Rename], r.fresh, r.at = true, true, .None
 	s := find_session(app, id)
 	if s == nil && app.chat.have_self && app.chat.self.id == id { s = &app.chat.self }
-	ui.field_set(&r.field, s != nil ? s.title : "")
-	ui.field_select_all(&r.field)
+	ui.line_edit_set(&r.field, s != nil ? s.title : "")
+	ui.line_edit_select_all(&r.field)
 }
 
 // The title of session `id`, edited where it is shown (`at`): Enter or a click elsewhere keeps it, Escape leaves it as it was.
@@ -325,12 +325,12 @@ rename_in_place :: proc(app: ^App, em, font_size, height: f32, fit := false) {
 	r.shown = true
 	pad := math.round(em * RENAME_PAD_EM)
 	w := ui.fill()
-	if fit { w = ui.px(math.round(ui.text_width(app.font, font_size, ui.field_string(&r.field)) + 2 * pad + em * RENAME_ROOM_EM), 0) }
+	if fit { w = ui.px(math.round(ui.text_width(app.font, font_size, ui.line_edit_string(&r.field)) + 2 * pad + em * RENAME_ROOM_EM), 0) }
 	ui.next({width = w, height = ui.px(height), cross = .Center, radius = 5 * ui.scale()})
 	if ui.well("###ren_in", .X, flags = {.Focus_Within, .Draw_Focus_Ring}) {
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), font_size = font_size, text_pad = pad})
-			res := ui.line_edit("###ren_f", &r.field, i18n.tr("Title"))
+			res := ui.line_edit("###ren_f", &r.field, {placeholder = i18n.tr("Title")})
 			if r.fresh { ui.set_focus(res.box.key); r.fresh = false } else if res.focused { r.held = true }
 			switch {
 			case res.cancelled:          r.at = .None
@@ -355,7 +355,7 @@ rename_dialog :: proc(app: ^App, em: f32) {
 @(private = "file")
 rename_commit :: proc(app: ^App) {
 	r := &app.rename
-	t := strings.trim_space(ui.field_string(&r.field))
+	t := strings.trim_space(ui.line_edit_string(&r.field))
 	app.cx.open[.Rename], r.at = false, .None
 	if t == "" { return }
 	if s := find_session(app, r.id); s != nil && s.title == t { return }   // (nothing changed: nothing to ask)

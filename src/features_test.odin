@@ -163,18 +163,18 @@ the_history_is_the_sessions_own :: proc(t: ^testing.T) {
 	app.chat.id = "ses_a"
 	append(&app.chat.messages, Message{id = "m1", kind = .User, text = "first"}, Message{id = "m2", kind = .Assistant},
 		Message{id = "m3", kind = .User, text = " second "}, Message{id = "m4", kind = .User, text = "second"})
-	ui.area_set(&app.composer.area, "a draft")
+	ui.text_edit_set(&app.composer.area, "a draft")
 	history_step(app, -1)   // (nothing newer than what is typed)
 	testing.expect(t, !history_browsing(app))
 	history_step(app, 1)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "second")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "second")
 	history_step(app, 1)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "first")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "first")
 	history_step(app, 1)   // (the oldest one stays)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "first")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "first")
 	history_step(app, -1)
 	history_step(app, -1)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "a draft")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "a draft")
 	testing.expect(t, !history_browsing(app))
 
 	// another session: only its own prompts, and none at all for a new one
@@ -182,14 +182,14 @@ the_history_is_the_sessions_own :: proc(t: ^testing.T) {
 	app.chat.id = "ses_b"
 	append(&app.chat.messages, Message{id = "m9", kind = .User, text = "other"})
 	history_step(app, 1)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "other")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "other")
 	history_step(app, 1)
-	testing.expect_value(t, ui.area_string(&app.composer.area), "other")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "other")
 	history_leave(app, true)
 	chat_reset(&app.chat)
 	history_step(app, 1)
 	testing.expect(t, !history_browsing(app))
-	testing.expect_value(t, ui.area_string(&app.composer.area), "a draft")
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "a draft")
 }
 
 @(test)
@@ -284,18 +284,18 @@ a_form_is_answered :: proc(t: ^testing.T) {
 	testing.expect(t, problem != "", "the name is required")
 	testing.expect_value(t, at, 0)
 
-	ui.field_set(&f.fields[0].text, "first")
+	ui.line_edit_set(&f.fields[0].text, "first")
 	f.fields[1].choice = 0
 	testing.expect(t, field_shown(f, &f.fields[2]), "production: the reason is asked")
-	ui.field_set(&f.fields[3].text, "9")
+	ui.line_edit_set(&f.fields[3].text, "9")
 	_, problem, at = form_answer(f)
 	testing.expect(t, problem != "", "9 is over the maximum")
 	testing.expect_value(t, at, 2 + 1)   // (its page among those shown: the reason counts now)
-	ui.field_set(&f.fields[3].text, "2.5")
+	ui.line_edit_set(&f.fields[3].text, "2.5")
 	_, problem, _ = form_answer(f)
 	testing.expect(t, problem != "", "not a whole number")
 
-	ui.field_set(&f.fields[3].text, "3")
+	ui.line_edit_set(&f.fields[3].text, "3")
 	body: string
 	body, problem, _ = form_answer(f)
 	testing.expect_value(t, problem, "")
@@ -319,7 +319,7 @@ a_question_wants_an_answer :: proc(t: ^testing.T) {
 	testing.expect(t, f.question, "a question")
 	_, problem, _ := form_answer(f)
 	testing.expect(t, problem != "", "no answer yet")
-	ui.field_set(&f.fields[0].text, "Teal")
+	ui.line_edit_set(&f.fields[0].text, "Teal")
 	body, _, _ := form_answer(f)
 	testing.expect_value(t, body, `{"answer":{"q0":"Teal"}}`)
 }
@@ -432,7 +432,7 @@ what_a_method_asks_goes_with_it :: proc(t: ^testing.T) {
 	defer form_free(f)
 	_, problem := connect_extra(f, "")
 	testing.expect(t, problem != "", "the host is required")
-	ui.field_set(&f.fields[0].text, "a.example")
+	ui.line_edit_set(&f.fields[0].text, "a.example")
 	extra, none := connect_extra(f, " work ")
 	testing.expect_value(t, none, "")
 	testing.expect_value(t, extra, `"answer":{"host":"a.example"},"label":"work"`)

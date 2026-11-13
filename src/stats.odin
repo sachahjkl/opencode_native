@@ -456,7 +456,7 @@ rank_row :: proc(id, name: string, n, max_n, failed: int, extra: string, em: f32
 heading :: proc(s: string, em: f32, color: u32 = HEX_BLUE, note := "") {
 	ui.spacer(ui.px(em * 0.9))
 	if ui.style({font = the_app.mono, font_size = em}) {
-		ui.section_header(fmt.tprintf("###st_%s", s), s, note, "", hex(color))
+		ui.section_header(fmt.tprintf("###st_%s", s), s, hex(color), note)
 	}
 	ui.spacer(ui.px(em * 0.35))
 }

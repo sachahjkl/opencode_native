@@ -63,8 +63,8 @@ build_ui :: proc(app: ^App) {
 	if app.chat.busy && !overlay_open(app) && !mention_takes_escape(app) && ui.key_press(.Escape) { interrupt_session(app, app.chat.id) }
 }
 
-app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
-	if ui.ctx_menu(key) {   // (as wide as its longest item)
+app_menu :: proc(app: ^App, key: string, em: f32) {
+	if ui.menu(key) {   // (as wide as its longest item)
 		if ui.menu_item(i18n.tr("Command palette…"), "Ctrl+K", icon = lucide.COMMAND).clicked { palette_toggle(app) }
 		ui.menu_separator()
 		if ui.menu_item(i18n.tr("Home"), "Ctrl+H", icon = lucide.HOME).clicked { command_run(app, command_find("nav.home")) }
@@ -75,7 +75,7 @@ app_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 		}
 		if ui.menu_item(i18n.tr("Settings…"), "Ctrl+,", icon = lucide.SLIDERS_HORIZONTAL).clicked { settings_open(app) }
 		if ui.menu_item(i18n.tr("Add a server…"), icon = lucide.PLUG).clicked { server_edit_open(app, -1) }
-		if ui.menu_item(i18n.tr("Statistics panel"), "Ctrl+I", app.stats.open, icon = lucide.GAUGE, enabled = app.chat.id != "").clicked { stats_toggle(app) }
+		if ui.menu_item(i18n.tr("Statistics panel"), "Ctrl+I", app.stats.open, icon = lucide.GAUGE, disabled = app.chat.id == "").clicked { stats_toggle(app) }
 		if preview_available() {
 			if ui.menu_item(i18n.tr("Preview panel"), "Ctrl+Shift+B", app.preview.open, icon = lucide.GLOBE).clicked { command_run(app, command_find("view.preview")) }
 		}

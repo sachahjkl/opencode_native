@@ -237,7 +237,7 @@ Side_Kept :: struct {
 Sidebar :: struct {
 	width:        f32,
 	hidden:       bool,
-	search:       ui.Text_Field,
+	search:       ui.Line_Edit,
 	folded:       map[u64]bool,   // groups folded (hash of the directory)
 	sub_open:     map[u64]bool,   // sessions whose sub-agents are listed under them
 	hold:         Side_Hold,      // the order, under the pointer

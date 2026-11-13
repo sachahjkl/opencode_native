@@ -33,7 +33,7 @@ read_shown :: proc(app: ^App, id: string, x: ^remote.Remote, em: f32, ask: proc(
 	info_line(app, id, words, em, hex(color))
 	if again {
 		ui.spacer(ui.px(em * 0.4))
-		if ui.button_icon(fmt.tprintf("%s_again", id), lucide.REFRESH_CW, i18n.tr("Try again"), height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { ask(app) }
+		if ui.button(fmt.tprintf("%s_again", id), i18n.tr("Try again"), lucide.REFRESH_CW, {height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { ask(app) }
 	}
 	return false
 }

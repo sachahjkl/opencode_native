@@ -85,7 +85,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "session.variant", description = "How hard that model thinks (one of its variants; empty: its default).", kind = .String, default = {s = ""}, hidden = true},
 	{name = "browser.tools", title = i18n.later("Tools"), description = i18n.later("Let the agents drive the Preview panel (open pages, read them, click, run scripts): the browser tools, while this window is open."), kind = .Bool, default = {b = true}},
 	{name = "layout.dock", description = "Where the panels are, as the dock writes it.", kind = .String, default = {s = ""}, hidden = true},
-	{name = "layout.dialogs", description = "The sizes the dialogs were given (settings, statistics, shortcuts), in logical pixels.", kind = .String, default = {s = ""}, hidden = true},
+	{name = "layout.dialogs", description = "The sizes the dialogs were given (settings, statistics, shortcuts), in ems.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "window.placement", description = "Where the window was (platform.placement_text): it opens there again.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "general.start", title = i18n.later("Start"), description = i18n.later("What the window opens on: the home page, or the session it showed when it closed (the latest one if it showed none yet)."), kind = .String, default = {s = "last"}, choices = {"home", "last"}, choice_labels = {i18n.later("Home"), i18n.later("Last")}},
 	{name = "advanced.experimental", title = i18n.later("Experimental"), description = i18n.later("Turn on the experimental options of a server on this computer, in its configuration file. What you set there yourself stays."), kind = .Bool, default = {b = true}},
@@ -148,11 +148,16 @@ prefs_path :: proc() -> string { return pjoin({filepath.dir(settings_path()), "p
 prefs_register :: proc(p: ^config.Prefs) {
 	d := prefs_page.STANDARD_DEFAULTS
 	d.theme, d.app_name, d.update_channel = "OpenCode", APP_NAME, "stable"
+	d.values = STANDARD_VALUES[:]
 	prefs_page.standard_register(p, prefs_page.STANDARD_ALL, d)
 	config.register(p, PREF_DEFS[:])
 	// (the titles the settings page made from the names, said here so that they are translated; order 0: their places stay)
 	for g in PREF_GROUPS { config.title_register(p, g[0], g[1]) }
 }
+
+// This program's own defaults of standard settings: the messages at the top right (at the bottom they hid the send
+// button: views.odin set_toast_area), each frame repainting only what changed.
+STANDARD_VALUES := [?]prefs_page.Standard_Value{{"window.toast_position", "top_right"}, {"rendering.partial_redraw", "true"}}
 
 PREF_GROUPS := [?][2]string{
 	{"conversation", i18n.later("Conversation")}, {"composer", i18n.later("Composer")}, {"sidebar", i18n.later("Sidebar")},
@@ -229,7 +234,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.update_channel = config.string_of(p, "update.channel")
 	s.update_auto = config.bool_of(p, "update.auto")
 	s.system_title = config.bool_of(p, "window.system_title")
-	app.announcer.mode = prefs_page.messages_mode(p)
+	app.announcer.mode = prefs_page.announce_mode(p)
 	s.new_sessions = approval_of_pref(config.string_of(p, "permission.new_sessions"))
 	update_channel_follow(app)
 	title_apply(app)
@@ -253,7 +258,16 @@ title_apply :: proc(app: ^App) {
 // Sets a preference from its text and applies it (the loop's writer saves it: main_after_frame).
 pref_set :: proc(app: ^App, name, value: string) {
 	if err := config.set_from_string(&app.cfg_prefs, name, value, .User); err != nil {
-		ui.toast(.Bad, "%s: %s", name, config.set_error_text(err))
+		ui.announce(&app.announcer, .Bad, fmt.tprintf("%s: %s", name, config.set_error_text(err)))
+		return
+	}
+	prefs_refresh(app)
+}
+
+// Sets a number preference to `v` at 3 decimals (the file shows 1.1, not the float's noise) and applies it.
+pref_set_float :: proc(app: ^App, name: string, v: f32) {
+	if err := config.set_float(&app.cfg_prefs, name, math.round(f64(v) * 1000) / 1000); err != nil {
+		ui.announce(&app.announcer, .Bad, fmt.tprintf("%s: %s", name, config.set_error_text(err)))
 		return
 	}
 	prefs_refresh(app)
@@ -267,7 +281,7 @@ prefs_track_zoom :: proc(app: ^App) {
 	z := ui.zoom(&app.state)
 	if abs(z - app.prefs.zoom) > ZOOM_EPSILON {
 		app.prefs.zoom = z
-		config.set_from_string(&app.cfg_prefs, "appearance.zoom", fmt.tprintf("%.3f", z), .User)
+		config.set_float(&app.cfg_prefs, "appearance.zoom", math.round(f64(z) * 1000) / 1000)
 		}
 }
 
@@ -349,16 +363,16 @@ Notices :: struct {
 toast_session :: proc(app: ^App, kind: ui.Toast_Kind, sid, what, detail: string) {
 	body := detail != "" ? fmt.tprintf("%s: %s", what, detail) : what
 	title := session_title_of(app, sid)
-	if sid == "" { ui.toast_titled(kind, title, body); return }
+	if sid == "" { ui.announce(&app.announcer, kind, title, body); return }
 	k := app.notices.toast_next
 	app.notices.toast_next = (k + 1) % TOAST_TARGETS
 	delete(app.notices.toast_targets[k])
 	app.notices.toast_targets[k] = strings.clone(sid)
-	ui.toast_titled(kind, title, body, proc(user: rawptr) {
+	ui.announce(&app.announcer, kind, title, body, action = proc(user: rawptr) {
 		app := the_app
 		sid := app.notices.toast_targets[int(uintptr(user))]
 		if sid != "" && sid != app.chat.id { open_root(app, sid) }
-	}, rawptr(uintptr(k)))
+	}, user = rawptr(uintptr(k)))
 }
 
 // A notification of the system: the session's title, what happened and what it is about. It is the entry `key`'s (missed.odin):
@@ -645,8 +659,17 @@ dialogs_track :: proc(app: ^App) {
 	if cx.dialogs == cx.dialogs_saved || ui.active_key() != 0 { return }
 	cx.dialogs_saved = cx.dialogs
 	b := strings.builder_make(context.temp_allocator)
-	for d in DIALOGS_SIZED { fmt.sbprintf(&b, "%.0fx%.0f ", cx.dialogs[d].x, cx.dialogs[d].y) }
+	for d in DIALOGS_SIZED { fmt.sbprintf(&b, "%.1fx%.1f ", cx.dialogs[d].x, cx.dialogs[d].y) }
 	pref_set(app, "layout.dialogs", strings.trim_space(strings.to_string(b)))
+}
+
+// The options of a dialog that the person resizes: its preferred and smallest sizes, and the size kept (layout.dialogs).
+dialog_options :: proc(app: ^App, d: Dialog, top: Maybe(f32) = nil) -> ui.Modal_Options {
+	return {
+		width_em = DIALOG_PREFERRED_EM[d].x, height_em = DIALOG_PREFERRED_EM[d].y,
+		min_width_em = DIALOG_MIN_EM[d].x, min_height_em = DIALOG_MIN_EM[d].y,
+		size = &app.cx.dialogs[d], top = top,
+	}
 }
 
 ////////////////////////////////
@@ -701,30 +724,23 @@ settings_open_on :: proc(app: ^App, category: string) {
 	p := &app.settings.prefs
 	delete(p.current)
 	p.current = strings.clone(category)
-	ui.field_set(&p.query, "")   // (a search would hide the page)
+	ui.line_edit_set(&p.query, "")   // (a search would hide the page)
 	settings_open(app)
 }
 
 // What the client's settings page is given (prefs_page.Options).
 settings_options :: proc(app: ^App) -> prefs_page.Options {
-	// (the pages' titles in the language in use: the toolkit's page shows what it is given)
-	pages := make([]prefs_page.Page_Info, len(SETTINGS_PAGES), context.temp_allocator)
-	for pg, i in SETTINGS_PAGES { pages[i] = pg; pages[i].title = i18n.tr(pg.title); pages[i].heading = i18n.tr(pg.heading) }
 	return {
 		user = app,
 		changed = proc(user: rawptr, _: string) { prefs_refresh((^App)(user)) },   // (main_after_frame's writer saves)
-		pages = pages,
+		pages = SETTINGS_PAGES[:],   // (in English: the toolkit's page translates their titles and headings)
 		icon_font = app.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
 		file = app.prefs_file,
 		version = fmt.tprintf("%s %s", APP_NAME, APP_VERSION),
 		themes = themes(app), themes_light = app.cx.theme.light,
 		themes_file = app.cx.theme.file.path != "" ? &app.cx.theme.file : nil,
 		choices = proc(_: rawptr, name: string) -> (labels, values: []string) {
-			if name == "update.channel" {
-				labels = make([]string, len(UPDATE_CHANNEL_LABELS), context.temp_allocator)
-				for l, i in UPDATE_CHANNEL_LABELS { labels[i] = i18n.tr(l) }
-				return labels, UPDATE_CHANNELS[:]
-			}
+			if name == "update.channel" { return UPDATE_CHANNEL_LABELS[:], UPDATE_CHANNELS[:] }   // (English: prefs_page translates where it shows)
 			return nil, nil
 		},
 		custom_names = FONT_PREFS[:],
@@ -734,7 +750,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Options {
 }
 
 settings_dialog :: proc(app: ^App, em: f32) {
-	if ui.modal_sized("settings", DIALOG_PREFERRED_EM[.Settings] * em, &app.cx.dialogs[.Settings], &app.cx.open[.Settings], DIALOG_MIN_EM[.Settings] * em) {
+	if ui.modal("settings", &app.cx.open[.Settings], dialog_options(app, .Settings)) {
 		dialog_backdrop()
 		if ui.dialog_header("settings_head", i18n.tr("Settings"), {close = true}) {}
 		// one sidebar for every page: the toolkit's page holds the client's preferences and the server's pages alike
@@ -775,13 +791,13 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###upd_b") {
-			if ui.button_icon("###u_check", lucide.REFRESH_CW, i18n.tr("Check now"), disabled = update_is_downloading(u)).clicked { update_check(app, true) }
+			if ui.button("u_check", i18n.tr("Check now"), lucide.REFRESH_CW, {disabled = update_is_downloading(u)}).clicked { update_check(app, true) }
 			ui.spacer(ui.px(em * 0.5))
 			if update_is_ready(u) {
-				if ui.button_icon("###u_inst", lucide.CHECK, ui.text_shown(fmt.tprintf(i18n.tr("Install %s"), update_version(u))), .Success).clicked { update_install(app) }
+				if ui.button("u_inst", ui.text_shown(fmt.tprintf(i18n.tr("Install %s"), update_version(u))), lucide.CHECK, {intent = .Success}).clicked { update_install(app) }
 			}
 			if update_is_installed(u) {
-				if ui.button_icon("###u_rest", lucide.REFRESH_CW, i18n.tr("Restart now"), .Success).clicked { app_restart(app) }
+				if ui.button("u_rest", i18n.tr("Restart now"), lucide.REFRESH_CW, {intent = .Success}).clicked { app_restart(app) }
 			}
 		}
 		ui.spacer(ui.px(em * 0.6))
@@ -793,9 +809,9 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###adv_b") {
-			if ui.button_icon("###adv_dir", lucide.FOLDER, i18n.tr("Open the settings folder")).clicked { ui.open(filepath.dir(prefs_path())) }
+			if ui.button("adv_dir", i18n.tr("Open the settings folder"), lucide.FOLDER).clicked { ui.open(filepath.dir(prefs_path())) }
 			ui.spacer(ui.px(em * 0.4))
-			if ui.button_icon("###adv_lic", "", ui.text_shown(app.settings.show_licence ? i18n.tr("Hide the terminal's licence") : i18n.tr("The terminal's licence")), face = .Ghost).clicked { app.settings.show_licence = !app.settings.show_licence }
+			if ui.button("adv_lic", ui.text_shown(app.settings.show_licence ? i18n.tr("Hide the terminal's licence") : i18n.tr("The terminal's licence")), o = {face = .Ghost}).clicked { app.settings.show_licence = !app.settings.show_licence }
 		}
 		if app.settings.show_licence {
 			ui.spacer(ui.px(em * 0.5))
@@ -828,7 +844,7 @@ font_button :: proc(app: ^App, name: string, em: f32) {
 		text("fm", mode, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)})
 		ui.spacer(ui.px(em * 0.5))
 	}
-	sig := ui.button_icon(fmt.tprintf("###fb_%s", name), "", ui.text_shown(shown), width = ui.px(em * 13))
+	sig := ui.button(fmt.tprintf("fb_%s", name), ui.text_shown(shown), o = {width = ui.px(em * 13)})
 	if sig.clicked {
 		if app.cx.open[.Picker] && app.picker.id == name { app.cx.open[.Picker] = false } else { picker_open(app, name, sig.box.rect) }
 	}
@@ -900,7 +916,7 @@ page_server :: proc(app: ^App, em: f32) {
 		for s, i in f.shells {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###sh%d", i)) {
-				if ui.button_icon(fmt.tprintf("###shb%d", i), lucide.SQUARE_TERMINAL, ui.text_shown(s.name), width = ui.px(em * 9), height = math.round(em * BUTTON_COMPACT_H_EM), disabled = !s.ok, face = sel == i ? .Toggled : .Raised).clicked { shell_set(app, s) }
+				if ui.button(fmt.tprintf("shb%d", i), ui.text_shown(s.name), lucide.SQUARE_TERMINAL, {face = sel == i ? .Toggled : .Raised, width = ui.px(em * 9), height = math.round(em * BUTTON_COMPACT_H_EM), disabled = !s.ok}).clicked { shell_set(app, s) }
 				ui.spacer(ui.px(em * 0.7))
 				text("p", s.path, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			}
@@ -920,9 +936,9 @@ page_server :: proc(app: ^App, em: f32) {
 			}
 			// (only this computer's server speaks of this computer's files)
 			if app.servers[app.server].local && config_file_shaped(c.path) && os.is_file(c.path) {
-				if ui.button_icon("###open", lucide.FILE, i18n.tr("Open"), height = math.round(em * BUTTON_SMALL_H_EM)).clicked { ui.open(c.path) }
+				if ui.button("open", i18n.tr("Open"), lucide.FILE, {height = math.round(em * BUTTON_SMALL_H_EM)}).clicked { ui.open(c.path) }
 				ui.spacer(ui.px(em * 0.3))
-				if ui.button_icon("###dir", lucide.FOLDER, "", height = math.round(em * BUTTON_SMALL_H_EM)).clicked { ui.open(filepath.dir(c.path)) }
+				if ui.button("dir", icon = lucide.FOLDER, o = {face = .Raised, height = math.round(em * BUTTON_SMALL_H_EM)}).clicked { ui.open(filepath.dir(c.path)) }
 			}
 		}
 		ui.spacer(ui.px(em * 0.4))
@@ -957,9 +973,9 @@ page_mcp :: proc(app: ^App, em: f32) {
 				// (what goes on says itself: no button says the opposite meanwhile)
 				if going == nil {
 					if connected {
-						if ui.button_icon("###dc", "", i18n.tr("Disconnect"), .Danger, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, false) }
+						if ui.button("dc", i18n.tr("Disconnect"), o = {intent = .Danger, height = math.round(em * BUTTON_SMALL_H_EM)}).clicked { mcp_switch(app, m.name, false) }
 					} else {
-						if ui.button_icon("###co", "", i18n.tr("Connect"), .Success, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, true) }
+						if ui.button("co", i18n.tr("Connect"), o = {intent = .Success, height = math.round(em * BUTTON_SMALL_H_EM)}).clicked { mcp_switch(app, m.name, true) }
 					}
 				}
 				ui.spacer(ui.px(em * 0.8))
@@ -990,7 +1006,7 @@ page_usage :: proc(app: ^App, em: f32) {
 		if ui.row(.Center, id = "###ws") {
 			text("w", fmt.tprintf(i18n.tr("Workspace “%s”"), f.workspace), hex(HEX_WORKSPACE_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			if f.usage_url != "" {
-				if ui.button_icon("###web", lucide.GLOBE, i18n.tr("Usage on opencode.ai"), height = math.round(em * BUTTON_SMALL_H_EM)).clicked { link_open(f.usage_url) }
+				if ui.button("web", i18n.tr("Usage on opencode.ai"), lucide.GLOBE, {height = math.round(em * BUTTON_SMALL_H_EM)}).clicked { link_open(f.usage_url) }
 			}
 		}
 	}
@@ -1063,7 +1079,7 @@ page_permissions :: proc(app: ^App, em: f32) {
 				text("a", s.action, hex(HEX_SETTING_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
 				ui.spacer(ui.px(em * 0.5))
 				text("r", s.resource, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
-				if ui.button_icon("###rv", lucide.TRASH_2, i18n.tr("Revoke"), .Danger, height = math.round(em * BUTTON_SMALL_H_EM), disabled = saved_revoking(f, s.id)).clicked { saved_revoke(app, s.id) }
+				if ui.button("rv", i18n.tr("Revoke"), lucide.TRASH_2, {intent = .Danger, height = math.round(em * BUTTON_SMALL_H_EM), disabled = saved_revoking(f, s.id)}).clicked { saved_revoke(app, s.id) }
 			}
 		}
 	}
