@@ -194,7 +194,7 @@ composer :: proc(app: ^App, em: f32) {
 					text("hint", attaching(app) ? i18n.tr("reading the attachment…") : i18n.tr("starting the session…"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				} else if history_browsing(app) {
 					text("hint", fmt.tprintf(i18n.tr("history %d/%d   ·   "), app.composer.history.at, len(app.composer.history.view)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-					if hint_action("###hist_back", i18n.tr("Esc  back to your text"), em, app.mono, intent = .Cancel) { history_leave(app, true) }
+					if hint_action("###hist_back", i18n.tr("Esc  back to your text"), em, app.mono) { history_leave(app, true) }
 				} else if queue_editing(app) {
 					if hint_action("###h_save", app.prefs.ctrl_enter ? i18n.tr("Ctrl+Enter  save") : i18n.tr("Enter  save"), em, app.mono, intent = .Success) { submit = true }
 				} else if as := composer_send_as(app); as != .Idle {

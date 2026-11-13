@@ -486,7 +486,7 @@ queue_edit_banner :: proc(app: ^App, em: f32) {
 			text("o", i18n.tr("it goes back last"), hex(HEX_FAINT), note)
 		}
 		ui.spacer(ui.fill())
-		if hint_action("###q_cancel", i18n.tr("Esc  cancel"), em, app.mono, intent = .Cancel) { queue_edit_end(app, .Cancel) }
+		if hint_action("###q_cancel", i18n.tr("Esc  cancel"), em, app.mono) { queue_edit_end(app, .Cancel) }
 		ui.spacer(ui.px(em * 0.85))
 	}
 }

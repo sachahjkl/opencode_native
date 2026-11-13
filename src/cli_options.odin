@@ -3,9 +3,11 @@
 package ocn
 
 import "core:os"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 import cli "gt:cli"
+import setup "gt:setup"
 
 OPTIONS := []cli.Option{
 	{name = "url", group = "Server", value = "url", help = "another server"},
@@ -14,18 +16,12 @@ OPTIONS := []cli.Option{
 	{name = "session", group = "Start", value = "id", help = "open that session at start"},
 	{name = "search", value = "text", help = "the sidebar's search, filled at start"},
 	{name = "find", value = "text", help = "open the find bar with that text"},
-	{name = "settings", value = "page", optional = true, help = "open the settings at start (on that page: general, connections...)"},
-	{name = "setup", help = "open Setup at start"},
+	{name = "settings", value = "page", optional = true, help = "open the settings at start (on that page: general, connections, install...)"},
 	{name = "add-server", help = "open the dialog that adds a server at start"},
 	{name = "image", value = "file", help = "open the image viewer on a file"},
 	{name = "pref", group = "Look", value = "name=value", separate = true, help = "set a preference for the run (e.g. appearance.theme=Nord)"},
 	{name = "scale", value = "factor", help = "the interface's scale whatever the screen's (1: 100 %)"},
 	{name = "size", value = "w>x<h", help = "the window's size in pixels"},
-	{name = "install", group = "Install", help = "install this copy for the user, or repair the install"},
-	{name = "desktop", help = "with --install: a shortcut on the Desktop too"},
-	{name = "uninstall", help = "remove it (it asks first)"},
-	{name = "quiet", help = "with --uninstall: do not ask"},
-	{name = "status", help = "print the install's state (exit code 0 installed, 2 needs repair, 1 not installed)"},
 	{name = "frames", group = "Checks", value = "n", help = "n frames of a hidden window, then exit (a check that it runs)"},
 	// (what the tools and the tests pass)
 	{name = "font-dir", value = "folder", hidden = true},
@@ -34,6 +30,11 @@ OPTIONS := []cli.Option{
 	{name = "slow-motion", value = "factor", hidden = true},
 	{name = "seek-subagent", hidden = true},
 	{name = "no-fixed-surface", hidden = true},
+}
+
+// The program's options, then the install's (--install, --uninstall, --setup: the same in every program, gt:setup).
+all_options :: proc() -> []cli.Option {
+	return slice.concatenate([][]cli.Option{OPTIONS, setup.COMMAND_OPTIONS[:]}, context.temp_allocator)
 }
 
 // The command line, read once at start: --help, --version, or an option this program does not have is said, and the
@@ -45,6 +46,7 @@ cli_start :: proc() -> Cli_Options {
 			{"opencode-native --url=http://host:4096 --password=…", "another server, for this run"},
 			{"opencode-native --pref appearance.theme=Kernel", "a preference, for this run"},
 			{"opencode-native --settings=connections", "the settings, on their page Connections"},
+			{"opencode-native --install", "install this copy for you"},
 			{"opencode-native --status", "is it installed? (exit code)"},
 		},
 		environment = {
@@ -52,7 +54,7 @@ cli_start :: proc() -> Cli_Options {
 			{"TOOLKIT_DEVTOOLS=<port>", "let the Chrome DevTools Protocol drive the window on 127.0.0.1 (development)"},
 		},
 		footer = "Files: ~/.config/opencode-native/ (Windows: %APPDATA%\\opencode-native\\): prefs.txt, servers.txt, themes.txt."}
-	if out, code, stop := cli.check(program, OPTIONS, os.args[1:]); stop {
+	if out, code, stop := cli.check(program, all_options(), os.args[1:]); stop {
 		say("%s", out)
 		os.exit(code)
 	}
@@ -66,12 +68,12 @@ Cli_Options :: struct {
 	session, search, find: string,    // the session opened, the sidebar's search, the find bar's text
 	settings:      bool,              // the settings open at start ...
 	settings_page: string,            // ... on this page (its category; "": the last one)
-	setup, add_server: bool,          // Setup, the dialog that adds a server
+	command:       setup.Command,     // --install, --uninstall, --status (no window), --setup (the install's dialog at start)
+	add_server:    bool,              // the dialog that adds a server
 	image:         string,            // a file in the image viewer
 	prefs:         []string,          // "name=value", each --pref in order
 	scale:         f32,               // the interface's scale, within SCALE_MIN..SCALE_MAX (0: the screen's)
 	size:          Maybe([2]f32),     // the window's size in pixels
-	install, desktop, uninstall, quiet, status: bool,
 	frames:        int,               // a check: this many frames, then exit (-1: run)
 	font_dir:      string,            // faces from files (fonts_from_dir)
 	attach:        []string,          // files attached at start, in order
@@ -84,7 +86,8 @@ Cli_Options :: struct {
 // The options of `args` (the line without the program; cli.check accepted it). The strings are slices of `args`; the lists
 // are in the default allocator, for the program's life.
 cli_read :: proc(args: []string) -> (o: Cli_Options) {
-	given := cli.parse(OPTIONS, args, context.temp_allocator)
+	given := cli.parse(all_options(), args, context.temp_allocator)
+	o.command, _ = setup.command_of(args)
 	o.url, _ = cli.value(given, "url")
 	o.password, _ = cli.value(given, "password")
 	o.server, _ = cli.value(given, "server")
@@ -93,7 +96,6 @@ cli_read :: proc(args: []string) -> (o: Cli_Options) {
 	o.find, _ = cli.value(given, "find")
 	o.settings = cli.has(given, "settings")
 	o.settings_page, _ = cli.value(given, "settings")
-	o.setup = cli.has(given, "setup")
 	o.add_server = cli.has(given, "add-server")
 	o.image, _ = cli.value(given, "image")
 	o.prefs = cli.values(given, "pref", context.allocator)
@@ -106,9 +108,6 @@ cli_read :: proc(args: []string) -> (o: Cli_Options) {
 		h, h_ok := strconv.parse_f32(h_text)
 		if w_ok && h_ok { o.size = [2]f32{w, h} }
 	}
-	o.install, o.desktop = cli.has(given, "install"), cli.has(given, "desktop")
-	o.uninstall, o.quiet = cli.has(given, "uninstall"), cli.has(given, "quiet")
-	o.status = cli.has(given, "status")
 	o.frames = -1
 	if v, ok := cli.value(given, "frames"); ok { o.frames, _ = strconv.parse_int(v) }   // (not a number: 0 frames, the check fails)
 	o.font_dir, _ = cli.value(given, "font-dir")

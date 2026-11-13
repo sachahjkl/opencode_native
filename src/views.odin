@@ -6,6 +6,8 @@ package ocn
 import "core:math"
 import "core:strings"
 import "gt:draw"
+import crash_bar "gt:crash_bar"
+import prefs_page "gt:prefs_page"
 import "gt:ui"
 import lucide "gt:lucide"
 import remote "gt:remote"
@@ -21,6 +23,7 @@ build_ui :: proc(app: ^App) {
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(id = "###root") {
 		title_bar(app, em)
+		crash_bar.bar(&app.crash_bar, {name = APP_NAME, version = APP_VERSION, repository = "sachahjkl/opencode_native"})
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.row(id = "###body") {
 			if !app.sidebar.hidden {
@@ -38,7 +41,7 @@ build_ui :: proc(app: ^App) {
 		status_bar(app, em)
 	}
 	delete_dialog(app, em)
-	setup_dialog(app, em)
+	setup_frame(app, em)
 	server_dialog(app, em)
 	settings_dialog(app, em)
 	image_viewer(app, em)
@@ -58,7 +61,7 @@ build_ui :: proc(app: ^App) {
 	context_menu(app, em)
 	// (only this way: a dialog opened by what was built after it, a menu, is open and not built until the next build)
 	when ODIN_DEBUG { assert(len(app.state.modals_built) == 0 || overlay_open(app), "a dialog built that is not in App_Context.open: the program's keys would act behind it") }
-	// (over the top of the conversation, under its header: at the bottom they hid the send button, when one wants to try again)
+	// (under the header: a message at the top does not cover it)
 	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.state.window_size})
 	// (last: what is open and a field that has it took Escape before it gets here)
 	if app.chat.busy && !overlay_open(app) && !mention_takes_escape(app) && ui.key_press(.Escape) { interrupt_session(app, app.chat.id) }
@@ -84,8 +87,8 @@ app_menu :: proc(app: ^App, key: string, em: f32) {
 		if ui.menu_item(i18n.tr("Keyboard shortcuts"), "F1", icon = lucide.KEYBOARD).clicked { app.cx.open[.Help] = true }
 		if ui.menu_item(i18n.tr("Sub-agent sessions in the list"), "", app.prefs.subagents == "flat", icon = lucide.BOT).clicked { pref_set(app, "sidebar.subagents", app.prefs.subagents == "flat" ? "nested" : "flat") }
 		ui.menu_separator()
-		if ui.menu_item(i18n.tr("Setup…"), icon = lucide.WRENCH).clicked { setup_open(app) }
-		if ui.menu_item(i18n.tr("About opencode native"), icon = lucide.INFO).clicked { setup_open(app) }
+		// (the settings' Installation page says the version, where the install is, and acts on it)
+		if ui.menu_item(i18n.tr("About opencode native"), icon = lucide.INFO).clicked { settings_open_on(app, prefs_page.INSTALL_PAGE) }
 		ui.menu_separator()
 		if ui.menu_item(i18n.tr("Quit"), "Alt+F4", icon = lucide.LOG_OUT).clicked { app.quit = true }
 	}

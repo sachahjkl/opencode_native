@@ -198,13 +198,6 @@ BROWSER_DIR_WAITS   :: 40    // ... that many times: then the server's default f
 BROWSER_REOPEN_MS   :: 400
 
 ////////////////////////////////
-// Updates (src/update: what is checked; updater.odin)
-
-UPDATE_HOST       :: "https://github.com"
-UPDATE_STABLE_DIR :: "/sachahjkl/opencode_native/releases/latest/download/"
-UPDATE_BETA_DIR   :: "/sachahjkl/opencode_native/releases/download/channel-beta/"
-
-////////////////////////////////
 // The way back to the end of the conversation
 
 GO_BOTTOM_SCREENS :: 1.2   // this far from the end, in screens

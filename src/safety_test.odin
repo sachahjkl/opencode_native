@@ -3,7 +3,6 @@ package ocn
 import "core:os"
 import "core:strings"
 import "core:testing"
-import setup "gt:setup"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -123,28 +122,6 @@ passwords_in_the_file :: proc(t: ^testing.T) {
 	got2, _, clear2 = password_from_field("a server", "")
 	testing.expect_value(t, got2, "")
 	testing.expect(t, !clear2)
-}
-
-// The user's answer in settings.txt: closed without one, not again for this version; an earlier "standalone" or
-// "installed" stays, unless an upgrade was declined.
-@(test)
-setup_keeps_the_users_answer :: proc(t: ^testing.T) {
-	none := setup.Facts{state = .Not_Installed}
-	older := setup.Facts{state = .Other_Copy, version = "0.0.1"}
-	dismissed := "dismissed:" + APP_VERSION
-	expect :: proc(t: ^testing.T, ev: setup.Event, f: setup.Facts, saved, want: string, changed: bool, loc := #caller_location) {
-		c, ch := setup_choice(ev, f, saved)
-		testing.expect_value(t, c, want, loc = loc)
-		testing.expect_value(t, ch, changed, loc = loc)
-	}
-	expect(t, .Installed, none, "", "installed", true)
-	expect(t, .Kept_Standalone, none, "", "standalone", true)
-	expect(t, .Dismissed, none, "", dismissed, true)
-	expect(t, .Dismissed, none, "standalone", "standalone", false)
-	expect(t, .Dismissed, none, "installed", "installed", false)
-	expect(t, .Dismissed, older, "standalone", dismissed, true)   // (an upgrade declined: for this version)
-	expect(t, .Uninstalled, none, "installed", "installed", false)
-	expect(t, .None, none, "", "", false)
 }
 
 // The viewer is the picture and its chrome, nothing more: the black around a picture smaller than the dialog was taken for the outside,

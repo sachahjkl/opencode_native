@@ -49,29 +49,26 @@ NIXOS_LIBRARIES := [?]string{
 // changing one leaves those files and keys behind, unrecognised.
 identity :: proc() -> desktop.Identity {
 	return desktop.Identity{
-		name = APP_NAME, key = "OpencodeNative", slug = APP_SLUG, aumid = "FromentSoftware.OpencodeNative",
+		name = APP_NAME, key = "OpencodeNative", slug = APP_SLUG,   // (the AppUserModelID: the vendor's and the name's, desktop.identity_aumid)
 		description = "A native desktop client for opencode. Not affiliated with the OpenCode team.",
 		vendor = APP_PUBLISHER,
 		entry_marker = "X-OpencodeNative-Integration", registry_mark = "OpencodeNativeIntegration", vendor_key = "FromentSoftware",
 		manifest_name = MANIFEST_NAME,
 		manifest_header = "Written by opencode native's Setup: the files it placed in this folder. Uninstalling removes exactly these.",
-		uninstall_arguments = "--uninstall",   // (Settings > Apps: it asks, then removes)
+		uninstall_arguments = "--setup",   // (Settings > Apps: the install's dialog, its Uninstall)
 		generic_name = "opencode client", categories = "Development;",
 		nix_runtime_name = "opencode-native-runtime", nixos_libraries = NIXOS_LIBRARIES[:],
 		cleanup_name = "opencode-native-uninstall",
 	}
 }
 
-// On NixOS the Nix package is the better install: Nix updates it. A classic install makes its copy run by itself: nix-build
-// makes a profile of its libraries, and patchelf points the copy at it (the toolkit's NixOS adaptation).
-NIXOS_ADVICE :: "On NixOS, the Nix package is the better install: nix profile add git+https://github.com/sachahjkl/opencode_native, or add it to your configuration. A classic install builds the libraries it needs with nix-build."
-
 // This copy is a Nix package: it runs from the store, and Nix installs and updates it.
 nix_package :: proc() -> bool { return desktop.in_nix_store(process.executable_path()) }
 
-// What Setup is given: the identity, this version, the install folder, the icons, the line under the version, and what
-// an install and an uninstall do besides the packages' parts.
-setup_config :: proc() -> setup.Setup_Options {
+// What the install is given: the identity, this version, the install folder, the icons, the line under the version, and
+// what an install and an uninstall do besides the packages' parts. On NixOS a classic install makes its copy run by
+// itself: nix-build makes a profile of NIXOS_LIBRARIES, and patchelf points the copy at it (the toolkit's NixOS adaptation).
+setup_options :: proc() -> setup.Setup_Options {
 	return setup.Setup_Options{
 		identity = identity(), version = APP_VERSION, install_folder = INSTALL_FOLDER, icons = desktop_icons(),
 		note = i18n.tr(APP_NOT_THEIRS), prepare = setup_prepare,
@@ -87,17 +84,11 @@ setup_prepare :: proc(o: ^desktop.Integration_Options, _: []bool, _: rawptr) {
 	if o.install_dir != "" { _ = os.remove(pjoin({o.install_dir, LEGACY_RECORD})) }
 }
 
-// The installed copy cleans what a replacement left beside it.
-desktop_clean_old :: proc() {
-	o := desktop.Integration_Options{identity = identity()}
-	desktop.clean_old(&o, process.parent_dir(process.executable_path()))
-}
-
 // The updater replaced `exe`: when it is the installed copy, its manifest takes the new version, its system's record too,
 // and on NixOS the new program is made to run by itself again (the update is the release, made for a usual Linux).
 desktop_updated :: proc(exe, version: string) -> (ok: bool, msg: string) {
 	failure :: proc(r: desktop.Result) -> string { return r.detail != "" ? r.detail : desktop.error_text(r.error) }
-	o, _ := setup.options(setup_config())
+	o, _ := setup.options(setup_options())
 	dir := process.parent_dir(exe)
 	if !os.exists(pjoin({dir, MANIFEST_NAME})) || !desktop.same_path(dir, o.install_dir) { return true, "" }
 	exe_name := desktop.exe_name_of(o.identity)
@@ -115,7 +106,7 @@ set_app_id :: proc() {
 	id := identity()
 	desktop.set_process_identity(id)
 	platform.set_app_id(APP_SLUG)
-	platform.notify_set_app({name = APP_NAME, aumid = id.aumid})   // (notifications of the system: under this name, grouped with its windows)
+	platform.notify_set_app({name = APP_NAME, aumid = desktop.identity_aumid(id)})   // (notifications of the system: under this name, grouped with its windows)
 }
 
 // A path made of `parts` (temp memory).

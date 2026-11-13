@@ -8,6 +8,7 @@ import "core:math"
 import "core:strings"
 import "gt:draw"
 import "gt:platform"
+import prefs_page "gt:prefs_page"
 import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
@@ -38,10 +39,11 @@ COMMANDS := [?]Command{
 	}},
 	{id = "app.add_server", title = i18n.later("Add a server…"), tags = "connect host remote url", group = i18n.later("General"), icon = lucide.PLUG, run = proc(app: ^App) { server_edit_open(app, -1) }},
 	{id = "app.pair", title = i18n.later("Pair a device…"), tags = "phone mobile qr link", group = i18n.later("General"), icon = lucide.GLOBE, run = pair_open, enabled = online},
-	{id = "app.setup", title = i18n.later("Setup and about"), tags = "about version install info", group = i18n.later("General"), icon = lucide.LIGHTBULB, run = setup_open},
+	{id = "app.setup", title = i18n.later("Installation and about"), tags = "about version install uninstall setup path info", group = i18n.later("General"), icon = lucide.PACKAGE, run = proc(app: ^App) { settings_open_on(app, prefs_page.INSTALL_PAGE) }},
+	{id = "app.diagnostics", title = i18n.later("Diagnostics"), tags = "gpu graphics slow performance frames renderer report", group = i18n.later("General"), icon = lucide.ACTIVITY, run = proc(app: ^App) { settings_open_on(app, prefs_page.DIAGNOSTICS_PAGE) }},
 	{id = "app.update", title = i18n.later("Check for updates"), tags = "upgrade version new release", group = i18n.later("General"), icon = lucide.REFRESH_CW, run = update_check_now},
-	{id = "app.update_install", title = i18n.later("Install the update"), tags = "upgrade download version", group = i18n.later("General"), icon = lucide.REFRESH_CW, run = update_install, enabled = proc(app: ^App) -> bool { return update_is_ready(&app.updater) }},
-	{id = "app.update_restart", title = i18n.later("Restart to update"), tags = "relaunch reload reboot upgrade", group = i18n.later("General"), icon = lucide.REFRESH_CW, run = app_restart, enabled = proc(app: ^App) -> bool { return update_is_installed(&app.updater) }},
+	{id = "app.update_install", title = i18n.later("Install the update"), tags = "upgrade download version", group = i18n.later("General"), icon = lucide.REFRESH_CW, run = update_install_now, enabled = proc(app: ^App) -> bool { return update_phase(app) == .Available }},
+	{id = "app.update_restart", title = i18n.later("Restart to update"), tags = "relaunch reload reboot upgrade", group = i18n.later("General"), icon = lucide.REFRESH_CW, run = app_restart, enabled = proc(app: ^App) -> bool { return update_phase(app) == .Installed }},
 	{id = "app.restart", title = i18n.later("Restart opencode native"), tags = "relaunch reload reboot reopen", group = i18n.later("General"), icon = lucide.POWER, run = app_restart},
 	{id = "app.quit", title = i18n.later("Quit"), tags = "exit close leave", group = i18n.later("General"), icon = lucide.X, keys = "Alt+F4", run = proc(app: ^App) { app.quit = true }},
 
@@ -83,7 +85,7 @@ COMMANDS := [?]Command{
 	{id = "view.preview_tab", title = i18n.later("New browser tab"), tags = "preview web page url", group = i18n.later("View"), icon = lucide.PLUS, keys = "Ctrl+T", run = preview_tab_new},
 	{id = "view.preview_tab_close", title = i18n.later("Close browser tab"), tags = "preview web page", group = i18n.later("View"), icon = lucide.X, keys = "Ctrl+W", run = preview_tab_close_front, enabled = preview_tab_can_close},
 	{id = "view.sidebar", title = i18n.later("Show or hide the sidebar"), tags = "sessions list toggle collapse", group = i18n.later("View"), icon = lucide.MENU, keys = "Ctrl+B", key = .B, mods = {.Ctrl}, run = proc(app: ^App) { app.sidebar.hidden = !app.sidebar.hidden }, checked = proc(app: ^App) -> bool { return !app.sidebar.hidden }},
-	{id = "view.prompt_rail", title = i18n.later("Show or hide the prompt rail"), tags = "minimap timeline prompts messages navigate jump outline", group = i18n.later("View"), icon = lucide.LIST, run = proc(app: ^App) { pref_set(app, "conversation.prompt_rail", app.prefs.prompt_rail ? "false" : "true") }, checked = proc(app: ^App) -> bool { return app.prefs.prompt_rail }},
+	{id = "view.prompt_rail", title = i18n.later("Show or hide the prompt marks"), tags = "minimap rail scrollbar overview ruler timeline prompts messages navigate jump outline", group = i18n.later("View"), icon = lucide.LIST, run = proc(app: ^App) { pref_set(app, "conversation.prompt_rail", app.prefs.prompt_rail ? "false" : "true") }, checked = proc(app: ^App) -> bool { return app.prefs.prompt_rail }},
 	{id = "view.notices", title = i18n.later("What you missed"), tags = "notifications inbox missed events log bell unread", group = i18n.later("View"), icon = lucide.BELL, keys = "Ctrl+Shift+N", key = .N, mods = {.Ctrl, .Shift}, run = missed_toggle, over = proc(app: ^App) -> bool { return app.cx.open[.Notices] }},
 	{id = "notices.next", title = i18n.later("Next missed"), tags = "notifications queue next unread inbox", group = i18n.later("Go to"), icon = lucide.ARROW_RIGHT, run = missed_next},
 	{id = "view.sidebar_mode", title = i18n.later("Switch the sidebar's mode (inbox, projects)"), tags = "inbox projects folders group", group = i18n.later("View"), icon = lucide.LIST, run = sidebar_mode_next},
@@ -131,10 +133,10 @@ commands_keys :: proc(app: ^App) {
 // its being open is App_Context.open: then it is in this answer. What is not there says it in its own state:
 // - Changes: its state machine (Changes_State) says whether it is on screen; a bool beside it could disagree with it.
 // - Output: the view shown is the dialog's subject; nil is its being closed.
-// - Setup: the toolkit's setup.Dialog keeps its own `open` (gt:setup opens and closes it).
+// - The install's dialog: the toolkit's prefs_page.Install keeps its own (install_open_now).
 // - the toolkit's menus (ui.menu), which the toolkit's state holds.
 overlay_open :: proc(app: ^App) -> bool {
-	return app.cx.open != {} || changes_shown(&app.cx.changes) || app.cx.outputs.shown != nil || app.setup.open || len(app.state.menus) > 0
+	return app.cx.open != {} || changes_shown(&app.cx.changes) || app.cx.outputs.shown != nil || prefs_page.install_open_now(&app.install) || len(app.state.menus) > 0
 }
 
 // The conversation's zoom: the session shown's own, or the preference (appearance.content_zoom), which is every session's that has

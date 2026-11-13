@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>opencode native</title>
+<title>opencode native: a native desktop client for opencode</title>
 <meta name="description" content="A native desktop client for opencode. An independent project, not affiliated with the OpenCode team.">
 <link rel="icon" href="img/logo.png">
 <link rel="stylesheet" href="style.css">
@@ -12,12 +12,7 @@
 <header class="bar">
   <a class="brand" href="#"><img src="img/logo.png" alt="" width="28" height="28"><span><span class="dim">open</span>code <em>native</em></span></a>
   <button class="burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav"><span></span></button>
-  <nav id="nav">
-    <a href="#features">Features</a>
-    <a href="#download">Download</a>
-    <a href="changelog.html">Changelog</a>
-    <a href="https://github.com/sachahjkl/opencode_native">GitHub</a>
-  </nav>
+  <!-- site-nav -->
 </header>
 
 <main>
@@ -27,10 +22,10 @@
     <p class="lead">A native desktop client for <a href="https://opencode.ai">opencode</a>.<br>
       <small>Independent: not built by the OpenCode team, not affiliated with them.</small></p>
     <div class="actions">
-      <a class="btn accent get" href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-windows-x64.exe" data-linux-href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-linux-x64.tar.gz"><span class="get-icon" aria-hidden="true"><svg data-os-icon="windows" data-linux-hidden width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M3 12V6.75l6-1.32v6.48zm17-9v8.75l-10 .15V5.21zM3 13l6 .09v6.81l-6-1.15zm17 .25V22l-10-1.91V13.1z"/></svg><svg data-os-icon="linux" data-linux-shown hidden width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M14.62 8.35c-.42.28-1.75 1.04-1.95 1.19c-.39.31-.75.29-1.14-.01c-.2-.16-1.53-.92-1.95-1.19c-.48-.31-.45-.7.08-.92c1.64-.69 3.28-.64 4.91.03c.49.21.51.6.05.9m7.22 7.28c-.93-2.09-2.2-3.99-3.84-5.66a4.3 4.3 0 0 1-1.06-1.88c-.1-.33-.17-.67-.24-1.01c-.2-.88-.29-1.78-.7-2.61c-.73-1.58-2-2.4-3.84-2.47c-1.81.05-3.16.81-3.95 2.4c-.21.43-.36.88-.46 1.34c-.17.76-.32 1.55-.5 2.32c-.15.65-.45 1.21-.96 1.71c-1.61 1.57-2.9 3.37-3.88 5.35c-.14.29-.28.58-.37.88c-.19.66.29 1.12.99.96c.44-.09.88-.18 1.3-.31c.41-.15.57-.05.67.35c.65 2.15 2.07 3.66 4.24 4.5c4.12 1.56 8.93-.66 9.97-4.58c.07-.27.17-.37.47-.27c.46.14.93.24 1.4.35c.49.09.85-.16.92-.64c.03-.26-.06-.49-.16-.73"/></svg></span> <span class="get-text"><span class="get-main" data-linux-text="Download for Linux">Download for Windows</span> <span class="get-sub" data-linux-text="v{{version}} · x64 · .tar.gz · Vulkan">v{{version}} · Windows 10 / 11 · x64 · .exe</span></span></a>
+      <!-- download -->
       <a class="btn" href="https://github.com/sachahjkl/opencode_native">Source on GitHub</a>
     </div>
-    <p class="small">Also for <a href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-linux-x64.tar.gz" data-linux-href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-windows-x64.exe" data-linux-text="Windows">Linux</a> &nbsp;·&nbsp; MIT</p>
+    <p class="small"><!-- download-others --> &nbsp;·&nbsp; MIT</p>
   </section>
 
   <figure class="shot wide">
@@ -174,16 +169,13 @@
         <code><a href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-linux-x64.tar.gz">opencode-native-{{version}}-linux-x64.tar.gz</a></code>
       </div>
     </div>
-    <p><a class="btn accent get" href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-windows-x64.exe" data-linux-href="https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-linux-x64.tar.gz"><span class="get-icon" aria-hidden="true"><svg data-os-icon="windows" data-linux-hidden width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M3 12V6.75l6-1.32v6.48zm17-9v8.75l-10 .15V5.21zM3 13l6 .09v6.81l-6-1.15zm17 .25V22l-10-1.91V13.1z"/></svg><svg data-os-icon="linux" data-linux-shown hidden width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M14.62 8.35c-.42.28-1.75 1.04-1.95 1.19c-.39.31-.75.29-1.14-.01c-.2-.16-1.53-.92-1.95-1.19c-.48-.31-.45-.7.08-.92c1.64-.69 3.28-.64 4.91.03c.49.21.51.6.05.9m7.22 7.28c-.93-2.09-2.2-3.99-3.84-5.66a4.3 4.3 0 0 1-1.06-1.88c-.1-.33-.17-.67-.24-1.01c-.2-.88-.29-1.78-.7-2.61c-.73-1.58-2-2.4-3.84-2.47c-1.81.05-3.16.81-3.95 2.4c-.21.43-.36.88-.46 1.34c-.17.76-.32 1.55-.5 2.32c-.15.65-.45 1.21-.96 1.71c-1.61 1.57-2.9 3.37-3.88 5.35c-.14.29-.28.58-.37.88c-.19.66.29 1.12.99.96c.44-.09.88-.18 1.3-.31c.41-.15.57-.05.67.35c.65 2.15 2.07 3.66 4.24 4.5c4.12 1.56 8.93-.66 9.97-4.58c.07-.27.17-.37.47-.27c.46.14.93.24 1.4.35c.49.09.85-.16.92-.64c.03-.26-.06-.49-.16-.73"/></svg></span> <span class="get-text"><span class="get-main" data-linux-text="Download for Linux">Download for Windows</span> <span class="get-sub" data-linux-text="v{{version}} · x64 · .tar.gz · Vulkan">v{{version}} · Windows 10 / 11 · x64 · .exe</span></span></a> &nbsp; <a class="small" href="https://github.com/sachahjkl/opencode_native/releases/latest">All files and checksums</a></p>
+    <p><!-- download --> &nbsp; <a class="small" href="https://github.com/sachahjkl/opencode_native/releases/latest">All files and checksums</a></p>
     <p class="small">It finds this computer's opencode server by itself (where <code>opencode service status</code> says it runs);
       another one: <code>--url=https://host:port --password=…</code> or the status bar's server menu.</p>
   </section>
 </main>
 
-<footer>
-  <p class="by">By <span class="maker"><img src="img/froment-software-64.png" alt="" width="16" height="16"><a href="https://froment.software">Froment Software</a></span></p>
-  <p class="small"><span>MIT licence</span> · <span>Not affiliated with <a href="https://opencode.ai">OpenCode</a></span> · <span>Built in <a href="https://odin-lang.org">Odin</a> on <a href="https://gt.sacha.house/">gui_toolkit</a></span> · <a href="classic/">Classic version</a></p>
-</footer>
+<!-- site-footer -->
 <script>
   // the bar's menu on narrow screens: the button opens it, a link or a click elsewhere closes it
   const bar = document.querySelector('.bar'), burger = bar.querySelector('.burger');
@@ -192,19 +184,6 @@
   bar.querySelectorAll('nav a').forEach(a => a.addEventListener('click', shut));
   document.addEventListener('click', e => { if (!bar.contains(e.target)) shut(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') shut(); });
-  // the download for this system: the page's links are Windows's, which every other system gets too (a Mac, a phone: whoever reads
-  // the page there installs it on a computer); Linux gets its archive
-  {
-    const ua = navigator.userAgent, platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
-    const os = !/android|iphone|ipad|ipod/i.test(ua) && /linux|x11|bsd/i.test(platform + ' ' + ua) ? 'linux' : 'windows';
-    if (os === 'linux') {
-      document.querySelectorAll('[data-' + os + '-href]').forEach(a => { a.href = a.getAttribute('data-' + os + '-href'); });
-      document.querySelectorAll('[data-' + os + '-text]').forEach(e => { e.textContent = e.getAttribute('data-' + os + '-text'); });
-      // (the attribute, not the property: a logo is an svg, which has none)
-      document.querySelectorAll('[data-' + os + '-hidden]').forEach(e => { e.setAttribute('hidden', ''); });
-      document.querySelectorAll('[data-' + os + '-shown]').forEach(e => { e.removeAttribute('hidden'); });
-    }
-  }
 </script>
 <script src="gallery.js" defer></script>
 </body>

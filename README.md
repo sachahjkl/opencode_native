@@ -146,10 +146,10 @@ TLS is rustls, checked against the system's trust store.
 | `--server=<name>` | a saved server at start |
 | `--session=<id>` | open that session at start |
 | `--search=<text>` | the sidebar's search, filled at start |
-| `--install [--desktop]` | install this copy for the user, or repair the install (Windows: `%LOCALAPPDATA%\Programs\opencode-native`, Start menu, Settings > Apps; Linux: `~/.local/share/opencode-native`, the applications menu, the icon); `--desktop` adds a shortcut on the Desktop |
-| `--uninstall [--quiet]` | remove it (it asks first unless `--quiet`); the files of a copy that runs go when it ends |
-| `--status` | prints the state and the installed program; exit code 0 installed (a Nix package too), 2 needs repair, 1 not installed |
-| `--setup` | open Setup at start |
+| `--install` | install this copy for the user, or repair the install, without a window (Windows: `%LOCALAPPDATA%\Programs\opencode-native`, Start menu, Settings > Apps; Linux: `~/.local/share/opencode-native`, the applications menu, the icon) |
+| `--uninstall` | remove it, without a window; the files of a copy that runs go when it ends |
+| `--status` | prints what is installed (where, its version, the menu entry, the start with the session, the PATH); exit code 0 installed (a Nix package too), 2 needs repair, 1 not installed |
+| `--setup` | open the install's dialog at start (Settings > Apps' Uninstall runs it); the settings' Installation page shows the same |
 | `--add-server` | open the dialog that adds a server at start |
 | `--find=<text>` | open the find bar (Ctrl+F) with that text |
 | `--scale=<factor>` | the interface's scale whatever the screen's (`1`: 100 %; screenshots) |
@@ -210,7 +210,7 @@ every step is a command of `tools/ocntools` (`help` lists them; `AGENTS.md`). Th
 | `src/bench_test.odin` | the heavy cases in the test's process (a long conversation, hundreds of sessions); timed with `-define:OCN_BENCH=true` ([docs/performance.md](docs/performance.md)) |
 | `site/` | the GitHub Pages site |
 | `tools/` | `ocntools`, the project's machinery (`ocntools help`): the build, the packages, the signed manifests, the pictures of the README and the site (`ocntools shots`, over the DevTools protocol; `--linux-build` builds the Linux one in WSL with `flake.nix`), and what makes the site's pages (`ocntools site build site _site`: its changelog, its classic pages, what a page says when it is shared, on the toolkit's `site` package; `ocntools site check` in a real browser), the logo and the icon of `assets/` (`ocntools logo`, the toolkit's paint package); the DevTools client is the toolkit's `cdp` package, and `doc_check` the toolkit's `tk doc_check --root . --extra ext/gui_toolkit` |
-| `res/`, `assets/` | resources of the exe (icon, version, manifest), the logo, Lucide (`assets/fonts`, ISC) |
+| `assets/` | the logo and the exe's icon (the toolkit's build makes the exe's resource from `OCN_PROJECT`), Lucide (`assets/fonts`, ISC) |
 
 ## License
 

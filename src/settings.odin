@@ -66,7 +66,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "conversation.tool_lines", title = i18n.later("Tool lines"), description = i18n.later("Lines of a tool's output shown before the rest is counted."), kind = .Int, default = {i = 60}, bounded = true, min = TOOL_LINES_MIN, max = TOOL_LINES_MAX},
 	{name = "conversation.page_size", title = i18n.later("Page size"), description = i18n.later("Messages read at a time (scrolling up reads the next page by itself)."), kind = .Int, default = {i = 80}, bounded = true, min = PAGE_SIZE_MIN, max = PAGE_SIZE_MAX},
 	{name = "conversation.follow", title = i18n.later("Follow"), description = i18n.later("Follow new messages to the bottom while you are there."), kind = .Bool, default = {b = true}},
-	{name = "conversation.prompt_rail", title = i18n.later("Prompt rail"), description = i18n.later("A rail beside the conversation with a dot for each of your prompts, the part in view a band over it: the pointer over a dot shows the prompt, a click goes to it at once. A filter at its top keeps the prompts that say what you type."), kind = .Bool, default = {b = true}},
+	{name = "conversation.prompt_rail", title = i18n.later("Prompt marks"), description = i18n.later("A mark on the conversation's scroll bar for each of your prompts, under the thumb where the view is: the pointer over a mark shows the prompt, a click goes to it at once. The magnifier above the bar filters the prompts by what you type."), kind = .Bool, default = {b = true}},
 	{name = "conversation.usage", title = i18n.later("Usage"), description = i18n.later("Tokens and cost under each answer."), kind = .Bool, default = {b = true}},
 	{name = "conversation.while_running", title = i18n.later("While running"), description = i18n.later("What Enter does while a turn runs: steer the message into the turn (at its next step), or queue it for the end of the turn. Ctrl+Enter does the other. A message waiting in the list can be sent now: that stops what the agent is doing."), kind = .String, default = {s = "steer"}, choices = {"queue", "steer"}, choice_labels = {i18n.later("Queue"), i18n.later("Steer")}},
 	{name = "conversation.image_viewer_size", title = i18n.later("Image viewer size"), description = i18n.later("The size of the image viewer, as a share of the most the window gives a picture. A picture opens no larger than its pixels; drag the viewer's edges or corners to make it larger or smaller."), kind = .Float, default = {f = 1}, bounded = true, min = VIEWER_SCALE_MIN, max = 1},
@@ -130,7 +130,6 @@ Prefs :: struct {
 	throbber:     string,
 	browser_tools: bool,
 	experimental: bool,
-	update_channel: string,
 	update_auto:  bool,
 	system_title: bool,    // window.system_title (title_apply)
 	new_sessions: Approval,   // permission.new_sessions: the preset a session made here starts with
@@ -149,18 +148,14 @@ prefs_path :: proc() -> string { return pjoin({filepath.dir(settings_path()), "p
 // this program's own.
 prefs_register :: proc(p: ^config.Prefs) {
 	d := prefs_page.STANDARD_DEFAULTS
-	d.theme, d.app_name, d.update_channel = "OpenCode", APP_NAME, "stable"
-	d.values = STANDARD_VALUES[:]
+	d.theme, d.app_name = "OpenCode", APP_NAME
+	// (update.channel: a choice of the releases' channels, updates.odin)
+	d.update_channels, d.update_channel_labels = UPDATE_CHANNEL_NAMES[:], UPDATE_CHANNEL_LABELS[:]
 	prefs_page.standard_register(p, prefs_page.STANDARD_ALL, d)
 	config.register(p, PREF_DEFS[:])
 	// (the titles the settings page made from the names, said here so that they are translated; order 0: their places stay)
 	for g in PREF_GROUPS { config.title_register(p, g[0], g[1]) }
 }
-
-// This program's own defaults of standard settings: the messages at the top right (at the bottom they hid the send
-// button: views.odin set_toast_area), each frame repainting only what changed, and scrolling that glides even when the
-// system turns animations off (a conversation read with the wheel: where a jump lands is lost).
-STANDARD_VALUES := [?]prefs_page.Standard_Value{{"window.toast_position", "top_right"}, {"rendering.partial_redraw", "true"}, {"scrolling.smooth", "on"}}
 
 PREF_GROUPS := [?][2]string{
 	{"conversation", i18n.later("Conversation")}, {"composer", i18n.later("Composer")}, {"sidebar", i18n.later("Sidebar")},
@@ -235,12 +230,11 @@ prefs_refresh :: proc(app: ^App) {
 	s.throbber = config.string_of(p, "appearance.throbber")
 	s.browser_tools = config.bool_of(p, "browser.tools")
 	s.experimental = config.bool_of(p, "advanced.experimental")
-	s.update_channel = config.string_of(p, "update.channel")
 	s.update_auto = config.bool_of(p, "update.auto")
 	s.system_title = config.bool_of(p, "window.system_title")
 	app.announcer.mode = prefs_page.announce_mode(p)
 	s.new_sessions = approval_of_pref(config.string_of(p, "permission.new_sessions"))
-	update_channel_follow(app)
+	updates_prefs(app)
 	title_apply(app)
 
 	// the faces, when either preference changed (a family is opened once: the font state keeps it)
@@ -709,10 +703,6 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "catalog", title = i18n.later("Providers & skills"), icon = lucide.LIST, build = proc(user: rawptr, em: f32) { page_catalog((^App)(user), em) }},
 }
 
-// The channels this program's releases come on (update.channel: the toolkit's, a free text without them).
-@(private = "file") UPDATE_CHANNELS       := [?]string{"stable", "beta"}
-@(private = "file") UPDATE_CHANNEL_LABELS := [?]string{i18n.later("Stable"), i18n.later("Beta")}
-
 // The font preferences: their control is this program's (font_button: its faces, the installed families).
 @(private = "file")
 FONT_PREFS := [?]string{"appearance.text.ui_font", "appearance.text.prose_font", "appearance.text.mono_font", "appearance.text.terminal_font"}
@@ -743,13 +733,12 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 		version = fmt.tprintf("%s %s", APP_NAME, APP_VERSION),
 		themes = themes(app), themes_light = app.cx.theme.light,
 		themes_file = app.cx.theme.file.path != "" ? &app.cx.theme.file : nil,
-		choices = proc(_: rawptr, name: string) -> (labels, values: []string) {
-			if name == "update.channel" { return UPDATE_CHANNEL_LABELS[:], UPDATE_CHANNELS[:] }   // (English: prefs_page translates where it shows)
-			return nil, nil
-		},
+		// (the Updates page: the Updater's state and its buttons under update.auto, as in every program of the toolkit)
+		updater = app.updater, restart = proc(user: rawptr) { app_restart((^App)(user)) },
 		custom_names = FONT_PREFS[:],
 		custom = proc(user: rawptr, name: string, em: f32) { font_button((^App)(user), name, em) },
 		page_foot = settings_page_foot,
+		install = &app.install, diagnostics = &app.window,
 	}
 }
 
@@ -763,49 +752,12 @@ settings_dialog :: proc(app: ^App, em: f32) {
 	}
 }
 
-// Under a page's preferences: what is not a setting (the updates' state and buttons; the folder, the program, the
-// terminal's licence; where Setup is).
+// Under a page's preferences: what is not a setting (the folder, the program, the terminal's licence). The Updates page
+// is the toolkit's alone (Page_Options.updater).
 @(private = "file")
 settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 	app := (^App)(user)
 	switch category {
-	case "behaviour":
-		ui.spacer(ui.px(em * 0.6))
-		info_line(app, "###hint_setup", i18n.tr(SETUP_HINT), em)
-	case "update":
-		u := &app.updater
-		state := i18n.tr("Up to date, as far as is known")
-		switch _ in u.state {
-		case nil:
-			if u.result != "" { state = u.result }
-		case Update_Checking:    state = i18n.tr("Looking for a new version…")
-		case Update_Ready:       state = fmt.tprintf(i18n.tr("Version %s is available"), update_version(u))
-		case Update_Downloading: state = fmt.tprintf(i18n.tr("Downloading %s…"), update_version(u))
-		case Update_Installed:   state = fmt.tprintf(i18n.tr("Version %s is installed: restart to use it"), update_version(u))
-		}
-		ui.spacer(ui.px(em * 0.6))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-		if ui.well("###upd") {
-			ui.spacer(ui.px(em * 0.4))
-			fact("###u1", "version", APP_VERSION, em)
-			fact("###u2", "channel", app.prefs.update_channel, em)
-			fact("###u3", i18n.tr("state"), state, em)
-			ui.spacer(ui.px(em * 0.4))
-		}
-		ui.spacer(ui.px(em * 0.7))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-		if ui.row(.Center, id = "###upd_b") {
-			if ui.button("u_check", i18n.tr("Check now"), lucide.REFRESH_CW, {disabled = update_is_downloading(u)}).clicked { update_check(app, true) }
-			ui.spacer(ui.px(em * 0.5))
-			if update_is_ready(u) {
-				if ui.button("u_inst", ui.text_shown(fmt.tprintf(i18n.tr("Install %s"), update_version(u))), lucide.CHECK, {intent = .Success}).clicked { update_install(app) }
-			}
-			if update_is_installed(u) {
-				if ui.button("u_rest", i18n.tr("Restart now"), lucide.REFRESH_CW, {intent = .Success}).clicked { app_restart(app) }
-			}
-		}
-		ui.spacer(ui.px(em * 0.6))
-		info_line(app, "###hint_sig", i18n.tr("Only what is signed with the key built into this program is installed: the channel, the version and the file's checksum are all in the signature."), em)
 	case "advanced":
 		ui.spacer(ui.px(em * 0.6))
 		info_line(app, "###adv_about", fmt.tprintf(i18n.tr("%s %s, a client of the OpenCode server. %s"), APP_NAME, APP_VERSION, i18n.tr(APP_NOT_THEIRS)), em)

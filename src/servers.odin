@@ -518,7 +518,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 			}
 			ui.spacer(ui.fill())
 			if taken { text("tk", i18n.tr("That name is taken"), hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
-			if ui.button("cancel", i18n.tr("Cancel"), o = {intent = .Cancel}).clicked { app.cx.open[.Server] = false }
+			if ui.button("cancel", i18n.tr("Cancel")).clicked { app.cx.open[.Server] = false }
 			ui.spacer(ui.px(em * 0.5))
 			if ui.button("ok", ui.text_shown(e.index >= 0 ? i18n.tr("Save and connect") : i18n.tr("Add and connect")), lucide.CHECK, {intent = .Success, disabled = !valid}).clicked { save = true }
 			pad(em)

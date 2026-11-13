@@ -28,7 +28,7 @@ Conversation :: struct {
 	rect:             Rect,           // the conversation's place (Ctrl and the wheel over it zoom it)
 	docked_w:         f32,            // the conversation's room as a panel of the dock (0: it is not one)
 	was_docked:       bool,           // the conversation was in the dock (preview.odin main_area)
-	prompt_rail:      Prompt_Rail,    // the rail of the prompts beside it (prompt_rail.odin)
+	prompt_rail:      Prompt_Rail,    // the marks of the prompts on its scroll bar (prompt_rail.odin)
 }
 
 ////////////////////////////////
@@ -53,9 +53,6 @@ conversation :: proc(app: ^App, em: f32) {
 		if !app.sidebar.hidden { avail -= app.sidebar.width * sc + math.round(SPLITTER_W_PX * sc) }
 		if app.conversation.docked_w > 0 { avail = app.conversation.docked_w }   // (a panel of the dock: its room)
 		if avail <= 0 { avail = AVAIL_FALLBACK_PX * sc }
-		// (the prompts' rail at the right: the conversation is what is left of the room)
-		rail_w := prompt_rail_w(app, em)
-		avail -= rail_w
 		app.conversation.column_w = 0
 		zoom := content_zoom(app)
 		cem := math.round(em * zoom)   // the conversation's own size: its zoom is not the interface's
@@ -71,8 +68,8 @@ conversation :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 		if ui.row(id = "###chat_row") {
 			sb = ui.prev_box("###chat")
-			// (before the keys of the conversation: Up and Down are the rail's while it has the keyboard)
-			if rail_w > 0 && sb != nil { prompt_rail(app, sb, rail_w, em) }
+			// (before the keys of the conversation: Up and Down are the marks' while they have the keyboard)
+			if prompt_rail_on(app) && sb != nil { prompt_rail(app, sb, em) }
 			find_update(app, sb, em)
 			chat_scroll_place(app, sb, em)
 			ui.next({width = ui.fill(), height = ui.fill()})
@@ -89,7 +86,6 @@ conversation :: proc(app: ^App, em: f32) {
 				}
 			}
 			app.conversation.scroll_box = ui.prev_box("###chat")
-			if rail_w > 0 { ui.spacer(ui.px(rail_w)) }
 		}
 		chat_scroll_settle(app, sb)
 		if sb != nil && app.chat.id != "" { column_handles(app, sb, main, side, col, avail, em) }

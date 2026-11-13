@@ -533,7 +533,18 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		session.frames(s, 3)
 		found := ui.find_count()
 		testing.expect(t, found > 1, "the sweep read the whole conversation")
-		testing.expect_value(t, app.find.index, found - 1)   // (searched from the bottom, under its last match: that one, not the first, a conversation away)
+		// (searched from where the reader is, a few screens over the bottom, the wheel's: the first match under the view's top, in
+		// view, not the conversation's first, a conversation away. Which one it is depends on where the wheel stopped, which the
+		// lazy column's estimates of the messages above once moved under the reader)
+		{
+			chat := session.get(s, "chat")
+			testing.expectf(t, app.find.index > found / 2, "a match near the view: %d of %d", app.find.index, found)
+			shown := false
+			for m in ui.find_matches() {
+				if m.index == app.find.index { shown = m.rect.max.y > chat.rect.min.y && m.rect.min.y < chat.rect.max.y }   // (window coordinates)
+			}
+			testing.expectf(t, shown, "the current match %d in view", app.find.index)
+		}
 		testing.expect(t, session.find(s, "msg_msg_0_a") == nil, "after the sweep, only what is near the view is built")
 		// the first match, far from anything built: the view goes there, and it is lit with its index of the sweep
 		app.find.index = found - 1
@@ -1247,6 +1258,129 @@ a_thought_opened_while_the_run_goes_on_stays :: proc(t: ^testing.T) {
 	})
 }
 
+// The answer that streams in, a delta at a time.
+@(private = "file")
+stream_delta :: proc(app: ^App, i: int) {
+	text := i % BENCH_PARAGRAPH_DELTAS == 0 ? fmt.tprintf("\n\n%s", BENCH_DELTA) : BENCH_DELTA
+	bench_event(app, fmt.tprintf(`{{"type":"session.text.delta","data":{{"sessionID":"%s","assistantMessageID":"live_a","ordinal":0,"delta":%s}}}}`, app.chat.id, jquote(text)))
+}
+
+// What the reader reads, read up in the conversation: `name` exactly at `y` on the screen, and the view moved by no glide.
+@(private = "file")
+read_stays :: proc(t: ^testing.T, app: ^App, s: ^session.Session, name: string, y: f32, what: string, i: int) -> bool {
+	sb := session.get(s, "chat")
+	b := session.find(s, name)
+	if !testing.expectf(t, b != nil, "%s %d: %s still shown", what, i, name) { return false }
+	if !testing.expectf(t, b.rect.min.y == y, "%s %d: %s stays at %v (now %v)", what, i, name, y, b.rect.min.y) { return false }
+	if !testing.expectf(t, !sb.view_anim[1].active && sb.view_off.y == sb.view_target.y, "%s %d: no glide (%v toward %v)", what, i, sb.view_off.y, sb.view_target.y) { return false }
+	return testing.expectf(t, !chat_following(app), "%s %d: the bottom still let go of", what, i)
+}
+
+// The agent answers while the reader has gone up into the conversation: what they read does not move by a pixel, whatever grows
+// below it (the answer that streams in, a tool's output, the composer) or changes above it (a message near it that grows, and the
+// estimate of the messages never built, which each measure of the streaming answer moves). Following the bottom, the answer's end
+// stays where it is on the screen at every frame.
+@(test)
+what_is_read_stays_while_the_answer_streams :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		c := &app.chat
+		c.busy = true
+		set_busy(app, c.id, true)
+		started := BENCH_EPOCH_MS + f64(BENCH_TURNS) * BENCH_STEP_MS
+		bench_event(app, fmt.tprintf(`{{"type":"session.step.started","data":{{"sessionID":"%s","assistantMessageID":"live_a","agent":"build","model":{{"id":"m","providerID":"p"}},"started":%f}}}}`, c.id, started))
+		bench_event(app, fmt.tprintf(`{{"type":"session.text.started","data":{{"sessionID":"%s","assistantMessageID":"live_a","ordinal":0}}}}`, c.id))
+		stream_delta(app, 0)
+		chat_scroll_event(app, Scroll_Signal.Snap)
+		session.frames(s, 4)
+
+		// following: glued to the bottom
+		live := session.find(s, "msg_live_a")
+		if !testing.expect(t, live != nil, "the answer that streams in") { return }
+		bottom := live.rect.max.y
+		for i in 1 ..< 40 {
+			stream_delta(app, i)
+			session.frames(s, 1)
+			sb := session.get(s, "chat")
+			if !testing.expectf(t, chat_following(app) && sb.view_off.y >= ui.view_limit(sb) - 0.5, "following, delta %d: at the bottom (%v of %v)", i, sb.view_off.y, ui.view_limit(sb)) { return }
+			live = session.find(s, "msg_live_a")
+			if !testing.expectf(t, live != nil && live.rect.max.y == bottom, "following, delta %d: its end stays at %v (now %v)", i, bottom, live != nil ? live.rect.max.y : -1) { return }
+		}
+
+		// gone up, to the middle of the conversation
+		sb := session.get(s, "chat")
+		chat_scroll_event(app, Scroll_Signal.Moved_Up)
+		ui.view_jump(sb, math.round(ui.view_limit(sb) * 0.5))
+		session.frames(s, 6)
+		sb = session.get(s, "chat")
+		testing.expect(t, !chat_following(app), "up: the bottom let go of")
+		// an answer that can grow (its last part a text), built: the view's top put just under its end, so that it is entirely above
+		// the view and still built (the band built reaches a screen above the view)
+		above := -1
+		for m, i in c.messages {
+			if m.kind != .Assistant || len(m.parts) == 0 || m.parts[len(m.parts) - 1].kind != .Text { continue }
+			if b := session.find(s, fmt.tprintf("msg_%s", m.id)); b != nil && b.rect.max.y > sb.rect.min.y { above = i; break }
+		}
+		if !testing.expect(t, above >= 0, "an answer built in the view") { return }
+		above_name := fmt.tprintf("msg_%s", c.messages[above].id)
+		ab := session.get(s, above_name)
+		ui.view_jump(sb, ab.rect.max.y - sb.rect.min.y + sb.view_off.y + 1)
+		session.frames(s, 6)
+		sb = session.get(s, "chat")
+		ab = session.find(s, above_name)
+		if !testing.expectf(t, ab != nil && ab.rect.max.y <= sb.rect.min.y, "the answer built above the view (%v, the view's top %v)", ab != nil ? ab.rect.max.y : -1, sb.rect.min.y) { return }
+		// a message after it whose top is in the view
+		at := -1
+		for i in above + 1 ..< len(c.messages) {
+			b := session.find(s, fmt.tprintf("msg_%s", c.messages[i].id))
+			if b != nil && b.rect.min.y > sb.rect.min.y && b.rect.min.y < sb.rect.max.y - sb.size.y * 0.25 { at = i; break }
+		}
+		if !testing.expect(t, at > above, "a message in the view") { return }
+		name := fmt.tprintf("msg_%s", c.messages[at].id)
+		y := session.get(s, name).rect.min.y
+
+		// the answer streams in below
+		for i in 40 ..< 100 {
+			stream_delta(app, i)
+			session.frames(s, 1)
+			if !read_stays(t, app, s, name, y, "delta", i) { return }
+		}
+		// a tool runs and its output comes in
+		bench_event(app, fmt.tprintf(`{{"type":"session.tool.input.started","data":{{"sessionID":"%s","assistantMessageID":"live_a","id":"call_live","name":"read"}}}}`, c.id))
+		session.frames(s, 1)
+		if !read_stays(t, app, s, name, y, "tool started", 0) { return }
+		bench_event(app, fmt.tprintf(`{{"type":"session.tool.called","data":{{"sessionID":"%s","assistantMessageID":"live_a","id":"call_live","input":{{"filePath":"src/live.odin"}}}}}}`, c.id))
+		session.frames(s, 1)
+		if !read_stays(t, app, s, name, y, "tool called", 0) { return }
+		bench_event(app, fmt.tprintf(`{{"type":"session.tool.success","data":{{"sessionID":"%s","assistantMessageID":"live_a","id":"call_live","content":[{{"type":"text","text":%s}}]}}}}`, c.id, jquote(strings.repeat(BENCH_OUTPUT, 30, context.temp_allocator))))
+		for i in 0 ..< 3 {
+			session.frames(s, 1)
+			if !read_stays(t, app, s, name, y, "tool done", i) { return }
+		}
+		// a message above the view grows (its height measured anew)
+		text := &c.messages[above].parts[len(c.messages[above].parts) - 1].text
+		for i in 0 ..< 4 {
+			append(text, "\n\nA paragraph more, above what is read, long enough to take a line or two of the column and push what follows it down.")
+			session.frames(s, 1)
+			if !read_stays(t, app, s, name, y, "above", i) { return }
+		}
+		// the composer grows a few lines
+		ui.text_edit_set(&app.composer.area, "one\ntwo\nthree\nfour\nfive")
+		for i in 0 ..< 3 {
+			session.frames(s, 1)
+			if !read_stays(t, app, s, name, y, "composer", i) { return }
+		}
+		ui.text_edit_set(&app.composer.area, "")
+		// and the answer goes on
+		for i in 100 ..< 140 {
+			stream_delta(app, i)
+			session.frames(s, 1)
+			if !read_stays(t, app, s, name, y, "delta", i) { return }
+		}
+	})
+}
+
 // A paused goal says why (the server's reason) at the end of the conversation, across it, all of it; the strip over the composer
 // stays one line.
 @(test)
@@ -1866,7 +2000,7 @@ the_palettes_search_is_a_menus_search_band :: proc(t: ^testing.T) {
 }
 
 // A button says what it does by its colour, the toolkit's soft pair of its intent's hue: the delete dialog's Delete is red
-// (Danger), the rename dialog's Rename green (Success), their Cancel red too (Cancel). Flat, so the middle of a face is its
+// (Danger), the rename dialog's Rename its Primary; their Cancel a plain face, untinted (only the act carries an intent). Flat, so the middle of a face is its
 // fill; dark, as the request was (Windows' CI is light).
 @(test)
 a_buttons_colour_says_what_it_does :: proc(t: ^testing.T) {
@@ -1881,6 +2015,14 @@ a_buttons_colour_says_what_it_does :: proc(t: ^testing.T) {
 		face :: proc(t: ^testing.T, s: ^session.Session, name: string, intent: ui.Intent) {
 			b := session.find(s, name)
 			if !testing.expectf(t, b != nil, "the button %s", name) { return }
+			if intent == .Neutral {
+				// (no intent, no tint: a plain face, grey, as any button's)
+				img := session.capture(s)
+				got := session.pixel(img, int(b.rect.min.x) + 4, int((b.rect.min.y + b.rect.max.y) * 0.5))
+				d := max(abs(int(got.r) - int(got.g)), abs(int(got.g) - int(got.b)), abs(int(got.r) - int(got.b)))
+				testing.expectf(t, d <= 3, "%s (neutral): its face %v, not tinted", name, got)
+				return
+			}
 			hue := ui.hue_color(ui.intent_hue(intent))
 			hue.a = 1
 			fill, _ := ui.soft_pair(hue)
@@ -1894,13 +2036,13 @@ a_buttons_colour_says_what_it_does :: proc(t: ^testing.T) {
 		app.cx.open[.Delete] = true
 		session.wait_idle(s)
 		face(t, s, "confirm_act", .Danger)
-		face(t, s, "confirm_cancel", .Cancel)
+		face(t, s, "confirm_cancel", .Neutral)   // (a Cancel is neutral: only the act carries its intent)
 		app.cx.open[.Delete] = false
 		session.frames(s, 2)
 		rename_open(app, "ses_colour")
 		session.wait_idle(s)
 		face(t, s, "prompt_ok", .Primary)
-		face(t, s, "prompt_cancel", .Cancel)
+		face(t, s, "prompt_cancel", .Neutral)
 		app.cx.open[.Rename] = false
 		session.frames(s, 2)
 	})
@@ -2138,9 +2280,10 @@ the_view_of_what_was_missed_builds_only_its_rows_in_view :: proc(t: ^testing.T) 
 	})
 }
 
-// The prompts' rail: a dot for each prompt, in the conversation's order, on a long conversation opened at its bottom. A click on
-// the dot of a prompt far above (never built) puts it at the top of the view in that frame, no glide; its plate has the keyboard,
-// and the view stays on it while the heights around it settle. The setting hides the rail and gives its room back.
+// The prompts' marks on the conversation's scroll bar: a mark for each prompt, in the conversation's order, on a long
+// conversation opened at its bottom. A click on the mark of a prompt far above (never built) puts it at the top of the view in
+// that frame, no glide; its plate has the keyboard, and the view stays on it while the heights around it settle. The setting
+// takes the marks off the bar, which is a plain one again.
 @(test)
 the_prompt_rail_goes_to_a_prompt_at_once :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
@@ -2148,17 +2291,17 @@ the_prompt_rail_goes_to_a_prompt_at_once :: proc(t: ^testing.T) {
 		app, s := bench_app(t)
 		rail := &app.conversation.prompt_rail.rail
 		sb := session.get(s, "chat")
-		testing.expect_value(t, len(ui.mark_rail_shown(rail)), BENCH_TURNS)
+		testing.expect_value(t, len(ui.scroll_marks_shown(rail)), BENCH_TURNS)
 		last: f32 = -1
 		for i in 0 ..< BENCH_TURNS {
-			at, ok := ui.mark_rail_dot(rail, sb, i)
-			if !testing.expectf(t, ok, "prompt %d has a dot", i) { return }
+			at, ok := ui.scroll_marks_at(rail, sb, i)
+			if !testing.expectf(t, ok, "prompt %d has a mark", i) { return }
 			testing.expectf(t, at.y >= last, "prompt %d below the one before it", i)
 			last = at.y
 		}
-		testing.expect_value(t, ui.mark_rail_id(rail, 10), "msg_10_u")
+		testing.expect_value(t, ui.scroll_marks_id(rail, 10), "msg_10_u")
 		testing.expect(t, session.find(s, "u_msg_10_u") == nil, "not built, far above")
-		at, _ := ui.mark_rail_dot(rail, sb, 10)
+		at, _ := ui.scroll_marks_at(rail, sb, 10)
 		session.click_at(s, at)
 		sb = session.get(s, "chat")
 		plate := session.find(s, "u_msg_10_u")
@@ -2171,11 +2314,17 @@ the_prompt_rail_goes_to_a_prompt_at_once :: proc(t: ^testing.T) {
 		session.frames(s, 20)
 		plate = session.get(s, "u_msg_10_u")
 		testing.expectf(t, abs(plate.rect.min.y - sb.rect.min.y - top) < 1, "still there: %v, was %v", plate.rect.min.y - sb.rect.min.y, top)
-		// hidden: the conversation takes its room back
-		w := sb.rect.max.x - sb.rect.min.x
+		// hidden: no marks, and the bar is a plain one (narrower, from the top of the view)
+		session.move(s, session.center(session.get(s, "chat")))
+		session.frames(s, 3)
+		marked, _, _ := ui.scrollbar_rects(session.get(s, "chat"))
 		command_run(app, command_find("view.prompt_rail"))
 		session.frames(s, 3)
-		testing.expect(t, session.find(s, "prompt_rail") == nil, "no rail")
-		testing.expectf(t, session.get(s, "chat").rect.max.x - session.get(s, "chat").rect.min.x > w, "wider: %v", w)
+		testing.expect(t, session.find(s, "prompt_rail") == nil, "no marks' button")
+		_, ok := ui.scroll_marks_at(rail, session.get(s, "chat"), 10)
+		testing.expect(t, !ok, "no marks on the bar")
+		plain, _, _ := ui.scrollbar_rects(session.get(s, "chat"))
+		testing.expectf(t, plain.max.x - plain.min.x < marked.max.x - marked.min.x, "narrower: %v, was %v", plain, marked)
+		testing.expectf(t, plain.min.y < marked.min.y, "from higher: %v, was %v", plain, marked)
 	})
 }

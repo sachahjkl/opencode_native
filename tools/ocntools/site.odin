@@ -3,7 +3,7 @@
 // browser is offered).
 //   ocntools site build <site> <out>       the two steps below, then the screenshots (docs/screenshots, in WebP) at the widths
 //                                          the page shows them: <out> is what is published
-//   ocntools site changelog <site> <out>   <out> gets a copy of <site>, the history and the classic pages
+//   ocntools site changelog <site> <out>   <out> gets a copy of <site>, the history, the classic pages and the shop's
 //   ocntools site meta <site> <out>        what a page says when it is shared, the files around the pages
 //   ocntools site card                     draws site/img/card.png, once, by hand
 //   ocntools site check [--site folder] [--shot file.png] [--browser program]
@@ -13,11 +13,9 @@
 package ocntools
 
 import "core:fmt"
-import "core:path/filepath"
 import "core:os"
 import "core:strings"
 import cdp "gt:cdp"
-import fsx "gt:fsx"
 import toolbox "gt:toolbox"
 import tk_site "gt:site"
 
@@ -47,6 +45,17 @@ SITE_META :: tk_site.Meta{
 	card_size   = 132,
 	card_logo   = 168,
 	card_font   = `"Segoe UI Variable Display", "Segoe UI", sans-serif`,
+	publisher_logo = "img/froment-software-64.png",
+	licence     = "MIT",
+	footer_note = `Not affiliated with <a href="https://opencode.ai">OpenCode</a>`,
+}
+
+// The home page's download, one button per system the release builds for (the reader's shown; Windows when it is not known:
+// a Mac or a phone, whoever reads the page there installs it on a computer).
+@(rodata)
+SITE_DOWNLOADS := [?]tk_site.Download{
+	{os = "windows", label = "Windows", href = "https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-windows-x64.exe", detail = "v{{version}} · Windows 10 / 11 · x64 · .exe"},
+	{os = "linux", label = "Linux", href = "https://github.com/sachahjkl/opencode_native/releases/download/v{{version}}/opencode-native-{{version}}-linux-x64.tar.gz", detail = "v{{version}} · x64 · .tar.gz · Vulkan"},
 }
 
 // What the home's structured data says besides its names.
@@ -92,35 +101,43 @@ site_meta :: proc() -> tk_site.Meta {
 	ld := SITE_LD
 	m.ld_fields = make([][2]string, len(ld), context.temp_allocator)
 	copy(m.ld_fields, ld[:])
+	m.shop = SITE_SHOP
 	return m
 }
 
-// (CHANGELOG.md is the repository's: main stands at its root.)
+// The pages: the history, the classic pages and the shop's. (CHANGELOG.md is the repository's: main stands at its root.)
 site_changelog :: proc(site, out: string, _: rawptr) -> bool {
-	return tk_site.build_changelog(site, out, {changes = SITE_CHANGES, version_mark = VERSION_MARK})
+	return tk_site.build_changelog(site, out, {changes = SITE_CHANGES, version_mark = VERSION_MARK, downloads = SITE_DOWNLOADS[:], meta = site_meta()})
 }
 
-// The shop's six pages (pricing, thanks, terms, refunds, privacy, imprint): "Coming soon" until Paddle's client token, the
-// price id and the licence Worker are set here (docs/licence.md of the toolkit, "What the maintainer does at the end").
+// The shop's six pages (pricing, thanks, terms, refunds, privacy, imprint), made with the others (Meta.shop): "Coming soon"
+// until Paddle's client token, the price id and the licence Worker are set here (docs/licence.md of the toolkit, "What the
+// maintainer does at the end").
 SITE_SHOP :: tk_site.Shop{
-	name = "opencode native", icon = "../img/logo.png", product_title = "opencode native licence",
+	name = "opencode native", icon = "../img/logo.png", product_title = "Opencode Native User License",
 	price = "15&nbsp;&euro;", price_note = "", environment = "sandbox", edition = "supporter", price_id = "",
-	thanks = "https://ocn.froment.software/thanks/", help = "https://github.com/sachahjkl/opencode_native/issues",
+	thanks = "https://ocn.froment.software/thanks/", help = "https://github.com/sachahjkl/opencode_native/issues/new",
 	register = "Open the file with opencode native, or paste the key in <em>Settings &rsaquo; Advanced &rsaquo; Licence</em>.",
-	extension = ".ocnlicence", seller = "Froment Software", seller_url = "https://froment.software",
-	code_licence = "MIT", stylesheet = "../style.css", home = "../", updated = "2026-11-13",
+	extension = ".ocnlicence", repository = "https://github.com/sachahjkl/opencode_native", seller = SELLER,
+	code_licence = "MIT License", platform = "Windows 10 or 11, x64, and Linux, x64 (Vulkan). It works with an opencode server, on this computer or another.",
+	network = "opencode native connects to your opencode server, on this computer unless you give another address. It asks GitHub for a new release when you turned on the automatic updates in the settings, or when you ask for it there, and puts an update in place only if it is signed by Froment Software.",
+	stylesheet = "../style.css", home = "../", updated = "2026-11-13",
 }
 
-@(private = "file")
-site_shop :: proc(out: string) -> bool {
-	for page in tk_site.licence_pages(SITE_SHOP) {
-		path := fmt.tprintf("%s/%s", out, page.path)
-		if !fsx.make_dirs(filepath.dir(path)) || !fsx.write_atomic(path, transmute([]u8)page.text) {
-			fmt.eprintfln("site: %s could not be written", path)
-			return false
-		}
-	}
-	return true
+// The seller, as Wren's imprint names it: the same block in every program of Froment Software.
+SELLER :: tk_site.Seller{
+	name       = "Froment Software",
+	owner      = "Sacha Froment",
+	status     = "sole proprietor (<em>entrepreneur individuel</em>)",
+	address    = "7 Lieu-dit les Renardi&egrave;res, 72220 Marign&eacute;-Laill&eacute;, France",
+	email      = "contact@froment.software",
+	url        = "https://froment.software",
+	siren      = "131 941 718",
+	siret      = "131 941 718 00010",
+	ape        = "6201Z, computer programming",
+	registry   = "the French national register of companies (RNE)",
+	registered = "23 October 2026",
+	vat        = "not applicable, article 293 B of the French General Tax Code (<em>franchise en base de TVA</em>)",
 }
 
 run_site :: proc(args: []string) -> int {
@@ -134,7 +151,6 @@ run_site :: proc(args: []string) -> int {
 		if !site_changelog(site, out, nil) { return 1 }
 		if !tk_site.build_meta(site_meta(), out, out) { return 1 }
 		if !site_screenshots(out) { return 1 }
-		if !site_shop(out) { return 1 }
 		o := site_images()
 		why: string
 		if o.encoder, why = toolbox.webp_encoder("build"); why != "" { fmt.eprintfln("site: no WebP encoder: %s", why); return 1 }
@@ -171,12 +187,12 @@ site_downloads :: proc(s: ^tk_site.Check) {
 		tk_site.check_call(s, "Emulation.setUserAgentOverride", fmt.tprintf(`{{"userAgent":%s,"platform":%s,"userAgentMetadata":{{"platform":%s,"platformVersion":"","architecture":"x86","model":"","mobile":false}}}}`,
 			cdp.quote(sys.agent), cdp.quote(sys.platform), cdp.quote(sys.data)))
 		if !tk_site.check_go(s, "index.html") { continue }
-		button :: `document.querySelector('.hero .actions .btn.accent')`
-		other :: `document.querySelector('.hero p.small a')`
-		main :: `document.querySelector('.hero .get-main').textContent`
-		sub :: `document.querySelector('.hero .get-sub').textContent`
-		// (the logos shown: those with a box)
-		icons :: `[...document.querySelectorAll('.hero [data-os-icon]')].filter((e) => e.getClientRects().length > 0).map((e) => e.dataset.osIcon).join(',')`
+		// (the button and the line shown: those with a box; the toolkit's markup, tk_site download.odin)
+		button :: `[...document.querySelectorAll('.hero [data-download-os]')].find((e) => e.getClientRects().length > 0)`
+		other :: `[...document.querySelectorAll('.hero [data-download-others]')].find((e) => e.getClientRects().length > 0).querySelector('a')`
+		main :: button + `.querySelector('.get-main').textContent`
+		sub :: button + `.querySelector('.get-sub').textContent`
+		icons :: `[...document.querySelectorAll('.hero [data-download-os]')].filter((e) => e.getClientRects().length > 0 && e.querySelector('.get-icon svg')).map((e) => e.dataset.downloadOs).join(',')`
 		tk_site.check_expect(s, tk_site.check_true(s, fmt.tprintf(`%s.href.endsWith(%s) && %s === %s`, button, cdp.quote(sys.button), main, cdp.quote(sys.label))),
 			fmt.tprintf("index.html, %s: the button is %s, %q (%s, %s)", sys.name, sys.button, sys.label, tk_site.check_text(s, button + ".href"), tk_site.check_text(s, main)))
 		tk_site.check_expect(s, tk_site.check_true(s, fmt.tprintf(`%s.endsWith(%s) && /\d+\.\d+\.\d+/.test(%s)`, sub, cdp.quote(sys.sub), sub)),

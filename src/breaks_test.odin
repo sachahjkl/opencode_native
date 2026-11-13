@@ -178,30 +178,6 @@ what_is_typed_in_the_panels_window_stays_through_a_redirect :: proc(t: ^testing.
 	clear(&app.cx.detached)
 }
 
-// Only a 404 says that a channel has nothing; a check that learned nothing leaves the offer.
-@(test)
-a_failed_check_is_no_news_of_the_update :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	testing.expect(t, update_says_missing(404, true))
-	testing.expect(t, !update_says_missing(0, false), "no network")
-	testing.expect(t, !update_says_missing(503, true))
-	app := bench_new()
-	app.prefs.update_channel = "stable"
-	offer := new(Update_Offer)
-	offer.manifest.version = strings.clone("9.9.9")
-	offer.path, offer.channel = strings.clone("/x/"), strings.clone("stable")
-	app.updater.state = Update_Ready{offer}
-	when ODIN_OS == .Windows {
-		update_check(app, true)
-		j := bench_update_job
-		bench_update_job = nil
-		j.err = strings.clone("the server could not be read")
-		update_answered(app, j)
-		testing.expect(t, update_is_ready(&app.updater), "what is on offer stays")
-		testing.expect(t, app.updater.result != "Up to date")
-	}
-}
-
 // What a dialog holds came from the server left.
 @(test)
 leaving_a_server_closes_what_acts_on_its_sessions :: proc(t: ^testing.T) {

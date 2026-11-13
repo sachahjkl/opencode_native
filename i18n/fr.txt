@@ -245,8 +245,11 @@ fr Ajouter un serveur…
 en Pair a device…
 fr Associer un appareil…
 
-en Setup and about
+en Installation and about
 fr Installation et à propos
+
+en Diagnostics
+fr Diagnostics
 
 en Check for updates
 fr Rechercher des mises à jour
@@ -368,8 +371,8 @@ fr Fermer l'onglet de navigateur
 en Show or hide the sidebar
 fr Afficher ou masquer la barre latérale
 
-en Show or hide the prompt rail
-fr Afficher ou masquer le rail des invites
+en Show or hide the prompt marks
+fr Afficher ou masquer les repères des invites
 
 en What you missed
 fr Ce que vous avez manqué
@@ -667,12 +670,6 @@ fr %s en entrée · %s en sortie · %.3f $
 
 en An independent project: not built by the OpenCode team, and not affiliated with them.
 fr Un projet indépendant : ni conçu par l'équipe d'OpenCode, ni affilié à elle.
-
-en Installation and the applications menu entry, the icon are in Setup… (title bar menu).
-fr L'installation, l'entrée du menu des applications et l'icône sont dans Installation… (menu de la barre de titre).
-
-en Installation and the shortcuts, the Settings > Apps entry are in Setup… (title bar menu).
-fr L'installation, les raccourcis et l'entrée de Paramètres > Applications sont dans Installation… (menu de la barre de titre).
 
 en No window: the renderer refused it
 fr Pas de fenêtre : le moteur de rendu l'a refusée
@@ -1054,9 +1051,6 @@ fr Choisissez un fichier de licence
 
 en opencode native licence
 fr licence opencode native
-
-en opencode native stopped unexpectedly last time: click to open its report
-fr opencode native s'est arrêté de façon inattendue la dernière fois : cliquez pour ouvrir son rapport
 
 en The preferences could not be saved
 fr Impossible d'enregistrer les préférences
@@ -1708,11 +1702,11 @@ fr Suivre
 en Follow new messages to the bottom while you are there.
 fr Suivre les nouveaux messages jusqu'en bas tant que vous y êtes.
 
-en Prompt rail
-fr Rail des invites
+en Prompt marks
+fr Repères des invites
 
-en A rail beside the conversation with a dot for each of your prompts, the part in view a band over it: the pointer over a dot shows the prompt, a click goes to it at once. A filter at its top keeps the prompts that say what you type.
-fr Un rail à côté de la conversation, avec un point pour chacune de vos invites et une bande sur la partie visible : le pointeur sur un point montre l'invite, un clic y va tout de suite. Un filtre en haut du rail garde les invites qui contiennent ce que vous tapez.
+en A mark on the conversation's scroll bar for each of your prompts, under the thumb where the view is: the pointer over a mark shows the prompt, a click goes to it at once. The magnifier above the bar filters the prompts by what you type.
+fr Un repère sur la barre de défilement de la conversation pour chacune de vos invites, sous le curseur là où se trouve la vue : le pointeur sur un repère montre l'invite, un clic y va tout de suite. La loupe au-dessus de la barre filtre les invites par ce que vous tapez.
 
 en Usage
 fr Consommation
@@ -1932,42 +1926,6 @@ fr Permissions
 
 en Providers & skills
 fr Fournisseurs et compétences
-
-en Stable
-fr Stable
-
-en Beta
-fr Bêta
-
-en Up to date, as far as is known
-fr À jour, pour autant qu'on le sache
-
-en Looking for a new version…
-fr Recherche d'une nouvelle version…
-
-en Version %s is available
-fr La version %s est disponible
-
-en Downloading %s…
-fr Téléchargement de %s…
-
-en Version %s is installed: restart to use it
-fr La version %s est installée : redémarrez pour l'utiliser
-
-en state
-fr état
-
-en Check now
-fr Vérifier maintenant
-
-en Install %s
-fr Installer %s
-
-en Restart now
-fr Redémarrer maintenant
-
-en Only what is signed with the key built into this program is installed: the channel, the version and the file's checksum are all in the signature.
-fr Seul ce qui est signé avec la clé intégrée à ce programme est installé : le canal, la version et la somme de contrôle du fichier sont tous dans la signature.
 
 en %s %s, a client of the OpenCode server. %s
 fr %s %s, un client du serveur OpenCode. %s
@@ -2587,47 +2545,14 @@ fr   ·  réinitialisation à %s  ·  dans %s
 en Diff
 fr Diff
 
-en the HTTP client failed to start
-fr le client HTTP n'a pas démarré
+en Stable
+fr Stable
 
-en the server could not be read
-fr impossible de lire le serveur
-
-en the update has no signature: refused
-fr la mise à jour n'a pas de signature : refusée
-
-en the update could not be downloaded
-fr impossible de télécharger la mise à jour
-
-en the update is in place, but %s
-fr la mise à jour est en place, mais %s
-
-en Update: %s
-fr Mise à jour : %s
-
-en %s is installed: click to restart
-fr %s est installée : cliquez pour redémarrer
-
-en Up to date
-fr À jour
-
-en opencode native %s is the latest
-fr opencode native %s est la dernière version
-
-en opencode native %s is available: click to install
-fr opencode native %s est disponible : cliquez pour l'installer
-
-en Nix updates this copy: update the Nix package
-fr Nix met à jour cette copie : mettez à jour le paquet Nix
+en Beta
+fr Bêta
 
 en Restart it by hand: it could not be started
 fr Redémarrez-le vous-même : il n'a pas pu être lancé
-
-en Update to %s
-fr Mettre à jour vers %s
-
-en Downloading the update…
-fr Téléchargement de la mise à jour…
 
 en Sidebar width
 fr Largeur de la barre latérale
@@ -2643,9 +2568,6 @@ fr Panneau Statistiques
 
 en Sub-agent sessions in the list
 fr Sessions des sous-agents dans la liste
-
-en Setup…
-fr Installation…
 
 en About opencode native
 fr À propos d'opencode native

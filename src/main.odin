@@ -20,10 +20,13 @@ import "gt:host"
 import "gt:platform"
 import "gt:render"
 import setup "gt:setup"
+import crash_bar "gt:crash_bar"
+import process "gt:process"
 import "gt:ui"
 import lucide "gt:lucide"
 import remote "gt:remote"
 import i18n "gt:i18n"
+import update "gt:update"
 
 // A face of the fonts. (Inside App, `font` names the face of the interface, from host.Shared: not the package.)
 Face_Id :: font.Font_Id
@@ -58,7 +61,8 @@ App :: struct {
 	throbber:       Throbber,          // what says a run goes on (throbber.odin)
 	preview:        Preview,           // the page beside the conversation (preview.odin)
 	browser:        Browser,           // the agents' tools on that page (browser_mcp.odin)
-	updater:        Updater,           // a new version: checked, downloaded, in place (updater.odin)
+	updater:        ^update.Updater,   // a new version: checked, downloaded, in place (updates.odin; nil: none started)
+	update_serial:  int,               // the updater's state last said (updates_follow)
 	dock:           ui.Dock,           // ... and the panels' layout
 	rename:         Rename,            // a session's title (context_menus.odin)
 	find:           Find,              // find in the conversation (find.odin)
@@ -105,7 +109,8 @@ App :: struct {
 	images:           map[u64]Image_Entry,   // decoded images, by key and size (images.odin)
 	frame_no:         u64,
 	devtools:         ^devtools.Server,   // TOOLKIT_DEVTOOLS=<port>: driven over the Chrome DevTools Protocol (the toolkit's tk cdp, or gt:cdp in ocntools)
-	setup:            setup.Dialog,
+	install:          prefs_page.Install,   // the install: its offer, its dialog, the settings' Installation page (setup.odin)
+	crash_bar:        crash_bar.Bar,        // the last session's crash, said in a bar under the title bar
 	quit:             bool,
 	last_tick:        time.Tick,
 	frame_times:      Frame_Times,   // the last frame's steps
@@ -143,10 +148,7 @@ Server_Known :: struct {
 App_Context :: struct {
 	home_lists:     Home_Lists,        // what the home page lists of the sessions (home.odin)
 	catalog_version: u64,             // counts the changes of the agents and the models (the pickers keep their lists until it moves)
-	crash_report:   string,            // the last session's crash report (owned; "" none): its toast opens it
 	theme:               Theme_State,          // the themes, the one shown, its colours (theme.odin)
-	system_stripes:      font.Subpixel_Text,   // what the system does with text (text_mode_follow)
-	system_stripes_read: bool,
 	conns:          [dynamic]^Conn,    // every connection not freed yet: their threads stop at close (servers.odin threads_stop)
 	chores:         tasks.Pool,         // what the interface must not wait for and keeps its order: the keyring, where the server runs (conn.odin)
 	outgoing:       [dynamic]^Outgoing,   // prompts between the composer and the server (outgoing.odin)
@@ -266,20 +268,6 @@ REFRESH_DEBOUNCE_MS  :: 1200
 FACTS_DEBOUNCE_MS    :: 700
 CHILDREN_DEBOUNCE_MS :: 800
 
-// Text smoothed per colour stripe when the system smooths it that way, at any scale, as the system's own text is, while
-// appearance.text.subpixel is at its default: the user's own word on it is the toolkit's (standard_watch applies it).
-// (Smoothing along the rows alone, DirectWrite's Natural, is not an answer to anything here: without the smoothing across, these
-// faces, which have no hinting, come out hard and stepped.)
-text_mode_follow :: proc(app: ^App) {
-	if !config.is_default(&app.cfg_prefs, config.ref_of(&app.cfg_prefs, "appearance.text.subpixel")) { return }
-	if !app.cx.system_stripes_read { app.cx.system_stripes, app.cx.system_stripes_read = font.system_subpixel_text(), true }
-	stripes := app.cx.system_stripes
-	if app.fonts.settings.subpixel_text == stripes { return }
-	settings := app.fonts.settings
-	settings.subpixel_text = stripes
-	font.set_settings(&app.fonts, settings)
-}
-
 // What a build of any window is given: they differ by their size and what came to them.
 build_params :: proc(app: ^App, win: ^platform.Window, size: draw.Vec2, events: []platform.Event, dt: f32) -> ui.Build_Params {
 	return {
@@ -314,7 +302,6 @@ main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
 	}
 	content_zoom_events(app, events)
 	dialogs_track(app)
-	text_mode_follow(app)
 	return events
 }
 
@@ -640,6 +627,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	ui.init(&app.state, &app.fonts, &app.theme)
 	app.state.icon_font = app.icons   // (Lucide: the menus' icons are its characters)
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
+	prefs_page.install_init(&app.install, &app.cfg_prefs, setup_options())
 	licence_init(app)
 	term_zooms_load(app)
 	zooms_load(&app.session_zooms, &app.stores.session_zooms, CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX)
@@ -661,14 +649,13 @@ main :: proc() {
 	opts := cli_start()   // (--help, --version, a line not understood: said, no window; everything else reads app.cli)
 	clock_watch_start()   // (the local time's offset, read here and then by a thread of its own: clock.odin)
 	started := time.tick_now()
-	// --install / --uninstall / --status: the desktop integration, without a window
-	if handled, code := desktop_cli(opts); handled { os.exit(code) }
+	// --install / --uninstall / --status: the install, without a window
+	if setup.command_alone(opts.command) { os.exit(setup.command_run(opts.command, setup_options(), process.console_write)) }
 	logger, crashed := log_start()
 	context.logger = logger
 	// the graphics device on a thread of its own while the rest starts (the driver's load is the longest step: 160 ms here)
 	render.preload_device()
 	set_app_id()           // (before the first window: the taskbar groups it under the shortcuts)
-	desktop_clean_old()
 
 	app := new(App)
 	the_app = app
@@ -679,7 +666,7 @@ main :: proc() {
 	app.seek_subagent = opts.seek_subagent   // (the view follows the bottom: Chat_Scroll's zero state)
 	chat_home(app)
 
-	stores_open(app)   // (before the window and its loop: the servers, the last session and the setup's answer decide the first frame)
+	stores_open(app)   // (before the window and its loop: the servers and the last session decide the first frame)
 	servers_init(app)
 
 	// a composition swap chain whose buffers keep the monitor's size while the window is resized: the window shows their
@@ -706,7 +693,8 @@ main :: proc() {
 	app.announcer = {mode = prefs_page.announce_mode(&app.cfg_prefs), window = app.win, state = &app.state}
 	// (the host was made after the preferences: the user's rendering.partial_redraw, if any, over its own default)
 	prefs_page.standard_apply(&app.cfg_prefs, &app.state, {partial_redraw = &app.window.partial_redraw})
-	crash_say(app, crashed)
+	crash_bar.init(&app.crash_bar, crashed)
+	delete(crashed)
 	app.last_tick = time.tick_now()
 	app.settle = FRAMES_AFTER_INPUT
 
@@ -726,11 +714,12 @@ main :: proc() {
 		os.exit(0)
 	}
 
-	update_startup(app)   // (a server or none: a check of this program's own version)
-	setup_offer_at_start(app)
+	updates_start(app)   // (a server or none: this program's own updates)
+	// (the install read on a task: the installed copy cleans what an update left; OPENCODE_NATIVE_NO_SETUP: never offered)
+	prefs_page.install_offer(&app.install, &app.state, offer = opts.command != .Setup && os.get_env("OPENCODE_NATIVE_NO_SETUP", context.temp_allocator) == "")
 	// what the line asks to see at start
 	if opts.search != "" { ui.line_edit_set(&app.sidebar.search, opts.search) }
-	if opts.setup { setup_open(app) }
+	if opts.command == .Setup { prefs_page.install_open(&app.install) }
 	if opts.add_server { server_edit_open(app, -1) }
 	if opts.find != "" { find_open(app); ui.line_edit_set(&app.find.field, opts.find) }
 	if opts.image != "" { image_view_start(app, opts.image) }
@@ -751,11 +740,14 @@ main :: proc() {
 		placement_track(app)
 	}
 	threads_stop(app)
+	updates_stop(app)   // (before the state's posts close: no news after it)
 	if app.cx.due[.Drafts].due_ms != 0 { drafts_save(app) }   // (what was typed in the last second)
 	config.user_writer_stop(&app.prefs_writer, &app.cfg_prefs)
 	stores_close(app)   // (waits for the disk: the window is gone, nothing waits on a frame)
 	ui.post_close(&app.state)
-	setup_finish(app)
+	prefs_page.install_end(&app.install)
+	crash_bar.destroy(&app.crash_bar)
+	prefs_page.install_launch(&app.install)   // (the window is gone: the installed copy the install's dialog opened starts)
 	log_stop(logger)
 	os.exit(0)
 }

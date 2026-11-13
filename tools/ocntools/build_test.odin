@@ -22,11 +22,6 @@ the_notes_say_where_it_runs :: proc(t: ^testing.T) {
 }
 
 @(test)
-a_key_outside_a_work_tree_only :: proc(t: ^testing.T) {
-	testing.expect(t, in_git_tree("tools/ocntools/some.key"), "this repository is one")
-}
-
-@(test)
 the_scroll_goes_towards_the_text :: proc(t: ^testing.T) {
 	testing.expect_value(t, scroll_notches(10), 1)
 	testing.expect_value(t, scroll_notches(-10), -1)

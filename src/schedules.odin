@@ -293,7 +293,7 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, w, em: f32) {
 				set_text(&s.removing, "")
 			}
 			ui.spacer(ui.px(em * 0.3))
-			if ui.button("sc_no", i18n.tr("Keep"), o = {intent = .Cancel, height = small}).clicked { set_text(&s.removing, "") }
+			if ui.button("sc_no", i18n.tr("Keep"), o = {height = small}).clicked { set_text(&s.removing, "") }
 		} else {
 			if it.status == .Active || it.status == .Paused {
 				pause := it.status == .Active
@@ -658,7 +658,7 @@ artifact_right :: proc(app: ^App, em: f32) {
 				return
 			}
 			ui.spacer(ui.px(em * 0.3))
-			if ui.button("ar_no", i18n.tr("Keep"), o = {intent = .Cancel, height = small}).clicked { set_text(&a.removing, "") }
+			if ui.button("ar_no", i18n.tr("Keep"), o = {height = small}).clicked { set_text(&a.removing, "") }
 		} else {
 			ui.a11y({role = .Button, name = i18n.tr("Open in the browser")})
 			if ui.button("ar_open", ui.text_shown(words ? i18n.tr("Open in the browser") : ""), lucide.GLOBE, {intent = .Primary, height = small, disabled = !artifact_can_open(a, it)}).clicked { artifact_view(a, it) }

@@ -1,0 +1,3 @@
+type: Changed
+
+**The install is in the settings: an Installation page.** It says where the installed copy is, its version, whether this copy is the installed one, the menu entry, Settings > Apps, the start with the session and the PATH, with Install, Repair, Upgrade and Uninstall. About opencode native and the palette's "Installation and about" open it. The command line is `--install`, `--uninstall`, `--status` and `--setup`, the same as in the other programs: `--desktop` and `--quiet` are gone, `--uninstall` no longer asks first, and Settings > Apps' Uninstall opens the install's dialog. Setup… is gone from the title bar's menu.

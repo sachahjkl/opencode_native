@@ -45,7 +45,7 @@ release_dist :: proc(tag: string) -> int {
 	channels := beta ? []string{"beta"} : []string{"stable", "beta"}
 	for c in channels {
 		out := fmt.tprintf("%s/%s", DIST_DIR, update.manifest_name(update.PLATFORM, c, context.temp_allocator))
-		if manifest(file, version, c, out) != 0 { fmt.eprintfln("release: the %s manifest could not be signed", c); return 1 }
+		if why := toolbox.update_manifest(ocn_update.PRODUCT, file, version, c, out); why != "" { fmt.eprintfln("release: the %s manifest could not be signed: %s", c, why); return 1 }
 	}
 	return 0
 }

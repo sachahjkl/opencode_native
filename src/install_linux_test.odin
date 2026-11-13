@@ -7,22 +7,18 @@ import "core:testing"
 import setup "gt:setup"
 
 // Setup up to 0.20.0 wrote these files itself (desktop_linux.odin of that version): the toolkit's setup finds them and
-// shows the install as one to repair, and its uninstall, with opencode native's part (the version file, the copy on the
-// Desktop), removes all of it.
+// shows the install as one to repair, and its uninstall, with opencode native's part (the version file), removes all of
+// it.
 @(test)
 an_install_of_the_earlier_setup_is_seen_and_removed :: proc(t: ^testing.T) {
 	tmp, _ := os.temp_dir(context.temp_allocator)
 	root := pjoin({tmp, fmt.tprintf("ocn-legacy-install-%d", os.get_pid())})
 	data := pjoin({root, "data"})
-	desk := pjoin({root, "Desktop"})
 	defer os.remove_all(root)
 	old_data, had_data := os.lookup_env("XDG_DATA_HOME", context.temp_allocator)
-	old_desk, had_desk := os.lookup_env("XDG_DESKTOP_DIR", context.temp_allocator)
 	_ = os.set_env("XDG_DATA_HOME", data)
-	_ = os.set_env("XDG_DESKTOP_DIR", desk)
 	defer {
 		if had_data { _ = os.set_env("XDG_DATA_HOME", old_data) } else { _ = os.unset_env("XDG_DATA_HOME") }
-		if had_desk { _ = os.set_env("XDG_DESKTOP_DIR", old_desk) } else { _ = os.unset_env("XDG_DESKTOP_DIR") }
 	}
 
 	dir := pjoin({data, "opencode-native"})
@@ -35,7 +31,6 @@ an_install_of_the_earlier_setup_is_seen_and_removed :: proc(t: ^testing.T) {
 		{exe, "#!/bin/sh\n"},
 		{pjoin({dir, "version"}), "0.20.0\n"},
 		{pjoin({data, "applications", "opencode-native.desktop"}), entry},
-		{pjoin({desk, "opencode-native.desktop"}), entry},
 		{pjoin({data, "icons", "hicolor", "256x256", "apps", "opencode-native.png"}), string(#load("../assets/logo_256.png"))},
 	}
 	for f in files {
@@ -44,7 +39,7 @@ an_install_of_the_earlier_setup_is_seen_and_removed :: proc(t: ^testing.T) {
 	}
 	_ = os.chmod(exe, os.Permissions_Default_File | {.Execute_User})
 
-	cfg := setup_config()
+	cfg := setup_options()
 	f := setup.facts(cfg)
 	testing.expect_value(t, f.dir, dir)
 	testing.expect(t, f.exe_there, "the program")
@@ -56,7 +51,6 @@ an_install_of_the_earlier_setup_is_seen_and_removed :: proc(t: ^testing.T) {
 
 	ok, leftovers, msg := setup.uninstall(cfg)
 	testing.expect(t, ok, msg)
-	desktop_copy_remove()
 	testing.expect_value(t, len(leftovers), 0)
 	delete(leftovers)
 	for f in files { testing.expectf(t, !os.exists(f[0]), "%s is gone", f[0]) }

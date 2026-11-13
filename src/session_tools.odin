@@ -526,7 +526,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###ch_foot") {
 				ui.spacer(ui.fill())
-				if ui.button("ch_cancel", i18n.tr("Cancel"), o = {intent = .Cancel}).clicked { open^ = false }
+				if ui.button("ch_cancel", i18n.tr("Cancel")).clicked { open^ = false }
 				ui.spacer(ui.px(em * 0.5))
 				if ui.button("ch_go", i18n.tr("Go back"), lucide.UNDO_2, {intent = .Danger, disabled = staging}).clicked { revert_commit(app) }
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))

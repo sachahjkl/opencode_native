@@ -525,7 +525,7 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 					set_text(&n.removing, "")
 				}
 				ui.spacer(ui.px(em * 0.3))
-				if ui.button("int_no", i18n.tr("Keep"), o = {intent = .Cancel, height = small}).clicked { set_text(&n.removing, "") }
+				if ui.button("int_no", i18n.tr("Keep"), o = {height = small}).clicked { set_text(&n.removing, "") }
 			} else {
 				if !c.active && ui.button("int_use", i18n.tr("Use"), o = {intent = .Success, height = small}).clicked {
 					request(app, .Credential_Done, "POST", fmt.tprintf("/api/credential/%s/activate", url_escape(c.id)))
@@ -579,7 +579,7 @@ connect_fill :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int, e
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###int_foot") {
 		ui.spacer(ui.fill())
-		if ui.button("int_cancel", i18n.tr("Cancel"), o = {intent = .Cancel}).clicked {
+		if ui.button("int_cancel", i18n.tr("Cancel")).clicked {
 			set_text(&n.failed, "")
 			connect_cancel(app)
 			return
@@ -623,7 +623,7 @@ connect_wait :: proc(app: ^App, em: f32) {
 			if ui.button("int_copy", i18n.tr("Copy"), lucide.COPY).clicked { clip_set(w.instructions) }
 		}
 		ui.spacer(ui.fill())
-		if ui.button("int_stop", i18n.tr("Cancel"), o = {intent = .Cancel}).clicked {
+		if ui.button("int_stop", i18n.tr("Cancel")).clicked {
 			set_text(&n.failed, "")
 			connect_cancel(app)
 			return

@@ -367,7 +367,7 @@ form_card :: proc(app: ^App, f: ^Form_Req, others: int, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###foot") {
 			ui.spacer(ui.px(em))
-			if ui.button("form_dismiss", i18n.tr("Dismiss"), o = {intent = .Cancel, face = .Ghost, disabled = f.sending}).clicked { dismiss = true }
+			if ui.button("form_dismiss", i18n.tr("Dismiss"), o = {face = .Ghost, disabled = f.sending}).clicked { dismiss = true }
 			ui.spacer(ui.fill())
 			if wizard && f.page > 0 {
 				if ui.button("form_prev", i18n.tr("Back"), lucide.ARROW_LEFT).clicked { f.page -= 1 }
@@ -444,7 +444,7 @@ form_page :: proc(app: ^App, f: ^Form_Req, pages: []int, reviewing, wizard: bool
 				ui.spacer(ui.px(em))
 				a := field_answer(fd)
 				name := fd.title != "" ? fd.title : fd.description != "" ? fd.description : fmt.tprintf(i18n.tr("Question %d"), k + 1)
-				if ui.button(fmt.tprintf("form_rv%d", k), ui.text_shown(label_safe(fmt.tprintf("%s:  %s", name, a != "" ? a : i18n.tr("no answer")))), o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_H_EM), wrap = true, left = true}).clicked { f.page = k }
+				if ui.button(fmt.tprintf("form_rv%d", k), ui.text_shown(label_safe(fmt.tprintf("%s:  %s", name, a != "" ? a : i18n.tr("no answer")))), o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true}).clicked { f.page = k }
 				ui.spacer(ui.px(em))
 			}
 			ui.spacer(ui.px(em * 0.15))
@@ -494,7 +494,7 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 		if fd.custom { form_line(fd, em, i18n.tr("Something else"), done) }
 	case:
 		for o, k in fd.options {
-			if ui.button(fmt.tprintf("form_o%d", k), ui.text_shown(label_safe(option_label(o))), o = {face = fd.choice == k ? .Toggled : .Raised, width = ui.fill(), height = h, wrap = true, left = true}).clicked {
+			if ui.button(fmt.tprintf("form_o%d", k), ui.text_shown(label_safe(option_label(o))), o = {face = fd.choice == k ? .Toggled : .Raised, width = ui.fill(), height = h, left = true}).clicked {
 				fd.choice = k
 				ui.line_edit_set(&fd.text, "")
 				done^ = true

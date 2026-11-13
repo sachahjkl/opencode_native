@@ -1,7 +1,8 @@
 package ocn
 
 // The bench of the panels and of what is around them (answers_test.odin has the bench itself): shells as tabs of the dock, the page and its
-// agents, the updater. What needs a window, a socket or a web view is not here: their logic is, in what those call.
+// agents. What needs a window, a socket or a web view is not here: their logic is, in what those call. (The updates are the
+// toolkit's Updater, tested there: gt:update's updater_test, its channels too.)
 
 import "base:runtime"
 import "core:fmt"
@@ -15,8 +16,6 @@ import "gt:term"
 import store "gt:store"
 import "gt:ui"
 import remote "gt:remote"
-
-@(thread_local) bench_update_job: ^Update_Job
 
 @(private = "file")
 shells :: proc(ids: ..string) -> string {
@@ -1005,118 +1004,6 @@ a_view_that_fails_answers_what_waits_and_says_why :: proc(t: ^testing.T) {
 	call(app, l, 2, "snapshot")
 	answer := sent(l)
 	testing.expect(t, strings.contains(answer, "no runtime") && !strings.contains(answer, "try again in a moment"), "not told to retry for ever")
-}
-
-////////////////////////////////
-// Updates
-
-@(private = "file")
-checked :: proc(app: ^App, found := "", err := "", nothing := false) {
-	j := bench_update_job
-	bench_update_job = nil
-	if err != "" { j.err = strings.clone(err) }
-	j.nothing_new = nothing
-	if found != "" { j.found = {version = strings.clone(found)} }
-	update_answered(app, j)
-}
-
-@(test)
-check_now_works_with_an_update_on_offer :: proc(t: ^testing.T) {
-	when ODIN_OS != .Windows { return }
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	update_channel_seen(app, "stable")
-	update_check(app, false)
-	checked(app, found = "9.0.0")
-	testing.expect(t, update_is_ready(&app.updater), "on offer")
-	testing.expect_value(t, app.updater.result, "Version 9.0.0 is available")
-	update_check(app, true)
-	_, checking := app.updater.state.(Update_Checking)
-	testing.expect(t, checking, "it looks again")
-	checked(app, found = "9.1.0")
-	testing.expect_value(t, update_version(&app.updater), "9.1.0")
-}
-
-@(test)
-a_check_that_fails_keeps_what_was_on_offer :: proc(t: ^testing.T) {
-	when ODIN_OS != .Windows { return }
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	update_channel_seen(app, "stable")
-	update_check(app, false)
-	checked(app, found = "9.0.0")
-	update_check(app, false)
-	checked(app, err = "unreachable")
-	testing.expect_value(t, update_version(&app.updater), "9.0.0")
-}
-
-@(test)
-asking_during_a_check_is_answered_by_it :: proc(t: ^testing.T) {
-	when ODIN_OS != .Windows { return }
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	update_channel_seen(app, "stable")
-	update_check(app, false)
-	update_check(app, true)
-	checked(app, nothing = true)
-	testing.expect_value(t, toasts(app), 1)
-	testing.expect_value(t, app.updater.result, "Up to date")
-}
-
-@(test)
-another_channel_drops_the_offer :: proc(t: ^testing.T) {
-	when ODIN_OS != .Windows { return }
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	update_channel_seen(app, "stable")
-	update_check(app, false)
-	checked(app, found = "9.0.0")
-	update_channel_seen(app, "beta")
-	testing.expect(t, app.updater.state == nil, "what was found was the other channel's")
-	testing.expect_value(t, app.updater.result, "")
-	update_install(app)
-	testing.expect(t, bench_update_job == nil, "nothing to install")
-}
-
-@(test)
-a_check_of_another_channel_is_asked_again :: proc(t: ^testing.T) {
-	when ODIN_OS != .Windows { return }
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	update_channel_seen(app, "stable")
-	update_check(app, false)
-	update_channel_seen(app, "beta")
-	checked(app, found = "9.0.0")
-	testing.expect(t, !update_is_ready(&app.updater), "not of this channel")
-	testing.expect(t, bench_update_job != nil, "it goes again")
-	testing.expect_value(t, bench_update_job.channel, "beta")
-	testing.expect_value(t, bench_update_job.path, UPDATE_BETA_DIR)
-}
-
-@(test)
-an_install_goes_to_the_folder_of_its_offer :: proc(t: ^testing.T) {
-	when ODIN_OS != .Windows { return }
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	update_channel_seen(app, "stable")
-	update_check(app, false)
-	checked(app, found = "9.0.0")
-	app.prefs.update_channel = "beta"   // (changed, and the frame that follows it not there yet)
-	update_install(app)
-	testing.expect_value(t, bench_update_job.path, UPDATE_STABLE_DIR)
-	testing.expect(t, update_is_downloading(&app.updater), "under way")
-	checked(app, err = "no room")
-	testing.expect(t, update_is_ready(&app.updater), "back on offer")
-	update_install(app)
-	checked(app)
-	testing.expect(t, update_is_installed(&app.updater), "in place")
-	testing.expect_value(t, update_version(&app.updater), "9.0.0")
-}
-
-@(private = "file")
-update_channel_seen :: proc(app: ^App, channel: string) {
-	app.prefs.update_channel = channel
-	update_channel_follow(app)
 }
 
 ////////////////////////////////

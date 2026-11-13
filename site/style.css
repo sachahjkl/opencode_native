@@ -38,6 +38,9 @@ em { font-style: normal; color: var(--accent); }
 .bar nav { display: flex; gap: 18px; font-size: 0.95rem; }
 .bar nav a { color: var(--weak); }
 .bar nav a:hover { color: var(--text); text-decoration: none; }
+/* the nav's last link, "Buy license": the accent button, small, as Wren's (gt:site's NAV_BUY_CLASS) */
+.bar nav { align-items: center; }
+.bar nav a.nav-buy, .bar nav a.nav-buy:hover { padding: 4px 14px; border-radius: 7px; color: #1a1008; font-size: 0.88rem; }
 /* the burger: a bevelled button with three carved bars, only on narrow screens */
 .burger {
   display: none; width: 40px; height: 34px; padding: 0; border-radius: 8px; cursor: pointer;
@@ -87,6 +90,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
 .btn.get:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 10px 32px rgba(250, 178, 131, 0.38), 0 2px 4px rgba(0, 0, 0, 0.6); }
 .btn.get:active { transform: translateY(1px); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35); }
 .get-icon svg { display: block; width: 30px; height: 30px; }
+/* (the download of another system than the reader's: a .btn's display would show it) */
+[hidden] { display: none !important; }
 .get-icon svg[hidden] { display: none; }
 .get-text { display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
 .get-main { font-size: 1.2rem; font-weight: 700; }
@@ -182,6 +187,8 @@ footer .small span, footer .small a { white-space: nowrap; }
   .bar.open nav { display: flex; }
   .bar nav a { padding: 11px 2px; font-size: 1rem; }
   .bar nav a + a { border-top: 1px solid #000; box-shadow: inset 0 1px 0 var(--lip); }
+  .bar nav { align-items: stretch; }
+  .bar nav a.nav-buy, .bar nav a.nav-buy:hover { margin: 8px 0 4px; padding: 10px 14px; text-align: center; font-size: 1rem; }
 }
 @media (max-width: 600px) {
   .hero { padding-top: 48px; }

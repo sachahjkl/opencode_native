@@ -31,7 +31,6 @@ GT_NATIVE_DIR :: GT_DEFAULT + "/native"   // the toolkit's crates ocn_native tak
 NATIVE_OUT :: "build/native"
 VT_OUT     :: "build/vt"
 VT_SOURCE  :: VT_OUT + "/ghostty"
-VERSION_H  :: "build/version.h"
 SETUP_FILE :: "src/setup.odin"
 
 GHOSTTY_COMMIT :: "0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec"
@@ -187,16 +186,6 @@ build_vt :: proc(force: bool) -> bool {
 	return false
 }
 
-// (the numbers of the VERSIONINFO resource: rewritten only when they change, the resource is built again otherwise)
-@(private = "file")
-write_version_header :: proc() -> bool {
-	version := toolbox.project_version(OCN_PROJECT)
-	found := version != ""
-	if !found || toolbox.version_header(version) == "" { fmt.eprintfln("build: no version of three numbers in %s", SETUP_FILE); return false }
-	if why := toolbox.write_version_header(VERSION_H, version); why != "" { fmt.eprintfln("build: %s", why); return false }
-	return true
-}
-
 @(private = "file")
 odin_is_pinned :: proc(odin: string) -> bool {
 	if os.get_env("OCN_ANY_ODIN", context.temp_allocator) != "" { return true }
@@ -241,9 +230,14 @@ build_program :: proc(b: Build) -> bool {
 	}
 	append(&cmd, ..toolbox.feature_defines(OCN_PROJECT.features, ODIN_OS, lucide))
 	when ODIN_OS == .Windows {
-		if !write_version_header() { return false }
+		// (what every program of the toolkit gets from its Project: the resource, the console launcher it embeds, the
+		// AppUserModelID of its windows)
+		p := OCN_PROJECT
+		p.toolkit = gt
+		if !toolbox.build_windows(p) { return false }
+		append(&cmd, ..toolbox.windows_flags(p, true))
 		// (the C runtime linked in: no vcruntime140.dll to ship)
-		append(&cmd, "-resource:res/opencode-native.rc", "-extra-linker-flags:/NODEFAULTLIB:vcruntime.lib /DEFAULTLIB:libvcruntime.lib")
+		append(&cmd, "-extra-linker-flags:/NODEFAULTLIB:vcruntime.lib /DEFAULTLIB:libvcruntime.lib")
 		if b.mode != .Debug { append(&cmd, "-subsystem:windows") }
 	} else {
 		flags := LINUX_FLAGS
