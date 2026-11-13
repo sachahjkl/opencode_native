@@ -6,6 +6,8 @@
 // themes.txt, beside the preferences (theme_load).
 package ocn
 
+import "base:runtime"
+
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -174,12 +176,32 @@ theme_load :: proc(app: ^App) {
 	app.cx.theme.colors = {}   // (shown again, as the file has it now)
 }
 
-// themes.txt, opened in the system's editor (made from the template first if there is none).
+// themes.txt, opened in the system's editor (made from the template first if there is none), by the App's chores: a file
+// written and a program started are system calls, which the interface's thread never makes. What could not be written is
+// said back on the interface's thread.
 themes_file_open :: proc(app: ^App) {
 	path := themes_file(app)
 	if path == "" { return }
-	if !os.exists(path) {
-		if os.write_entire_file(path, transmute([]u8)string(THEMES_TEMPLATE)) != nil { ui.toast(.Bad, "%s could not be written", THEMES_FILE); return }
-	}
-	_ = platform.open_path(path)
+	job := new(Themes_Job, runtime.heap_allocator())
+	job^ = {app = app, path = strings.clone(path, runtime.heap_allocator())}
+	pool_add(&app.cx.chores, proc(data: rawptr) {
+		job := (^Themes_Job)(data)
+		if themes_file_make(job.path) {
+			_ = platform.open_path(job.path)
+		} else {
+			_ = ui.post(&job.app.state, proc(_: rawptr, _: u64) { ui.toast(.Bad, "%s could not be written", THEMES_FILE) })
+		}
+		delete(job.path, runtime.heap_allocator())
+		free(job, runtime.heap_allocator())
+	}, job)
+}
+
+@(private = "file")
+Themes_Job :: struct { app: ^App, path: string }
+
+// The file of the user's themes, made from the template when there is none (one that is there is never touched). False: it
+// could not be written. (On a chore: it touches the disk.)
+themes_file_make :: proc(path: string) -> bool {
+	if os.exists(path) { return true }
+	return os.write_entire_file(path, transmute([]u8)string(THEMES_TEMPLATE)) == nil
 }
