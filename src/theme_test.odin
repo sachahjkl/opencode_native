@@ -124,3 +124,22 @@ a_button_in_a_dialog_keeps_its_background :: proc(t: ^testing.T) {
 		testing.expect_value(t, bg, ui.theme_lookup(&th, {kind}, "background"))
 	}
 }
+
+// The user's themes file is made from the template when there is none, its lines of comment saying how a theme is written,
+// and one that is there is never written over.
+@(test)
+the_themes_file_is_made_once_from_its_template :: proc(t: ^testing.T) {
+	tmp, _ := os.temp_dir(context.temp_allocator)
+	dir, _ := filepath.join({tmp, "ocn_themes_file_test"}, context.temp_allocator)
+	os.remove_all(dir)
+	defer os.remove_all(dir)
+	testing.expect(t, os.make_directory(dir) == nil)
+	path, _ := filepath.join({dir, THEMES_FILE}, context.temp_allocator)
+	testing.expect(t, themes_file_make(path), "made")
+	data, err := os.read_entire_file(path, context.temp_allocator)
+	testing.expect(t, err == nil && string(data) == THEMES_TEMPLATE, "the template, its comments with it")
+	testing.expect(t, os.write_entire_file(path, transmute([]u8)string("[Mine]\naccent = #ff0000\n")) == nil)
+	testing.expect(t, themes_file_make(path), "there already")
+	data, err = os.read_entire_file(path, context.temp_allocator)
+	testing.expect(t, err == nil && string(data) == "[Mine]\naccent = #ff0000\n", "never written over")
+}
