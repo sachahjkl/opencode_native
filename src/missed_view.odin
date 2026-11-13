@@ -63,10 +63,11 @@ missed_bell :: proc(app: ^App, size, em: f32) {
 	missed_rows_refresh(app)
 	n := app.missed.new_here
 	ui.a11y({role = .Button, name = "What you missed"})
-	sig := glyph_button("###bell", lucide.BELL, size, ui.caption_ink(hex(n > 0 ? HEX_WEAK : HEX_FAINT)))
+	ui.next({width = ui.px(size), height = ui.px(size), fg = ui.caption_ink(hex(n > 0 ? HEX_WEAK : HEX_FAINT))})
+	sig := ui.icon_button("bell", lucide.BELL)
 	if app.prefs.notices_badge { ui.badge(sig.box, n) }
 	if sig.clicked { command_run(app, command_find("view.notices")) }
-	if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("What you missed  (Ctrl+Shift+N)") } }
+	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text("What you missed  (Ctrl+Shift+N)") } }
 }
 
 // What an entry says happened.
@@ -101,15 +102,12 @@ missed_dialog :: proc(app: ^App, em: f32) {
 	act_row := -1
 	if ui.modal_sized("notices", DIALOG_PREFERRED_EM[.Notices] * em, &app.cx.dialogs[.Notices], &app.cx.open[.Notices], DIALOG_MIN_EM[.Notices] * em) {
 		dialog_backdrop()
-		if dialog_header("###mi_head") {
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-			text("t", "What you missed", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
+		if ui.dialog_header("mi_head", "What you missed", {close = true}) {
 			small := math.round(em * BUTTON_SMALL_H_EM)
 			ui.a11y({role = .Button, name = "Acknowledged"})
-			if bevel_button("###mi_hist", "Acknowledged", lucide.HISTORY, height = small, face = m.history ? .Toggled : .Raised, lit = m.history).clicked { m.history = !m.history }
+			if ui.button_icon("###mi_hist", lucide.HISTORY, "Acknowledged", height = small, face = m.history ? .Toggled : .Raised, lit = m.history).clicked { m.history = !m.history }
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###mi_all", "Acknowledge all", lucide.CHECK, .Success, height = small).clicked { act = .Acknowledge_All }
-			ui.spacer(ui.px(em * 3.2))   // (the close cross's corner)
+			if ui.button_icon("###mi_all", lucide.CHECK, "Acknowledge all", .Success, height = small).clicked { act = .Acknowledge_All }
 		}
 		// the keys: read in the dialog (its scope holds them), over every row, built or not
 		if n > 0 {
@@ -151,7 +149,6 @@ missed_dialog :: proc(app: ^App, em: f32) {
 			text("h", "Enter open    A acknowledge    Shift+A the session    Ctrl+Shift+A all", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			ui.spacer(ui.px(em * 1))
 		}
-		dialog_close(&app.cx.open[.Notices])
 	}
 	// (after the rows: acknowledging changes the log, and the rows hold its entries)
 	missed_act(app, act, act_row)
@@ -199,7 +196,7 @@ missed_header :: proc(app: ^App, r: ^Missed_Row, k: int, h, em: f32) -> (acknowl
 		}
 		if r.open > 0 {
 			ui.a11y({role = .Button, name = "Acknowledge the session"})
-			acknowledge = bevel_button("###ack_g", "Acknowledge", lucide.CHECK, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked
+			acknowledge = ui.button_icon("###ack_g", lucide.CHECK, "Acknowledge", height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked
 		}
 		ui.spacer(ui.px(em * 0.8))
 	}
@@ -244,10 +241,10 @@ missed_entry_row :: proc(app: ^App, r: ^Missed_Row, k: int, selected: bool, now:
 		ui.spacer(ui.px(em * 0.5))
 		small := math.round(em * BUTTON_SMALL_H_EM)
 		if missed_is_wait(e) && !acked {
-			button = bevel_button("###answer", "Answer", lucide.ARROW_RIGHT, .Primary, height = small, quiet = true).clicked
+			button = ui.button_icon("###answer", lucide.ARROW_RIGHT, "Answer", .Primary, height = small, quiet = true).clicked
 		} else if !acked {
 			ui.a11y({role = .Button, name = "Acknowledge"})
-			button = bevel_button("###ack", "", lucide.CHECK, height = small, quiet = true, face = .Ghost).clicked
+			button = ui.button_icon("###ack", lucide.CHECK, "", height = small, quiet = true, face = .Ghost).clicked
 		}
 		ui.spacer(ui.px(em * 0.8))
 	}

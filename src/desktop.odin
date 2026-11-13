@@ -23,7 +23,6 @@ import desktop "gt:desktop"
 import "gt:platform"
 import process "gt:process"
 import setup "gt:setup"
-import "gt:ui"
 
 APP_NAME      :: "opencode native"
 // (said wherever this program presents itself: their README asks it of a project with "opencode" in its name, and it is the truth)
@@ -75,21 +74,9 @@ setup_config :: proc() -> setup.Config {
 	return setup.Config{
 		identity = identity(), version = APP_VERSION, install_folder = INSTALL_FOLDER, icons = desktop_icons(),
 		note = APP_NOT_THEIRS, prepare = setup_prepare,
-		// (the dialog in opencode's look: its blurred backdrop, its buttons, its close cross)
+		// (the dialog in opencode's look: its blurred backdrop)
 		backdrop = proc(_: rawptr) { dialog_backdrop() },
-		button = setup_button,
-		close = proc(_: string, _: f32, _: rawptr) -> bool {
-			open := true
-			dialog_close(&open)
-			return !open
-		},
 	}
-}
-
-// A button of the Setup dialog as opencode's: a bevel of the intent and the glyph the dialog gives it (what it does).
-@(private = "file")
-setup_button :: proc(id, label, glyph: string, intent: ui.Intent, em: f32, _: rawptr) -> bool {
-	return bevel_button(id, label, glyph, intent).clicked
 }
 
 // Called by both Install and Uninstall before the packages write or remove: the record of Setup up to 0.20.0 goes, so that

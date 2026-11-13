@@ -52,6 +52,9 @@ detached_style :: proc(app: ^App, s: ^ui.State) {
 	ui.set_rounding(s, m.rounding)
 	ui.set_scrollbar_autohide(s, app.prefs.autohide_scrollbars)
 	ui.set_toast_position(s, m.toast_pos)
+	ui.set_feel(s, ui.feel(m))   // (the delays, repeats and steps the settings gave the main window)
+	ui.set_animations(s, ui.animations(m))
+	ui.set_smooth_scroll(s, ui.smooth_scroll(m))
 	s.icon_font, s.mono_font = m.icon_font, m.mono_font
 	for regular, set in m.families { ui.set_family(s, regular, set[1], set[2], set[3]) }
 }

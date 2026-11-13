@@ -775,9 +775,9 @@ the_console_theme_is_edged :: proc(t: ^testing.T) {
 		defer pref_set(app, "appearance.theme", "OpenCode")
 		testing.expect_value(t, app.theme.finish, ui.Finish.Edged)
 		testing.expect_value(t, corners(), 0)
-		pref_set(app, "appearance.style", "flat")   // (the theme's own finish wins over the style asked)
+		pref_set(app, "appearance.finish", "flat")   // (the theme's own finish wins over the style asked)
 		testing.expect_value(t, app.theme.finish, ui.Finish.Edged)
-		pref_set(app, "appearance.style", "machined")
+		pref_set(app, "appearance.finish", "machined")
 		stats_open(app)
 		session.wait_idle(s)
 		testing.expect(t, session.find(s, "st_Tokens") != nil, "the tokens' section")
@@ -845,13 +845,13 @@ the_shells_have_their_own_face :: proc(t: ^testing.T) {
 		testing.expect(t, app.term_font == app.own.term[0] && app.term_font != app.mono, "Fira Mono, not DM Mono")
 		testing.expect(t, app.term_font_bold == app.own.term[1] && app.term_font_bold != app.term_font, "its bold")
 		testing.expect_value(t, app.term_face, "")
-		pref_set(app, "appearance.terminal_font", "DejaVu Sans Mono")
-		defer pref_set(app, "appearance.terminal_font", "")
+		pref_set(app, "appearance.text.terminal_font", "DejaVu Sans Mono")
+		defer pref_set(app, "appearance.text.terminal_font", "")
 		if app.term_face != "" {   // (where it is installed)
 			testing.expect_value(t, app.term_face, "DejaVu Sans Mono")
 			testing.expect(t, app.term_font != app.own.term[0], "the system's")
 		}
-		pref_set(app, "appearance.terminal_font", "")
+		pref_set(app, "appearance.text.terminal_font", "")
 		testing.expect(t, app.term_font == app.own.term[0], "back to its own")
 	})
 }
@@ -907,68 +907,15 @@ the_system_title_bar_by_choice :: proc(t: ^testing.T) {
 		testing.expect(t, platform.is_integrated_title(app.win), "the program's title bar at first")
 		session.wait_idle(s)
 		testing.expect(t, session.find(s, "wb_close") != nil, "its buttons")
-		pref_set(app, "appearance.system_title", "true")
-		defer pref_set(app, "appearance.system_title", "false")
+		pref_set(app, "window.system_title", "true")
+		defer pref_set(app, "window.system_title", "false")
 		session.wait_idle(s)
 		testing.expect(t, !platform.is_integrated_title(app.win), "the system's")
 		testing.expect(t, session.find(s, "wb_close") == nil, "the system's buttons: none here")
 		testing.expect(t, session.find(s, "appmenu") != nil, "the program's bar stays, its menu in it")
-		pref_set(app, "appearance.system_title", "false")
+		pref_set(app, "window.system_title", "false")
 		session.wait_idle(s)
 		testing.expect(t, platform.is_integrated_title(app.win) && session.find(s, "wb_close") != nil, "the program's again")
-	})
-}
-
-// A slider of the settings dragged and let go: the preference takes the value it was let go at, and keeps it.
-@(test)
-a_slider_keeps_the_value_it_is_let_go_at :: proc(t: ^testing.T) {
-	unwatched.run(t, proc(t: ^testing.T) {
-		context.allocator = runtime.heap_allocator()
-		app, s := bench_app(t)
-		settings_open(app)
-		ui.field_set(&app.settings.query, "conversation width")
-		session.frames(s, 3)
-		sl := session.find(s, "sl")
-		if !testing.expect(t, sl != nil, "the slider") { return }
-		before := config.int_of(&app.cfg_prefs, "conversation.width")
-		from := session.center(sl)
-		to := from + {(sl.rect.max.x - sl.rect.min.x) * 0.3, 0}
-		session.press(s, from)
-		session.move(s, from + {10, 0})
-		session.move(s, to)
-		session.release(s, to)
-		session.frames(s, 3)
-		after := config.int_of(&app.cfg_prefs, "conversation.width")
-		testing.expectf(t, after > before + 20, "dragged right: %v, from %v", after, before)
-		session.frames(s, 3)
-		testing.expect_value(t, config.int_of(&app.cfg_prefs, "conversation.width"), after)
-		ui.field_set(&app.settings.query, "")
-		app.cx.open[.Settings] = false
-		pref_set(app, "conversation.width", fmt.tprintf("%v", before))
-	})
-}
-
-// The settings' search: what matches in every client page, under its page's title, and nothing else of the pages.
-@(test)
-the_settings_search_shows_what_matches :: proc(t: ^testing.T) {
-	unwatched.run(t, proc(t: ^testing.T) {
-		context.allocator = runtime.heap_allocator()
-		app, s := bench_app(t)
-		settings_open(app)
-		session.frames(s, 3)
-		testing.expect(t, session.find(s, "set_appearance.glow") != nil, "a page shows its settings")
-		testing.expect(t, session.find_text(s, fmt.tprintf("opencode native %s", APP_VERSION)) != nil, "the version, under the pages")
-		ui.field_set(&app.settings.query, "permission")
-		session.frames(s, 3)
-		testing.expect(t, session.find(s, "set_notify.permission") != nil, "the match")
-		testing.expect(t, session.find(s, "set_appearance.glow") == nil, "nothing else")
-		testing.expect(t, session.find(s, "hint_setup") == nil, "nor what a page says besides its settings")
-		ui.field_set(&app.settings.query, "no setting is called this")
-		session.frames(s, 3)
-		testing.expect(t, session.find_text(s, "No setting matches.") != nil, "nothing matches, and it says so")
-		ui.field_set(&app.settings.query, "")
-		session.frames(s, 3)
-		testing.expect(t, session.find(s, "set_appearance.glow") != nil, "the page again")
 	})
 }
 
@@ -1142,28 +1089,6 @@ a_table_s_copy_button_is_over_its_rows :: proc(t: ^testing.T) {
 		session.click_at(s, session.center(copy))
 		session.frames(s, 2)
 		testing.expect(t, session.find_text(s, "Table copied") != nil, "a click on it copies the table")
-	})
-}
-
-// Every setting the palette lists (not a hidden one) is on a settings page: the search the palette gives the settings shows it, with
-// its control. A hidden one is on none.
-@(test)
-every_setting_of_the_palette_is_on_a_page :: proc(t: ^testing.T) {
-	unwatched.run(t, proc(t: ^testing.T) {
-		context.allocator = runtime.heap_allocator()
-		app, s := bench_app(t)
-		settings_open(app)
-		for d in PREF_DEFS {
-			ui.field_set(&app.settings.query, setting_query(d.name))
-			session.frames(s, 2)
-			found := session.find(s, fmt.tprintf("set_%s", d.name)) != nil
-			if d.hidden {
-				testing.expectf(t, !found, "%s is hidden: on no page", d.name)
-			} else {
-				testing.expectf(t, found, "%s: the settings show it when the palette opens them on it (%q)", d.name, setting_query(d.name))
-			}
-		}
-		ui.field_set(&app.settings.query, "")
 	})
 }
 
@@ -1410,7 +1335,7 @@ a_password_can_be_shown :: proc(t: ^testing.T) {
 		server_edit_open(app, -1)
 		session.frames(s, 3)
 		ui.field_set(&app.server_edit.password, "hunter2")
-		session.frames(s, 2)
+		session.wait_idle(s)   // (the dialog fades in: a click meanwhile goes through it)
 		eye := session.find(s, "reveal")
 		if !testing.expect(t, eye != nil, "the password's eye") { return }
 		shown :: proc(s: ^session.Session) -> string {   // (what the field draws: the eye is its child)
@@ -1821,7 +1746,7 @@ a_recent_folder_tells_and_copies_its_path :: proc(t: ^testing.T) {
 		path := strings.clone(home_folders(app)[0], context.temp_allocator)
 		testing.expect(t, session.find_text(s, path) == nil, "the path is not shown at rest")
 		session.hover(s, "hf0")
-		session.advance(s, 1000 * TOOLTIP_DELAY_S + 100)
+		session.advance(s, f64(ui.FEEL_DEFAULT.tooltip_delay_ms) + 100)
 		session.save_png(s, "folder_tooltip.png")
 		testing.expect(t, session.find_text(s, path) != nil, "the tooltip says the whole path")
 		session.click(s, "hf0", .Right)
@@ -1931,8 +1856,8 @@ a_buttons_colour_says_what_it_does :: proc(t: ^testing.T) {
 		pref_set(app, "appearance.theme", "OpenCode")
 		pref_set(app, "appearance.mode", "dark")
 		defer pref_set(app, "appearance.mode", "system")
-		pref_set(app, "appearance.style", "flat")
-		defer pref_set(app, "appearance.style", "machined")
+		pref_set(app, "appearance.finish", "flat")
+		defer pref_set(app, "appearance.finish", "machined")
 		face :: proc(t: ^testing.T, s: ^session.Session, name: string, intent: ui.Intent) {
 			b := session.find(s, name)
 			if !testing.expectf(t, b != nil, "the button %s", name) { return }
@@ -1948,14 +1873,14 @@ a_buttons_colour_says_what_it_does :: proc(t: ^testing.T) {
 		session.leave(s)   // (a face under the pointer is lit: not its fill)
 		app.cx.open[.Delete] = true
 		session.wait_idle(s)
-		face(t, s, "confirm", .Danger)
-		face(t, s, "cancel", .Cancel)
+		face(t, s, "confirm_act", .Danger)
+		face(t, s, "confirm_cancel", .Cancel)
 		app.cx.open[.Delete] = false
 		session.frames(s, 2)
 		rename_open(app, "ses_colour")
 		session.wait_idle(s)
-		face(t, s, "ren_ok", .Success)
-		face(t, s, "ren_cancel", .Cancel)
+		face(t, s, "prompt_ok", .Primary)
+		face(t, s, "prompt_cancel", .Cancel)
 		app.cx.open[.Rename] = false
 		session.frames(s, 2)
 	})

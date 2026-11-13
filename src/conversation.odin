@@ -295,7 +295,7 @@ chat_failed :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###read_retry") {
 		ui.spacer(ui.fill())
-		if bevel_button("###retry", "Try again", lucide.REFRESH_CW, disabled = !online(app)).clicked { chat_read(app) }
+		if ui.button_icon("###retry", lucide.REFRESH_CW, "Try again", disabled = !online(app)).clicked { chat_read(app) }
 		ui.spacer(ui.fill())
 	}
 }

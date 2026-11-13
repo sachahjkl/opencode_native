@@ -35,7 +35,7 @@ SCROLL_MOST :: 10     // notches at a time
 TOUR_TITLE  :: "Tour of picker.odin"
 WORK_TITLE  :: "Python clock"   // what the sidebar's search leaves of the sessions, and shows once they are read
 // (grey text: the colours of the stripes belong to a screen, and a picture is seen on others, scaled)
-SHOT_ARGS   :: [?]string{"--pref", "appearance.theme=OpenCode", "--pref", "appearance.mode=dark", "--pref", "appearance.style=machined", "--pref", "appearance.text_smoothing=grey", "--pref", "appearance.zoom=1", "--scale=1.25"}
+SHOT_ARGS   :: [?]string{"--pref", "appearance.theme=OpenCode", "--pref", "appearance.mode=dark", "--pref", "appearance.finish=machined", "--pref", "appearance.text.subpixel=off", "--pref", "appearance.zoom=1", "--scale=1.25"}
 // (these are published: a model that is not public never goes out in one)
 SHOT_SECRETS :: [?]string{"iceman", "Contributor"}
 
@@ -258,7 +258,11 @@ ready_connections :: proc(s: ^Snap) {
 }
 
 // (it looks at start)
-@(private = "file") ready_updates :: proc(s: ^Snap) { if s.ok { step(s, cdp.wait_for(s.dt, "Up to date", SHOT_LIMIT)) } }
+// (the settings open on the client's page: its Updates page is chosen in its sidebar)
+@(private = "file") ready_updates :: proc(s: ^Snap) {
+	click_exact(s, "Updates", 0)
+	if s.ok { step(s, cdp.wait_for(s.dt, "Up to date", SHOT_LIMIT)) }
+}
 
 @(private = "file")
 ready_subagent_session :: proc(s: ^Snap) {
@@ -302,8 +306,8 @@ PICTURES :: [?]Picture{
 	{name = "mention", work = true, ready = ready_mention},
 	{name = "files", work = true, ready = ready_files},
 	{name = "schedules", work = true, ready = ready_schedules},
-	{name = "connections", extra = "--settings=6", ready = ready_connections},
-	{name = "updates", extra = "--settings=3", ready = ready_updates},
+	{name = "connections", extra = "--settings=2", ready = ready_connections},
+	{name = "updates", extra = "--settings=0", ready = ready_updates},
 	{name = "settings", extra = "--settings=0"},
 	{name = "subagent-session", ready = ready_subagent_session},
 	{name = "viewer", on_conversation = true, ready = ready_viewer},
@@ -402,7 +406,7 @@ take :: proc(s: ^Shots, p: Picture) -> bool {
 	if p.extra != "" { append(&args, p.extra) }
 	if p.theme != "" { append(&args, "--pref", fmt.tprintf("appearance.theme=%s", p.theme)) }
 	if p.mode != "" { append(&args, "--pref", fmt.tprintf("appearance.mode=%s", p.mode)) }
-	if p.style != "" { append(&args, "--pref", fmt.tprintf("appearance.style=%s", p.style)) }
+	if p.style != "" { append(&args, "--pref", fmt.tprintf("appearance.finish=%s", p.style)) }
 	if p.on_conversation { append(&args, fmt.tprintf("--image=%s/conversation.webp", s.docs)) }
 
 	app: App

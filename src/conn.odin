@@ -5,6 +5,7 @@
 package ocn
 
 import "core:mem"
+import tasks "gt:tasks"
 import "core:sync"
 import "gt:ui"
 
@@ -12,7 +13,7 @@ Conn :: struct {
 	app:       ^App,      // (for its threads: the_app is the interface's)
 	http:      Http,
 	transport: Transport,
-	pool:      Work_Pool,   // its requests' workers
+	pool:      tasks.Pool,   // its requests' workers
 	stop:      bool,      // (atomic) its threads stop: the event thread at its next event or retry, a shell's at its next read
 	// What uses it, on the interface's thread only: the App while it is the one connected, each request until its answer ran, each
 	// thread that reads it until its last post ran. A thread lets go by a post: what it posted before, with this pointer in it, has run
@@ -62,7 +63,7 @@ http_close :: proc(c: ^Conn) {
 conn_make :: proc(app: ^App, http: Http, transport: Transport, workers: int, clock: ^i64 = nil) -> ^Conn {
 	c := new(Conn)
 	c^ = {app = app, http = http, transport = transport, holders = 1}
-	pool_init(&c.pool, workers, clock)
+	tasks.start(&c.pool, {threads = workers, clock = clock})
 	append(&app.cx.conns, c)
 	return c
 }
@@ -75,7 +76,7 @@ conn_release :: proc(app: ^App, c: ^Conn) {
 	c.holders -= 1
 	if c.holders > 0 { return }
 	for x, i in app.cx.conns { if x == c { unordered_remove(&app.cx.conns, i); break } }
-	pool_add(&app.cx.chores, conn_free_work, c)
+	tasks.add(&app.cx.chores, conn_free_work, c)
 }
 
 // From a thread that held it: its posts run first (Conn.holders). A post refused (the program ends) keeps it.
@@ -94,7 +95,7 @@ conn_stop :: proc(c: ^Conn) { sync.atomic_store(&c.stop, true) }
 conn_free_work :: proc(data: rawptr) { conn_free((^Conn)(data)) }
 
 conn_free :: proc(c: ^Conn) {
-	pool_stop(&c.pool)
+	tasks.stop(&c.pool)
 	c.transport.close(c)
 	delete(c.browsers_left)
 	free(c)

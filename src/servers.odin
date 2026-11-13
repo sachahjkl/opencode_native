@@ -4,6 +4,7 @@
 package ocn
 
 import "core:fmt"
+import tasks "gt:tasks"
 import "core:math"
 import "core:mem/virtual"
 import "core:strings"
@@ -69,7 +70,7 @@ servers_rediscover :: proc(app: ^App) {
 	if now - app.rediscover_ms < REDISCOVER_MS { return }
 	app.rediscover_ms = now
 	app.rediscover_busy = true
-	pool_add(&app.cx.chores, rediscover_work, app)
+	tasks.add(&app.cx.chores, rediscover_work, app)
 }
 
 @(private = "file")
@@ -137,7 +138,7 @@ servers_save :: proc(app: ^App, forget := "", forget_first := "") {
 		if s.local || s.argv { continue }
 		append(&job.servers, Server{name = strings.clone(s.name), url = strings.clone(s.url), password = strings.clone(s.password), stored = strings.clone(s.stored)})
 	}
-	pool_add(&app.cx.chores, servers_save_work, job)
+	tasks.add(&app.cx.chores, servers_save_work, job)
 }
 
 @(private = "file")
@@ -291,7 +292,7 @@ server_connect :: proc(app: ^App, i: int, all := false) {
 		server_connect_now(app, i)
 		return
 	}
-	pool_add(&app.cx.chores, servers_read_work, job)
+	tasks.add(&app.cx.chores, servers_read_work, job)
 }
 
 // Connects to server `i`, all it needs known.
@@ -458,12 +459,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 	if ui.modal("server", em * 32, &app.cx.open[.Server], SERVER_DIALOG_TOP) {
 		dialog_backdrop()
 		pad :: proc(em: f32) { ui.spacer(ui.px(em * DIALOG_MARGIN_EM)) }
-		if dialog_header("###sv_head") {
-			pad(em)
-			glyph(lucide.GLOBE, accent(), math.round(em * ICON_LARGE))
-			ui.spacer(ui.px(em * 0.5))
-			text("t", e.index >= 0 ? "Edit the server" : "Add a server", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 1.8)})
-		}
+		if ui.dialog_header("sv_head", e.index >= 0 ? "Edit the server" : "Add a server", {icon = lucide.GLOBE, close = true}) {}
 		ui.spacer(ui.px(em * 0.9))
 		field :: proc(id, label, hint: string, f: ^ui.Text_Field, em: f32, secret := false, reveal: ^bool = nil) -> ui.Edit_Result {
 			res: ui.Edit_Result
@@ -472,7 +468,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 				text("k", label, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.5)}, ui.px(em * 6))
 				ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
-				if well("###w", .X, radius = 7) {
+				if ui.well("###w", .X) {
 					if ui.tags("bare") {
 						ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.5})
 						res = ui.line_edit("###e", f, hint, secret = secret, reveal = reveal)
@@ -514,16 +510,16 @@ server_dialog :: proc(app: ^App, em: f32) {
 		if ui.row(.Center) {
 			pad(em)
 			if e.index >= 0 {
-				if bevel_button("###rm", "Remove", lucide.TRASH_2, .Danger).clicked {
+				if ui.button_icon("###rm", lucide.TRASH_2, "Remove", .Danger).clicked {
 					server_remove(app, e.index)
 					app.cx.open[.Server] = false
 				}
 			}
 			ui.spacer(ui.fill())
 			if taken { text("tk", "That name is taken", hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
-			if bevel_button("###cancel", "Cancel", "", .Cancel).clicked { app.cx.open[.Server] = false }
+			if ui.button_icon("###cancel", "", "Cancel", .Cancel).clicked { app.cx.open[.Server] = false }
 			ui.spacer(ui.px(em * 0.5))
-			if bevel_button("###ok", e.index >= 0 ? "Save and connect" : "Add and connect", lucide.CHECK, .Success, disabled = !valid).clicked { save = true }
+			if ui.button_icon("###ok", lucide.CHECK, ui.text_shown(e.index >= 0 ? "Save and connect" : "Add and connect"), .Success, disabled = !valid).clicked { save = true }
 			pad(em)
 		}
 		if save && valid {
@@ -546,7 +542,6 @@ server_dialog :: proc(app: ^App, em: f32) {
 			server_connect(app, i)
 		}
 		ui.spacer(ui.px(em * 1.2))
-		dialog_close(&app.cx.open[.Server])
 	}
 }
 

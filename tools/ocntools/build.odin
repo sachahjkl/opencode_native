@@ -77,19 +77,6 @@ BUILD_MODE_NAMES := [Build_Mode]string{.Dev = "dev", .Release = "release", .Debu
 // The mode a program was built in, as the build wrote it beside it (<program>.mode); "": not known (built otherwise).
 build_mode_of :: proc(program: string) -> string { return strings.trim_space(read_text(fmt.tprintf("%s.mode", program))) }
 
-// APP_VERSION in the text of src/setup.odin.
-app_version :: proc(setup: string) -> (version: string, ok: bool) {
-	at := strings.index(setup, "APP_VERSION")
-	if at < 0 { return }
-	rest := setup[at:]
-	open := strings.index_byte(rest, '"')
-	if open < 0 { return }
-	rest = rest[open + 1:]
-	close := strings.index_byte(rest, '"')
-	if close <= 0 { return }
-	return rest[:close], true
-}
-
 // Every file under `dir`.
 files_under :: proc(dir: string, out: ^[dynamic]string) {
 	entries, err := os.read_all_directory_by_path(dir, context.temp_allocator)
@@ -203,7 +190,8 @@ build_vt :: proc(force: bool) -> bool {
 // (the numbers of the VERSIONINFO resource: rewritten only when they change, the resource is built again otherwise)
 @(private = "file")
 write_version_header :: proc() -> bool {
-	version, found := app_version(read_text(SETUP_FILE))
+	version := toolbox.project_version(OCN_PROJECT)
+	found := version != ""
 	if !found || toolbox.version_header(version) == "" { fmt.eprintfln("build: no version of three numbers in %s", SETUP_FILE); return false }
 	if why := toolbox.write_version_header(VERSION_H, version); why != "" { fmt.eprintfln("build: %s", why); return false }
 	return true
@@ -245,6 +233,13 @@ build_program :: proc(b: Build) -> bool {
 	append(&cmd, odin, "build", "src", gt_collection(gt), fmt.tprintf("-out:%s", out), "-vet")
 	native_flags := NATIVE_FLAGS
 	append(&cmd, ..native_flags[:])
+	// what the program takes of the toolkit (OCN_PROJECT.features): a release build only the Lucide icons it names
+	lucide := ""
+	if b.mode == .Release {
+		why: string
+		if lucide, why = toolbox.lucide_subset(OCN_PROJECT); why != "" { fmt.eprintfln("build: the Lucide subset: %s", why); return false }
+	}
+	append(&cmd, ..toolbox.feature_defines(OCN_PROJECT.features, ODIN_OS, lucide))
 	when ODIN_OS == .Windows {
 		if !write_version_header() { return false }
 		// (the C runtime linked in: no vcruntime140.dll to ship)

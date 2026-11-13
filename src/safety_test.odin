@@ -26,13 +26,6 @@ labels_keep_their_hashes :: proc(t: ^testing.T) {
 }
 
 @(test)
-slider_focus_alone :: proc(t: ^testing.T) {
-	testing.expect_value(t, slider_idle(800, 5, 400, 5), 400)   // a value the file allows, beyond the slider
-	testing.expect_value(t, slider_idle(60, 5, 400, 5), 60)     // on its step: nothing moves
-	testing.expect(t, abs(slider_idle(1.125, 0.6, 2.5, 0.05) - 1.15) < 0.051)
-}
-
-@(test)
 config_files_only :: proc(t: ^testing.T) {
 	for p in ([]string{"opencode.json", "\\\\host\\share\\x.json", "//host/x.json", "https://a.b/x.json"}) { testing.expect(t, !config_file_shaped(p), p) }
 	when ODIN_OS == .Windows {

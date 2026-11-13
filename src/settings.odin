@@ -3,6 +3,8 @@
 // its MCP servers, its saved permissions, its usage, its providers, agents, skills, commands, its configuration files).
 package ocn
 
+import "base:runtime"
+
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -14,9 +16,9 @@ import "core:strconv"
 import "core:strings"
 import "gt:config"
 import desktop "gt:desktop"
-import "gt:draw"
 import "gt:font"
 import "gt:platform"
+import prefs_page "gt:prefs_page"
 import "gt:ui"
 import diff "gt:diff"
 import lucide "gt:lucide"
@@ -29,10 +31,6 @@ import remote "gt:remote"
 HEX_ROSE :: 0xf28ba8ff
 
 // The bounds of the preferences (PREF_DEFS) that their sliders share.
-FONT_SIZE_MIN         :: 11
-FONT_SIZE_MAX         :: 20
-ZOOM_MIN              :: 0.6
-ZOOM_MAX              :: 2.5
 COLUMN_W_MIN          :: 560
 COLUMN_W_MAX          :: 1800
 TOOL_LINES_MIN        :: 5
@@ -40,7 +38,6 @@ TOOL_LINES_MAX        :: 1000
 PAGE_SIZE_MIN         :: 20
 PAGE_SIZE_MAX         :: 200
 
-COMPACT_DENSITY     :: 0.8
 ZOOM_EPSILON        :: 0.001
 SLIDER_EPSILON      :: 1e-4
 TOAST_TITLE_CHARS   :: 60
@@ -58,27 +55,9 @@ HEX_MCP_NAME       :: 0xf0f0f0ff
 HEX_WORKSPACE_NAME :: 0xe0e0e0ff
 HEX_CATALOG_NAME   :: 0xe8e8e8ff
 
-TEXT_SMOOTHINGS :: []string{"auto", "rgb", "bgr", "grey"}
-
 PREF_DEFS := [?]config.Def{
-	{name = "appearance.theme", description = "The colours of the whole interface: opencode's black with an accent of its own, or an editor's palette. Themes of your own go in themes.txt beside the preferences.", kind = .String, default = {s = "OpenCode"}},
-	{name = "appearance.mode", description = "Each theme in its dark or its light version: as the system's apps are, or always one.", kind = .String, default = {s = "system"}, choices = {"system", "dark", "light"}},
-	{name = "appearance.style", description = "Machined: raised buttons, sunken wells, carved lines, glowing lamps. Edged: the same reliefs drawn crisp, a lit line along the top of each, square corners. Flat: plain surfaces and thin lines. A theme made for one style (Kernel: edged) brings it.", kind = .String, default = {s = "machined"}, choices = {"machined", "edged", "flat"}},
-	{name = "appearance.system_title", description = "The system's title bar above the window, with its own buttons, instead of the one drawn here. The bar with the menu, the way back and the session's name stays under it. Shown where the system can draw it (Windows, X11, KDE; not GNOME).", kind = .Bool, default = {b = false}},
-	{name = "appearance.font", description = "The face of the interface's text: the client's own (automatic), the system's usual one, or any installed family.", kind = .String, default = {s = ""}},
-	{name = "appearance.prose_font", description = "The face of the answers: the client's own (automatic), the interface's, or any installed family.", kind = .String, default = {s = ""}},
-	{name = "appearance.mono_font", description = "The face of code, paths and figures: the client's own (automatic), the system's usual one, or any installed family.", kind = .String, default = {s = ""}},
-	{name = "appearance.terminal_font", description = "The face of the shells: the client's own (automatic: Fira Mono, no ligatures), the system's usual monospace, or any installed family.", kind = .String, default = {s = ""}},
-	{name = "appearance.font_size", description = "Size of the interface's text, in points at 100 % zoom.", kind = .Int, default = {i = 14}, bounded = true, min = FONT_SIZE_MIN, max = FONT_SIZE_MAX},
-	{name = "appearance.text_smoothing", description = "Text smoothed per colour stripe of the screen's pixels: sharper at few pixels per letter, with faint colours on its edges. Automatic: as the system says (ClearType on Windows, fontconfig on Linux).", kind = .String, default = {s = "auto"}, choices = TEXT_SMOOTHINGS},
-	{name = "appearance.zoom", description = "Zoom of the interface: bars, sidebar, menus (Ctrl + Shift + = / - / 0, Ctrl + wheel outside the conversation).", kind = .Float, default = {f = 1}, bounded = true, min = ZOOM_MIN, max = ZOOM_MAX},
+	{name = "appearance.text.terminal_font", description = "The face of the shells: the client's own (automatic: Fira Mono, no ligatures), the system's usual monospace, or any installed family.", kind = .String, default = {s = ""}},
 	{name = "appearance.content_zoom", description = "Zoom of the conversation alone, whatever the interface's: each session's until it has its own (Ctrl + = / - over it, Ctrl + wheel; Ctrl + 0 brings it back to this one).", kind = .Float, default = {f = 1}, bounded = true, min = CONTENT_ZOOM_MIN, max = CONTENT_ZOOM_MAX},
-	{name = "appearance.density", description = "Compact rows fit more on screen at the same text size.", kind = .String, default = {s = "comfortable"}, choices = {"comfortable", "compact"}},
-	{name = "appearance.rounding", description = "Corner rounding of buttons, fields and menus (0: square).", kind = .Float, default = {f = 1}, bounded = true, min = 0, max = 2},
-	{name = "appearance.animations", description = "Interface animations: the system's setting, always, or never.", kind = .String, default = {s = "system"}, choices = {"system", "on", "off"}},
-	{name = "appearance.smooth_scroll", description = "Scrolling glides to where the wheel or the keys send it, even when the system turns animations off.", kind = .Bool, default = {b = true}},
-	{name = "appearance.autohide_scrollbars", description = "Scroll bars show only while the pointer is over what they scroll.", kind = .Bool, default = {b = true}},
-	{name = "appearance.glow", description = "Halos around lit buttons, lamps and running sub-agents.", kind = .Bool, default = {b = true}},
 	{name = "conversation.width", description = "Widest the conversation column gets, in logical pixels.", kind = .Int, default = {i = 880}, bounded = true, min = COLUMN_W_MIN, max = COLUMN_W_MAX},
 	{name = "conversation.reasoning", description = "How the model's reasoning shows: folded under a line, unfolded, or not at all.", kind = .String, default = {s = "collapsed"}, choices = {"collapsed", "expanded", "hidden"}},
 	{name = "conversation.expand_tools", description = "Tool calls open with their input and output shown.", kind = .Bool, default = {b = false}},
@@ -106,10 +85,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "browser.tools", description = "Let the agents drive the Preview panel (open pages, read them, click, run scripts): the browser tools, while this window is open.", kind = .Bool, default = {b = true}},
 	{name = "layout.dock", description = "Where the panels are, as the dock writes it.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "layout.dialogs", description = "The sizes the dialogs were given (settings, statistics, shortcuts), in logical pixels.", kind = .String, default = {s = ""}, hidden = true},
-	{name = "update.channel", description = "Which releases this copy follows: the stable ones, or the betas too.", kind = .String, default = {s = "stable"}, choices = {"stable", "beta"}},
-	{name = "update.auto", description = "Look for a new version at start (it is only installed when you say so).", kind = .Bool, default = {b = true}},
 	{name = "window.placement", description = "Where the window was (platform.placement_text): it opens there again.", kind = .String, default = {s = ""}, hidden = true},
-	{name = "update.base_url", description = "Where releases are read from (empty: GitHub). Whatever the place, only what the built-in key signed is installed.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "general.start", description = "What the window opens on: the home page, or the session it showed when it closed (the latest one if it showed none yet).", kind = .String, default = {s = "last"}, choices = {"home", "last"}},
 	{name = "advanced.experimental", description = "Turn on the experimental options of a server on this computer, in its configuration file. What you set there yourself stays.", kind = .Bool, default = {b = true}},
 	{name = "advanced.fps", description = "The frame rate and what a frame costs, in the status bar.", kind = .Bool, default = {b = false}},
@@ -119,16 +95,12 @@ PREF_DEFS := [?]config.Def{
 // The preferences as plain values (read on every frame: no lookups by name there).
 Prefs :: struct {
 	accent_hex:   u32,
-	finish:       ui.Finish,   // appearance.style
+	finish:       ui.Finish,   // appearance.finish
 	mode:         string,  // appearance.mode: system, dark, light (the preference's own text: not owned)
 	font_size:    f32,
 	zoom:         f32,
-	density:      f32,
-	rounding:     f32,
-	animations:   string,
-	glow:         bool,
-	smooth_scroll: bool,
-	autohide_scrollbars: bool,
+	glow:         bool,   // appearance.glow above 0, in a finish with halos
+	autohide_scrollbars: bool,   // scrolling.autohide_scrollbars: the detached windows' states take it too
 	column_w:     f32,
 	reasoning:    string,
 	expand_tools: bool,
@@ -157,7 +129,7 @@ Prefs :: struct {
 	experimental: bool,
 	update_channel: string,
 	update_auto:  bool,
-	system_title: bool,    // appearance.system_title (title_apply)
+	system_title: bool,    // window.system_title (title_apply)
 	new_sessions: Approval,   // permission.new_sessions: the preset a session made here starts with
 }
 
@@ -166,15 +138,33 @@ CONTENT_ZOOM_MAX :: 3
 
 prefs_path :: proc() -> string { return pjoin({filepath.dir(settings_path()), "prefs.txt"}) }
 
+// The toolkit's common settings (the look, the text, scrolling, input, delays, rendering, updates, the session), then
+// this program's own.
+prefs_register :: proc(p: ^config.Prefs) {
+	d := prefs_page.STANDARD_DEFAULTS
+	d.theme, d.app_name, d.update_channel = "OpenCode", APP_NAME, "stable"
+	prefs_page.standard_register(p, prefs_page.STANDARD_ALL, d)
+	config.register(p, PREF_DEFS[:])
+}
+
 // `file` "": the defaults, nothing read or saved (a test).
 prefs_init :: proc(app: ^App, file: string) {
 	app.cfg_prefs = config.prefs_make()
-	config.register(&app.cfg_prefs, PREF_DEFS[:])
+	prefs_register(&app.cfg_prefs)
 	app.prefs_file = strings.clone(file)
-	if file != "" { config.load_file(&app.cfg_prefs, file, .User) }
+	themes_init(app)
+	if file != "" {
+		config.load_file(&app.cfg_prefs, file, .User)
+		config.user_writer_start(&app.prefs_writer, &app.cfg_prefs, file)
+	}
 	for spec in app.cli.prefs {   // --pref name=value (a value out of range or unknown: the preference keeps its own)
 		if eq := strings.index_byte(spec, '='); eq > 0 { config.set_from_string(&app.cfg_prefs, spec[:eq], spec[eq + 1:], .Command_Line) }
 	}
+	// the toolkit's settings applied to it now, then each one as it changes (config.watch): its zoom, density, rounding,
+	// motion, scrolling, delays, text rendering
+	targets := prefs_page.Standard_Targets{}
+	if app.win != nil { targets = {renderer = &app.r, fonts = &app.fonts, partial_redraw = &app.window.partial_redraw} }
+	prefs_page.standard_watch(&app.standard, &app.cfg_prefs, &app.state, targets)
 	prefs_refresh(app)
 }
 
@@ -182,20 +172,16 @@ prefs_init :: proc(app: ^App, file: string) {
 prefs_refresh :: proc(app: ^App) {
 	p := &app.cfg_prefs
 	s := &app.prefs
-	s.finish = ui.finish_of(config.string_of(p, "appearance.style"))
-	s.mode = config.string_of(p, "appearance.mode")
-	theme_load(app)
-	theme_set(app, theme_index(app, config.string_of(p, "appearance.theme")), theme_wants_light(s.mode))
+	look := prefs_page.appearance_read(p, context.temp_allocator)
+	s.finish = look.finish
+	s.mode = config.string_of(p, prefs_page.MODE_PREF)
+	theme_set(app, theme_index(app, look.theme), theme_wants_light(s.mode))
 	theme_windows(app)
 	s.accent_hex = themed(HEX_PEACH)
-	s.font_size = f32(config.int_of(p, "appearance.font_size"))
+	s.font_size = look.font_size
 	s.zoom = f32(config.float_of(p, "appearance.zoom"))
-	s.density = config.string_of(p, "appearance.density") == "compact" ? COMPACT_DENSITY : 1
-	s.rounding = f32(config.float_of(p, "appearance.rounding"))
-	s.animations = config.string_of(p, "appearance.animations")
-	s.glow = config.bool_of(p, "appearance.glow") && config.string_of(p, "appearance.style") != "flat"   // (no halos in the flat style)
-	s.smooth_scroll = config.bool_of(p, "appearance.smooth_scroll")
-	s.autohide_scrollbars = config.bool_of(p, "appearance.autohide_scrollbars")
+	s.glow = look.glow > 0 && look.finish != .Flat   // (no halos in the flat finish)
+	s.autohide_scrollbars = config.bool_of(p, "scrolling.autohide_scrollbars")
 	s.column_w = f32(config.int_of(p, "conversation.width"))
 	s.reasoning = config.string_of(p, "conversation.reasoning")
 	s.expand_tools = config.bool_of(p, "conversation.expand_tools")
@@ -226,19 +212,17 @@ prefs_refresh :: proc(app: ^App) {
 	s.experimental = config.bool_of(p, "advanced.experimental")
 	s.update_channel = config.string_of(p, "update.channel")
 	s.update_auto = config.bool_of(p, "update.auto")
-	s.system_title = config.bool_of(p, "appearance.system_title")
+	s.system_title = config.bool_of(p, "window.system_title")
+	app.announcer.mode = prefs_page.messages_mode(p)
 	s.new_sessions = approval_of_pref(config.string_of(p, "permission.new_sessions"))
 	update_channel_follow(app)
 	title_apply(app)
 
 	// the faces, when either preference changed (a family is opened once: the font state keeps it)
-	if wanted := fmt.tprintf("%s\n%s\n%s\n%s", config.string_of(p, "appearance.font"), config.string_of(p, "appearance.mono_font"), config.string_of(p, "appearance.prose_font"), config.string_of(p, "appearance.terminal_font")); wanted != app.fonts_wanted {
+	if wanted := fmt.tprintf("%s\n%s\n%s\n%s", config.string_of(p, "appearance.text.ui_font"), config.string_of(p, "appearance.text.mono_font"), config.string_of(p, "appearance.text.prose_font"), config.string_of(p, "appearance.text.terminal_font")); wanted != app.fonts_wanted {
 		fonts_apply(app)
 	}
 
-	ui.set_zoom(&app.state, s.zoom)
-	ui.set_density(&app.state, s.density)
-	ui.set_rounding(&app.state, s.rounding)
 	theme_refresh(&app.theme)
 	terms_recolour(app)
 }
@@ -250,18 +234,12 @@ title_apply :: proc(app: ^App) {
 	platform.set_integrated_title(app.win, !(app.prefs.system_title && platform.system_title_available(app.win)))
 }
 
-prefs_save :: proc(app: ^App) {
-	if app.prefs_file == "" { return }
-	if !config.save_user(&app.cfg_prefs, app.prefs_file) { ui.toast(.Bad, "The preferences could not be saved") }
-}
-
-// Sets a preference from its text, saves the user's changes, applies them.
+// Sets a preference from its text and applies it (the loop's writer saves it: main_after_frame).
 pref_set :: proc(app: ^App, name, value: string) {
 	if err := config.set_from_string(&app.cfg_prefs, name, value, .User); err != nil {
 		ui.toast(.Bad, "%s: %s", name, config.set_error_text(err))
 		return
 	}
-	prefs_save(app)
 	prefs_refresh(app)
 }
 
@@ -274,15 +252,12 @@ prefs_track_zoom :: proc(app: ^App) {
 	if abs(z - app.prefs.zoom) > ZOOM_EPSILON {
 		app.prefs.zoom = z
 		config.set_from_string(&app.cfg_prefs, "appearance.zoom", fmt.tprintf("%.3f", z), .User)
-		prefs_save(app)
-	}
+		}
 }
 
+// Whether the system asks for motion (Build_Params.animations): the user's word on it (appearance.animations) is the
+// toolkit's, over it (ui.set_animations, by standard_watch).
 animations_on :: proc(app: ^App) -> bool {
-	switch app.prefs.animations {
-	case "on":  return true
-	case "off": return false
-	}
 	// (the system's setting, read now and then: it is asked at every build)
 	@(static) read_ms: f64
 	@(static) enabled: bool
@@ -374,13 +349,30 @@ toast_session :: proc(app: ^App, kind: ui.Toast_Kind, sid, what, detail: string)
 // a second one replaces the first, acknowledging the entry closes it, a click on it brings the window and opens the session
 // (main_input). Without an entry (the session shown, the window behind), a click brings the window. False: the system shows none.
 @(private = "file")
+// (Sent without a wait: D-Bus answers at a next turn of the window's loop. A server that then refuses it: the toast says it.)
 notify_system :: proc(app: ^App, key, sid, what, detail: string) -> bool {
-	if app.win == nil || !platform.notify_supported() { return false }
+	if app.win == nil { return false }
 	body := detail != "" ? fmt.tprintf("%s: %s", what, detail) : what
-	id, ok := platform.notify(app.win, {title = session_title_of(app, sid), body = body, replace = missed_system_of(app, key)})
-	if !ok { return false }
-	missed_system_set(app, key, id)
-	return true
+	h := runtime.heap_allocator()
+	n := new(Notify_Sent, h)
+	n^ = {app = app, key = strings.clone(key, h), sid = strings.clone(sid, h), what = strings.clone(what, h)}
+	sent := platform.notify_async(app.win, {title = session_title_of(app, sid), body = body, replace = missed_system_of(app, key)}, proc(user: rawptr, id: platform.Notification_Id, ok: bool) {
+		n := (^Notify_Sent)(user)
+		if ok { missed_system_set(n.app, n.key, id) } else { toast_session(n.app, .Info, n.sid, n.what, "") }
+		notify_sent_free(n)
+	}, n)
+	if !sent { notify_sent_free(n) }
+	return sent
+}
+
+@(private = "file")
+Notify_Sent :: struct { app: ^App, key, sid, what: string }
+
+@(private = "file")
+notify_sent_free :: proc(n: ^Notify_Sent) {
+	h := runtime.heap_allocator()
+	delete(n.key, h); delete(n.sid, h); delete(n.what, h)
+	free(n, h)
 }
 
 // What a notification of the system came back with: a click opens its session, in front; closed, its entry no longer has it.
@@ -588,7 +580,7 @@ shell_failed :: proc(app: ^App, was: string) {
 server_facts_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { server_facts_answer(app, r.kind, v) }
 
 shell_set_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	ui.toast(.Good, "Shell set")
+	ui.announce(&app.announcer, .Good, "Shell set")
 	facts_soon(app)   // (a reading that crossed it said the one before)
 }
 
@@ -644,28 +636,17 @@ dialogs_track :: proc(app: ^App) {
 ////////////////////////////////
 // The dialog
 
-Settings_Page :: enum u8 { Appearance, Conversation, Behaviour, Updates, Advanced, Server, Connections, Mcp, Plugins, Usage, Permissions, Catalog }
+Settings_Page :: enum u8 { Preferences, Server, Connections, Mcp, Plugins, Usage, Permissions, Catalog }
 
-// The settings dialog: its page, its search, the slider held, what is unfolded in it.
+// The settings dialog: its page, and the client's preferences (prefs_page, from the registry).
 Settings_View :: struct {
-	page:              Settings_Page,
-	// the slider held (its preference, a constant name; "": none) and where it is: ui.slider moves its value only while the
-	// button is down, so the value is kept here between frames and written at the release
-	slider_held:       string,
-	slider_held_value: f32,
-	query:             ui.Text_Field,    // the search: while it has text, the matching settings of every client page
-	search:            config.Search,    // what that text shows, this frame (settings_dialog)
-	row_hidden:        bool,             // the row being built does not match the search: setting_end has nothing to close
-	themes_open:       bool,             // the themes as a grid, not one line (theme_cards)
-	show_licence:      bool,             // Ghostty's
+	page:         Settings_Page,
+	prefs:        prefs_page.Page,
+	show_licence: bool,   // Ghostty's
 }
 
 SETTINGS_PAGES := [Settings_Page]struct { title, icon: string, opencode: bool }{
-	.Appearance   = {"Appearance", lucide.PALETTE, false},
-	.Conversation = {"Conversation", lucide.MESSAGE_SQUARE, false},
-	.Behaviour    = {"Behaviour", lucide.SLIDERS_HORIZONTAL, false},
-	.Updates      = {"Updates", lucide.REFRESH_CW, false},
-	.Advanced     = {"Advanced", lucide.WRENCH, false},
+	.Preferences  = {"Settings", lucide.SLIDERS_HORIZONTAL, false},
 	.Server       = {"Server & shell", lucide.SQUARE_TERMINAL, true},
 	.Connections  = {"Connections", lucide.USER, true},
 	.Mcp          = {"MCP servers", lucide.PLUG, true},
@@ -675,30 +656,68 @@ SETTINGS_PAGES := [Settings_Page]struct { title, icon: string, opencode: bool }{
 	.Catalog      = {"Providers & skills", lucide.LIST, true},
 }
 
+// The pages of the client's preferences, in their order: the toolkit's groups and this program's (Behaviour and Advanced
+// gather small groups of its own by name).
+SETTINGS_PREF_PAGES := [?]prefs_page.Page_Info{
+	{category = "general", title = "General", icon = lucide.SETTINGS},
+	{category = "appearance", title = "Appearance", icon = lucide.PALETTE},
+	{category = "window", title = "Window", icon = lucide.APP_WINDOW},
+	{category = "conversation", title = "Conversation", icon = lucide.MESSAGE_SQUARE},
+	{category = "behaviour", title = "Behaviour", icon = lucide.BELL, names = {"composer.send", "sidebar.mode", "sidebar.subagents", "notify.finished", "permission.new_sessions", "notify.permission", "notices.badge", "notices.keep"}},
+	{category = "scrolling", title = "Scrolling", icon = lucide.SCROLL},
+	{category = "input", title = "Input", icon = lucide.KEYBOARD},
+	{category = "timing", title = "Delays and menus", icon = lucide.TIMER},
+	{category = "update", title = "Updates", icon = lucide.REFRESH_CW},
+	{category = "rendering", title = "Rendering", icon = lucide.MONITOR},
+	{category = "advanced", title = "Advanced", icon = lucide.WRENCH, names = {"browser.tools", "advanced.experimental", "advanced.fps", "advanced.frame_rate"}},
+}
+
+// The channels this program's releases come on (update.channel: the toolkit's, a free text without them).
+@(private = "file") UPDATE_CHANNELS       := [?]string{"stable", "beta"}
+@(private = "file") UPDATE_CHANNEL_LABELS := [?]string{"Stable", "Beta"}
+
+// The font preferences: their control is this program's (font_button: its faces, the installed families).
+@(private = "file")
+FONT_PREFS := [?]string{"appearance.text.ui_font", "appearance.text.prose_font", "appearance.text.mono_font", "appearance.text.terminal_font"}
+
 settings_open :: proc(app: ^App) {
 	app.cx.open[.Settings] = true
+	prefs_page.focus_search(&app.settings.prefs)
 	server_facts_load(app)
 }
 
-// The client's pages, the ones the search goes through (the OPENCODE ones show what the server says, not preferences).
-SETTINGS_CLIENT_PAGES :: [?]Settings_Page{.Appearance, .Conversation, .Behaviour, .Updates, .Advanced}
-
-// A search is typed: the page area shows what matches in every client page, and only that.
-settings_searching :: proc(app: ^App) -> bool { return config.searching(&app.settings.search) }
+// What the client's settings page is given (prefs_page.Options).
+settings_options :: proc(app: ^App) -> prefs_page.Options {
+	return {
+		user = app,
+		changed = proc(user: rawptr, _: string) { prefs_refresh((^App)(user)) },   // (main_after_frame's writer saves)
+		pages = SETTINGS_PREF_PAGES[:],
+		icon_font = app.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
+		file = app.prefs_file,
+		version = fmt.tprintf("%s %s", APP_NAME, APP_VERSION),
+		themes = themes(app), themes_light = app.cx.theme.light,
+		themes_file = app.cx.theme.file.path != "" ? &app.cx.theme.file : nil,
+		choices = proc(_: rawptr, name: string) -> (labels, values: []string) {
+			if name == "update.channel" { return UPDATE_CHANNEL_LABELS[:], UPDATE_CHANNELS[:] }
+			return nil, nil
+		},
+		custom_names = FONT_PREFS[:],
+		custom = proc(user: rawptr, name: string, em: f32) { font_button((^App)(user), name, em) },
+		page_foot = settings_page_foot,
+	}
+}
 
 settings_dialog :: proc(app: ^App, em: f32) {
 	if ui.modal_sized("settings", DIALOG_PREFERRED_EM[.Settings] * em, &app.cx.dialogs[.Settings], &app.cx.open[.Settings], DIALOG_MIN_EM[.Settings] * em) {
 		dialog_backdrop()
-		config.search_begin(&app.settings.search, ui.field_string(&app.settings.query))
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 		if ui.row(id = "###settings_body") {
 			// the pages (their icons alone in a narrow dialog: the page needs the room more)
 			narrow := ui.parent_box().size.x < em * SETTINGS_NARROW_EM
 			ui.next({width = ui.px(em * (narrow ? SETTINGS_NAV_ICONS_EM : SETTINGS_NAV_EM)), height = ui.fill(), axis = .Y})
 			if ui.column(id = "###settings_nav") {
-				// (the list scrolls: a short window must not push it out of the dialog; the foot stays)
+				// (the list scrolls: a short window must not push it out of the dialog)
 				ui.spacer(ui.px(em * 1.1))
-				if !narrow { settings_search_field(app, em) }
 				ui.next({width = ui.fill(), height = ui.fill()})
 				if ui.scroll_y("###settings_nav_list") {
 					ui.spacer(ui.px(em * 0.6))
@@ -709,100 +728,50 @@ settings_dialog :: proc(app: ^App, em: f32) {
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 						if ui.row(id = fmt.tprintf("###nv%d", int(page))) {
 							ui.spacer(ui.px(em * 0.7))
-							current := app.settings.page == page && !settings_searching(app)
-							if bevel_button(fmt.tprintf("###nav%d", int(page)), narrow ? "" : info.title, info.icon, width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true, face = current ? .Toggled : .Ghost).clicked {
+							current := app.settings.page == page
+							if ui.button_icon(fmt.tprintf("###nav%d", int(page)), info.icon, ui.text_shown(narrow ? "" : info.title), width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true, face = current ? .Toggled : .Ghost).clicked {
 								app.settings.page = page
-								ui.field_set(&app.settings.query, "")   // (a page chosen: the search is done)
 							}
 							ui.spacer(ui.px(em * 0.9))   // (the scroll bar's place)
 						}
 						ui.spacer(ui.px(em * 0.2))
 					}
 				}
-				if !narrow {
-					// (the program and its version, above where its preferences are: what a report of a problem says first)
-					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-					if ui.row(id = "###nav_version") {
-						ui.spacer(ui.px(em * 0.9))
-						text("v", fmt.tprintf("opencode native %s", APP_VERSION), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.4)})
-					}
-					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-					if ui.row(id = "###nav_foot") {
-						ui.spacer(ui.px(em * 0.9))
-						text("f", fmt.tprintf("prefs: %s", filepath.base(prefs_path())), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.4)})
-					}
-					ui.spacer(ui.px(em * 0.9))
-				}
 			}
 			groove("###settings_div")
 			// the page: its title in the header, beside the close cross (it stays as the page scrolls under it)
 			ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 			if ui.column(id = "###settings_side") {
-				if dialog_header("###settings_head") {
-					ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-					title := settings_searching(app) ? "Search" : SETTINGS_PAGES[app.settings.page].title
-					text("pt", title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
-				}
-				ui.next({width = ui.fill(), height = ui.fill()})
-				if ui.scroll_y("###settings_page") {
-					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-					if ui.row(id = "###pg") {
-						ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-						if ui.column() {
-							ui.spacer(ui.px(em * 0.6))
-							if settings_searching(app) { settings_results(app, em) } else { settings_page_draw(app, app.settings.page, em) }
-							ui.spacer(ui.px(em * 1.5))
+				if ui.dialog_header("settings_head", SETTINGS_PAGES[app.settings.page].title, {close = true}) {}
+				if app.settings.page == .Preferences {
+					// the client's preferences: the toolkit's page (its own search, its pages, the file, export and import)
+					ui.next({width = ui.fill(), height = ui.fill()})
+					prefs_page.build(&app.settings.prefs, &app.cfg_prefs, settings_options(app))
+				} else {
+					ui.next({width = ui.fill(), height = ui.fill()})
+					if ui.scroll_y("###settings_page") {
+						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+						if ui.row(id = "###pg") {
+							ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+							ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+							if ui.column() {
+								ui.spacer(ui.px(em * 0.6))
+								settings_page_draw(app, app.settings.page, em)
+								ui.spacer(ui.px(em * 1.5))
+							}
+							ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 						}
-						ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 					}
 				}
 			}
 		}
-		dialog_close(&app.cx.open[.Settings])
-	}
-}
-
-// The field of the settings' search, above the pages.
-@(private = "file")
-settings_search_field :: proc(app: ^App, em: f32) {
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-	if ui.row(id = "###settings_search") {
-		ui.spacer(ui.px(em * 0.7))
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
-		if well("###settings_search_well", .X, radius = 7) {
-			ui.spacer(ui.px(em * 0.5))
-			glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
-			if ui.tags("bare") {
-				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-				ui.line_edit("###settings_query", &app.settings.query, "Search settings")
-			}
-		}
-		ui.spacer(ui.px(em * 0.9))
-	}
-}
-
-// What the search finds in every client page, under each page's title (config.Search), the controls live.
-@(private = "file")
-settings_results :: proc(app: ^App, em: f32) {
-	for page in SETTINGS_CLIENT_PAGES {
-		config.search_page(&app.settings.search, SETTINGS_PAGES[page].title)
-		settings_page_draw(app, page, em)
-	}
-	if app.settings.search.found == 0 {
-		ui.spacer(ui.px(em * 0.6))
-		info_line(app, "###settings_none", "No setting matches.", em, hex(HEX_FAINT))
 	}
 }
 
 @(private = "file")
 settings_page_draw :: proc(app: ^App, page: Settings_Page, em: f32) {
 	switch page {
-	case .Appearance:   page_appearance(app, em)
-	case .Conversation: page_conversation(app, em)
-	case .Behaviour:    page_behaviour(app, em)
-	case .Updates:      page_updates(app, em)
-	case .Advanced:     page_advanced(app, em)
+	case .Preferences:
 	case .Server:       page_server(app, em)
 	case .Connections:  page_connections(app, em)
 	case .Mcp:          page_mcp(app, em)
@@ -811,7 +780,7 @@ settings_page_draw :: proc(app: ^App, page: Settings_Page, em: f32) {
 	case .Permissions:  page_permissions(app, em)
 	case .Catalog:      page_catalog(app, em)
 	}
-	}
+}
 
 @(private = "file")
 nav_heading :: proc(s: string, face: Face_Id, em: f32) {
@@ -822,217 +791,75 @@ nav_heading :: proc(s: string, face: Face_Id, em: f32) {
 	}
 }
 
-// `if setting(name) { control }`: a row with the preference's title and description on the left, its control on the
-// right, and a reset button when it is not at its default.
-@(deferred_in = setting_end)
-setting :: proc(app: ^App, name: string, em: f32) -> bool {
-	p := &app.cfg_prefs
-	show, heading := config.search_shows(&app.settings.search, p, name)
-	if !show { app.settings.row_hidden = true; return false }
-	if heading != "" { section_draw(heading, em) }   // (a search: the page's title before its first match)
-	r := config.ref_of(p, name)
-	e := config.entry(p, r)
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	ui.push_parent(ui.build_box({}, fmt.tprintf("###set_%s", name)))
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-	ui.push_parent(ui.build_box({}, "###line"))
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if ui.column(id = "###words") {
-		text("t", config.title_of(e.def), hex(HEX_SETTING_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
-		ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Text_Wrap}, fg = hex(HEX_WEAK), text_pad = 0})
-		ui.paragraph(fmt.tprintf("%s###d", e.def.description))
-		ui.spacer(ui.px(em * 0.2))
-	}
-	ui.spacer(ui.px(em * 0.8))
-	if !config.is_default(p, r) {
-		ui.a11y({name = "Reset to default"})
-		if glyph_button("###reset", lucide.REFRESH_CW, math.round(em * 1.6)).clicked {
-			config.reset(p, name)
-			prefs_save(app)
-			prefs_refresh(app)
+// Under a page's preferences: what is not a setting (the updates' state and buttons; the folder, the program, the
+// terminal's licence; where Setup is).
+@(private = "file")
+settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
+	app := (^App)(user)
+	switch category {
+	case "behaviour":
+		ui.spacer(ui.px(em * 0.6))
+		info_line(app, "###hint_setup", "Installation and " + LBL_PIECES + " are in Setup… (title bar menu).", em)
+	case "update":
+		u := &app.updater
+		state := "Up to date, as far as is known"
+		switch _ in u.state {
+		case nil:
+			if u.result != "" { state = u.result }
+		case Update_Checking:    state = "Looking for a new version…"
+		case Update_Ready:       state = fmt.tprintf("Version %s is available", update_version(u))
+		case Update_Downloading: state = fmt.tprintf("Downloading %s…", update_version(u))
+		case Update_Installed:   state = fmt.tprintf("Version %s is installed: restart to use it", update_version(u))
 		}
-		ui.spacer(ui.px(em * 0.3))
-	}
-	return true
-}
-
-@(private = "file")
-setting_end :: proc(app: ^App, name: string, _: f32) {
-	if app.settings.row_hidden { app.settings.row_hidden = false; return }
-	ui.pop_parent()   // ###line
-	em := ui.font_size()
-	ui.spacer(ui.px(em * 0.5))
-	groove()
-	ui.spacer(ui.px(em * 0.4))
-	ui.pop_parent()   // ###set_
-}
-
-// The controls, each bound to a preference.
-
-@(private = "file")
-pref_choice :: proc(app: ^App, name: string, labels: []string, em: f32, width: f32 = 0) {
-	d := config.entry(&app.cfg_prefs, config.ref_of(&app.cfg_prefs, name)).def
-	cur := config.string_of(&app.cfg_prefs, name)
-	sel := 0
-	for c, i in d.choices { if c == cur { sel = i } }
-	w := width > 0 ? width : em * 7.6 * f32(len(labels))
-	// (never narrower than its words: the segments are of one width, the longest label's with its room around it)
-	widest: f32
-	for l in labels { widest = max(widest, ui.text_width(app.font, ui.font_size(), l)) }
-	w = max(w, f32(len(labels)) * (widest + em * SEGMENT_PAD_EM))
-	// Too wide beside its words, it goes under them: the words keep the line, it has the room. (setting_end closes this line as it would
-	// have closed the first one.)
-	line := ui.parent_box()
-	if room := line.rect.max.x - line.rect.min.x; room > 0 && w > room * WIDE_CHOICE_SHARE {
-		ui.pop_parent()   // ###line
-		ui.spacer(ui.px(em * 0.4))
+		ui.spacer(ui.px(em * 0.6))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+		if ui.well("###upd") {
+			ui.spacer(ui.px(em * 0.4))
+			fact("###u1", "version", APP_VERSION, em)
+			fact("###u2", "channel", app.prefs.update_channel, em)
+			fact("###u3", "state", state, em)
+			ui.spacer(ui.px(em * 0.4))
+		}
+		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-		ui.push_parent(ui.build_box({}, "###under"))
-	}
-	ui.next({width = ui.px(math.round(w)), height = ui.px(math.round(em * 2))})
-	if choice("###seg", labels, &sel) { pref_set(app, name, d.choices[sel]) }
-}
-
-@(private = "file")
-pref_switch :: proc(app: ^App, name: string, em: f32) {
-	v := config.bool_of(&app.cfg_prefs, name)
-	ui.next({width = ui.px(em * 3.6), height = ui.px(math.round(em * 2))})
-	ui.a11y({name = config.title_of(config.entry(&app.cfg_prefs, config.ref_of(&app.cfg_prefs, name)).def)})
-	if ui.toggle("###sw", "", &v).clicked { pref_set(app, name, v ? "true" : "false") }
-}
-
-// What a focused slider makes of `v` with no key pressed: it snaps it to its step and its range.
-slider_idle :: proc(v, lo, hi, step: f32) -> f32 {
-	return clamp(step > 0 ? math.round(v / step) * step : v, lo, hi)
-}
-
-@(private = "file")
-pref_slider :: proc(app: ^App, name: string, lo, hi, step: f32, format: string, em: f32) {
-	p := &app.cfg_prefs
-	d := config.entry(p, config.ref_of(p, name)).def
-	held := app.settings.slider_held == name
-	v := held ? app.settings.slider_held_value : (d.kind == .Int ? f32(config.int_of(p, name)) : f32(config.float_of(p, name)))
-	ui.next({width = ui.px(em * 15), height = ui.px(math.round(em * 2))})
-	ui.a11y({name = config.title_of(d)})
-	idle := slider_idle(v, lo, hi, step)
-	sig := ui.slider("###sl", &v, lo, hi, step, format)
-	// while the button is down the value is the app's (the preference is read again at each frame); at the release it is written
-	if sig.pointer_pressed || sig.dragging {
-		app.settings.slider_held, app.settings.slider_held_value = name, v
-	} else if held {
-		app.settings.slider_held = ""
-	}
-	// written when the drag ends (or at each key step): the file is not rewritten at the pointer's rate, nor by the focus alone
-	if (sig.released || (sig.focused && !sig.dragging && abs(v - idle) > SLIDER_EPSILON)) && (d.kind == .Int ? i64(math.round(v)) != config.int_of(p, name) : abs(f64(v) - config.float_of(p, name)) > SLIDER_EPSILON) {
-		pref_set(app, name, d.kind == .Int ? fmt.tprintf("%d", i64(math.round(v))) : fmt.tprintf("%.2f", v))
-	} else if sig.dragging && d.kind == .Float && name == "appearance.rounding" {
-		ui.set_rounding(&app.state, v)   // (live while dragged)
-	}
-}
-
-@(private = "file")
-Theme_Card :: struct { cols: ^ui.Theme_Colors, chosen: bool }
-
-// The themes, each in its own colours: its surface, its name in its text, its colours as dots, a ring of its accent around the
-// one shown. On one line that scrolls sideways; "Show all" lays them out as a grid (gui_toolkit's strip_grid).
-@(private = "file")
-theme_cards :: proc(app: ^App, em: f32) {
-	all := themes(app)
-	cur := app.cx.theme.at
-	gap := em * 0.5
-	if ui.strip_grid("###themes", &app.settings.themes_open, {gap, gap}) {
-		for &def, i in all {
-			ui.next({width = ui.px(math.round(em * THEME_CARD_W_EM)), height = ui.px(math.round(em * THEME_CARD_H_EM)), axis = .Y, cursor = .Hand})
-			ui.a11y({role = .Radio_Button, name = def.name, toggled = i == cur ? .True : .False})
-			b := ui.build_box({.Clickable, .Focusable}, fmt.tprintf("###th%d", i))
-			d := ui.frame_new(Theme_Card)
-			cols := ui.frame_new(ui.Theme_Colors)
-			cols^, _ = ui.theme_version(def, app.cx.theme.light)   // (in the version shown)
-			d^ = {cols, i == cur}
-			b.custom, b.custom_user = theme_card_draw, d
-			if ui.signal(b).clicked && i != cur { pref_set(app, "appearance.theme", def.name) }
-			if ui.parent(b) {
-				ui.spacer(ui.px(em * 0.55))
-				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-				if ui.row(id = "###n") {
-					ui.spacer(ui.px(em * 0.8))
-					text("t", def.name, draw.hex(cols.texts[2]), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.4)}, ui.fill())
-				}
+		if ui.row(.Center, id = "###upd_b") {
+			if ui.button_icon("###u_check", lucide.REFRESH_CW, "Check now", disabled = update_is_downloading(u)).clicked { update_check(app, true) }
+			ui.spacer(ui.px(em * 0.5))
+			if update_is_ready(u) {
+				if ui.button_icon("###u_inst", lucide.CHECK, ui.text_shown(fmt.tprintf("Install %s", update_version(u))), .Success).clicked { update_install(app) }
+			}
+			if update_is_installed(u) {
+				if ui.button_icon("###u_rest", lucide.REFRESH_CW, "Restart now", .Success).clicked { app_restart(app) }
 			}
 		}
-	}
-	ui.spacer(ui.px(em * 0.5))
-}
-
-// Where a theme card's dots go: their size, the first one's left, their top. `em`: the font's size as drawn (frame pixels,
-// the screen's scale in it already: scaled once more, at 200 % the dots rose onto the name).
-theme_card_dots :: proc(r: Rect, em: f32) -> (dot, x, y: f32) {
-	dot = math.round((r.max.y - r.min.y) * 0.16)
-	x = r.min.x + math.round(0.8 * em)
-	y = r.max.y - math.round(0.55 * em) - dot
-	return
-}
-
-@(private = "file")
-theme_card_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	d := (^Theme_Card)(user)
-	t := d.cols
-	r := b.rect
-	s := ui.scale()
-	radius := math.round(THEME_CARD_RADIUS * s * corners())
-	draw.rect(dc, r, draw.hex(t.steps[3]), radius)
-	accent := draw.hex(t.hues[0])
-	edge := d.chosen ? accent : draw.mix(draw.hex(t.steps[5]), draw.hex(t.texts[1]), 0.35 * b.hot_t)
-	draw.rect(dc, r, edge, radius, d.chosen ? 2 * px1() : px1())
-	// its colours, as dots along the bottom: the accent first, larger
-	dot, x, y := theme_card_dots(r, ui.font_size())
-	prev := draw.set_circular_corners(dc, true)
-	defer draw.set_circular_corners(dc, prev)
-	for h, i in t.hues {
-		if i == 2 || i == 7 { continue }   // (purple and rose: the accent and the others say enough)
-		sz := i == 0 ? dot * 1.5 : dot
-		cy := y + dot * 0.5
-		draw.rect(dc, {{x, cy - sz * 0.5}, {x + sz, cy + sz * 0.5}}, draw.hex(h), sz * 0.5)
-		x += sz + math.round(dot * 0.6)
-	}
-}
-
-page_appearance :: proc(app: ^App, em: f32) {
-	theme := false
-	if setting(app, "appearance.theme", em) { theme = true }   // (its title and its words; the cards under them)
-	if theme {
-		theme_cards(app, em)
-		if hint_action("###themes_file", "Themes of your own: themes.txt", em) { themes_file_open(app) }
 		ui.spacer(ui.px(em * 0.6))
+		info_line(app, "###hint_sig", "Only what is signed with the key built into this program is installed: the channel, the version and the file's checksum are all in the signature.", em)
+	case "advanced":
+		ui.spacer(ui.px(em * 0.6))
+		info_line(app, "###adv_about", fmt.tprintf("%s %s, a client of the OpenCode server. %s", APP_NAME, APP_VERSION, APP_NOT_THEIRS), em)
+		licence_section(app, em)
+		ui.spacer(ui.px(em * 0.7))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###adv_b") {
+			if ui.button_icon("###adv_dir", lucide.FOLDER, "Open the settings folder").clicked { ui.open(filepath.dir(prefs_path())) }
+			ui.spacer(ui.px(em * 0.4))
+			if ui.button_icon("###adv_lic", "", ui.text_shown(app.settings.show_licence ? "Hide the terminal's licence" : "The terminal's licence"), face = .Ghost).clicked { app.settings.show_licence = !app.settings.show_licence }
+		}
+		if app.settings.show_licence {
+			ui.spacer(ui.px(em * 0.5))
+			info_line(app, "###adv_lic_say", "The terminal's emulation is Ghostty's, through libghostty-vt.", em)
+			ui.spacer(ui.px(em * 0.3))
+			code_block("###adv_lic_text", "text", GHOSTTY_LICENSE, app.mono, version = 1)
+		}
 	}
-	if setting(app, "appearance.mode", em) { pref_choice(app, "appearance.mode", {"System", "Dark", "Light"}, em, em * 16) }
-	if setting(app, "appearance.style", em) { pref_choice(app, "appearance.style", {"Machined", "Edged", "Flat"}, em, em * 18) }
-	if app.win != nil && platform.system_title_available(app.win) {   // (GNOME: no title bar of the system to choose)
-		if setting(app, "appearance.system_title", em) { pref_switch(app, "appearance.system_title", em) }
-	}
-	if setting(app, "appearance.font", em) { font_button(app, "appearance.font", em) }
-	if setting(app, "appearance.prose_font", em) { font_button(app, "appearance.prose_font", em) }
-	if setting(app, "appearance.mono_font", em) { font_button(app, "appearance.mono_font", em) }
-	if setting(app, "appearance.terminal_font", em) { font_button(app, "appearance.terminal_font", em) }
-	if setting(app, "appearance.font_size", em) { pref_slider(app, "appearance.font_size", FONT_SIZE_MIN, FONT_SIZE_MAX, 1, "%.0f pt", em) }
-	if setting(app, "appearance.text_smoothing", em) { pref_choice(app, "appearance.text_smoothing", {"Auto", "RGB", "BGR", "Grey"}, em, em * 18) }
-	if setting(app, "appearance.zoom", em) { pref_slider(app, "appearance.zoom", ZOOM_MIN, ZOOM_MAX, 0.05, "%.2f×", em) }
-	if setting(app, "appearance.content_zoom", em) { pref_slider(app, "appearance.content_zoom", CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX, 0.05, "%.2f×", em) }
-	if setting(app, "appearance.throbber", em) { pref_choice(app, "appearance.throbber", {"Board", "Orbit", "Scanner", "None"}, em, em * 18) }
-	if setting(app, "appearance.density", em) { pref_choice(app, "appearance.density", {"Comfortable", "Compact"}, em) }
-	if setting(app, "appearance.rounding", em) { pref_slider(app, "appearance.rounding", 0, 2, 0.05, "%.2f", em) }
-	if setting(app, "appearance.animations", em) { pref_choice(app, "appearance.animations", {"System", "On", "Off"}, em) }
-	if setting(app, "appearance.smooth_scroll", em) { pref_switch(app, "appearance.smooth_scroll", em) }
-	if setting(app, "appearance.autohide_scrollbars", em) { pref_switch(app, "appearance.autohide_scrollbars", em) }
-	if setting(app, "appearance.glow", em) { pref_switch(app, "appearance.glow", em) }
 }
 
 // The button of a font preference (its face) and its picker: Automatic (the client's own), the other choice, then the
 // installed families, matched as one types.
 font_button :: proc(app: ^App, name: string, em: f32) {
-	term := name == "appearance.terminal_font"
-	mono := name == "appearance.mono_font" || term
-	prose := name == "appearance.prose_font"
+	term := name == "appearance.text.terminal_font"
+	mono := name == "appearance.text.mono_font" || term
+	prose := name == "appearance.text.prose_font"
 	want := config.string_of(&app.cfg_prefs, name)
 	face := term ? app.term_face : mono ? app.mono_face : prose ? app.prose_face : app.ui_face
 	own := term ? "Fira Mono" : mono ? "DM Mono" : prose ? "Newsreader" : "Hanken Grotesk"
@@ -1049,7 +876,7 @@ font_button :: proc(app: ^App, name: string, em: f32) {
 		text("fm", mode, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)})
 		ui.spacer(ui.px(em * 0.5))
 	}
-	sig := bevel_button(fmt.tprintf("###fb_%s", name), shown, "", width = ui.px(em * 13))
+	sig := ui.button_icon(fmt.tprintf("###fb_%s", name), "", ui.text_shown(shown), width = ui.px(em * 13))
 	if sig.clicked {
 		if app.cx.open[.Picker] && app.picker.id == name { app.cx.open[.Picker] = false } else { picker_open(app, name, sig.box.rect) }
 	}
@@ -1068,104 +895,6 @@ font_button :: proc(app: ^App, name: string, em: f32) {
 	}
 }
 
-page_conversation :: proc(app: ^App, em: f32) {
-	if setting(app, "conversation.width", em) { pref_slider(app, "conversation.width", COLUMN_W_MIN, COLUMN_W_MAX, 20, "%.0f px", em) }
-	if setting(app, "conversation.reasoning", em) { pref_choice(app, "conversation.reasoning", {"Folded", "Unfolded", "Hidden"}, em) }
-	if setting(app, "conversation.expand_tools", em) { pref_switch(app, "conversation.expand_tools", em) }
-	if setting(app, "conversation.tool_lines", em) { pref_slider(app, "conversation.tool_lines", TOOL_LINES_MIN, TOOL_LINES_MAX, 5, "%.0f lines", em) }
-	if setting(app, "conversation.page_size", em) { pref_slider(app, "conversation.page_size", PAGE_SIZE_MIN, PAGE_SIZE_MAX, 10, "%.0f", em) }
-	if setting(app, "conversation.follow", em) { pref_switch(app, "conversation.follow", em) }
-	if setting(app, "conversation.usage", em) { pref_switch(app, "conversation.usage", em) }
-	if setting(app, "conversation.while_running", em) { pref_choice(app, "conversation.while_running", {"Queue", "Steer"}, em) }
-	if setting(app, "conversation.image_viewer_size", em) { pref_slider(app, "conversation.image_viewer_size", VIEWER_SCALE_MIN, 1, 0.05, "%.2f", em) }
-	if setting(app, "conversation.clock", em) { pref_choice(app, "conversation.clock", {"24 h", "12 h"}, em) }
-}
-
-page_behaviour :: proc(app: ^App, em: f32) {
-	if setting(app, "composer.send", em) { pref_choice(app, "composer.send", {"Enter", "Ctrl+Enter"}, em, em * 14) }
-	if setting(app, "sidebar.mode", em) { pref_choice(app, "sidebar.mode", {SIDEBAR_MODES[.Inbox].label, SIDEBAR_MODES[.Projects].label}, em, em * 14) }
-	if setting(app, "sidebar.subagents", em) { pref_choice(app, "sidebar.subagents", {"Nested", "Flat", "Hidden"}, em) }
-	if setting(app, "notify.finished", em) { pref_choice(app, "notify.finished", {"Off", "Toast", "Flash", "System"}, em) }
-	if setting(app, "permission.new_sessions", em) { pref_choice(app, "permission.new_sessions", {"As configured", "Allow edits", "Allow all", "Ask all"}, em, em * 26) }
-	if setting(app, "notify.permission", em) { pref_switch(app, "notify.permission", em) }
-	if setting(app, "notices.badge", em) { pref_switch(app, "notices.badge", em) }
-	if setting(app, "notices.keep", em) { pref_slider(app, "notices.keep", NOTICES_KEEP_MIN, NOTICES_KEEP_MAX, 10, "%.0f entries", em) }
-	if setting(app, "general.start", em) { pref_choice(app, "general.start", {"Home", "Latest session"}, em, em * 14) }
-	if !settings_searching(app) {
-		ui.spacer(ui.px(em * 0.6))
-		info_line(app, "###hint_setup", "Installation and " + LBL_PIECES + " are in Setup… (title bar menu).", em)
-	}
-}
-
-page_updates :: proc(app: ^App, em: f32) {
-	if !settings_searching(app) {   // (the state and the buttons: a page's, not a setting's)
-		u := &app.updater
-		state := "Up to date, as far as is known"
-		switch _ in u.state {
-		case nil:
-			if u.result != "" { state = u.result }
-		case Update_Checking:    state = "Looking for a new version…"
-		case Update_Ready:       state = fmt.tprintf("Version %s is available", update_version(u))
-		case Update_Downloading: state = fmt.tprintf("Downloading %s…", update_version(u))
-		case Update_Installed:   state = fmt.tprintf("Version %s is installed: restart to use it", update_version(u))
-		}
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-		if well("###upd", radius = 7, base = HEX_FACTS_WELL) {
-			ui.spacer(ui.px(em * 0.4))
-			fact("###u1", "version", APP_VERSION, em)
-			fact("###u2", "channel", app.prefs.update_channel, em)
-			fact("###u3", "state", state, em)
-			ui.spacer(ui.px(em * 0.4))
-		}
-		ui.spacer(ui.px(em * 0.7))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-		if ui.row(.Center, id = "###upd_b") {
-			if bevel_button("###u_check", "Check now", lucide.REFRESH_CW, disabled = update_is_downloading(u)).clicked { update_check(app, true) }
-			ui.spacer(ui.px(em * 0.5))
-			if update_is_ready(u) {
-				if bevel_button("###u_inst", fmt.tprintf("Install %s", update_version(u)), lucide.CHECK, .Success).clicked { update_install(app) }
-			}
-			if update_is_installed(u) {
-				if bevel_button("###u_rest", "Restart now", lucide.REFRESH_CW, .Success).clicked { app_restart(app) }
-			}
-		}
-		ui.spacer(ui.px(em * 0.9))
-	}
-	if setting(app, "update.channel", em) { pref_choice(app, "update.channel", {"Stable", "Beta"}, em, em * 14) }
-	if setting(app, "update.auto", em) { pref_switch(app, "update.auto", em) }
-	if !settings_searching(app) {
-		ui.spacer(ui.px(em * 0.6))
-		info_line(app, "###hint_sig", "Only what is signed with the key built into this program is installed: the channel, the version and the file's checksum are all in the signature.", em)
-	}
-}
-
-page_advanced :: proc(app: ^App, em: f32) {
-	section(app, "PREVIEW", em)
-	if setting(app, "browser.tools", em) { pref_switch(app, "browser.tools", em) }
-	section(app, "ABOUT", em)
-	if !settings_searching(app) { info_line(app, "###adv_about", fmt.tprintf("%s %s, a client of the OpenCode server. %s", APP_NAME, APP_VERSION, APP_NOT_THEIRS), em) }
-	section(app, "SERVER", em)
-	if setting(app, "advanced.experimental", em) { pref_switch(app, "advanced.experimental", em) }
-	section(app, "DIAGNOSTICS", em)
-	if setting(app, "advanced.fps", em) { pref_switch(app, "advanced.fps", em) }
-	if setting(app, "advanced.frame_rate", em) { pref_choice(app, "advanced.frame_rate", {"Screen", "30", "60", "120", "240", "Uncapped"}, em, em * 24) }
-	if !settings_searching(app) {   // (the folder, the licence: not settings)
-		ui.spacer(ui.px(em * 0.7))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-		if ui.row(.Center, id = "###adv_b") {
-			if bevel_button("###adv_dir", "Open the settings folder", lucide.FOLDER).clicked { _ = platform.open_path(filepath.dir(prefs_path())) }
-			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###adv_lic", app.settings.show_licence ? "Hide the terminal's licence" : "The terminal's licence", "", face = .Ghost).clicked { app.settings.show_licence = !app.settings.show_licence }
-		}
-		if app.settings.show_licence {
-			ui.spacer(ui.px(em * 0.5))
-			info_line(app, "###adv_lic_say", "The terminal's emulation is Ghostty's, through libghostty-vt.", em)
-			ui.spacer(ui.px(em * 0.3))
-			code_block("###adv_lic_text", "text", GHOSTTY_LICENSE, app.mono, version = 1)
-		}
-	}
-}
-
 // A line of quiet text.
 info_line :: proc(app: ^App, id, s: string, em: f32, color := Color{}) {
 	ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Text_Wrap}, fg = color.a > 0 ? color : hex(HEX_WEAK), text_pad = 0})
@@ -1179,12 +908,6 @@ fact :: proc(id, k, v: string, em: f32, col := Color{}) {
 }
 
 section :: proc(app: ^App, s: string, em: f32) {
-	if settings_searching(app) { return }   // (a search shows the pages' titles, not their groups)
-	section_draw(s, em)
-}
-
-@(private = "file")
-section_draw :: proc(s: string, em: f32) {
 	ui.spacer(ui.px(em * 0.6))
 	section_label(fmt.tprintf("sec_%s", s), s, em)
 }
@@ -1205,7 +928,7 @@ page_server :: proc(app: ^App, em: f32) {
 	f := &app.facts
 	section(app, "SERVER", em)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well("###srv", radius = 7, base = HEX_FACTS_WELL) {
+	if ui.well("###srv") {
 		ui.spacer(ui.px(em * 0.4))
 		fact("###s1", "address", server_base(app), em)
 		fact("###s2", "status", online(app) ? "connected" : "not connected", em, online(app) ? hex(HEX_GREEN) : hex(HEX_YELLOW))
@@ -1225,7 +948,7 @@ page_server :: proc(app: ^App, em: f32) {
 		for s, i in f.shells {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###sh%d", i)) {
-				if bevel_button(fmt.tprintf("###shb%d", i), s.name, lucide.SQUARE_TERMINAL, width = ui.px(em * 9), height = math.round(em * BUTTON_COMPACT_H_EM), disabled = !s.ok, face = sel == i ? .Toggled : .Raised).clicked { shell_set(app, s) }
+				if ui.button_icon(fmt.tprintf("###shb%d", i), lucide.SQUARE_TERMINAL, ui.text_shown(s.name), width = ui.px(em * 9), height = math.round(em * BUTTON_COMPACT_H_EM), disabled = !s.ok, face = sel == i ? .Toggled : .Raised).clicked { shell_set(app, s) }
 				ui.spacer(ui.px(em * 0.7))
 				text("p", s.path, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			}
@@ -1245,9 +968,9 @@ page_server :: proc(app: ^App, em: f32) {
 			}
 			// (only this computer's server speaks of this computer's files)
 			if app.servers[app.server].local && config_file_shaped(c.path) && os.is_file(c.path) {
-				if bevel_button("###open", "Open", lucide.FILE, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_path(c.path) }
+				if ui.button_icon("###open", lucide.FILE, "Open", height = math.round(em * BUTTON_SMALL_H_EM)).clicked { ui.open(c.path) }
 				ui.spacer(ui.px(em * 0.3))
-				if bevel_button("###dir", "", lucide.FOLDER, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { platform.open_path(filepath.dir(c.path)) }
+				if ui.button_icon("###dir", lucide.FOLDER, "", height = math.round(em * BUTTON_SMALL_H_EM)).clicked { ui.open(filepath.dir(c.path)) }
 			}
 		}
 		ui.spacer(ui.px(em * 0.4))
@@ -1282,9 +1005,9 @@ page_mcp :: proc(app: ^App, em: f32) {
 				// (what goes on says itself: no button says the opposite meanwhile)
 				if going == nil {
 					if connected {
-						if bevel_button("###dc", "Disconnect", "", .Danger, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, false) }
+						if ui.button_icon("###dc", "", "Disconnect", .Danger, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, false) }
 					} else {
-						if bevel_button("###co", "Connect", "", .Success, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, true) }
+						if ui.button_icon("###co", "", "Connect", .Success, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, true) }
 					}
 				}
 				ui.spacer(ui.px(em * 0.8))
@@ -1315,7 +1038,7 @@ page_usage :: proc(app: ^App, em: f32) {
 		if ui.row(.Center, id = "###ws") {
 			text("w", fmt.tprintf("Workspace “%s”", f.workspace), hex(HEX_WORKSPACE_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			if f.usage_url != "" {
-				if bevel_button("###web", "Usage on opencode.ai", lucide.GLOBE, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { link_open(f.usage_url) }
+				if ui.button_icon("###web", lucide.GLOBE, "Usage on opencode.ai", height = math.round(em * BUTTON_SMALL_H_EM)).clicked { link_open(f.usage_url) }
 			}
 		}
 	}
@@ -1388,7 +1111,7 @@ page_permissions :: proc(app: ^App, em: f32) {
 				text("a", s.action, hex(HEX_SETTING_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
 				ui.spacer(ui.px(em * 0.5))
 				text("r", s.resource, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
-				if bevel_button("###rv", "Revoke", lucide.TRASH_2, .Danger, height = math.round(em * BUTTON_SMALL_H_EM), disabled = saved_revoking(f, s.id)).clicked { saved_revoke(app, s.id) }
+				if ui.button_icon("###rv", lucide.TRASH_2, "Revoke", .Danger, height = math.round(em * BUTTON_SMALL_H_EM), disabled = saved_revoking(f, s.id)).clicked { saved_revoke(app, s.id) }
 			}
 		}
 	}

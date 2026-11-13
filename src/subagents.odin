@@ -500,7 +500,7 @@ card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: b
 			ui.spacer(ui.px(em * 0.5))
 		}
 		if v.id != "" {
-			if bevel_button("###open", "Open", "", height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { drill_down(app, v.id) }
+			if ui.button_icon("###open", "", "Open", height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { drill_down(app, v.id) }
 			ui.spacer(ui.px(em * 0.2))
 		}
 		glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
@@ -605,7 +605,7 @@ sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 	s := v.session
 	section_label("fa", "SESSION", em)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well("###facts", radius = 7, base = HEX_FACTS_WELL) {
+	if ui.well("###facts") {
 		ui.spacer(ui.px(em * 0.45))
 		row :: proc(id, k, val: string, em: f32, col := Color{}) {
 			kv_row(id, k, val, em, {h = 1.4, key_w = 7, key_fs = FS_CAPTION, val_fs = FS_CAPTION, pad_l = 0.8, val = HEX_TEXT_SOFT}, col)
@@ -654,7 +654,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 			text("at", clock_text(m.created, app.prefs.clock24), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.5))
 			if m.sub_child != "" {
-				if bevel_button("###open", "Open", "", height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { drill_down(app, m.sub_child) }
+				if ui.button_icon("###open", "", "Open", height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { drill_down(app, m.sub_child) }
 				ui.spacer(ui.px(em * 0.2))
 			}
 			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
@@ -720,7 +720,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 				text("f", facts, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
-			if bevel_button("###back", "Return to main session", lucide.ARROW_LEFT).clicked { go_back(app) }
+			if ui.button_icon("###back", lucide.ARROW_LEFT, "Return to main session").clicked { go_back(app) }
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -750,7 +750,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 		animate(app)
 		lamp("###sub_lamp", hex(HEX_YELLOW), 1, pulse = true, size = em * 1.0)
 		ui.spacer(ui.px(em * 0.3))
-		sig = bevel_button("###subs", fmt.tprintf("%d active", len(active)), lucide.BOT, height = math.round(em * BUTTON_COMPACT_H_EM))
+		sig = ui.button_icon("###subs", lucide.BOT, ui.text_shown(fmt.tprintf("%d active", len(active))), height = math.round(em * BUTTON_COMPACT_H_EM))
 		ui.spacer(ui.px(em * 0.3))
 		text("of", fmt.tprintf("/ %d", len(c.children)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 	} else {

@@ -37,7 +37,8 @@ tag_version :: proc(tag: string) -> (version: string, beta: bool) {
 @(private = "file")
 release_dist :: proc(tag: string) -> int {
 	version, beta := tag_version(tag)
-	source, found := app_version(read_text(SETUP_FILE))
+	source := toolbox.project_version(OCN_PROJECT)
+	found := source != ""
 	if !found || source != version { fmt.eprintfln("release: tag %s does not match APP_VERSION %s (%s)", tag, source, SETUP_FILE); return 1 }
 	if run_package({version}) != 0 { return 1 }
 	file := fmt.tprintf("%s/%s", DIST_DIR, update.expected_file_name(ocn_update.PRODUCT, version, update.PLATFORM, context.temp_allocator))

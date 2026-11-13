@@ -19,6 +19,10 @@ run_check :: proc(args: []string) -> int {
 		return EXIT_USAGE
 	}
 	if !changelog_check() { return 1 }
+	// (a scope opened under a negation ends at once: `if !ui.row(...)`)
+	if !toolbox.check_scopes("src") { return 1 }
+	// (the other system's code compiles too: Windows' from Linux, Linux's from Windows is the CI's)
+	when ODIN_OS != .Windows { if !toolbox.check_windows(OCN_PROJECT) { return 1 } }
 	// (where the headers are: a build of the emulation is what brings them, and the CI keeps only its library)
 	if os.exists(VT_HEADERS) && vt_run(VT_HEADERS, true) != 0 { return 1 }
 	// (one test with a window at a time: testkit/session says so; on Linux the program's own flags)

@@ -3,16 +3,14 @@
 // uses them); ui.theme_recolor moves each to the theme shown: a grey to the same place on the theme's steps (its backgrounds, its
 // lines, its texts), a colour to the theme's colour of the nearest hue, mixed as much with the theme's grey as it was with opencode's.
 // OpenCode dark is opencode's: it moves nothing. The themes: OpenCode, then the toolkit's; themes of the user's own come from
-// themes.txt, beside the preferences (theme_load).
+// themes.txt, beside the preferences (themes_poll).
 package ocn
 
-import "base:runtime"
 
-import "core:os"
 import "core:path/filepath"
 import "core:strings"
-import "core:time"
 import "gt:platform"
+import prefs_page "gt:prefs_page"
 import "gt:ui"
 
 @(private = "file") BLACK_STEPS :: [6]u32{0x070707ff, 0x0a0a0aff, 0x101010ff, 0x161616ff, 0x1e1e1eff, 0x2a2a2aff}
@@ -45,9 +43,7 @@ themes_builtin :: proc() -> []ui.Theme_Def {
 // The themes there are, the one shown and in which version, and opencode's colours as it has them (made as they are asked for:
 // the same few hundred each frame).
 Theme_State :: struct {
-	all:      [dynamic]ui.Theme_Def,   // the program's, then the user's (their names owned)
-	own:      int,                  // where the user's begin in all
-	file_at:  time.Time,            // themes.txt as it was read (its time: read again when it changes)
+	file:     prefs_page.Themes_File,   // the program's themes, then the user's (themes.txt)
 	at:       int,
 	light:    bool,                 // the light version shown
 	identity: bool,                 // OpenCode dark: nothing moves
@@ -57,7 +53,7 @@ Theme_State :: struct {
 }
 
 // The themes there are: the program's, then the user's.
-themes :: proc(app: ^App) -> []ui.Theme_Def { return len(app.cx.theme.all) > 0 ? app.cx.theme.all[:] : themes_builtin() }
+themes :: proc(app: ^App) -> []ui.Theme_Def { return len(app.cx.theme.file.all) > 0 ? app.cx.theme.file.all[:] : themes_builtin() }
 
 // The theme of this name ("" or an unknown one: opencode's).
 theme_index :: proc(app: ^App, name: string) -> int {
@@ -114,7 +110,7 @@ theme_follow_system :: proc(app: ^App) {
 }
 
 ////////////////////////////////
-// Themes of the user's own: themes.txt
+// Themes of the user's own: themes.txt (prefs_page.Themes_File: made, opened and read again by tasks)
 
 // Where they are: beside the preferences.
 themes_file :: proc(app: ^App) -> string {
@@ -123,85 +119,17 @@ themes_file :: proc(app: ^App) -> string {
 	return p
 }
 
-// What a new themes.txt says: how it is read, and a theme to start from (commented: nothing changes until it is written).
-THEMES_TEMPLATE :: `# Themes of your own. Each [section] is one, by its name; it shows in Settings > Appearance after the program's.
-# A colour is #rrggbb. What is not given is OpenCode's. The keys, for the dark version:
-#   well bg0 bg1 bg2 bg3 line        the steps: wells and code, the conversation, the bars, the cards, what is raised, the lines
-#   faint weak text bright           the texts, from the faintest
-#   accent blue purple green yellow red cyan rose
-# and the same with "light." before them for the light version (a theme with none stays dark in light mode).
-# A theme can start from another: from = Gruvbox
-#
-# [My theme]
-# from = OpenCode
-# accent = #e5c07b
-# bg0 = #050505
-# light.accent = #b58900
-`
-
-// The user's themes, read again when themes.txt changed (or at the start). The program's are first; a theme of the user's of the
-// same name as one of them is the user's.
-theme_load :: proc(app: ^App) {
-	path := themes_file(app)
-	if path == "" { return }
-	ts := &app.cx.theme
-	info, err := os.stat(path, context.temp_allocator)
-	stamp := err == nil ? info.modification_time : time.Time{}
-	if len(ts.all) > 0 && stamp == ts.file_at { return }
-	ts.file_at = stamp
-	for t in ts.all[ts.own:] { delete(t.name) }
-	clear(&ts.all)
-	append(&ts.all, ..themes_builtin())
-	ts.own = len(ts.all)
-	if err != nil { return }
-	data, rerr := os.read_entire_file(path, context.temp_allocator)
-	if rerr != nil { return }
-	// (a theme of the user's starts as OpenCode's dark version; `from = Name` starts it from one of the program's)
-	own := ui.themes_read(string(data), themes_builtin(), themes_builtin()[0], context.temp_allocator)
-	for t in own {
-		u := t
-		u.name = strings.clone(t.name)
-		append(&ts.all, u)
-	}
-	// (of the user's, the last of a name; a program's of that name gives way to it)
-	for i := len(ts.all) - 1; i >= ts.own; i -= 1 {
-		for j in 0 ..< i {
-			if strings.equal_fold(ts.all[j].name, ts.all[i].name) {
-				if j >= ts.own { delete(ts.all[j].name); ordered_remove(&ts.all, j); i -= 1 } else { ts.all[j].name = "" }
-				break
-			}
-		}
-	}
-	for i := ts.own - 1; i >= 0; i -= 1 { if ts.all[i].name == "" { ordered_remove(&ts.all, i); ts.own -= 1 } }
-	app.cx.theme.colors = {}   // (shown again, as the file has it now)
+// Keeps the user's themes (at the start, with the preferences' file: a test has none).
+themes_init :: proc(app: ^App) {
+	if path := themes_file(app); path != "" { prefs_page.themes_file_init(&app.cx.theme.file, path, themes_builtin()) }
 }
 
-// themes.txt, opened in the system's editor (made from the template first if there is none), by the App's chores: a file
-// written and a program started are system calls, which the interface's thread never makes. What could not be written is
-// said back on the interface's thread.
-themes_file_open :: proc(app: ^App) {
-	path := themes_file(app)
-	if path == "" { return }
-	job := new(Themes_Job, runtime.heap_allocator())
-	job^ = {app = app, path = strings.clone(path, runtime.heap_allocator())}
-	pool_add(&app.cx.chores, proc(data: rawptr) {
-		job := (^Themes_Job)(data)
-		if themes_file_make(job.path) {
-			_ = platform.open_path(job.path)
-		} else {
-			_ = ui.post(&job.app.state, proc(_: rawptr, _: u64) { ui.toast(.Bad, "%s could not be written", THEMES_FILE) })
-		}
-		delete(job.path, runtime.heap_allocator())
-		free(job, runtime.heap_allocator())
-	}, job)
-}
-
-@(private = "file")
-Themes_Job :: struct { app: ^App, path: string }
-
-// The file of the user's themes, made from the template when there is none (one that is there is never touched). False: it
-// could not be written. (On a chore: it touches the disk.)
-themes_file_make :: proc(path: string) -> bool {
-	if os.exists(path) { return true }
-	return os.write_entire_file(path, transmute([]u8)string(THEMES_TEMPLATE)) == nil
+// At each build: the user's themes, read again when the file changed (a task looks at it now and then); the theme shown
+// again as it now says.
+themes_poll :: proc(app: ^App) {
+	if app.cx.theme.file.path == "" { return }
+	if prefs_page.themes_file_poll(&app.cx.theme.file, &app.state) {
+		app.cx.theme.colors = {}
+		prefs_refresh(app)
+	}
 }

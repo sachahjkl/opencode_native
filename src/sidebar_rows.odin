@@ -46,9 +46,9 @@ sidebar :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###side_top") {
 			pad_row(em)
-			if bevel_button("###new", "New session", lucide.PLUS, .Primary, width = ui.fill()).clicked { new_session(app) }
+			if ui.button_icon("###new", lucide.PLUS, "New session", .Primary, width = ui.fill()).clicked { new_session(app) }
 			ui.spacer(ui.px(em * 0.45))
-			if bevel_button("###refresh", "", lucide.REFRESH_CW).clicked { refresh_sessions(app) }
+			if ui.button_icon("###refresh", lucide.REFRESH_CW, "").clicked { refresh_sessions(app) }
 			pad_row(em)
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -57,7 +57,7 @@ sidebar :: proc(app: ^App, em: f32) {
 		if ui.row(id = "###side_search") {
 			pad_row(em)
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
-			if well("###search_well", .X, radius = 7) {
+			if ui.well("###search_well", .X) {
 				ui.spacer(ui.px(em * 0.5))
 				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
@@ -161,7 +161,8 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 		// it: the header is no longer the box under the pointer), shown while the header is hot (Hot_Within keeps it
 		// hot over its button)
 		plus_col := hdr.hot_t > FADE_VISIBLE ? hex(HEX_WEAK) : Color{0, 0, 0, 0.001}
-		if glyph_button("###gadd", lucide.PLUS, math.round(em * 1.5), plus_col).clicked {
+		ui.next({width = ui.px(math.round(em * 1.5)), height = ui.px(math.round(em * 1.5)), fg = plus_col})
+		if ui.icon_button("gadd", lucide.PLUS).clicked {
 			new_session(app)
 			delete(app.chat.new_dir, app.chat.alloc)
 			app.chat.new_dir = strings.clone(gr.dir, app.chat.alloc)
@@ -340,37 +341,14 @@ project_menu :: proc(app: ^App, em: f32) {
 }
 
 delete_dialog :: proc(app: ^App, em: f32) {
-	if ui.modal("delete", em * 26, &app.cx.open[.Delete]) {
-		dialog_backdrop()
-		ui.spacer(ui.px(em))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row() {
-			ui.spacer(ui.px(em * 1.2))
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-			if ui.column() {
-				title := "this session"
-				if s := find_session(app, app.sidebar.delete_id); s != nil { title = s.title }
-				ui.next({width = ui.fill(), height = ui.px(em * 2), font_size = math.round(em * FS_HEADING)})
-				ui.label("Delete the session?###dt")
-				ui.next({width = ui.fill(), flags = {.Text_Wrap}})
-				if ui.tags("weak") { ui.paragraph(fmt.tprintf("“%s” and its messages will be removed from the server.###dp", label_safe(title))) }
-				ui.spacer(ui.px(em * 1.2))
-				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-				if ui.row() {
-					ui.spacer(ui.fill())
-					if bevel_button("###cancel", "Cancel", "", .Cancel).clicked { app.cx.open[.Delete] = false }
-					ui.spacer(ui.px(em * 0.6))
-					if bevel_button("###confirm", "Delete", lucide.TRASH_2, .Danger).clicked {
-						delete_session(app, app.sidebar.delete_id)
-						if app.sidebar.delete_id == app.chat.id { new_session(app) }
-						nav_forget(app, app.sidebar.delete_id)
-						app.cx.open[.Delete] = false
-						refresh_soon(app)
-					}
-				}
-				ui.spacer(ui.px(em * 1.2))
-			}
-			ui.spacer(ui.px(em * 1.2))
-		}
+	if !app.cx.open[.Delete] { return }
+	title := "this session"
+	if s := find_session(app, app.sidebar.delete_id); s != nil { title = s.title }
+	o := ui.Confirm_Options{title = "Delete the session?", note = fmt.tprintf("“%s” and its messages will be removed from the server.", title), act = "Delete", width_em = 26}
+	if ui.confirm("delete", &app.cx.open[.Delete], o) == .Confirmed {
+		delete_session(app, app.sidebar.delete_id)
+		if app.sidebar.delete_id == app.chat.id { new_session(app) }
+		nav_forget(app, app.sidebar.delete_id)
+		refresh_soon(app)
 	}
 }

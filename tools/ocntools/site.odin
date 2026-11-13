@@ -13,9 +13,11 @@
 package ocntools
 
 import "core:fmt"
+import "core:path/filepath"
 import "core:os"
 import "core:strings"
 import cdp "gt:cdp"
+import fsx "gt:fsx"
 import toolbox "gt:toolbox"
 import tk_site "gt:site"
 
@@ -94,8 +96,31 @@ site_meta :: proc() -> tk_site.Meta {
 }
 
 // (CHANGELOG.md is the repository's: main stands at its root.)
-site_changelog :: proc(site, out: string) -> bool {
+site_changelog :: proc(site, out: string, _: rawptr) -> bool {
 	return tk_site.build_changelog(site, out, {changes = SITE_CHANGES, version_mark = VERSION_MARK})
+}
+
+// The shop's six pages (pricing, thanks, terms, refunds, privacy, imprint): "Coming soon" until Paddle's client token, the
+// prices and the licence Worker are set here (docs/licence.md of the toolkit, "What the maintainer does at the end").
+SITE_SHOP :: tk_site.Shop{
+	name = "opencode native", product_title = "opencode native Supporter Licence",
+	price = "15&nbsp;&euro;", price_note = "Once. Taxes included.", environment = "sandbox",
+	thanks = "https://ocn.froment.software/thanks/", help = "https://github.com/sachahjkl/opencode_native/issues",
+	register = "Open the file with opencode native, or paste the key in <em>Settings &rsaquo; Advanced &rsaquo; Licence</em>.",
+	extension = ".ocnlicence", seller = "Froment Software", seller_url = "https://froment.software",
+	code_licence = "MIT", stylesheet = "../style.css", home = "../", updated = "2026-11-13",
+}
+
+@(private = "file")
+site_shop :: proc(out: string) -> bool {
+	for page in tk_site.licence_pages(SITE_SHOP) {
+		path := fmt.tprintf("%s/%s", out, page.path)
+		if !fsx.make_dirs(filepath.dir(path)) || !fsx.write_atomic(path, transmute([]u8)page.text) {
+			fmt.eprintfln("site: %s could not be written", path)
+			return false
+		}
+	}
+	return true
 }
 
 run_site :: proc(args: []string) -> int {
@@ -104,11 +129,12 @@ run_site :: proc(args: []string) -> int {
 	case "build", "changelog", "meta":
 		if len(args) != 3 { break }
 		site, out := args[1], args[2]
-		if what == "changelog" { return site_changelog(site, out) ? 0 : 1 }
+		if what == "changelog" { return site_changelog(site, out, nil) ? 0 : 1 }
 		if what == "meta" { return tk_site.build_meta(site_meta(), site, out) ? 0 : 1 }
-		if !site_changelog(site, out) { return 1 }
+		if !site_changelog(site, out, nil) { return 1 }
 		if !tk_site.build_meta(site_meta(), out, out) { return 1 }
 		if !site_screenshots(out) { return 1 }
+		if !site_shop(out) { return 1 }
 		o := site_images()
 		why: string
 		if o.encoder, why = toolbox.webp_encoder("build"); why != "" { fmt.eprintfln("site: no WebP encoder: %s", why); return 1 }

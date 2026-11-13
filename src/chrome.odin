@@ -70,19 +70,21 @@ title_bar :: proc(app: ^App, em: f32) {
 		b.custom_user = d
 		ink := ui.caption_ink
 		ui.spacer(ui.px(em * 0.4))
-		msig := glyph_button("###appmenu", lucide.MENU, math.round(h * 0.78), ink(hex(HEX_WEAK)))
+		ui.next({width = ui.px(math.round(h * 0.78)), height = ui.px(math.round(h * 0.78)), fg = ink(hex(HEX_WEAK))})
+		msig := ui.icon_button("appmenu", lucide.MENU)
 		menu_key := ui.key_from_string(0, "app_menu")
 		if msig.clicked { ui.ctx_menu_open_rect(menu_key, msig.box.rect, msig.box.key) }
 		app_menu(app, menu_key, em)
 		nav_button :: proc(app: ^App, id, icon, tip: string, d: int, size: f32) {
 			can := nav_can(app, d)
 			ui.a11y({role = .Button, name = tip})
-			sig := glyph_button(id, icon, size, ui.caption_ink(can ? hex(HEX_WEAK) : hex(HEX_FAINT)))
+			ui.next({width = ui.px(size), height = ui.px(size), fg = ui.caption_ink(can ? hex(HEX_WEAK) : hex(HEX_FAINT))})
+			sig := ui.icon_button(id, icon)
 			if sig.clicked { nav_step(app, d) }
-			if can && ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(tip) } }
+			if can && ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(tip) } }
 		}
-		nav_button(app, "###nav_back", lucide.ARROW_LEFT, "Back  (Alt+Left)", -1, math.round(h * 0.78))
-		nav_button(app, "###nav_fwd", lucide.ARROW_RIGHT, "Forward  (Alt+Right)", 1, math.round(h * 0.78))
+		nav_button(app, "nav_back", lucide.ARROW_LEFT, "Back  (Alt+Left)", -1, math.round(h * 0.78))
+		nav_button(app, "nav_fwd", lucide.ARROW_RIGHT, "Forward  (Alt+Right)", 1, math.round(h * 0.78))
 		ui.spacer(ui.px(em * 0.4))
 		// the logo and the wordmark ("open" dim, "code" bright, "native" in the accent, in the mono face) go home, as on any site
 		ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .X, cross = .Center, cursor = .Hand})
@@ -99,7 +101,7 @@ title_bar :: proc(app: ^App, em: f32) {
 			text("w3", "native", ink(accent()), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_HEADING)})
 		}
 		if hsig.clicked { command_run(app, command_find("nav.home")) }
-		if ui.hovered_for(hsig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Home  (Ctrl+H)") } }
+		if ui.hovered_for(hsig) { if ui.tooltip() { ui.tooltip_text("Home  (Ctrl+H)") } }
 		side_line("###tg", b.last, em * 0.9, app.sidebar.width)
 		ui.spacer(ui.px(em * 1.3))
 		if !app.servers[app.server].local {   // another computer's server: its name first
@@ -152,7 +154,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		if s == nil && app.chat.have_self { s = &app.chat.self }   // (a sub-agent, or an old session: not in the sidebar's list)
 		if back := back_target(app); back != "" {
 			// the way back up: to the session drilled down from, or the parent
-			if bevel_button("###back", "", lucide.ARROW_LEFT, width = ui.px(math.round(em * BUTTON_H_EM)), height = math.round(em * BUTTON_H_EM)).clicked { go_back(app) }
+			if ui.button_icon("###back", lucide.ARROW_LEFT, "", width = ui.px(math.round(em * BUTTON_H_EM)), height = math.round(em * BUTTON_H_EM)).clicked { go_back(app) }
 			ui.spacer(ui.px(em * 0.7))
 		}
 		if logo_of(app, "###hlogo", project_logo(app, chat_project(app)), math.round(em * 2.3)) { ui.spacer(ui.px(em * 0.7)) }
@@ -210,7 +212,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		}
 		if c.busy {
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###stop", "Stop", lucide.SQUARE, .Danger, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { interrupt_session(app, c.id) }
+			if ui.button_icon("###stop", lucide.SQUARE, "Stop", .Danger, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { interrupt_session(app, c.id) }
 		}
 		ui.spacer(ui.px(em * 1.2))
 	}

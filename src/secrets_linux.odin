@@ -4,6 +4,7 @@
 package ocn
 
 import "base:runtime"
+import tasks "gt:tasks"
 import "core:strings"
 import "core:sync"
 import "core:time"
@@ -136,7 +137,7 @@ secret_available :: proc(app: ^App) -> (up, known: bool) {
 	if stale && !sync.atomic_load(&service_asking) {
 		sync.atomic_store(&service_asking, true)
 		service_asked = time.tick_now()
-		pool_add(&app.cx.chores, secret_ask_work, app)
+		tasks.add(&app.cx.chores, secret_ask_work, app)
 	}
 	return sync.atomic_load(&service_up), sync.atomic_load(&service_known)
 }

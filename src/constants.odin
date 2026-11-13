@@ -84,7 +84,6 @@ HEX_PAL_SELECTED    :: 0x0c0c0cff
 ////////////////////////////////
 // Commands
 
-ZOOM_FACTOR :: 1.1
 PALETTE_SESSION_CHARS :: 40   // the session a command acts on, beside it in the palette
 TOOL_ELAPSED_TENTHS_S :: 10   // a tool call's time with its tenths under this many seconds (elapsed_text)
 
@@ -174,7 +173,6 @@ HEX_PREVIEW_BG :: 0x0d0d0dff
 TAB_PAD_EM     :: 0.9    // a tab's word, from its ends
 TAB_LINE_INSET_EM :: 0.6 // the line under the tab shown, from them
 DOCK_TAB_H_EM  :: 2.1
-TOOLTIP_DELAY_S :: 0.5   // over a button
 MODEL_TIP_LINE_EM  :: 1.45   // a line of a model's tooltip
 MODEL_TIP_LABEL_EM :: 5.0    // its labels' column
 HEADER_FIGURES_MIN_EM :: 40   // a conversation narrower than this keeps its title, not its figures
@@ -309,7 +307,6 @@ SESSION_BADGE_INBOX_EM :: 1.9    // ... a row of two (the inbox)
 SESSION_BADGE_ALPHA    :: 0.2    // its colour behind its letter
 SESSION_BADGE_HEX := [?]u32{HEX_PEACH, HEX_BLUE, HEX_PURPLE, HEX_GREEN, HEX_YELLOW, HEX_RED, HEX_CYAN, HEX_ROSE}   // what a session's id picks from
 THEME_CARD_W_EM   :: 12    // a theme's card: its width (on the line, in the grid)
-THEME_CARD_H_EM   :: 3.6   // a theme's card in the settings (settings.odin theme_cards)
 THEME_CARD_RADIUS :: 8     // its corners, logical px
 COMPOSER_FIT_SLACK_EM :: 3   // the composer's toolbar gives back what it left out once this much wider than where it went past (composer.odin composer_fit)
 THEMES_FILE  :: "themes.txt"   // the user's themes, beside the preferences (theme.odin)

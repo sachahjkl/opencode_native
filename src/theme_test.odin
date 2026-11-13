@@ -1,8 +1,7 @@
 package ocn
 
-import "core:os"
-import "core:path/filepath"
 import "core:testing"
+import prefs_page "gt:prefs_page"
 import "gt:ui"
 
 // The theme of the App given, as the program would have it, for a test; what it made goes with it.
@@ -16,8 +15,7 @@ theme_app :: proc(app: ^App) -> (prev: ^App) {
 @(private = "file")
 theme_app_end :: proc(app: ^App, prev: ^App) {
 	delete(app.cx.theme.cache)
-	for t in app.cx.theme.all[app.cx.theme.own:] { delete(t.name) }
-	delete(app.cx.theme.all)
+	prefs_page.themes_file_destroy(&app.cx.theme.file)
 	the_app = prev
 }
 
@@ -75,37 +73,6 @@ every_theme_reads :: proc(t: ^testing.T) {
 }
 
 
-// themes.txt: a theme from another, a few colours of its own; a theme of the program's name is the user's; what is not a colour is left.
-@(test)
-themes_of_ones_own :: proc(t: ^testing.T) {
-	dir := filepath.join({os.get_env("TEMP", context.temp_allocator), "ocn_theme_test"}, context.temp_allocator) or_else ""
-	_ = os.make_directory(dir)
-	defer os.remove_all(dir)
-	app := new(App)
-	defer free(app)
-	app.prefs_file = filepath.join({dir, "prefs.txt"}, context.temp_allocator) or_else ""
-	prev := theme_app(app)
-	defer theme_app_end(app, prev)
-	text := "# mine\n[Mine]\nfrom = Nord\naccent = #e5c07b\nbg0 = 050505\nlight.text = #101010\nred = nope\n\n[Monokai]\nbg0 = #000000\n"
-	testing.expect(t, os.write_entire_file(themes_file(app), transmute([]u8)text) == nil)
-	theme_load(app)
-	all := themes(app)
-	mine := theme_index(app, "Mine")
-	testing.expect(t, mine > 0 && all[mine].name == "Mine", "the user's theme is there")
-	nord := all[theme_index(app, "Nord")]
-	testing.expect_value(t, all[mine].dark.hues[0], 0xe5c07bff)
-	testing.expect_value(t, all[mine].dark.steps[1], 0x050505ff)
-	testing.expect_value(t, all[mine].dark.steps[2], nord.dark.steps[2])   // (from Nord)
-	testing.expect_value(t, all[mine].dark.hues[5], nord.dark.hues[5])     // ("nope": not a colour)
-	testing.expect_value(t, all[mine].light.texts[2], 0x101010ff)
-	testing.expect(t, all[mine].versions == .Both, "a light version")
-	monokai := theme_index(app, "Monokai")
-	testing.expect(t, monokai >= app.cx.theme.own && all[monokai].dark.steps[1] == 0x000000ff, "Monokai is the user's now")
-	n := 0
-	for th in all { if th.name == "Monokai" { n += 1 } }
-	testing.expect_value(t, n, 1)
-}
-
 // An intent's button (accent, danger, success...) in a dialog keeps its own background (and its label stays readable on
 // it): our colours of what floats were an entry ahead of the palette's and won over the button's (the setup dialog's
 // Uninstall: white on white).
@@ -125,21 +92,3 @@ a_button_in_a_dialog_keeps_its_background :: proc(t: ^testing.T) {
 	}
 }
 
-// The user's themes file is made from the template when there is none, its lines of comment saying how a theme is written,
-// and one that is there is never written over.
-@(test)
-the_themes_file_is_made_once_from_its_template :: proc(t: ^testing.T) {
-	tmp, _ := os.temp_dir(context.temp_allocator)
-	dir, _ := filepath.join({tmp, "ocn_themes_file_test"}, context.temp_allocator)
-	os.remove_all(dir)
-	defer os.remove_all(dir)
-	testing.expect(t, os.make_directory(dir) == nil)
-	path, _ := filepath.join({dir, THEMES_FILE}, context.temp_allocator)
-	testing.expect(t, themes_file_make(path), "made")
-	data, err := os.read_entire_file(path, context.temp_allocator)
-	testing.expect(t, err == nil && string(data) == THEMES_TEMPLATE, "the template, its comments with it")
-	testing.expect(t, os.write_entire_file(path, transmute([]u8)string("[Mine]\naccent = #ff0000\n")) == nil)
-	testing.expect(t, themes_file_make(path), "there already")
-	data, err = os.read_entire_file(path, context.temp_allocator)
-	testing.expect(t, err == nil && string(data) == "[Mine]\naccent = #ff0000\n", "never written over")
-}

@@ -90,9 +90,9 @@ approval_button :: proc(app: ^App, em: f32) {
 	}
 	ui.a11y({role = .Button, name = fmt.tprintf("Approvals: %s", APPROVAL_WORDS[mode])})
 	key := ui.key_from_string(0, "approval_menu")
-	sig := bevel_button("###approval", APPROVAL_SHORT[mode], lucide.SHIELD, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = ui.ctx_menu_is_open(key), icon_color = color, face = .Ghost)
+	sig := ui.button_icon("###approval", lucide.SHIELD, ui.text_shown(APPROVAL_SHORT[mode]), height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = ui.ctx_menu_is_open(key), icon_color = color, face = .Ghost)
 	if sig.clicked { ui.ctx_menu_open_rect(key, sig.box.rect, sig.box.key) }
-	if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(fmt.tprintf("Approvals: %s (%s)", APPROVAL_WORDS[mode], APPROVAL_DETAIL[mode])) } }
+	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(fmt.tprintf("Approvals: %s (%s)", APPROVAL_WORDS[mode], APPROVAL_DETAIL[mode])) } }
 	if ui.ctx_menu(key) {
 		ui.menu_heading("Approvals in this session")
 		for m in Approval {

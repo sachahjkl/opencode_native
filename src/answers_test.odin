@@ -7,6 +7,7 @@ package ocn
 // here is a defect that once happened or could: what it checks fails without its fix.
 
 import "base:runtime"
+import tasks "gt:tasks"
 import "core:encoding/base64"
 import "core:encoding/json"
 import "core:fmt"
@@ -57,7 +58,7 @@ bench_conn :: proc(app: ^App) -> ^Conn {
 
 // What waits for its time comes now, on every connection: the bench answers in its own time.
 bench_pump :: proc() {
-	for c in bench_conns { pool_pump(&c.pool, all_timed = true) }
+	for c in bench_conns { tasks.pump(&c.pool, all_timed = true) }
 }
 
 // The answers posted run, as the next build would run them.
@@ -80,7 +81,7 @@ bench_new :: proc() -> ^App {
 	app.prefs.page_size = 50
 	app.prefs.notify = "off"
 	app.cfg_prefs = config.prefs_make()
-	config.register(&app.cfg_prefs, PREF_DEFS[:])
+	prefs_register(&app.cfg_prefs)
 	app.fonts_wanted = "\n\n\n"   // (the faces stay as they are: pref_set does not load any)
 	chat_home(app)
 	return app
@@ -1122,6 +1123,8 @@ a_projects_icon_is_set_on_the_server :: proc(t: ^testing.T) {
 	jpg_like := fmt.tprintf("%s/wide.png", dir)
 	_ = os.write_entire_file(jpg_like, png.encode(big, 600, 300, allocator = context.temp_allocator))
 	project_icon_set_file(app, "p1", jpg_like)
+	testing.expect(t, wait_for(proc(data: rawptr) -> bool { return ui.posts_pending(&(^App)(data).state) }, app), "the file read by its task")
+	bench_drain(app)
 	r := bench_take(t, .Project_Icon)
 	testing.expect_value(t, r.method, "PATCH")
 	testing.expect_value(t, r.path, "/api/project/p1")
@@ -1135,6 +1138,8 @@ a_projects_icon_is_set_on_the_server :: proc(t: ^testing.T) {
 	txt := fmt.tprintf("%s/notes.txt", dir)
 	_ = os.write_entire_file(txt, transmute([]u8)string("hello"))
 	project_icon_set_file(app, "p1", txt)
+	testing.expect(t, wait_for(proc(data: rawptr) -> bool { return ui.posts_pending(&(^App)(data).state) }, app), "the file read by its task")
+	bench_drain(app)
 	testing.expect_value(t, bench_count(.Project_Icon), 0)   // (no image: nothing sent)
 	project_icon_remove(app, "p1")
 	testing.expect_value(t, bench_take(t, .Project_Icon).body, `{"icon":{"override":""}}`)
@@ -1505,7 +1510,7 @@ later_call :: proc(c: ^Conn, r: ^Request) -> bool {
 }
 
 @(private = "file")
-later_close :: proc(c: ^Conn) { later_joined = c.pool.joined }
+later_close :: proc(c: ^Conn) { later_joined = tasks.state(&c.pool).threads == 0 ? 1 : 0 }
 
 // A request for later waits in its connection's timed queue: its worker waits for work, not for its time, and the request goes when the
 // clock says, not before. No thread sleeps for it.
@@ -1517,30 +1522,30 @@ a_request_later_waits_in_a_queue_not_in_a_thread :: proc(t: ^testing.T) {
 	c := conn_make(app, {}, Transport{call = later_call, fetch = bench_fetch, close = later_close}, 1, &clock)
 	app.conn = c
 	request_later(app, .Action, "/later", 500, "")
-	testing.expect(t, pool_wait_rest(&c.pool, REST_BOUND), "its worker rests")
-	st := pool_state(&c.pool)
+	testing.expect(t, tasks.wait_rest(&c.pool, REST_BOUND), "its worker rests")
+	st := tasks.state(&c.pool)
 	testing.expect_value(t, st.timed, 1)
 	testing.expect_value(t, st.waiting, 1)   // (on the queue's condition: with a clock of its own it waits for a poke, not a time)
 	look :: proc(c: ^Conn, clock: ^i64, at: i64) -> bool {
-		looks := pool_state(&c.pool).looks
+		looks := tasks.state(&c.pool).looks
 		sync.atomic_store(clock, at)
-		pool_poke(&c.pool)
+		tasks.poke(&c.pool)
 		Seen :: struct { c: ^Conn, looks: int }
 		seen := Seen{c, looks}
 		return wait_for(proc(data: rawptr) -> bool {
 			s := (^Seen)(data)
-			st := pool_state(&s.c.pool)
+			st := tasks.state(&s.c.pool)
 			return st.looks > s.looks && st.waiting == 1
 		}, &seen)
 	}
 	testing.expect(t, look(c, &clock, 499), "the worker looked")
 	testing.expect_value(t, sync.atomic_load(&later_calls), 0)
-	testing.expect_value(t, pool_state(&c.pool).timed, 1)
+	testing.expect_value(t, tasks.state(&c.pool).timed, 1)
 	testing.expect(t, look(c, &clock, 500), "the worker looked again")
 	testing.expect_value(t, sync.atomic_load(&later_calls), 1)
-	testing.expect_value(t, pool_state(&c.pool).timed, 0)
+	testing.expect_value(t, tasks.state(&c.pool).timed, 0)
 	// (the worker rests once its answer is posted)
-	testing.expect(t, pool_wait_rest(&c.pool, REST_BOUND), "it rests again")
+	testing.expect(t, tasks.wait_rest(&c.pool, REST_BOUND), "it rests again")
 	bench_drain(app)
 	testing.expect_value(t, app.pending, 0)
 	testing.expect(t, !flying(app, .Action, ""), "its flight ended")
@@ -1564,7 +1569,7 @@ a_connection_let_go_is_freed_when_its_requests_ended :: proc(t: ^testing.T) {
 		r.status, r.ok, r.resp = 200, true, strings.clone(`{"data":[]}`)
 		return true
 	}
-	c := conn_make(app, {}, Transport{call = answered, fetch = bench_fetch, close = proc(c: ^Conn) { held_joined = c.pool.joined }}, CONN_WORKERS)
+	c := conn_make(app, {}, Transport{call = answered, fetch = bench_fetch, close = proc(c: ^Conn) { held_joined = tasks.state(&c.pool).threads }}, CONN_WORKERS)
 	request(app, .Agents, "GET", "/api/agent", conn = c)
 	conn_stop(c)
 	conn_release(app, c)   // (the App's hold: the request has its own)
@@ -1574,7 +1579,7 @@ a_connection_let_go_is_freed_when_its_requests_ended :: proc(t: ^testing.T) {
 	testing.expect(t, listed, "still there while its request is on its way")
 	testing.expect(t, wait_for(proc(data: rawptr) -> bool { return ui.posts_pending(&(^App)(data).state) }, app), "its answer came")
 	bench_drain(app)
-	testing.expect_value(t, held_joined, CONN_WORKERS)
+	testing.expect_value(t, held_joined, 0)   // (every worker joined)
 	for x in app.cx.conns { testing.expect(t, x != c, "no longer listed") }
 	testing.expect_value(t, app.pending, 0)
 }

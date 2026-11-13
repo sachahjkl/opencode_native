@@ -375,7 +375,8 @@ queue_action :: proc(id, label, icon: string, wide: bool, em: f32, intent := ui.
 	ui.a11y({role = .Button, name = label})
 	ink := Color{}
 	if intent != .Neutral { _, ink, _ = intent_colors(intent) }
-	return glyph_button(id, icon, math.round(em * QUEUE_GLYPH_EM), ink).clicked
+	ui.next({width = ui.px(math.round(em * QUEUE_GLYPH_EM)), height = ui.px(math.round(em * QUEUE_GLYPH_EM)), fg = ink})
+	return ui.icon_button(strings.trim_prefix(id, "###"), icon).clicked   // (its name alone: icon_button adds the ###)
 }
 
 @(private = "file")
@@ -408,7 +409,7 @@ queue_row :: proc(app: ^App, it: ^Queue_Item, n: int, em: f32) {
 		case:
 			if !it.skills && queue_action("###edit", "Edit", lucide.PENCIL, wide, em) { queue_edit(app, id) }
 			if it.delivery == .Queue && queue_action("###steer", "Steer", lucide.ARROW_RIGHT, wide, em) { queue_steer(app, id) }
-			if it.delivery == .Steer && queue_action("###now", "Send now", lucide.SEND_HORIZONTAL, wide, em) { queue_send_now(app, id) }
+			if it.delivery == .Steer && queue_action("###now", "Send now", lucide.SEND_HORIZONAL, wide, em) { queue_send_now(app, id) }
 			if queue_action("###rm", "Remove", lucide.X, wide, em, .Danger) { queue_remove(app, id) }
 		}
 		ui.spacer(ui.px(em * TRAY_PAD_EM))

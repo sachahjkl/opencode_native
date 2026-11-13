@@ -131,7 +131,7 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 	// the same size and the same corners, all of it covered; a well inside a plate showed the plate's edge beside it.)
 	if plate("###findbar", radius = FIND_RADIUS, shadow = 8, rim = 0, border = CLEAR) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), axis = .X, cross = .Center})
-		if well("###fw", .X, radius = FIND_RADIUS, focus = 1) {
+		if focus_well("###fw", .X, radius = FIND_RADIUS, focus = 1) {
 			ui.spacer(ui.px(em * 0.6))
 			glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 			if ui.tags("bare") {
@@ -146,9 +146,12 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 			count := needle == "" ? "" : pending ? (ui.find_progress() < 1 ? fmt.tprintf("%d…  %d %%", n, int(ui.find_progress() * 100)) : "") : n == 0 ? "no match" : fmt.tprintf("%d / %d", max(f.index, 0) + 1, n)
 			text("fc", count, n == 0 && !pending ? hex(HEX_RED) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)})
 			ui.spacer(ui.px(em * 0.4))
-			if glyph_button("###fprev", lucide.CHEVRON_UP, math.round(em * GLYPH_BUTTON_EM)).clicked { find_step(app, -1) }
-			if glyph_button("###fnext", lucide.CHEVRON_DOWN, math.round(em * GLYPH_BUTTON_EM)).clicked { find_step(app, 1) }
-			if glyph_button("###fclose", lucide.X, math.round(em * GLYPH_BUTTON_EM)).clicked { find_close(app) }
+			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
+			if ui.icon_button("fprev", lucide.CHEVRON_UP).clicked { find_step(app, -1) }
+			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
+			if ui.icon_button("fnext", lucide.CHEVRON_DOWN).clicked { find_step(app, 1) }
+			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
+			if ui.icon_button("fclose", lucide.X).clicked { find_close(app) }
 			ui.spacer(ui.px(em * 0.3))
 		}
 	}

@@ -12,9 +12,9 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:sync"
-import "core:thread"
 import "core:unicode/utf8"
 import "gt:ascii"
+import tasks "gt:tasks"
 import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -59,14 +59,14 @@ attaching :: proc(app: ^App) -> bool {
 	return false
 }
 
-// `job` goes to its thread, for the composer shown.
+// `job` goes to the chores, for the composer shown.
 @(private = "file")
 attach_start :: proc(app: ^App, job: ^Attach_Job) {
 	job.app = app
 	job.chat = strings.clone(app.chat.id, runtime.heap_allocator())
 	append(&app.composer.attaching, job)
 	sync.atomic_add(&app.pending, 1)
-	thread.create_and_start_with_poly_data(job, attach_run, self_cleanup = true)
+	tasks.add(ui.chores(), attach_run, job)
 }
 
 // The bytes `data` (copied: the caller keeps them) as a file `name` of type `mime`.
@@ -87,7 +87,8 @@ slice_clone :: proc(data: []u8, allocator: runtime.Allocator) -> []u8 {
 
 // On the job's thread: the file read, its type, the size it may have, its data URL.
 @(private = "file")
-attach_run :: proc(job: ^Attach_Job) {
+attach_run :: proc(data: rawptr) {
+	job := (^Attach_Job)(data)
 	h := runtime.heap_allocator()
 	defer free_all(context.temp_allocator)
 	switch {
@@ -199,11 +200,11 @@ attach_path :: proc(app: ^App, path: string) {
 
 // The paperclip: the system's dialog, several files at once.
 attach_pick :: proc(app: ^App) {
-	r := platform.open_file_dialog({owner = app.win, title = "Attach files", all_files = true, multiple = true, remember_id = "attach"})
-	defer platform.dialog_result_destroy(&r)
-	if r.status == .Unsupported { ui.toast(.Bad, "This system has no file dialog"); return }
-	if r.status != .Chosen { return }
-	for p in r.paths { attach_path(app, p) }
+	ui.file_dialog(&app.state, .Open, {owner = app.win, title = "Attach files", all_files = true, multiple = true, remember_id = "attach"}, proc(r: platform.Dialog_Result, user: rawptr) {
+		if r.status == .Unsupported { ui.toast(.Bad, "This system has no file dialog"); return }
+		if r.status != .Chosen { return }
+		for p in r.paths { attach_path((^App)(user), p) }
+	}, app)
 }
 
 // A drag over the window from another program: files, an image or text it carries go to the composer at the drop, where
@@ -382,7 +383,8 @@ attachments_row :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.8))
 				text("n", fmt.tprintf("%s  %s", a.name, kfmt(f64(a.size))), hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.2))
-				if glyph_button("###x", lucide.X, math.round(em * 1.3)).clicked { gone = i }
+				ui.next({width = ui.px(math.round(em * 1.3)), height = ui.px(math.round(em * 1.3))})
+				if ui.icon_button("x", lucide.X).clicked { gone = i }
 			}
 		}
 	}

@@ -4,7 +4,9 @@
 package ocn
 
 import "core:encoding/json"
+import tasks "gt:tasks"
 import "core:fmt"
+import "core:log"
 import "core:os"
 import "core:strconv"
 import "core:strings"
@@ -366,7 +368,7 @@ request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag
 	sync.atomic_add(&app.pending, 1)
 	append(&app.cx.flights, Flight{kind, strings.clone(tag), to})
 	conn_hold(to)
-	pool_add(&to.pool, request_run, r, delay)
+	tasks.add(&to.pool, request_run, r, {after_ms = delay})
 }
 
 // On a worker: what is no longer wanted is not sent; the rest goes by the connection's transport.
@@ -622,7 +624,7 @@ answer :: proc(app: ^App, r: ^Request) {
 	}
 	if !r.ok {
 		// (this request failed: whether the connection is down is for the event stream to say, stream_up)
-		log_line(app, "request failed: %s %s: %s", r.method, r.path, r.resp)
+		log.warnf("request failed: %s %s: %s", r.method, r.path, r.resp)
 		answer_failed(app, r, .Transport, "Server unreachable")
 		return
 	}

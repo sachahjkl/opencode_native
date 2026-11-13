@@ -134,7 +134,7 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 				ui.next({width = ui.text_size(0), height = ui.pct(1), fg = running ? hex(HEX_TEXT_SOFT) : hex(HEX_FAINT), font = app.mono, font_size = math.round(em * FS_CAPTION), text_pad = 0})
 				tk := ui.signal(ui.build_box({.Draw_Text, .Clickable}, fmt.tprintf("%s###tk", took)))
 				if tk.clicked { part_toggle(app, p.tool_id != "" ? p.tool_id : pid, hb) }
-				if ui.hovered_for(tk, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(tool_when(p, running, now_epoch_ms(), app.prefs.clock24)) } }
+				if ui.hovered_for(tk) { if ui.tooltip() { ui.tooltip_text(tool_when(p, running, now_epoch_ms(), app.prefs.clock24)) } }
 				ui.spacer(ui.px(em * 0.5))
 			}
 			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY))

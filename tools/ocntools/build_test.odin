@@ -6,15 +6,6 @@ import "core:path/filepath"
 import "core:strings"
 import "core:testing"
 
-@(test)
-the_version_is_read_from_the_source :: proc(t: ^testing.T) {
-	v, ok := app_version("package x\nAPP_VERSION :: \"0.17.0\"\nOTHER :: \"1\"\n")
-	testing.expect(t, ok)
-	testing.expect_value(t, v, "0.17.0")
-	_, none := app_version("package x\n")
-	testing.expect(t, !none, "no version, none invented")
-}
-
 CHANGELOG_SAMPLE :: "# Changelog\r\n\r\n## [0.2.0] - 2026-01-02\r\n\r\n### Added\r\n- **Two**\r\n\r\n## [0.1.0] - 2026-01-01\r\n\r\n### Added\r\n- **One**\r\n\r\n[0.2.0]: https://x\r\n"
 
 @(test)

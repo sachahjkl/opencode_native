@@ -3,6 +3,8 @@
 // product (src/update). Nothing here waits on the interface's thread. A Nix package is never updated here: Nix updates it.
 package ocn
 
+import "base:runtime"
+
 import "core:fmt"
 import "core:os"
 import "core:strings"
@@ -191,7 +193,7 @@ update_checked :: proc(app: ^App, j: ^Update_Job) {
 		if c.offer != nil { update_go(u, Update_Ready{c.offer}) } else { update_go(u, nil) }
 	case j.nothing_new:
 		update_result(u, "Up to date")
-		if c.asked { ui.toast(.Good, "opencode native %s is the latest", APP_VERSION) }
+		if c.asked { ui.announce(&app.announcer, .Good, fmt.tprintf("opencode native %s is the latest", APP_VERSION)) }
 		update_go(u, nil)
 	case:
 		o := new(Update_Offer)
@@ -274,10 +276,21 @@ update_install :: proc(app: ^App) {
 }
 
 // The program starts again: another of it from the same file, then this one ends (the same one, or the one an update put there).
+// (A process started is a system call: a task's. Its answer ends this one, or says why not, at the next build.)
 app_restart :: proc(app: ^App) {
-	args := []string{process.executable_path()}
-	if _, err := os.process_start({command = args}); err != nil { ui.toast(.Bad, "Restart it by hand: it could not be started"); return }
-	app.quit = true
+	Restart :: struct { app: ^App, ok: bool }
+	r := new(Restart, runtime.heap_allocator())
+	r.app = app
+	ui.task(&app.state, proc(data: rawptr) {
+		r := (^Restart)(data)
+		args := []string{process.executable_path()}
+		_, err := os.process_start({command = args})
+		r.ok = err == nil
+	}, proc(data: rawptr, _: u64) {
+		r := (^Restart)(data)
+		if r.ok { r.app.quit = true } else { ui.toast(.Bad, "Restart it by hand: it could not be started") }
+		free(r, runtime.heap_allocator())
+	}, r, proc(data: rawptr) { free(data, runtime.heap_allocator()) })
 }
 
 // At the start of the program, whatever the server does: what an earlier update left, and whether there is another.

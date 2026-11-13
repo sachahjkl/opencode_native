@@ -1,20 +1,24 @@
 package ocn
 
 import "base:runtime"
-import "core:math"
 import "core:strings"
 import "core:testing"
+import prefs_page "gt:prefs_page"
 import "gt:config"
 import "gt:ui"
 
-// A switch of the palette shows the setting's title, as the settings say it, not its name ("appearance.system_title").
+// A switch of the palette shows the setting's title, as the settings say it, not its name ("window.system_title").
 @(test)
 a_palette_switch_shows_its_title :: proc(t: ^testing.T) {
+	p := config.prefs_make()
+	defer config.prefs_destroy(&p)
+	prefs_register(&p)
 	found := 0
-	for d in PREF_DEFS {
-		if d.name != "appearance.system_title" && d.name != "notify.permission" { continue }
+	for &e in p.entries {
+		d := e.def
+		if d.name != "window.system_title" && d.name != "notify.permission" { continue }
 		found += 1
-		title := setting_title(d)
+		title := setting_title(&p, d)
 		testing.expectf(t, !strings.contains(title, ".") && !strings.contains(title, "_"), "a title, not the name: %q", title)
 		testing.expectf(t, strings.contains(title, " › "), "its group, then its words: %q", title)
 		testing.expectf(t, strings.has_suffix(title, config.title_of(d)), "the settings' words: %q", title)
@@ -25,14 +29,19 @@ a_palette_switch_shows_its_title :: proc(t: ^testing.T) {
 // "animation" finds the animations' setting (a choice, not a switch: it was not listed).
 @(test)
 a_setting_that_is_no_switch_is_found :: proc(t: ^testing.T) {
-	for d in PREF_DEFS {
+	p := config.prefs_make()
+	defer config.prefs_destroy(&p)
+	prefs_register(&p)
+	found := false
+	for &e in p.entries {
+		d := e.def
 		if d.name != "appearance.animations" { continue }
+		found = true
 		testing.expect(t, !d.hidden && d.kind != .Bool, "a choice")
-		_, _, ok := ui.fuzzy_words("animation", setting_title(d))
-		testing.expectf(t, ok, "found by its title: %q", setting_title(d))
-		return
+		_, _, ok := ui.fuzzy_words("animation", setting_title(&p, d))
+		testing.expectf(t, ok, "found by its title: %q", setting_title(&p, d))
 	}
-	testing.fail_now(t, "appearance.animations")
+	testing.expect(t, found, "appearance.animations")
 }
 
 // The palette finds words, whole or as pieces that each begin a word, the whole first; letters scattered in a word find nothing
@@ -53,20 +62,6 @@ the_palette_finds_words_not_scattered_letters :: proc(t: ^testing.T) {
 	hits = palette_hits(app, items, "kesh")
 	testing.expect_value(t, len(hits), 1)   // (keyboard shortcuts: pieces that begin its words)
 	testing.expect_value(t, len(palette_hits(app, items, "pvsc")), 0)   // (scattered in its words: nothing)
-}
-
-// A theme card's dots stay under its name at every scale of the screen: the name is a line under a margin, the dots along the
-// bottom (at 200 % they rose onto the name: the font's size, already scaled, was scaled again).
-@(test)
-a_theme_cards_dots_stay_under_its_name :: proc(t: ^testing.T) {
-	for em in ([]f32{14, 21, 28, 35}) {   // (100 %, 150 %, 200 %, 250 %)
-		r := Rect{{0, 0}, {300, math.round(em * THEME_CARD_H_EM)}}
-		dot, _, y := theme_card_dots(r, em)
-		name_bottom := em * 0.55 + em * 1.4   // (theme_cards: its margin, then its line)
-		accent_top := y + dot * 0.5 - dot * 1.5 * 0.5
-		testing.expectf(t, accent_top >= name_bottom, "em %v: the dots' top %v, the name's bottom %v", em, accent_top, name_bottom)
-		testing.expectf(t, y + dot <= r.max.y, "em %v: inside the card", em)
-	}
 }
 
 // A command is found by its tags ("exit" for Quit) and with a slip ("Qestart pencode native" for the restart).
@@ -95,4 +90,24 @@ a_session_command_names_its_session :: proc(t: ^testing.T) {
 	fork := ""
 	for it in items { if it.id == "session.fork" { fork = it.detail } }
 	testing.expect_value(t, fork, "Session · The blend of the pane")
+}
+
+// Every setting the palette lists (not a hidden one) is on a page of the settings (SETTINGS_PREF_PAGES), where
+// prefs_page.show finds it; a hidden one is on none.
+@(test)
+every_setting_of_the_palette_is_on_a_page :: proc(t: ^testing.T) {
+	p := config.prefs_make()
+	defer config.prefs_destroy(&p)
+	prefs_register(&p)
+	for &e in p.entries {
+		found := false
+		for pg in SETTINGS_PREF_PAGES {
+			for name in prefs_page.page_names(&p, pg) { if name == e.def.name { found = true } }
+		}
+		if e.def.hidden {
+			testing.expectf(t, !found, "%s is hidden: on no page", e.def.name)
+		} else {
+			testing.expectf(t, found, "%s: on a page of the settings", e.def.name)
+		}
+	}
 }

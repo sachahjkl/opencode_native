@@ -10,7 +10,6 @@ import "core:mem"
 import "core:mem/virtual"
 import "core:strconv"
 import "core:strings"
-import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -367,16 +366,16 @@ form_card :: proc(app: ^App, f: ^Form_Req, others: int, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###foot") {
 			ui.spacer(ui.px(em))
-			if bevel_button("###form_dismiss", "Dismiss", "", .Cancel, disabled = f.sending, face = .Ghost).clicked { dismiss = true }
+			if ui.button_icon("###form_dismiss", "", "Dismiss", .Cancel, disabled = f.sending, face = .Ghost).clicked { dismiss = true }
 			ui.spacer(ui.fill())
 			if wizard && f.page > 0 {
-				if bevel_button("###form_prev", "Back", lucide.ARROW_LEFT).clicked { f.page -= 1 }
+				if ui.button_icon("###form_prev", lucide.ARROW_LEFT, "Back").clicked { f.page -= 1 }
 				ui.spacer(ui.px(em * 0.4))
 			}
 			if wizard && !reviewing {
-				if bevel_button("###form_next", f.page == len(pages) - 1 ? "Review" : "Next", lucide.ARROW_RIGHT, .Primary).clicked { next = true }
+				if ui.button_icon("###form_next", lucide.ARROW_RIGHT, ui.text_shown(f.page == len(pages) - 1 ? "Review" : "Next"), .Primary).clicked { next = true }
 			} else {
-				if bevel_button("###form_send", "Send", lucide.CHECK, .Primary, disabled = f.sending).clicked { send = true }
+				if ui.button_icon("###form_send", lucide.CHECK, "Send", .Primary, disabled = f.sending).clicked { send = true }
 			}
 			ui.spacer(ui.px(em))
 		}
@@ -401,9 +400,9 @@ form_tabs :: proc(f: ^Form_Req, pages: []int, em: f32) {
 			for p, k in pages {
 				fd := &f.fields[p]
 				name := fd.title != "" ? fd.title : fmt.tprintf("Question %d", k + 1)
-				if bevel_button(fmt.tprintf("###form_tab%d", k), label_safe(name), field_answer(fd) != "" ? lucide.CHECK : "", height = h, face = f.page == k ? .Toggled : .Ghost).clicked { f.page = k }
+				if ui.button_icon(fmt.tprintf("###form_tab%d", k), field_answer(fd) != "" ? lucide.CHECK : "", ui.text_shown(label_safe(name)), height = h, face = f.page == k ? .Toggled : .Ghost).clicked { f.page = k }
 			}
-			if bevel_button("###form_tab_review", "Review", "", height = h, face = f.page == len(pages) ? .Toggled : .Ghost).clicked { f.page = len(pages) }
+			if ui.button_icon("###form_tab_review", "", "Review", height = h, face = f.page == len(pages) ? .Toggled : .Ghost).clicked { f.page = len(pages) }
 		}
 		ui.spacer(ui.px(em))
 	}
@@ -444,7 +443,7 @@ form_page :: proc(app: ^App, f: ^Form_Req, pages: []int, reviewing, wizard: bool
 				ui.spacer(ui.px(em))
 				a := field_answer(fd)
 				name := fd.title != "" ? fd.title : fd.description != "" ? fd.description : fmt.tprintf("Question %d", k + 1)
-				if bevel_button(fmt.tprintf("###form_rv%d", k), label_safe(fmt.tprintf("%s:  %s", name, a != "" ? a : "no answer")), "", width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true, wrap = true, face = .Ghost).clicked { f.page = k }
+				if ui.button_icon(fmt.tprintf("###form_rv%d", k), "", ui.text_shown(label_safe(fmt.tprintf("%s:  %s", name, a != "" ? a : "no answer"))), width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true, wrap = true, face = .Ghost).clicked { f.page = k }
 				ui.spacer(ui.px(em))
 			}
 			ui.spacer(ui.px(em * 0.15))
@@ -484,7 +483,7 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 	case "boolean":
 		ui.toggle("###on", "", &fd.on)
 	case "external":
-		if fd.url != "" && bevel_button("###open", "Open", lucide.GLOBE).clicked { _ = platform.open_url(fd.url) }
+		if fd.url != "" && ui.button_icon("###open", lucide.GLOBE, "Open").clicked { ui.open(fd.url, .Url) }
 	case "multiselect":
 		for o, k in fd.options {
 			ui.next({width = ui.fill()})
@@ -494,7 +493,7 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 		if fd.custom { form_line(fd, em, "Something else", done) }
 	case:
 		for o, k in fd.options {
-			if bevel_button(fmt.tprintf("###form_o%d", k), label_safe(option_label(o)), "", width = ui.fill(), height = h, left = true, wrap = true, face = fd.choice == k ? .Toggled : .Raised).clicked {
+			if ui.button_icon(fmt.tprintf("###form_o%d", k), "", ui.text_shown(label_safe(option_label(o))), width = ui.fill(), height = h, left = true, wrap = true, face = fd.choice == k ? .Toggled : .Raised).clicked {
 				fd.choice = k
 				ui.field_set(&fd.text, "")
 				done^ = true
@@ -510,7 +509,7 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 @(private = "file")
 form_line :: proc(fd: ^Form_Field, em: f32, placeholder: string, done: ^bool) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
-	if well("###lw", .X, radius = 6) {
+	if ui.well("###lw", .X) {
 		ui.spacer(ui.px(em * 0.5))
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})

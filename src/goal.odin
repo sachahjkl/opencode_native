@@ -84,7 +84,7 @@ goal_strip :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 1.0))
 		switch g.status {
 		case .Active:   if hint_action("###g_pause", "pause", em, app.mono, lucide.SQUARE) { goal_command(app, "pause") }
-		case .Paused:   if hint_action("###g_resume", "resume", em, app.mono, lucide.SEND_HORIZONTAL) { goal_command(app, "resume") }
+		case .Paused:   if hint_action("###g_resume", "resume", em, app.mono, lucide.SEND_HORIZONAL) { goal_command(app, "resume") }
 		case .Complete:
 		}
 		ui.spacer(ui.px(em * 0.9))
@@ -120,7 +120,7 @@ goal_reason_line :: proc(app: ^App, em: f32) {
 		}
 		if over {
 			ui.spacer(ui.px(em * 0.8))
-			if hint_action("###gw_resume", "resume", em, app.mono, lucide.SEND_HORIZONTAL) { goal_command(app, "resume") }
+			if hint_action("###gw_resume", "resume", em, app.mono, lucide.SEND_HORIZONAL) { goal_command(app, "resume") }
 		}
 		ui.spacer(ui.px(em * 0.6))
 		groove(across = true)

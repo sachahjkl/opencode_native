@@ -846,19 +846,19 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 					session := app.chat.id
 					if r.kind == .Shell { j := job_find(a, r.id); session = j != nil && !j.background ? j.session : "" }
 					if session != "" {
-						if bevel_button("###bg", "Background", "", height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { background_session(app, session) }
+						if ui.button_icon("###bg", "", "Background", height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { background_session(app, session) }
 						ui.spacer(ui.px(em * 0.2))
 					}
 				}
 				if running {
-					if bevel_button("###stop", "Stop", "", .Danger, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_stop(app, r) }
+					if ui.button_icon("###stop", "", "Stop", .Danger, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_stop(app, r) }
 					ui.spacer(ui.px(em * 0.2))
 				}
-				if r.kind == .Agent && bevel_button("###open", "Open", "", height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_act(app, r) }
-				if r.kind != .Agent && bevel_button("###inspect", "Inspect", "", height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_inspect(app, r) }
-				if r.kind == .Shell && r.preview != "" && bevel_button("###copy", "Copy", "", height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked {
+				if r.kind == .Agent && ui.button_icon("###open", "", "Open", height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_act(app, r) }
+				if r.kind != .Agent && ui.button_icon("###inspect", "", "Inspect", height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_inspect(app, r) }
+				if r.kind == .Shell && r.preview != "" && ui.button_icon("###copy", "", "Copy", height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked {
 					clip_set(plain_output(r.preview))
-					ui.toast(.Good, "Output copied")
+					ui.announce(&app.announcer, .Good, "Output copied")
 				}
 				ui.spacer(ui.px(em * 0.3))
 			}

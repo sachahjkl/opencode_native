@@ -13,7 +13,6 @@ import "core:strings"
 import "gt:config"
 import desktop "gt:desktop"
 import "gt:draw"
-import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -124,7 +123,8 @@ strip_end :: proc(user: rawptr, d: ^ui.Dock, leaf: i32) {
 	em := ui.font_size()
 	if p := panel_in_front(app, leaf); p != 0 {
 		ui.a11y({role = .Button, name = "Open in a window"})
-		if glyph_button("###panel_win", lucide.APP_WINDOW, math.round(em * TERM_NEW_EM)).clicked { panel_detach(app, p) }
+		ui.next({width = ui.px(math.round(em * TERM_NEW_EM)), height = ui.px(math.round(em * TERM_NEW_EM))})
+		if ui.icon_button("panel_win", lucide.APP_WINDOW).clicked { panel_detach(app, p) }
 	}
 	terminal_strip_end(app, d, leaf, em)
 }
@@ -234,7 +234,7 @@ BROWSE_URL :: "https://opencode.ai/extensions/browse"
 
 preview_missing :: proc() {
 	when ODIN_OS == .Linux {
-		ui.toast_action(.Info, proc(_: rawptr) { _ = platform.open_url(BROWSE_URL) }, nil, "No Preview panel on Linux: let agents use your own browser with OpenCode Browse. Click to see it")
+		ui.toast_action(.Info, proc(_: rawptr) { ui.open(BROWSE_URL, .Url) }, nil, "No Preview panel on Linux: let agents use your own browser with OpenCode Browse. Click to see it")
 	} else {
 		ui.toast(.Warn, "The Preview panel needs the WebView2 runtime")
 	}
@@ -265,7 +265,7 @@ preview_show_in :: proc(app: ^App, p: ^Preview, by: Asked_By) {
 
 // A link: in the panel where there is one, else in the system's browser.
 preview_open :: proc(app: ^App, url: string, by := Asked_By.User) {
-	if !preview_available() { _ = platform.open_url(url); return }
+	if !preview_available() { ui.open(url, .Url); return }
 	p := &app.preview
 	if !p.open { preview_show(app, by) }
 	preview_go(app, preview_front_made(app, p), url)
@@ -377,7 +377,7 @@ preview_nav_ended :: proc(app: ^App, t: ^Preview_Tab, nav: u64, ok: bool) {
 	browser_page_loaded(app, t, nav, ok)
 }
 
-reveal_path :: proc(path: string) { _ = platform.reveal_in_folder(path) }
+reveal_path :: proc(path: string) { ui.open(path, .Reveal) }
 
 // The system's terminal, in a session's folder (desktop.open_terminal: $TERMINAL or a common one; Windows Terminal).
 terminal_open :: proc(dir: string) {
@@ -436,7 +436,8 @@ preview_strip :: proc(app: ^App, p: ^Preview, em: f32) {
 				ui.spacer(ui.px(em * 0.6))
 				text("t", ellipsize(title, PREVIEW_TAB_TITLE_MOST), col, ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 				ui.a11y({role = .Button, name = "Close this tab"})
-				if glyph_button("###pv_tab_x", lucide.X, math.round(em * GLYPH_BUTTON_EM * 0.75)).clicked { p.due_close = t }
+				ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM * 0.75)), height = ui.px(math.round(em * GLYPH_BUTTON_EM * 0.75))})
+				if ui.icon_button("pv_tab_x", lucide.X).clicked { p.due_close = t }
 				ui.spacer(ui.px(em * 0.25))
 			}
 		}
@@ -476,12 +477,15 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 	if ui.row(.Center, id = "###pv_bar") {
 		ui.spacer(ui.px(em * 0.4))
 		size := math.round(em * GLYPH_BUTTON_EM)
-		if glyph_button("###pv_back", lucide.ARROW_LEFT, size).clicked { web_act(t, .Back) }
-		if glyph_button("###pv_fwd", lucide.CHEVRON_RIGHT, size).clicked { web_act(t, .Forward) }
-		if glyph_button("###pv_reload", preview_loading(t) ? lucide.X : lucide.REFRESH_CW, size).clicked { web_act(t, preview_loading(t) ? .Stop : .Reload) }
+		ui.next({width = ui.px(size), height = ui.px(size)})
+		if ui.icon_button("pv_back", lucide.ARROW_LEFT).clicked { web_act(t, .Back) }
+		ui.next({width = ui.px(size), height = ui.px(size)})
+		if ui.icon_button("pv_fwd", lucide.CHEVRON_RIGHT).clicked { web_act(t, .Forward) }
+		ui.next({width = ui.px(size), height = ui.px(size)})
+		if ui.icon_button("pv_reload", preview_loading(t) ? lucide.X : lucide.REFRESH_CW).clicked { web_act(t, preview_loading(t) ? .Stop : .Reload) }
 		ui.spacer(ui.px(em * 0.35))
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), axis = .X, cross = .Center})
-		if well("###pv_addr", .X, radius = 6) {
+		if ui.well("###pv_addr", .X) {
 			ui.spacer(ui.px(em * 0.4))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3, font = app.mono, font_size = math.round(em * FS_SMALL)})
@@ -493,8 +497,10 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 		}
 		ui.spacer(ui.px(em * 0.35))
 		ui.a11y({role = .Button, name = "New browser tab"})
-		if glyph_button("###pv_new", lucide.PLUS, size).clicked { p.due_new = true }
-		if glyph_button("###pv_out", lucide.GLOBE, size).clicked && t.url != "" { _ = platform.open_url(t.url) }
+		ui.next({width = ui.px(size), height = ui.px(size)})
+		if ui.icon_button("pv_new", lucide.PLUS).clicked { p.due_new = true }
+		ui.next({width = ui.px(size), height = ui.px(size)})
+		if ui.icon_button("pv_out", lucide.GLOBE).clicked && t.url != "" { ui.open(t.url, .Url) }
 		ui.spacer(ui.px(em * 0.4))
 	}
 	edge_line("###pv_edge")
@@ -529,7 +535,7 @@ preview_panel :: proc(app: ^App, em: f32) {
 				text("m", msg, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 				if failed {
 					ui.spacer(ui.px(em * 0.5))
-					if bevel_button("###pv_again", "Try again", lucide.REFRESH_CW, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { web_start(app, t) }
+					if ui.button_icon("###pv_again", lucide.REFRESH_CW, "Try again", height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { web_start(app, t) }
 				}
 				ui.spacer(ui.fill())
 			}

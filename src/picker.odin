@@ -101,6 +101,16 @@ Picker :: struct {
 	fresh:  bool,      // opened in this frame: focus the field, select the current item
 	mouse:  Vec2,
 	search: ui.Fuzzy_Cache,   // the query and the items folded, from one frame to the next: they are ranked each frame
+	// The items of the picker open (composer_pickers), and the rows shown of them: made again when the items' version, the
+	// query or the folds change, not at each frame (an open list of hundreds of models costs nothing at rest).
+	items:        [dynamic]Pick_Item,
+	item_ids:     [dynamic]string,   // the agents' ids, beside their items (not owned: the agents' own)
+	items_version: u64,
+	rows:         [dynamic]Pick_Row,
+	rows_query:   string,   // (owned)
+	rows_version: u64,
+	folds:        u64,      // counts the folds changed (picker_fold)
+	rows_folds:   u64,
 }
 
 PICK_ROWS :: 10
@@ -125,6 +135,7 @@ picker_unfolded :: proc(p: ^Picker, group: string) -> bool { return group in p.u
 
 picker_fold :: proc(p: ^Picker, group: string, open: bool) {
 	if open == picker_unfolded(p, group) { return }
+	p.folds += 1
 	if open {
 		p.unfolded[strings.clone(group)] = true
 	} else {
@@ -157,14 +168,21 @@ picker_rows :: proc(p: ^Picker, items: []Pick_Item, hits: []ui.Rank_Hit, typed: 
 }
 
 // Builds the picker `id` while it is open; returns the index in `items` of the one chosen in this frame (-1: none).
-picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_Item, em: f32, align_right := false) -> (chosen: int) {
+// `version`: the items' version as the caller counts their changes (0: none kept, they are ranked and laid out again each frame).
+picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_Item, em: f32, align_right := false, version: u64 = 0) -> (chosen: int) {
 	chosen = -1
 	if !app.cx.open[.Picker] || p.id != id { return }
 	needle := ui.field_string(&p.field)
-	hits := ui.rank(needle, items, proc(it: ^Pick_Item, _: rawptr) -> ui.Rank_Entry { return {label = it.label, group = it.group} }, match = ui.rank_fuzzy, cache = &p.search)
+	hits := ui.rank(needle, items, proc(it: ^Pick_Item, _: rawptr) -> ui.Rank_Entry { return {label = it.label, group = it.group} }, match = ui.rank_fuzzy, cache = &p.search, version = version)
 	if p.fresh { for h in hits { if it := items[h.index]; it.current && it.group != "" { picker_fold(p, it.group, true) } } }
 	typed := needle != ""
-	rows := picker_rows(p, items, hits, typed)
+	if version == 0 || p.fresh || version != p.rows_version || p.folds != p.rows_folds || needle != p.rows_query {
+		clear(&p.rows)
+		append(&p.rows, ..picker_rows(p, items, hits, typed))
+		delete(p.rows_query)
+		p.rows_query, p.rows_version, p.rows_folds = strings.clone(needle), version, p.folds
+	}
+	rows := p.rows[:]
 	n := len(rows)
 	if p.fresh {
 		for r, k in rows { if r.hit >= 0 && items[hits[r.hit].index].current { p.sel = k } }
@@ -206,7 +224,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 		if ui.row(.Center, id = "###ps") {
 			ui.spacer(ui.px(em * 0.5))
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
-			if well("###psw", .X, radius = 7, focus = 1) {
+			if focus_well("###psw", .X, radius = 7, focus = 1) {
 				ui.spacer(ui.px(em * 0.5))
 				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
@@ -267,7 +285,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 				}
 				h := hits[row.hit]
 				it := items[h.index]
-				if it.model != nil && ui.hovered_for(rs, TOOLTIP_DELAY_S) { model_tip(app, it.model^, em) }
+				if it.model != nil && ui.hovered_for(rs) { model_tip(app, it.model^, em) }
 				if ui.parent(rb) {
 					ui.spacer(ui.px(em * (row.group != "" ? 1.9 : 0.75)))
 					if it.color.a > 0 {

@@ -4,6 +4,8 @@
 // app: there is nothing here to run it.
 package ocn
 
+import "base:runtime"
+
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -188,7 +190,7 @@ due_text :: proc(due, now: f64) -> string {
 field_line :: proc(id: string, f: ^ui.Text_Field, hint: string, em: f32, label := "", unit := "") -> ui.Edit_Result {
 	res: ui.Edit_Result
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
-	if well(fmt.tprintf("%s_w", id), .X, radius = 7) {
+	if ui.well(fmt.tprintf("%s_w", id), .X) {
 		if label != "" {
 			ui.spacer(ui.px(em * 0.6))
 			text("l", label, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
@@ -215,9 +217,7 @@ schedules_dialog :: proc(app: ^App, em: f32) {
 	w := min(math.round(em * SCHEDULES_W_EM), win.x - 2 * margin)
 	if ui.modal("schedules", w, &app.cx.open[.Schedules], SCHEDULES_TOP) {
 		dialog_backdrop()
-		if dialog_header("###sc_head") {
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-			text("t", "Schedules of this session", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
+		if ui.dialog_header("sc_head", "Schedules of this session", {close = true}) {
 		}
 		ui.spacer(ui.px(em * 0.4))
 		// (what it held at the last build: this one is not laid out yet. The title and the gaps are what the window keeps.)
@@ -248,7 +248,6 @@ schedules_dialog :: proc(app: ^App, em: f32) {
 			}
 		}
 		ui.spacer(ui.px(em * 0.9))
-		dialog_close(&app.cx.open[.Schedules])
 	}
 }
 
@@ -288,22 +287,22 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, w, em: f32) {
 		text("x", schedule_next(it, now), hex(it.status == .Active ? HEX_TEXT_SOFT : HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.px(em * 0.6))
 		if it.id == s.removing {
-			if bevel_button("###sc_yes", "Delete", lucide.TRASH_2, .Danger, height = small).clicked {
+			if ui.button_icon("###sc_yes", lucide.TRASH_2, "Delete", .Danger, height = small).clicked {
 				request(app, .Schedule_Done, "DELETE", fmt.tprintf("/api/experimental/schedule/%s", url_escape(it.id)))
 				set_text(&s.removing, "")
 			}
 			ui.spacer(ui.px(em * 0.3))
-			if bevel_button("###sc_no", "Keep", "", .Cancel, height = small).clicked { set_text(&s.removing, "") }
+			if ui.button_icon("###sc_no", "", "Keep", .Cancel, height = small).clicked { set_text(&s.removing, "") }
 		} else {
 			if it.status == .Active || it.status == .Paused {
 				pause := it.status == .Active
-				if bevel_button("###sc_pause", pause ? "Pause" : "Resume", "", height = small).clicked {
+				if ui.button_icon("###sc_pause", "", ui.text_shown(pause ? "Pause" : "Resume"), height = small).clicked {
 					request(app, .Schedule_Done, "POST", fmt.tprintf("/api/experimental/schedule/%s/%s", url_escape(it.id), pause ? "pause" : "resume"), "{}")
 				}
 				ui.spacer(ui.px(em * 0.3))
 			}
 			ui.a11y({role = .Button, name = "Delete"})
-			if bevel_button("###sc_del", words ? "Delete" : "", lucide.TRASH_2, .Danger, height = small, face = .Ghost).clicked { set_text(&s.removing, it.id) }
+			if ui.button_icon("###sc_del", lucide.TRASH_2, ui.text_shown(words ? "Delete" : ""), .Danger, height = small, face = .Ghost).clicked { set_text(&s.removing, it.id) }
 		}
 	}
 }
@@ -340,7 +339,7 @@ schedule_form :: proc(app: ^App, w, em: f32) {
 		if field_line("###sc_value", &s.value, WHEN_MODES[s.mode].hint, em, unit = WHEN_MODES[s.mode].unit).committed { go = true }
 		ui.spacer(ui.px(em * 0.5))
 		making := s.making.state == .Loading
-		if bevel_button("###sc_go", making ? "Planning…" : "Plan it", lucide.CHECK, .Success, height = math.round(em * FIELD_H_EM), disabled = making).clicked { go = true }
+		if ui.button_icon("###sc_go", lucide.CHECK, ui.text_shown(making ? "Planning…" : "Plan it"), .Success, height = math.round(em * FIELD_H_EM), disabled = making).clicked { go = true }
 	}
 	if s.problem != "" || remote.failed(&s.making) {
 		ui.spacer(ui.px(em * 0.4))
@@ -477,7 +476,7 @@ chat_artifacts_between :: proc(app: ^App, from, to: f64) -> []Chat_Artifact {
 artifact_card :: proc(app: ^App, a: Chat_Artifact, em: f32) {
 	ui.spacer(ui.px(em * 0.5))
 	ui.next({width = ui.fill(), height = ui.children_sum(), cursor = .Hand})
-	if well(fmt.tprintf("###art_%s", a.id), radius = 6, flags = {.Clickable}) {
+	if ui.well(fmt.tprintf("###art_%s", a.id), flags = {.Clickable}) {
 		card := ui.parent_box()
 		ui.a11y({role = .Button, name = fmt.tprintf("Artifact %s: show it", a.title)})
 		show := ui.signal(card).clicked
@@ -489,7 +488,7 @@ artifact_card :: proc(app: ^App, a: Chat_Artifact, em: f32) {
 			text("k", "Artifact", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.6))
 			text("n", ellipsize(a.title != "" ? a.title : a.id, ARTIFACT_TITLE_CHARS), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
-			if bevel_button("###show", "Show", lucide.EYE, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { show = true }
+			if ui.button_icon("###show", lucide.EYE, "Show", height = math.round(em * BUTTON_SMALL_H_EM)).clicked { show = true }
 			ui.spacer(ui.px(em * 0.6))
 		}
 		if show {
@@ -548,21 +547,56 @@ artifact_can_open :: proc(a: ^Artifacts, it: ^Artifact) -> bool {
 // What the server serves itself asks its password, which has no place in an address: the files go in a folder of ours, and that opens.
 @(private = "file")
 artifact_view :: proc(a: ^Artifacts, it: ^Artifact) {
-	if artifact_online(it) { _ = platform.open_url(it.url); return }
+	if artifact_online(it) { ui.open(it.url, .Url); return }
 	if !artifact_can_open(a, it) { return }
-	context.allocator = context.temp_allocator
+	// (the files are written, then opened, by a task: the disk is not the interface's)
+	h := runtime.heap_allocator()
+	job := new(Artifact_Write, h)
+	job.id, job.entry = strings.clone(it.id, h), strings.clone(it.entry, h)
+	job.files = make([]Artifact_File, len(a.files), h)
+	job.left_out = make([dynamic]string, h)   // (filled on the task's thread, freed on this one)
+	for f, i in a.files { job.files[i] = {strings.clone(f.path, h), strings.clone(f.content, h)} }
+	ui.task(&the_app.state, artifact_write_work, artifact_write_done, job, artifact_write_free)
+}
+
+@(private = "file")
+Artifact_Write :: struct { id, entry: string, files: []Artifact_File, left_out: [dynamic]string, failed, no_temp: bool }
+
+@(private = "file")
+artifact_write_work :: proc(data: rawptr) {
+	job := (^Artifact_Write)(data)
 	temp, no_temp := os.temp_directory(context.temp_allocator)
-	if no_temp != nil { ui.toast(.Bad, "No temporary folder"); return }
-	root, _ := filepath.join({temp, "opencode-artifacts", file_safe(it.id)}, context.temp_allocator)
+	if no_temp != nil { job.no_temp = true; return }
+	root, _ := filepath.join({temp, "opencode-artifacts", file_safe(job.id)}, context.temp_allocator)
 	entry := ""
-	for f in a.files {
-		if !artifact_path_safe(f.path) { ui.toast(.Warn, "%s was left out: it points outside its folder", f.path); continue }
+	for f in job.files {
+		if !artifact_path_safe(f.path) { append(&job.left_out, f.path); continue }
 		path, _ := filepath.join({root, f.path}, context.temp_allocator)
 		_ = os.make_directory_all(filepath.dir(path))
-		if os.write_entire_file(path, transmute([]u8)f.content) != nil { ui.toast(.Bad, "The file could not be written"); return }
-		if f.path == it.entry || entry == "" { entry = path }
+		if os.write_entire_file(path, transmute([]u8)f.content) != nil { job.failed = true; return }
+		if f.path == job.entry || entry == "" { entry = path }
 	}
 	if entry != "" { _ = platform.open_path(entry) }
+}
+
+@(private = "file")
+artifact_write_done :: proc(data: rawptr, _: u64) {
+	job := (^Artifact_Write)(data)
+	for p in job.left_out { ui.toast(.Warn, "%s was left out: it points outside its folder", p) }
+	if job.no_temp { ui.toast(.Bad, "No temporary folder") }
+	if job.failed { ui.toast(.Bad, "The file could not be written") }
+	artifact_write_free(job)
+}
+
+@(private = "file")
+artifact_write_free :: proc(data: rawptr) {
+	job := (^Artifact_Write)(data)
+	h := runtime.heap_allocator()
+	for f in job.files { delete(f.path, h); delete(f.content, h) }
+	delete(job.files, h)
+	delete(job.left_out)
+	delete(job.id, h); delete(job.entry, h)
+	free(job, h)
 }
 
 artifacts_dialog :: proc(app: ^App, em: f32) {
@@ -570,9 +604,7 @@ artifacts_dialog :: proc(app: ^App, em: f32) {
 	if !app.cx.open[.Artifacts] { return }
 	if ui.modal_sized("artifacts", DIALOG_PREFERRED_EM[.Artifacts] * em, &app.cx.dialogs[.Artifacts], &app.cx.open[.Artifacts], DIALOG_MIN_EM[.Artifacts] * em) {
 		dialog_backdrop()
-		if dialog_header("###ar_head") {
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-			text("t", "Artifacts of this folder", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
+		if ui.dialog_header("ar_head", "Artifacts of this folder", {close = true}) {
 		}
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
@@ -601,7 +633,6 @@ artifacts_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 		}
 		ui.spacer(ui.px(em * 0.9))
-		dialog_close(&app.cx.open[.Artifacts])
 	}
 }
 
@@ -617,7 +648,7 @@ artifact_right :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###ar_bar") {
 		text("p", it.provider, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)}, ui.fill())
 		if it.id == a.removing {
-			if bevel_button("###ar_yes", "Delete", lucide.TRASH_2, .Danger, height = small).clicked {
+			if ui.button_icon("###ar_yes", lucide.TRASH_2, "Delete", .Danger, height = small).clicked {
 				q := location_query(a.dir)
 				request(app, .Artifact_Done, "DELETE", fmt.tprintf("/api/experimental/artifacts/%s%s%s", url_escape(it.id), q != "" ? "?" : "", q))
 				set_text(&a.removing, ""); set_text(&a.shown, "")
@@ -626,13 +657,13 @@ artifact_right :: proc(app: ^App, em: f32) {
 				return
 			}
 			ui.spacer(ui.px(em * 0.3))
-			if bevel_button("###ar_no", "Keep", "", .Cancel, height = small).clicked { set_text(&a.removing, "") }
+			if ui.button_icon("###ar_no", "", "Keep", .Cancel, height = small).clicked { set_text(&a.removing, "") }
 		} else {
 			ui.a11y({role = .Button, name = "Open in the browser"})
-			if bevel_button("###ar_open", words ? "Open in the browser" : "", lucide.GLOBE, .Primary, height = small, disabled = !artifact_can_open(a, it)).clicked { artifact_view(a, it) }
+			if ui.button_icon("###ar_open", lucide.GLOBE, ui.text_shown(words ? "Open in the browser" : ""), .Primary, height = small, disabled = !artifact_can_open(a, it)).clicked { artifact_view(a, it) }
 			ui.spacer(ui.px(em * 0.3))
 			ui.a11y({role = .Button, name = "Delete"})
-			if bevel_button("###ar_del", words ? "Delete" : "", lucide.TRASH_2, .Danger, height = small, face = .Ghost).clicked { set_text(&a.removing, it.id) }
+			if ui.button_icon("###ar_del", lucide.TRASH_2, ui.text_shown(words ? "Delete" : ""), .Danger, height = small, face = .Ghost).clicked { set_text(&a.removing, it.id) }
 		}
 	}
 	ui.spacer(ui.px(em * 0.4))
@@ -643,7 +674,7 @@ artifact_right :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.3, em * 0.3}})
 		if ui.flow({em * 0.3, em * 0.3}, "###ar_files") {
 			for f, i in a.files {
-				if bevel_button(fmt.tprintf("###arf%d", i), label_safe(f.path), "", height = small, face = a.file == i ? .Toggled : .Raised).clicked { a.file = i; a.version += 1 }
+				if ui.button_icon(fmt.tprintf("###arf%d", i), "", ui.text_shown(label_safe(f.path)), height = small, face = a.file == i ? .Toggled : .Raised).clicked { a.file = i; a.version += 1 }
 			}
 		}
 		ui.spacer(ui.px(em * 0.4))
@@ -742,12 +773,12 @@ page_plugins :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###pl_bar") {
 		small := math.round(em * BUTTON_COMPACT_H_EM)
 		checking := p.check.state == .Loading
-		if bevel_button("###pl_check", checking ? "Checking…" : "Check for updates", lucide.REFRESH_CW, height = small, disabled = checking).clicked {
+		if ui.button_icon("###pl_check", lucide.REFRESH_CW, ui.text_shown(checking ? "Checking…" : "Check for updates"), height = small, disabled = checking).clicked {
 			remote.begin(&p.check)
 			request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", reading = &p.check)
 		}
 		ui.spacer(ui.px(em * 0.4))
-		if bevel_button("###pl_built", fmt.tprintf("%s the %d built in", p.builtin ? "Hide" : "Show", built), "", height = small, face = .Ghost).clicked { p.builtin = !p.builtin }
+		if ui.button_icon("###pl_built", "", ui.text_shown(fmt.tprintf("%s the %d built in", p.builtin ? "Hide" : "Show", built)), height = small, face = .Ghost).clicked { p.builtin = !p.builtin }
 	}
 	if !p.builtin { return }
 	ui.spacer(ui.px(em * 0.5))
@@ -761,7 +792,7 @@ plugin_row :: proc(app: ^App, it: ^Plugin, i: int, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###plr%d", i)) {
 		color: u32 = it.failed ? HEX_RED : it.outdated ? HEX_YELLOW : HEX_FAINT
-		glyph(it.failed ? lucide.TRIANGLE_ALERT : lucide.PLUG, hex(color), math.round(em * ICON_SMALL), em * 1.2)
+		glyph(it.failed ? lucide.ALERT_TRIANGLE : lucide.PLUG, hex(color), math.round(em * ICON_SMALL), em * 1.2)
 		ui.spacer(ui.px(em * 0.3))
 		name := it.id != "" ? it.id : it.target != "" ? it.target : it.kind
 		text("n", name, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
@@ -770,7 +801,7 @@ plugin_row :: proc(app: ^App, it: ^Plugin, i: int, em: f32) {
 		text("d", detail, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)})
 		if it.outdated && it.target != "" {
 			ui.spacer(ui.px(em * 0.4))
-			if bevel_button("###pl_up", it.updating ? "Updating…" : "Update", "", .Success, height = math.round(em * BUTTON_SMALL_H_EM), disabled = it.updating).clicked {
+			if ui.button_icon("###pl_up", "", ui.text_shown(it.updating ? "Updating…" : "Update"), .Success, height = math.round(em * BUTTON_SMALL_H_EM), disabled = it.updating).clicked {
 				request(app, .Plugin_Update, "POST", "/api/plugin/update", fmt.tprintf(`{{"targets":[%s]}}`, jquote(it.target)))
 				it.updating = true
 			}

@@ -477,11 +477,13 @@ sessions_load :: proc(app: ^App, v: json.Value) {
 agents_clear :: proc(app: ^App) {
 	for a in app.agents { delete(a.id); delete(a.name); delete(a.description); delete(a.mode) }
 	clear(&app.agents)
+	app.cx.catalog_version += 1
 }
 
 models_clear :: proc(app: ^App) {
 	for m in app.models { delete(m.id); delete(m.provider); delete(m.name); delete(m.family); delete(m.status); delete(m.inputs); delete(m.efforts) }
 	clear(&app.models)
+	app.cx.catalog_version += 1
 }
 
 // (read again at each reconnection and each change of what is connected: an answer replaces the list)

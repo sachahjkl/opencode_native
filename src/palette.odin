@@ -10,6 +10,7 @@ import "core:math"
 import "core:mem/virtual"
 import "core:strconv"
 import "core:strings"
+import prefs_page "gt:prefs_page"
 import "gt:config"
 import "gt:draw"
 import store "gt:store"
@@ -144,13 +145,14 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 		}
 		if want(only, ':') {
 			// every setting of the settings' pages: a switch flips here, the others open the settings on themselves
-			for d in PREF_DEFS {
+			for &e in the_app.cfg_prefs.entries {
+				d := e.def
 				if d.hidden { continue }
 				if d.kind != .Bool {
-					append(&items, Pal_Item{kind = .Setting, id = d.name, title = setting_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, tags = d.tags})
+					append(&items, Pal_Item{kind = .Setting, id = d.name, title = setting_title(&the_app.cfg_prefs, d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, tags = d.tags})
 					continue
 				}
-				append(&items, Pal_Item{kind = .Switch, id = d.name, title = setting_title(d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, tags = d.tags})
+				append(&items, Pal_Item{kind = .Switch, id = d.name, title = setting_title(&the_app.cfg_prefs, d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, tags = d.tags})
 			}
 		}
 	}
@@ -246,7 +248,8 @@ palette_choose :: proc(app: ^App, it: ^Pal_Item) {
 	case .Setting:
 		// the settings, searching for it: it shows alone, with its control
 		settings_open(app)
-		ui.field_set(&app.settings.query, setting_query(it.id))
+		app.settings.page = .Preferences
+		prefs_page.show(&app.settings.prefs, &app.cfg_prefs, settings_options(app), it.id)
 	}
 }
 
@@ -360,16 +363,9 @@ palette_dialog :: proc(app: ^App, em: f32) {
 
 // A setting's title as the settings say it ("Notify › Permission", temp memory); the name is still found by what is typed
 // (palette_view).
-setting_title :: proc(d: config.Def) -> string {
-	group := d.category
-	if group == "" { group = d.name[:max(strings.index_byte(d.name, '.'), 0)] }
-	return fmt.tprintf("%s › %s", config.category_title(group), config.title_of(d))
-}
-
-// What the settings' search is given to show one setting: its title (the search reads the titles and the descriptions).
-setting_query :: proc(name: string) -> string {
-	for d in PREF_DEFS { if d.name == name { return config.title_of(d) } }
-	return name
+setting_title :: proc(p: ^config.Prefs, d: config.Def) -> string {
+	group := d.name[:max(strings.index_byte(d.name, '.'), 0)]
+	return fmt.tprintf("%s › %s", config.group_title(p, group), config.title_of(d))
 }
 
 // What the usage bonus reads (palette_hits): the counts, and now.
@@ -382,7 +378,7 @@ Usage_Now :: struct { palette: ^Palette, now: f64 }
 palette_hits :: proc(app: ^App, items: []Pal_Item, needle: string, version: u64 = 0) -> []ui.Rank_Hit {
 	at := Usage_Now{&app.palette, now_epoch_ms()}
 	return ui.rank(needle, items, proc(it: ^Pal_Item, _: rawptr) -> ui.Rank_Entry {
-		// a switch is found by its name too ("appearance.system_title"), its title then shown without marks
+		// a switch is found by its name too ("window.system_title"), its title then shown without marks
 		return {label = it.title, tags = it.tags, last = it.kind == .Switch || it.kind == .Setting ? it.id : ""}
 	}, &at, bonus = proc(it: ^Pal_Item, user: rawptr) -> f64 {
 		at := (^Usage_Now)(user)

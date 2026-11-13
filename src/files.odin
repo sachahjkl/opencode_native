@@ -474,9 +474,7 @@ files_dialog :: proc(app: ^App, em: f32) {
 	if !app.cx.open[.Files] { return }
 	if ui.modal_sized("files", DIALOG_PREFERRED_EM[.Files] * em, &app.cx.dialogs[.Files], &app.cx.open[.Files], DIALOG_MIN_EM[.Files] * em) {
 		dialog_backdrop()
-		if dialog_header("###fl_head") {
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-			text("t", f.at != "" && !f.searching ? f.at : base_name(f.dir), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
+		if ui.dialog_header("fl_head", f.at != "" && !f.searching ? f.at : base_name(f.dir), {close = true}) {
 		}
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
@@ -490,7 +488,6 @@ files_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 		}
 		ui.spacer(ui.px(em * 0.9))
-		dialog_close(&app.cx.open[.Files])
 	}
 	f.fresh = false
 }
@@ -518,7 +515,7 @@ files_left :: proc(app: ^App, em: f32) {
 		if ui.key_press(.Up) { f.sel = (f.sel + n - 1) % n }
 	}
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
-	if well("###fl_well", .X, radius = 8, focus = 1) {
+	if focus_well("###fl_well", .X, radius = 8, focus = 1) {
 		ui.spacer(ui.px(em * 0.6))
 		glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 		if ui.tags("bare") {
@@ -571,11 +568,11 @@ files_right :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###fl_bar") {
 		text("p", f.file, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 		ui.spacer(ui.px(em * 0.5))
-		if bevel_button("###fl_copy", "Copy path", lucide.COPY, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
+		if ui.button_icon("###fl_copy", lucide.COPY, "Copy path", height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
 			clip_set(fmt.tprintf("%s/%s", strings.trim_right(f.dir, `\/`), f.file))
 		}
 		ui.spacer(ui.px(em * 0.4))
-		if bevel_button("###fl_mention", "Mention in the prompt", lucide.PENCIL, .Primary, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
+		if ui.button_icon("###fl_mention", lucide.PENCIL, "Mention in the prompt", .Primary, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
 			a := &app.composer.area
 			a.mark = a.cursor
 			mention_put(app, .File, f.file, file_uri(f.dir, f.file), filepath.base(f.file))

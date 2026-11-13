@@ -18,6 +18,7 @@ package ocn
 import "core:encoding/base64"
 import "core:encoding/json"
 import "core:fmt"
+import "core:log"
 import "core:strings"
 import "core:sync"
 import "core:thread"
@@ -317,7 +318,7 @@ browser_stop :: proc(app: ^App) {
 browser_send :: proc(to: Browser_To, text: string) -> bool {
 	l := to.link
 	if l == nil || sync.atomic_load(&l.socket) != to.socket {
-		fmt.eprintln("browser: an answer for a socket gone was dropped")
+		log.warn("browser: an answer for a socket gone was dropped")
 		return false
 	}
 	sync.lock(&l.lock)

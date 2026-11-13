@@ -6,6 +6,7 @@
 package ocn
 
 import "core:encoding/json"
+import tasks "gt:tasks"
 import "core:os"
 import "core:strings"
 import "gt:ui"
@@ -167,7 +168,7 @@ experimental_check :: proc(app: ^App) {
 	job := new(Experimental_Job)
 	job^ = {app, app.conn, app.prefs.experimental && url_is_here(app.conn.http.base)}
 	conn_hold(app.conn)
-	pool_add(&app.conn.pool, proc(data: rawptr) {
+	tasks.add(&app.conn.pool, proc(data: rawptr) {
 		job := (^Experimental_Job)(data)
 		defer free(job)
 		a := context.temp_allocator
@@ -221,5 +222,5 @@ experimental_answer :: proc(data: rawptr, word: u64) {
 	defer { conn_release(app, r.conn); free(r) }
 	if r.conn != app.conn { return }
 	if r.known { app.cx.no_schedules, app.cx.no_artifacts = !r.schedules, !r.artifacts }
-	if r.changed { ui.toast(.Good, "The server's experimental options are on") }
+	if r.changed { ui.announce(&app.announcer, .Good, "The server's experimental options are on") }
 }

@@ -12,6 +12,8 @@
 // server was left.
 package ocn
 
+import "base:runtime"
+
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -24,11 +26,33 @@ import diff "gt:diff"
 import lucide "gt:lucide"
 import remote "gt:remote"
 
+// What a dialog of a session's (a folder, a file) answers to, and what a task writes or reads there (heap; freed by its end).
+@(private = "file")
+Session_File :: struct { app: ^App, id, body, path: string, ok: bool }
+
+@(private = "file")
+session_file_new :: proc(app: ^App, id := "", body := "") -> ^Session_File {
+	a := runtime.heap_allocator()
+	f := new(Session_File, a)
+	f^ = {app = app, id = strings.clone(id, a), body = strings.clone(body, a)}
+	return f
+}
+
+@(private = "file")
+session_file_free :: proc(data: rawptr) {
+	f := (^Session_File)(data)
+	a := runtime.heap_allocator()
+	delete(f.id, a); delete(f.body, a); delete(f.path, a)
+	free(f, a)
+}
+
 session_move_pick :: proc(app: ^App, id: string) {
-	r := platform.pick_folder_dialog({owner = app.win, title = "Move the session to", remember_id = "session_move"})
-	defer platform.dialog_result_destroy(&r)
-	if r.status != .Chosen || len(r.paths) == 0 { return }
-	request(app, .Session_Moved, "POST", fmt.tprintf("/api/session/%s/move", id), fmt.tprintf(`{{"directory":%s}}`, jquote(r.paths[0])), id)
+	ui.file_dialog(&app.state, .Folder, {owner = app.win, title = "Move the session to", remember_id = "session_move"}, proc(r: platform.Dialog_Result, user: rawptr) {
+		f := (^Session_File)(user)
+		defer session_file_free(f)
+		if r.status != .Chosen || len(r.paths) == 0 { return }
+		request(f.app, .Session_Moved, "POST", fmt.tprintf("/api/session/%s/move", f.id), fmt.tprintf(`{{"directory":%s}}`, jquote(r.paths[0])), f.id)
+	}, session_file_new(app, id))
 }
 
 // (`redacted`: the server replaces every text by a mark: a file that shows the shape of a session, to share.)
@@ -42,11 +66,20 @@ session_export_save :: proc(app: ^App, id, raw: string) {
 	title := id
 	if s := find_session(app, id); s != nil && s.title != "" { title = s.title }
 	filters := []platform.File_Filter{{name = "Session", patterns = {"*.json"}}}
-	r := platform.save_file_dialog({owner = app.win, title = "Export the session", filters = filters, suggested_name = fmt.tprintf("%s.json", file_safe(title)), default_ext = "json", remember_id = "session_export", overwrite_prompt = true})
-	defer platform.dialog_result_destroy(&r)
-	if r.status != .Chosen || len(r.paths) == 0 { return }
-	if os.write_entire_file(r.paths[0], transmute([]u8)body) != nil { ui.toast(.Bad, "The file could not be written"); return }
-	ui.toast(.Good, "Session exported")
+	// (the dialog, then the file written: both on the chores)
+	ui.file_dialog(&app.state, .Save, {owner = app.win, title = "Export the session", filters = filters, suggested_name = fmt.tprintf("%s.json", file_safe(title)), default_ext = "json", remember_id = "session_export", overwrite_prompt = true}, proc(r: platform.Dialog_Result, user: rawptr) {
+		f := (^Session_File)(user)
+		if r.status != .Chosen || len(r.paths) == 0 { session_file_free(f); return }
+		f.path = strings.clone(r.paths[0], runtime.heap_allocator())
+		ui.task(&f.app.state, proc(data: rawptr) {
+			f := (^Session_File)(data)
+			f.ok = os.write_entire_file(f.path, transmute([]u8)f.body) == nil
+		}, proc(data: rawptr, _: u64) {
+			f := (^Session_File)(data)
+			if f.ok { ui.announce(&f.app.announcer, .Good, "Session exported") } else { ui.toast(.Bad, "The file could not be written") }
+			session_file_free(f)
+		}, f, session_file_free)
+	}, session_file_new(app, id, body))
 }
 
 export_body :: proc(raw: string) -> string {
@@ -64,19 +97,30 @@ file_safe :: proc(s: string) -> string {
 
 session_import_pick :: proc(app: ^App) {
 	filters := []platform.File_Filter{{name = "Session", patterns = {"*.json"}}}
-	r := platform.open_file_dialog({owner = app.win, title = "Import a session", filters = filters, all_files = true, remember_id = "session_export"})
-	defer platform.dialog_result_destroy(&r)
-	if r.status != .Chosen || len(r.paths) == 0 { return }
-	session_import_file(app, r.paths[0])
+	ui.file_dialog(&app.state, .Open, {owner = app.win, title = "Import a session", filters = filters, all_files = true, remember_id = "session_export"}, proc(r: platform.Dialog_Result, user: rawptr) {
+		if r.status != .Chosen || len(r.paths) == 0 { return }
+		session_import_file((^App)(user), r.paths[0])
+	}, app)
 }
 
+// The file is read by a task; what it holds is sent at the next build.
 session_import_file :: proc(app: ^App, path: string) {
-	data, err := os.read_entire_file(path, context.temp_allocator)
-	if err != nil { ui.toast(.Bad, "The file could not be read"); return }
-	v, bad := json.parse(data, parse_integers = true, allocator = context.temp_allocator)
-	id := jstr(v, "info", "id")
-	if bad != nil || id == "" { ui.toast(.Bad, "This file is not an exported session"); return }
-	request(app, .Session_Import, "POST", "/api/experimental/session/import", string(data), id)
+	f := session_file_new(app)
+	f.path = strings.clone(path, runtime.heap_allocator())
+	ui.task(&app.state, proc(data: rawptr) {
+		f := (^Session_File)(data)
+		bytes, err := os.read_entire_file(f.path, runtime.heap_allocator())
+		f.ok = err == nil
+		if f.ok { f.body = string(bytes) }
+	}, proc(data: rawptr, _: u64) {
+		f := (^Session_File)(data)
+		defer session_file_free(f)
+		if !f.ok { ui.toast(.Bad, "The file could not be read"); return }
+		v, bad := json.parse(transmute([]u8)f.body, parse_integers = true, allocator = context.temp_allocator)
+		id := jstr(v, "info", "id")
+		if bad != nil || id == "" { ui.toast(.Bad, "This file is not an exported session"); return }
+		request(f.app, .Session_Import, "POST", "/api/experimental/session/import", f.body, id)
+	}, f, session_file_free)
 }
 
 // The server refuses a session it has already: that one is opened.
@@ -361,7 +405,7 @@ revert_done :: proc(app: ^App) {
 	}
 	changes_reset(c)
 	refresh_soon(app)
-	ui.toast(.Good, "Back to this prompt")
+	ui.announce(&app.announcer, .Good, "Back to this prompt")
 }
 
 revert_cancelled :: proc(app: ^App) { changes_reset(&app.cx.changes) }
@@ -425,11 +469,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 	_, staging := c.state.(Changes_Staging)
 	if ui.modal_sized("changes", DIALOG_PREFERRED_EM[.Changes] * em, &app.cx.dialogs[.Changes], open, DIALOG_MIN_EM[.Changes] * em) {
 		dialog_backdrop()
-		if dialog_header("###ch_head") {
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-			title := !viewing ? "Go back to this prompt" : v.from != "" ? "What this prompt changed" : "What this session changed"
-			text("t", title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
-		}
+		if ui.dialog_header("ch_head", !viewing ? "Go back to this prompt" : v.from != "" ? "What this prompt changed" : "What this session changed", {close = true}) {}
 		// (under the header, as wide as the dialog: the corner is the close cross's only beside the header)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###ch_sub") {
@@ -485,14 +525,13 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###ch_foot") {
 				ui.spacer(ui.fill())
-				if bevel_button("###ch_cancel", "Cancel", "", .Cancel).clicked { open^ = false }
+				if ui.button_icon("###ch_cancel", "", "Cancel", .Cancel).clicked { open^ = false }
 				ui.spacer(ui.px(em * 0.5))
-				if bevel_button("###ch_go", "Go back", lucide.UNDO_2, .Danger, disabled = staging).clicked { revert_commit(app) }
+				if ui.button_icon("###ch_go", lucide.UNDO_2, "Go back", .Danger, disabled = staging).clicked { revert_commit(app) }
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			}
 		}
 		ui.spacer(ui.px(em * 0.8))
-		dialog_close(open)
 	}
 }
 
@@ -500,7 +539,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 // What the answers to its requests do (net.odin REQ_FACTS)
 
 session_moved_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	ui.toast(.Good, "Session moved")
+	ui.announce(&app.announcer, .Good, "Session moved")
 	refresh_soon(app)
 }
 
@@ -510,7 +549,7 @@ session_import_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 	refresh_soon(app)
 	// (the reader who went elsewhere meanwhile stays there: it is in the sidebar)
 	if id := jstr(v, "data", "id"); id != "" && r.gen == app.chat.gen { open_root(app, id) }
-	ui.toast(.Good, "Session imported")
+	ui.announce(&app.announcer, .Good, "Session imported")
 }
 
 session_import_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {

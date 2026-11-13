@@ -6,6 +6,7 @@ package ocn
 import "core:fmt"
 import "core:math"
 import "core:strings"
+import "gt:draw"
 import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -84,11 +85,11 @@ COMMANDS := [?]Command{
 	{id = "view.notices", title = "What you missed", tags = "notifications inbox missed events log bell unread", group = "View", icon = lucide.BELL, keys = "Ctrl+Shift+N", key = .N, mods = {.Ctrl, .Shift}, run = missed_toggle, over = proc(app: ^App) -> bool { return app.cx.open[.Notices] }},
 	{id = "notices.next", title = "Next missed", tags = "notifications queue next unread inbox", group = "Go to", icon = lucide.ARROW_RIGHT, run = missed_next},
 	{id = "view.sidebar_mode", title = "Switch the sidebar's mode (inbox, projects)", tags = "inbox projects folders group", group = "View", icon = lucide.LIST, run = sidebar_mode_next},
-	{id = "view.content_in", title = "Zoom in the conversation", tags = "bigger larger font size text", group = "View", icon = lucide.PLUS, keys = "Ctrl+=", run = proc(app: ^App) { content_zoom_by(app, ZOOM_FACTOR) }},
-	{id = "view.content_out", title = "Zoom out the conversation", tags = "smaller font size text", group = "View", icon = lucide.CHEVRON_DOWN, keys = "Ctrl+-", run = proc(app: ^App) { content_zoom_by(app, 1 / ZOOM_FACTOR) }},
+	{id = "view.content_in", title = "Zoom in the conversation", tags = "bigger larger font size text", group = "View", icon = lucide.PLUS, keys = "Ctrl+=", run = proc(app: ^App) { content_zoom_by(app, ui.feel(&app.state).zoom_step) }},
+	{id = "view.content_out", title = "Zoom out the conversation", tags = "smaller font size text", group = "View", icon = lucide.CHEVRON_DOWN, keys = "Ctrl+-", run = proc(app: ^App) { content_zoom_by(app, 1 / ui.feel(&app.state).zoom_step) }},
 	{id = "view.content_reset", title = "Reset the conversation's zoom", tags = "default font size text", group = "View", icon = lucide.UNDO_2, keys = "Ctrl+0", run = proc(app: ^App) { content_zoom_reset(app) }},
-	{id = "view.chrome_in", title = "Zoom in the interface", tags = "bigger larger scale ui", group = "View", icon = lucide.PLUS, keys = "Ctrl+Shift+=", run = proc(app: ^App) { ui.set_zoom(&app.state, ui.zoom(&app.state) * ZOOM_FACTOR) }},
-	{id = "view.chrome_out", title = "Zoom out the interface", tags = "smaller scale ui", group = "View", icon = lucide.CHEVRON_DOWN, keys = "Ctrl+Shift+-", run = proc(app: ^App) { ui.set_zoom(&app.state, ui.zoom(&app.state) / ZOOM_FACTOR) }},
+	{id = "view.chrome_in", title = "Zoom in the interface", tags = "bigger larger scale ui", group = "View", icon = lucide.PLUS, keys = "Ctrl+Shift+=", run = proc(app: ^App) { ui.set_zoom(&app.state, ui.zoom(&app.state) * ui.feel(&app.state).zoom_step) }},
+	{id = "view.chrome_out", title = "Zoom out the interface", tags = "smaller scale ui", group = "View", icon = lucide.CHEVRON_DOWN, keys = "Ctrl+Shift+-", run = proc(app: ^App) { ui.set_zoom(&app.state, ui.zoom(&app.state) / ui.feel(&app.state).zoom_step) }},
 	{id = "view.chrome_reset", title = "Reset the interface's zoom", tags = "default scale ui", group = "View", icon = lucide.UNDO_2, keys = "Ctrl+Shift+0", run = proc(app: ^App) { ui.set_zoom(&app.state, 1) }},
 }
 
@@ -161,15 +162,15 @@ content_zoom_events :: proc(app: ^App, events: []platform.Event) {
 	for &e in events {
 		#partial switch e.kind {
 		case .Scroll:
-			if .Ctrl not_in e.mods || !rect_contains(app.conversation.rect, e.pos) { continue }
+			if .Ctrl not_in e.mods || !draw.rect_contains(app.conversation.rect, e.pos) { continue }
 			z := content_zoom(app)
-			content_zoom_set(app, e.delta.y < 0 ? z * ZOOM_FACTOR : z / ZOOM_FACTOR)
+			content_zoom_set(app, e.delta.y < 0 ? z * ui.feel(&app.state).zoom_step : z / ui.feel(&app.state).zoom_step)
 			e.kind = .None
 		case .Key_Press:
 			if e.mods != {.Ctrl} { continue }
 			#partial switch e.key {
-			case .Equal, .Num_Add:      content_zoom_by(app, ZOOM_FACTOR)
-			case .Minus, .Num_Subtract: content_zoom_by(app, 1 / ZOOM_FACTOR)
+			case .Equal, .Num_Add:      content_zoom_by(app, ui.feel(&app.state).zoom_step)
+			case .Minus, .Num_Subtract: content_zoom_by(app, 1 / ui.feel(&app.state).zoom_step)
 			case .N0:                   content_zoom_reset(app)
 			case: continue
 			}
@@ -177,8 +178,6 @@ content_zoom_events :: proc(app: ^App, events: []platform.Event) {
 		}
 	}
 }
-
-rect_contains :: proc(r: Rect, p: Vec2) -> bool { return p.x >= r.min.x && p.x < r.max.x && p.y >= r.min.y && p.y < r.max.y }
 
 // The keys of the table as a dialog: what can be done, by group.
 help_dialog :: proc(app: ^App, em: f32) {

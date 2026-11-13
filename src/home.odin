@@ -46,24 +46,50 @@ home_session :: proc(app: ^App, s: ^Session_Info, em, now: f64, busy: bool) {
 	}
 }
 
-// The folders of the latest sessions, the latest first.
-home_folders :: proc(app: ^App) -> []string {
-	seen := make(map[string]bool, allocator = context.temp_allocator)
-	out := make([dynamic]string, context.temp_allocator)
-	for &s in app.sessions {
-		if s.directory == "" || s.directory in seen { continue }
-		seen[s.directory] = true
-		append(&out, s.directory)
-		if len(out) == HOME_FOLDERS { break }
-	}
-	return out[:]
+// What the home page lists of the sessions: made again when the sessions or what runs change (sessions_ver, marks_ver), not
+// at each frame. The indices are in app.sessions and the folders its strings: both good until sessions_ver moves.
+Home_Lists :: struct {
+	sessions_ver, marks_ver: u64,
+	made:    bool,
+	folders: [dynamic]string,   // the folders of the latest sessions, the latest first
+	running: [dynamic]int,      // the top sessions that run, at most HOME_RUNNING
+	running_count: int,         // all of them
+	recent:  [dynamic]int,      // the latest top sessions that neither run nor are archived, at most HOME_RECENT
 }
 
 @(private = "file")
+home_lists :: proc(app: ^App) -> ^Home_Lists {
+	h := &app.cx.home_lists
+	if h.made && h.sessions_ver == app.cx.sessions_ver && h.marks_ver == app.cx.marks_ver { return h }
+	h.made, h.sessions_ver, h.marks_ver = true, app.cx.sessions_ver, app.cx.marks_ver
+	clear(&h.folders); clear(&h.running); clear(&h.recent)
+	h.running_count = 0
+	seen := make(map[string]bool, allocator = context.temp_allocator)
+	for &s, i in app.sessions {
+		if s.directory != "" && s.directory not_in seen && len(h.folders) < HOME_FOLDERS {
+			seen[s.directory] = true
+			append(&h.folders, s.directory)
+		}
+		if s.parent != "" { continue }
+		if app.busy[s.id] or_else false {
+			h.running_count += 1
+			if len(h.running) < HOME_RUNNING { append(&h.running, i) }
+		} else if s.archived == 0 && len(h.recent) < HOME_RECENT {   // (archived: put away)
+			append(&h.recent, i)
+		}
+	}
+	return h
+}
+
+// The folders of the latest sessions, the latest first.
+home_folders :: proc(app: ^App) -> []string { return home_lists(app).folders[:] }
+
+@(private = "file")
 home_pick_folder :: proc(app: ^App) {
-	r := platform.pick_folder_dialog({owner = app.win, title = "Start a session in", remember_id = "new_session"})
-	defer platform.dialog_result_destroy(&r)
-	if r.status == .Chosen && len(r.paths) > 0 { app.chat.new_dir = strings.clone(r.paths[0], app.chat.alloc) }
+	ui.file_dialog(&app.state, .Folder, {owner = app.win, title = "Start a session in", remember_id = "new_session"}, proc(r: platform.Dialog_Result, user: rawptr) {
+		app := (^App)(user)
+		if r.status == .Chosen && len(r.paths) > 0 { app.chat.new_dir = strings.clone(r.paths[0], app.chat.alloc) }
+	}, app)
 }
 
 home :: proc(app: ^App, em: f32) {
@@ -92,44 +118,31 @@ home :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.45, em * 0.45}})
 	if ui.flow({em * 0.45, em * 0.45}, "###h_folders") {
 		for d, i in folders {
-			sig := bevel_button(fmt.tprintf("###hf%d", i), base_name(d), lucide.FOLDER, height = math.round(em * BUTTON_COMPACT_H_EM), face = d == app.chat.new_dir ? .Toggled : .Raised)
+			sig := ui.button_icon(fmt.tprintf("###hf%d", i), lucide.FOLDER, ui.text_shown(base_name(d)), height = math.round(em * BUTTON_COMPACT_H_EM), face = d == app.chat.new_dir ? .Toggled : .Raised)
 			if sig.clicked {
 				app.chat.new_dir = strings.clone(d, app.chat.alloc)
 				app.composer.focus_next = true
 			}
 			// (the button shows the folder's name alone: two folders of one name differ only by their paths)
-			if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(d) } }
+			if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(d) } }
 			if sig.right_clicked { ctx_open(app, .Folder, msg = d) }
 		}
-		if bevel_button("###hf_other", "Other folder…", lucide.PLUS, height = math.round(em * BUTTON_COMPACT_H_EM), face = .Ghost).clicked { home_pick_folder(app) }
+		if ui.button_icon("###hf_other", lucide.PLUS, "Other folder…", height = math.round(em * BUTTON_COMPACT_H_EM), face = .Ghost).clicked { home_pick_folder(app) }
 	}
 	ui.spacer(ui.px(em * 1.1))
 
 	// what runs now, whatever the session
-	running := 0
-	for &s in app.sessions { if s.parent == "" && (app.busy[s.id] or_else false) { running += 1 } }
-	if running > 0 {
-		section_label("h_run", fmt.tprintf("RUNNING NOW  %d", running), em)
-		shown := 0
-		for &s in app.sessions {
-			if s.parent != "" || !(app.busy[s.id] or_else false) { continue }
-			if shown == HOME_RUNNING { break }
-			home_session(app, &s, f64(em), now, true)
-			shown += 1
-		}
+	lists := home_lists(app)
+	if lists.running_count > 0 {
+		section_label("h_run", fmt.tprintf("RUNNING NOW  %d", lists.running_count), em)
+		for i in lists.running { home_session(app, &app.sessions[i], f64(em), now, true) }
 		ui.spacer(ui.px(em * 1))
 	}
 
 	if app.sessions_loaded {
 		section_label("h_rec", "RECENT", em)
-		shown := 0
-		for &s in app.sessions {
-			if s.parent != "" || s.archived > 0 || (app.busy[s.id] or_else false) { continue }   // (archived: put away)
-			if shown == HOME_RECENT { break }
-			home_session(app, &s, f64(em), now, false)
-			shown += 1
-		}
-		if shown == 0 {
+		for i in lists.recent { home_session(app, &app.sessions[i], f64(em), now, false) }
+		if len(lists.recent) == 0 {
 			ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###h_none") { text("n", "No session yet: ask anything below.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
 		}

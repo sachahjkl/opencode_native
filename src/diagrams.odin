@@ -72,7 +72,7 @@ mermaid_block :: proc(id, code: string, closed: bool, version: u64) {
 	if closed && !as_text { d = diagram_of(app, code, !app.cx.theme.light) }
 	ok := d != nil && d.why == ""
 	ui.next({width = ui.fill(), height = ui.children_sum()})
-	if well(id, radius = 6, base = HEX_CODE_WELL) {
+	if ui.well(id) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###hdr") {
 			ui.spacer(ui.px(em * 0.7))
@@ -87,19 +87,22 @@ mermaid_block :: proc(id, code: string, closed: bool, version: u64) {
 			}
 			if closed && (d == nil || d.why == "") {   // (what is no diagram shows its text already)
 				ui.a11y({role = .Button, name = as_text ? "Show the diagram" : "Show its text"})
-				sig := glyph_button("###as_text", as_text ? lucide.GIT_FORK : lucide.CODE, math.round(em * 1.6))
+				ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
+				sig := ui.icon_button("as_text", as_text ? lucide.GIT_FORK : lucide.CODE)
 				if sig.clicked { app.conversation.expanded[k] = !as_text }
-				if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text(as_text ? "Show the diagram" : "Show its text") } }
+				if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(as_text ? "Show the diagram" : "Show its text") } }
 			}
 			if ok {
 				ui.a11y({role = .Button, name = "Open in the viewer"})
-				sig := glyph_button("###open", lucide.ZOOM_IN, math.round(em * 1.6))
+				ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
+				sig := ui.icon_button("open", lucide.ZOOM_IN)
 				if sig.clicked { diagram_view_open(app, code) }
-				if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Open in the viewer") } }
+				if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text("Open in the viewer") } }
 			}
 			ui.a11y({role = .Button, name = "Copy"})
-			if glyph_button("###copy", lucide.COPY, math.round(em * 1.6)).clicked {
-				if ok { ctx_open(app, .Diagram, msg = code) } else { clip_set(code); ui.toast(.Good, "Copied") }
+			ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
+			if ui.icon_button("copy", lucide.COPY).clicked {
+				if ok { ctx_open(app, .Diagram, msg = code) } else { clip_set(code); ui.announce(&app.announcer, .Good, "Copied") }
 			}
 			ui.spacer(ui.px(em * 0.3))
 		}
@@ -172,7 +175,7 @@ diagram_copy_png :: proc(app: ^App, code: string) {
 	if !ok { ui.toast(.Bad, "The diagram could not be copied: it is not a diagram"); return }
 	defer paint.canvas_destroy(&c)
 	pixels := platform.Clipboard_Image{rgba = paint.to_rgba8(c, context.temp_allocator), size = {c.width, c.height}}
-	if platform.clipboard_set_image(app.win, pixels) { ui.toast(.Good, "Diagram copied as a picture") } else { ui.toast(.Bad, "The diagram could not be copied") }
+	if platform.clipboard_set_image(app.win, pixels) { ui.announce(&app.announcer, .Good, "Diagram copied as a picture") } else { ui.toast(.Bad, "The diagram could not be copied") }
 }
 
 // The pixels of the diagram of `code`, as diagram_copy_png copies them (the caller's: paint.canvas_destroy).

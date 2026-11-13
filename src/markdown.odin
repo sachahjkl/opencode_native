@@ -54,12 +54,13 @@ md_code :: proc(user: rawptr, id: string, c: markdown.Code) {
 md_table_copy :: proc(user: rawptr, t: ^markdown.Table, source: []string, size: f32) {
 	app := (^App)(user)
 	ui.a11y({role = .Button, name = "Copy the table"})
-	sig := glyph_button("###copy", lucide.COPY, size, face = .Raised)
+	ui.next({width = ui.px(size), height = ui.px(size)})
+	sig := ui.icon_button("copy", lucide.COPY, face = .Raised)
 	if sig.clicked {
 		_ = platform.clipboard_set(app.win, {text = strings.join(source, "\n", context.temp_allocator), html = markdown.table_html(t)})
-		ui.toast(.Good, "Table copied")
+		ui.announce(&app.announcer, .Good, "Table copied")
 	}
-	if ui.hovered_for(sig, TOOLTIP_DELAY_S) { if ui.tooltip() { ui.tooltip_text("Copy the table (pastes as a table)") } }
+	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text("Copy the table (pastes as a table)") } }
 }
 
 link_clicked :: proc(res: ui.Rich_Result) {
@@ -76,7 +77,7 @@ link_allowed :: proc(url: string) -> bool {
 link_open :: proc(url: string) {
 	if link_allowed(url) {
 		// (what an agent serves here is what the panel is for)
-		if strings.contains(url, "://localhost") || strings.contains(url, "://127.0.0.1") { preview_open(the_app, url) } else { platform.open_url(url) }
+		if strings.contains(url, "://localhost") || strings.contains(url, "://127.0.0.1") { preview_open(the_app, url) } else { ui.open(url, .Url) }
 	} else { ui.toast(.Warn, "Link not opened: %s", ellipsize(url, TOAST_TITLE_CHARS)) }
 }
 
@@ -85,7 +86,7 @@ link_open :: proc(url: string) {
 code_block :: proc(id: string, lang: string, code: string, mono: Face_Id, table := false, version: u64 = 0, runs: []ui.Rich_Run = nil) {
 	em := ui.font_size()
 	ui.next({width = ui.fill(), height = ui.children_sum()})
-	if well(id, radius = 6, base = HEX_CODE_WELL) {
+	if ui.well(id) {
 		if !table {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###hdr") {
@@ -94,9 +95,10 @@ code_block :: proc(id: string, lang: string, code: string, mono: Face_Id, table 
 				ui.spacer(ui.px(em * 0.3))
 				text("lang", lang != "" ? lang : "text", hex(HEX_FAINT), ui.Style_Mod{font = mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.fill())
-				if glyph_button("###copy", lucide.COPY, math.round(em * 1.6)).clicked {
+				ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
+				if ui.icon_button("copy", lucide.COPY).clicked {
 					platform.set_clipboard(the_app.win, code)
-					ui.toast(.Good, "Copied")
+					ui.announce(&the_app.announcer, .Good, "Copied")
 				}
 				ui.spacer(ui.px(em * 0.3))
 			}

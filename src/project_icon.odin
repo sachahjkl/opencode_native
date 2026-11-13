@@ -3,6 +3,8 @@
 // client shows the same (project.updated).
 package ocn
 
+import "base:runtime"
+
 import "core:encoding/base64"
 import "core:encoding/json"
 import "core:fmt"
@@ -26,21 +28,55 @@ project_icon_body :: proc(override: string) -> string {
 project_icon_pick :: proc(app: ^App, project: string) {
 	if project == "" { return }
 	filters := []platform.File_Filter{{name = "Images", patterns = {"*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp", "*.ico", "*.tif", "*.tiff"}}}
-	r := platform.open_file_dialog({owner = app.win, title = "The project's icon", filters = filters, remember_id = "project_icon"})
-	defer platform.dialog_result_destroy(&r)
-	if r.status == .Unsupported { ui.toast(.Bad, "This system has no file dialog"); return }
-	if r.status != .Chosen || len(r.paths) == 0 { return }
-	project_icon_set_file(app, project, r.paths[0])
+	ui.file_dialog(&app.state, .Open, {owner = app.win, title = "The project's icon", filters = filters, remember_id = "project_icon"}, proc(r: platform.Dialog_Result, user: rawptr) {
+		j := (^Icon_Job)(user)
+		if r.status == .Unsupported { ui.toast(.Bad, "This system has no file dialog") }
+		if r.status != .Chosen || len(r.paths) == 0 { icon_job_free(j); return }
+		project_icon_set_file(j.app, j.project, r.paths[0])
+		icon_job_free(j)
+	}, icon_job_new(app, project, ""))
 }
 
-// An image file on the project, made PROJECT_ICON_SIDE at most (refused, with a toast, when it is no image).
+// An image file read, made an icon and encoded by a task (heap; icon_job_free).
+@(private = "file")
+Icon_Job :: struct { app: ^App, project, path, url: string, unreadable: bool }
+
+@(private = "file")
+icon_job_new :: proc(app: ^App, project, path: string) -> ^Icon_Job {
+	a := runtime.heap_allocator()
+	j := new(Icon_Job, a)
+	j^ = {app = app, project = strings.clone(project, a), path = strings.clone(path, a)}
+	return j
+}
+
+@(private = "file")
+icon_job_free :: proc(data: rawptr) {
+	j := (^Icon_Job)(data)
+	a := runtime.heap_allocator()
+	delete(j.project, a); delete(j.path, a); delete(j.url, a)
+	free(j, a)
+}
+
+// An image file on the project, made PROJECT_ICON_SIDE at most (refused, with a toast, when it is no image). The file is
+// read and decoded by a task: a disk and an image's size take their time.
 project_icon_set_file :: proc(app: ^App, project, path: string) {
-	data, err := os.read_entire_file(path, context.temp_allocator)
-	if err != nil { ui.toast(.Bad, "%s cannot be read", base_name(path)); return }
-	png_data, ok := project_icon_png(data)
-	if !ok { ui.toast(.Warn, "%s is not an image this program reads (PNG, JPEG, GIF, WebP, BMP)", base_name(path)); return }
-	b64, _ := base64.encode(png_data, allocator = context.temp_allocator)
-	request(app, .Project_Icon, "PATCH", fmt.tprintf("/api/project/%s", project), project_icon_body(strings.concatenate({"data:image/png;base64,", b64}, context.temp_allocator)), project)
+	ui.task(&app.state, proc(data: rawptr) {
+		j := (^Icon_Job)(data)
+		bytes, err := os.read_entire_file(j.path, context.temp_allocator)
+		if err != nil { j.unreadable = true; return }
+		png_data, ok := project_icon_png(bytes)
+		if !ok { return }
+		b64, _ := base64.encode(png_data, allocator = context.temp_allocator)
+		j.url = strings.concatenate({"data:image/png;base64,", b64}, runtime.heap_allocator())
+	}, proc(data: rawptr, _: u64) {
+		j := (^Icon_Job)(data)
+		defer icon_job_free(j)
+		switch {
+		case j.unreadable: ui.toast(.Bad, "%s cannot be read", base_name(j.path))
+		case j.url == "":  ui.toast(.Warn, "%s is not an image this program reads (PNG, JPEG, GIF, WebP, BMP)", base_name(j.path))
+		case: request(j.app, .Project_Icon, "PATCH", fmt.tprintf("/api/project/%s", j.project), project_icon_body(j.url), j.project)
+		}
+	}, icon_job_new(app, project, path), icon_job_free)
 }
 
 // An image's bytes as the icon: decoded, made PROJECT_ICON_SIDE at most (its proportions kept), a PNG (temp allocator).

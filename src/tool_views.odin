@@ -81,7 +81,7 @@ diff_view :: proc(app: ^App, id: string, d: diff.Parsed, patch: string, em: f32,
 	lines := d.lines
 	if len(lines) == 0 { return }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well(id, radius = 6, base = HEX_CODE_WELL) {
+	if ui.well(id) {
 		ui.spacer(ui.px(em * 0.3))
 		o := diff_options(app, em, title)
 		o.max_bytes = TOOL_LINE_CHARS
@@ -145,7 +145,7 @@ numbered_line :: proc(l: string) -> (no: int, rest: string, ok: bool) {
 // once for this output: a build reads no further than what it shows.)
 read_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut: ^Text_Cut) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well(id, radius = 6, base = HEX_CODE_WELL) {
+	if ui.well(id) {
 		ui.spacer(ui.px(em * 0.4))
 		known := text_cut_known(cut, output, max_lines, .Read)
 		rest := output
@@ -182,7 +182,7 @@ read_lines_in :: proc(output: string) -> bool {
 // Matches under their file ("path:" then "  Line 12: text"), paths one a line.
 search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut: ^Text_Cut) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well(id, radius = 6, base = HEX_CODE_WELL) {
+	if ui.well(id) {
 		ui.spacer(ui.px(em * 0.4))
 		known := text_cut_known(cut, output, max_lines, .Search)
 		rest := output
@@ -249,7 +249,7 @@ value_text :: proc(v: json.Value) -> string {
 input_view :: proc(app: ^App, p: ^Part, em: f32) {
 	if !p.input_object { mono_well("###input", p.input, em, TOOL_INPUT_LINES_MAX); return }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well("###input", radius = 6, base = HEX_CODE_WELL) {
+	if ui.well("###input") {
 		ui.spacer(ui.px(em * 0.4))
 		for &f, i in p.fields {
 			k, s := f.key, f.value
@@ -307,7 +307,7 @@ tool_body :: proc(app: ^App, p: ^Part, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###cmd_more") {
 				ui.spacer(ui.fill())
-				if bevel_button("###inspect", "Inspect the output", lucide.SQUARE_TERMINAL, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { output_view_open_part(app, p) }
+				if ui.button_icon("###inspect", lucide.SQUARE_TERMINAL, "Inspect the output", height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { output_view_open_part(app, p) }
 			}
 		}
 		return

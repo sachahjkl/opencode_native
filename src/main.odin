@@ -5,11 +5,13 @@
 package ocn
 
 import "core:fmt"
+import tasks "gt:tasks"
 import "core:mem/virtual"
 import "core:math"
 import "core:os"
 import "core:strings"
 import "core:time"
+import prefs_page "gt:prefs_page"
 import "gt:config"
 import "gt:devtools"
 import "gt:draw"
@@ -90,6 +92,10 @@ App :: struct {
 	cli:              Cli_Options,    // the command line, read once at start (cli_options.odin)
 	cfg_prefs:        config.Prefs,   // the preferences (settings.odin)
 	prefs_file:       string,         // where they are saved ("": nowhere)
+	announcer:        ui.Announcer,     // says what an act did (Copied, Exported): the system's notifications or the window's toasts (general.messages)
+	licence:          Licence_View,     // the licence that supports the program (licence.odin)
+	standard:         prefs_page.Standard_Watch,   // applies the toolkit's settings as they change (settings.odin prefs_init)
+	prefs_writer:     config.User_Writer,   // writes them off the loop, once a round when they changed (main_after_frame)
 	prefs:            Prefs,          // their plain values
 	facts:            Server_Facts,   // what the server said for the settings pages
 	seek_subagent:    bool,   // --seek-subagent (tests): scroll to the first sub-agent card
@@ -133,11 +139,14 @@ Server_Known :: struct {
 
 // What the window keeps from one frame to the next that belongs to no panel: what is due, what is open, where things are.
 App_Context :: struct {
+	home_lists:     Home_Lists,        // what the home page lists of the sessions (home.odin)
+	catalog_version: u64,             // counts the changes of the agents and the models (the pickers keep their lists until it moves)
+	crash_report:   string,            // the last session's crash report (owned; "" none): its toast opens it
 	theme:               Theme_State,          // the themes, the one shown, its colours (theme.odin)
 	system_stripes:      font.Subpixel_Text,   // what the system does with text (text_mode_follow)
 	system_stripes_read: bool,
 	conns:          [dynamic]^Conn,    // every connection not freed yet: their threads stop at close (servers.odin threads_stop)
-	chores:         Work_Pool,         // what the interface must not wait for and keeps its order: the keyring, where the server runs (conn.odin)
+	chores:         tasks.Pool,         // what the interface must not wait for and keeps its order: the keyring, where the server runs (conn.odin)
 	outgoing:       [dynamic]^Outgoing,   // prompts between the composer and the server (outgoing.odin)
 	outgoing_last:  u64,               // ... the last one's id
 	waits_unread:   bool,              // the stream just came up: what sessions wait on, asked before it, is read from the next list
@@ -256,19 +265,14 @@ REFRESH_DEBOUNCE_MS  :: 1200
 FACTS_DEBOUNCE_MS    :: 700
 CHILDREN_DEBOUNCE_MS :: 800
 
-// Automatic: text is smoothed per colour stripe when the system smooths it that way, at any scale, as the system's own text is.
+// Text smoothed per colour stripe when the system smooths it that way, at any scale, as the system's own text is, while
+// appearance.text.subpixel is at its default: the user's own word on it is the toolkit's (standard_watch applies it).
 // (Smoothing along the rows alone, DirectWrite's Natural, is not an answer to anything here: without the smoothing across, these
 // faces, which have no hinting, come out hard and stepped.)
 text_mode_follow :: proc(app: ^App) {
-	stripes: font.Subpixel_Text
-	switch config.string_of(&app.cfg_prefs, "appearance.text_smoothing") {
-	case "rgb":  stripes = .Rgb
-	case "bgr":  stripes = .Bgr
-	case "grey": stripes = .Off
-	case:
-		if !app.cx.system_stripes_read { app.cx.system_stripes, app.cx.system_stripes_read = font.system_subpixel_text(), true }
-		stripes = app.cx.system_stripes
-	}
+	if !config.is_default(&app.cfg_prefs, config.ref_of(&app.cfg_prefs, "appearance.text.subpixel")) { return }
+	if !app.cx.system_stripes_read { app.cx.system_stripes, app.cx.system_stripes_read = font.system_subpixel_text(), true }
+	stripes := app.cx.system_stripes
 	if app.fonts.settings.subpixel_text == stripes { return }
 	settings := app.fonts.settings
 	settings.subpixel_text = stripes
@@ -279,7 +283,6 @@ text_mode_follow :: proc(app: ^App) {
 build_params :: proc(app: ^App, win: ^platform.Window, size: draw.Vec2, events: []platform.Event, dt: f32) -> ui.Build_Params {
 	return {
 		window_size = size, events = events, dt = dt, animations = animations_on(app),
-		smooth_scroll = app.prefs.smooth_scroll ? .On : .Off,
 		dpi_scale = app.scale > 0 ? app.scale : win.dpi_scale, window = win,
 		base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(30)}, font = app.font, font_size = app.prefs.font_size, text_pad = 6, cursor = .Arrow, radius = 6},
 		clipboard_set = clip_set,   // (no clipboard_get: a paste asks the window's clipboard and waits for nothing, ui.paste_request)
@@ -331,6 +334,7 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 		app.state.post_budget = again ? 0 : POSTS_PER_BUILD
 		ui.begin_build(&app.state, build_params(app, app.win, size, events, dt))
 		missed_sync(app)     // (after the events, before their effects: a notification finds its entry)
+		if !again { themes_poll(app) }   // (the user's themes.txt changed: shown at once)
 		effects_apply(app)   // (what the events begin_build ran asked for: shown in this very build)
 		app.conversation.scroll_box = nil   // (only now: the answers begin_build ran read the last build's, a page placed by chat_load above all)
 		build_ui(app)
@@ -399,6 +403,8 @@ main_after_frame :: proc(h: ^host.Host) {
 	app.chrome.work_ms += (work - app.chrome.work_ms) * FPS_SMOOTH
 	h.times = {}   // (a frame held draws nothing: it costs nothing either)
 	answers_spent_free(app)
+	config.user_writer_save(&app.prefs_writer, &app.cfg_prefs)
+	if config.user_writer_failed(&app.prefs_writer) { ui.toast(.Bad, "The preferences could not be saved") }
 	posts_moved(app, ui.post_stats(&app.state).run)
 	terminals_reap(app)
 	output_views_tick(app)
@@ -565,10 +571,10 @@ fonts_from_dir :: proc(app: ^App) {
 
 // The text faces from the preferences appearance.font and appearance.mono_font (at start, and when either changes).
 fonts_apply :: proc(app: ^App) {
-	want_ui := config.string_of(&app.cfg_prefs, "appearance.font")
-	want_mono := config.string_of(&app.cfg_prefs, "appearance.mono_font")
-	want_prose := config.string_of(&app.cfg_prefs, "appearance.prose_font")
-	want_term := config.string_of(&app.cfg_prefs, "appearance.terminal_font")
+	want_ui := config.string_of(&app.cfg_prefs, "appearance.text.ui_font")
+	want_mono := config.string_of(&app.cfg_prefs, "appearance.text.mono_font")
+	want_prose := config.string_of(&app.cfg_prefs, "appearance.text.prose_font")
+	want_term := config.string_of(&app.cfg_prefs, "appearance.text.terminal_font")
 	app.font, app.ui_face = face_resolve(app, want_ui, UI_FACES, app.own.ui[0])
 	mono_face: string
 	app.mono, mono_face = face_resolve(app, want_mono, MONO_FACES, app.own.mono[0])
@@ -635,11 +641,12 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	ui.set_toast_position(&app.state, .Top_Right)
 	ui.set_autoscroll_enabled(&app.state, true)   // a click of the wheel scrolls by the pointer, as in the browsers
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
+	licence_init(app)
 	palette_init(app)      // (from app.stores, read at the start: a test's are empty)
 	term_zooms_load(app)
 	zooms_load(&app.session_zooms, &app.stores.session_zooms, CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX)
 	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
-	pool_init(&app.cx.chores, CHORES_WORKERS)
+	tasks.start(&app.cx.chores, {threads = CHORES_WORKERS})
 }
 
 // The fonts, before the renderer: they load while the graphics device is made (render.preload_device).
@@ -658,6 +665,8 @@ main :: proc() {
 	started := time.tick_now()
 	// --install / --uninstall / --status: the desktop integration, without a window
 	if handled, code := desktop_cli(opts); handled { os.exit(code) }
+	logger, crashed := log_start()
+	context.logger = logger
 	// the graphics device on a thread of its own while the rest starts (the driver's load is the longest step: 160 ms here)
 	render.preload_device()
 	set_app_id()           // (before the first window: the taskbar groups it under the shortcuts)
@@ -695,6 +704,10 @@ main :: proc() {
 	platform.set_dark_title(app.win, !app.cx.theme.light)
 	app.devtools = devtools.start_from_env(app.win, "opencode")
 	main_window_adopt(app)
+	app.announcer = {mode = prefs_page.messages_mode(&app.cfg_prefs), window = app.win, state = &app.state}
+	// (the host was made after the preferences: the user's rendering.partial_redraw, if any, over its own default)
+	prefs_page.standard_apply(&app.cfg_prefs, &app.state, {partial_redraw = &app.window.partial_redraw})
+	crash_say(app, crashed)
 	app.last_tick = time.tick_now()
 	app.settle = FRAMES_AFTER_INPUT
 
@@ -710,6 +723,7 @@ main :: proc() {
 		}
 		fmt.printfln("opencode-native: %d frames, %d boxes, online=%v, %d sessions, %d messages, first frame %.1f ms", frames, app.state.boxes_built, online(app), len(app.sessions), len(app.chat.messages), time.duration_milliseconds(first))
 		stores_close(app)
+		log_stop(logger)
 		os.exit(0)
 	}
 
@@ -740,9 +754,11 @@ main :: proc() {
 	}
 	threads_stop(app)
 	if app.cx.due[.Drafts].due_ms != 0 { drafts_save(app) }   // (what was typed in the last second)
+	config.user_writer_stop(&app.prefs_writer, &app.cfg_prefs)
 	stores_close(app)   // (waits for the disk: the window is gone, nothing waits on a frame)
 	ui.post_close(&app.state)
 	setup_finish(app)
+	log_stop(logger)
 	os.exit(0)
 }
 

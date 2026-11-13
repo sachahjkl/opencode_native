@@ -58,7 +58,6 @@ build_ui :: proc(app: ^App) {
 	when ODIN_DEBUG { assert(len(app.state.modals_built) == 0 || overlay_open(app), "a dialog built that is not in App_Context.open: the program's keys would act behind it") }
 	// (over the top of the conversation, under its header: at the bottom they hid the send button, when one wants to try again)
 	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.state.window_size})
-	ui.toasts_build()
 	// (last: what is open and a field that has it took Escape before it gets here)
 	if app.chat.busy && !overlay_open(app) && !mention_takes_escape(app) && ui.key_press(.Escape) { interrupt_session(app, app.chat.id) }
 }

@@ -1135,12 +1135,12 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 		text("w", words, hex(t.link == .Closed ? HEX_WEAK : HEX_YELLOW), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		h := math.round(em * BUTTON_COMPACT_H_EM)
 		if t.link == .Closed {
-			if bevel_button("###term_restart", "Restart", lucide.REFRESH_CW, height = h, disabled = s.made.state == .Loading).clicked { term_restart(app, t) }
+			if ui.button_icon("###term_restart", lucide.REFRESH_CW, "Restart", height = h, disabled = s.made.state == .Loading).clicked { term_restart(app, t) }
 		} else if t.given_up {
-			if bevel_button("###term_again", "Reconnect", lucide.REFRESH_CW, height = h).clicked { term_reconnect(app, t) }
+			if ui.button_icon("###term_again", lucide.REFRESH_CW, "Reconnect", height = h).clicked { term_reconnect(app, t) }
 		}
 		ui.spacer(ui.px(em * 0.3))
-		if bevel_button("###term_close", "Close", lucide.X, height = h, face = .Ghost).clicked { s.close_due = t.panel }
+		if ui.button_icon("###term_close", lucide.X, "Close", height = h, face = .Ghost).clicked { s.close_due = t.panel }
 		ui.spacer(ui.px(em * 0.6))
 	}
 }
@@ -1214,7 +1214,8 @@ terminal_strip_end :: proc(app: ^App, d: ^ui.Dock, leaf: i32, em: f32) {
 	}
 	if any == nil && !stand_in { return }
 	ui.a11y({role = .Button, name = "New terminal"})
-	if glyph_button("###term_new", lucide.PLUS, math.round(em * TERM_NEW_EM)).clicked {
+	ui.next({width = ui.px(math.round(em * TERM_NEW_EM)), height = ui.px(math.round(em * TERM_NEW_EM))})
+	if ui.icon_button("term_new", lucide.PLUS).clicked {
 		if any != nil { s.last_panel = any.panel }   // (in this stack, whichever had the keyboard)
 		term_create(app)
 	}

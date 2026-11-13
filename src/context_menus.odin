@@ -7,6 +7,7 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:math"
 import "core:strings"
+import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
 
@@ -104,7 +105,7 @@ fork_item :: proc(app: ^App, m: ^Message) {
 @(private = "file")
 copied :: proc(s: string, what: string) {
 	clip_set(s)
-	ui.toast(.Good, "%s copied", what)
+	ui.announce(&the_app.announcer, .Good, fmt.tprintf("%s copied", what))
 }
 
 // The first address a text holds, http or https.
@@ -115,29 +116,6 @@ first_url :: proc(s: string) -> string {
 	end := i
 	for end < len(s) && !strings.contains_rune(" \t\r\n\"'<>)]}`", rune(s[end])) { end += 1 }
 	return s[i:end]
-}
-
-@(private = "file")
-composer_menu :: proc(app: ^App) {
-	a := &app.composer.area
-	lo, hi := min(a.cursor, a.mark), max(a.cursor, a.mark)
-	if ui.menu_item("Undo", "Ctrl+Z", icon = lucide.UNDO_2, enabled = len(a.undo) > 0).clicked { ui.area_undo(a) }
-	if ui.menu_item("Redo", "Ctrl+Y", icon = lucide.REDO_2, enabled = len(a.redo) > 0).clicked { ui.area_redo(a) }
-	ui.menu_separator()
-	if ui.menu_item("Cut", "Ctrl+X", icon = lucide.SCISSORS, enabled = hi > lo).clicked {
-		clip_set(string(a.buf[lo:hi]))
-		area_insert(a, "")
-	}
-	if ui.menu_item("Copy", "Ctrl+C", icon = lucide.COPY, enabled = hi > lo).clicked { clip_set(string(a.buf[lo:hi])) }
-	if ui.menu_item("Paste", "Ctrl+V", icon = lucide.CLIPBOARD_PASTE).clicked {
-		composer_paste(app)
-		app.composer.focus_next = true
-	}
-	ui.menu_separator()
-	if ui.menu_item("Select all", "Ctrl+A", icon = lucide.TEXT_CURSOR_INPUT, enabled = len(a.buf) > 0).clicked {
-		a.mark, a.cursor = 0, len(a.buf)
-		app.composer.focus_next = true
-	}
 }
 
 @(private = "file")
@@ -206,10 +184,15 @@ tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
 context_menu :: proc(app: ^App, em: f32) {
 	app.ctx_menu.taken = false
 	quote_chip(app, em)
-	if ui.ctx_menu(ui.key_from_string(0, CTX_MENU_KEY)) {
+	key := ui.key_from_string(0, CTX_MENU_KEY)
+	// (the composer's is a text field's: the toolkit's, on its area)
+	if app.ctx_menu.target.kind == .Composer {
+		ui.field_menu(key, &app.composer.area, app.composer.edit_key)
+		return
+	}
+	if ui.ctx_menu(key) {
 		switch app.ctx_menu.target.kind {
-		case .None:
-		case .Composer: composer_menu(app)
+		case .None, .Composer:
 		case .Message:
 			if m := find_msg(app, app.ctx_menu.target.msg); m != nil { message_menu(app, m) }
 		case .Tool:
@@ -221,11 +204,11 @@ context_menu :: proc(app: ^App, em: f32) {
 				if ui.menu_item("Open in the viewer", icon = lucide.ZOOM_IN).clicked { image_view_open(app, image) }
 			}
 		case .Folder:
-			if ui.menu_item("Copy the path", icon = lucide.COPY).clicked { clip_set(app.ctx_menu.target.msg); ui.toast(.Good, "Copied") }
+			if ui.menu_item("Copy the path", icon = lucide.COPY).clicked { clip_set(app.ctx_menu.target.msg); ui.announce(&app.announcer, .Good, "Copied") }
 		case .Diagram:
 			code := app.ctx_menu.target.msg
 			if ui.menu_item("Copy as PNG", app.cx.open[.Viewer] ? "Ctrl+C" : "", icon = lucide.IMAGE).clicked { diagram_copy_png(app, code) }
-			if ui.menu_item("Copy the text", icon = lucide.COPY).clicked { clip_set(code); ui.toast(.Good, "Copied") }
+			if ui.menu_item("Copy the text", icon = lucide.COPY).clicked { clip_set(code); ui.announce(&app.announcer, .Good, "Copied") }
 			if !app.cx.open[.Viewer] {
 				if ui.menu_item("Open in the viewer", icon = lucide.ZOOM_IN).clicked { diagram_view_open(app, code) }
 			}
@@ -248,7 +231,7 @@ quote_text :: proc(app: ^App, text: string, comment: bool) {
 	for line in strings.split_lines_iterator(&rest) { fmt.sbprintf(&b, "> %s\n", strings.trim_right_space(line)) }
 	strings.write_byte(&b, '\n')
 	ui.area_set(&app.composer.area, strings.to_string(b))
-	if comment { app.composer.focus_next = true } else { ui.toast(.Good, "Quoted in the composer") }
+	if comment { app.composer.focus_next = true } else { ui.announce(&app.announcer, .Good, "Quoted in the composer") }
 }
 
 quote_selection :: proc(app: ^App) {
@@ -271,7 +254,7 @@ quote_chip :: proc(app: ^App, em: f32) {
 	q := &app.quote
 	id := "###quote_chip"
 	on_chip := false
-	if r, ok := ui.popover_rect(id); ok && q.open { on_chip = rect_contains(r, ui.mouse_pos()) }
+	if r, ok := ui.popover_rect(id); ok && q.open { on_chip = draw.rect_contains(r, ui.mouse_pos()) }
 	if !on_chip {
 		if !ui.has_selection(s) || overlay_open(app) || ui.active_key() != 0 { q.open = false; return }
 		serial := ui.selection_serial(s)
@@ -286,8 +269,8 @@ quote_chip :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.3)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###qr") {
 			ui.spacer(ui.px(em * 0.35))
-			quoted := bevel_button("###q1", "Quote", "", width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM), face = .Ghost).clicked
-			commented := bevel_button("###q2", "Comment", "", width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM), face = .Ghost).clicked
+			quoted := ui.button_icon("###q1", "", "Quote", width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM), face = .Ghost).clicked
+			commented := ui.button_icon("###q2", "", "Comment", width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM), face = .Ghost).clicked
 			ui.spacer(ui.px(em * 0.35))
 			if quoted || commented {
 				quote_text(app, q.kept, commented)
@@ -343,7 +326,7 @@ rename_in_place :: proc(app: ^App, em, font_size, height: f32, fit := false) {
 	w := ui.fill()
 	if fit { w = ui.px(math.round(ui.text_width(app.font, font_size, ui.field_string(&r.field)) + 2 * pad + em * RENAME_ROOM_EM), 0) }
 	ui.next({width = w, height = ui.px(height), axis = .X, cross = .Center})
-	if well("###ren_in", .X, radius = 5, focus = 1) {
+	if focus_well("###ren_in", .X, radius = 5, focus = 1) {
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), font_size = font_size, text_pad = pad})
 			res := ui.line_edit("###ren_f", &r.field, "Title")
@@ -363,39 +346,9 @@ rename_dialog :: proc(app: ^App, em: f32) {
 	// scrolled away - is left as it was)
 	if r.at != .None && !r.shown { r.at = .None }
 	r.shown = false
-	if ui.modal("rename", em * 28, &app.cx.open[.Rename]) {
-		dialog_backdrop()
-		ui.spacer(ui.px(em))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row(id = "###ren") {
-			ui.spacer(ui.px(em * 1.2))
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-			if ui.column() {
-				text("t", "Rename the session", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
-				ui.spacer(ui.px(em * 0.4))
-				ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
-				if well("###ren_w", .X, radius = 7, focus = 1) {
-					if ui.tags("bare") {
-						ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.5})
-						res := ui.line_edit("###ren_f", &r.field, "Title")
-						if r.fresh { ui.set_focus(res.box.key); r.fresh = false }
-						if res.committed { rename_commit(app) }
-						if res.cancelled { app.cx.open[.Rename] = false }
-					}
-				}
-				ui.spacer(ui.px(em * 0.9))
-				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-				if ui.row(.Center, id = "###ren_b") {
-					ui.spacer(ui.fill())
-					if bevel_button("###ren_cancel", "Cancel", "", .Cancel).clicked { app.cx.open[.Rename] = false }
-					ui.spacer(ui.px(em * 0.5))
-					if bevel_button("###ren_ok", "Rename", lucide.CHECK, .Success).clicked { rename_commit(app) }
-				}
-				ui.spacer(ui.px(em))
-			}
-			ui.spacer(ui.px(em * 1.2))
-		}
-	}
+	if !app.cx.open[.Rename] { return }
+	r.fresh = false   // (the prompt's field has the keyboard as it opens)
+	if ui.prompt("rename", &app.cx.open[.Rename], &r.field, {title = "Rename the session", placeholder = "Title", act = "Rename", width_em = 28}) == .Confirmed { rename_commit(app) }
 }
 
 @(private = "file")
@@ -421,5 +374,5 @@ forked_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 		prompt_restore(app, app.composer.fork_prompt)
 		if app.composer.fork_prompt != "" { app.composer.focus_next = true }
 	}
-	ui.toast(.Good, "Forked")
+	ui.announce(&app.announcer, .Good, "Forked")
 }

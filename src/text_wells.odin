@@ -106,7 +106,7 @@ Well_Kept :: struct {
 mono_well :: proc(id: string, s: string, em: f32, max_lines: int, color := Color{}, kept: ^Well_Kept = nil, kept_in := mem.Allocator{}) {
 	body, extra := mono_cut_kept(kept != nil ? &kept.cut : nil, s, max_lines)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if well(id, radius = 6, base = HEX_CODE_WELL) {
+	if ui.well(id) {
 		ui.spacer(ui.px(em * 0.5))
 		mono_text(body, extra, em, 0.75, color, kept = kept != nil ? &kept.runs : nil, kept_in = kept_in)
 		ui.spacer(ui.px(em * 0.5))

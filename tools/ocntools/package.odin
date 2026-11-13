@@ -113,7 +113,8 @@ run_package :: proc(args: []string) -> int {
 		version = args[0]
 	} else {
 		found: bool
-		version, found = app_version(read_text(SETUP_FILE))
+		version = toolbox.project_version(OCN_PROJECT)
+		found = version != ""
 		if !found { fmt.eprintfln("package: no version in %s", SETUP_FILE); return 1 }
 	}
 	done := package_windows(version) when ODIN_OS == .Windows else package_linux(version)

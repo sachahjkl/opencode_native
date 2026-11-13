@@ -110,8 +110,12 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 - **Statistics of a session** (its token count in the header, Ctrl+I): tokens in, out, reasoning, cache reads and
   writes, cost, cache hits, the context the last step filled against the model's window, time and pace, tool calls by
   tool (failures counted), models, its sub-agents, and the whole project's totals from the server.
-- **Settings** (Ctrl+,): the theme (27 of them, most dark and light, as the system or always one; themes of your own in `themes.txt`) and the style (machined, edged or flat), the system's title bar or the program's, the fonts of the interface, the answers and code (built in, the system's, or any installed one, in a searched picker), text size, zoom, density, rounding, animations, smooth scrolling, scroll bars that hide, glow; how the conversation shows;
-  the send key; sub-agents in the sidebar; notifications when a session finishes or asks. And what the server lets one see
+- **Settings** (Ctrl+,): the common settings of the toolkit's programs, searched, with an Advanced part, export and import:
+  the theme (27 of them, most dark and light, as the system or always one; themes of your own in `themes.txt`) and the
+  finish, the system's title bar or the program's, the fonts of the interface, the answers, code and the shells (built in,
+  the system's, or any installed one, in a searched picker), text rendering, size, zoom, density, rounding, animations,
+  scrolling, keys and delays, where messages go; how the conversation shows; the send key; sub-agents in the sidebar;
+  notifications when a session finishes or asks; the licence that supports the program. And what the server lets one see
   or change: its shell, its MCP servers (connect, disconnect), the usage limits and budgets of an OpenCode workspace, the
   saved permissions (revoke), providers, models, agents, skills, commands, the configuration files.
 - **Desktop integration** without administrator rights: Setup installs the running copy for the user, and opens by itself to offer an upgrade when a newer copy starts over an older install. On Windows: a

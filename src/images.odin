@@ -14,8 +14,8 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:sync"
-import "core:thread"
 import "gt:config"
+import tasks "gt:tasks"
 import "gt:draw"
 import "gt:platform"
 import "gt:render"
@@ -143,13 +143,14 @@ images_pump :: proc(app: ^App) {
 			continue
 		}
 		app.cx.image_decoding += 1
-		thread.create_and_start_with_poly_data(job, image_decode_run, self_cleanup = true)
+		tasks.add(ui.chores(), image_decode_run, job)
 	}
 }
 
-// On a thread of its own: the decode, its answer posted to the interface's thread.
+// On a thread of the chores: the decode, its answer posted to the interface's thread.
 @(private = "file")
-image_decode_run :: proc(job: ^Decode_Job) {
+image_decode_run :: proc(data: rawptr) {
+	job := (^Decode_Job)(data)
 	r := ocn_image_decode(raw_data(job.data), len(job.data), i32(job.encoding), job.max_dim, &job.w, &job.h, &job.out)
 	job.ok = r == 0
 	if !ui.post(&job.app.state, image_decoded, job) { ocn_buf_free(job.out); delete(job.data); free(job) }
@@ -162,7 +163,7 @@ image_copy :: proc(app: ^App, ref: Image_Ref) {
 	job := new(Decode_Job)
 	job^ = {app = app, data = strings.clone(ref.data), encoding = ref.encoding, max_dim = 0, copy = true}
 	sync.atomic_add(&app.pending, 1)
-	thread.create_and_start_with_poly_data(job, image_decode_run, self_cleanup = true)
+	tasks.add(ui.chores(), image_decode_run, job)
 }
 
 // On the interface's thread: the pixels become a texture, or go to the clipboard.
@@ -177,7 +178,7 @@ image_decoded :: proc(data: rawptr, word: u64) {
 		switch {
 		case !job.ok || job.w == 0 || job.h == 0: ui.toast(.Bad, "The image could not be copied: it is unreadable")
 		case !platform.clipboard_set_image(app.win, pixels): ui.toast(.Bad, "The image could not be copied")
-		case: ui.toast(.Good, "Image copied")
+		case: ui.announce(&app.announcer, .Good, "Image copied")
 		}
 		return
 	}
@@ -564,13 +565,13 @@ image_viewer :: proc(app: ^App, em: f32) {
 				text("d", dims, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.8))
 				bh := math.round(em * BUTTON_SMALL_H_EM)
-				if bevel_button("###zoom_out", "−", "", height = bh).clicked { view_zoom_to(app, app.viewer.zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
+				if ui.button_icon("###zoom_out", "", "−", height = bh).clicked { view_zoom_to(app, app.viewer.zoom / VIEW_ZOOM_STEP, max_zoom, {}) }
 				ui.spacer(ui.px(em * 0.3))
-				if bevel_button("###zoom_in", "+", "", height = bh).clicked { view_zoom_to(app, app.viewer.zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
+				if ui.button_icon("###zoom_in", "", "+", height = bh).clicked { view_zoom_to(app, app.viewer.zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
 				ui.spacer(ui.px(em * 0.3))
-				if bevel_button("###zoom_fit", "Fit", "", height = bh).clicked { app.viewer.zoom, app.viewer.pan = 1, {} }
+				if ui.button_icon("###zoom_fit", "", "Fit", height = bh).clicked { app.viewer.zoom, app.viewer.pan = 1, {} }
 				ui.spacer(ui.px(em * 0.8))
-				if bevel_button("###close", "Close", lucide.X, height = bh).clicked { app.cx.open[.Viewer] = false }
+				if ui.button_icon("###close", lucide.X, "Close", height = bh).clicked { app.cx.open[.Viewer] = false }
 				ui.spacer(ui.px(em))
 			}
 		}

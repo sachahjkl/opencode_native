@@ -9,6 +9,7 @@ import "core:math"
 import "core:mem"
 import "core:mem/virtual"
 import "core:strings"
+import "gt:draw"
 import "gt:config"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -332,7 +333,7 @@ sidebar_hold_end :: proc(app: ^App) {
 // What the pointer asks of the list, from the box that scrolls it.
 sidebar_hold_wanted :: proc(app: ^App, list: ^ui.Box) -> bool {
 	since := ui.now_ms() - app.cx.pointer_ms
-	if !rect_contains(list.rect, ui.mouse_pos()) || since >= SIDEBAR_HOLD_MS { return false }
+	if !draw.rect_contains(list.rect, ui.mouse_pos()) || since >= SIDEBAR_HOLD_MS { return false }
 	// (at rest nothing draws: this is what ends the hold if the pointer stays where it is)
 	app.cx.due[.Side_Wake] = {}
 	ui.deferred_ask(&app.cx.due[.Side_Wake], SIDEBAR_HOLD_MS - since + 1)
