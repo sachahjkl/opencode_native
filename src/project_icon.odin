@@ -14,6 +14,7 @@ import "gt:platform"
 import "gt:png"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 // The icon's side, at most (pixels): what is sent is the image made this small, as a PNG, whatever its size was (it is
 // kept in the project and read with the projects by every client). Sharp at twice the sidebar's size, at 200 %.
@@ -27,10 +28,10 @@ project_icon_body :: proc(override: string) -> string {
 // The system's dialog, then the image on the project.
 project_icon_pick :: proc(app: ^App, project: string) {
 	if project == "" { return }
-	filters := []platform.File_Filter{{name = "Images", patterns = {"*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp", "*.ico", "*.tif", "*.tiff"}}}
-	ui.file_dialog(&app.state, .Open, {owner = app.win, title = "The project's icon", filters = filters, remember_id = "project_icon"}, proc(r: platform.Dialog_Result, user: rawptr) {
+	filters := []platform.File_Filter{{name = i18n.tr("Images"), patterns = {"*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp", "*.ico", "*.tif", "*.tiff"}}}
+	ui.file_dialog(&app.state, .Open, {owner = app.win, title = i18n.tr("The project's icon"), filters = filters, remember_id = "project_icon"}, proc(r: platform.Dialog_Result, user: rawptr) {
 		j := (^Icon_Job)(user)
-		if r.status == .Unsupported { ui.toast(.Bad, "This system has no file dialog") }
+		if r.status == .Unsupported { ui.toast(.Bad, i18n.tr("This system has no file dialog")) }
 		if r.status != .Chosen || len(r.paths) == 0 { icon_job_free(j); return }
 		project_icon_set_file(j.app, j.project, r.paths[0])
 		icon_job_free(j)
@@ -72,8 +73,8 @@ project_icon_set_file :: proc(app: ^App, project, path: string) {
 		j := (^Icon_Job)(data)
 		defer icon_job_free(j)
 		switch {
-		case j.unreadable: ui.toast(.Bad, "%s cannot be read", base_name(j.path))
-		case j.url == "":  ui.toast(.Warn, "%s is not an image this program reads (PNG, JPEG, GIF, WebP, BMP)", base_name(j.path))
+		case j.unreadable: ui.toast(.Bad, i18n.tr("%s cannot be read"), base_name(j.path))
+		case j.url == "":  ui.toast(.Warn, i18n.tr("%s is not an image this program reads (PNG, JPEG, GIF, WebP, BMP)"), base_name(j.path))
 		case: request(j.app, .Project_Icon, "PATCH", fmt.tprintf("/api/project/%s", j.project), project_icon_body(j.url), j.project)
 		}
 	}, icon_job_new(app, project, path), icon_job_free)
@@ -107,8 +108,8 @@ project_icon_overridden :: proc(app: ^App, project: string) -> bool {
 // A menu's items for a project's icon.
 project_icon_items :: proc(app: ^App, project: string) {
 	if project == "" { return }
-	if ui.menu_item("Set the project's icon…", icon = lucide.IMAGE).clicked { project_icon_pick(app, project) }
+	if ui.menu_item(i18n.tr("Set the project's icon…"), icon = lucide.IMAGE).clicked { project_icon_pick(app, project) }
 	if project_icon_overridden(app, project) {
-		if ui.menu_item("Remove the project's icon", icon = lucide.TRASH_2).clicked { project_icon_remove(app, project) }
+		if ui.menu_item(i18n.tr("Remove the project's icon"), icon = lucide.TRASH_2).clicked { project_icon_remove(app, project) }
 	}
 }

@@ -1,0 +1,2621 @@
+# The French texts of opencode native: tools/ocntools `i18n fr` writes the entries from the code, a person their French.
+language fr
+
+en running
+fr en cours
+
+en killed
+fr tué
+
+en timeout
+fr délai dépassé
+
+en exited
+fr terminé
+
+en in the conversation
+fr dans la conversation
+
+en in background · %s
+fr en arrière-plan · %s
+
+en exit %d
+fr code de sortie %d
+
+en Activity
+fr Activité
+
+en %d agent
+en+ %d agents
+fr %d agent
+fr+ %d agents
+
+en %d command
+en+ %d commands
+fr %d commande
+fr+ %d commandes
+
+en push to background
+fr passer en arrière-plan
+
+en Esc  close
+fr Échap  fermer
+
+en ↓  details
+fr ↓  détails
+
+en Background
+fr Arrière-plan
+
+en Stop
+fr Arrêter
+
+en Open
+fr Ouvrir
+
+en Inspect
+fr Examiner
+
+en Copy
+fr Copier
+
+en Output copied
+fr Sortie copiée
+
+en TODO
+fr À FAIRE
+
+en All
+fr Tout
+
+en Active %d
+fr Actives %d
+
+en Done %d
+fr Faites %d
+
+en Which todos show
+fr Tâches affichées
+
+en Nothing left to do.
+fr Plus rien à faire.
+
+en Nothing done yet.
+fr Rien de fait pour l'instant.
+
+en ACTIVITY
+fr ACTIVITÉ
+
+en %d running
+fr %d en cours
+
+en ↑↓ move   Enter open   Del stop   
+fr ↑↓ déplacer   Entrée ouvrir   Suppr arrêter   
+
+en Esc close
+fr Échap fermer
+
+en Nothing runs in the background of this session.
+fr Rien ne tourne en arrière-plan dans cette session.
+
+en As configured
+fr Selon la configuration
+
+en Allow edits
+fr Autoriser les modifications
+
+en Allow everything
+fr Tout autoriser
+
+en Ask for everything
+fr Tout demander
+
+en Custom rules
+fr Règles personnalisées
+
+en the server's rules decide
+fr les règles du serveur décident
+
+en file edits go without asking
+fr les modifications de fichiers passent sans demande
+
+en nothing is asked; a policy's deny stays
+fr rien n'est demandé ; un refus imposé par une stratégie reste
+
+en every action waits for you
+fr chaque action attend votre accord
+
+en rules set elsewhere
+fr règles définies ailleurs
+
+en edits
+fr modifs
+
+en all
+fr tout
+
+en ask
+fr demander
+
+en custom
+fr perso
+
+en Approvals: %s
+fr Autorisations : %s
+
+en Approvals: %s (%s)
+fr Autorisations : %s (%s)
+
+en Approvals in this session
+fr Autorisations de cette session
+
+en %s is too large to attach
+fr %s est trop gros pour être joint
+
+en %s is not an image, a PDF or text: its path goes in the prompt
+fr %s n'est ni une image, ni un PDF, ni du texte : son chemin va dans l'invite
+
+en The image could not be read
+fr Impossible de lire l'image
+
+en Attach files
+fr Joindre des fichiers
+
+en This system has no file dialog
+fr Ce système n'a pas de boîte de dialogue de fichiers
+
+en Back  (Alt+Left)
+fr Précédent  (Alt+Gauche)
+
+en Forward  (Alt+Right)
+fr Suivant  (Alt+Droite)
+
+en Home
+fr Accueil
+
+en Home  (Ctrl+H)
+fr Accueil  (Ctrl+H)
+
+en parent session
+fr session parente
+
+en   ›  sub-agent
+fr   ›  sous-agent
+
+en New session
+fr Nouvelle session
+
+en Untitled
+fr Sans titre
+
+en default folder
+fr dossier par défaut
+
+en %s in · %s out
+fr %s en entrée · %s en sortie
+
+en connecting
+fr connexion
+
+en connected
+fr connecté
+
+en reconnecting
+fr reconnexion
+
+en auth refused
+fr authentification refusée
+
+en %d request
+en+ %d requests
+fr %d requête
+fr+ %d requêtes
+
+en %d sessions
+en+ %d sessions
+fr %d session
+fr+ %d sessions
+
+en %3.0f fps  %.1f ms
+fr %3.0f i/s  %.1f ms
+
+en %d unreadable
+en+ %d unreadable
+fr %d illisible
+fr+ %d illisibles
+
+en Command palette
+fr Palette de commandes
+
+en General
+fr Général
+
+en Keyboard shortcuts
+fr Raccourcis clavier
+
+en Settings
+fr Réglages
+
+en Refresh
+fr Actualiser
+
+en Add a server…
+fr Ajouter un serveur…
+
+en Pair a device…
+fr Associer un appareil…
+
+en Setup and about
+fr Installation et à propos
+
+en Check for updates
+fr Rechercher des mises à jour
+
+en Install the update
+fr Installer la mise à jour
+
+en Restart to update
+fr Redémarrer pour mettre à jour
+
+en Restart opencode native
+fr Redémarrer opencode native
+
+en Quit
+fr Quitter
+
+en Go to
+fr Aller à
+
+en Back
+fr Précédent
+
+en Forward
+fr Suivant
+
+en Focus the composer
+fr Aller à la zone de saisie
+
+en Session
+fr Session
+
+en Push the running command to the background
+fr Passer la commande en cours en arrière-plan
+
+en Stop the run
+fr Arrêter l'exécution
+
+en What runs in the background
+fr Ce qui tourne en arrière-plan
+
+en Quote what is selected
+fr Citer la sélection
+
+en Find in the conversation
+fr Chercher dans la conversation
+
+en Show or hide the Statistics panel
+fr Afficher ou masquer le panneau Statistiques
+
+en Rename the session…
+fr Renommer la session…
+
+en Fork the session
+fr Bifurquer la session
+
+en Compact the conversation
+fr Compacter la conversation
+
+en Send running tools to the background
+fr Passer les outils en cours en arrière-plan
+
+en Connect an account
+fr Connecter un compte
+
+en Terminal
+fr Terminal
+
+en View
+fr Affichage
+
+en New terminal
+fr Nouveau terminal
+
+en Schedules of this session
+fr Planifications de cette session
+
+en Artifacts of this folder
+fr Artefacts de ce dossier
+
+en Browse the files
+fr Parcourir les fichiers
+
+en What this session changed
+fr Ce que cette session a modifié
+
+en Archive the session, or bring it back
+fr Archiver la session, ou la ramener
+
+en Open a terminal in the session's folder
+fr Ouvrir un terminal dans le dossier de la session
+
+en Move the session to a folder
+fr Déplacer la session vers un dossier
+
+en Export the session
+fr Exporter la session
+
+en Export the session without its text
+fr Exporter la session sans son texte
+
+en Import a session
+fr Importer une session
+
+en Copy the session ID
+fr Copier l'identifiant de la session
+
+en Open this panel in a window
+fr Ouvrir ce panneau dans une fenêtre
+
+en Show or hide the Preview panel
+fr Afficher ou masquer le panneau Aperçu
+
+en New browser tab
+fr Nouvel onglet de navigateur
+
+en Close browser tab
+fr Fermer l'onglet de navigateur
+
+en Show or hide the sidebar
+fr Afficher ou masquer la barre latérale
+
+en What you missed
+fr Ce que vous avez manqué
+
+en Next missed
+fr Manqué suivant
+
+en Switch the sidebar's mode (inbox, projects)
+fr Changer le mode de la barre latérale (réception, projets)
+
+en Zoom in the conversation
+fr Agrandir la conversation
+
+en Zoom out the conversation
+fr Réduire la conversation
+
+en Reset the conversation's zoom
+fr Rétablir le zoom de la conversation
+
+en Zoom in the interface
+fr Agrandir l'interface
+
+en Zoom out the interface
+fr Réduire l'interface
+
+en Reset the interface's zoom
+fr Rétablir le zoom de l'interface
+
+en Composer
+fr Zone de saisie
+
+en Up / Down
+fr Haut / Bas
+
+en Go through what you sent in this session
+fr Parcourir ce que vous avez envoyé dans cette session
+
+en Down
+fr Bas
+
+en On the last line: what runs in the background
+fr Sur la dernière ligne : ce qui tourne en arrière-plan
+
+en Paste text, an image or files
+fr Coller du texte, une image ou des fichiers
+
+en Middle click
+fr Clic du milieu
+
+en Scroll by the pointer
+fr Défiler avec le pointeur
+
+en Stop the run, what was sent during it goes next
+fr Arrêter l'exécution ; ce qui a été envoyé pendant part ensuite
+
+en Permission requested: %s
+fr Permission demandée : %s
+
+en Allow once
+fr Autoriser une fois
+
+en Always
+fr Toujours
+
+en Reject
+fr Refuser
+
+en Ask anything…
+fr Demandez ce que vous voulez…
+
+en Attach files: images, PDF, text  (or paste, or drop them here)
+fr Joindre des fichiers : images, PDF, texte  (ou collez-les, ou déposez-les ici)
+
+en default model
+fr modèle par défaut
+
+en reading the attachment…
+fr lecture de la pièce jointe…
+
+en starting the session…
+fr démarrage de la session…
+
+en history %d/%d   ·   
+fr historique %d/%d   ·   
+
+en Esc  back to your text
+fr Échap  revenir à votre texte
+
+en Ctrl+Enter  save
+fr Ctrl+Entrée  enregistrer
+
+en Enter  save
+fr Entrée  enregistrer
+
+en queue
+fr mettre en file
+
+en steer
+fr orienter
+
+en Ctrl+Enter  send   ·   Enter  new line
+fr Ctrl+Entrée  envoyer   ·   Entrée  nouvelle ligne
+
+en Enter  send   ·   Shift+Enter  new line
+fr Entrée  envoyer   ·   Maj+Entrée  nouvelle ligne
+
+en Save
+fr Enregistrer
+
+en Queue
+fr Mettre en file
+
+en Steer
+fr Orienter
+
+en Preview panel
+fr Panneau Aperçu
+
+en Preview panel  (Ctrl+Shift+B)
+fr Panneau Aperçu  (Ctrl+Maj+B)
+
+en Terminal  (Ctrl+Shift+T)
+fr Terminal  (Ctrl+Maj+T)
+
+en Search agents
+fr Chercher un agent
+
+en Search models
+fr Chercher un modèle
+
+en Thinking
+fr Réflexion
+
+en default
+fr par défaut
+
+en How hard the model thinks: %s
+fr Effort de réflexion du modèle : %s
+
+en How hard the model thinks
+fr Effort de réflexion du modèle
+
+en Nothing to show yet. Type an address above, or let an agent open one.
+fr Rien à afficher pour l'instant. Saisissez une adresse ci-dessus, ou laissez un agent en ouvrir une.
+
+en Fork before this answer
+fr Bifurquer avant cette réponse
+
+en Fork from here
+fr Bifurquer à partir d'ici
+
+en Quote
+fr Citer
+
+en Quote with a comment
+fr Citer avec un commentaire
+
+en Copy the selection
+fr Copier la sélection
+
+en Selection copied
+fr Sélection copiée
+
+en Prompt copied
+fr Invite copiée
+
+en Edit in the composer
+fr Modifier dans la zone de saisie
+
+en What this prompt changed
+fr Ce que cette invite a modifié
+
+en Go back to here…
+fr Revenir à ce point…
+
+en Copy the answer
+fr Copier la réponse
+
+en Answer copied
+fr Réponse copiée
+
+en Open the link
+fr Ouvrir le lien
+
+en Text copied
+fr Texte copié
+
+en Inspect the output
+fr Examiner la sortie
+
+en Copy the output
+fr Copier la sortie
+
+en Copy the diff
+fr Copier le diff
+
+en Diff copied
+fr Diff copié
+
+en Copy the command
+fr Copier la commande
+
+en Command copied
+fr Commande copiée
+
+en Copy the path
+fr Copier le chemin
+
+en Path copied
+fr Chemin copié
+
+en Show in the folder
+fr Afficher dans le dossier
+
+en Copy the input
+fr Copier l'entrée
+
+en Input copied
+fr Entrée copiée
+
+en Copy image
+fr Copier l'image
+
+en Open in the viewer
+fr Ouvrir dans la visionneuse
+
+en Copied
+fr Copié
+
+en Copy as PNG
+fr Copier en PNG
+
+en Copy the text
+fr Copier le texte
+
+en Quoted in the composer
+fr Cité dans la zone de saisie
+
+en Comment
+fr Commenter
+
+en Title
+fr Titre
+
+en Rename the session
+fr Renommer la session
+
+en Rename
+fr Renommer
+
+en Forked
+fr Session bifurquée
+
+en Conversation width
+fr Largeur de la conversation
+
+en Go to the latest message
+fr Aller au dernier message
+
+en Latest
+fr Dernier
+
+en Earlier messages could not be read: scroll to try again
+fr Impossible de lire les messages précédents : faites défiler pour réessayer
+
+en Loading earlier messages…
+fr Chargement des messages précédents…
+
+en Loading the conversation…
+fr Chargement de la conversation…
+
+en Esc to stop
+fr Échap pour arrêter
+
+en The conversation could not be read: %s
+fr Impossible de lire la conversation : %s
+
+en no answer
+fr pas de réponse
+
+en Try again
+fr Réessayer
+
+en synthetic message
+fr message synthétique
+
+en Conversation compacted
+fr Conversation compactée
+
+en You
+fr Vous
+
+en %s in · %s out · $%.3f
+fr %s en entrée · %s en sortie · %.3f $
+
+en An independent project: not built by the OpenCode team, and not affiliated with them.
+fr Un projet indépendant : ni conçu par l'équipe d'OpenCode, ni affilié à elle.
+
+en Installation and the applications menu entry, the icon are in Setup… (title bar menu).
+fr L'installation, l'entrée du menu des applications et l'icône sont dans Installation… (menu de la barre de titre).
+
+en Installation and the shortcuts, the Settings > Apps entry are in Setup… (title bar menu).
+fr L'installation, les raccourcis et l'entrée de Paramètres > Applications sont dans Installation… (menu de la barre de titre).
+
+en No window: the renderer refused it
+fr Pas de fenêtre : le moteur de rendu l'a refusée
+
+en not a diagram: %s
+fr pas un diagramme : %s
+
+en Show the diagram
+fr Afficher le diagramme
+
+en Show its text
+fr Afficher son texte
+
+en A diagram
+fr Un diagramme
+
+en The diagram could not be copied: it is not a diagram
+fr Impossible de copier le diagramme : ce n'est pas un diagramme
+
+en Diagram copied as a picture
+fr Diagramme copié en image
+
+en The diagram could not be copied
+fr Impossible de copier le diagramme
+
+en Cannot read %s
+fr Impossible de lire %s
+
+en Stacked
+fr Empilé
+
+en Split
+fr Côte à côte
+
+en The server's experimental options are on
+fr Les options expérimentales du serveur sont activées
+
+en Find a file
+fr Chercher un fichier
+
+en Nothing matches.
+fr Aucun résultat.
+
+en This folder is empty.
+fr Ce dossier est vide.
+
+en Pick a file to read it.
+fr Choisissez un fichier pour le lire.
+
+en Copy path
+fr Copier le chemin
+
+en Mention in the prompt
+fr Mentionner dans l'invite
+
+en Not text: %d bytes. It can still go with a prompt.
+en+ Not text: %d bytes. It can still go with a prompt.
+fr Pas du texte : %d octet. Il peut quand même accompagner une invite.
+fr+ Pas du texte : %d octets. Il peut quand même accompagner une invite.
+
+en The first %d of %d bytes.
+fr Les %d premiers octets sur %d.
+
+en no match
+fr aucun résultat
+
+en Answer: %s
+fr Répondez : %s
+
+en %s: a whole number is expected
+fr %s : un nombre entier est attendu
+
+en %s: a number is expected
+fr %s : un nombre est attendu
+
+en %s: %v at least
+fr %s : %v au minimum
+
+en %s: %v at most
+fr %s : %v au maximum
+
+en A sub-agent asks
+fr Un sous-agent demande
+
+en The agent asks
+fr L'agent demande
+
+en 1 of %d
+fr 1 sur %d
+
+en Dismiss
+fr Ignorer
+
+en Review
+fr Relire
+
+en Next
+fr Suivant
+
+en Send
+fr Envoyer
+
+en Question %d
+fr Question %d
+
+en Yes
+fr Oui
+
+en No
+fr Non
+
+en Something else
+fr Autre chose
+
+en Your answer
+fr Votre réponse
+
+en Goal
+fr Objectif
+
+en goal
+fr objectif
+
+en goal paused
+fr objectif en pause
+
+en goal met
+fr objectif atteint
+
+en round %d/%d
+fr tour %d/%d
+
+en Start a session in
+fr Démarrer une session dans
+
+en %s refused the password
+fr %s a refusé le mot de passe
+
+en Connecting to %s…
+fr Connexion à %s…
+
+en START IN
+fr DÉMARRER DANS
+
+en Other folder…
+fr Autre dossier…
+
+en RUNNING NOW  %d
+fr EN COURS  %d
+
+en RECENT
+fr RÉCENT
+
+en No session yet: ask anything below.
+fr Aucune session pour l'instant : demandez ce que vous voulez ci-dessous.
+
+en Ctrl+K  everything
+fr Ctrl+K  tout
+
+en Ctrl+Shift+B  preview
+fr Ctrl+Maj+B  aperçu
+
+en F1  shortcuts
+fr F1  raccourcis
+
+en The image could not be copied: it is unreadable
+fr Impossible de copier l'image : elle est illisible
+
+en The image could not be copied
+fr Impossible de copier l'image
+
+en Image copied
+fr Image copiée
+
+en no room for its texture
+fr pas de place pour sa texture
+
+en image unreadable: %s
+fr image illisible : %s
+
+en image unreadable
+fr image illisible
+
+en Image
+fr Image
+
+en image unreadable: the file is empty
+fr image illisible : le fichier est vide
+
+en Opening the image…
+fr Ouverture de l'image…
+
+en Mermaid diagram
+fr Diagramme Mermaid
+
+en image
+fr image
+
+en Fit
+fr Ajuster
+
+en Close
+fr Fermer
+
+en API key
+fr Clé d'API
+
+en Sign in
+fr Se connecter
+
+en Use what is on this machine
+fr Utiliser ce qui est sur cette machine
+
+en Run a command
+fr Lancer une commande
+
+en From the environment
+fr Depuis l'environnement
+
+en The key is empty
+fr La clé est vide
+
+en The server did not say how to go on
+fr Le serveur n'a pas dit comment continuer
+
+en It did not work
+fr Cela n'a pas fonctionné
+
+en It took too long: the attempt expired
+fr Trop long : la tentative a expiré
+
+en Connected
+fr Connecté
+
+en The code is empty
+fr Le code est vide
+
+en The accounts the server signs in with: what you connect here gives you its models.
+fr Les comptes avec lesquels le serveur se connecte : ce que vous connectez ici vous donne ses modèles.
+
+en Find an integration
+fr Chercher une intégration
+
+en %d more: search to find them.
+en+ %d more: search to find them.
+fr %d de plus : faites une recherche pour la trouver.
+fr+ %d de plus : faites une recherche pour les trouver.
+
+en %d connected
+en+ %d connected
+fr %d connecté
+fr+ %d connectés
+
+en All connections
+fr Toutes les connexions
+
+en Or set %s where the server runs.
+fr Ou définissez %s là où tourne le serveur.
+
+en  or 
+fr  ou 
+
+en A name
+fr Un nom
+
+en %s, in the environment
+fr %s, dans l'environnement
+
+en Remove it?
+fr La supprimer ?
+
+en Remove
+fr Supprimer
+
+en Keep
+fr Garder
+
+en Use
+fr Utiliser
+
+en It must sign in again.
+fr Elle doit se reconnecter.
+
+en The server will run: %s
+fr Le serveur lancera : %s
+
+en The key
+fr La clé
+
+en A name for it (optional)
+fr Un nom pour elle (facultatif)
+
+en Cancel
+fr Annuler
+
+en Connecting…
+fr Connexion…
+
+en Continue in the browser
+fr Continuer dans le navigateur
+
+en Connect
+fr Connecter
+
+en PASTE THE CODE
+fr COLLEZ LE CODE
+
+en WAITING
+fr EN ATTENTE
+
+en It goes on in the browser.
+fr La suite se passe dans le navigateur.
+
+en The server no longer says how this goes. It may still end: try again, or cancel it.
+fr Le serveur ne dit plus où en est l'opération. Elle peut encore aboutir : réessayez, ou annulez-la.
+
+en The code
+fr Le code
+
+en Open again
+fr Rouvrir
+
+en Finishing…
+fr Finalisation…
+
+en Finish
+fr Terminer
+
+en Thank you: the licence is registered
+fr Merci : la licence est enregistrée
+
+en The licence was removed
+fr La licence a été supprimée
+
+en LICENCE
+fr LICENCE
+
+en Registered to %s (%s). Thank you for supporting %s.
+fr Enregistrée au nom de %s (%s). Merci de soutenir %s.
+
+en Remove the licence
+fr Supprimer la licence
+
+en Unregistered: %s works the same. A licence supports its work.
+fr Non enregistré : %s fonctionne de la même façon. Une licence soutient son développement.
+
+en Support opencode native
+fr Soutenir opencode native
+
+en Paste a licence key
+fr Collez une clé de licence
+
+en Register
+fr Enregistrer
+
+en Choose a file…
+fr Choisir un fichier…
+
+en Choose a licence file
+fr Choisissez un fichier de licence
+
+en opencode native licence
+fr licence opencode native
+
+en opencode native stopped unexpectedly last time: click to open its report
+fr opencode native s'est arrêté de façon inattendue la dernière fois : cliquez pour ouvrir son rapport
+
+en The preferences could not be saved
+fr Impossible d'enregistrer les préférences
+
+en Copy the table
+fr Copier le tableau
+
+en Table copied
+fr Tableau copié
+
+en Copy the table (pastes as a table)
+fr Copier le tableau (se colle en tableau)
+
+en Link not opened: %s
+fr Lien non ouvert : %s
+
+en in background
+fr en arrière-plan
+
+en finished in background
+fr terminé en arrière-plan
+
+en Thought
+fr Réflexion faite
+
+en Thinking…
+fr Réflexion…
+
+en Failed
+fr Échec
+
+en Stopped
+fr Arrêté
+
+en Done
+fr Terminé
+
+en Nothing missed
+fr Rien de manqué
+
+en What you missed  (Ctrl+Shift+N)
+fr Ce que vous avez manqué  (Ctrl+Maj+N)
+
+en Permission
+fr Permission
+
+en Question
+fr Question
+
+en Command failed
+fr Commande en échec
+
+en Command ended
+fr Commande terminée
+
+en Scheduled run
+fr Exécution planifiée
+
+en Sub-agent failed
+fr Sous-agent en échec
+
+en Sub-agent stopped
+fr Sous-agent arrêté
+
+en Sub-agent done
+fr Sous-agent terminé
+
+en Acknowledged
+fr Acquittés
+
+en Acknowledge all
+fr Tout acquitter
+
+en Nothing yet
+fr Rien pour l'instant
+
+en Enter open    A acknowledge    Shift+A the session    Ctrl+Shift+A all
+fr Entrée ouvrir    A acquitter    Maj+A la session    Ctrl+Maj+A tout
+
+en Acknowledge the session
+fr Acquitter la session
+
+en Acknowledge
+fr Acquitter
+
+en Answer
+fr Répondre
+
+en The run failed
+fr L'exécution a échoué
+
+en This session was deleted
+fr Cette session a été supprimée
+
+en Not connected
+fr Non connecté
+
+en status %d
+fr statut %d
+
+en Server unreachable
+fr Serveur injoignable
+
+en Authentication refused by the server
+fr Authentification refusée par le serveur
+
+en Unreadable answer
+fr Réponse illisible
+
+en Server unreachable (%s)
+fr Serveur injoignable (%s)
+
+en Unreadable answer (%s)
+fr Réponse illisible (%s)
+
+en That message was delivered meanwhile: what you wrote is in the composer
+fr Ce message a été remis entre-temps : ce que vous avez écrit est dans la zone de saisie
+
+en A prompt was not sent: it waits in the composer of its session
+fr Une invite n'a pas été envoyée : elle attend dans la zone de saisie de sa session
+
+en ended
+fr terminé
+
+en timed out
+fr délai dépassé
+
+en The server no longer has this command.
+fr Le serveur n'a plus cette commande.
+
+en Finished: nothing more will come.
+fr Terminé : rien de plus ne viendra.
+
+en The server kept the end of it.
+fr Le serveur n'en a gardé que la fin.
+
+en Window
+fr Fenêtre
+
+en The server made no pairing code
+fr Le serveur n'a produit aucun code d'association
+
+en Pair a device
+fr Associer un appareil
+
+en Asking the server for a code…
+fr Demande d'un code au serveur…
+
+en Scan it with the device's camera, or open one of these links on it. A link works once.
+fr Scannez-le avec l'appareil photo de l'appareil, ou ouvrez-y l'un de ces liens. Un lien ne sert qu'une fois.
+
+en Open one of these links on the device. A link works once.
+fr Ouvrez l'un de ces liens sur l'appareil. Un lien ne sert qu'une fois.
+
+en This computer
+fr Cet ordinateur
+
+en Link
+fr Lien
+
+en The code expires in %d:%02d.
+fr Le code expire dans %d:%02d.
+
+en This code expired.
+fr Ce code a expiré.
+
+en The server can be reached from this computer only. To pair another device, run `%s`.
+fr Le serveur n'est joignable que depuis cet ordinateur. Pour associer un autre appareil, lancez `%s`.
+
+en New code
+fr Nouveau code
+
+en Link copied
+fr Lien copié
+
+en Session · %s
+fr Session · %s
+
+en Agent: %s
+fr Agent : %s
+
+en Search commands, sessions, agents, models…
+fr Chercher des commandes, des sessions, des agents, des modèles…
+
+en Nothing matches
+fr Aucun résultat
+
+en > commands    @ sessions    / server    # models    : settings
+fr > commandes    @ sessions    / serveur    # modèles    : réglages
+
+en Enter run
+fr Entrée exécuter
+
+en Context
+fr Contexte
+
+en Output
+fr Sortie
+
+en Price
+fr Prix
+
+en free
+fr gratuit
+
+en $%s in, $%s out per M
+fr %s $ en entrée, %s $ en sortie par M
+
+en Cached
+fr En cache
+
+en $%s per M
+fr %s $ par M
+
+en Reads
+fr Lit
+
+en Tools
+fr Outils
+
+en yes
+fr oui
+
+en no
+fr non
+
+en Released
+fr Sortie
+
+en Status
+fr Statut
+
+en Open in a window
+fr Ouvrir dans une fenêtre
+
+en Conversation
+fr Conversation
+
+en Preview
+fr Aperçu
+
+en Statistics
+fr Statistiques
+
+en No Preview panel on Linux: let agents use your own browser with OpenCode Browse. Click to see it
+fr Pas de panneau Aperçu sous Linux : laissez les agents utiliser votre propre navigateur avec OpenCode Browse. Cliquez pour le voir
+
+en The Preview panel needs the WebView2 runtime
+fr Le panneau Aperçu a besoin du runtime WebView2
+
+en No terminal could be started in that folder
+fr Impossible de lancer un terminal dans ce dossier
+
+en New tab
+fr Nouvel onglet
+
+en Browser tab: %s
+fr Onglet de navigateur : %s
+
+en Close this tab
+fr Fermer cet onglet
+
+en localhost:3000 or an address
+fr localhost:3000 ou une adresse
+
+en The page could not start: %s
+fr La page n'a pas pu démarrer : %s
+
+en Starting the web view…
+fr Démarrage de la vue web…
+
+en the WebView2 runtime did not start
+fr le runtime WebView2 n'a pas démarré
+
+en Images
+fr Images
+
+en The project's icon
+fr L'icône du projet
+
+en %s cannot be read
+fr Impossible de lire %s
+
+en %s is not an image this program reads (PNG, JPEG, GIF, WebP, BMP)
+fr %s n'est pas une image que ce programme sait lire (PNG, JPEG, GIF, WebP, BMP)
+
+en Set the project's icon…
+fr Choisir l'icône du projet…
+
+en Remove the project's icon
+fr Retirer l'icône du projet
+
+en That message was delivered meanwhile: what you wrote stays in the composer
+fr Ce message a été remis entre-temps : ce que vous avez écrit reste dans la zone de saisie
+
+en That message is no longer waiting: what you wrote stays in the composer
+fr Ce message n'est plus en attente : ce que vous avez écrit reste dans la zone de saisie
+
+en Pending message %d: %s
+fr Message en attente %d : %s
+
+en (no text)
+fr (pas de texte)
+
+en %d file
+en+ %d files
+fr %d fichier
+fr+ %d fichiers
+
+en sending…
+fr envoi…
+
+en removing…
+fr suppression…
+
+en changing…
+fr modification…
+
+en Edit
+fr Modifier
+
+en Send now
+fr Envoyer maintenant
+
+en What waits for this session could not be read  ·  Try again
+fr Impossible de lire ce qui attend pour cette session  ·  Réessayer
+
+en Pending messages
+fr Messages en attente
+
+en PENDING  %d
+fr EN ATTENTE  %d
+
+en not sent yet  ·  queued ones go when the turn ends
+fr pas encore envoyés  ·  ceux en file partent à la fin du tour
+
+en not sent  ·  the run stopped, these wait
+fr non envoyés  ·  l'exécution s'est arrêtée, ils attendent
+
+en Editing a pending message
+fr Modification d'un message en attente
+
+en it goes back last
+fr il repart en dernier
+
+en Esc  cancel
+fr Échap  annuler
+
+en Reading…
+fr Lecture…
+
+en Not connected: this is read when the server answers.
+fr Non connecté : ceci sera lu quand le serveur répondra.
+
+en In
+fr Dans
+
+en from now
+fr à partir de maintenant
+
+en Every
+fr Tous les
+
+en repeats
+fr se répète
+
+en At
+fr À
+
+en once
+fr une fois
+
+en Say what to ask
+fr Dites quoi demander
+
+en Say when
+fr Dites quand
+
+en due now
+fr maintenant
+
+en in %d min
+fr dans %d min
+
+en in %d h
+fr dans %d h
+
+en in %d day
+en+ in %d days
+fr dans %d jour
+fr+ dans %d jours
+
+en Nothing is planned yet.
+fr Rien n'est planifié pour l'instant.
+
+en PLANNED (%d)
+fr PLANIFIÉ (%d)
+
+en %s · %d left
+en+ %s · %d left
+fr %s · encore %d
+fr+ %s · encore %d
+
+en %s · ran %d (%s)
+fr %s · exécuté %d fois (%s)
+
+en %s · ran %d
+fr %s · exécuté %d fois
+
+en Delete
+fr Supprimer
+
+en Pause
+fr Suspendre
+
+en Resume
+fr Reprendre
+
+en what the session does when it wakes
+fr ce que fait la session à son réveil
+
+en Ask
+fr Demander
+
+en Planning…
+fr Planification…
+
+en Plan it
+fr Planifier
+
+en Artifact %s: show it
+fr Artefact %s : l'afficher
+
+en Artifact
+fr Artefact
+
+en Show
+fr Afficher
+
+en %s was left out: it points outside its folder
+fr %s a été laissé de côté : il pointe hors de son dossier
+
+en No temporary folder
+fr Pas de dossier temporaire
+
+en The file could not be written
+fr Impossible d'écrire le fichier
+
+en No artifact here: an agent publishes them.
+fr Aucun artefact ici : c'est un agent qui les publie.
+
+en Open in the browser
+fr Ouvrir dans le navigateur
+
+en No text in this artifact.
+fr Pas de texte dans cet artefact.
+
+en Not text.
+fr Pas du texte.
+
+en INSTALLED (%d)
+fr INSTALLÉS (%d)
+
+en No plugin but those of the server.
+fr Aucun plugin à part ceux du serveur.
+
+en Checking…
+fr Vérification…
+
+en Hide the %d built in
+fr Masquer les %d intégrés
+
+en Show the %d built in
+fr Afficher les %d intégrés
+
+en Updating…
+fr Mise à jour…
+
+en Update
+fr Mettre à jour
+
+en No usable Secret Service (none here, or its keyring is locked): the password stays in clear in servers.txt, which only you can read (mode 0600).
+fr Aucun Secret Service utilisable (absent, ou son trousseau est verrouillé) : le mot de passe reste en clair dans servers.txt, que vous seul pouvez lire (mode 0600).
+
+en Command line
+fr Ligne de commande
+
+en The password of %s could not be protected: the list of servers was not saved
+fr Impossible de protéger le mot de passe de %s : la liste des serveurs n'a pas été enregistrée
+
+en No HTTP client for %s
+fr Pas de client HTTP pour %s
+
+en Edit this server…
+fr Modifier ce serveur…
+
+en Edit the server
+fr Modifier le serveur
+
+en Add a server
+fr Ajouter un serveur
+
+en Name
+fr Nom
+
+en Work laptop
+fr Portable du bureau
+
+en Address
+fr Adresse
+
+en Password
+fr Mot de passe
+
+en none
+fr aucun
+
+en the server's OPENCODE_SERVER_PASSWORD, as user opencode
+fr le OPENCODE_SERVER_PASSWORD du serveur, avec l'utilisateur opencode
+
+en That name is taken
+fr Ce nom est déjà pris
+
+en Save and connect
+fr Enregistrer et connecter
+
+en Add and connect
+fr Ajouter et connecter
+
+en Move the session to
+fr Déplacer la session vers
+
+en Session exported
+fr Session exportée
+
+en The file could not be read
+fr Impossible de lire le fichier
+
+en This file is not an exported session
+fr Ce fichier n'est pas une session exportée
+
+en This session is already here
+fr Cette session est déjà ici
+
+en Going back to a prompt is under way: try again in a moment
+fr Un retour à une invite est en cours : réessayez dans un instant
+
+en Back to this prompt
+fr Retour à cette invite
+
+en %d file  +%d  -%d
+en+ %d files  +%d  -%d
+fr %d fichier  +%d  -%d
+fr+ %d fichiers  +%d  -%d
+
+en This session was left going back. 
+fr Cette session est restée en plein retour en arrière. 
+
+en %sThis folder keeps no snapshots: the files stay as they are, only the conversation goes back.
+fr %sCe dossier ne garde pas d'instantanés : les fichiers restent tels quels, seule la conversation revient en arrière.
+
+en %sNo file to restore: only the conversation goes back.
+fr %sAucun fichier à restaurer : seule la conversation revient en arrière.
+
+en %s%s, written back on disk already. Go back keeps it so and drops what came after this prompt; Cancel puts the files back.
+fr %s%s, déjà réécrits sur le disque. Revenir les garde ainsi et abandonne ce qui a suivi cette invite ; Annuler remet les fichiers en place.
+
+en No change recorded. Only a git folder keeps them.
+fr Aucune modification enregistrée. Seul un dossier git les conserve.
+
+en %s, in the last turn only: this session changed folder, it cannot be compared as a whole.
+fr %s, dans le dernier tour seulement : cette session a changé de dossier, elle ne peut pas être comparée en entier.
+
+en Go back to this prompt
+fr Revenir à cette invite
+
+en Full view
+fr Vue complète
+
+en The server gave only the beginning of this file.
+fr Le serveur n'a donné que le début de ce fichier.
+
+en Go back
+fr Revenir
+
+en Session moved
+fr Session déplacée
+
+en Session imported
+fr Session importée
+
+en Terminal font
+fr Police du terminal
+
+en The face of the shells: the client's own (automatic: Fira Mono, no ligatures), the system's usual monospace, or any installed family.
+fr La police des shells : celle du client (automatique : Fira Mono, sans ligatures), la police à chasse fixe habituelle du système, ou toute famille installée.
+
+en Content zoom
+fr Zoom du contenu
+
+en Zoom of the conversation alone, whatever the interface's: each session's until it has its own (Ctrl + = / - over it, Ctrl + wheel; Ctrl + 0 brings it back to this one).
+fr Zoom de la seule conversation, quel que soit celui de l'interface : celui de chaque session tant qu'elle n'a pas le sien (Ctrl + = / - au-dessus, Ctrl + molette ; Ctrl + 0 la ramène à celui-ci).
+
+en Width
+fr Largeur
+
+en Widest the conversation column gets, in logical pixels.
+fr Largeur maximale de la colonne de conversation, en pixels logiques.
+
+en Reasoning
+fr Raisonnement
+
+en How the model's reasoning shows: folded under a line, unfolded, or not at all.
+fr Affichage du raisonnement du modèle : replié sous une ligne, déplié, ou pas du tout.
+
+en Collapsed
+fr Replié
+
+en Expanded
+fr Déplié
+
+en Hidden
+fr Masqué
+
+en Expand tools
+fr Déplier les outils
+
+en Tool calls open with their input and output shown.
+fr Les appels d'outils s'ouvrent avec leur entrée et leur sortie visibles.
+
+en Tool lines
+fr Lignes d'outil
+
+en Lines of a tool's output shown before the rest is counted.
+fr Lignes de la sortie d'un outil affichées avant que le reste soit seulement compté.
+
+en Page size
+fr Taille de page
+
+en Messages read at a time (scrolling up reads the next page by itself).
+fr Messages lus à la fois (défiler vers le haut lit la page suivante tout seul).
+
+en Follow
+fr Suivre
+
+en Follow new messages to the bottom while you are there.
+fr Suivre les nouveaux messages jusqu'en bas tant que vous y êtes.
+
+en Usage
+fr Consommation
+
+en Tokens and cost under each answer.
+fr Jetons et coût sous chaque réponse.
+
+en While running
+fr Pendant l'exécution
+
+en What Enter does while a turn runs: steer the message into the turn (at its next step), or queue it for the end of the turn. Ctrl+Enter does the other. A message waiting in the list can be sent now: that stops what the agent is doing.
+fr Ce que fait Entrée pendant un tour : orienter le tour avec le message (à son étape suivante), ou le mettre en file pour la fin du tour. Ctrl+Entrée fait l'autre. Un message qui attend dans la liste peut être envoyé tout de suite : cela arrête ce que fait l'agent.
+
+en Image viewer size
+fr Taille de la visionneuse
+
+en The size of the image viewer, as a share of the most the window gives a picture. A picture opens no larger than its pixels; drag the viewer's edges or corners to make it larger or smaller.
+fr La taille de la visionneuse d'images, en part du maximum que la fenêtre donne à une image. Une image ne s'ouvre jamais plus grande que ses pixels ; faites glisser les bords ou les coins de la visionneuse pour l'agrandir ou la réduire.
+
+en Clock
+fr Horloge
+
+en Times of messages in 24-hour or 12-hour form.
+fr Heure des messages au format 24 heures ou 12 heures.
+
+en The key that sends: Enter (Shift+Enter breaks the line) or Ctrl+Enter (Enter breaks the line).
+fr La touche qui envoie : Entrée (Maj+Entrée passe à la ligne) ou Ctrl+Entrée (Entrée passe à la ligne).
+
+en Enter
+fr Entrée
+
+en Ctrl+enter
+fr Ctrl+Entrée
+
+en Subagents
+fr Sous-agents
+
+en Sub-agent sessions: under their parent, in the list with the others, or not shown.
+fr Sessions des sous-agents : sous leur parent, dans la liste avec les autres, ou masquées.
+
+en Nested
+fr Imbriquées
+
+en Flat
+fr À plat
+
+en Mode
+fr Mode
+
+en What the sidebar shows: what needs you first across projects (what waits for you, what finished and you have not seen, what runs, the rest), or sessions by project.
+fr Ce que montre la barre latérale : ce qui a d'abord besoin de vous, tous projets confondus (ce qui vous attend, ce qui s'est terminé sans que vous l'ayez vu, ce qui tourne, le reste), ou les sessions par projet.
+
+en Inbox
+fr Réception
+
+en Projects
+fr Projets
+
+en Finished
+fr Terminées
+
+en When a session that is not in front of you ends its run: nothing, a toast, a toast and the taskbar button flashing, or a notification of the system (a click on it opens the session).
+fr Quand une session qui n'est pas sous vos yeux termine son exécution : rien, une bulle, une bulle et le bouton de la barre des tâches qui clignote, ou une notification du système (un clic dessus ouvre la session).
+
+en Off
+fr Désactivé
+
+en Toast
+fr Bulle
+
+en Flash
+fr Clignotement
+
+en System
+fr Système
+
+en New sessions
+fr Nouvelles sessions
+
+en The approvals a session made here starts with, set on the server (the composer's shield changes them for one session): the server's configured rules, file edits allowed, everything allowed (a policy's deny stays), or every action asked.
+fr Les autorisations de départ d'une session créée ici, définies sur le serveur (le bouclier de la zone de saisie les change pour une session) : les règles configurées du serveur, modifications de fichiers autorisées, tout autorisé (un refus imposé par une stratégie reste), ou chaque action demandée.
+
+en Configured
+fr Configurées
+
+en Allow all
+fr Tout autoriser
+
+en Ask all
+fr Tout demander
+
+en When a session asks for a permission or a question and the window is not in front: the taskbar button flashes, and with notifications of the system, one says it.
+fr Quand une session demande une permission ou pose une question alors que la fenêtre n'est pas au premier plan : le bouton de la barre des tâches clignote, et avec les notifications du système, l'une d'elles le dit.
+
+en Badge
+fr Pastille
+
+en The count of what you missed on the bell of the title bar: runs that ended, questions and permissions that wait, commands, scheduled runs and sub-agents that ended.
+fr Le nombre d'éléments manqués sur la cloche de la barre de titre : exécutions terminées, questions et permissions en attente, commandes, exécutions planifiées et sous-agents terminés.
+
+en How many entries that you acknowledged "What you missed" keeps in its history. What is not acknowledged yet always stays.
+fr Combien d'éléments acquittés « Ce que vous avez manqué » garde dans son historique. Ce qui n'est pas encore acquitté reste toujours.
+
+en Throbber
+fr Indicateur d'activité
+
+en What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing.
+fr Ce qui montre qu'une exécution est en cours : un panneau qui épelle ce que fait l'agent, des points en orbite, le scanner, ou rien.
+
+en Board
+fr Afficheur
+
+en Orbit
+fr Orbite
+
+en Scanner
+fr Scanner
+
+en None
+fr Aucun
+
+en Let the agents drive the Preview panel (open pages, read them, click, run scripts): the browser tools, while this window is open.
+fr Laisser les agents piloter le panneau Aperçu (ouvrir des pages, les lire, cliquer, lancer des scripts) : les outils de navigateur, tant que cette fenêtre est ouverte.
+
+en Start
+fr Démarrage
+
+en What the window opens on: the home page, or the session it showed when it closed (the latest one if it showed none yet).
+fr Ce sur quoi la fenêtre s'ouvre : la page d'accueil, ou la session qu'elle montrait à sa fermeture (la plus récente si elle n'en montrait aucune).
+
+en Last
+fr Dernière
+
+en Experimental
+fr Expérimental
+
+en Turn on the experimental options of a server on this computer, in its configuration file. What you set there yourself stays.
+fr Activer les options expérimentales d'un serveur sur cet ordinateur, dans son fichier de configuration. Ce que vous y avez réglé vous-même reste.
+
+en FPS
+fr I/S
+
+en The frame rate and what a frame costs, in the status bar.
+fr Les images par seconde et le coût d'une image, dans la barre d'état.
+
+en Frame rate
+fr Images par seconde
+
+en The most frames a second, when there is something to draw (nothing moving, nothing is drawn): what the screen takes, a number, or no limit. Above the screen's rate it shows the newest of them: not smoother, but quicker to answer, for more power. What you type and click is read at once whatever this says.
+fr Le maximum d'images par seconde quand il y a quelque chose à dessiner (si rien ne bouge, rien n'est dessiné) : ce que prend l'écran, un nombre, ou sans limite. Au-delà de la fréquence de l'écran, il affiche la plus récente : pas plus fluide, mais plus réactif, pour plus de consommation. Ce que vous tapez et cliquez est lu tout de suite, quel que soit ce réglage.
+
+en Screen
+fr Écran
+
+en Uncapped
+fr Sans limite
+
+en Sidebar
+fr Barre latérale
+
+en Notify
+fr Notifications
+
+en Notices
+fr Éléments manqués
+
+en Browser
+fr Navigateur
+
+en Advanced
+fr Avancé
+
+en Shell set
+fr Shell défini
+
+en CLIENT
+fr CLIENT
+
+en Appearance
+fr Apparence
+
+en Behaviour
+fr Comportement
+
+en Scrolling
+fr Défilement
+
+en Input
+fr Clavier et souris
+
+en Delays and menus
+fr Délais et menus
+
+en Updates
+fr Mises à jour
+
+en Rendering
+fr Rendu
+
+en Server & shell
+fr Serveur et shell
+
+en Connections
+fr Connexions
+
+en MCP servers
+fr Serveurs MCP
+
+en Plugins
+fr Plugins
+
+en Usage & limits
+fr Consommation et limites
+
+en Permissions
+fr Permissions
+
+en Providers & skills
+fr Fournisseurs et compétences
+
+en Stable
+fr Stable
+
+en Beta
+fr Bêta
+
+en Up to date, as far as is known
+fr À jour, pour autant qu'on le sache
+
+en Looking for a new version…
+fr Recherche d'une nouvelle version…
+
+en Version %s is available
+fr La version %s est disponible
+
+en Downloading %s…
+fr Téléchargement de %s…
+
+en Version %s is installed: restart to use it
+fr La version %s est installée : redémarrez pour l'utiliser
+
+en state
+fr état
+
+en Check now
+fr Vérifier maintenant
+
+en Install %s
+fr Installer %s
+
+en Restart now
+fr Redémarrer maintenant
+
+en Only what is signed with the key built into this program is installed: the channel, the version and the file's checksum are all in the signature.
+fr Seul ce qui est signé avec la clé intégrée à ce programme est installé : le canal, la version et la somme de contrôle du fichier sont tous dans la signature.
+
+en %s %s, a client of the OpenCode server. %s
+fr %s %s, un client du serveur OpenCode. %s
+
+en Open the settings folder
+fr Ouvrir le dossier des réglages
+
+en Hide the terminal's licence
+fr Masquer la licence du terminal
+
+en The terminal's licence
+fr La licence du terminal
+
+en The terminal's emulation is Ghostty's, through libghostty-vt.
+fr L'émulation du terminal est celle de Ghostty, via libghostty-vt.
+
+en auto
+fr auto
+
+en system
+fr système
+
+en same
+fr identique
+
+en not installed
+fr non installée
+
+en Automatic
+fr Automatique
+
+en %s, built in
+fr %s, intégrée
+
+en As the interface
+fr Comme l'interface
+
+en the interface's face
+fr la police de l'interface
+
+en the system's usual face
+fr la police habituelle du système
+
+en Search code fonts
+fr Chercher une police de code
+
+en Search fonts
+fr Chercher une police
+
+en SERVER
+fr SERVEUR
+
+en address
+fr adresse
+
+en status
+fr statut
+
+en not connected
+fr non connecté
+
+en version
+fr version
+
+en name
+fr nom
+
+en auth
+fr authentification
+
+en Basic (password from service.json)
+fr Basic (mot de passe de service.json)
+
+en sessions
+fr sessions
+
+en %d loaded · %d running
+fr %d chargées · %d en cours
+
+en client
+fr client
+
+en SHELL
+fr SHELL
+
+en The shell the agents run their commands in (written to the configuration's "shell").
+fr Le shell dans lequel les agents lancent leurs commandes (écrit dans le champ « shell » de la configuration).
+
+en None set: the server picks one.
+fr Aucun défini : le serveur en choisit un.
+
+en CONFIGURATION FILES
+fr FICHIERS DE CONFIGURATION
+
+en No configuration file (the defaults apply).
+fr Aucun fichier de configuration (les valeurs par défaut s'appliquent).
+
+en Model Context Protocol servers give the agents more tools. Connecting or disconnecting one applies to the server now.
+fr Les serveurs Model Context Protocol donnent plus d'outils aux agents. En connecter ou en déconnecter un s'applique tout de suite au serveur.
+
+en No MCP server is configured.
+fr Aucun serveur MCP n'est configuré.
+
+en connecting…
+fr connexion…
+
+en disconnecting…
+fr déconnexion…
+
+en Disconnect
+fr Déconnecter
+
+en The server reports no usage limit (a provider of your own, or no OpenCode workspace).
+fr Le serveur n'indique aucune limite de consommation (un fournisseur à vous, ou pas d'espace de travail OpenCode).
+
+en Workspace “%s”
+fr Espace de travail « %s »
+
+en Usage on opencode.ai
+fr Consommation sur opencode.ai
+
+en resets in %s
+fr réinitialisation dans %s
+
+en BUDGETS
+fr BUDGETS
+
+en budget
+fr budget
+
+en Answers given with “Always”: the server applies them without asking again. Revoke one to be asked next time.
+fr Réponses données avec « Toujours » : le serveur les applique sans redemander. Révoquez-en une pour que la question revienne la prochaine fois.
+
+en No saved permission.
+fr Aucune permission enregistrée.
+
+en Revoke
+fr Révoquer
+
+en RULES OF THE AGENTS
+fr RÈGLES DES AGENTS
+
+en PROVIDERS
+fr FOURNISSEURS
+
+en %s · %s context
+fr %s · contexte %s
+
+en MODELS
+fr MODÈLES
+
+en AGENTS
+fr AGENTS
+
+en SKILLS
+fr COMPÉTENCES
+
+en COMMANDS
+fr COMMANDES
+
+en Waits for you
+fr Vous attend
+
+en Running
+fr En cours
+
+en Recent
+fr Récent
+
+en Archived
+fr Archivées
+
+en What the sidebar shows
+fr Ce que montre la barre latérale
+
+en Mark as seen
+fr Marquer comme vu
+
+en Search sessions
+fr Chercher une session
+
+en Loading…
+fr Chargement…
+
+en (no folder)
+fr (pas de dossier)
+
+en … %d more: open the session and use its sub-agents menu
+en+ … %d more: open the session and use its sub-agents menu
+fr … %d de plus : ouvrez la session et utilisez son menu des sous-agents
+fr+ … %d de plus : ouvrez la session et utilisez son menu des sous-agents
+
+en Rename…
+fr Renommer…
+
+en Fork
+fr Bifurquer
+
+en Move to a folder…
+fr Déplacer vers un dossier…
+
+en Unarchive
+fr Désarchiver
+
+en Archive
+fr Archiver
+
+en What it changed
+fr Ce qu'elle a modifié
+
+en Schedules
+fr Planifications
+
+en Export…
+fr Exporter…
+
+en Export without the text…
+fr Exporter sans le texte…
+
+en Copy session ID
+fr Copier l'identifiant de la session
+
+en Copy folder path
+fr Copier le chemin du dossier
+
+en Show the folder
+fr Afficher le dossier
+
+en Open a terminal here
+fr Ouvrir un terminal ici
+
+en Delete…
+fr Supprimer…
+
+en this session
+fr cette session
+
+en Delete the session?
+fr Supprimer la session ?
+
+en “%s” and its messages will be removed from the server.
+fr « %s » et ses messages seront supprimés du serveur.
+
+en Your prompts
+fr Vos invites
+
+en Attached files
+fr Fichiers joints
+
+en Notes to the model
+fr Notes pour le modèle
+
+en Skills
+fr Compétences
+
+en Shell commands
+fr Commandes shell
+
+en Summary of what came before
+fr Résumé de ce qui précède
+
+en Answers
+fr Réponses
+
+en Tool: %s
+fr Outil : %s
+
+en %d failed
+fr %d en échec
+
+en Open a session: its statistics show here.
+fr Ouvrez une session : ses statistiques s'affichent ici.
+
+en context
+fr contexte
+
+en tokens in
+fr jetons en entrée
+
+en tokens out
+fr jetons en sortie
+
+en reasoning
+fr raisonnement
+
+en cost
+fr coût
+
+en cache hits
+fr succès du cache
+
+en … and %d more
+en+ … and %d more
+fr … et %d de plus
+fr+ … et %d de plus
+
+en Instructions and tool definitions
+fr Instructions et définitions des outils
+
+en %s  (the model's window is not listed)
+fr %s  (la fenêtre du modèle n'est pas indiquée)
+
+en Not known yet (no step in the loaded messages, or the model's window is not listed).
+fr Pas encore connu (aucune étape dans les messages chargés, ou la fenêtre du modèle n'est pas indiquée).
+
+en The last step's total is the server's. It gives the messages, not their sizes: the parts are estimated from their text, the rest is what no message says. Near the top, opencode compacts the conversation.
+fr Le total de la dernière étape vient du serveur. Il donne les messages, pas leur taille : les parties sont estimées d'après leur texte, le reste est ce qu'aucun message ne dit. Près du maximum, opencode compacte la conversation.
+
+en Tokens
+fr Jetons
+
+en input
+fr entrée
+
+en %s  (uncached)
+fr %s  (hors cache)
+
+en cache read
+fr lecture du cache
+
+en cache write
+fr écriture du cache
+
+en Time
+fr Temps
+
+en created
+fr créée
+
+en %s  (%s ago)
+fr %s  (il y a %s)
+
+en last change
+fr dernière modification
+
+en model at work
+fr modèle au travail
+
+en %s over %d steps (%s a step)
+fr %s sur %d étapes (%s par étape)
+
+en output pace
+fr débit de sortie
+
+en %.0f tokens / s
+fr %.0f jetons / s
+
+en loaded
+fr chargés
+
+en %d messages · %d prompts · %d steps (earlier ones not loaded)
+fr %d messages · %d invites · %d étapes (les précédents ne sont pas chargés)
+
+en %d messages · %d prompts · %d steps
+fr %d messages · %d invites · %d étapes
+
+en %d calls, %d failed
+fr %d appels, %d en échec
+
+en … and %d more tools
+en+ … and %d more tools
+fr … et %d outil de plus
+fr+ … et %d outils de plus
+
+en No tool call in the loaded messages.
+fr Aucun appel d'outil dans les messages chargés.
+
+en Models
+fr Modèles
+
+en %s out
+fr %s en sortie
+
+en Sub-agents
+fr Sous-agents
+
+en launched
+fr lancé
+
+en %d  (%d running)
+fr %d  (%d en cours)
+
+en their tokens
+fr leurs jetons
+
+en their cost
+fr leur coût
+
+en The project
+fr Le projet
+
+en %d  (+ %d sub-agents)
+fr %d  (+ %d sous-agents)
+
+en prompts · steps
+fr invites · étapes
+
+en tokens
+fr jetons
+
+en %s in · %s out · %s reasoning
+fr %s en entrée · %s en sortie · %s de raisonnement
+
+en active days
+fr jours actifs
+
+en %d  (streak %d)
+fr %d  (série de %d)
+
+en since
+fr depuis
+
+en %s ago
+fr il y a %s
+
+en tool calls
+fr appels d'outils
+
+en %d  (%d failed)
+fr %d  (%d en échec)
+
+en %s could not be saved
+fr Impossible d'enregistrer %s
+
+en starting
+fr démarrage
+
+en finishing
+fr finalisation
+
+en done
+fr terminé
+
+en failed
+fr échec
+
+en stopped
+fr arrêté
+
+en (no description)
+fr (pas de description)
+
+en PROMPT
+fr INVITE
+
+en ERROR
+fr ERREUR
+
+en RESULT
+fr RÉSULTAT
+
+en No result yet: it is still working.
+fr Pas encore de résultat : il travaille encore.
+
+en background
+fr arrière-plan
+
+en %d tools
+en+ %d tools
+fr %d outil
+fr+ %d outils
+
+en %s in
+fr %s en entrée
+
+en SESSION
+fr SESSION
+
+en session
+fr session
+
+en title
+fr titre
+
+en started
+fr démarrée
+
+en finished
+fr terminée
+
+en %s  after %s
+fr %s  après %s
+
+en outcome
+fr issue
+
+en in %s · out %s · reasoning %s · cache read %s · cache write %s
+fr entrée %s · sortie %s · raisonnement %s · lecture du cache %s · écriture du cache %s
+
+en seen live
+fr vu en direct
+
+en %d steps · %d tool calls
+fr %d étapes · %d appels d'outils
+
+en sub-agent
+fr sous-agent
+
+en returned
+fr a rendu
+
+en SUB-AGENT
+fr SOUS-AGENT
+
+en launched by “%s”
+fr lancé par « %s »
+
+en started %s · %s · %s in · %s out · $%.2f
+fr démarré à %s · %s · %s en entrée · %s en sortie · %.2f $
+
+en started %s · %s · %s in · %s out
+fr démarré à %s · %s · %s en entrée · %s en sortie
+
+en Return to main session
+fr Revenir à la session principale
+
+en %d active
+fr %d actifs
+
+en %d past sub-agents
+en+ %d past sub-agents
+fr %d sous-agent passé
+fr+ %d sous-agents passés
+
+en Active now (%d)
+fr Actifs maintenant (%d)
+
+en Finished (%d)
+fr Terminés (%d)
+
+en This shell ended.
+fr Ce shell s'est terminé.
+
+en The connection to this shell was lost.
+fr La connexion à ce shell a été perdue.
+
+en The connection to this shell was lost: trying again…
+fr La connexion à ce shell a été perdue : nouvelle tentative…
+
+en Restart
+fr Redémarrer
+
+en Reconnect
+fr Reconnecter
+
+en Paste
+fr Coller
+
+en Select all
+fr Tout sélectionner
+
+en Zoom in
+fr Agrandir
+
+en Zoom out
+fr Réduire
+
+en Reset the zoom (%d%%)
+fr Rétablir le zoom (%d %%)
+
+en Reset the zoom
+fr Rétablir le zoom
+
+en Copy all the output
+fr Copier toute la sortie
+
+en %s (ended)
+fr %s (terminé)
+
+en %s (lost)
+fr %s (perdu)
+
+en … %d more lines
+en+ … %d more lines
+fr … %d ligne de plus
+fr+ … %d lignes de plus
+
+en <0.1s
+fr <0,1 s
+
+en %.1fs
+fr %.1f s
+
+en %.0f ms
+fr %.0f ms
+
+en %.1f s
+fr %.1f s
+
+en %d min
+fr %d min
+
+en %dh %02d
+fr %d h %02d
+
+en %dd %02dh
+fr %d j %02d h
+
+en Started %s, running
+fr Démarré à %s, en cours
+
+en Started %s
+fr Démarré à %s
+
+en Started %s, ended %s
+fr Démarré à %s, terminé à %s
+
+en   ·  limit reset at %s
+fr   ·  limite réinitialisée à %s
+
+en   ·  resets on %s at %s  ·  in %s
+fr   ·  réinitialisation le %s à %s  ·  dans %s
+
+en   ·  resets at %s  ·  in %s
+fr   ·  réinitialisation à %s  ·  dans %s
+
+en Diff
+fr Diff
+
+en the HTTP client failed to start
+fr le client HTTP n'a pas démarré
+
+en the server could not be read
+fr impossible de lire le serveur
+
+en the update has no signature: refused
+fr la mise à jour n'a pas de signature : refusée
+
+en the update could not be downloaded
+fr impossible de télécharger la mise à jour
+
+en the update is in place, but %s
+fr la mise à jour est en place, mais %s
+
+en Update: %s
+fr Mise à jour : %s
+
+en %s is installed: click to restart
+fr %s est installée : cliquez pour redémarrer
+
+en Up to date
+fr À jour
+
+en opencode native %s is the latest
+fr opencode native %s est la dernière version
+
+en opencode native %s is available: click to install
+fr opencode native %s est disponible : cliquez pour l'installer
+
+en Nix updates this copy: update the Nix package
+fr Nix met à jour cette copie : mettez à jour le paquet Nix
+
+en Restart it by hand: it could not be started
+fr Redémarrez-le vous-même : il n'a pas pu être lancé
+
+en Update to %s
+fr Mettre à jour vers %s
+
+en Downloading the update…
+fr Téléchargement de la mise à jour…
+
+en Sidebar width
+fr Largeur de la barre latérale
+
+en Command palette…
+fr Palette de commandes…
+
+en Settings…
+fr Réglages…
+
+en Statistics panel
+fr Panneau Statistiques
+
+en Sub-agent sessions in the list
+fr Sessions des sous-agents dans la liste
+
+en Setup…
+fr Installation…
+
+en About opencode native
+fr À propos d'opencode native

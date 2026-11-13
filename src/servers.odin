@@ -13,6 +13,7 @@ import store "gt:store"
 import "gt:ui"
 import lucide "gt:lucide"
 import remote "gt:remote"
+import i18n "gt:i18n"
 
 Server :: struct {
 	name:     string,
@@ -42,7 +43,7 @@ password_from_field :: proc(name, field: string) -> (password, stored: string, c
 // server's field waits in `stored`, as one the keyring would not open.
 servers_init :: proc(app: ^App) {
 	argv := app.cli.url != ""
-	append(&app.servers, Server{name = strings.clone("This computer"), local = true})
+	append(&app.servers, Server{name = strings.clone(i18n.later("This computer")), local = true})
 	for e in store.list(&app.stores.servers) {   // (read at the start, stores_open: the name, then "url<TAB>field")
 		if strings.trim_space(e.key) == "" { continue }
 		url, _, field := strings.partition(e.value, "\t")
@@ -50,7 +51,7 @@ servers_init :: proc(app: ^App) {
 	}
 	app.server = 0
 	if argv {
-		append(&app.servers, Server{name = strings.clone("Command line"), argv = true})
+		append(&app.servers, Server{name = strings.clone(i18n.later("Command line")), argv = true})
 		app.server = len(app.servers) - 1
 	} else if last := settings_get(app, "server"); last != "" {
 		for s, i in app.servers { if s.name == last { app.server = i } }
@@ -173,7 +174,7 @@ servers_saved :: proc(data: rawptr, word: u64) {
 	defer servers_save_free(job)
 	app := job.app
 	if job.failed != "" {
-		ui.toast(.Bad, "The password of %s could not be protected: the list of servers was not saved", label_safe(job.failed))
+		ui.toast(.Bad, i18n.tr("The password of %s could not be protected: the list of servers was not saved"), label_safe(job.failed))
 		return
 	}
 	store.replace(&app.stores.servers, job.entries[:])
@@ -302,7 +303,7 @@ server_connect_now :: proc(app: ^App, i: int) {
 	s := app.servers[i]
 	h: Http
 	if !http_init(&h, s.url, "opencode", s.password) {
-		ui.toast(.Bad, "No HTTP client for %s", s.url)
+		ui.toast(.Bad, i18n.tr("No HTTP client for %s"), s.url)
 		delete(h.base)
 		return
 	}
@@ -442,13 +443,13 @@ server_edit_open :: proc(app: ^App, i: int) {
 server_menu :: proc(app: ^App, key: ui.Key, em: f32) {
 	if ui.ctx_menu(key, em * 26) {
 		for s, i in app.servers {
-			label := fmt.tprintf("%s   %s###srv%d", label_safe(s.name), label_safe(s.url), i)
+			label := fmt.tprintf("%s   %s###srv%d", label_safe(i18n.tr(s.name)), label_safe(s.url), i)
 			if ui.menu_item(label, "", i == app.server, icon = lucide.SERVER).clicked && i != app.server { server_connect(app, i) }
 		}
 		ui.menu_separator()
-		if ui.menu_item("Add a server…", icon = lucide.PLUG).clicked { server_edit_open(app, -1) }
+		if ui.menu_item(i18n.tr("Add a server…"), icon = lucide.PLUG).clicked { server_edit_open(app, -1) }
 		cur := app.server >= 0 && app.server < len(app.servers) ? app.servers[app.server] : Server{local = true}
-		if ui.menu_item("Edit this server…", icon = lucide.PENCIL, enabled = !cur.local && !cur.argv).clicked { server_edit_open(app, app.server) }
+		if ui.menu_item(i18n.tr("Edit this server…"), icon = lucide.PENCIL, enabled = !cur.local && !cur.argv).clicked { server_edit_open(app, app.server) }
 	}
 }
 
@@ -459,7 +460,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 	if ui.modal("server", em * 32, &app.cx.open[.Server], SERVER_DIALOG_TOP) {
 		dialog_backdrop()
 		pad :: proc(em: f32) { ui.spacer(ui.px(em * DIALOG_MARGIN_EM)) }
-		if ui.dialog_header("sv_head", e.index >= 0 ? "Edit the server" : "Add a server", {icon = lucide.GLOBE, close = true}) {}
+		if ui.dialog_header("sv_head", e.index >= 0 ? i18n.tr("Edit the server") : i18n.tr("Add a server"), {icon = lucide.GLOBE, close = true}) {}
 		ui.spacer(ui.px(em * 0.9))
 		field :: proc(id, label, hint: string, f: ^ui.Text_Field, em: f32, secret := false, reveal: ^bool = nil) -> ui.Edit_Result {
 			res: ui.Edit_Result
@@ -479,14 +480,14 @@ server_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.5))
 			return res
 		}
-		r1 := field("###fn", "Name", "Work laptop", &e.name, em)
-		r2 := field("###fu", "Address", "http://host:4096", &e.url, em)
-		r3 := field("###fp", "Password", "none", &e.password, em, secret = true, reveal = &e.password_shown)
+		r1 := field("###fn", i18n.tr("Name"), i18n.tr("Work laptop"), &e.name, em)
+		r2 := field("###fu", i18n.tr("Address"), "http://host:4096", &e.url, em)
+		r3 := field("###fp", i18n.tr("Password"), i18n.tr("none"), &e.password, em, secret = true, reveal = &e.password_shown)
 		if ui.tags("weak") {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row() {
 				ui.spacer(ui.px(em * 7.4))
-				text("h", "the server's OPENCODE_SERVER_PASSWORD, as user opencode", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.3)}, ui.fill())
+				text("h", i18n.tr("the server's OPENCODE_SERVER_PASSWORD, as user opencode"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.3)}, ui.fill())
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			}
 			if note := password_note(app); note != "" {
@@ -510,16 +511,16 @@ server_dialog :: proc(app: ^App, em: f32) {
 		if ui.row(.Center) {
 			pad(em)
 			if e.index >= 0 {
-				if ui.button_icon("###rm", lucide.TRASH_2, "Remove", .Danger).clicked {
+				if ui.button_icon("###rm", lucide.TRASH_2, i18n.tr("Remove"), .Danger).clicked {
 					server_remove(app, e.index)
 					app.cx.open[.Server] = false
 				}
 			}
 			ui.spacer(ui.fill())
-			if taken { text("tk", "That name is taken", hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
-			if ui.button_icon("###cancel", "", "Cancel", .Cancel).clicked { app.cx.open[.Server] = false }
+			if taken { text("tk", i18n.tr("That name is taken"), hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
+			if ui.button_icon("###cancel", "", i18n.tr("Cancel"), .Cancel).clicked { app.cx.open[.Server] = false }
 			ui.spacer(ui.px(em * 0.5))
-			if ui.button_icon("###ok", lucide.CHECK, ui.text_shown(e.index >= 0 ? "Save and connect" : "Add and connect"), .Success, disabled = !valid).clicked { save = true }
+			if ui.button_icon("###ok", lucide.CHECK, ui.text_shown(e.index >= 0 ? i18n.tr("Save and connect") : i18n.tr("Add and connect")), .Success, disabled = !valid).clicked { save = true }
 			pad(em)
 		}
 		if save && valid {

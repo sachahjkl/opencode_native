@@ -14,6 +14,7 @@ import "core:fmt"
 import "core:strings"
 import "gt:config"
 import "gt:ui"
+import i18n "gt:i18n"
 
 Out_Stage :: enum u8 {
 	Creating,   // POST /api/session on its way
@@ -153,7 +154,7 @@ outgoing_replaced :: proc(app: ^App, out: u64, go: bool) {
 	if go { outgoing_send(app, o); return }
 	o.stage = .Returned
 	outgoing_return(app)
-	ui.toast(.Warn, "That message was delivered meanwhile: what you wrote is in the composer")
+	ui.toast(.Warn, i18n.tr("That message was delivered meanwhile: what you wrote is in the composer"))
 }
 
 // What the answers to the prompt's requests do (net.odin REQ_FACTS).
@@ -161,7 +162,7 @@ created_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 	if id := jstr(v, "data", "id"); id != "" {
 		outgoing_created(app, r, id)
 	} else {
-		answer_failed(app, r, .Unreadable, "Unreadable answer")
+		answer_failed(app, r, .Unreadable, i18n.tr("Unreadable answer"))
 	}
 }
 
@@ -327,7 +328,7 @@ outgoing_answered :: proc(app: ^App, r: ^Request, delivered: bool) {
 	if delivered { outgoing_free(app, o); return }
 	o.stage = .Returned
 	outgoing_return(app)
-	if outgoing_find(app, r.out) != nil { ui.toast(.Warn, "A prompt was not sent: it waits in the composer of its session") }
+	if outgoing_find(app, r.out) != nil { ui.toast(.Warn, i18n.tr("A prompt was not sent: it waits in the composer of its session")) }
 }
 
 // What failed for the session now shown comes back to its composer, the oldest first. (A session opened, the home page reached.)

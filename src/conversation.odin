@@ -9,6 +9,7 @@ import "gt:draw"
 import "gt:markdown"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 
 HEX_USER_PLATE_TOP    :: 0x222222ff
@@ -102,7 +103,7 @@ column_handles :: proc(app: ^App, sb, main: ^ui.Box, side, col, avail, em: f32) 
 	for right in ([]bool{false, true}) {
 		x := right ? side + col : side - hw
 		ui.next({fixed_x = math.round(x), fixed_y = math.round(top), width = ui.px(hw), height = ui.px(h), cursor = .Col_Resize})
-		ui.a11y({role = .Slider, name = "Conversation width"})
+		ui.a11y({role = .Slider, name = i18n.tr("Conversation width")})
 		b := ui.build_box({.Clickable}, right ? "###col_r" : "###col_l")
 		sig := ui.signal(b)
 		if sig.pressed { app.conversation.column_drag_from = col / unit }
@@ -141,7 +142,7 @@ go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
 	w := math.round(em * GO_BOTTOM_W_EM)
 	y := sb.rect.max.y - main.rect.min.y - h - em * (0.2 + 0.6 * t)
 	ui.next({fixed_x = math.round((avail - w) * 0.5), fixed_y = math.round(y), width = ui.px(w), height = ui.px(h), axis = .X, cross = .Center, cursor = .Hand})
-	ui.a11y({role = .Button, name = "Go to the latest message"})
+	ui.a11y({role = .Button, name = i18n.tr("Go to the latest message")})
 	b := ui.build_box({.Clickable, .Focusable}, "###go_bottom")
 	d := ui.frame_new(f32)
 	d^ = t
@@ -162,7 +163,7 @@ go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
 		ui.spacer(ui.fill())
 		glyph(lucide.CHEVRON_DOWN, with_alpha(hex(HEX_TEXT_SOFT), t), math.round(em * ICON_SMALL))
 		ui.spacer(ui.px(em * 0.3))
-		text("t", "Latest", with_alpha(hex(HEX_TEXT_SOFT), t), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+		text("t", i18n.tr("Latest"), with_alpha(hex(HEX_TEXT_SOFT), t), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.fill())
 	}
 }
@@ -208,7 +209,7 @@ messages :: proc(app: ^App, em: f32) {
 				scanner("###older_bar", accent(), math.round(em * 5), math.round(em * 0.9))
 				ui.spacer(ui.px(em * 0.7))
 			}
-			if ui.tags("weak") { text("older_t", c.older_failed > 0 ? "Earlier messages could not be read: scroll to try again" : "Loading earlier messages…", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
+			if ui.tags("weak") { text("older_t", c.older_failed > 0 ? i18n.tr("Earlier messages could not be read: scroll to try again") : i18n.tr("Loading earlier messages…"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
 			ui.spacer(ui.fill())
 		}
 		ui.spacer(ui.px(em * 0.6))
@@ -216,7 +217,7 @@ messages :: proc(app: ^App, em: f32) {
 	view := chat_view(app)
 	if view == .Loading && len(c.messages) == 0 {
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
-		if ui.tags("weak") { ui.label("Loading the conversation…###loading") }
+		if ui.tags("weak") { ui.label(fmt.tprintf("%s###loading", i18n.tr("Loading the conversation…"))) }
 	}
 	if view == .Failed { chat_failed(app, em) }
 	// Only the messages near the view are built (the toolkit's lazy column): the others stand as a space of the height they
@@ -278,7 +279,7 @@ messages :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.4))
 			throbber(app, "###wl", accent(), math.round(em * 7), math.round(em * 0.9), em)
 			ui.spacer(ui.fill())
-			if hint_action("###stop_hint", "Esc to stop", em, intent = .Danger) { interrupt_session(app, c.id) }
+			if hint_action("###stop_hint", i18n.tr("Esc to stop"), em, intent = .Danger) { interrupt_session(app, c.id) }
 		}
 		foot -= line
 	}
@@ -290,12 +291,12 @@ messages :: proc(app: ^App, em: f32) {
 chat_failed :: proc(app: ^App, em: f32) {
 	r := &app.cx.chat_read
 	ui.next({width = ui.fill(), flags = {.Text_Wrap}, text_align = .Center})
-	if ui.tags("weak") { ui.paragraph(fmt.tprintf("The conversation could not be read: %s###read_failed", label_safe(r.message != "" ? r.message : "no answer"))) }
+	if ui.tags("weak") { ui.paragraph(fmt.tprintf("%s###read_failed", label_safe(fmt.tprintf(i18n.tr("The conversation could not be read: %s"), r.message != "" ? r.message : i18n.tr("no answer"))))) }
 	ui.spacer(ui.px(em * 0.7))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###read_retry") {
 		ui.spacer(ui.fill())
-		if ui.button_icon("###retry", lucide.REFRESH_CW, "Try again", disabled = !online(app)).clicked { chat_read(app) }
+		if ui.button_icon("###retry", lucide.REFRESH_CW, i18n.tr("Try again"), disabled = !online(app)).clicked { chat_read(app) }
 		ui.spacer(ui.fill())
 	}
 }
@@ -309,9 +310,9 @@ message :: proc(app: ^App, c: ^Chat, m: ^Message, i: int, em: f32) {
 		next := i + 1 < len(c.messages) ? &c.messages[i + 1] : nil
 		assistant_message(app, m, em, continues(prev, m), next != nil && continues(m, next) ? next : nil, prev)
 	case .Synthetic:
-		if m.sub_child != "" { subagent_result(app, m, em) } else { note_line(app, m, em, lucide.ZAP, m.text != "" ? first_line(m.text) : "synthetic message") }
+		if m.sub_child != "" { subagent_result(app, m, em) } else { note_line(app, m, em, lucide.ZAP, m.text != "" ? first_line(m.text) : i18n.tr("synthetic message")) }
 	case .Shell:       note_line(app, m, em, lucide.SQUARE_TERMINAL, fmt.tprintf("$ %s", m.text))
-	case .Compaction:  note_line(app, m, em, lucide.LIST, "Conversation compacted")
+	case .Compaction:  note_line(app, m, em, lucide.LIST, i18n.tr("Conversation compacted"))
 	case .Idle:        if i < len(c.messages) - 1 { turn_end(app, m, em) }
 	case .Switch:      switch_line(app, m, em)
 	case .Other:
@@ -409,7 +410,7 @@ user_message :: proc(app: ^App, m: ^Message, em: f32) {
 				if ui.row(.Center, id = "###who") {
 					glyph(lucide.USER, accent(), math.round(em * ICON_SMALL), em * 1.1)
 					ui.spacer(ui.px(em * 0.2))
-					text("you", "You", accent(), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+					text("you", i18n.tr("You"), accent(), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 					ui.spacer(ui.fill())
 					text("at", clock_text(m.created, app.prefs.clock24), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}
@@ -512,7 +513,7 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 		if app.prefs.usage && !m.streaming && m.tokens_out > 0 && m.finish == "stop" {
 			ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###foot") {
-				text("tk", fmt.tprintf("%s in · %s out%s", kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), m.cost > 0 ? fmt.tprintf(" · $%.3f", m.cost) : ""), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				text("tk", m.cost > 0 ? fmt.tprintf(i18n.tr("%s in · %s out · $%.3f"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), m.cost) : fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			}
 		}
 	}

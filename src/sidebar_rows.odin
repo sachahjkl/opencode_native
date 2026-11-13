@@ -10,6 +10,7 @@ import "core:unicode/utf8"
 import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 
 SIDEBAR_W_DEFAULT     :: 290
@@ -46,7 +47,7 @@ sidebar :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###side_top") {
 			pad_row(em)
-			if ui.button_icon("###new", lucide.PLUS, "New session", .Primary, width = ui.fill()).clicked { new_session(app) }
+			if ui.button_icon("###new", lucide.PLUS, i18n.tr("New session"), .Primary, width = ui.fill()).clicked { new_session(app) }
 			ui.spacer(ui.px(em * 0.45))
 			if ui.button_icon("###refresh", lucide.REFRESH_CW, "").clicked { refresh_sessions(app) }
 			pad_row(em)
@@ -62,7 +63,7 @@ sidebar :: proc(app: ^App, em: f32) {
 				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-					ui.line_edit("###search", &app.sidebar.search, "Search sessions", clearable = true)
+					ui.line_edit("###search", &app.sidebar.search, i18n.tr("Search sessions"), clearable = true)
 				}
 			}
 			pad_row(em)
@@ -90,7 +91,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 	if !app.sessions_loaded {
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
-		if ui.tags("weak") { ui.label(online(app) ? "Loading…" : "Connecting…") }
+		if ui.tags("weak") { ui.label(online(app) ? i18n.tr("Loading…") : i18n.tr("Connecting…")) }
 		return
 	}
 	sections := sidebar_view(app, ui.field_string(&app.sidebar.search), sidebar_hold_wanted(app, ui.parent_box()))
@@ -124,7 +125,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###side_settings") {
 		ui.spacer(ui.px(em * 0.6))
-		if glyph_label_button(app, "###open_settings", "Settings", em).clicked { settings_open(app) }
+		if glyph_label_button(app, "###open_settings", i18n.tr("Settings"), em).clicked { settings_open(app) }
 	}
 	ui.spacer(ui.px(em))
 	session_menu(app, em)
@@ -152,7 +153,7 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 		logo := len(gr.items) > 0 ? project_logo(app, app.sessions[gr.items[0]].project) : nil
 		if !logo_of(app, "###glogo", logo, math.round(em * 1.25)) { glyph(lucide.FOLDER, accent(), math.round(em * ICON_REGULAR)) }
 		ui.spacer(ui.px(em * 0.35))
-		name := gr.dir != "" ? base_name(gr.dir) : "(no folder)"
+		name := gr.dir != "" ? base_name(gr.dir) : i18n.tr("(no folder)")
 		text("n", strings.to_upper(name, context.temp_allocator), hs.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.px(em * 0.4))
 		text("c", fmt.tprintf("%d", len(gr.items)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
@@ -249,7 +250,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				session_lamp_off("###unseen", sub_state_color(st), em)
 				ui.spacer(ui.px(em * 0.35))
 			}
-			title := s.title != "" ? s.title : "Untitled"
+			title := s.title != "" ? s.title : i18n.tr("Untitled")
 			// a sub-agent: lit while it runs, dimmed once it is done
 			tcol := hex(HEX_TEXT_SOFT)
 			if depth > 0 { tcol = busy ? hex(HEX_TEXT) : hex(HEX_SUB_OFF_TITLE) }
@@ -263,7 +264,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 					ui.spacer(ui.fill())
 					title_style.height = ui.px(math.round(em * 1.3))
 					if renaming_at(app, s.id, .Side) { rename_in_place(app, em, title_style.font_size.?, math.round(em * 1.3)) } else { text_found("t", title, ui.field_string(&app.sidebar.search), tcol, title_style, ui.fill()) }
-					where_ := s.directory != "" ? base_name(s.directory) : "(no folder)"
+					where_ := s.directory != "" ? base_name(s.directory) : i18n.tr("(no folder)")
 					if session_unseen(app, s) && s.outcome != "succeeded" && s.outcome != "" { where_ = fmt.tprintf("%s · %s", where_, s.outcome) }
 					text("p", ellipsize(where_, SIDE_PROJECT_CHARS), quiet, ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(math.round(em * 1.1))}, ui.fill())
 					ui.spacer(ui.fill())
@@ -296,7 +297,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 				if ui.row(.Center, id = fmt.tprintf("###more_%s", s.id)) {
 					ui.spacer(ui.px(em * 2.6))
-					text("m", fmt.tprintf("… %d more: open the session and use its sub-agents menu", len(kids) - LIMIT), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
+					text("m", fmt.tprintf(i18n.tr(len(kids) - LIMIT, "… %d more: open the session and use its sub-agents menu", "… %d more: open the session and use its sub-agents menu"), len(kids) - LIMIT), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
 				}
 				break
 			}
@@ -308,26 +309,26 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 session_menu :: proc(app: ^App, em: f32) {
 	key := ui.key_from_string(0, "session_menu")
 	if ui.ctx_menu(key, em * 17) {
-		if ui.menu_item("Open", icon = lucide.EXTERNAL_LINK).clicked { open_root(app, app.sidebar.menu_session) }
-		if ui.menu_item("Rename…", "F2", icon = lucide.PENCIL).clicked { rename_open(app, app.sidebar.menu_session) }
-		if ui.menu_item("Fork", icon = lucide.GIT_FORK).clicked { fork_session(app, app.sidebar.menu_session, "") }
-		if ui.menu_item("Move to a folder…", icon = lucide.FOLDER_INPUT).clicked { session_move_pick(app, app.sidebar.menu_session) }
+		if ui.menu_item(i18n.tr("Open"), icon = lucide.EXTERNAL_LINK).clicked { open_root(app, app.sidebar.menu_session) }
+		if ui.menu_item(i18n.tr("Rename…"), "F2", icon = lucide.PENCIL).clicked { rename_open(app, app.sidebar.menu_session) }
+		if ui.menu_item(i18n.tr("Fork"), icon = lucide.GIT_FORK).clicked { fork_session(app, app.sidebar.menu_session, "") }
+		if ui.menu_item(i18n.tr("Move to a folder…"), icon = lucide.FOLDER_INPUT).clicked { session_move_pick(app, app.sidebar.menu_session) }
 		if s := find_session(app, app.sidebar.menu_session); s != nil { project_icon_items(app, s.project) }
 		archived := session_is_archived(app, app.sidebar.menu_session)
-		if ui.menu_item(archived ? "Unarchive" : "Archive", icon = archived ? lucide.ARCHIVE_RESTORE : lucide.ARCHIVE).clicked { session_archive(app, app.sidebar.menu_session, !archived) }
-		if ui.menu_item("What it changed", icon = lucide.FILE_DIFF).clicked { changes_open(app, app.sidebar.menu_session) }
-		if !app.cx.no_schedules && ui.menu_item("Schedules", icon = lucide.CALENDAR_CLOCK).clicked { schedules_open(app, app.sidebar.menu_session) }
-		if ui.menu_item("Export…", icon = lucide.DOWNLOAD).clicked { session_export(app, app.sidebar.menu_session) }
-		if ui.menu_item("Export without the text…", icon = lucide.FILE_DOWN).clicked { session_export(app, app.sidebar.menu_session, redacted = true) }
+		if ui.menu_item(archived ? i18n.tr("Unarchive") : i18n.tr("Archive"), icon = archived ? lucide.ARCHIVE_RESTORE : lucide.ARCHIVE).clicked { session_archive(app, app.sidebar.menu_session, !archived) }
+		if ui.menu_item(i18n.tr("What it changed"), icon = lucide.FILE_DIFF).clicked { changes_open(app, app.sidebar.menu_session) }
+		if !app.cx.no_schedules && ui.menu_item(i18n.tr("Schedules"), icon = lucide.CALENDAR_CLOCK).clicked { schedules_open(app, app.sidebar.menu_session) }
+		if ui.menu_item(i18n.tr("Export…"), icon = lucide.DOWNLOAD).clicked { session_export(app, app.sidebar.menu_session) }
+		if ui.menu_item(i18n.tr("Export without the text…"), icon = lucide.FILE_DOWN).clicked { session_export(app, app.sidebar.menu_session, redacted = true) }
 		ui.menu_separator()
-		if ui.menu_item("Copy session ID", icon = lucide.HASH).clicked { clip_set(app.sidebar.menu_session) }
+		if ui.menu_item(i18n.tr("Copy session ID"), icon = lucide.HASH).clicked { clip_set(app.sidebar.menu_session) }
 		if s := find_session(app, app.sidebar.menu_session); s != nil {
-			if ui.menu_item("Copy folder path", icon = lucide.CLIPBOARD_COPY).clicked { clip_set(s.directory) }
-			if ui.menu_item("Show the folder", icon = lucide.FOLDER_OPEN).clicked { reveal_path(s.directory) }
-			if ui.menu_item("Open a terminal here", icon = lucide.TERMINAL).clicked { terminal_open(s.directory) }
+			if ui.menu_item(i18n.tr("Copy folder path"), icon = lucide.CLIPBOARD_COPY).clicked { clip_set(s.directory) }
+			if ui.menu_item(i18n.tr("Show the folder"), icon = lucide.FOLDER_OPEN).clicked { reveal_path(s.directory) }
+			if ui.menu_item(i18n.tr("Open a terminal here"), icon = lucide.TERMINAL).clicked { terminal_open(s.directory) }
 		}
 		ui.menu_separator()
-		if ui.menu_item("Delete…", icon = lucide.TRASH_2).clicked {
+		if ui.menu_item(i18n.tr("Delete…"), icon = lucide.TRASH_2).clicked {
 			delete(app.sidebar.delete_id)
 			app.sidebar.delete_id = strings.clone(app.sidebar.menu_session)
 			app.cx.open[.Delete] = true
@@ -342,9 +343,9 @@ project_menu :: proc(app: ^App, em: f32) {
 
 delete_dialog :: proc(app: ^App, em: f32) {
 	if !app.cx.open[.Delete] { return }
-	title := "this session"
+	title := i18n.tr("this session")
 	if s := find_session(app, app.sidebar.delete_id); s != nil { title = s.title }
-	o := ui.Confirm_Options{title = "Delete the session?", note = fmt.tprintf("“%s” and its messages will be removed from the server.", title), act = "Delete", width_em = 26}
+	o := ui.Confirm_Options{title = i18n.tr("Delete the session?"), note = fmt.tprintf(i18n.tr("“%s” and its messages will be removed from the server."), title), act = i18n.tr("Delete"), width_em = 26}
 	if ui.confirm("delete", &app.cx.open[.Delete], o) == .Confirmed {
 		delete_session(app, app.sidebar.delete_id)
 		if app.sidebar.delete_id == app.chat.id { new_session(app) }

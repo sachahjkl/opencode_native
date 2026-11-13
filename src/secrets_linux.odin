@@ -10,6 +10,7 @@ import "core:sync"
 import "core:time"
 import "gt:dbus"
 import "gt:ui"
+import i18n "gt:i18n"
 
 @(private = "file") SECRET_BUS        :: "org.freedesktop.secrets"
 @(private = "file") SECRET_PATH       :: "/org/freedesktop/secrets"
@@ -191,5 +192,5 @@ password_note :: proc(app: ^App) -> string {
 	sync.unlock(&in_clear_lock)
 	up, known := secret_available(app)
 	if !known || (up && none_in_clear) { return "" }   // (not known yet: nothing said rather than a warning that may be wrong)
-	return "No usable Secret Service (none here, or its keyring is locked): the password stays in clear in servers.txt, which only you can read (mode 0600)."
+	return i18n.tr("No usable Secret Service (none here, or its keyring is locked): the password stays in clear in servers.txt, which only you can read (mode 0600).")
 }

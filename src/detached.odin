@@ -5,6 +5,7 @@ import "gt:draw"
 import "gt:host"
 import "gt:platform"
 import "gt:ui"
+import i18n "gt:i18n"
 
 // A panel in a window of its own, for a large screen or a second one. The same program, the same renderer, the same connection:
 // the window has a ui.State and a surface of its own, and is built after the main one, in its frame. The panel goes on as ever;
@@ -89,7 +90,7 @@ panel_detach :: proc(app: ^App, panel: u32) {
 	d.panel, d.app = panel, app
 	if !host.host_open(&d.window, &app.gfx, {title = panel_title(app, panel), size = {DETACHED_W, DETACHED_H}, under_children = panel == u32(Panel.Preview)}, detached_build, d) {
 		free(d)
-		ui.toast(.Bad, "No window: the renderer refused it")
+		ui.toast(.Bad, i18n.tr("No window: the renderer refused it"))
 		return
 	}
 	platform.set_dark_title(d.win, !app.cx.theme.light)

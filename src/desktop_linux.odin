@@ -7,6 +7,7 @@ package ocn
 import "core:os"
 import desktop "gt:desktop"
 import setup "gt:setup"
+import i18n "gt:i18n"
 
 @(private = "file")
 ICON_SET := [?]desktop.Icon{{256, #load("../assets/logo_256.png")}}
@@ -16,6 +17,8 @@ desktop_icons :: proc() -> []desktop.Icon { return ICON_SET[:] }
 
 // What the settings call the pieces of an install, on this system.
 LBL_PIECES :: "the applications menu entry, the icon"
+// (the settings' line about Setup, whole: a language orders its words its own way)
+SETUP_HINT := i18n.later("Installation and the applications menu entry, the icon are in Setup… (title bar menu).")
 
 // After an uninstall: the copy of the menu entry on the Desktop, when it is ours.
 desktop_copy_remove :: proc() {

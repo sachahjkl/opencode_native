@@ -9,6 +9,7 @@ import "gt:draw"
 import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 @(private = "file")
 home_row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
@@ -37,7 +38,7 @@ home_session :: proc(app: ^App, s: ^Session_Info, em, now: f64, busy: bool) {
 			glyph(lucide.MESSAGE_SQUARE, hex(HEX_FAINT), math.round(e * ICON_SMALL), e * 1.25)
 		}
 		ui.spacer(ui.px(e * 0.55))
-		text("t", s.title != "" ? s.title : "Untitled", hex(HEX_TEXT_SOFT), ui.Style_Mod{font_size = math.round(e * FS_LABEL)}, ui.fill())
+		text("t", s.title != "" ? s.title : i18n.tr("Untitled"), hex(HEX_TEXT_SOFT), ui.Style_Mod{font_size = math.round(e * FS_LABEL)}, ui.fill())
 		ui.spacer(ui.px(e * 0.5))
 		text("d", base_name(s.directory), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(e * FS_CAPTION)})
 		ui.spacer(ui.px(e * 0.8))
@@ -86,7 +87,7 @@ home_folders :: proc(app: ^App) -> []string { return home_lists(app).folders[:] 
 
 @(private = "file")
 home_pick_folder :: proc(app: ^App) {
-	ui.file_dialog(&app.state, .Folder, {owner = app.win, title = "Start a session in", remember_id = "new_session"}, proc(r: platform.Dialog_Result, user: rawptr) {
+	ui.file_dialog(&app.state, .Folder, {owner = app.win, title = i18n.tr("Start a session in"), remember_id = "new_session"}, proc(r: platform.Dialog_Result, user: rawptr) {
 		app := (^App)(user)
 		if r.status == .Chosen && len(r.paths) > 0 { app.chat.new_dir = strings.clone(r.paths[0], app.chat.alloc) }
 	}, app)
@@ -105,14 +106,14 @@ home :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.fill())
 		if !online(app) {
 			refused := app.link == .Auth_Refused
-			text("c", fmt.tprintf(refused ? "%s refused the password" : "Connecting to %s…", server_base(app)), refused ? hex(HEX_RED) : hex(HEX_YELLOW), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+			text("c", fmt.tprintf(refused ? i18n.tr("%s refused the password") : i18n.tr("Connecting to %s…"), server_base(app)), refused ? hex(HEX_RED) : hex(HEX_YELLOW), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		}
 	}
-	info_line(app, "###h_not_theirs", APP_NOT_THEIRS, em, hex(HEX_FAINT))
+	info_line(app, "###h_not_theirs", i18n.tr(APP_NOT_THEIRS), em, hex(HEX_FAINT))
 	ui.spacer(ui.px(em * 0.8))
 
 	// where a new session starts
-	section_label("h_start", "START IN", em)
+	section_label("h_start", i18n.tr("START IN"), em)
 	folders := home_folders(app)
 	if app.chat.new_dir == "" && len(folders) > 0 { app.chat.new_dir = strings.clone(folders[0], app.chat.alloc) }
 	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.45, em * 0.45}})
@@ -127,24 +128,24 @@ home :: proc(app: ^App, em: f32) {
 			if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(d) } }
 			if sig.right_clicked { ctx_open(app, .Folder, msg = d) }
 		}
-		if ui.button_icon("###hf_other", lucide.PLUS, "Other folder…", height = math.round(em * BUTTON_COMPACT_H_EM), face = .Ghost).clicked { home_pick_folder(app) }
+		if ui.button_icon("###hf_other", lucide.PLUS, i18n.tr("Other folder…"), height = math.round(em * BUTTON_COMPACT_H_EM), face = .Ghost).clicked { home_pick_folder(app) }
 	}
 	ui.spacer(ui.px(em * 1.1))
 
 	// what runs now, whatever the session
 	lists := home_lists(app)
 	if lists.running_count > 0 {
-		section_label("h_run", fmt.tprintf("RUNNING NOW  %d", lists.running_count), em)
+		section_label("h_run", fmt.tprintf(i18n.tr("RUNNING NOW  %d"), lists.running_count), em)
 		for i in lists.running { home_session(app, &app.sessions[i], f64(em), now, true) }
 		ui.spacer(ui.px(em * 1))
 	}
 
 	if app.sessions_loaded {
-		section_label("h_rec", "RECENT", em)
+		section_label("h_rec", i18n.tr("RECENT"), em)
 		for i in lists.recent { home_session(app, &app.sessions[i], f64(em), now, false) }
 		if len(lists.recent) == 0 {
 			ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
-			if ui.row(.Center, id = "###h_none") { text("n", "No session yet: ask anything below.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
+			if ui.row(.Center, id = "###h_none") { text("n", i18n.tr("No session yet: ask anything below."), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
 		}
 		ui.spacer(ui.px(em * 1.1))
 	}
@@ -152,11 +153,11 @@ home :: proc(app: ^App, em: f32) {
 	// what is worth knowing first
 	ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###h_keys") {
-		if hint_action("###hk1", "Ctrl+K  everything", em, app.mono) { command_run(app, command_find("app.palette")) }
+		if hint_action("###hk1", i18n.tr("Ctrl+K  everything"), em, app.mono) { command_run(app, command_find("app.palette")) }
 		ui.spacer(ui.px(em * 1.6))
-		if hint_action("###hk2", "Ctrl+Shift+B  preview", em, app.mono) { command_run(app, command_find("view.preview")) }
+		if hint_action("###hk2", i18n.tr("Ctrl+Shift+B  preview"), em, app.mono) { command_run(app, command_find("view.preview")) }
 		ui.spacer(ui.px(em * 1.6))
-		if hint_action("###hk3", "F1  shortcuts", em, app.mono) { command_run(app, command_find("app.help")) }
+		if hint_action("###hk3", i18n.tr("F1  shortcuts"), em, app.mono) { command_run(app, command_find("app.help")) }
 	}
 	ui.spacer(ui.px(em * 2))
 }

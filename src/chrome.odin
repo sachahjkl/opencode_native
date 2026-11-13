@@ -7,6 +7,7 @@ import "core:strings"
 import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 
 TITLE_BAR_MIN_H_PX    :: 34
@@ -83,12 +84,12 @@ title_bar :: proc(app: ^App, em: f32) {
 			if sig.clicked { nav_step(app, d) }
 			if can && ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(tip) } }
 		}
-		nav_button(app, "nav_back", lucide.ARROW_LEFT, "Back  (Alt+Left)", -1, math.round(h * 0.78))
-		nav_button(app, "nav_fwd", lucide.ARROW_RIGHT, "Forward  (Alt+Right)", 1, math.round(h * 0.78))
+		nav_button(app, "nav_back", lucide.ARROW_LEFT, i18n.tr("Back  (Alt+Left)"), -1, math.round(h * 0.78))
+		nav_button(app, "nav_fwd", lucide.ARROW_RIGHT, i18n.tr("Forward  (Alt+Right)"), 1, math.round(h * 0.78))
 		ui.spacer(ui.px(em * 0.4))
 		// the logo and the wordmark ("open" dim, "code" bright, "native" in the accent, in the mono face) go home, as on any site
 		ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .X, cross = .Center, cursor = .Hand})
-		ui.a11y({role = .Button, name = "Home"})
+		ui.a11y({role = .Button, name = i18n.tr("Home")})
 		home_link := ui.build_box({.Clickable}, "###home_link")
 		hsig := ui.signal(home_link)
 		if ui.parent(home_link) {
@@ -101,13 +102,13 @@ title_bar :: proc(app: ^App, em: f32) {
 			text("w3", "native", ink(accent()), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_HEADING)})
 		}
 		if hsig.clicked { command_run(app, command_find("nav.home")) }
-		if ui.hovered_for(hsig) { if ui.tooltip() { ui.tooltip_text("Home  (Ctrl+H)") } }
+		if ui.hovered_for(hsig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Home  (Ctrl+H)")) } }
 		side_line("###tg", b.last, em * 0.9, app.sidebar.width)
 		ui.spacer(ui.px(em * 1.3))
 		if !app.servers[app.server].local {   // another computer's server: its name first
 			glyph(lucide.GLOBE, ink(hex(HEX_CYAN)), math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.3))
-			text("srv", server_name(app), ink(hex(HEX_CYAN)), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			text("srv", i18n.tr(server_name(app)), ink(hex(HEX_CYAN)), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			if app.chat.id != "" { text("srvsep", "  /  ", ink(hex(HEX_FAINT)), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}) }
 		}
 		s := find_session(app, app.chat.id)
@@ -165,7 +166,7 @@ chat_header :: proc(app: ^App, em: f32) {
 				// breadcrumb: the parent, then this sub-agent
 				ui.next({width = ui.fill(), height = ui.px(em * 1.2), axis = .X, cross = .Center})
 				if ui.row(.Center, id = "###crumb") {
-					parent := app.chat.parent_title != "" ? app.chat.parent_title : "parent session"
+					parent := app.chat.parent_title != "" ? app.chat.parent_title : i18n.tr("parent session")
 					ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .X, cross = .Center, cursor = .Hand})
 					pb := ui.build_box({.Clickable}, "###crumb_parent")
 					ps := ui.signal(pb)
@@ -175,10 +176,10 @@ chat_header :: proc(app: ^App, em: f32) {
 					if ui.parent(pb) {
 						text("p", ellipsize(parent, CRUMB_PARENT_CHARS), ps.hovering ? accent() : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 					}
-					text("s", "  ›  sub-agent", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+					text("s", i18n.tr("  ›  sub-agent"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 				}
 			}
-			title := s != nil ? s.title : "New session"
+			title := s != nil ? s.title : i18n.tr("New session")
 			if s != nil && renaming_at(app, s.id, .Header) {
 				rename_in_place(app, em, math.round(em * FS_HEADING), em * 1.5, fit = true)
 			} else {
@@ -186,11 +187,11 @@ chat_header :: proc(app: ^App, em: f32) {
 				tb := ui.build_box(s != nil ? {.Clickable} : {}, "###title_b")
 				if s != nil && ui.signal(tb).double_clicked { rename_inline(app, s.id, .Header) }
 				if ui.parent(tb) {
-					text("title", title != "" ? title : "Untitled", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_HEADING), height = ui.px(em * 1.5)}, ui.fill())
+					text("title", title != "" ? title : i18n.tr("Untitled"), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_HEADING), height = ui.px(em * 1.5)}, ui.fill())
 				}
 			}
 			dir := s != nil ? s.directory : app.chat.new_dir
-			text("dir", dir != "" ? dir : "default folder", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2), flags = dir != "" ? {.Selectable} : {}}, ui.fill())
+			text("dir", dir != "" ? dir : i18n.tr("default folder"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2), flags = dir != "" ? {.Selectable} : {}}, ui.fill())
 			ui.spacer(ui.fill())
 		}
 		c := &app.chat
@@ -203,7 +204,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		// (narrow, as a panel of the dock: the title first, the figures are in the statistics)
 		narrow := editing || app.conversation.docked_w > 0 && app.conversation.docked_w < em * HEADER_FIGURES_MIN_EM
 		if !narrow && c.tokens_in + c.tokens_out > 0 {
-			if pill_button("###tok", fmt.tprintf("%s in · %s out", kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, lucide.ZAP).clicked { stats_toggle(app) }
+			if pill_button("###tok", fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, lucide.ZAP).clicked { stats_toggle(app) }
 			ui.spacer(ui.px(em * 0.4))
 		}
 		if !narrow && c.cost > 0 {
@@ -212,7 +213,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		}
 		if c.busy {
 			ui.spacer(ui.px(em * 0.4))
-			if ui.button_icon("###stop", lucide.SQUARE, "Stop", .Danger, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { interrupt_session(app, c.id) }
+			if ui.button_icon("###stop", lucide.SQUARE, i18n.tr("Stop"), .Danger, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { interrupt_session(app, c.id) }
 		}
 		ui.spacer(ui.px(em * 1.2))
 	}
@@ -259,15 +260,15 @@ status_bar :: proc(app: ^App, em: f32) {
 			if up { pip("###online", col, em * 0.8) } else { lamp("###online", col, 1, pulse = true, size = em * 0.8); animate(app) }
 			ui.spacer(ui.px(em * 0.4))
 			if len(app.servers) > 1 || !app.servers[app.server].local {
-				text("sn", server_name(app), up ? hex(HEX_TEXT) : col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+				text("sn", i18n.tr(server_name(app)), up ? hex(HEX_TEXT) : col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.5))
 			}
 			state: string
 			switch app.link {
-			case .Connecting:   state = "connecting"
-			case .Online:       state = "connected"
-			case .Retrying:     state = "reconnecting"
-			case .Auth_Refused: state = "auth refused"
+			case .Connecting:   state = i18n.tr("connecting")
+			case .Online:       state = i18n.tr("connected")
+			case .Retrying:     state = i18n.tr("reconnecting")
+			case .Auth_Refused: state = i18n.tr("auth refused")
 			}
 			text("st", fmt.tprintf("%s  %s", state, server_base(app)), up ? hex(HEX_WEAK) : col, small)
 			ui.spacer(ui.px(em * 0.35))
@@ -285,22 +286,22 @@ status_bar :: proc(app: ^App, em: f32) {
 		pend := int(app.pending)
 		if pend == 0 { app.chrome.pending_since = 0 } else if app.chrome.pending_since == 0 { app.chrome.pending_since = ui.now_ms() }
 		if pend > 0 && ui.now_ms() - app.chrome.pending_since >= PENDING_SHOW_MS {
-			text("p", fmt.tprintf("%d request%s", pend, pend > 1 ? "s" : ""), hex(HEX_FAINT), small)
+			text("p", fmt.tprintf(i18n.tr(pend, "%d request", "%d requests"), pend), hex(HEX_FAINT), small)
 			ui.spacer(ui.px(em * 0.8))
 		}
 		nbusy := len(app.busy)
 		if nbusy > 0 {
-			text("b", fmt.tprintf("%d running", nbusy), accent(), small)
+			text("b", fmt.tprintf(i18n.tr("%d running"), nbusy), accent(), small)
 			ui.spacer(ui.px(em * 0.8))
 		}
-		text("n", fmt.tprintf("%d sessions", len(app.sessions)), hex(HEX_FAINT), small)
+		text("n", fmt.tprintf(i18n.tr(len(app.sessions), "%d sessions", "%d sessions"), len(app.sessions)), hex(HEX_FAINT), small)
 		ui.spacer(ui.px(em * 0.8))
 		if app.prefs.show_fps {
 			fps := app.chrome.frame_ms > 0 ? 1000 / app.chrome.frame_ms : 0
-			text("fps", fmt.tprintf("%3.0f fps  %.1f ms", fps, app.chrome.work_ms), hex(HEX_FAINT), small)
+			text("fps", fmt.tprintf(i18n.tr("%3.0f fps  %.1f ms"), fps, app.chrome.work_ms), hex(HEX_FAINT), small)
 			ui.spacer(ui.px(em * 0.8))
 			if n := app.cx.unreadable.count; n > 0 {   // (unreadable.odin: the log says what they were)
-				text("unr", fmt.tprintf("%d unreadable", n), hex(HEX_YELLOW), small)
+				text("unr", fmt.tprintf(i18n.tr(n, "%d unreadable", "%d unreadable"), n), hex(HEX_YELLOW), small)
 				ui.spacer(ui.px(em * 0.8))
 			}
 		}

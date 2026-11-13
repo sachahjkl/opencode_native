@@ -8,6 +8,7 @@ import "core:slice"
 import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 
 HEX_PERM_TOP          :: 0x2a2116ff
@@ -66,16 +67,16 @@ permission_card :: proc(app: ^App, p: ^Permission, em: f32) {
 			ui.spacer(ui.px(em * 0.5))
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
-				text("a", fmt.tprintf("Permission requested: %s", p.action), hex(HEX_YELLOW), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
+				text("a", fmt.tprintf(i18n.tr("Permission requested: %s"), p.action), hex(HEX_YELLOW), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
 				detail := p.message != "" ? p.message : strings.join(p.resources, ", ", context.temp_allocator)
 				text("d", detail, hex(HEX_PERM_DETAIL), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.4)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
-			if ui.button_icon("###once", lucide.CHECK, "Allow once", .Success, disabled = p.replying).clicked { reply_permission(app, p, "once") }
+			if ui.button_icon("###once", lucide.CHECK, i18n.tr("Allow once"), .Success, disabled = p.replying).clicked { reply_permission(app, p, "once") }
 			ui.spacer(ui.px(em * 0.4))
-			if ui.button_icon("###always", "", "Always", .Success, disabled = p.replying).clicked { reply_permission(app, p, "always") }
+			if ui.button_icon("###always", "", i18n.tr("Always"), .Success, disabled = p.replying).clicked { reply_permission(app, p, "always") }
 			ui.spacer(ui.px(em * 0.4))
-			if ui.button_icon("###reject", lucide.X, "Reject", .Danger, disabled = p.replying).clicked { reply_permission(app, p, "reject") }
+			if ui.button_icon("###reject", lucide.X, i18n.tr("Reject"), .Danger, disabled = p.replying).clicked { reply_permission(app, p, "reject") }
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -148,7 +149,7 @@ composer :: proc(app: ^App, em: f32) {
 				if !overlay_open(app) && ui.focus_key() == 0 && typed_word(app) { ui.type_to_field(ui.key_from_string(ui.parent_box().key, "###composer")) }
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_BODY), text_pad = em * 0.5})
 				// (menu = false: the menu is the whole card's, ctx_check below; it is ui.field_menu on this area)
-				res := ui.text_edit("###composer", &app.composer.area, "Ask anything…", wrap = true, auto_height = true, min_lines = 2, max_lines = COMPOSER_MAX_LINES, menu = false)
+				res := ui.text_edit("###composer", &app.composer.area, i18n.tr("Ask anything…"), wrap = true, auto_height = true, min_lines = 2, max_lines = COMPOSER_MAX_LINES, menu = false)
 				app.composer.focused = res.focused
 				app.composer.edit_key = res.box.key
 				mention_track(app)
@@ -168,10 +169,10 @@ composer :: proc(app: ^App, em: f32) {
 		if ui.row(.Center, id = "###tools") {
 			ui.spacer(ui.px(em * 0.6))
 			// what goes with the prompt, then who answers it and with what
-			ui.a11y({role = .Button, name = "Attach files"})
+			ui.a11y({role = .Button, name = i18n.tr("Attach files")})
 			att := ui.button_icon("###attach", lucide.PAPERCLIP, "", height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, face = .Ghost)
 			if att.clicked { attach_pick(app) }
-			if ui.hovered_for(att) { if ui.tooltip() { ui.tooltip_text("Attach files: images, PDF, text  (or paste, or drop them here)") } }
+			if ui.hovered_for(att) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Attach files: images, PDF, text  (or paste, or drop them here)")) } }
 			ui.spacer(ui.px(em * 0.1))
 			agent := shown_agent(app)
 			if agent == "" { agent = "build" }
@@ -180,7 +181,7 @@ composer :: proc(app: ^App, em: f32) {
 			if asig.clicked { if app.cx.open[.Picker] && app.picker.id == "agent" { app.cx.open[.Picker] = false } else { picker_open(app, "agent", asig.box.rect) } }
 			ui.spacer(ui.px(em * 0.4))
 			model, _ := shown_model(app)
-			if model == "" { model = "default model" }
+			if model == "" { model = i18n.tr("default model") }
 			msig := ui.button_icon("###model", lucide.CPU, ui.text_shown(model), height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.cx.open[.Picker] && app.picker.id == "model", face = .Ghost)
 			if msig.clicked { if app.cx.open[.Picker] && app.picker.id == "model" { app.cx.open[.Picker] = false } else { picker_open(app, "model", msig.box.rect) } }
 			variant_button(app, em, fit >= 3)
@@ -190,20 +191,20 @@ composer :: proc(app: ^App, em: f32) {
 			held := composer_held(app)
 			if app.conversation.column_w > em * COMPOSER_HINT_MIN_EM && fit < 1 {   // (room for it beside the agent and model buttons)
 				if held {
-					text("hint", attaching(app) ? "reading the attachment…" : "starting the session…", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					text("hint", attaching(app) ? i18n.tr("reading the attachment…") : i18n.tr("starting the session…"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				} else if history_browsing(app) {
-					text("hint", fmt.tprintf("history %d/%d   ·   ", app.composer.history.at, len(app.composer.history.view)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-					if hint_action("###hist_back", "Esc  back to your text", em, app.mono, intent = .Cancel) { history_leave(app, true) }
+					text("hint", fmt.tprintf(i18n.tr("history %d/%d   ·   "), app.composer.history.at, len(app.composer.history.view)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					if hint_action("###hist_back", i18n.tr("Esc  back to your text"), em, app.mono, intent = .Cancel) { history_leave(app, true) }
 				} else if queue_editing(app) {
-					if hint_action("###h_save", app.prefs.ctrl_enter ? "Ctrl+Enter  save" : "Enter  save", em, app.mono, intent = .Success) { submit = true }
+					if hint_action("###h_save", app.prefs.ctrl_enter ? i18n.tr("Ctrl+Enter  save") : i18n.tr("Enter  save"), em, app.mono, intent = .Success) { submit = true }
 				} else if as := composer_send_as(app); as != .Idle {
 					// (each says what it does, and does it)
-					first, second := as == .Queue ? "queue" : "steer", as == .Queue ? "steer" : "queue"
+					first, second := as == .Queue ? i18n.tr("queue") : i18n.tr("steer"), as == .Queue ? i18n.tr("steer") : i18n.tr("queue")
 					if hint_action("###h_first", fmt.tprintf("%s  %s", app.prefs.ctrl_enter ? "Ctrl+Enter" : "Enter", first), em, app.mono) { submit = true }
 					text("h_dot", "   ·   ", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 					if hint_action("###h_second", fmt.tprintf("%s  %s", app.prefs.ctrl_enter ? "Ctrl+Shift+Enter" : "Ctrl+Enter", second), em, app.mono) { submit, other = true, true }
 				} else {
-					text("hint", app.prefs.ctrl_enter ? "Ctrl+Enter  send   ·   Enter  new line" : "Enter  send   ·   Shift+Enter  new line", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					text("hint", app.prefs.ctrl_enter ? i18n.tr("Ctrl+Enter  send   ·   Enter  new line") : i18n.tr("Enter  send   ·   Shift+Enter  new line"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}
 			}
 			ui.spacer(ui.px(em * 0.8))
@@ -216,12 +217,12 @@ composer :: proc(app: ^App, em: f32) {
 			// (what it does, while that is not what it usually does)
 			send_label, send_icon, send_intent := "", lucide.SEND_HORIZONAL, ui.Intent.Primary
 			if queue_editing(app) {
-				send_label, send_icon, send_intent = "Save", lucide.CHECK, .Success
+				send_label, send_icon, send_intent = i18n.tr("Save"), lucide.CHECK, .Success
 			} else {
 				switch composer_send_as(app) {
 				case .Idle:
-				case .Queue: send_label, send_icon = "Queue", lucide.LIST
-				case .Steer: send_label = "Steer"
+				case .Queue: send_label, send_icon = i18n.tr("Queue"), lucide.LIST
+				case .Steer: send_label = i18n.tr("Steer")
 				}
 			}
 			if app.conversation.column_w <= em * QUEUE_WORDS_MIN_EM || fit >= 2 { send_label = "" }   // (narrow, its glyph says it: the toolbar has no room)
@@ -269,8 +270,8 @@ composer_panels :: proc(app: ^App, em: f32) {
 		if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(tip) } }
 		ui.spacer(ui.px(em * 0.4))
 	}
-	if preview_available() { panel(app, "preview_btn", lucide.GLOBE, "Preview panel", "Preview panel  (Ctrl+Shift+B)", "view.preview", app.preview.open, size, em) }
-	panel(app, "terminal_btn", lucide.SQUARE_TERMINAL, "Terminal", "Terminal  (Ctrl+Shift+T)", "view.terminal", app.cx.terms.open, size, em)
+	if preview_available() { panel(app, "preview_btn", lucide.GLOBE, i18n.tr("Preview panel"), i18n.tr("Preview panel  (Ctrl+Shift+B)"), "view.preview", app.preview.open, size, em) }
+	panel(app, "terminal_btn", lucide.SQUARE_TERMINAL, i18n.tr("Terminal"), i18n.tr("Terminal  (Ctrl+Shift+T)"), "view.terminal", app.cx.terms.open, size, em)
 }
 
 composer_pickers :: proc(app: ^App, agent: string, em: f32) {
@@ -296,8 +297,8 @@ composer_pickers :: proc(app: ^App, agent: string, em: f32) {
 		}
 	}
 	// (a version of each list of its own, never 0: 0 keeps nothing)
-	if k := picker(app, p, "agent", "agents", p.items[:], em, version = app.cx.catalog_version * 2 + 1); k >= 0 { choose_agent(app, p.item_ids[k]) }
-	if k := picker(app, p, "model", "models", p.items[:], em, version = app.cx.catalog_version * 2 + 2); k >= 0 { choose_model(app, app.models[k]) }
+	if k := picker(app, p, "agent", i18n.tr("Search agents"), p.items[:], em, version = app.cx.catalog_version * 2 + 1); k >= 0 { choose_agent(app, p.item_ids[k]) }
+	if k := picker(app, p, "model", i18n.tr("Search models"), p.items[:], em, version = app.cx.catalog_version * 2 + 2); k >= 0 { choose_model(app, app.models[k]) }
 }
 
 // The reader picks one, in the picker or the palette: the session shown takes it, and it stands until that session's end.
@@ -390,14 +391,14 @@ variant_button :: proc(app: ^App, em: f32, glyph := false) {
 	if len(variants) == 0 { return }
 	current := shown_variant(app)
 	ui.spacer(ui.px(em * 0.2))
-	ui.a11y({role = .Button, name = "Thinking"})
-	name := current != "" ? current : "default"
+	ui.a11y({role = .Button, name = i18n.tr("Thinking")})
+	name := current != "" ? current : i18n.tr("default")
 	sig := ui.button_icon("###variant", lucide.GAUGE, ui.text_shown(glyph ? "" : name), height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, face = .Ghost)
 	key := ui.key_from_string(0, "variant_menu")
 	if sig.clicked { ui.ctx_menu_open_rect(key, sig.box.rect, sig.box.key) }
-	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(glyph ? fmt.tprintf("How hard the model thinks: %s", name) : "How hard the model thinks") } }
+	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(glyph ? fmt.tprintf(i18n.tr("How hard the model thinks: %s"), name) : i18n.tr("How hard the model thinks")) } }
 	if ui.ctx_menu(key, em * 12) {
-		if ui.menu_item("default###v_default", "", current == "").clicked { choose_variant(app, "") }
+		if ui.menu_item(fmt.tprintf("%s###v_default", i18n.tr("default")), "", current == "").clicked { choose_variant(app, "") }
 		for v, i in variants {
 			if ui.menu_item(fmt.tprintf("%s###v%d", label_safe(v), i), "", v == current).clicked { choose_variant(app, v) }
 		}

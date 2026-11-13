@@ -18,6 +18,7 @@ import tasks "gt:tasks"
 import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 Attachment :: struct {
 	name: string,      // (owned)
@@ -156,14 +157,14 @@ attach_done :: proc(data: rawptr, word: u64) {
 		if strings.has_prefix(job.mime, "image/") { a.ref = image_ref(a.uri, .Data_Url, job.mime, a.name) }
 		composer_take(app, job.chat, a, "")
 	case .Too_Large:
-		ui.toast(.Warn, "%s is too large to attach", job.name)
+		ui.toast(.Warn, i18n.tr("%s is too large to attach"), job.name)
 	case .Not_Attachable:
-		ui.toast(.Warn, "%s is not an image, a PDF or text: its path goes in the prompt", job.name)
+		ui.toast(.Warn, i18n.tr("%s is not an image, a PDF or text: its path goes in the prompt"), job.name)
 		composer_take(app, job.chat, nil, fmt.tprintf("%s ", job.path))
 	case .Unread:
 		composer_take(app, job.chat, nil, fmt.tprintf("%s ", job.path))
 	case .Bad_Image:
-		ui.toast(.Bad, "The image could not be read")
+		ui.toast(.Bad, i18n.tr("The image could not be read"))
 	case .Failed:
 	}
 }
@@ -200,8 +201,8 @@ attach_path :: proc(app: ^App, path: string) {
 
 // The paperclip: the system's dialog, several files at once.
 attach_pick :: proc(app: ^App) {
-	ui.file_dialog(&app.state, .Open, {owner = app.win, title = "Attach files", all_files = true, multiple = true, remember_id = "attach"}, proc(r: platform.Dialog_Result, user: rawptr) {
-		if r.status == .Unsupported { ui.toast(.Bad, "This system has no file dialog"); return }
+	ui.file_dialog(&app.state, .Open, {owner = app.win, title = i18n.tr("Attach files"), all_files = true, multiple = true, remember_id = "attach"}, proc(r: platform.Dialog_Result, user: rawptr) {
+		if r.status == .Unsupported { ui.toast(.Bad, i18n.tr("This system has no file dialog")); return }
 		if r.status != .Chosen { return }
 		for p in r.paths { attach_path((^App)(user), p) }
 	}, app)

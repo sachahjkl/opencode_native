@@ -14,6 +14,7 @@ import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
 import remote "gt:remote"
+import i18n "gt:i18n"
 
 // What a request says of the folder: the session's, or the one about to get a session; "": the server's own.
 @(private = "file")
@@ -520,7 +521,7 @@ files_left :: proc(app: ^App, em: f32) {
 		glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.35, font_size = math.round(em * FS_BODY)})
-			res := ui.line_edit("###fl_find", &f.field, "Find a file")
+			res := ui.line_edit("###fl_find", &f.field, i18n.tr("Find a file"))
 			if f.fresh { ui.set_focus(res.box.key) }
 			if res.changed { files_list(app) }
 			if res.cancelled { app.cx.open[.Files] = false }
@@ -534,7 +535,7 @@ files_left :: proc(app: ^App, em: f32) {
 			if file_row(app, "###fl_up", "..", lucide.FOLDER, false, em) { files_up(app); return }
 		}
 		if !read_shown(app, "###fl_read", &f.read, em, files_list) { return }
-		if len(f.rows) == 0 { info_line(app, "###fl_none", f.searching ? "Nothing matches." : "This folder is empty.", em) }
+		if len(f.rows) == 0 { info_line(app, "###fl_none", f.searching ? i18n.tr("Nothing matches.") : i18n.tr("This folder is empty."), em) }
 		for r, i in f.rows {
 			if !file_row(app, fmt.tprintf("###flr%d", i), r.name, r.directory ? lucide.FOLDER : lucide.FILE, i == f.sel, em) { continue }
 			f.sel = i
@@ -561,18 +562,18 @@ file_row :: proc(app: ^App, id, name, icon: string, selected: bool, em: f32) -> 
 files_right :: proc(app: ^App, em: f32) {
 	f := &app.cx.files
 	if f.file == "" {
-		info_line(app, "###fl_hint", "Pick a file to read it.", em)
+		info_line(app, "###fl_hint", i18n.tr("Pick a file to read it."), em)
 		return
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###fl_bar") {
 		text("p", f.file, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 		ui.spacer(ui.px(em * 0.5))
-		if ui.button_icon("###fl_copy", lucide.COPY, "Copy path", height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
+		if ui.button_icon("###fl_copy", lucide.COPY, i18n.tr("Copy path"), height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
 			clip_set(fmt.tprintf("%s/%s", strings.trim_right(f.dir, `\/`), f.file))
 		}
 		ui.spacer(ui.px(em * 0.4))
-		if ui.button_icon("###fl_mention", lucide.PENCIL, "Mention in the prompt", .Primary, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
+		if ui.button_icon("###fl_mention", lucide.PENCIL, i18n.tr("Mention in the prompt"), .Primary, height = math.round(em * BUTTON_COMPACT_H_EM)).clicked {
 			a := &app.composer.area
 			a.mark = a.cursor
 			mention_put(app, .File, f.file, file_uri(f.dir, f.file), filepath.base(f.file))
@@ -582,10 +583,10 @@ files_right :: proc(app: ^App, em: f32) {
 	ui.spacer(ui.px(em * 0.5))
 	if !read_shown(app, "###fl_file", &f.file_read, em, file_read) { return }
 	if f.binary {
-		info_line(app, "###fl_bin", fmt.tprintf("Not text: %d bytes. It can still go with a prompt.", f.size), em)
+		info_line(app, "###fl_bin", fmt.tprintf(i18n.tr(f.size, "Not text: %d bytes. It can still go with a prompt.", "Not text: %d bytes. It can still go with a prompt."), f.size), em)
 		return
 	}
-	if f.size > len(f.content) { info_line(app, "###fl_cut", fmt.tprintf("The first %d of %d bytes.", len(f.content), f.size), em) }
+	if f.size > len(f.content) { info_line(app, "###fl_cut", fmt.tprintf(i18n.tr("The first %d of %d bytes."), len(f.content), f.size), em) }
 	ui.next({width = ui.fill(), height = ui.fill()})
 	if ui.scroll_y("###fl_view") {
 		code_block("###fl_code", strings.trim_prefix(filepath.ext(f.file), "."), f.content, app.mono, version = f.version)

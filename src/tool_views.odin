@@ -12,6 +12,7 @@ import "gt:ui"
 import diff "gt:diff"
 import lucide "gt:lucide"
 import syntax "gt:syntax"
+import i18n "gt:i18n"
 
 Tool_Kind :: enum u8 { Other, Edit, Read, Search, Shell, Todo }
 
@@ -97,7 +98,7 @@ more_lines :: proc(n: int, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###more") {
 		ui.spacer(ui.px(em * 0.75))
-		text("m", fmt.tprintf("… %d more lines", n), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
+		text("m", fmt.tprintf(i18n.tr(n, "… %d more lines", "… %d more lines"), n), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
 	}
 }
 
@@ -111,8 +112,8 @@ diff_more :: proc(n: int, em: f32) -> (clicked: bool) {
 		ui.spacer(ui.px(em * 0.75))
 		col := sig.hovering ? hex(HEX_TEXT) : hex(HEX_FAINT)
 		fs := math.round(em * FS_SMALL)
-		if n > 0 { text("m", fmt.tprintf("… %d more lines", n), col, ui.Style_Mod{font = the_app.mono, font_size = fs}); ui.spacer(ui.px(em * 0.8)) }
-		text("f", "Full view", col, ui.Style_Mod{font_size = fs})
+		if n > 0 { text("m", fmt.tprintf(i18n.tr(n, "… %d more lines", "… %d more lines"), n), col, ui.Style_Mod{font = the_app.mono, font_size = fs}); ui.spacer(ui.px(em * 0.8)) }
+		text("f", i18n.tr("Full view"), col, ui.Style_Mod{font_size = fs})
 	}
 	return sig.clicked
 }
@@ -278,7 +279,7 @@ input_view :: proc(app: ^App, p: ^Part, em: f32) {
 // What a call that edits names: its file, as the arguments say.
 tool_diff_title :: proc(p: ^Part) -> string {
 	if p.subject != "" { return p.subject }
-	return p.tool_name != "" ? p.tool_name : "Diff"
+	return p.tool_name != "" ? p.tool_name : i18n.tr("Diff")
 }
 
 // The body of a call that is open, by what it does.
@@ -307,7 +308,7 @@ tool_body :: proc(app: ^App, p: ^Part, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###cmd_more") {
 				ui.spacer(ui.fill())
-				if ui.button_icon("###inspect", lucide.SQUARE_TERMINAL, "Inspect the output", height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { output_view_open_part(app, p) }
+				if ui.button_icon("###inspect", lucide.SQUARE_TERMINAL, i18n.tr("Inspect the output"), height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { output_view_open_part(app, p) }
 			}
 		}
 		return

@@ -12,6 +12,7 @@ import "core:strings"
 import "core:time"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 Goal_Status :: enum u8 { Active, Paused, Complete }
 
@@ -63,7 +64,7 @@ goal_strip :: proc(app: ^App, em: f32) {
 	if !c.has_goal || c.id == "" { return }
 	g := &c.goal
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * BUTTON_COMPACT_H_EM)), axis = .X, cross = .Center})
-	ui.a11y({role = .Group, name = "Goal"})
+	ui.a11y({role = .Group, name = i18n.tr("Goal")})
 	if ui.row(.Center, id = "###goal_strip") {
 		note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
 		ui.spacer(ui.px(em * 0.5))
@@ -73,13 +74,13 @@ goal_strip :: proc(app: ^App, em: f32) {
 		case .Complete: glyph(lucide.CHECK, hex(HEX_GREEN), math.round(em * ICON_SMALL))
 		}
 		ui.spacer(ui.px(em * 0.35))
-		word := g.status == .Active ? "goal" : g.status == .Paused ? "goal paused" : "goal met"
+		word := g.status == .Active ? i18n.tr("goal") : g.status == .Paused ? i18n.tr("goal paused") : i18n.tr("goal met")
 		text("w", word, hex(HEX_WEAK), note)
 		ui.spacer(ui.px(em * 0.5))
 		text("o", g.objective, hex(HEX_TEXT_SOFT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		if g.max_rounds > 0 {
 			ui.spacer(ui.px(em * 0.6))
-			text("r", fmt.tprintf("round %d/%d", g.rounds, g.max_rounds), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("r", fmt.tprintf(i18n.tr("round %d/%d"), g.rounds, g.max_rounds), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
 		ui.spacer(ui.px(em * 1.0))
 		switch g.status {
@@ -113,7 +114,7 @@ goal_reason_line :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.6))
 		lamp("###gwl", hex(HEX_FAINT), 1, size = em * CARD_MARK_EM)
 		ui.spacer(ui.px(em * 0.35))
-		text("w", "goal paused", hex(HEX_WEAK), small)
+		text("w", i18n.tr("goal paused"), hex(HEX_WEAK), small)
 		if resets > 0 {
 			text("when", reset_text(resets, now_epoch_ms(), app.prefs.clock24), hex(HEX_FAINT), small)
 			if !over { ui.wake_within(&app.state, GOAL_RESET_TICK_MS) }   // (the time left, minute after minute)

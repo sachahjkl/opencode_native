@@ -11,12 +11,13 @@ import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
 import remote "gt:remote"
+import i18n "gt:i18n"
 
 // What a reading says while it has nothing to show, the same in every dialog. `again`: it can be tried again.
 read_words :: proc(app: ^App, x: ^remote.Remote) -> (words: string, color: u32, again: bool) {
 	switch x.state {
-	case .Idle:    return online(app) ? "Reading…" : "Not connected: this is read when the server answers.", HEX_WEAK, false
-	case .Loading: return "Reading…", HEX_WEAK, false
+	case .Idle:    return online(app) ? i18n.tr("Reading…") : i18n.tr("Not connected: this is read when the server answers."), HEX_WEAK, false
+	case .Loading: return i18n.tr("Reading…"), HEX_WEAK, false
 	case .Refused: return x.message, HEX_YELLOW, true
 	case .Failed:  return x.message, HEX_RED, true
 	case .Ready:
@@ -32,7 +33,7 @@ read_shown :: proc(app: ^App, id: string, x: ^remote.Remote, em: f32, ask: proc(
 	info_line(app, id, words, em, hex(color))
 	if again {
 		ui.spacer(ui.px(em * 0.4))
-		if ui.button_icon(fmt.tprintf("%s_again", id), lucide.REFRESH_CW, "Try again", height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { ask(app) }
+		if ui.button_icon(fmt.tprintf("%s_again", id), lucide.REFRESH_CW, i18n.tr("Try again"), height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { ask(app) }
 	}
 	return false
 }

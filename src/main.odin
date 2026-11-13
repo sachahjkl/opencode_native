@@ -23,6 +23,7 @@ import setup "gt:setup"
 import "gt:ui"
 import lucide "gt:lucide"
 import remote "gt:remote"
+import i18n "gt:i18n"
 
 // A face of the fonts. (Inside App, `font` names the face of the interface, from host.Shared: not the package.)
 Face_Id :: font.Font_Id
@@ -404,7 +405,7 @@ main_after_frame :: proc(h: ^host.Host) {
 	h.times = {}   // (a frame held draws nothing: it costs nothing either)
 	answers_spent_free(app)
 	config.user_writer_save(&app.prefs_writer, &app.cfg_prefs)
-	if config.user_writer_failed(&app.prefs_writer) { ui.toast(.Bad, "The preferences could not be saved") }
+	if config.user_writer_failed(&app.prefs_writer) { ui.toast(.Bad, i18n.tr("The preferences could not be saved")) }
 	posts_moved(app, ui.post_stats(&app.state).run)
 	terminals_reap(app)
 	output_views_tick(app)

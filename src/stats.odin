@@ -17,6 +17,7 @@ import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
 import remote "gt:remote"
+import i18n "gt:i18n"
 
 Tool_Count :: struct { name: string, calls, failed: int, p50: f64 }
 Model_Count :: struct { name: string, steps: int, tokens_in, tokens_out, cost: f64 }
@@ -170,28 +171,28 @@ context_message :: proc(x: ^Stats_Context, m: json.Value) {
 	}
 	switch jstr(m, "type") {
 	case "user":
-		text_part(x, "Your prompts", jstr(m, "text"), id)
+		text_part(x, i18n.tr("Your prompts"), jstr(m, "text"), id)
 		for f, i in jarr(m, "files") {
 			key := fmt.tprintf("%s_f%d", id, i)
 			name := jstr(f, "name") != "" ? jstr(f, "name") : "attachment"
 			image := strings.has_prefix(jstr(f, "mime"), "image/")
-			context_add(x, "Attached files", name, "", key, image ? CTX_IMAGE_TOKENS : f64(len(jstr(f, "data"))) * 0.75 / CTX_BYTES_PER_TOKEN)
+			context_add(x, i18n.tr("Attached files"), name, "", key, image ? CTX_IMAGE_TOKENS : f64(len(jstr(f, "data"))) * 0.75 / CTX_BYTES_PER_TOKEN)
 		}
 	case "synthetic", "system":
-		text_part(x, "Notes to the model", jstr(m, "text"), id)
+		text_part(x, i18n.tr("Notes to the model"), jstr(m, "text"), id)
 	case "skill":
-		context_add(x, "Skills", jstr(m, "name"), jstr(m, "text"), id, tokens_of(jstr(m, "text")))
+		context_add(x, i18n.tr("Skills"), jstr(m, "name"), jstr(m, "text"), id, tokens_of(jstr(m, "text")))
 	case "shell":
 		t := fmt.tprintf("$ %s\n%s", jstr(m, "command"), jstr(m, "output", "output"))
-		context_add(x, "Shell commands", jstr(m, "command"), t, id, tokens_of(t))
+		context_add(x, i18n.tr("Shell commands"), jstr(m, "command"), t, id, tokens_of(t))
 	case "compaction":
-		text_part(x, "Summary of what came before", jstr(m, "summary"), id)
+		text_part(x, i18n.tr("Summary of what came before"), jstr(m, "summary"), id)
 	case "assistant":
 		for p, i in jarr(m, "content") {
 			key := fmt.tprintf("%s_%d", id, i)
 			switch jstr(p, "type") {
-			case "text":      text_part(x, "Answers", jstr(p, "text"), key)
-			case "reasoning": text_part(x, "Reasoning", jstr(p, "text"), key)
+			case "text":      text_part(x, i18n.tr("Answers"), jstr(p, "text"), key)
+			case "reasoning": text_part(x, i18n.tr("Reasoning"), jstr(p, "text"), key)
 			case "tool":
 				st := jget(p, "state")
 				name := jstr(p, "name")
@@ -200,7 +201,7 @@ context_message :: proc(x: ^Stats_Context, m: json.Value) {
 				tool_set_input(&call, jget(st, "input"), context.temp_allocator)
 				out := jstr(st, "status") == "error" ? error_text(jget(st, "error")) : content_text(jarr(st, "content"))
 				t := fmt.tprintf("%s\n\n%s", call.input, out)
-				context_add(x, fmt.tprintf("Tool: %s", name), call.subject != "" ? call.subject : name, t, key, tokens_of(t))
+				context_add(x, fmt.tprintf(i18n.tr("Tool: %s"), name), call.subject != "" ? call.subject : name, t, key, tokens_of(t))
 			}
 		}
 		used := jnum(m, "tokens", "input") + jnum(m, "tokens", "cache", "read")
@@ -420,7 +421,7 @@ rank_row :: proc(id, name: string, n, max_n, failed: int, extra: string, em: f32
 	mono := ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)}
 	note := ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)}
 	bold := ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_SMALL)}
-	failures := failed > 0 ? fmt.tprintf("%d failed", failed) : ""
+	failures := failed > 0 ? fmt.tprintf(i18n.tr("%d failed"), failed) : ""
 	ui.next({width = ui.fill(), height = ui.px(em * 1.55), axis = .X, cross = .Center})
 	if ui.row(.Center, id = id) {
 		if the_app.stats.width > em * STATS_WIDE_EM {
@@ -479,7 +480,7 @@ stats_panel :: proc(app: ^App, em: f32) {
 						stats_body(app, s, em)
 					} else {
 						ui.spacer(ui.px(em * 1.2))
-						info_line(app, "###st_none", "Open a session: its statistics show here.", em, hex(HEX_FAINT))
+						info_line(app, "###st_none", i18n.tr("Open a session: its statistics show here."), em, hex(HEX_FAINT))
 					}
 				}
 				ui.spacer(ui.px(pad))
@@ -497,7 +498,7 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 2.2), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###title") {
 		if logo_of(app, "###lg", project_logo(app, chat_project(app)), math.round(em * 1.8)) { ui.spacer(ui.px(em * 0.5)) }
-		text("t", s != nil && s.title != "" ? s.title : "Session", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE)}, ui.fill())
+		text("t", s != nil && s.title != "" ? s.title : i18n.tr("Session"), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE)}, ui.fill())
 	}
 	totals := stats_totals(c, s)
 	used, window := context_used(app, c, l)
@@ -549,14 +550,14 @@ stats_figures :: proc(t: Totals, used, window: f64, em: f32) {
 	if ui.flow({em * 0.5, em * 0.7}, "###figures") {
 		if used > 0 && window > 0 {
 			share := f32(used / window)
-			figure("###f0", fmt.tprintf("%.0f %%", share * 100), "context", context_color(share), em)
+			figure("###f0", fmt.tprintf("%.0f %%", share * 100), i18n.tr("context"), context_color(share), em)
 		}
-		figure("###f1", kfmt(tin + cread), "tokens in", plain, em)
-		figure("###f2", kfmt(tout), "tokens out", plain, em)
-		figure("###f3", kfmt(reas), "reasoning", plain, em)
-		figure("###f4", cost > 0 ? fmt.tprintf("$%.2f", cost) : "$0", "cost", plain, em)
+		figure("###f1", kfmt(tin + cread), i18n.tr("tokens in"), plain, em)
+		figure("###f2", kfmt(tout), i18n.tr("tokens out"), plain, em)
+		figure("###f3", kfmt(reas), i18n.tr("reasoning"), plain, em)
+		figure("###f4", cost > 0 ? fmt.tprintf("$%.2f", cost) : "$0", i18n.tr("cost"), plain, em)
 		hit := tin + cread > 0 ? cread / (tin + cread) : 0
-		figure("###f5", fmt.tprintf("%.0f %%", hit * 100), "cache hits", plain, em)
+		figure("###f5", fmt.tprintf("%.0f %%", hit * 100), i18n.tr("cache hits"), plain, em)
 	}
 }
 
@@ -676,7 +677,7 @@ context_list :: proc(app: ^App, used: f64, em: f32) {
 		if !context_open(app, key) { continue }
 		for &it, k in g.items {
 			if k == CTX_ITEMS_SHOWN {
-				info_line(app, fmt.tprintf("###cm%d", i), fmt.tprintf("… and %d more", len(g.items) - CTX_ITEMS_SHOWN), em, hex(HEX_FAINT))
+				info_line(app, fmt.tprintf("###cm%d", i), fmt.tprintf(i18n.tr(len(g.items) - CTX_ITEMS_SHOWN, "… and %d more", "… and %d more"), len(g.items) - CTX_ITEMS_SHOWN), em, hex(HEX_FAINT))
 				break
 			}
 			item_key := it.text != "" ? fmt.tprintf("ctxi_%s", it.key) : ""
@@ -688,34 +689,34 @@ context_list :: proc(app: ^App, used: f64, em: f32) {
 		}
 	}
 	if x.unlisted > 0 {
-		context_line(app, "###cu", "Instructions and tool definitions", size_of(x.unlisted, whole), "", 0, hex(HEX_FAINT), em)
+		context_line(app, "###cu", i18n.tr("Instructions and tool definitions"), size_of(x.unlisted, whole), "", 0, hex(HEX_FAINT), em)
 	}
 }
 
 // The context the last step filled, against the model's window, and what fills it.
 @(private = "file")
 stats_context :: proc(app: ^App, used, window: f64, em: f32) {
-	heading("Context", em, HEX_CYAN)
+	heading(i18n.tr("Context"), em, HEX_CYAN)
 	if used > 0 {
 		t := f32(window > 0 ? used / window : 0)
-		wrapped("###ctx", window > 0 ? fmt.tprintf("%.0f %%  ·  %s / %s", t * 100, kfmt(used), kfmt(window)) : fmt.tprintf("%s  (the model's window is not listed)", kfmt(used)), context_color(t), em)
+		wrapped("###ctx", window > 0 ? fmt.tprintf("%.0f %%  ·  %s / %s", t * 100, kfmt(used), kfmt(window)) : fmt.tprintf(i18n.tr("%s  (the model's window is not listed)"), kfmt(used)), context_color(t), em)
 		ui.spacer(ui.px(em * 0.35))
 		context_bar(app, used, window, em)
 		ui.spacer(ui.px(em * 0.5))
 	} else {
-		info_line(app, "###ctxn", "Not known yet (no step in the loaded messages, or the model's window is not listed).", em, hex(HEX_FAINT))
+		info_line(app, "###ctxn", i18n.tr("Not known yet (no step in the loaded messages, or the model's window is not listed)."), em, hex(HEX_FAINT))
 	}
 	if read_shown(app, "###ctxl", &app.stats.context_read, em, context_ask) {
 		context_list(app, used, em)
 		ui.spacer(ui.px(em * 0.3))
-		info_line(app, "###ctxh", "The last step's total is the server's. It gives the messages, not their sizes: the parts are estimated from their text, the rest is what no message says. Near the top, opencode compacts the conversation.", em)
+		info_line(app, "###ctxh", i18n.tr("The last step's total is the server's. It gives the messages, not their sizes: the parts are estimated from their text, the rest is what no message says. Near the top, opencode compacts the conversation."), em)
 	}
 }
 
 @(private = "file")
 stats_tokens :: proc(t: Totals, em: f32) {
 	tin, tout, reas, cread, cwrite, cost := t.tin, t.tout, t.reas, t.cread, t.cwrite, t.cost
-	heading("Tokens", em, HEX_YELLOW)
+	heading(i18n.tr("Tokens"), em, HEX_YELLOW)
 	// their mix at a glance: what went in (cached or not), what came out
 	if total := tin + cread + cwrite + tout + reas; total > 0 {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5))})
@@ -725,9 +726,9 @@ stats_tokens :: proc(t: Totals, em: f32) {
 		})
 		ui.spacer(ui.px(em * 0.4))
 	}
-	kv("###k1", "input", fmt.tprintf("%s  (uncached)", kfmt(tin)), em, hex(HEX_BLUE))   // (the colour of its part of the bar)
-	kv("###k2", "cache read", kfmt(cread), em, hex(HEX_CYAN))
-	kv("###k3", "cache write", kfmt(cwrite), em, hex(HEX_PURPLE))
+	kv("###k1", i18n.tr("input"), fmt.tprintf(i18n.tr("%s  (uncached)"), kfmt(tin)), em, hex(HEX_BLUE))   // (the colour of its part of the bar)
+	kv("###k2", i18n.tr("cache read"), kfmt(cread), em, hex(HEX_CYAN))
+	kv("###k3", i18n.tr("cache write"), kfmt(cwrite), em, hex(HEX_PURPLE))
 	kv("###k4", "output", kfmt(tout), em, hex(HEX_GREEN))
 	kv("###k5", "reasoning", kfmt(reas), em, hex(HEX_YELLOW))
 	kv("###k6", "cost", fmt.tprintf("$%.4f", cost), em)
@@ -735,34 +736,34 @@ stats_tokens :: proc(t: Totals, em: f32) {
 
 @(private = "file")
 stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local_Stats, now: f64, clock24: bool, em: f32) {
-	heading("Time", em, HEX_PURPLE)
+	heading(i18n.tr("Time"), em, HEX_PURPLE)
 	if s != nil {
-		kv("###d1", "created", fmt.tprintf("%s  (%s ago)", clock_text(s.created, clock24), duration_text(s.created, now)), em)
-		if s.updated > 0 { kv("###d2", "last change", fmt.tprintf("%s  (%s ago)", clock_text(s.updated, clock24), duration_text(s.updated, now)), em) }
+		kv("###d1", i18n.tr("created"), fmt.tprintf(i18n.tr("%s  (%s ago)"), clock_text(s.created, clock24), duration_text(s.created, now)), em)
+		if s.updated > 0 { kv("###d2", i18n.tr("last change"), fmt.tprintf(i18n.tr("%s  (%s ago)"), clock_text(s.updated, clock24), duration_text(s.updated, now)), em) }
 	}
 	if l.active_ms > 0 {
-		kv("###d3", "model at work", fmt.tprintf("%s over %d steps (%s a step)", duration_text(DURATION_ORIGIN_MS, l.active_ms), l.steps, duration_text(DURATION_ORIGIN_MS, l.active_ms / f64(max(l.steps, 1)))), em)
-		if l.out_tokens > 0 { kv("###d4", "output pace", fmt.tprintf("%.0f tokens / s", l.out_tokens / (l.active_ms / MS_PER_S)), em) }
+		kv("###d3", i18n.tr("model at work"), fmt.tprintf(i18n.tr("%s over %d steps (%s a step)"), duration_text(DURATION_ORIGIN_MS, l.active_ms), l.steps, duration_text(DURATION_ORIGIN_MS, l.active_ms / f64(max(l.steps, 1)))), em)
+		if l.out_tokens > 0 { kv("###d4", i18n.tr("output pace"), fmt.tprintf(i18n.tr("%.0f tokens / s"), l.out_tokens / (l.active_ms / MS_PER_S)), em) }
 	}
-	kv("###d5", "loaded", fmt.tprintf("%d messages · %d prompts · %d steps%s", l.msgs, l.prompts, l.steps, c.older != "" ? " (earlier ones not loaded)" : ""), em)
+	kv("###d5", i18n.tr("loaded"), c.older != "" ? fmt.tprintf(i18n.tr("%d messages · %d prompts · %d steps (earlier ones not loaded)"), l.msgs, l.prompts, l.steps) : fmt.tprintf(i18n.tr("%d messages · %d prompts · %d steps"), l.msgs, l.prompts, l.steps), em)
 }
 
 // What the loaded messages called, and which models answered.
 @(private = "file")
 stats_rankings :: proc(app: ^App, l: ^Local_Stats, em: f32) {
-	heading("Tools", em, HEX_GREEN, fmt.tprintf("%d calls, %d failed", l.calls, l.failed))
+	heading(i18n.tr("Tools"), em, HEX_GREEN, fmt.tprintf(i18n.tr("%d calls, %d failed"), l.calls, l.failed))
 	max_t := len(l.tools) > 0 ? l.tools[0].calls : 0
 	for t, i in l.tools {
-		if i == TOOLS_SHOWN { info_line(app, "###tm", fmt.tprintf("… and %d more tools", len(l.tools) - TOOLS_SHOWN), em, hex(HEX_FAINT)); break }
+		if i == TOOLS_SHOWN { info_line(app, "###tm", fmt.tprintf(i18n.tr(len(l.tools) - TOOLS_SHOWN, "… and %d more tools", "… and %d more tools"), len(l.tools) - TOOLS_SHOWN), em, hex(HEX_FAINT)); break }
 		rank_row(fmt.tprintf("###tl%d", i), t.name, t.calls, max_t, t.failed, "", em, accent())
 	}
-	if len(l.tools) == 0 { info_line(app, "###tn", "No tool call in the loaded messages.", em, hex(HEX_FAINT)) }
+	if len(l.tools) == 0 { info_line(app, "###tn", i18n.tr("No tool call in the loaded messages."), em, hex(HEX_FAINT)) }
 
 	if len(l.models) > 0 {
-		heading("Models", em, HEX_PEACH)
+		heading(i18n.tr("Models"), em, HEX_PEACH)
 		max_m := l.models[0].steps
 		for m, i in l.models {
-			rank_row(fmt.tprintf("###ml%d", i), m.name, m.steps, max_m, 0, fmt.tprintf("%s out", kfmt(m.tokens_out)), em, hex(HEX_WEAK))
+			rank_row(fmt.tprintf("###ml%d", i), m.name, m.steps, max_m, 0, fmt.tprintf(i18n.tr("%s out"), kfmt(m.tokens_out)), em, hex(HEX_WEAK))
 		}
 	}
 }
@@ -770,15 +771,15 @@ stats_rankings :: proc(app: ^App, l: ^Local_Stats, em: f32) {
 @(private = "file")
 stats_children :: proc(app: ^App, c: ^Chat, em: f32) {
 	if len(c.children) > 0 {
-		heading("Sub-agents", em, HEX_ROSE)
+		heading(i18n.tr("Sub-agents"), em, HEX_ROSE)
 		running, scost, sin, sout := 0, 0.0, 0.0, 0.0
 		for k in c.children {
 			if app.busy[k.id] or_else false { running += 1 }
 			scost += k.cost; sin += k.tokens_in + k.cache_read; sout += k.tokens_out
 		}
-		kv("###s1", "launched", fmt.tprintf("%d  (%d running)", len(c.children), running), em, running > 0 ? hex(HEX_YELLOW) : {})
-		kv("###s2", "their tokens", fmt.tprintf("%s in · %s out", kfmt(sin), kfmt(sout)), em)
-		if scost > 0 { kv("###s3", "their cost", fmt.tprintf("$%.2f", scost), em) }
+		kv("###s1", i18n.tr("launched"), fmt.tprintf(i18n.tr("%d  (%d running)"), len(c.children), running), em, running > 0 ? hex(HEX_YELLOW) : {})
+		kv("###s2", i18n.tr("their tokens"), fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(sin), kfmt(sout)), em)
+		if scost > 0 { kv("###s3", i18n.tr("their cost"), fmt.tprintf("$%.2f", scost), em) }
 	}
 }
 
@@ -787,15 +788,15 @@ stats_children :: proc(app: ^App, c: ^Chat, em: f32) {
 stats_project :: proc(app: ^App, now: f64, em: f32) {
 	ps := &app.stats.project
 	if ps.project != "" {
-		heading("The project", em, HEX_BLUE)
+		heading(i18n.tr("The project"), em, HEX_BLUE)
 		if read_shown(app, "###pl", &app.stats.read, em, stats_ask) {
-			kv("###p1", "sessions", fmt.tprintf("%d  (+ %d sub-agents)", ps.sessions, ps.subagents), em)
-			kv("###p2", "prompts · steps", fmt.tprintf("%d · %d", ps.prompts, ps.steps), em)
-			kv("###p3", "tokens", fmt.tprintf("%s in · %s out · %s reasoning", kfmt(ps.tokens_in + ps.cache_read), kfmt(ps.tokens_out), kfmt(ps.reasoning)), em)
+			kv("###p1", i18n.tr("sessions"), fmt.tprintf(i18n.tr("%d  (+ %d sub-agents)"), ps.sessions, ps.subagents), em)
+			kv("###p2", i18n.tr("prompts · steps"), fmt.tprintf("%d · %d", ps.prompts, ps.steps), em)
+			kv("###p3", i18n.tr("tokens"), fmt.tprintf(i18n.tr("%s in · %s out · %s reasoning"), kfmt(ps.tokens_in + ps.cache_read), kfmt(ps.tokens_out), kfmt(ps.reasoning)), em)
 			if ps.cost > 0 { kv("###p4", "cost", fmt.tprintf("$%.2f", ps.cost), em) }
-			kv("###p5", "active days", fmt.tprintf("%d  (streak %d)", ps.active_days, ps.streak), em)
-			if ps.from > 0 { kv("###p6", "since", fmt.tprintf("%s ago", duration_text(ps.from, now)), em) }
-			kv("###p7", "tool calls", fmt.tprintf("%d  (%d failed)", ps.calls, ps.failed), em, ps.failed > 0 ? hex(HEX_STAT_FAILED) : {})
+			kv("###p5", i18n.tr("active days"), fmt.tprintf(i18n.tr("%d  (streak %d)"), ps.active_days, ps.streak), em)
+			if ps.from > 0 { kv("###p6", i18n.tr("since"), fmt.tprintf(i18n.tr("%s ago"), duration_text(ps.from, now)), em) }
+			kv("###p7", i18n.tr("tool calls"), fmt.tprintf(i18n.tr("%d  (%d failed)"), ps.calls, ps.failed), em, ps.failed > 0 ? hex(HEX_STAT_FAILED) : {})
 			if len(ps.tools) > 0 {
 				ui.spacer(ui.px(em * 0.4))
 				max_p := 0
@@ -810,7 +811,7 @@ stats_project :: proc(app: ^App, now: f64, em: f32) {
 				max_s := 0
 				for m in ps.models { max_s = max(max_s, m.steps) }
 				for m, i in ps.models {
-					rank_row(fmt.tprintf("###pm%d", i), m.name, m.steps, max_s, 0, m.cost > 0 ? fmt.tprintf("$%.2f", m.cost) : fmt.tprintf("%s out", kfmt(m.tokens_out)), em, hex(HEX_WEAK))
+					rank_row(fmt.tprintf("###pm%d", i), m.name, m.steps, max_s, 0, m.cost > 0 ? fmt.tprintf("$%.2f", m.cost) : fmt.tprintf(i18n.tr("%s out"), kfmt(m.tokens_out)), em, hex(HEX_WEAK))
 				}
 			}
 		}

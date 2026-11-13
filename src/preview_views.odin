@@ -9,6 +9,7 @@ import "core:fmt"
 import "core:strings"
 import "gt:platform"
 import "gt:ui"
+import i18n "gt:i18n"
 
 Web_Act :: enum i32 { Back, Forward, Reload, Stop, Focus }
 
@@ -61,7 +62,7 @@ web_start :: proc(app: ^App, t: ^Preview_Tab) {
 	v.native = host.open(app, v, v.parent)
 	if v.native == nil {
 		free(v)
-		web_state_set(t, Web_Failed{strings.clone("the WebView2 runtime did not start")})
+		web_state_set(t, Web_Failed{strings.clone(i18n.tr("the WebView2 runtime did not start"))})
 		return
 	}
 	t.view = v

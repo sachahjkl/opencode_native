@@ -7,6 +7,7 @@ import "core:fmt"
 import "core:math"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 Find :: struct {
 	open:   bool,
@@ -136,14 +137,14 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 			glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-				res := ui.line_edit("###ff", &f.field, "Find in the conversation")
+				res := ui.line_edit("###ff", &f.field, i18n.tr("Find in the conversation"))
 				if f.fresh { ui.set_focus(res.box.key); f.fresh = false }
 				if ui.key_press(.Return, {.Shift}) { find_step(app, -1) } else if res.committed { find_step(app, 1) }
 				if res.cancelled { find_close(app) }
 			}
 			needle := ui.field_string(&f.field)
 			pending := ui.find_pending()   // (read so far, and how far: "no match" would be a lie before the end; nothing while the needle rests)
-			count := needle == "" ? "" : pending ? (ui.find_progress() < 1 ? fmt.tprintf("%d…  %d %%", n, int(ui.find_progress() * 100)) : "") : n == 0 ? "no match" : fmt.tprintf("%d / %d", max(f.index, 0) + 1, n)
+			count := needle == "" ? "" : pending ? (ui.find_progress() < 1 ? fmt.tprintf("%d…  %d %%", n, int(ui.find_progress() * 100)) : "") : n == 0 ? i18n.tr("no match") : fmt.tprintf("%d / %d", max(f.index, 0) + 1, n)
 			text("fc", count, n == 0 && !pending ? hex(HEX_RED) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)})
 			ui.spacer(ui.px(em * 0.4))
 			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})

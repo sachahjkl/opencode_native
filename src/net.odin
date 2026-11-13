@@ -18,6 +18,7 @@ import "core:unicode/utf8"
 import "gt:ascii"
 import "gt:ui"
 import remote "gt:remote"
+import i18n "gt:i18n"
 
 Server_Config :: struct {
 	host:     string,
@@ -358,7 +359,7 @@ flight_ends :: proc(app: ^App, r: ^Request) {
 request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "", delay := 0, reading: ^remote.Remote = nil, out: u64 = 0, conn: ^Conn = nil, prompt: Maybe(Prompt_Parts) = nil) {
 	to := conn != nil ? conn : app.conn
 	if to == nil {   // (no server yet: nothing to ask)
-		if reading != nil { remote.settle(reading, .Failed, "Not connected") }
+		if reading != nil { remote.settle(reading, .Failed, i18n.tr("Not connected")) }
 		return
 	}
 	r := new(Request)
@@ -590,7 +591,7 @@ refusal_text :: proc(r: ^Request) -> string {
 	v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
 	if msg := jstr(v, "message"); msg != "" { return msg }
 	if r.resp != "" { return r.resp[:min(len(r.resp), ERROR_EXCERPT_BYTES)] }
-	return fmt.tprintf("status %d", r.status)
+	return fmt.tprintf(i18n.tr("status %d"), r.status)
 }
 
 // What was begun on a server and nobody waits for any more: nothing here will end it, so it is undone there, on the server it went
@@ -625,10 +626,10 @@ answer :: proc(app: ^App, r: ^Request) {
 	if !r.ok {
 		// (this request failed: whether the connection is down is for the event stream to say, stream_up)
 		log.warnf("request failed: %s %s: %s", r.method, r.path, r.resp)
-		answer_failed(app, r, .Transport, "Server unreachable")
+		answer_failed(app, r, .Transport, i18n.tr("Server unreachable"))
 		return
 	}
-	if r.status == 401 { answer_failed(app, r, .Auth, "Authentication refused by the server"); return }
+	if r.status == 401 { answer_failed(app, r, .Auth, i18n.tr("Authentication refused by the server")); return }
 	if r.status >= 400 { answer_failed(app, r, .Refused, refusal_text(r)); return }
 	v := r.value
 	unreadable := r.unreadable
@@ -637,7 +638,7 @@ answer :: proc(app: ^App, r: ^Request) {
 		v, err = json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
 		unreadable = err != nil
 	}
-	if unreadable && REQ_FACTS[r.kind].json { answer_failed(app, r, .Unreadable, "Unreadable answer"); return }
+	if unreadable && REQ_FACTS[r.kind].json { answer_failed(app, r, .Unreadable, i18n.tr("Unreadable answer")); return }
 	if r.reading != nil { remote.settle(r.reading, .Ready, "") }
 	if ok := REQ_FACTS[r.kind].on_ok; ok != nil { ok(app, r, v) }
 }
@@ -657,10 +658,10 @@ answer_failed :: proc(app: ^App, r: ^Request, f: Failure, message: string) {
 	if f == .Unreadable { unreadable_note(app, fmt.tprintf("answer %v", r.kind), r.resp) }   // (counted before on_fail: it may tell no one)
 	if fail := REQ_FACTS[r.kind].on_fail; fail != nil && fail(app, r, f, message) { return }
 	switch f {
-	case .Transport:  ui.toast(.Bad, "Server unreachable (%s)", r.path)
-	case .Auth:       ui.toast(.Bad, "Authentication refused by the server")
+	case .Transport:  ui.toast(.Bad, i18n.tr("Server unreachable (%s)"), r.path)
+	case .Auth:       ui.toast(.Bad, i18n.tr("Authentication refused by the server"))
 	case .Refused:    ui.toast(.Bad, "%s %s: %d %s", r.method, r.path, r.status, message)
-	case .Unreadable: ui.toast(.Warn, "Unreadable answer (%s)", r.path)
+	case .Unreadable: ui.toast(.Warn, i18n.tr("Unreadable answer (%s)"), r.path)
 	}
 }
 

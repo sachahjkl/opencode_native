@@ -7,6 +7,7 @@ import "core:path/filepath"
 import "core:strings"
 import "gt:ui"
 import diff "gt:diff"
+import i18n "gt:i18n"
 
 // A diff in a window of its own, whole: stacked, or old and new side by side (gt:diff's view: read once, when it opens; only the
 // rows in view are built).
@@ -30,7 +31,7 @@ diff_full_open :: proc(app: ^App, title, patch: string) {
 
 diff_full_open_file :: proc(app: ^App, path: string) {
 	data, err := os.read_entire_file(path, context.temp_allocator)
-	if err != nil { ui.toast(.Bad, "Cannot read %s", path); return }
+	if err != nil { ui.toast(.Bad, i18n.tr("Cannot read %s"), path); return }
 	diff_full_open(app, filepath.base(path), string(data))
 }
 
@@ -51,13 +52,13 @@ diff_full_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.5))
 			text("d", fmt.tprintf("-%d", d.doc.removed), hex(HEX_RED), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
 			ui.spacer(ui.px(em))
-			if ui.button_icon("###df_copy", "", "Copy").clicked {
+			if ui.button_icon("###df_copy", "", i18n.tr("Copy")).clicked {
 				clip_set(d.doc.patch)
-				ui.announce(&app.announcer, .Good, "Diff copied")
+				ui.announce(&app.announcer, .Good, i18n.tr("Diff copied"))
 			}
 			ui.spacer(ui.px(em * 0.6))
 			sel := int(app.prefs.diff_layout)
-			labels := []string{"Stacked", "Split"}
+			labels := []string{i18n.tr("Stacked"), i18n.tr("Split")}
 			ui.next({width = ui.px(em * 12), height = ui.px(em * 2)})
 			if choice("###df_mode", labels, &sel) { pref_set(app, "conversation.diff_layout", diff_layout_name(diff.Layout(sel))) }
 		}

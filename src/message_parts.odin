@@ -8,6 +8,7 @@ import "core:strings"
 import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 
 HEX_TOOL_DONE_PIP     :: 0x4f8a5eff
@@ -147,8 +148,8 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 				ui.spacer(ui.px(em * 0.5))
 				if bg {
 					if bg_running { session_lamp("###bgl", LAMP_BACKGROUND, em); ui.spacer(ui.px(em * 0.35)) }
-					text("bgt", bg_running ? "in background" : "finished in background", hex(bg_running ? HEX_TEXT_SOFT : HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-				} else if hint_action("###bgpush", "push to background", em, app.mono, lucide.SEND_TO_BACK) {
+					text("bgt", bg_running ? i18n.tr("in background") : i18n.tr("finished in background"), hex(bg_running ? HEX_TEXT_SOFT : HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				} else if hint_action("###bgpush", i18n.tr("push to background"), em, app.mono, lucide.SEND_TO_BACK) {
 					background_session(app, app.chat.id)
 				}
 				// (what it prints, as it prints it: the command at work, whether it holds the turn or runs in the background)
@@ -202,7 +203,7 @@ reasoning_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 		glyph(lucide.LIGHTBULB, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 		ui.spacer(ui.px(em * 0.3))
 		// (a run over says no more about this part: it thought)
-		text("t", p.done || !app.chat.busy ? "Thought" : "Thinking…", hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+		text("t", p.done || !app.chat.busy ? i18n.tr("Thought") : i18n.tr("Thinking…"), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		ui.spacer(ui.px(em * 0.5))
 		if !open {
 			text("pv", preview_text(string(p.text[:])), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())

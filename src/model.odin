@@ -13,6 +13,7 @@ import "gt:config"
 import "gt:markdown"
 import "gt:ui"
 import diff "gt:diff"
+import i18n "gt:i18n"
 
 Session_Info :: struct {
 	id, title, parent, directory, agent, model, provider, outcome, project: string,
@@ -1134,7 +1135,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		if mine {
 			load_messages(app, sid)   // the stored page: the stream only gave the pieces
 			stats_context_soon(app)
-			if kind == "session.execution.failed" { effect_toast(app, .Bad, "The run failed") }
+			if kind == "session.execution.failed" { effect_toast(app, .Bad, i18n.tr("The run failed")) }
 		}
 		refresh_soon(app)
 	case "session.viewed":
@@ -1152,7 +1153,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 			outgoing_session_gone(app, sid)
 			preview_session_gone(app, sid)
 			if mine {   // (elsewhere: what is shown no longer is)
-				effect_toast(app, .Warn, "This session was deleted")
+				effect_toast(app, .Warn, i18n.tr("This session was deleted"))
 				append(&app.nav.steps, Nav_Step{kind = .Gone})
 			}
 		}
@@ -1189,7 +1190,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		permission_add(app, req)
 		asker := jstr(req, "sessionID")
 		detail := permission_words(req)
-		if asker != c.id { effect_session_toast(app, .Warn, asker, "Permission", detail) }
+		if asker != c.id { effect_session_toast(app, .Warn, asker, i18n.tr("Permission"), detail) }
 		effect_waiting(app, missed_key(app, .Permission, jstr(req, "id"), asker), asker, "Permission", detail)
 	case "session.permissions":   // (a session's approval mode, set here or by another client)
 		approval_seen(app, sid, approval_of(jget(d, "permissions")))
@@ -1203,7 +1204,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		form_add(app, form)
 		asker := jstr(form, "sessionID")
 		detail := form_words(form)
-		if asker != "" && asker != c.id && !is_child(c, asker) { effect_session_toast(app, .Warn, asker, "Question", detail) }   // (no session: shown in the conversation, no toast)
+		if asker != "" && asker != c.id && !is_child(c, asker) { effect_session_toast(app, .Warn, asker, i18n.tr("Question"), detail) }   // (no session: shown in the conversation, no toast)
 		effect_waiting(app, asker != "" ? missed_key(app, .Question, jstr(form, "id"), asker) : "", asker, "Question", detail)
 	case "form.replied", "form.cancelled":
 		waits_gone(app, jstr(d, "id"))

@@ -16,6 +16,7 @@ import "gt:draw"
 import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 Output_View :: struct {
 	term:     ^Term,           // (not in the terminal's list: no tab, no socket)
@@ -322,12 +323,12 @@ output_view_state :: proc(v: ^Output_View) -> Sub_State {
 // What it says of how it stands, in a word. (Its colour is the build's, output_view_word_color: an end's ink reads the page.)
 output_view_word :: proc(v: ^Output_View) -> (word: string) {
 	switch {
-	case v.lost:                 word = "ended"
-	case !v.over:                word = "running"
-	case v.status == .Killed:    word = "killed"
-	case v.status == .Timeout:   word = "timed out"
-	case v.has_exit:             word = fmt.tprintf("exit %d", v.exit)
-	case:                        word = "ended"
+	case v.lost:                 word = i18n.tr("ended")
+	case !v.over:                word = i18n.tr("running")
+	case v.status == .Killed:    word = i18n.tr("killed")
+	case v.status == .Timeout:   word = i18n.tr("timed out")
+	case v.has_exit:             word = fmt.tprintf(i18n.tr("exit %d"), v.exit)
+	case:                        word = i18n.tr("ended")
 	}
 	return
 }
@@ -365,24 +366,24 @@ output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
 		}
 		ui.spacer(ui.px(em * 1.1))
 		switch {
-		case v.lost:     text("m", "The server no longer has this command.", hex(HEX_WEAK), note, ui.fill())
-		case v.seen_end: text("m", "Finished: nothing more will come.", hex(HEX_TEXT_SOFT), note, ui.fill())
-		case v.dropped:  text("m", "The server kept the end of it.", hex(HEX_FAINT), note, ui.fill())
+		case v.lost:     text("m", i18n.tr("The server no longer has this command."), hex(HEX_WEAK), note, ui.fill())
+		case v.seen_end: text("m", i18n.tr("Finished: nothing more will come."), hex(HEX_TEXT_SOFT), note, ui.fill())
+		case v.dropped:  text("m", i18n.tr("The server kept the end of it."), hex(HEX_FAINT), note, ui.fill())
 		case:            ui.spacer(ui.fill())   // (the command is at the head of the grid)
 		}
 		ui.spacer(ui.px(em * 0.8))
 		h := math.round(em * BUTTON_SMALL_H_EM)
-		if ui.button_icon("###out_copy", lucide.COPY, "Copy", height = h, disabled = len(v.raw) == 0, quiet = true, face = .Ghost).clicked {
+		if ui.button_icon("###out_copy", lucide.COPY, i18n.tr("Copy"), height = h, disabled = len(v.raw) == 0, quiet = true, face = .Ghost).clicked {
 			clip_set(plain_output(string(v.raw[:])))
-			ui.announce(&app.announcer, .Good, "Output copied")
+			ui.announce(&app.announcer, .Good, i18n.tr("Output copied"))
 		}
 		if !in_window {
 			ui.spacer(ui.px(em * 0.2))
-			if ui.button_icon("###out_win", lucide.APP_WINDOW, "Window", height = h, quiet = true, face = .Ghost).clicked { app.cx.outputs.window = v }
+			if ui.button_icon("###out_win", lucide.APP_WINDOW, i18n.tr("Window"), height = h, quiet = true, face = .Ghost).clicked { app.cx.outputs.window = v }
 		}
 		if !in_window || v.seen_end {
 			ui.spacer(ui.px(em * 0.2))
-			if ui.button_icon("###out_close", "", "Close", height = h, quiet = !v.seen_end, face = v.seen_end ? .Raised : .Ghost).clicked { output_view_close(app, v) }
+			if ui.button_icon("###out_close", "", i18n.tr("Close"), height = h, quiet = !v.seen_end, face = v.seen_end ? .Raised : .Ghost).clicked { output_view_close(app, v) }
 		}
 		ui.spacer(ui.px(em * 0.5))
 	}

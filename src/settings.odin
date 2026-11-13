@@ -18,6 +18,7 @@ import "gt:config"
 import desktop "gt:desktop"
 import "gt:font"
 import "gt:platform"
+import i18n "gt:i18n"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
 import diff "gt:diff"
@@ -56,40 +57,40 @@ HEX_WORKSPACE_NAME :: 0xe0e0e0ff
 HEX_CATALOG_NAME   :: 0xe8e8e8ff
 
 PREF_DEFS := [?]config.Def{
-	{name = "appearance.text.terminal_font", description = "The face of the shells: the client's own (automatic: Fira Mono, no ligatures), the system's usual monospace, or any installed family.", kind = .String, default = {s = ""}},
-	{name = "appearance.content_zoom", description = "Zoom of the conversation alone, whatever the interface's: each session's until it has its own (Ctrl + = / - over it, Ctrl + wheel; Ctrl + 0 brings it back to this one).", kind = .Float, default = {f = 1}, bounded = true, min = CONTENT_ZOOM_MIN, max = CONTENT_ZOOM_MAX},
-	{name = "conversation.width", description = "Widest the conversation column gets, in logical pixels.", kind = .Int, default = {i = 880}, bounded = true, min = COLUMN_W_MIN, max = COLUMN_W_MAX},
-	{name = "conversation.reasoning", description = "How the model's reasoning shows: folded under a line, unfolded, or not at all.", kind = .String, default = {s = "collapsed"}, choices = {"collapsed", "expanded", "hidden"}},
-	{name = "conversation.expand_tools", description = "Tool calls open with their input and output shown.", kind = .Bool, default = {b = false}},
+	{name = "appearance.text.terminal_font", title = i18n.later("Terminal font"), description = i18n.later("The face of the shells: the client's own (automatic: Fira Mono, no ligatures), the system's usual monospace, or any installed family."), kind = .String, default = {s = ""}},
+	{name = "appearance.content_zoom", title = i18n.later("Content zoom"), description = i18n.later("Zoom of the conversation alone, whatever the interface's: each session's until it has its own (Ctrl + = / - over it, Ctrl + wheel; Ctrl + 0 brings it back to this one)."), kind = .Float, default = {f = 1}, bounded = true, min = CONTENT_ZOOM_MIN, max = CONTENT_ZOOM_MAX},
+	{name = "conversation.width", title = i18n.later("Width"), description = i18n.later("Widest the conversation column gets, in logical pixels."), kind = .Int, default = {i = 880}, bounded = true, min = COLUMN_W_MIN, max = COLUMN_W_MAX},
+	{name = "conversation.reasoning", title = i18n.later("Reasoning"), description = i18n.later("How the model's reasoning shows: folded under a line, unfolded, or not at all."), kind = .String, default = {s = "collapsed"}, choices = {"collapsed", "expanded", "hidden"}, choice_labels = {i18n.later("Collapsed"), i18n.later("Expanded"), i18n.later("Hidden")}},
+	{name = "conversation.expand_tools", title = i18n.later("Expand tools"), description = i18n.later("Tool calls open with their input and output shown."), kind = .Bool, default = {b = false}},
 	{name = "conversation.diff_layout", description = "How a diff's full view shows it: old and new stacked, or side by side.", kind = .String, default = {s = "stacked"}, choices = {"stacked", "split"}, hidden = true},
-	{name = "conversation.tool_lines", description = "Lines of a tool's output shown before the rest is counted.", kind = .Int, default = {i = 60}, bounded = true, min = TOOL_LINES_MIN, max = TOOL_LINES_MAX},
-	{name = "conversation.page_size", description = "Messages read at a time (scrolling up reads the next page by itself).", kind = .Int, default = {i = 80}, bounded = true, min = PAGE_SIZE_MIN, max = PAGE_SIZE_MAX},
-	{name = "conversation.follow", description = "Follow new messages to the bottom while you are there.", kind = .Bool, default = {b = true}},
-	{name = "conversation.usage", description = "Tokens and cost under each answer.", kind = .Bool, default = {b = true}},
-	{name = "conversation.while_running", description = "What Enter does while a turn runs: steer the message into the turn (at its next step), or queue it for the end of the turn. Ctrl+Enter does the other. A message waiting in the list can be sent now: that stops what the agent is doing.", kind = .String, default = {s = "steer"}, choices = {"queue", "steer"}},
-	{name = "conversation.image_viewer_size", description = "The size of the image viewer, as a share of the most the window gives a picture. A picture opens no larger than its pixels; drag the viewer's edges or corners to make it larger or smaller.", kind = .Float, default = {f = 1}, bounded = true, min = VIEWER_SCALE_MIN, max = 1},
-	{name = "conversation.clock", description = "Times of messages in 24-hour or 12-hour form.", kind = .String, default = {s = "24h"}, choices = {"24h", "12h"}},
-	{name = "composer.send", description = "The key that sends: Enter (Shift+Enter breaks the line) or Ctrl+Enter (Enter breaks the line).", kind = .String, default = {s = "enter"}, choices = {"enter", "ctrl+enter"}},
-	{name = "sidebar.subagents", description = "Sub-agent sessions: under their parent, in the list with the others, or not shown.", kind = .String, default = {s = "nested"}, choices = {"nested", "flat", "hidden"}},
-	{name = "sidebar.mode", description = "What the sidebar shows: what needs you first across projects (what waits for you, what finished and you have not seen, what runs, the rest), or sessions by project.", kind = .String, default = {s = "inbox"}, choices = {"inbox", "projects"}},
-	{name = "notify.finished", description = "When a session that is not in front of you ends its run: nothing, a toast, a toast and the taskbar button flashing, or a notification of the system (a click on it opens the session).", kind = .String, default = {s = "system"}, choices = {"off", "toast", "flash", "system"}},
-	{name = "permission.new_sessions", description = "The approvals a session made here starts with, set on the server (the composer's shield changes them for one session): the server's configured rules, file edits allowed, everything allowed (a policy's deny stays), or every action asked.", kind = .String, default = {s = "configured"}, choices = {"configured", "allow_edits", "allow_all", "ask_all"}},
-	{name = "notify.permission", description = "When a session asks for a permission or a question and the window is not in front: the taskbar button flashes, and with notifications of the system, one says it.", kind = .Bool, default = {b = true}},
-	{name = "notices.badge", description = "The count of what you missed on the bell of the title bar: runs that ended, questions and permissions that wait, commands, scheduled runs and sub-agents that ended.", kind = .Bool, default = {b = true}},
-	{name = "notices.keep", description = "How many entries that you acknowledged \"What you missed\" keeps in its history. What is not acknowledged yet always stays.", kind = .Int, default = {i = notices.CAP}, bounded = true, min = NOTICES_KEEP_MIN, max = NOTICES_KEEP_MAX},
-	{name = "appearance.throbber", description = "What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing.", kind = .String, default = {s = "board"}, choices = {"board", "orbit", "scanner", "none"}},
+	{name = "conversation.tool_lines", title = i18n.later("Tool lines"), description = i18n.later("Lines of a tool's output shown before the rest is counted."), kind = .Int, default = {i = 60}, bounded = true, min = TOOL_LINES_MIN, max = TOOL_LINES_MAX},
+	{name = "conversation.page_size", title = i18n.later("Page size"), description = i18n.later("Messages read at a time (scrolling up reads the next page by itself)."), kind = .Int, default = {i = 80}, bounded = true, min = PAGE_SIZE_MIN, max = PAGE_SIZE_MAX},
+	{name = "conversation.follow", title = i18n.later("Follow"), description = i18n.later("Follow new messages to the bottom while you are there."), kind = .Bool, default = {b = true}},
+	{name = "conversation.usage", title = i18n.later("Usage"), description = i18n.later("Tokens and cost under each answer."), kind = .Bool, default = {b = true}},
+	{name = "conversation.while_running", title = i18n.later("While running"), description = i18n.later("What Enter does while a turn runs: steer the message into the turn (at its next step), or queue it for the end of the turn. Ctrl+Enter does the other. A message waiting in the list can be sent now: that stops what the agent is doing."), kind = .String, default = {s = "steer"}, choices = {"queue", "steer"}, choice_labels = {i18n.later("Queue"), i18n.later("Steer")}},
+	{name = "conversation.image_viewer_size", title = i18n.later("Image viewer size"), description = i18n.later("The size of the image viewer, as a share of the most the window gives a picture. A picture opens no larger than its pixels; drag the viewer's edges or corners to make it larger or smaller."), kind = .Float, default = {f = 1}, bounded = true, min = VIEWER_SCALE_MIN, max = 1},
+	{name = "conversation.clock", title = i18n.later("Clock"), description = i18n.later("Times of messages in 24-hour or 12-hour form."), kind = .String, default = {s = "24h"}, choices = {"24h", "12h"}},
+	{name = "composer.send", title = i18n.later("Send"), description = i18n.later("The key that sends: Enter (Shift+Enter breaks the line) or Ctrl+Enter (Enter breaks the line)."), kind = .String, default = {s = "enter"}, choices = {"enter", "ctrl+enter"}, choice_labels = {i18n.later("Enter"), i18n.later("Ctrl+enter")}},
+	{name = "sidebar.subagents", title = i18n.later("Subagents"), description = i18n.later("Sub-agent sessions: under their parent, in the list with the others, or not shown."), kind = .String, default = {s = "nested"}, choices = {"nested", "flat", "hidden"}, choice_labels = {i18n.later("Nested"), i18n.later("Flat"), i18n.later("Hidden")}},
+	{name = "sidebar.mode", title = i18n.later("Mode"), description = i18n.later("What the sidebar shows: what needs you first across projects (what waits for you, what finished and you have not seen, what runs, the rest), or sessions by project."), kind = .String, default = {s = "inbox"}, choices = {"inbox", "projects"}, choice_labels = {i18n.later("Inbox"), i18n.later("Projects")}},
+	{name = "notify.finished", title = i18n.later("Finished"), description = i18n.later("When a session that is not in front of you ends its run: nothing, a toast, a toast and the taskbar button flashing, or a notification of the system (a click on it opens the session)."), kind = .String, default = {s = "system"}, choices = {"off", "toast", "flash", "system"}, choice_labels = {i18n.later("Off"), i18n.later("Toast"), i18n.later("Flash"), i18n.later("System")}},
+	{name = "permission.new_sessions", title = i18n.later("New sessions"), description = i18n.later("The approvals a session made here starts with, set on the server (the composer's shield changes them for one session): the server's configured rules, file edits allowed, everything allowed (a policy's deny stays), or every action asked."), kind = .String, default = {s = "configured"}, choices = {"configured", "allow_edits", "allow_all", "ask_all"}, choice_labels = {i18n.later("Configured"), i18n.later("Allow edits"), i18n.later("Allow all"), i18n.later("Ask all")}},
+	{name = "notify.permission", title = i18n.later("Permission"), description = i18n.later("When a session asks for a permission or a question and the window is not in front: the taskbar button flashes, and with notifications of the system, one says it."), kind = .Bool, default = {b = true}},
+	{name = "notices.badge", title = i18n.later("Badge"), description = i18n.later("The count of what you missed on the bell of the title bar: runs that ended, questions and permissions that wait, commands, scheduled runs and sub-agents that ended."), kind = .Bool, default = {b = true}},
+	{name = "notices.keep", title = i18n.later("Keep"), description = i18n.later("How many entries that you acknowledged \"What you missed\" keeps in its history. What is not acknowledged yet always stays."), kind = .Int, default = {i = notices.CAP}, bounded = true, min = NOTICES_KEEP_MIN, max = NOTICES_KEEP_MAX},
+	{name = "appearance.throbber", title = i18n.later("Throbber"), description = i18n.later("What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing."), kind = .String, default = {s = "board"}, choices = {"board", "orbit", "scanner", "none"}, choice_labels = {i18n.later("Board"), i18n.later("Orbit"), i18n.later("Scanner"), i18n.later("None")}},
 	{name = "session.agent", description = "The agent a new session starts with: the one chosen last.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "session.model", description = "The model a new session starts with: the one chosen last.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "session.provider", description = "The provider of that model.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "session.variant", description = "How hard that model thinks (one of its variants; empty: its default).", kind = .String, default = {s = ""}, hidden = true},
-	{name = "browser.tools", description = "Let the agents drive the Preview panel (open pages, read them, click, run scripts): the browser tools, while this window is open.", kind = .Bool, default = {b = true}},
+	{name = "browser.tools", title = i18n.later("Tools"), description = i18n.later("Let the agents drive the Preview panel (open pages, read them, click, run scripts): the browser tools, while this window is open."), kind = .Bool, default = {b = true}},
 	{name = "layout.dock", description = "Where the panels are, as the dock writes it.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "layout.dialogs", description = "The sizes the dialogs were given (settings, statistics, shortcuts), in logical pixels.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "window.placement", description = "Where the window was (platform.placement_text): it opens there again.", kind = .String, default = {s = ""}, hidden = true},
-	{name = "general.start", description = "What the window opens on: the home page, or the session it showed when it closed (the latest one if it showed none yet).", kind = .String, default = {s = "last"}, choices = {"home", "last"}},
-	{name = "advanced.experimental", description = "Turn on the experimental options of a server on this computer, in its configuration file. What you set there yourself stays.", kind = .Bool, default = {b = true}},
-	{name = "advanced.fps", description = "The frame rate and what a frame costs, in the status bar.", kind = .Bool, default = {b = false}},
-	{name = "advanced.frame_rate", description = "The most frames a second, when there is something to draw (nothing moving, nothing is drawn): what the screen takes, a number, or no limit. Above the screen's rate it shows the newest of them: not smoother, but quicker to answer, for more power. What you type and click is read at once whatever this says.", kind = .String, default = {s = "screen"}, choices = {"screen", "30", "60", "120", "240", "uncapped"}},
+	{name = "general.start", title = i18n.later("Start"), description = i18n.later("What the window opens on: the home page, or the session it showed when it closed (the latest one if it showed none yet)."), kind = .String, default = {s = "last"}, choices = {"home", "last"}, choice_labels = {i18n.later("Home"), i18n.later("Last")}},
+	{name = "advanced.experimental", title = i18n.later("Experimental"), description = i18n.later("Turn on the experimental options of a server on this computer, in its configuration file. What you set there yourself stays."), kind = .Bool, default = {b = true}},
+	{name = "advanced.fps", title = i18n.later("FPS"), description = i18n.later("The frame rate and what a frame costs, in the status bar."), kind = .Bool, default = {b = false}},
+	{name = "advanced.frame_rate", title = i18n.later("Frame rate"), description = i18n.later("The most frames a second, when there is something to draw (nothing moving, nothing is drawn): what the screen takes, a number, or no limit. Above the screen's rate it shows the newest of them: not smoother, but quicker to answer, for more power. What you type and click is read at once whatever this says."), kind = .String, default = {s = "screen"}, choices = {"screen", "30", "60", "120", "240", "uncapped"}, choice_labels = {i18n.later("Screen"), "30", "60", "120", "240", i18n.later("Uncapped")}},
 }
 
 // The preferences as plain values (read on every frame: no lookups by name there).
@@ -136,6 +137,10 @@ Prefs :: struct {
 CONTENT_ZOOM_MIN :: 0.5
 CONTENT_ZOOM_MAX :: 3
 
+// The program's texts in other languages (English is the code's own), beside the toolkit's: tools/ocntools `i18n fr`
+// writes the catalogue from the tr calls.
+PROGRAM_CATALOGUES :: []i18n.Catalog{{"fr", #load("../i18n/fr.txt", string)}}
+
 prefs_path :: proc() -> string { return pjoin({filepath.dir(settings_path()), "prefs.txt"}) }
 
 // The toolkit's common settings (the look, the text, scrolling, input, delays, rendering, updates, the session), then
@@ -145,6 +150,14 @@ prefs_register :: proc(p: ^config.Prefs) {
 	d.theme, d.app_name, d.update_channel = "OpenCode", APP_NAME, "stable"
 	prefs_page.standard_register(p, prefs_page.STANDARD_ALL, d)
 	config.register(p, PREF_DEFS[:])
+	// (the titles the settings page made from the names, said here so that they are translated; order 0: their places stay)
+	for g in PREF_GROUPS { config.title_register(p, g[0], g[1]) }
+}
+
+PREF_GROUPS := [?][2]string{
+	{"conversation", i18n.later("Conversation")}, {"composer", i18n.later("Composer")}, {"sidebar", i18n.later("Sidebar")},
+	{"notify", i18n.later("Notify")}, {"notices", i18n.later("Notices")}, {"permission", i18n.later("Permission")},
+	{"browser", i18n.later("Browser")}, {"advanced", i18n.later("Advanced")},
 }
 
 // `file` "": the defaults, nothing read or saved (a test).
@@ -160,6 +173,9 @@ prefs_init :: proc(app: ^App, file: string) {
 	for spec in app.cli.prefs {   // --pref name=value (a value out of range or unknown: the preference keeps its own)
 		if eq := strings.index_byte(spec, '='); eq > 0 { config.set_from_string(&app.cfg_prefs, spec[:eq], spec[eq + 1:], .Command_Line) }
 	}
+	// the language, once general.language is read (the file and --pref) and before any text is shown; not in a test (no
+	// file): its texts are the English keys, whatever the system's language
+	if file != "" { prefs_page.language_start(&app.cfg_prefs, PROGRAM_CATALOGUES) }
 	// the toolkit's settings applied to it now, then each one as it changes (config.watch): its zoom, density, rounding,
 	// motion, scrolling, delays, text rendering
 	targets := prefs_page.Standard_Targets{}
@@ -281,7 +297,7 @@ notify_finished :: proc(app: ^App, key, sid, outcome: string) {
 	front := window_in_front(app)
 	if sid == app.chat.id && front { return }
 	if find_child(&app.chat, sid) != nil && front { return }   // (its card and the strip say it)
-	word := outcome == "failed" ? "Failed" : outcome == "interrupted" ? "Stopped" : "Done"
+	word := outcome == "failed" ? i18n.tr("Failed") : outcome == "interrupted" ? i18n.tr("Stopped") : i18n.tr("Done")
 	// (in front, the toast says it: a notification of the system is for a window you are not looking at)
 	if mode == "system" && !front && notify_system(app, key, sid, word, "") { return }
 	kind: ui.Toast_Kind = outcome == "failed" ? .Bad : outcome == "interrupted" ? .Warn : .Good
@@ -580,7 +596,7 @@ shell_failed :: proc(app: ^App, was: string) {
 server_facts_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { server_facts_answer(app, r.kind, v) }
 
 shell_set_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	ui.announce(&app.announcer, .Good, "Shell set")
+	ui.announce(&app.announcer, .Good, i18n.tr("Shell set"))
 	facts_soon(app)   // (a reading that crossed it said the one before)
 }
 
@@ -646,29 +662,29 @@ Settings_View :: struct {
 // (Behaviour and Advanced gather small groups of its own by name). Then what the opencode server shows: pages of this
 // program's own, which the search does not look in. A category names its page (settings_open_on, --settings=<page>).
 SETTINGS_PAGES := [?]prefs_page.Page_Info{
-	{category = "general", title = "General", icon = lucide.SETTINGS, heading = "CLIENT"},
-	{category = "appearance", title = "Appearance", icon = lucide.PALETTE},
-	{category = "window", title = "Window", icon = lucide.APP_WINDOW},
-	{category = "conversation", title = "Conversation", icon = lucide.MESSAGE_SQUARE},
-	{category = "behaviour", title = "Behaviour", icon = lucide.BELL, names = {"composer.send", "sidebar.mode", "sidebar.subagents", "notify.finished", "permission.new_sessions", "notify.permission", "notices.badge", "notices.keep"}},
-	{category = "scrolling", title = "Scrolling", icon = lucide.SCROLL},
-	{category = "input", title = "Input", icon = lucide.KEYBOARD},
-	{category = "timing", title = "Delays and menus", icon = lucide.TIMER},
-	{category = "update", title = "Updates", icon = lucide.REFRESH_CW},
-	{category = "rendering", title = "Rendering", icon = lucide.MONITOR},
-	{category = "advanced", title = "Advanced", icon = lucide.WRENCH, names = {"browser.tools", "advanced.experimental", "advanced.fps", "advanced.frame_rate"}},
-	{category = "server", title = "Server & shell", icon = lucide.SQUARE_TERMINAL, heading = "OPENCODE", build = proc(user: rawptr, em: f32) { page_server((^App)(user), em) }},
-	{category = "connections", title = "Connections", icon = lucide.USER, build = proc(user: rawptr, em: f32) { page_connections((^App)(user), em) }},
-	{category = "mcp", title = "MCP servers", icon = lucide.PLUG, build = proc(user: rawptr, em: f32) { page_mcp((^App)(user), em) }},
-	{category = "plugins", title = "Plugins", icon = lucide.ZAP, build = proc(user: rawptr, em: f32) { page_plugins((^App)(user), em) }},
-	{category = "usage", title = "Usage & limits", icon = lucide.GAUGE, build = proc(user: rawptr, em: f32) { page_usage((^App)(user), em) }},
-	{category = "permissions", title = "Permissions", icon = lucide.SHIELD, build = proc(user: rawptr, em: f32) { page_permissions((^App)(user), em) }},
-	{category = "catalog", title = "Providers & skills", icon = lucide.LIST, build = proc(user: rawptr, em: f32) { page_catalog((^App)(user), em) }},
+	{category = "general", title = i18n.later("General"), icon = lucide.SETTINGS, heading = i18n.later("CLIENT")},
+	{category = "appearance", title = i18n.later("Appearance"), icon = lucide.PALETTE},
+	{category = "window", title = i18n.later("Window"), icon = lucide.APP_WINDOW},
+	{category = "conversation", title = i18n.later("Conversation"), icon = lucide.MESSAGE_SQUARE},
+	{category = "behaviour", title = i18n.later("Behaviour"), icon = lucide.BELL, names = {"composer.send", "sidebar.mode", "sidebar.subagents", "notify.finished", "permission.new_sessions", "notify.permission", "notices.badge", "notices.keep"}},
+	{category = "scrolling", title = i18n.later("Scrolling"), icon = lucide.SCROLL},
+	{category = "input", title = i18n.later("Input"), icon = lucide.KEYBOARD},
+	{category = "timing", title = i18n.later("Delays and menus"), icon = lucide.TIMER},
+	{category = "update", title = i18n.later("Updates"), icon = lucide.REFRESH_CW},
+	{category = "rendering", title = i18n.later("Rendering"), icon = lucide.MONITOR},
+	{category = "advanced", title = i18n.later("Advanced"), icon = lucide.WRENCH, names = {"browser.tools", "advanced.experimental", "advanced.fps", "advanced.frame_rate"}},
+	{category = "server", title = i18n.later("Server & shell"), icon = lucide.SQUARE_TERMINAL, heading = "OPENCODE", build = proc(user: rawptr, em: f32) { page_server((^App)(user), em) }},
+	{category = "connections", title = i18n.later("Connections"), icon = lucide.USER, build = proc(user: rawptr, em: f32) { page_connections((^App)(user), em) }},
+	{category = "mcp", title = i18n.later("MCP servers"), icon = lucide.PLUG, build = proc(user: rawptr, em: f32) { page_mcp((^App)(user), em) }},
+	{category = "plugins", title = i18n.later("Plugins"), icon = lucide.ZAP, build = proc(user: rawptr, em: f32) { page_plugins((^App)(user), em) }},
+	{category = "usage", title = i18n.later("Usage & limits"), icon = lucide.GAUGE, build = proc(user: rawptr, em: f32) { page_usage((^App)(user), em) }},
+	{category = "permissions", title = i18n.later("Permissions"), icon = lucide.SHIELD, build = proc(user: rawptr, em: f32) { page_permissions((^App)(user), em) }},
+	{category = "catalog", title = i18n.later("Providers & skills"), icon = lucide.LIST, build = proc(user: rawptr, em: f32) { page_catalog((^App)(user), em) }},
 }
 
 // The channels this program's releases come on (update.channel: the toolkit's, a free text without them).
 @(private = "file") UPDATE_CHANNELS       := [?]string{"stable", "beta"}
-@(private = "file") UPDATE_CHANNEL_LABELS := [?]string{"Stable", "Beta"}
+@(private = "file") UPDATE_CHANNEL_LABELS := [?]string{i18n.later("Stable"), i18n.later("Beta")}
 
 // The font preferences: their control is this program's (font_button: its faces, the installed families).
 @(private = "file")
@@ -691,17 +707,24 @@ settings_open_on :: proc(app: ^App, category: string) {
 
 // What the client's settings page is given (prefs_page.Options).
 settings_options :: proc(app: ^App) -> prefs_page.Options {
+	// (the pages' titles in the language in use: the toolkit's page shows what it is given)
+	pages := make([]prefs_page.Page_Info, len(SETTINGS_PAGES), context.temp_allocator)
+	for pg, i in SETTINGS_PAGES { pages[i] = pg; pages[i].title = i18n.tr(pg.title); pages[i].heading = i18n.tr(pg.heading) }
 	return {
 		user = app,
 		changed = proc(user: rawptr, _: string) { prefs_refresh((^App)(user)) },   // (main_after_frame's writer saves)
-		pages = SETTINGS_PAGES[:],
+		pages = pages,
 		icon_font = app.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
 		file = app.prefs_file,
 		version = fmt.tprintf("%s %s", APP_NAME, APP_VERSION),
 		themes = themes(app), themes_light = app.cx.theme.light,
 		themes_file = app.cx.theme.file.path != "" ? &app.cx.theme.file : nil,
 		choices = proc(_: rawptr, name: string) -> (labels, values: []string) {
-			if name == "update.channel" { return UPDATE_CHANNEL_LABELS[:], UPDATE_CHANNELS[:] }
+			if name == "update.channel" {
+				labels = make([]string, len(UPDATE_CHANNEL_LABELS), context.temp_allocator)
+				for l, i in UPDATE_CHANNEL_LABELS { labels[i] = i18n.tr(l) }
+				return labels, UPDATE_CHANNELS[:]
+			}
 			return nil, nil
 		},
 		custom_names = FONT_PREFS[:],
@@ -713,7 +736,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Options {
 settings_dialog :: proc(app: ^App, em: f32) {
 	if ui.modal_sized("settings", DIALOG_PREFERRED_EM[.Settings] * em, &app.cx.dialogs[.Settings], &app.cx.open[.Settings], DIALOG_MIN_EM[.Settings] * em) {
 		dialog_backdrop()
-		if ui.dialog_header("settings_head", "Settings", {close = true}) {}
+		if ui.dialog_header("settings_head", i18n.tr("Settings"), {close = true}) {}
 		// one sidebar for every page: the toolkit's page holds the client's preferences and the server's pages alike
 		ui.next({width = ui.fill(), height = ui.fill()})
 		prefs_page.build(&app.settings.prefs, &app.cfg_prefs, settings_options(app))
@@ -728,17 +751,17 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 	switch category {
 	case "behaviour":
 		ui.spacer(ui.px(em * 0.6))
-		info_line(app, "###hint_setup", "Installation and " + LBL_PIECES + " are in Setup… (title bar menu).", em)
+		info_line(app, "###hint_setup", i18n.tr(SETUP_HINT), em)
 	case "update":
 		u := &app.updater
-		state := "Up to date, as far as is known"
+		state := i18n.tr("Up to date, as far as is known")
 		switch _ in u.state {
 		case nil:
 			if u.result != "" { state = u.result }
-		case Update_Checking:    state = "Looking for a new version…"
-		case Update_Ready:       state = fmt.tprintf("Version %s is available", update_version(u))
-		case Update_Downloading: state = fmt.tprintf("Downloading %s…", update_version(u))
-		case Update_Installed:   state = fmt.tprintf("Version %s is installed: restart to use it", update_version(u))
+		case Update_Checking:    state = i18n.tr("Looking for a new version…")
+		case Update_Ready:       state = fmt.tprintf(i18n.tr("Version %s is available"), update_version(u))
+		case Update_Downloading: state = fmt.tprintf(i18n.tr("Downloading %s…"), update_version(u))
+		case Update_Installed:   state = fmt.tprintf(i18n.tr("Version %s is installed: restart to use it"), update_version(u))
 		}
 		ui.spacer(ui.px(em * 0.6))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
@@ -746,37 +769,37 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 			ui.spacer(ui.px(em * 0.4))
 			fact("###u1", "version", APP_VERSION, em)
 			fact("###u2", "channel", app.prefs.update_channel, em)
-			fact("###u3", "state", state, em)
+			fact("###u3", i18n.tr("state"), state, em)
 			ui.spacer(ui.px(em * 0.4))
 		}
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###upd_b") {
-			if ui.button_icon("###u_check", lucide.REFRESH_CW, "Check now", disabled = update_is_downloading(u)).clicked { update_check(app, true) }
+			if ui.button_icon("###u_check", lucide.REFRESH_CW, i18n.tr("Check now"), disabled = update_is_downloading(u)).clicked { update_check(app, true) }
 			ui.spacer(ui.px(em * 0.5))
 			if update_is_ready(u) {
-				if ui.button_icon("###u_inst", lucide.CHECK, ui.text_shown(fmt.tprintf("Install %s", update_version(u))), .Success).clicked { update_install(app) }
+				if ui.button_icon("###u_inst", lucide.CHECK, ui.text_shown(fmt.tprintf(i18n.tr("Install %s"), update_version(u))), .Success).clicked { update_install(app) }
 			}
 			if update_is_installed(u) {
-				if ui.button_icon("###u_rest", lucide.REFRESH_CW, "Restart now", .Success).clicked { app_restart(app) }
+				if ui.button_icon("###u_rest", lucide.REFRESH_CW, i18n.tr("Restart now"), .Success).clicked { app_restart(app) }
 			}
 		}
 		ui.spacer(ui.px(em * 0.6))
-		info_line(app, "###hint_sig", "Only what is signed with the key built into this program is installed: the channel, the version and the file's checksum are all in the signature.", em)
+		info_line(app, "###hint_sig", i18n.tr("Only what is signed with the key built into this program is installed: the channel, the version and the file's checksum are all in the signature."), em)
 	case "advanced":
 		ui.spacer(ui.px(em * 0.6))
-		info_line(app, "###adv_about", fmt.tprintf("%s %s, a client of the OpenCode server. %s", APP_NAME, APP_VERSION, APP_NOT_THEIRS), em)
+		info_line(app, "###adv_about", fmt.tprintf(i18n.tr("%s %s, a client of the OpenCode server. %s"), APP_NAME, APP_VERSION, i18n.tr(APP_NOT_THEIRS)), em)
 		licence_section(app, em)
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###adv_b") {
-			if ui.button_icon("###adv_dir", lucide.FOLDER, "Open the settings folder").clicked { ui.open(filepath.dir(prefs_path())) }
+			if ui.button_icon("###adv_dir", lucide.FOLDER, i18n.tr("Open the settings folder")).clicked { ui.open(filepath.dir(prefs_path())) }
 			ui.spacer(ui.px(em * 0.4))
-			if ui.button_icon("###adv_lic", "", ui.text_shown(app.settings.show_licence ? "Hide the terminal's licence" : "The terminal's licence"), face = .Ghost).clicked { app.settings.show_licence = !app.settings.show_licence }
+			if ui.button_icon("###adv_lic", "", ui.text_shown(app.settings.show_licence ? i18n.tr("Hide the terminal's licence") : i18n.tr("The terminal's licence")), face = .Ghost).clicked { app.settings.show_licence = !app.settings.show_licence }
 		}
 		if app.settings.show_licence {
 			ui.spacer(ui.px(em * 0.5))
-			info_line(app, "###adv_lic_say", "The terminal's emulation is Ghostty's, through libghostty-vt.", em)
+			info_line(app, "###adv_lic_say", i18n.tr("The terminal's emulation is Ghostty's, through libghostty-vt."), em)
 			ui.spacer(ui.px(em * 0.3))
 			code_block("###adv_lic_text", "text", GHOSTTY_LICENSE, app.mono, version = 1)
 		}
@@ -796,10 +819,10 @@ font_button :: proc(app: ^App, name: string, em: f32) {
 	// the button names the face in use; a faint word before it says how it was chosen
 	mode, shown: string
 	switch want {
-	case "", FONT_BUILTIN: mode, shown = "auto", own
-	case FONT_SYSTEM:      mode, shown = "system", face != "" ? face : own
-	case FONT_SAME:        mode, shown = "same", app.ui_face != "" ? app.ui_face : "Hanken Grotesk"
-	case:                  mode, shown = face == want ? "" : "not installed", want
+	case "", FONT_BUILTIN: mode, shown = i18n.tr("auto"), own
+	case FONT_SYSTEM:      mode, shown = i18n.tr("system"), face != "" ? face : own
+	case FONT_SAME:        mode, shown = i18n.tr("same"), app.ui_face != "" ? app.ui_face : "Hanken Grotesk"
+	case:                  mode, shown = face == want ? "" : i18n.tr("not installed"), want
 	}
 	if mode != "" {
 		text("fm", mode, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)})
@@ -812,10 +835,10 @@ font_button :: proc(app: ^App, name: string, em: f32) {
 	if !(app.cx.open[.Picker] && app.picker.id == name) { return }
 	if app.font_families == nil { app.font_families = font.system_families(&app.fonts) }
 	items := make([dynamic]Pick_Item, context.temp_allocator)
-	append(&items, Pick_Item{label = "Automatic", detail = fmt.tprintf("%s, built in", own), current = want == "" || want == FONT_BUILTIN})
-	append(&items, Pick_Item{label = prose ? "As the interface" : "System", detail = prose ? "the interface's face" : "the system's usual face", current = want == second})
+	append(&items, Pick_Item{label = i18n.tr("Automatic"), detail = fmt.tprintf(i18n.tr("%s, built in"), own), current = want == "" || want == FONT_BUILTIN})
+	append(&items, Pick_Item{label = prose ? i18n.tr("As the interface") : i18n.tr("System"), detail = prose ? i18n.tr("the interface's face") : i18n.tr("the system's usual face"), current = want == second})
 	for fam in app.font_families { append(&items, Pick_Item{label = fam, current = fam == want}) }
-	if k := picker(app, &app.picker, name, mono ? "code fonts" : "fonts", items[:], em, align_right = true); k >= 0 {
+	if k := picker(app, &app.picker, name, mono ? i18n.tr("Search code fonts") : i18n.tr("Search fonts"), items[:], em, align_right = true); k >= 0 {
 		switch k {
 		case 0: pref_set(app, name, "")
 		case 1: pref_set(app, name, second)
@@ -855,21 +878,21 @@ config_file_shaped :: proc(path: string) -> bool {
 
 page_server :: proc(app: ^App, em: f32) {
 	f := &app.facts
-	section(app, "SERVER", em)
+	section(app, i18n.tr("SERVER"), em)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.well("###srv") {
 		ui.spacer(ui.px(em * 0.4))
-		fact("###s1", "address", server_base(app), em)
-		fact("###s2", "status", online(app) ? "connected" : "not connected", em, online(app) ? hex(HEX_GREEN) : hex(HEX_YELLOW))
-		fact("###s3", "version", app.server_version != "" ? app.server_version : "?", em)
-		fact("###s0", "name", server_name(app), em)
-		fact("###s4", "auth", app.servers[app.server].password == "" ? "none" : app.servers[app.server].local ? "Basic (password from service.json)" : "Basic", em)
-		fact("###s5", "sessions", fmt.tprintf("%d loaded · %d running", len(app.sessions), len(app.busy)), em)
-		fact("###s6", "client", fmt.tprintf("opencode native %s", APP_VERSION), em)
+		fact("###s1", i18n.tr("address"), server_base(app), em)
+		fact("###s2", i18n.tr("status"), online(app) ? i18n.tr("connected") : i18n.tr("not connected"), em, online(app) ? hex(HEX_GREEN) : hex(HEX_YELLOW))
+		fact("###s3", i18n.tr("version"), app.server_version != "" ? app.server_version : "?", em)
+		fact("###s0", i18n.tr("name"), i18n.tr(server_name(app)), em)
+		fact("###s4", i18n.tr("auth"), app.servers[app.server].password == "" ? i18n.tr("none") : app.servers[app.server].local ? i18n.tr("Basic (password from service.json)") : "Basic", em)
+		fact("###s5", i18n.tr("sessions"), fmt.tprintf(i18n.tr("%d loaded · %d running"), len(app.sessions), len(app.busy)), em)
+		fact("###s6", i18n.tr("client"), fmt.tprintf("opencode native %s", APP_VERSION), em)
 		ui.spacer(ui.px(em * 0.4))
 	}
-	section(app, "SHELL", em)
-	info_line(app, "###shh", "The shell the agents run their commands in (written to the configuration's \"shell\").", em)
+	section(app, i18n.tr("SHELL"), em)
+	info_line(app, "###shh", i18n.tr("The shell the agents run their commands in (written to the configuration's \"shell\")."), em)
 	ui.spacer(ui.px(em * 0.4))
 	if read_shown(app, "###sh_read", &f.reads[.Shells], em, server_facts_load) {
 		sel := -1
@@ -883,9 +906,9 @@ page_server :: proc(app: ^App, em: f32) {
 			}
 			ui.spacer(ui.px(em * 0.25))
 		}
-		if sel < 0 { info_line(app, "###shd", "None set: the server picks one.", em, hex(HEX_FAINT)) }
+		if sel < 0 { info_line(app, "###shd", i18n.tr("None set: the server picks one."), em, hex(HEX_FAINT)) }
 	}
-	section(app, "CONFIGURATION FILES", em)
+	section(app, i18n.tr("CONFIGURATION FILES"), em)
 	if !read_shown(app, "###cf_read", &f.reads[.Cfg], em, server_facts_load) { return }
 	for c, i in f.files {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
@@ -897,30 +920,30 @@ page_server :: proc(app: ^App, em: f32) {
 			}
 			// (only this computer's server speaks of this computer's files)
 			if app.servers[app.server].local && config_file_shaped(c.path) && os.is_file(c.path) {
-				if ui.button_icon("###open", lucide.FILE, "Open", height = math.round(em * BUTTON_SMALL_H_EM)).clicked { ui.open(c.path) }
+				if ui.button_icon("###open", lucide.FILE, i18n.tr("Open"), height = math.round(em * BUTTON_SMALL_H_EM)).clicked { ui.open(c.path) }
 				ui.spacer(ui.px(em * 0.3))
 				if ui.button_icon("###dir", lucide.FOLDER, "", height = math.round(em * BUTTON_SMALL_H_EM)).clicked { ui.open(filepath.dir(c.path)) }
 			}
 		}
 		ui.spacer(ui.px(em * 0.4))
 	}
-	if len(f.files) == 0 { info_line(app, "###nocf", "No configuration file (the defaults apply).", em, hex(HEX_FAINT)) }
+	if len(f.files) == 0 { info_line(app, "###nocf", i18n.tr("No configuration file (the defaults apply)."), em, hex(HEX_FAINT)) }
 }
 
 page_mcp :: proc(app: ^App, em: f32) {
 	f := &app.facts
-	info_line(app, "###mh", "Model Context Protocol servers give the agents more tools. Connecting or disconnecting one applies to the server now.", em)
+	info_line(app, "###mh", i18n.tr("Model Context Protocol servers give the agents more tools. Connecting or disconnecting one applies to the server now."), em)
 	ui.spacer(ui.px(em * 0.6))
 	if !read_shown(app, "###mcp_read", &f.reads[.Mcp], em, server_facts_load) { return }
 	if len(f.mcp) == 0 {
-		info_line(app, "###none", "No MCP server is configured.", em, hex(HEX_FAINT))
+		info_line(app, "###none", i18n.tr("No MCP server is configured."), em, hex(HEX_FAINT))
 		return
 	}
 	for &m, i in f.mcp {
 		connected := m.status == .Connected
 		going := mcp_going(f, m.name)
 		col := connected ? hex(HEX_GREEN) : m.status == .Failed || m.error != "" ? hex(HEX_RED) : hex(HEX_FAINT)
-		word := going != nil ? (going.connecting ? "connecting…" : "disconnecting…") : m.word != "" ? m.word : "?"
+		word := going != nil ? (going.connecting ? i18n.tr("connecting…") : i18n.tr("disconnecting…")) : m.word != "" ? m.word : "?"
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if plate(fmt.tprintf("###mcp%d", i), top = HEX_MCP_TOP, bottom = HEX_MCP_BOTTOM, radius = 8, shadow = 4) {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
@@ -934,9 +957,9 @@ page_mcp :: proc(app: ^App, em: f32) {
 				// (what goes on says itself: no button says the opposite meanwhile)
 				if going == nil {
 					if connected {
-						if ui.button_icon("###dc", "", "Disconnect", .Danger, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, false) }
+						if ui.button_icon("###dc", "", i18n.tr("Disconnect"), .Danger, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, false) }
 					} else {
-						if ui.button_icon("###co", "", "Connect", .Success, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, true) }
+						if ui.button_icon("###co", "", i18n.tr("Connect"), .Success, height = math.round(em * BUTTON_SMALL_H_EM)).clicked { mcp_switch(app, m.name, true) }
 					}
 				}
 				ui.spacer(ui.px(em * 0.8))
@@ -959,15 +982,15 @@ page_usage :: proc(app: ^App, em: f32) {
 	f := &app.facts
 	if !read_shown(app, "###use_read", &f.reads[.Usage], em, server_facts_load) { return }
 	if len(f.limits) == 0 && len(f.budgets) == 0 {
-		info_line(app, "###none", "The server reports no usage limit (a provider of your own, or no OpenCode workspace).", em, hex(HEX_FAINT))
+		info_line(app, "###none", i18n.tr("The server reports no usage limit (a provider of your own, or no OpenCode workspace)."), em, hex(HEX_FAINT))
 		return
 	}
 	if f.workspace != "" {
 		ui.next({width = ui.fill(), height = ui.px(em * SETTINGS_ROW_H_EM), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###ws") {
-			text("w", fmt.tprintf("Workspace “%s”", f.workspace), hex(HEX_WORKSPACE_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+			text("w", fmt.tprintf(i18n.tr("Workspace “%s”"), f.workspace), hex(HEX_WORKSPACE_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			if f.usage_url != "" {
-				if ui.button_icon("###web", lucide.GLOBE, "Usage on opencode.ai", height = math.round(em * BUTTON_SMALL_H_EM)).clicked { link_open(f.usage_url) }
+				if ui.button_icon("###web", lucide.GLOBE, i18n.tr("Usage on opencode.ai"), height = math.round(em * BUTTON_SMALL_H_EM)).clicked { link_open(f.usage_url) }
 			}
 		}
 	}
@@ -982,20 +1005,20 @@ page_usage :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.7))
 			col := l.limited ? hex(HEX_RED) : l.percent >= USAGE_WARN_PERCENT ? hex(HEX_YELLOW) : hex(HEX_WEAK)
 			text("p", fmt.tprintf("%.0f %%", l.percent), col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 3.5))
-			text("r", l.resets > now ? fmt.tprintf("resets in %s", duration_text(now, l.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
+			text("r", l.resets > now ? fmt.tprintf(i18n.tr("resets in %s"), duration_text(now, l.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
 		}
 	}
-	if len(f.budgets) > 0 { section(app, "BUDGETS", em) }
+	if len(f.budgets) > 0 { section(app, i18n.tr("BUDGETS"), em) }
 	for b, i in f.budgets {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = fmt.tprintf("###bud%d", i)) {
-			text("n", b.scope != "" ? b.scope : "budget", hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.px(em * 6))
+			text("n", b.scope != "" ? b.scope : i18n.tr("budget"), hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.px(em * 6))
 			t := b.limit > 0 ? f32(b.spent / b.limit) : 0
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 0.7))})
 			ui.progress("###bar", t)
 			ui.spacer(ui.px(em * 0.7))
 			text("p", fmt.tprintf("$%.2f / $%.0f", b.spent, b.limit), t >= BUDGET_WARN_SHARE ? hex(HEX_YELLOW) : hex(HEX_GREEN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 8))
-			text("r", b.resets > now ? fmt.tprintf("resets in %s", duration_text(now, b.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
+			text("r", b.resets > now ? fmt.tprintf(i18n.tr("resets in %s"), duration_text(now, b.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
 		}
 	}
 }
@@ -1027,10 +1050,10 @@ saved_revoke_done :: proc(app: ^App, id: string) {
 
 page_permissions :: proc(app: ^App, em: f32) {
 	f := &app.facts
-	info_line(app, "###ph", "Answers given with “Always”: the server applies them without asking again. Revoke one to be asked next time.", em)
+	info_line(app, "###ph", i18n.tr("Answers given with “Always”: the server applies them without asking again. Revoke one to be asked next time."), em)
 	ui.spacer(ui.px(em * 0.6))
 	if read_shown(app, "###sp_read", &f.reads[.Saved], em, server_facts_load) {
-		if len(f.saved) == 0 { info_line(app, "###none", "No saved permission.", em, hex(HEX_FAINT)) }
+		if len(f.saved) == 0 { info_line(app, "###none", i18n.tr("No saved permission."), em, hex(HEX_FAINT)) }
 		for &s, i in f.saved {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###sp%d", i)) {
@@ -1040,11 +1063,11 @@ page_permissions :: proc(app: ^App, em: f32) {
 				text("a", s.action, hex(HEX_SETTING_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
 				ui.spacer(ui.px(em * 0.5))
 				text("r", s.resource, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
-				if ui.button_icon("###rv", lucide.TRASH_2, "Revoke", .Danger, height = math.round(em * BUTTON_SMALL_H_EM), disabled = saved_revoking(f, s.id)).clicked { saved_revoke(app, s.id) }
+				if ui.button_icon("###rv", lucide.TRASH_2, i18n.tr("Revoke"), .Danger, height = math.round(em * BUTTON_SMALL_H_EM), disabled = saved_revoking(f, s.id)).clicked { saved_revoke(app, s.id) }
 			}
 		}
 	}
-	section(app, "RULES OF THE AGENTS", em)
+	section(app, i18n.tr("RULES OF THE AGENTS"), em)
 	for a in app.agents {
 		info_line(app, fmt.tprintf("###ag_%s", a.id), fmt.tprintf("%s (%s): %s", a.name != "" ? a.name : a.id, a.mode, first_line(a.description)), em)
 		ui.spacer(ui.px(em * 0.3))
@@ -1066,13 +1089,13 @@ page_catalog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.25))
 		}
 	}
-	list(app, "PROVIDERS", f.providers[:], em, &f.reads[.Providers])
+	list(app, i18n.tr("PROVIDERS"), f.providers[:], em, &f.reads[.Providers])
 	models := make([]Named, len(app.models), context.temp_allocator)
-	for m, i in app.models { models[i] = {m.name != "" ? m.name : m.id, fmt.tprintf("%s · %s context", m.provider, kfmt(m.ctx_len))} }
-	list(app, "MODELS", models, em)
+	for m, i in app.models { models[i] = {m.name != "" ? m.name : m.id, fmt.tprintf(i18n.tr("%s · %s context"), m.provider, kfmt(m.ctx_len))} }
+	list(app, i18n.tr("MODELS"), models, em)
 	agents := make([]Named, len(app.agents), context.temp_allocator)
 	for a, i in app.agents { agents[i] = {a.name != "" ? a.name : a.id, fmt.tprintf("%s · %s", a.mode, first_line(a.description))} }
-	list(app, "AGENTS", agents, em)
-	list(app, "SKILLS", f.skills[:], em, &f.reads[.Skills])
-	list(app, "COMMANDS", f.commands[:], em, &f.reads[.Commands])
+	list(app, i18n.tr("AGENTS"), agents, em)
+	list(app, i18n.tr("SKILLS"), f.skills[:], em, &f.reads[.Skills])
+	list(app, i18n.tr("COMMANDS"), f.commands[:], em, &f.reads[.Commands])
 }

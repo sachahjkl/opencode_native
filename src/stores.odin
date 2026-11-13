@@ -18,6 +18,7 @@ import "core:strings"
 import store "gt:store"
 import "gt:fsx"
 import "gt:ui"
+import i18n "gt:i18n"
 
 Stores :: struct {
 	settings:    store.Store,
@@ -71,7 +72,7 @@ store_failed :: proc(user: rawptr, path: string) {
 @(private = "file")
 store_failed_say :: proc(data: rawptr, word: u64) {
 	name := strings.string_from_ptr((^u8)(data), int(word))
-	ui.toast(.Bad, "%s could not be saved", name)
+	ui.toast(.Bad, i18n.tr("%s could not be saved"), name)
 	delete(name, runtime.heap_allocator())
 }
 

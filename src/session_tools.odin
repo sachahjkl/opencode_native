@@ -25,6 +25,7 @@ import "gt:ui"
 import diff "gt:diff"
 import lucide "gt:lucide"
 import remote "gt:remote"
+import i18n "gt:i18n"
 
 // What a dialog of a session's (a folder, a file) answers to, and what a task writes or reads there (heap; freed by its end).
 @(private = "file")
@@ -47,7 +48,7 @@ session_file_free :: proc(data: rawptr) {
 }
 
 session_move_pick :: proc(app: ^App, id: string) {
-	ui.file_dialog(&app.state, .Folder, {owner = app.win, title = "Move the session to", remember_id = "session_move"}, proc(r: platform.Dialog_Result, user: rawptr) {
+	ui.file_dialog(&app.state, .Folder, {owner = app.win, title = i18n.tr("Move the session to"), remember_id = "session_move"}, proc(r: platform.Dialog_Result, user: rawptr) {
 		f := (^Session_File)(user)
 		defer session_file_free(f)
 		if r.status != .Chosen || len(r.paths) == 0 { return }
@@ -65,9 +66,9 @@ session_export_save :: proc(app: ^App, id, raw: string) {
 	body := export_body(raw)
 	title := id
 	if s := find_session(app, id); s != nil && s.title != "" { title = s.title }
-	filters := []platform.File_Filter{{name = "Session", patterns = {"*.json"}}}
+	filters := []platform.File_Filter{{name = i18n.tr("Session"), patterns = {"*.json"}}}
 	// (the dialog, then the file written: both on the chores)
-	ui.file_dialog(&app.state, .Save, {owner = app.win, title = "Export the session", filters = filters, suggested_name = fmt.tprintf("%s.json", file_safe(title)), default_ext = "json", remember_id = "session_export", overwrite_prompt = true}, proc(r: platform.Dialog_Result, user: rawptr) {
+	ui.file_dialog(&app.state, .Save, {owner = app.win, title = i18n.tr("Export the session"), filters = filters, suggested_name = fmt.tprintf("%s.json", file_safe(title)), default_ext = "json", remember_id = "session_export", overwrite_prompt = true}, proc(r: platform.Dialog_Result, user: rawptr) {
 		f := (^Session_File)(user)
 		if r.status != .Chosen || len(r.paths) == 0 { session_file_free(f); return }
 		f.path = strings.clone(r.paths[0], runtime.heap_allocator())
@@ -76,7 +77,7 @@ session_export_save :: proc(app: ^App, id, raw: string) {
 			f.ok = os.write_entire_file(f.path, transmute([]u8)f.body) == nil
 		}, proc(data: rawptr, _: u64) {
 			f := (^Session_File)(data)
-			if f.ok { ui.announce(&f.app.announcer, .Good, "Session exported") } else { ui.toast(.Bad, "The file could not be written") }
+			if f.ok { ui.announce(&f.app.announcer, .Good, i18n.tr("Session exported")) } else { ui.toast(.Bad, i18n.tr("The file could not be written")) }
 			session_file_free(f)
 		}, f, session_file_free)
 	}, session_file_new(app, id, body))
@@ -96,8 +97,8 @@ file_safe :: proc(s: string) -> string {
 }
 
 session_import_pick :: proc(app: ^App) {
-	filters := []platform.File_Filter{{name = "Session", patterns = {"*.json"}}}
-	ui.file_dialog(&app.state, .Open, {owner = app.win, title = "Import a session", filters = filters, all_files = true, remember_id = "session_export"}, proc(r: platform.Dialog_Result, user: rawptr) {
+	filters := []platform.File_Filter{{name = i18n.tr("Session"), patterns = {"*.json"}}}
+	ui.file_dialog(&app.state, .Open, {owner = app.win, title = i18n.tr("Import a session"), filters = filters, all_files = true, remember_id = "session_export"}, proc(r: platform.Dialog_Result, user: rawptr) {
 		if r.status != .Chosen || len(r.paths) == 0 { return }
 		session_import_file((^App)(user), r.paths[0])
 	}, app)
@@ -115,10 +116,10 @@ session_import_file :: proc(app: ^App, path: string) {
 	}, proc(data: rawptr, _: u64) {
 		f := (^Session_File)(data)
 		defer session_file_free(f)
-		if !f.ok { ui.toast(.Bad, "The file could not be read"); return }
+		if !f.ok { ui.toast(.Bad, i18n.tr("The file could not be read")); return }
 		v, bad := json.parse(transmute([]u8)f.body, parse_integers = true, allocator = context.temp_allocator)
 		id := jstr(v, "info", "id")
-		if bad != nil || id == "" { ui.toast(.Bad, "This file is not an exported session"); return }
+		if bad != nil || id == "" { ui.toast(.Bad, i18n.tr("This file is not an exported session")); return }
 		request(f.app, .Session_Import, "POST", "/api/experimental/session/import", f.body, id)
 	}, f, session_file_free)
 }
@@ -126,7 +127,7 @@ session_import_file :: proc(app: ^App, path: string) {
 // The server refuses a session it has already: that one is opened.
 session_import_conflict :: proc(app: ^App, id: string) {
 	open_root(app, id)
-	ui.toast(.Warn, "This session is already here")
+	ui.toast(.Warn, i18n.tr("This session is already here"))
 }
 
 ////////////////////////////////
@@ -217,7 +218,7 @@ changes_held :: proc(c: ^Changes) -> bool {
 @(private = "file")
 changes_wait :: proc(c: ^Changes) -> bool {
 	if !changes_held(c) { return false }
-	ui.toast(.Warn, "Going back to a prompt is under way: try again in a moment")
+	ui.toast(.Warn, i18n.tr("Going back to a prompt is under way: try again in a moment"))
 	return true
 }
 
@@ -405,7 +406,7 @@ revert_done :: proc(app: ^App) {
 	}
 	changes_reset(c)
 	refresh_soon(app)
-	ui.announce(&app.announcer, .Good, "Back to this prompt")
+	ui.announce(&app.announcer, .Good, i18n.tr("Back to this prompt"))
 }
 
 revert_cancelled :: proc(app: ^App) { changes_reset(&app.cx.changes) }
@@ -439,17 +440,17 @@ changes_forget :: proc(app: ^App) {
 changes_say :: proc(c: ^Changes) -> string {
 	add, del := 0, 0
 	for f in c.files { add += f.additions; del += f.deletions }
-	count := fmt.tprintf("%d %s  +%d  -%d", len(c.files), len(c.files) == 1 ? "file" : "files", add, del)
+	count := fmt.tprintf(i18n.tr(len(c.files), "%d file  +%d  -%d", "%d files  +%d  -%d"), len(c.files), add, del)
 	#partial switch s in c.state {
-	case Changes_Staging: return "Reading…"
+	case Changes_Staging: return i18n.tr("Reading…")
 	case Changes_Staged:
-		lead := s.found ? "This session was left going back. " : ""
-		if s.no_snapshot { return fmt.tprintf("%sThis folder keeps no snapshots: the files stay as they are, only the conversation goes back.", lead) }
-		if len(c.files) == 0 { return fmt.tprintf("%sNo file to restore: only the conversation goes back.", lead) }
-		return fmt.tprintf("%s%s, written back on disk already. Go back keeps it so and drops what came after this prompt; Cancel puts the files back.", lead, count)
+		lead := s.found ? i18n.tr("This session was left going back. ") : ""
+		if s.no_snapshot { return fmt.tprintf(i18n.tr("%sThis folder keeps no snapshots: the files stay as they are, only the conversation goes back."), lead) }
+		if len(c.files) == 0 { return fmt.tprintf(i18n.tr("%sNo file to restore: only the conversation goes back."), lead) }
+		return fmt.tprintf(i18n.tr("%s%s, written back on disk already. Go back keeps it so and drops what came after this prompt; Cancel puts the files back."), lead, count)
 	case Changes_Viewing:
-		if len(c.files) == 0 { return "No change recorded. Only a git folder keeps them." }
-		if s.step == .Last_Turn { return fmt.tprintf("%s, in the last turn only: this session changed folder, it cannot be compared as a whole.", count) }
+		if len(c.files) == 0 { return i18n.tr("No change recorded. Only a git folder keeps them.") }
+		if s.step == .Last_Turn { return fmt.tprintf(i18n.tr("%s, in the last turn only: this session changed folder, it cannot be compared as a whole."), count) }
 	}
 	return count
 }
@@ -469,7 +470,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 	_, staging := c.state.(Changes_Staging)
 	if ui.modal_sized("changes", DIALOG_PREFERRED_EM[.Changes] * em, &app.cx.dialogs[.Changes], open, DIALOG_MIN_EM[.Changes] * em) {
 		dialog_backdrop()
-		if ui.dialog_header("ch_head", !viewing ? "Go back to this prompt" : v.from != "" ? "What this prompt changed" : "What this session changed", {close = true}) {}
+		if ui.dialog_header("ch_head", !viewing ? i18n.tr("Go back to this prompt") : v.from != "" ? i18n.tr("What this prompt changed") : i18n.tr("What this session changed"), {close = true}) {}
 		// (under the header, as wide as the dialog: the corner is the close cross's only beside the header)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###ch_sub") {
@@ -502,7 +503,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 							}
 							if f.patch != "" {
 								ui.next({width = ui.text_size(0), height = ui.px(em * 1.4), font_size = math.round(em * FS_CAPTION), fg = hex(HEX_FAINT), cursor = .Hand, text_pad = 0})
-								full := ui.build_box({.Clickable, .Draw_Text}, "Full view###ff")
+								full := ui.build_box({.Clickable, .Draw_Text}, fmt.tprintf("%s###ff", i18n.tr("Full view")))
 								if ui.signal(full).clicked { diff_full_open(app, f.file, f.patch); f.open = !f.open }   // (the head's click is undone: this one was not for it)
 								ui.spacer(ui.px(em * 0.8))
 							}
@@ -512,7 +513,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 						}
 						if f.open {
 							diff_view(app, "###fd", f.diff, f.patch, em, CHANGES_DIFF_LINES, f.file)
-							if f.more { text("m", "The server gave only the beginning of this file.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)}, ui.fill()) }
+							if f.more { text("m", i18n.tr("The server gave only the beginning of this file."), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)}, ui.fill()) }
 						}
 						ui.spacer(ui.px(em * 0.4))
 					}
@@ -525,9 +526,9 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###ch_foot") {
 				ui.spacer(ui.fill())
-				if ui.button_icon("###ch_cancel", "", "Cancel", .Cancel).clicked { open^ = false }
+				if ui.button_icon("###ch_cancel", "", i18n.tr("Cancel"), .Cancel).clicked { open^ = false }
 				ui.spacer(ui.px(em * 0.5))
-				if ui.button_icon("###ch_go", lucide.UNDO_2, "Go back", .Danger, disabled = staging).clicked { revert_commit(app) }
+				if ui.button_icon("###ch_go", lucide.UNDO_2, i18n.tr("Go back"), .Danger, disabled = staging).clicked { revert_commit(app) }
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
 			}
 		}
@@ -539,7 +540,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 // What the answers to its requests do (net.odin REQ_FACTS)
 
 session_moved_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	ui.announce(&app.announcer, .Good, "Session moved")
+	ui.announce(&app.announcer, .Good, i18n.tr("Session moved"))
 	refresh_soon(app)
 }
 
@@ -549,7 +550,7 @@ session_import_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 	refresh_soon(app)
 	// (the reader who went elsewhere meanwhile stays there: it is in the sidebar)
 	if id := jstr(v, "data", "id"); id != "" && r.gen == app.chat.gen { open_root(app, id) }
-	ui.announce(&app.announcer, .Good, "Session imported")
+	ui.announce(&app.announcer, .Good, i18n.tr("Session imported"))
 }
 
 session_import_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {

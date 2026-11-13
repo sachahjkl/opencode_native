@@ -19,6 +19,8 @@ run_check :: proc(args: []string) -> int {
 		return EXIT_USAGE
 	}
 	if !changelog_check() { return 1 }
+	// (a text of the code with no French, or a French text the code no longer has)
+	if why := toolbox.i18n_catalogue({"src"}, "i18n/fr.txt", "fr", true); why != "" { fmt.eprintfln("check: %s", why); return 1 }
 	// (a scope opened under a negation ends at once: `if !ui.row(...)`)
 	if !toolbox.check_scopes("src") { return 1 }
 	// (the other system's code compiles too: Windows' from Linux, Linux's from Windows is the CI's)

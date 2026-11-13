@@ -10,6 +10,7 @@ import "core:math"
 import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 PAIR_QR_EM      :: 15     // the QR code's side
 PAIR_TICK_MS    :: 1000   // the time left is said to the second
@@ -48,7 +49,7 @@ pair_load :: proc(app: ^App, code: string, expires_in: f64) {
 pair_failed :: proc(app: ^App, why: string) {
 	p := &app.pair
 	delete(p.failed)
-	p.failed = strings.clone(why != "" ? why : "The server made no pairing code")
+	p.failed = strings.clone(why != "" ? why : i18n.tr("The server made no pairing code"))
 }
 
 server_urls_clear :: proc(app: ^App) {
@@ -93,7 +94,7 @@ pair_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 1.4))
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
-				text("t", "Pair a device", hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
+				text("t", i18n.tr("Pair a device"), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
 				pair_body(app, em)
 			}
 			ui.spacer(ui.px(em * 1.4))
@@ -111,11 +112,11 @@ pair_body :: proc(app: ^App, em: f32) {
 	if p.failed != "" {
 		pair_note("###f", p.failed, hex(HEX_RED), soft)
 		ui.spacer(ui.px(em * 0.8))
-		if ui.button_icon("###pair_retry", lucide.REFRESH_CW, "Try again").clicked { pair_new_code(app) }
+		if ui.button_icon("###pair_retry", lucide.REFRESH_CW, i18n.tr("Try again")).clicked { pair_new_code(app) }
 		return
 	}
 	if p.code == "" {
-		pair_note("###w", "Asking the server for a code…", hex(HEX_WEAK), soft)
+		pair_note("###w", i18n.tr("Asking the server for a code…"), hex(HEX_WEAK), soft)
 		animate(app)
 		return
 	}
@@ -131,33 +132,33 @@ pair_body :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.fill())
 		}
 		ui.spacer(ui.px(em * 0.8))
-		pair_note("###s", "Scan it with the device's camera, or open one of these links on it. A link works once.", hex(HEX_TEXT_SOFT), note)
+		pair_note("###s", i18n.tr("Scan it with the device's camera, or open one of these links on it. A link works once."), hex(HEX_TEXT_SOFT), note)
 	} else if left > 0 {
-		pair_note("###s", "Open one of these links on the device. A link works once.", hex(HEX_TEXT_SOFT), note)
+		pair_note("###s", i18n.tr("Open one of these links on the device. A link works once."), hex(HEX_TEXT_SOFT), note)
 	}
 	ui.spacer(ui.px(em * 0.6))
 	if left > 0 {
 		for u, i in urls {
-			pair_link_row(app, fmt.tprintf("###pl%d", i), url_is_here(u) ? "This computer" : "Link", pair_link(u, p.code), em)
+			pair_link_row(app, fmt.tprintf("###pl%d", i), url_is_here(u) ? i18n.tr("This computer") : i18n.tr("Link"), pair_link(u, p.code), em)
 		}
 		ui.spacer(ui.px(em * 0.4))
 		mins, secs := int(left) / 60, int(left) % 60
-		pair_note("###x", fmt.tprintf("The code expires in %d:%02d.", mins, secs), hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+		pair_note("###x", fmt.tprintf(i18n.tr("The code expires in %d:%02d."), mins, secs), hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.wake_within(&app.state, PAIR_TICK_MS)
 	} else {
-		pair_note("###x", "This code expired.", hex(HEX_WEAK), soft)
+		pair_note("###x", i18n.tr("This code expired."), hex(HEX_WEAK), soft)
 	}
 	if reach == "" {
 		ui.spacer(ui.px(em * 0.6))
-		pair_note("###h", fmt.tprintf("The server can be reached from this computer only. To pair another device, run `%s`.", PAIR_HOSTNAME_HINT), hex(HEX_WEAK), note)
+		pair_note("###h", fmt.tprintf(i18n.tr("The server can be reached from this computer only. To pair another device, run `%s`."), PAIR_HOSTNAME_HINT), hex(HEX_WEAK), note)
 	}
 	ui.spacer(ui.px(em * 0.8))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###pair_buttons") {
 		ui.spacer(ui.fill())
-		if ui.button_icon("###pair_new", lucide.REFRESH_CW, "New code").clicked { pair_new_code(app) }
+		if ui.button_icon("###pair_new", lucide.REFRESH_CW, i18n.tr("New code")).clicked { pair_new_code(app) }
 		ui.spacer(ui.px(em * 0.5))
-		if ui.button_icon("###pair_close", lucide.X, "Close").clicked { app.cx.open[.Pair] = false }
+		if ui.button_icon("###pair_close", lucide.X, i18n.tr("Close")).clicked { app.cx.open[.Pair] = false }
 	}
 }
 
@@ -182,9 +183,9 @@ pair_link_row :: proc(app: ^App, id, what, link: string, em: f32) {
 		ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Selectable}})
 		link_clicked(ui.rich_paragraph("###l", runs[:], max_lines = 1))
 		ui.spacer(ui.px(em * 0.4))
-		if ui.button_icon("###c", "", "Copy", height = math.round(em * BUTTON_SMALL_H_EM)).clicked {
+		if ui.button_icon("###c", "", i18n.tr("Copy"), height = math.round(em * BUTTON_SMALL_H_EM)).clicked {
 			clip_set(link)
-			ui.announce(&app.announcer, .Good, "Link copied")
+			ui.announce(&app.announcer, .Good, i18n.tr("Link copied"))
 		}
 	}
 }

@@ -22,6 +22,7 @@ import "gt:render"
 import svg "gt:svg"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 // Odd 64-bit constants that spread the bits of what they multiply.
 HASH_MIX_A :: 0x9e3779b97f4a7c15
@@ -176,9 +177,9 @@ image_decoded :: proc(data: rawptr, word: u64) {
 	if job.copy {
 		pixels := platform.Clipboard_Image{rgba = job.out.ptr[:job.out.len], size = {int(job.w), int(job.h)}}
 		switch {
-		case !job.ok || job.w == 0 || job.h == 0: ui.toast(.Bad, "The image could not be copied: it is unreadable")
-		case !platform.clipboard_set_image(app.win, pixels): ui.toast(.Bad, "The image could not be copied")
-		case: ui.announce(&app.announcer, .Good, "Image copied")
+		case !job.ok || job.w == 0 || job.h == 0: ui.toast(.Bad, i18n.tr("The image could not be copied: it is unreadable"))
+		case !platform.clipboard_set_image(app.win, pixels): ui.toast(.Bad, i18n.tr("The image could not be copied"))
+		case: ui.announce(&app.announcer, .Good, i18n.tr("Image copied"))
 		}
 		return
 	}
@@ -191,7 +192,7 @@ image_decoded :: proc(data: rawptr, word: u64) {
 		return
 	}
 	e.tex = render.create_texture_rgba(&app.r, int(job.w), int(job.h), mips = job.mips)
-	if e.tex == 0 { image_failed(e, "no room for its texture"); return }
+	if e.tex == 0 { image_failed(e, i18n.tr("no room for its texture")); return }
 	render.update_texture_rgba(&app.r, e.tex, 0, 0, int(job.w), int(job.h), job.out.ptr[:job.out.len])
 	e.w, e.h = int(job.w), int(job.h)
 	e.state = .Ready
@@ -206,7 +207,7 @@ image_failed :: proc(e: ^Image_Entry, why: string) {
 
 // What a picture that cannot be shown says of itself.
 image_failed_words :: proc(e: ^Image_Entry) -> string {
-	return e.error != "" ? fmt.tprintf("image unreadable: %s", e.error) : "image unreadable"
+	return e.error != "" ? fmt.tprintf(i18n.tr("image unreadable: %s"), e.error) : i18n.tr("image unreadable")
 }
 
 // Keeps the textures within IMAGE_BUDGET_BYTES: the ones shown longest ago go (they are decoded again when shown).
@@ -277,7 +278,7 @@ image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) ->
 	}
 	if state == .Pending { animate(app) }
 	ui.next({width = ui.px(w), height = ui.px(h), cursor = .Hand})
-	ui.a11y({role = .Button, name = ref.name != "" ? ref.name : "Image"})
+	ui.a11y({role = .Button, name = ref.name != "" ? ref.name : i18n.tr("Image")})
 	b := ui.build_box({.Clickable, .Focusable}, id)
 	d := ui.frame_new(Image_Draw)
 	d^ = {tex = tex, radius = 6, frame = true, state = state}
@@ -327,7 +328,7 @@ logo_of :: proc(app: ^App, id: string, ref: ^Image_Ref, size: f32) -> bool {
 // --image=<file>: the viewer opens on a file, once decoded.
 image_view_start :: proc(app: ^App, path: string) {
 	data, err := os.read_entire_file(path, context.allocator)
-	if err != nil { ui.toast(.Bad, fmt.tprintf("Cannot read %s", path)); return }
+	if err != nil { ui.toast(.Bad, fmt.tprintf(i18n.tr("Cannot read %s"), path)); return }
 	app.viewer.start = image_ref(string(data), .Bytes, "image", strings.clone(filepath.base(path)))
 }
 
@@ -343,7 +344,7 @@ image_view_wait :: proc(app: ^App) {
 	if s != nil && s.state == .Ready {
 		image_view_open(app, app.viewer.start)
 	} else {
-		ui.toast(.Bad, "%s: %s", app.viewer.start.name, s != nil ? image_failed_words(s) : "image unreadable: the file is empty")
+		ui.toast(.Bad, "%s: %s", app.viewer.start.name, s != nil ? image_failed_words(s) : i18n.tr("image unreadable: the file is empty"))
 	}
 	app.viewer.start.key = 0
 }
@@ -470,7 +471,7 @@ image_viewer_wait :: proc(app: ^App, em: f32) {
 		dialog_backdrop()
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
-		if ui.tags("weak") { ui.label("Opening the image…###view_wait") }
+		if ui.tags("weak") { ui.label(fmt.tprintf("%s###view_wait", i18n.tr("Opening the image…"))) }
 		ui.spacer(ui.px(em))
 	}
 }
@@ -521,7 +522,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 				picture := source * f.fit * app.viewer.zoom
 				pannable := picture.x > view.x || picture.y > view.y
 				ui.next({width = ui.px(view.x), height = ui.px(view.y), cursor = pannable ? (ui.active_key() != 0 ? .Grabbing : .Grab) : .Arrow})
-				ui.a11y({role = .Image, name = diagram ? "A diagram" : app.viewer.ref.name != "" ? app.viewer.ref.name : "Image"})
+				ui.a11y({role = .Image, name = diagram ? i18n.tr("A diagram") : app.viewer.ref.name != "" ? app.viewer.ref.name : i18n.tr("Image")})
 				b := ui.build_box({.Clickable, .Scroll_Self}, "###view")
 				sig := ui.signal(b)
 				if sig.pressed && viewer_outside(sig.mouse, view, picture, app.viewer.pan) { closing = true }
@@ -557,7 +558,7 @@ image_viewer :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(bar), axis = .X, cross = .Center})
 			if ui.row(.Center) {
 				ui.spacer(ui.px(em))
-				name := diagram ? "Mermaid diagram" : app.viewer.ref.name != "" ? app.viewer.ref.name : "image"
+				name := diagram ? i18n.tr("Mermaid diagram") : app.viewer.ref.name != "" ? app.viewer.ref.name : i18n.tr("image")
 				text("n", ellipsize(name, IMAGE_NAME_CHARS), hex(HEX_VIEWER_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 				ui.spacer(ui.px(em * 0.6))
 				zoom := f.fit * app.viewer.zoom / sc * 100
@@ -569,9 +570,9 @@ image_viewer :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.3))
 				if ui.button_icon("###zoom_in", "", "+", height = bh).clicked { view_zoom_to(app, app.viewer.zoom * VIEW_ZOOM_STEP, max_zoom, {}) }
 				ui.spacer(ui.px(em * 0.3))
-				if ui.button_icon("###zoom_fit", "", "Fit", height = bh).clicked { app.viewer.zoom, app.viewer.pan = 1, {} }
+				if ui.button_icon("###zoom_fit", "", i18n.tr("Fit"), height = bh).clicked { app.viewer.zoom, app.viewer.pan = 1, {} }
 				ui.spacer(ui.px(em * 0.8))
-				if ui.button_icon("###close", lucide.X, "Close", height = bh).clicked { app.cx.open[.Viewer] = false }
+				if ui.button_icon("###close", lucide.X, i18n.tr("Close"), height = bh).clicked { app.cx.open[.Viewer] = false }
 				ui.spacer(ui.px(em))
 			}
 		}

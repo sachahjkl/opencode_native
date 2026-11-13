@@ -12,6 +12,7 @@ import "core:strconv"
 import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 Form_Option :: struct { value, label, description: string }
 Form_When   :: struct { key, op, value: string }
@@ -243,13 +244,13 @@ form_answer :: proc(f: ^Form_Req) -> (body, problem: string, at: int) {
 		case "number", "integer":
 			s := field_value(&fd)
 			if s == "" {
-				if must { return "", fmt.tprintf("Answer: %s", name), page }
+				if must { return "", fmt.tprintf(i18n.tr("Answer: %s"), name), page }
 				continue
 			}
 			n, ok := strconv.parse_f64(s)
-			if !ok || (fd.kind == "integer" && math.floor(n) != n) { return "", fmt.tprintf("%s: a %s is expected", name, fd.kind == "integer" ? "whole number" : "number"), page }
-			if m, has := fd.min.?; has && n < m { return "", fmt.tprintf("%s: %v at least", name, m), page }
-			if m, has := fd.max.?; has && n > m { return "", fmt.tprintf("%s: %v at most", name, m), page }
+			if !ok || (fd.kind == "integer" && math.floor(n) != n) { return "", fmt.tprintf(fd.kind == "integer" ? i18n.tr("%s: a whole number is expected") : i18n.tr("%s: a number is expected"), name), page }
+			if m, has := fd.min.?; has && n < m { return "", fmt.tprintf(i18n.tr("%s: %v at least"), name, m), page }
+			if m, has := fd.max.?; has && n > m { return "", fmt.tprintf(i18n.tr("%s: %v at most"), name, m), page }
 			put(&b, &first, fd.key, s)
 		case "multiselect":
 			l := strings.builder_make(context.temp_allocator)
@@ -267,12 +268,12 @@ form_answer :: proc(f: ^Form_Req) -> (body, problem: string, at: int) {
 				n += 1
 			}
 			strings.write_byte(&l, ']')
-			if n == 0 && must { return "", fmt.tprintf("Answer: %s", name), page }
+			if n == 0 && must { return "", fmt.tprintf(i18n.tr("Answer: %s"), name), page }
 			put(&b, &first, fd.key, strings.to_string(l))
 		case:
 			s := field_value(&fd)
 			if s == "" {
-				if must { return "", fmt.tprintf("Answer: %s", name), page }
+				if must { return "", fmt.tprintf(i18n.tr("Answer: %s"), name), page }
 				continue
 			}
 			put(&b, &first, fd.key, jquote(s))
@@ -342,9 +343,9 @@ form_card :: proc(app: ^App, f: ^Form_Req, others: int, em: f32) {
 			ui.spacer(ui.px(em))
 			glyph(lucide.LIGHTBULB, accent(), math.round(em * ICON_LARGE), em * 1.6)
 			ui.spacer(ui.px(em * 0.5))
-			title := f.question ? (sub ? "A sub-agent asks" : "The agent asks") : (f.title != "" ? f.title : "The agent asks")
+			title := f.question ? (sub ? i18n.tr("A sub-agent asks") : i18n.tr("The agent asks")) : (f.title != "" ? f.title : i18n.tr("The agent asks"))
 			text("t", title, accent(), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
-			if others > 1 { text("n", fmt.tprintf("1 of %d", others), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
+			if others > 1 { text("n", fmt.tprintf(i18n.tr("1 of %d"), others), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.3))
@@ -366,16 +367,16 @@ form_card :: proc(app: ^App, f: ^Form_Req, others: int, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###foot") {
 			ui.spacer(ui.px(em))
-			if ui.button_icon("###form_dismiss", "", "Dismiss", .Cancel, disabled = f.sending, face = .Ghost).clicked { dismiss = true }
+			if ui.button_icon("###form_dismiss", "", i18n.tr("Dismiss"), .Cancel, disabled = f.sending, face = .Ghost).clicked { dismiss = true }
 			ui.spacer(ui.fill())
 			if wizard && f.page > 0 {
-				if ui.button_icon("###form_prev", lucide.ARROW_LEFT, "Back").clicked { f.page -= 1 }
+				if ui.button_icon("###form_prev", lucide.ARROW_LEFT, i18n.tr("Back")).clicked { f.page -= 1 }
 				ui.spacer(ui.px(em * 0.4))
 			}
 			if wizard && !reviewing {
-				if ui.button_icon("###form_next", lucide.ARROW_RIGHT, ui.text_shown(f.page == len(pages) - 1 ? "Review" : "Next"), .Primary).clicked { next = true }
+				if ui.button_icon("###form_next", lucide.ARROW_RIGHT, ui.text_shown(f.page == len(pages) - 1 ? i18n.tr("Review") : i18n.tr("Next")), .Primary).clicked { next = true }
 			} else {
-				if ui.button_icon("###form_send", lucide.CHECK, "Send", .Primary, disabled = f.sending).clicked { send = true }
+				if ui.button_icon("###form_send", lucide.CHECK, i18n.tr("Send"), .Primary, disabled = f.sending).clicked { send = true }
 			}
 			ui.spacer(ui.px(em))
 		}
@@ -399,10 +400,10 @@ form_tabs :: proc(f: ^Form_Req, pages: []int, em: f32) {
 		if ui.flow({em * 0.25, em * 0.25}, "###tabs_flow") {
 			for p, k in pages {
 				fd := &f.fields[p]
-				name := fd.title != "" ? fd.title : fmt.tprintf("Question %d", k + 1)
+				name := fd.title != "" ? fd.title : fmt.tprintf(i18n.tr("Question %d"), k + 1)
 				if ui.button_icon(fmt.tprintf("###form_tab%d", k), field_answer(fd) != "" ? lucide.CHECK : "", ui.text_shown(label_safe(name)), height = h, face = f.page == k ? .Toggled : .Ghost).clicked { f.page = k }
 			}
-			if ui.button_icon("###form_tab_review", "", "Review", height = h, face = f.page == len(pages) ? .Toggled : .Ghost).clicked { f.page = len(pages) }
+			if ui.button_icon("###form_tab_review", "", i18n.tr("Review"), height = h, face = f.page == len(pages) ? .Toggled : .Ghost).clicked { f.page = len(pages) }
 		}
 		ui.spacer(ui.px(em))
 	}
@@ -413,7 +414,7 @@ form_tabs :: proc(f: ^Form_Req, pages: []int, em: f32) {
 @(private = "file")
 field_answer :: proc(fd: ^Form_Field) -> string {
 	switch fd.kind {
-	case "boolean":  return fd.on ? "Yes" : "No"
+	case "boolean":  return fd.on ? i18n.tr("Yes") : i18n.tr("No")
 	case "external": return ""
 	case "multiselect":
 		b := strings.builder_make(context.temp_allocator)
@@ -442,8 +443,8 @@ form_page :: proc(app: ^App, f: ^Form_Req, pages: []int, reviewing, wizard: bool
 			if ui.row(.Center, id = fmt.tprintf("###rv%d", k)) {
 				ui.spacer(ui.px(em))
 				a := field_answer(fd)
-				name := fd.title != "" ? fd.title : fd.description != "" ? fd.description : fmt.tprintf("Question %d", k + 1)
-				if ui.button_icon(fmt.tprintf("###form_rv%d", k), "", ui.text_shown(label_safe(fmt.tprintf("%s:  %s", name, a != "" ? a : "no answer"))), width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true, wrap = true, face = .Ghost).clicked { f.page = k }
+				name := fd.title != "" ? fd.title : fd.description != "" ? fd.description : fmt.tprintf(i18n.tr("Question %d"), k + 1)
+				if ui.button_icon(fmt.tprintf("###form_rv%d", k), "", ui.text_shown(label_safe(fmt.tprintf("%s:  %s", name, a != "" ? a : i18n.tr("no answer")))), width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true, wrap = true, face = .Ghost).clicked { f.page = k }
 				ui.spacer(ui.px(em))
 			}
 			ui.spacer(ui.px(em * 0.15))
@@ -483,14 +484,14 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 	case "boolean":
 		ui.toggle("###on", "", &fd.on)
 	case "external":
-		if fd.url != "" && ui.button_icon("###open", lucide.GLOBE, "Open").clicked { ui.open(fd.url, .Url) }
+		if fd.url != "" && ui.button_icon("###open", lucide.GLOBE, i18n.tr("Open")).clicked { ui.open(fd.url, .Url) }
 	case "multiselect":
 		for o, k in fd.options {
 			ui.next({width = ui.fill()})
 			ui.checkbox(fmt.tprintf("###form_o%d", k), label_safe(option_label(o)), &fd.picks[k], wrap = true)
 			ui.spacer(ui.px(em * 0.15))
 		}
-		if fd.custom { form_line(fd, em, "Something else", done) }
+		if fd.custom { form_line(fd, em, i18n.tr("Something else"), done) }
 	case:
 		for o, k in fd.options {
 			if ui.button_icon(fmt.tprintf("###form_o%d", k), "", ui.text_shown(label_safe(option_label(o))), width = ui.fill(), height = h, left = true, wrap = true, face = fd.choice == k ? .Toggled : .Raised).clicked {
@@ -501,7 +502,7 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 			ui.spacer(ui.px(em * 0.25))
 		}
 		if len(fd.options) == 0 || fd.custom {
-			form_line(fd, em, fd.placeholder != "" ? fd.placeholder : len(fd.options) > 0 ? "Something else" : "Your answer", done)
+			form_line(fd, em, fd.placeholder != "" ? fd.placeholder : len(fd.options) > 0 ? i18n.tr("Something else") : i18n.tr("Your answer"), done)
 		}
 	}
 }

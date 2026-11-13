@@ -57,7 +57,7 @@ main :: proc() {
 	commands := make([dynamic]toolbox.Command)
 	own := COMMANDS
 	append(&commands, ..own[:])
-	append(&commands, tk_changelog.command(OCN_PROJECT), lic[0], lic[1])
+	append(&commands, tk_changelog.command(OCN_PROJECT), lic[0], lic[1], toolbox.i18n_command({dirs = {"src"}, folder = "i18n"}))
 	// (a copy of the tree with no .git, which wsl_build builds from, has the mark too: the root is found by it)
 	toolbox.tool_main("ocntools", commands[:], toolbox.ROOT_MARK_DEFAULT)
 }

@@ -10,6 +10,7 @@ import tasks "gt:tasks"
 import "core:os"
 import "core:strings"
 import "gt:ui"
+import i18n "gt:i18n"
 
 // The options the server's schema offers that are plain switches, and whether a feature of ours is among them.
 experimental_keys :: proc(spec: json.Value, allocator := context.temp_allocator) -> []string {
@@ -222,5 +223,5 @@ experimental_answer :: proc(data: rawptr, word: u64) {
 	defer { conn_release(app, r.conn); free(r) }
 	if r.conn != app.conn { return }
 	if r.known { app.cx.no_schedules, app.cx.no_artifacts = !r.schedules, !r.artifacts }
-	if r.changed { ui.announce(&app.announcer, .Good, "The server's experimental options are on") }
+	if r.changed { ui.announce(&app.announcer, .Good, i18n.tr("The server's experimental options are on")) }
 }

@@ -13,13 +13,14 @@ import "gt:draw"
 import "gt:config"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 Sidebar_Mode :: enum u8 { Inbox, Projects }
 
 // (`word`: the value of sidebar.mode, PREF_DEFS lists the same ones.)
 SIDEBAR_MODES := [Sidebar_Mode]struct { word, label: string }{
-	.Inbox    = {"inbox", "Inbox"},
-	.Projects = {"projects", "Projects"},
+	.Inbox    = {"inbox", i18n.later("Inbox")},
+	.Projects = {"projects", i18n.later("Projects")},
 }
 
 sidebar_mode_of :: proc(word: string) -> Sidebar_Mode {
@@ -37,7 +38,7 @@ sidebar_mode_next :: proc(app: ^App) {
 // What needs the person first. A session is in the first of these that it can be: one that runs again is no longer finished.
 Inbox_Class :: enum u8 { Waiting, Finished, Running, Rest }
 
-INBOX_TITLES := [Inbox_Class]string{.Waiting = "Waits for you", .Finished = "Finished", .Running = "Running", .Rest = "Recent"}
+INBOX_TITLES := [Inbox_Class]string{.Waiting = i18n.later("Waits for you"), .Finished = i18n.later("Finished"), .Running = i18n.later("Running"), .Rest = i18n.later("Recent")}
 
 // A section of the list. `items`: indices into app.sessions, in order.
 Side_Section :: struct {
@@ -50,7 +51,7 @@ Side_Section :: struct {
 	items:   [dynamic]int,
 }
 
-ARCHIVED_TITLE :: "Archived"
+ARCHIVED_TITLE := i18n.later("Archived")   // (a section's title: translated where it is shown)
 
 // The server knows what was seen, for every client of it and across restarts: a run ended (time.idle) after the last end someone looked
 // at (time.viewed), POST /view says one was. Its own rule, on the sessions one opens: sub-agents are read through their parent, and
@@ -349,11 +350,11 @@ section_seen :: proc(app: ^App, sec: ^Side_Section) {
 // The modes, under the search.
 sidebar_mode_switch :: proc(app: ^App, em: f32) {
 	labels: [len(Sidebar_Mode)]string
-	for m in Sidebar_Mode { labels[m] = SIDEBAR_MODES[m].label }
+	for m in Sidebar_Mode { labels[m] = i18n.tr(SIDEBAR_MODES[m].label) }
 	sel := int(app.prefs.sidebar_mode)
 	if ui.style({font_size = math.round(em * FS_SMALL)}) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * SIDE_MODES_H_EM))})
-		ui.a11y({name = "What the sidebar shows"})
+		ui.a11y({name = i18n.tr("What the sidebar shows")})
 		if choice("###side_mode", labels[:], &sel) { sidebar_mode_set(app, Sidebar_Mode(sel)) }
 	}
 }
@@ -368,12 +369,12 @@ inbox_header :: proc(app: ^App, sec: ^Side_Section, folded: bool, em: f32) {
 		ui.spacer(ui.px(em * 0.8))
 		glyph(folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
 		ui.spacer(ui.px(em * 0.2))
-		text("n", strings.to_upper(sec.title, context.temp_allocator), hs.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+		text("n", strings.to_upper(i18n.tr(sec.title), context.temp_allocator), hs.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.px(em * 0.4))
 		text("c", fmt.tprintf("%d", len(sec.items)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.fill())
 		if sec.unseen {
-			if hint_action("###seen_all", "Mark as seen", em) { section_seen(app, sec) }
+			if hint_action("###seen_all", i18n.tr("Mark as seen"), em) { section_seen(app, sec) }
 			ui.spacer(ui.px(em * 0.9))
 		}
 	}

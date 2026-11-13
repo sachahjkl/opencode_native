@@ -12,6 +12,7 @@ import "core:strings"
 import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 Job_Status :: enum u8 { Exited, Running, Killed, Timeout }
 
@@ -573,12 +574,12 @@ job_state :: proc(j: ^Shell_Job) -> Sub_State {
 @(private = "file")
 job_word :: proc(j: ^Shell_Job) -> string {
 	switch j.status {
-	case .Running: return "running"
-	case .Killed:  return "killed"
-	case .Timeout: return "timeout"
+	case .Running: return i18n.tr("running")
+	case .Killed:  return i18n.tr("killed")
+	case .Timeout: return i18n.tr("timeout")
 	case .Exited:
 	}
-	return "exited"
+	return i18n.tr("exited")
 }
 
 // A running call of a shell tool whose command is not in the list of the server's commands.
@@ -615,7 +616,7 @@ tool_rows :: proc(app: ^App, rows: ^[dynamic]Act_Row) {
 			listed := false
 			for &j in app.activity.jobs { if j.command == command { listed = true } }
 			if listed { continue }
-			append(rows, Act_Row{kind = .Tool, id = p.tool_id, name = "$", title = command != "" ? first_line(command) : p.subject, what = "in the conversation", state = .Running, started = p.started_ms})
+			append(rows, Act_Row{kind = .Tool, id = p.tool_id, name = "$", title = command != "" ? first_line(command) : p.subject, what = i18n.tr("in the conversation"), state = .Running, started = p.started_ms})
 		}
 	}
 }
@@ -635,12 +636,12 @@ activity_rows :: proc(app: ^App) -> []Act_Row {
 	for &s in app.chat.children { if app.busy[s.id] or_else false { agent(app, &rows, &s) } }
 	#reverse for &j in a.jobs {
 		if !job_ours(app, &j) { continue }
-		if j.status == .Running { append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = j.background ? fmt.tprintf("in background · %s", base_name(j.cwd)) : base_name(j.cwd), preview = string(j.tail[:]), state = .Running, started = j.started}) }
+		if j.status == .Running { append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = j.background ? fmt.tprintf(i18n.tr("in background · %s"), base_name(j.cwd)) : base_name(j.cwd), preview = string(j.tail[:]), state = .Running, started = j.started}) }
 	}
 	tool_rows(app, &rows)
 	#reverse for &j in a.jobs {
 		if j.status == .Running || !job_ours(app, &j) { continue }
-		what := j.has_exit ? fmt.tprintf("exit %d", j.exit) : job_word(&j)
+		what := j.has_exit ? fmt.tprintf(i18n.tr("exit %d"), j.exit) : job_word(&j)
 		append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = what, preview = string(j.tail[:]), state = job_state(&j), started = j.started, ended = j.ended})
 	}
 	shown := 0
@@ -729,10 +730,6 @@ activity_keys :: proc(app: ^App) {
 ////////////////////////////////
 // The line over the composer
 
-// `n` of `word`, in the plural when it takes one.
-@(private = "file")
-count_of :: proc(n: int, word: string) -> string { return fmt.tprintf("%d %s%s", n, word, n == 1 ? "" : "s") }
-
 activity_strip :: proc(app: ^App, em: f32) {
 	a := &app.activity
 	todos_update(app)
@@ -742,11 +739,11 @@ activity_strip :: proc(app: ^App, em: f32) {
 	if agents + shells == 0 && !open_todos && !a.open { return }
 	running := agents + shells > 0
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * BUTTON_COMPACT_H_EM)), axis = .X, cross = .Center})
-	ui.a11y({role = .Button, name = "Activity"})
-	b := ui.build_box({.Clickable, .Focusable}, "###act_strip")
-	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-		if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.03 * b.hot_t}, BUTTON_RADIUS * ui.scale() * corners()) }
-	}
+	ui.a11y({role = .Button, name = i18n.tr("Activity")})
+	// (a ghost button's look: no fill at rest, the theme's hover under the pointer, in a light theme as in a dark one)
+	ui.push_tags("ghost_button")
+	b := ui.build_box({.Clickable, .Focusable, .Draw_Background, .Draw_Hot_Effects}, "###act_strip")
+	ui.pop_tags()
 	sig := ui.signal(b)
 	if sig.clicked { activity_toggle(app) }
 	if ui.parent(b) {
@@ -758,13 +755,13 @@ activity_strip :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.35))
 		}
 		if agents > 0 {
-			text("a", count_of(agents, "agent"), hex(HEX_TEXT_SOFT), note)
+			text("a", fmt.tprintf(i18n.tr(agents, "%d agent", "%d agents"), agents), hex(HEX_TEXT_SOFT), note)
 			ui.spacer(ui.px(em * 0.8))
 		}
 		if shells > 0 {
 			glyph(lucide.SQUARE_TERMINAL, hex(HEX_WEAK), math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.25))
-			text("s", count_of(shells, "command"), hex(HEX_TEXT_SOFT), note)
+			text("s", fmt.tprintf(i18n.tr(shells, "%d command", "%d commands"), shells), hex(HEX_TEXT_SOFT), note)
 			ui.spacer(ui.px(em * 0.8))
 		}
 		if open_todos {
@@ -777,10 +774,10 @@ activity_strip :: proc(app: ^App, em: f32) {
 		if !open_todos || doing == "" { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(em * 0.8)) }
 		// (a command that holds the turn: it can go on in the background while the session does)
 		if foreground_command(app) {
-			if hint_action("###bg", "push to background", em, app.mono, lucide.SEND_TO_BACK) { background_session(app, app.chat.id) }
+			if hint_action("###bg", i18n.tr("push to background"), em, app.mono, lucide.SEND_TO_BACK) { background_session(app, app.chat.id) }
 			ui.spacer(ui.px(em * 1.2))
 		}
-		text("k", a.open ? "Esc  close" : "↓  details", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+		text("k", a.open ? i18n.tr("Esc  close") : i18n.tr("↓  details"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		ui.spacer(ui.px(em * 0.5))
 	}
 	ui.spacer(ui.px(em * 0.25))
@@ -846,19 +843,19 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 					session := app.chat.id
 					if r.kind == .Shell { j := job_find(a, r.id); session = j != nil && !j.background ? j.session : "" }
 					if session != "" {
-						if ui.button_icon("###bg", "", "Background", height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { background_session(app, session) }
+						if ui.button_icon("###bg", "", i18n.tr("Background"), height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { background_session(app, session) }
 						ui.spacer(ui.px(em * 0.2))
 					}
 				}
 				if running {
-					if ui.button_icon("###stop", "", "Stop", .Danger, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_stop(app, r) }
+					if ui.button_icon("###stop", "", i18n.tr("Stop"), .Danger, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_stop(app, r) }
 					ui.spacer(ui.px(em * 0.2))
 				}
-				if r.kind == .Agent && ui.button_icon("###open", "", "Open", height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_act(app, r) }
-				if r.kind != .Agent && ui.button_icon("###inspect", "", "Inspect", height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_inspect(app, r) }
-				if r.kind == .Shell && r.preview != "" && ui.button_icon("###copy", "", "Copy", height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked {
+				if r.kind == .Agent && ui.button_icon("###open", "", i18n.tr("Open"), height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_act(app, r) }
+				if r.kind != .Agent && ui.button_icon("###inspect", "", i18n.tr("Inspect"), height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked { row_inspect(app, r) }
+				if r.kind == .Shell && r.preview != "" && ui.button_icon("###copy", "", i18n.tr("Copy"), height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true, face = .Ghost).clicked {
 					clip_set(plain_output(r.preview))
-					ui.announce(&app.announcer, .Good, "Output copied")
+					ui.announce(&app.announcer, .Good, i18n.tr("Output copied"))
 				}
 				ui.spacer(ui.px(em * 0.3))
 			}
@@ -921,13 +918,13 @@ activity_todos :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.7)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###td_head") {
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
-		caption_title("h", "TODO", fmt.tprintf("%d/%d", done, len(a.todos)), em, hex(HEX_GREEN))
+		caption_title("h", i18n.tr("TODO"), fmt.tprintf("%d/%d", done, len(a.todos)), em, hex(HEX_GREEN))
 		ui.spacer(ui.fill())
-		labels := [3]string{"All", fmt.tprintf("Active %d", active), fmt.tprintf("Done %d", len(a.todos) - active)}   // (Todo_Filter's order)
+		labels := [3]string{i18n.tr("All"), fmt.tprintf(i18n.tr("Active %d"), active), fmt.tprintf(i18n.tr("Done %d"), len(a.todos) - active)}   // (Todo_Filter's order)
 		sel := int(a.todo_filter)
 		if ui.style({font = app.mono, font_size = math.round(em * FS_CAPTION)}) {
 			ui.next({height = ui.px(math.round(em * 1.4))})
-			ui.a11y({name = "Which todos show"})
+			ui.a11y({name = i18n.tr("Which todos show")})
 			if ui.segmented("###td_filter", labels[:], &sel, look = .Text) { a.todo_filter = Todo_Filter(sel) }
 		}
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
@@ -940,7 +937,7 @@ activity_todos :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###td_none") {
 			ui.spacer(ui.px(em * TRAY_PAD_EM))
-			text("n", a.todo_filter == .Active ? "Nothing left to do." : "Nothing done yet.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+			text("n", a.todo_filter == .Active ? i18n.tr("Nothing left to do.") : i18n.tr("Nothing done yet."), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		}
 	}
 }
@@ -956,10 +953,10 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###act_head") {
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
-		caption_title("h", "ACTIVITY", fmt.tprintf("%d running", running), em, hex(HEX_CYAN))
+		caption_title("h", i18n.tr("ACTIVITY"), fmt.tprintf(i18n.tr("%d running"), running), em, hex(HEX_CYAN))
 		ui.spacer(ui.fill())
-		if app.conversation.column_w > em * ACT_KEYS_MIN_EM { text("k", "↑↓ move   Enter open   Del stop   ", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
-		if hint_action("###act_close", "Esc close", em, app.mono) { activity_close(app) }
+		if app.conversation.column_w > em * ACT_KEYS_MIN_EM { text("k", i18n.tr("↑↓ move   Enter open   Del stop   "), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
+		if hint_action("###act_close", i18n.tr("Esc close"), em, app.mono) { activity_close(app) }
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
 	}
 	ui.spacer(ui.px(em * 0.2))
@@ -967,7 +964,7 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###act_none") {
 			ui.spacer(ui.px(em * TRAY_PAD_EM))
-			text("n", "Nothing runs in the background of this session.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+			text("n", i18n.tr("Nothing runs in the background of this session."), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		}
 	}
 	now := now_epoch_ms()

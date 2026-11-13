@@ -20,6 +20,7 @@ import "core:unicode/utf8"
 import "gt:platform"
 import "gt:ui"
 import notices "gt:notices"
+import i18n "gt:i18n"
 
 Missed_Kind :: enum u16 { End, Permission, Question, Shell, Scheduled, Sub }
 
@@ -245,10 +246,10 @@ missed_run_ended :: proc(app: ^App, sid, word: string) -> (key: string) {
 @(private = "file")
 missed_end_title :: proc(st: Sub_State) -> string {
 	#partial switch st {
-	case .Failed:    return "Failed"
-	case .Cancelled: return "Stopped"
+	case .Failed:    return i18n.later("Failed")
+	case .Cancelled: return i18n.later("Stopped")
 	}
-	return "Done"
+	return i18n.later("Done")
 }
 
 // What a sub-agent handed back, when the conversation shown has it (its card's result, the end of its work read for the tray).
@@ -448,7 +449,7 @@ missed_next :: proc(app: ^App) {
 		open_root(app, root)
 		return
 	}
-	ui.toast(.Info, "Nothing missed")
+	ui.toast(.Info, i18n.tr("Nothing missed"))
 }
 
 // A notification of the system came back: a click opens the session of its entry (the visit acknowledges what it can), in front.

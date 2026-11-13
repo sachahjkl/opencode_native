@@ -12,6 +12,7 @@ import "gt:draw"
 import "gt:markdown"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 HEX_CARD_RESULT_LINE :: 0xa8a8a8ff
 HEX_CARD_RESULT      :: 0xd8d8d8ff
@@ -56,14 +57,14 @@ Sub_View :: struct {
 
 sub_state_label :: proc(s: Sub_State) -> string {
 	switch s {
-	case .Starting:   return "starting"
-	case .Running:    return "running"
-	case .Finishing:  return "finishing"
-	case .Done:       return "done"
-	case .Failed:     return "failed"
-	case .Cancelled:  return "stopped"
-	case .Background: return "in background"
-	case .Unknown:    return "launched"
+	case .Starting:   return i18n.tr("starting")
+	case .Running:    return i18n.tr("running")
+	case .Finishing:  return i18n.tr("finishing")
+	case .Done:       return i18n.tr("done")
+	case .Failed:     return i18n.tr("failed")
+	case .Cancelled:  return i18n.tr("stopped")
+	case .Background: return i18n.tr("in background")
+	case .Unknown:    return i18n.tr("launched")
 	}
 	return ""
 }
@@ -460,7 +461,7 @@ SUB_GUESS_SLACK_MS :: 5000   // a child made this much before the call's start i
 card_head :: proc(app: ^App, v: ^Sub_View, part_id: string, open, running: bool, em: f32) {
 	end := v.ended > 0 ? v.ended : (running ? now_epoch_ms() : 0)
 	name := v.agent != "" ? v.agent : "sub-agent"
-	desc := v.desc != "" ? v.desc : "(no description)"
+	desc := v.desc != "" ? v.desc : i18n.tr("(no description)")
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	ui.a11y({role = .Button, name = fmt.tprintf("%s, %s: %s", sub_state_label(v.state), name, desc)})
 	head := ui.build_box({.Clickable, .Focusable, .Hot_Within}, "###head")
@@ -500,7 +501,7 @@ card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: b
 			ui.spacer(ui.px(em * 0.5))
 		}
 		if v.id != "" {
-			if ui.button_icon("###open", "", "Open", height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { drill_down(app, v.id) }
+			if ui.button_icon("###open", "", i18n.tr("Open"), height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { drill_down(app, v.id) }
 			ui.spacer(ui.px(em * 0.2))
 		}
 		glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
@@ -546,13 +547,13 @@ card_body :: proc(app: ^App, v: ^Sub_View, p: ^Part, pid: string, running: bool,
 				ui.spacer(ui.px(em * 0.5))
 			}
 			if v.prompt != "" {
-				section_label("pr", "PROMPT", em)
+				section_label("pr", i18n.tr("PROMPT"), em)
 				body, extra := mono_cut_kept(&p.prompt_well.cut, v.prompt, PROMPT_LINES_MAX)   // (the card is its frame: no box of its own inside it)
 				mono_text(body, extra, em, 0, hex(HEX_TEXT_SOFT), flush = true, kept = &p.prompt_well.runs, kept_in = app.chat.alloc)
 				ui.spacer(ui.px(em * 0.6))
 			}
 			if v.result != "" {
-				section_label("re", v.state == .Failed ? "ERROR" : "RESULT", em)
+				section_label("re", v.state == .Failed ? i18n.tr("ERROR") : i18n.tr("RESULT"), em)
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})   // (as the prompt: in the card, no box of its own)
 				if ui.column(id = "###result") {
 					id := fmt.tprintf("%s_res", pid)
@@ -561,7 +562,7 @@ card_body :: proc(app: ^App, v: ^Sub_View, p: ^Part, pid: string, running: bool,
 				ui.spacer(ui.px(em * 0.4))
 			} else if running {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
-				if ui.row(.Center) { text("w", "No result yet: it is still working.", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill()) }
+				if ui.row(.Center) { text("w", i18n.tr("No result yet: it is still working."), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill()) }
 			}
 			ui.spacer(ui.px(em * 0.7))
 		}
@@ -573,11 +574,11 @@ card_body :: proc(app: ^App, v: ^Sub_View, p: ^Part, pid: string, running: bool,
 card_meta :: proc(v: ^Sub_View, running: bool) -> string {
 	parts := make([dynamic]string, context.temp_allocator)
 	if running && v.has_live && v.live.activity != "" { append(&parts, v.live.activity) }
-	if v.background { append(&parts, "background") }
+	if v.background { append(&parts, i18n.tr("background")) }
 	if v.model != "" { append(&parts, short_model(v.model)) }
-	if v.live.tools > 0 { append(&parts, fmt.tprintf("%d tools", v.live.tools)) }
+	if v.live.tools > 0 { append(&parts, fmt.tprintf(i18n.tr(v.live.tools, "%d tools", "%d tools"), v.live.tools)) }
 	tin, tout, cost := sub_totals(v)
-	if tin + tout > 0 { append(&parts, fmt.tprintf("%s in", kfmt(tin)), fmt.tprintf("%s out", kfmt(tout))) }
+	if tin + tout > 0 { append(&parts, fmt.tprintf(i18n.tr("%s in"), kfmt(tin)), fmt.tprintf(i18n.tr("%s out"), kfmt(tout))) }
 	if cost > 0 { append(&parts, fmt.tprintf("$%.2f", cost)) }
 	return strings.join(parts[:], " · ", context.temp_allocator)
 }
@@ -603,23 +604,23 @@ sub_totals :: proc(v: ^Sub_View) -> (tin, tout, cost: f64) {
 // A table of what its session says: session id, started, idle, outcome, tokens in detail.
 sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 	s := v.session
-	section_label("fa", "SESSION", em)
+	section_label("fa", i18n.tr("SESSION"), em)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.well("###facts") {
 		ui.spacer(ui.px(em * 0.45))
 		row :: proc(id, k, val: string, em: f32, col := Color{}) {
 			kv_row(id, k, val, em, {h = 1.4, key_w = 7, key_fs = FS_CAPTION, val_fs = FS_CAPTION, pad_l = 0.8, val = HEX_TEXT_SOFT}, col)
 		}
-		row("###f1", "session", s.id, em)
-		row("###f2", "title", s.title, em)
-		row("###f3", "started", fmt.tprintf("%s  (%s ago)", clock_text(s.created, app.prefs.clock24), duration_text(s.created, now_epoch_ms())), em)
-		if s.idle > 0 { row("###f4", "finished", fmt.tprintf("%s  after %s", clock_text(s.idle, app.prefs.clock24), duration_text(s.created, s.idle)), em) }
+		row("###f1", i18n.tr("session"), s.id, em)
+		row("###f2", i18n.tr("title"), s.title, em)
+		row("###f3", i18n.tr("started"), fmt.tprintf(i18n.tr("%s  (%s ago)"), clock_text(s.created, app.prefs.clock24), duration_text(s.created, now_epoch_ms())), em)
+		if s.idle > 0 { row("###f4", i18n.tr("finished"), fmt.tprintf(i18n.tr("%s  after %s"), clock_text(s.idle, app.prefs.clock24), duration_text(s.created, s.idle)), em) }
 		if s.outcome != "" {
-			row("###f5", "outcome", s.outcome, em)
+			row("###f5", i18n.tr("outcome"), s.outcome, em)
 		}
-		row("###f6", "tokens", fmt.tprintf("in %s · out %s · reasoning %s · cache read %s · cache write %s", kfmt(s.tokens_in), kfmt(s.tokens_out), kfmt(s.reasoning), kfmt(s.cache_read), kfmt(s.cache_write)), em)
-		if s.cost > 0 { row("###f7", "cost", fmt.tprintf("$%.4f", s.cost), em) }
-		if v.has_live && v.live.steps + v.live.tools > 0 { row("###f8", "seen live", fmt.tprintf("%d steps · %d tool calls", v.live.steps, v.live.tools), em) }
+		row("###f6", i18n.tr("tokens"), fmt.tprintf(i18n.tr("in %s · out %s · reasoning %s · cache read %s · cache write %s"), kfmt(s.tokens_in), kfmt(s.tokens_out), kfmt(s.reasoning), kfmt(s.cache_read), kfmt(s.cache_write)), em)
+		if s.cost > 0 { row("###f7", i18n.tr("cost"), fmt.tprintf("$%.4f", s.cost), em) }
+		if v.has_live && v.live.steps + v.live.tools > 0 { row("###f8", i18n.tr("seen live"), fmt.tprintf(i18n.tr("%d steps · %d tool calls"), v.live.steps, v.live.tools), em) }
 		ui.spacer(ui.px(em * 0.45))
 	}
 }
@@ -644,9 +645,9 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 			ui.spacer(ui.px(em * CARD_PAD_EM))
 			state_mark("###st", st, size = em * CARD_MARK_EM)
 			ui.spacer(ui.px(em * CARD_MARK_GAP_EM))
-			text("ag", v.agent != "" ? v.agent : "sub-agent", hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			text("ag", v.agent != "" ? v.agent : i18n.tr("sub-agent"), hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.4))
-			word := st == .Done ? "returned" : sub_state_label(st)
+			word := st == .Done ? i18n.tr("returned") : sub_state_label(st)
 			text("w", word, sub_state_ink(st), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.6))
 			desc := m.sub_desc != "" ? m.sub_desc : v.desc
@@ -654,7 +655,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 			text("at", clock_text(m.created, app.prefs.clock24), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.5))
 			if m.sub_child != "" {
-				if ui.button_icon("###open", "", "Open", height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { drill_down(app, m.sub_child) }
+				if ui.button_icon("###open", "", i18n.tr("Open"), height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked { drill_down(app, m.sub_child) }
 				ui.spacer(ui.px(em * 0.2))
 			}
 			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
@@ -702,7 +703,7 @@ subagent_banner :: proc(app: ^App, em: f32) {
 			if ui.column() {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 				if ui.row(.Center) {
-					text("k", "SUB-AGENT", hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+					text("k", i18n.tr("SUB-AGENT"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 					ui.spacer(ui.px(em * 0.5))
 					text("a", s.agent, hex(HEX_TEXT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 					if st != .Unknown {
@@ -714,13 +715,13 @@ subagent_banner :: proc(app: ^App, em: f32) {
 					ui.spacer(ui.fill())
 				}
 				parent := c.parent_title != "" ? c.parent_title : s.parent
-				text("p", fmt.tprintf("launched by “%s”", parent), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.4)}, ui.fill())
+				text("p", fmt.tprintf(i18n.tr("launched by “%s”"), parent), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.4)}, ui.fill())
 				end := s.idle > 0 && !sub_live(st) ? s.idle : now_epoch_ms()
-				facts := fmt.tprintf("started %s · %s · %s in · %s out%s", clock_text(s.created, app.prefs.clock24), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out), s.cost > 0 ? fmt.tprintf(" · $%.2f", s.cost) : "")
+				facts := s.cost > 0 ? fmt.tprintf(i18n.tr("started %s · %s · %s in · %s out · $%.2f"), clock_text(s.created, app.prefs.clock24), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out), s.cost) : fmt.tprintf(i18n.tr("started %s · %s · %s in · %s out"), clock_text(s.created, app.prefs.clock24), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out))
 				text("f", facts, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.5))
-			if ui.button_icon("###back", lucide.ARROW_LEFT, "Return to main session").clicked { go_back(app) }
+			if ui.button_icon("###back", lucide.ARROW_LEFT, i18n.tr("Return to main session")).clicked { go_back(app) }
 			ui.spacer(ui.px(em))
 		}
 		ui.spacer(ui.px(em * 0.7))
@@ -750,16 +751,16 @@ subagents_button :: proc(app: ^App, em: f32) {
 		animate(app)
 		lamp("###sub_lamp", hex(HEX_YELLOW), 1, pulse = true, size = em * 1.0)
 		ui.spacer(ui.px(em * 0.3))
-		sig = ui.button_icon("###subs", lucide.BOT, ui.text_shown(fmt.tprintf("%d active", len(active))), height = math.round(em * BUTTON_COMPACT_H_EM))
+		sig = ui.button_icon("###subs", lucide.BOT, ui.text_shown(fmt.tprintf(i18n.tr("%d active"), len(active))), height = math.round(em * BUTTON_COMPACT_H_EM))
 		ui.spacer(ui.px(em * 0.3))
 		text("of", fmt.tprintf("/ %d", len(c.children)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 	} else {
-		sig = glyph_label_button(app, "###subs", fmt.tprintf("%d past sub-agents", len(c.children)), em)
+		sig = glyph_label_button(app, "###subs", fmt.tprintf(i18n.tr(len(c.children), "%d past sub-agents", "%d past sub-agents"), len(c.children)), em)
 	}
 	if sig.clicked { ui.ctx_menu_open_rect(key, sig.box.rect, sig.box.key) }
 	if ui.ctx_menu(key, em * 32) {
 		if len(active) > 0 {
-			ui.menu_heading(fmt.tprintf("Active now (%d)", len(active)))
+			ui.menu_heading(fmt.tprintf(i18n.tr("Active now (%d)"), len(active)))
 			for s in active {
 				v := sub_view(app, s.id)
 				what := v.has_live && v.live.activity != "" ? v.live.activity : s.agent
@@ -767,11 +768,11 @@ subagents_button :: proc(app: ^App, em: f32) {
 			}
 			ui.menu_separator()
 		}
-		ui.menu_heading(fmt.tprintf("Finished (%d)", len(c.children) - len(active)))
+		ui.menu_heading(fmt.tprintf(i18n.tr("Finished (%d)"), len(c.children) - len(active)))
 		shown := 0
 		for &s in c.children {
 			if app.busy[s.id] or_else false { continue }
-			if shown == FINISHED_SHOWN { ui.menu_item(fmt.tprintf("… and %d more", len(c.children) - len(active) - shown), enabled = false); break }
+			if shown == FINISHED_SHOWN { ui.menu_item(fmt.tprintf(i18n.tr(len(c.children) - len(active) - shown, "… and %d more", "… and %d more"), len(c.children) - len(active) - shown), enabled = false); break }
 			v := sub_view(app, s.id)
 			mark := "·"
 			#partial switch v.state {

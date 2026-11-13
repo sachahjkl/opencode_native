@@ -16,6 +16,7 @@ import "gt:draw"
 import store "gt:store"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 Pal_Kind :: enum u8 { Command, Session, Agent, Model, Slash, Switch, Setting }
 
@@ -110,10 +111,10 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 	if want(only, '>') {
 		// (what a session's command acts on: the session shown, named beside it; "Fork the session" said which one)
 		shown := ""
-		if s := find_session(app, app.chat.id); s != nil { shown = fmt.tprintf("Session · %s", ellipsize(s.title != "" ? s.title : "Untitled", PALETTE_SESSION_CHARS)) }
+		if s := find_session(app, app.chat.id); s != nil { shown = fmt.tprintf(i18n.tr("Session · %s"), ellipsize(s.title != "" ? s.title : i18n.tr("Untitled"), PALETTE_SESSION_CHARS)) }
 		for &c in COMMANDS {
 			if !command_enabled(app, &c) || c.id == "app.palette" { continue }
-			it := Pal_Item{kind = .Command, id = c.id, title = c.title, detail = c.group, keys = c.keys, icon = c.icon, cmd = &c, tags = strings.fields(c.tags, context.temp_allocator)}
+			it := Pal_Item{kind = .Command, id = c.id, title = i18n.tr(c.title), detail = i18n.tr(c.group), keys = c.keys, icon = c.icon, cmd = &c, tags = strings.fields(c.tags, context.temp_allocator)}
 			if c.group == "Session" && shown != "" { it.detail = shown }
 			if c.checked != nil { it.toggle = true }
 			append(&items, it)
@@ -124,7 +125,7 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 		for &s in app.sessions {
 			if s.parent != "" { continue }
 			if !searching && only == 0 && shown == PALETTE_SESSIONS { break }
-			append(&items, Pal_Item{kind = .Session, id = s.id, title = s.title != "" ? s.title : "Untitled", detail = base_name(s.directory), icon = lucide.MESSAGE_SQUARE})
+			append(&items, Pal_Item{kind = .Session, id = s.id, title = s.title != "" ? s.title : i18n.tr("Untitled"), detail = base_name(s.directory), icon = lucide.MESSAGE_SQUARE})
 			shown += 1
 		}
 	}
@@ -135,7 +136,7 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 		if want(only, '@') {
 			for a in app.agents {
 				if a.mode == "subagent" { continue }
-				append(&items, Pal_Item{kind = .Agent, id = a.id, title = fmt.tprintf("Agent: %s", a.name != "" ? a.name : a.id), detail = a.description, icon = lucide.BOT, toggle = true})
+				append(&items, Pal_Item{kind = .Agent, id = a.id, title = fmt.tprintf(i18n.tr("Agent: %s"), a.name != "" ? a.name : a.id), detail = a.description, icon = lucide.BOT, toggle = true})
 			}
 		}
 		if want(only, '#') {
@@ -149,10 +150,10 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 				d := e.def
 				if d.hidden { continue }
 				if d.kind != .Bool {
-					append(&items, Pal_Item{kind = .Setting, id = d.name, title = setting_title(&the_app.cfg_prefs, d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, tags = d.tags})
+					append(&items, Pal_Item{kind = .Setting, id = d.name, title = setting_title(&the_app.cfg_prefs, d), detail = ellipsize(i18n.tr(d.description), 60), icon = lucide.SLIDERS_HORIZONTAL, tags = d.tags})
 					continue
 				}
-				append(&items, Pal_Item{kind = .Switch, id = d.name, title = setting_title(&the_app.cfg_prefs, d), detail = ellipsize(d.description, 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, tags = d.tags})
+				append(&items, Pal_Item{kind = .Switch, id = d.name, title = setting_title(&the_app.cfg_prefs, d), detail = ellipsize(i18n.tr(d.description), 60), icon = lucide.SLIDERS_HORIZONTAL, toggle = true, tags = d.tags})
 			}
 		}
 	}
@@ -291,7 +292,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 			glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.45, font_size = math.round(em * FS_BODY)})
-				res := ui.line_edit("###pal_field", &p.field, "Search commands, sessions, agents, models…")
+				res := ui.line_edit("###pal_field", &p.field, i18n.tr("Search commands, sessions, agents, models…"))
 				if p.fresh { ui.set_focus(res.box.key) }
 				if res.changed { vl.sel = 0; p.reveal = true }
 				if res.committed && n > 0 { chosen = hits[vl.sel].index }
@@ -307,7 +308,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 		if rows, ok := ui.vlist("###pal_list", vl, p.ids[:], ids_version = p.stamp); ok {
 			if n == 0 {
 				ui.next({width = ui.fill(), height = ui.px(row_h), text_align = .Center})
-				if ui.tags("weak") { ui.label("Nothing matches###none") }
+				if ui.tags("weak") { ui.label(fmt.tprintf("%s###none", i18n.tr("Nothing matches"))) }
 			}
 			if vl.activated && n > 0 { chosen = hits[vl.sel].index }
 			if vl.cancelled { app.cx.open[.Palette] = false }
@@ -351,8 +352,8 @@ palette_dialog :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###pal_foot") {
 			ui.spacer(ui.px(em * 1))
-			text("h", "> commands    @ sessions    / server    # models    : settings", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
-			text("k", "Enter run", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("h", i18n.tr("> commands    @ sessions    / server    # models    : settings"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+			text("k", i18n.tr("Enter run"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 1))
 		}
 	}
@@ -364,7 +365,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 // (palette_view).
 setting_title :: proc(p: ^config.Prefs, d: config.Def) -> string {
 	group := d.name[:max(strings.index_byte(d.name, '.'), 0)]
-	return fmt.tprintf("%s › %s", config.group_title(p, group), config.title_of(d))
+	return fmt.tprintf("%s › %s", i18n.tr(config.group_title(p, group)), i18n.tr(config.title_of(d)))
 }
 
 // What the usage bonus reads (palette_hits): the counts, and now.

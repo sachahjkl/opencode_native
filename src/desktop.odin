@@ -23,10 +23,11 @@ import desktop "gt:desktop"
 import "gt:platform"
 import process "gt:process"
 import setup "gt:setup"
+import i18n "gt:i18n"
 
 APP_NAME      :: "opencode native"
 // (said wherever this program presents itself: their README asks it of a project with "opencode" in its name, and it is the truth)
-APP_NOT_THEIRS :: "An independent project: not built by the OpenCode team, and not affiliated with them."
+APP_NOT_THEIRS := i18n.later("An independent project: not built by the OpenCode team, and not affiliated with them.")
 APP_PUBLISHER :: "Froment Software"
 
 APP_SLUG       :: "opencode-native"   // the .desktop file, the icon, the windows' class, the executable
@@ -73,7 +74,7 @@ nix_package :: proc() -> bool { return desktop.in_nix_store(process.executable_p
 setup_config :: proc() -> setup.Config {
 	return setup.Config{
 		identity = identity(), version = APP_VERSION, install_folder = INSTALL_FOLDER, icons = desktop_icons(),
-		note = APP_NOT_THEIRS, prepare = setup_prepare,
+		note = i18n.tr(APP_NOT_THEIRS), prepare = setup_prepare,
 		// (the dialog in opencode's look: its blurred backdrop)
 		backdrop = proc(_: rawptr) { dialog_backdrop() },
 	}

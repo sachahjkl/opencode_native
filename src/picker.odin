@@ -11,6 +11,7 @@ import "core:time"
 import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 Pick_Item :: struct {
 	label:   string,   // what is matched and shown
@@ -41,24 +42,24 @@ Model_Fact :: struct { label, value: string }
 // What a model is. What the server did not say is left out, not guessed. (In the frame's allocator.)
 model_facts :: proc(m: Model_Info) -> []Model_Fact {
 	out := make([dynamic]Model_Fact, context.temp_allocator)
-	if m.ctx_len > 0 { append(&out, Model_Fact{"Context", size_text(m.ctx_len)}) }
-	if m.out_len > 0 { append(&out, Model_Fact{"Output", size_text(m.out_len)}) }
+	if m.ctx_len > 0 { append(&out, Model_Fact{i18n.tr("Context"), size_text(m.ctx_len)}) }
+	if m.out_len > 0 { append(&out, Model_Fact{i18n.tr("Output"), size_text(m.out_len)}) }
 	if m.priced {
 		if m.price_in == 0 && m.price_out == 0 {
-			append(&out, Model_Fact{"Price", "free"})
+			append(&out, Model_Fact{i18n.tr("Price"), i18n.tr("free")})
 		} else {
-			append(&out, Model_Fact{"Price", fmt.tprintf("$%s in, $%s out per M", price_text(m.price_in), price_text(m.price_out))})
-			if m.price_cached > 0 { append(&out, Model_Fact{"Cached", fmt.tprintf("$%s per M", price_text(m.price_cached))}) }
+			append(&out, Model_Fact{i18n.tr("Price"), fmt.tprintf(i18n.tr("$%s in, $%s out per M"), price_text(m.price_in), price_text(m.price_out))})
+			if m.price_cached > 0 { append(&out, Model_Fact{i18n.tr("Cached"), fmt.tprintf(i18n.tr("$%s per M"), price_text(m.price_cached))}) }
 		}
 	}
-	if m.inputs != "" { append(&out, Model_Fact{"Reads", m.inputs}) }
-	if m.tools_known { append(&out, Model_Fact{"Tools", m.tools ? "yes" : "no"}) }
-	if m.efforts != "" { append(&out, Model_Fact{"Thinking", m.efforts}) }
+	if m.inputs != "" { append(&out, Model_Fact{i18n.tr("Reads"), m.inputs}) }
+	if m.tools_known { append(&out, Model_Fact{i18n.tr("Tools"), m.tools ? i18n.tr("yes") : i18n.tr("no")}) }
+	if m.efforts != "" { append(&out, Model_Fact{i18n.tr("Thinking"), m.efforts}) }
 	if m.released > 0 {
 		y, mo, _ := time.date(time.unix(i64(m.released / 1000), 0))
-		append(&out, Model_Fact{"Released", fmt.tprintf("%04d-%02d", y, int(mo))})
+		append(&out, Model_Fact{i18n.tr("Released"), fmt.tprintf("%04d-%02d", y, int(mo))})
 	}
-	if m.status != "" && m.status != "active" { append(&out, Model_Fact{"Status", m.status}) }
+	if m.status != "" && m.status != "active" { append(&out, Model_Fact{i18n.tr("Status"), m.status}) }
 	return out[:]
 }
 
@@ -168,8 +169,9 @@ picker_rows :: proc(p: ^Picker, items: []Pick_Item, hits: []ui.Rank_Hit, typed: 
 }
 
 // Builds the picker `id` while it is open; returns the index in `items` of the one chosen in this frame (-1: none).
+// `hint`: what its field says while empty, a whole sentence (translated by the caller).
 // `version`: the items' version as the caller counts their changes (0: none kept, they are ranked and laid out again each frame).
-picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_Item, em: f32, align_right := false, version: u64 = 0) -> (chosen: int) {
+picker :: proc(app: ^App, p: ^Picker, id: string, hint: string, items: []Pick_Item, em: f32, align_right := false, version: u64 = 0) -> (chosen: int) {
 	chosen = -1
 	if !app.cx.open[.Picker] || p.id != id { return }
 	needle := ui.field_string(&p.field)
@@ -229,7 +231,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-					res := ui.line_edit("###pf", &p.field, fmt.tprintf("Search %s", title))
+					res := ui.line_edit("###pf", &p.field, hint)
 					if p.fresh { ui.set_focus(res.box.key) }
 					if res.changed { p.sel = 0; p.reveal = true }
 					if res.committed && n > 0 { chosen = picker_take(p, items, hits, rows, p.sel) }
@@ -254,7 +256,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, title: string, items: []Pick_I
 			}
 			if n == 0 {
 				ui.next({width = ui.fill(), height = ui.px(row_h), text_align = .Center})
-				if ui.tags("weak") { ui.label("Nothing matches###none") }
+				if ui.tags("weak") { ui.label(fmt.tprintf("%s###none", i18n.tr("Nothing matches"))) }
 			}
 			for k in 0 ..< n {
 				row := rows[k]

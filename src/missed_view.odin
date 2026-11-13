@@ -10,6 +10,7 @@ import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
 import notices "gt:notices"
+import i18n "gt:i18n"
 
 MISSED_HEADER_BIT :: u64(1) << 63   // (a header's identity in the list: never an entry's id)
 
@@ -62,25 +63,25 @@ missed_rows_free :: proc(app: ^App) {
 missed_bell :: proc(app: ^App, size, em: f32) {
 	missed_rows_refresh(app)
 	n := app.missed.new_here
-	ui.a11y({role = .Button, name = "What you missed"})
+	ui.a11y({role = .Button, name = i18n.tr("What you missed")})
 	ui.next({width = ui.px(size), height = ui.px(size), fg = ui.caption_ink(hex(n > 0 ? HEX_WEAK : HEX_FAINT))})
 	sig := ui.icon_button("bell", lucide.BELL)
 	if app.prefs.notices_badge { ui.badge(sig.box, n) }
 	if sig.clicked { command_run(app, command_find("view.notices")) }
-	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text("What you missed  (Ctrl+Shift+N)") } }
+	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("What you missed  (Ctrl+Shift+N)")) } }
 }
 
 // What an entry says happened.
 missed_words :: proc(e: ^notices.Entry) -> string {
 	st := Sub_State(e.outcome)
-	word := e.title
+	word := i18n.tr(e.title)   // (kept in English in the log: said in the language of the day)
 	switch Missed_Kind(e.kind) {
-	case .End:        word = e.title
-	case .Permission: word = "Permission"
-	case .Question:   word = "Question"
-	case .Shell:      word = st == .Failed ? "Command failed" : "Command ended"
-	case .Scheduled:  word = "Scheduled run"
-	case .Sub:        word = st == .Failed ? "Sub-agent failed" : st == .Cancelled ? "Sub-agent stopped" : "Sub-agent done"
+	case .End:        word = i18n.tr(e.title)
+	case .Permission: word = i18n.tr("Permission")
+	case .Question:   word = i18n.tr("Question")
+	case .Shell:      word = st == .Failed ? i18n.tr("Command failed") : i18n.tr("Command ended")
+	case .Scheduled:  word = i18n.tr("Scheduled run")
+	case .Sub:        word = st == .Failed ? i18n.tr("Sub-agent failed") : st == .Cancelled ? i18n.tr("Sub-agent stopped") : i18n.tr("Sub-agent done")
 	}
 	if e.count > 1 { return fmt.tprintf("%s ×%d", word, e.count) }
 	return word
@@ -102,12 +103,12 @@ missed_dialog :: proc(app: ^App, em: f32) {
 	act_row := -1
 	if ui.modal_sized("notices", DIALOG_PREFERRED_EM[.Notices] * em, &app.cx.dialogs[.Notices], &app.cx.open[.Notices], DIALOG_MIN_EM[.Notices] * em) {
 		dialog_backdrop()
-		if ui.dialog_header("mi_head", "What you missed", {close = true}) {
+		if ui.dialog_header("mi_head", i18n.tr("What you missed"), {close = true}) {
 			small := math.round(em * BUTTON_SMALL_H_EM)
-			ui.a11y({role = .Button, name = "Acknowledged"})
-			if ui.button_icon("###mi_hist", lucide.HISTORY, "Acknowledged", height = small, face = m.history ? .Toggled : .Raised, lit = m.history).clicked { m.history = !m.history }
+			ui.a11y({role = .Button, name = i18n.tr("Acknowledged")})
+			if ui.button_icon("###mi_hist", lucide.HISTORY, i18n.tr("Acknowledged"), height = small, face = m.history ? .Toggled : .Raised, lit = m.history).clicked { m.history = !m.history }
 			ui.spacer(ui.px(em * 0.4))
-			if ui.button_icon("###mi_all", lucide.CHECK, "Acknowledge all", .Success, height = small).clicked { act = .Acknowledge_All }
+			if ui.button_icon("###mi_all", lucide.CHECK, i18n.tr("Acknowledge all"), .Success, height = small).clicked { act = .Acknowledge_All }
 		}
 		// the keys: read in the dialog (its scope holds them), over every row, built or not
 		if n > 0 {
@@ -125,7 +126,7 @@ missed_dialog :: proc(app: ^App, em: f32) {
 		if rows, ok := ui.vlist("###mi_list", vl, m.ids[:], selectable = m.selectable[:], ids_version = m.rows_stamp); ok {
 			if n == 0 {
 				ui.next({width = ui.fill(), height = ui.px(row_h), text_align = .Center})
-				if ui.tags("weak") { ui.label(m.history ? "Nothing yet###none" : "Nothing missed###none") }
+				if ui.tags("weak") { ui.label(fmt.tprintf("%s###none", m.history ? i18n.tr("Nothing yet") : i18n.tr("Nothing missed"))) }
 			}
 			if vl.activated && n > 0 { act, act_row = .Open, vl.sel }
 			if vl.cancelled { app.cx.open[.Notices] = false }
@@ -146,7 +147,7 @@ missed_dialog :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###mi_foot") {
 			ui.spacer(ui.px(em * 1))
-			text("h", "Enter open    A acknowledge    Shift+A the session    Ctrl+Shift+A all", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+			text("h", i18n.tr("Enter open    A acknowledge    Shift+A the session    Ctrl+Shift+A all"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			ui.spacer(ui.px(em * 1))
 		}
 	}
@@ -186,7 +187,7 @@ missed_header :: proc(app: ^App, r: ^Missed_Row, k: int, h, em: f32) -> (acknowl
 			session_badge(app, s, math.round(em * SESSION_BADGE_EM), em)
 			ui.spacer(ui.px(em * 0.55))
 		}
-		title := s != nil && s.title != "" ? s.title : s != nil ? "Untitled" : r.root
+		title := s != nil && s.title != "" ? s.title : s != nil ? i18n.tr("Untitled") : r.root
 		text("t", title, hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
 		if s != nil && s.directory != "" {
 			ui.spacer(ui.px(em * 0.6))
@@ -195,8 +196,8 @@ missed_header :: proc(app: ^App, r: ^Missed_Row, k: int, h, em: f32) -> (acknowl
 			ui.spacer(ui.fill())
 		}
 		if r.open > 0 {
-			ui.a11y({role = .Button, name = "Acknowledge the session"})
-			acknowledge = ui.button_icon("###ack_g", lucide.CHECK, "Acknowledge", height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked
+			ui.a11y({role = .Button, name = i18n.tr("Acknowledge the session")})
+			acknowledge = ui.button_icon("###ack_g", lucide.CHECK, i18n.tr("Acknowledge"), height = math.round(em * BUTTON_SMALL_H_EM), quiet = true, face = .Ghost).clicked
 		}
 		ui.spacer(ui.px(em * 0.8))
 	}
@@ -241,9 +242,9 @@ missed_entry_row :: proc(app: ^App, r: ^Missed_Row, k: int, selected: bool, now:
 		ui.spacer(ui.px(em * 0.5))
 		small := math.round(em * BUTTON_SMALL_H_EM)
 		if missed_is_wait(e) && !acked {
-			button = ui.button_icon("###answer", lucide.ARROW_RIGHT, "Answer", .Primary, height = small, quiet = true).clicked
+			button = ui.button_icon("###answer", lucide.ARROW_RIGHT, i18n.tr("Answer"), .Primary, height = small, quiet = true).clicked
 		} else if !acked {
-			ui.a11y({role = .Button, name = "Acknowledge"})
+			ui.a11y({role = .Button, name = i18n.tr("Acknowledge")})
 			button = ui.button_icon("###ack", lucide.CHECK, "", height = small, quiet = true, face = .Ghost).clicked
 		}
 		ui.spacer(ui.px(em * 0.8))

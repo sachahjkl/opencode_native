@@ -15,6 +15,7 @@ import "gt:platform"
 import svg "gt:svg"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 // A diagram laid out once for its text and the theme's lightness, kept while it is shown (DIAGRAMS_KEPT at most, the least
 // recently drawn going first).
@@ -81,28 +82,28 @@ mermaid_block :: proc(id, code: string, closed: bool, version: u64) {
 			text("lang", "mermaid", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			if d != nil && d.why != "" {
 				ui.spacer(ui.px(em * 0.6))
-				text("why", fmt.tprintf("not a diagram: %s", first_line(d.why)), hex(HEX_YELLOW), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
+				text("why", fmt.tprintf(i18n.tr("not a diagram: %s"), first_line(d.why)), hex(HEX_YELLOW), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
 			} else {
 				ui.spacer(ui.fill())
 			}
 			if closed && (d == nil || d.why == "") {   // (what is no diagram shows its text already)
-				ui.a11y({role = .Button, name = as_text ? "Show the diagram" : "Show its text"})
+				ui.a11y({role = .Button, name = as_text ? i18n.tr("Show the diagram") : i18n.tr("Show its text")})
 				ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
 				sig := ui.icon_button("as_text", as_text ? lucide.GIT_FORK : lucide.CODE)
 				if sig.clicked { app.conversation.expanded[k] = !as_text }
-				if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(as_text ? "Show the diagram" : "Show its text") } }
+				if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(as_text ? i18n.tr("Show the diagram") : i18n.tr("Show its text")) } }
 			}
 			if ok {
-				ui.a11y({role = .Button, name = "Open in the viewer"})
+				ui.a11y({role = .Button, name = i18n.tr("Open in the viewer")})
 				ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
 				sig := ui.icon_button("open", lucide.ZOOM_IN)
 				if sig.clicked { diagram_view_open(app, code) }
-				if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text("Open in the viewer") } }
+				if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Open in the viewer")) } }
 			}
-			ui.a11y({role = .Button, name = "Copy"})
+			ui.a11y({role = .Button, name = i18n.tr("Copy")})
 			ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
 			if ui.icon_button("copy", lucide.COPY).clicked {
-				if ok { ctx_open(app, .Diagram, msg = code) } else { clip_set(code); ui.announce(&app.announcer, .Good, "Copied") }
+				if ok { ctx_open(app, .Diagram, msg = code) } else { clip_set(code); ui.announce(&app.announcer, .Good, i18n.tr("Copied")) }
 			}
 			ui.spacer(ui.px(em * 0.3))
 		}
@@ -138,7 +139,7 @@ diagram_box :: proc(app: ^App, doc: ^svg.Document, code: string, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.ceil(sz.y)), axis = .X})
 	if ui.row(id = "###diagram_row") {
 		ui.spacer(ui.fill())
-		ui.a11y({role = .Image, name = "A diagram"})
+		ui.a11y({role = .Image, name = i18n.tr("A diagram")})
 		ui.next({width = ui.px(math.ceil(sz.x)), height = ui.px(math.ceil(sz.y)), cursor = .Zoom_In})
 		b := ui.build_box({.Clickable}, "###diagram")
 		if ui.signal(b).clicked { diagram_view_open(app, code) }
@@ -172,10 +173,10 @@ DIAGRAM_COPY_MOST :: 4096
 // The diagram of `code` as a picture on the clipboard.
 diagram_copy_png :: proc(app: ^App, code: string) {
 	c, ok := diagram_picture(app, code)
-	if !ok { ui.toast(.Bad, "The diagram could not be copied: it is not a diagram"); return }
+	if !ok { ui.toast(.Bad, i18n.tr("The diagram could not be copied: it is not a diagram")); return }
 	defer paint.canvas_destroy(&c)
 	pixels := platform.Clipboard_Image{rgba = paint.to_rgba8(c, context.temp_allocator), size = {c.width, c.height}}
-	if platform.clipboard_set_image(app.win, pixels) { ui.announce(&app.announcer, .Good, "Diagram copied as a picture") } else { ui.toast(.Bad, "The diagram could not be copied") }
+	if platform.clipboard_set_image(app.win, pixels) { ui.announce(&app.announcer, .Good, i18n.tr("Diagram copied as a picture")) } else { ui.toast(.Bad, i18n.tr("The diagram could not be copied")) }
 }
 
 // The pixels of the diagram of `code`, as diagram_copy_png copies them (the caller's: paint.canvas_destroy).

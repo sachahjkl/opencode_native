@@ -15,6 +15,7 @@ import desktop "gt:desktop"
 import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 // (Panel.Terminal: while there is no shell. The shells are panels too, from TERM_PANEL_BASE.)
 Panel :: enum u32 { Conversation = 1, Preview, Terminal, Stats }
@@ -122,7 +123,7 @@ strip_end :: proc(user: rawptr, d: ^ui.Dock, leaf: i32) {
 	app := (^App)(user)
 	em := ui.font_size()
 	if p := panel_in_front(app, leaf); p != 0 {
-		ui.a11y({role = .Button, name = "Open in a window"})
+		ui.a11y({role = .Button, name = i18n.tr("Open in a window")})
 		ui.next({width = ui.px(math.round(em * TERM_NEW_EM)), height = ui.px(math.round(em * TERM_NEW_EM))})
 		if ui.icon_button("panel_win", lucide.APP_WINDOW).clicked { panel_detach(app, p) }
 	}
@@ -134,12 +135,12 @@ panel_title :: proc(user: rawptr, panel: u32) -> string {
 	if v := output_view_of_panel(app, panel); v != nil { return ellipsize(first_line(v.command), OUTPUT_TITLE_CHARS) }
 	if t := term_of_panel(app, panel); t != nil { return term_label(t) }
 	switch Panel(panel) {
-	case .Conversation: return "Conversation"
+	case .Conversation: return i18n.tr("Conversation")
 	case .Preview:
 		t := preview_front(&app.preview)
-		return t != nil && t.title != "" ? ellipsize(t.title, 28) : "Preview"
-	case .Terminal:     return "Terminal"
-	case .Stats:        return "Statistics"
+		return t != nil && t.title != "" ? ellipsize(t.title, 28) : i18n.tr("Preview")
+	case .Terminal:     return i18n.tr("Terminal")
+	case .Stats:        return i18n.tr("Statistics")
 	}
 	return ""
 }
@@ -234,9 +235,9 @@ BROWSE_URL :: "https://opencode.ai/extensions/browse"
 
 preview_missing :: proc() {
 	when ODIN_OS == .Linux {
-		ui.toast_action(.Info, proc(_: rawptr) { ui.open(BROWSE_URL, .Url) }, nil, "No Preview panel on Linux: let agents use your own browser with OpenCode Browse. Click to see it")
+		ui.toast_action(.Info, proc(_: rawptr) { ui.open(BROWSE_URL, .Url) }, nil, i18n.tr("No Preview panel on Linux: let agents use your own browser with OpenCode Browse. Click to see it"))
 	} else {
-		ui.toast(.Warn, "The Preview panel needs the WebView2 runtime")
+		ui.toast(.Warn, i18n.tr("The Preview panel needs the WebView2 runtime"))
 	}
 }
 
@@ -381,7 +382,7 @@ reveal_path :: proc(path: string) { ui.open(path, .Reveal) }
 
 // The system's terminal, in a session's folder (desktop.open_terminal: $TERMINAL or a common one; Windows Terminal).
 terminal_open :: proc(dir: string) {
-	if dir == "" || !desktop.open_terminal(dir) { ui.toast(.Warn, "No terminal could be started in that folder") }
+	if dir == "" || !desktop.open_terminal(dir) { ui.toast(.Warn, i18n.tr("No terminal could be started in that folder")) }
 }
 
 // What the address bar was given: an address, a host, or a file.
@@ -423,8 +424,8 @@ preview_strip :: proc(app: ^App, p: ^Preview, em: f32) {
 		strip_look(app, nil, 0)
 		for t, i in p.tabs {
 			in_front := i == p.front
-			title := t.title != "" ? t.title : t.url != "" ? t.url : "New tab"
-			ui.a11y({role = .Button, name = fmt.tprintf("Browser tab: %s", title)})
+			title := t.title != "" ? t.title : t.url != "" ? t.url : i18n.tr("New tab")
+			ui.a11y({role = .Button, name = fmt.tprintf(i18n.tr("Browser tab: %s"), title)})
 			ui.next({width = ui.fill(), height = ui.pct(1), axis = .X, cross = .Center})
 			b := ui.build_box({.Clickable, .Middle_Click, .Hot_Within, .Clip}, fmt.tprintf("###pv_tab_%s", t.id))
 			b.custom, b.custom_user = tab_look_draw, in_front ? rawptr(app) : nil
@@ -435,7 +436,7 @@ preview_strip :: proc(app: ^App, p: ^Preview, em: f32) {
 				col := in_front ? hex(HEX_BRIGHT) : sig.hovering ? hex(HEX_TEXT_SOFT) : hex(HEX_WEAK)
 				ui.spacer(ui.px(em * 0.6))
 				text("t", ellipsize(title, PREVIEW_TAB_TITLE_MOST), col, ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
-				ui.a11y({role = .Button, name = "Close this tab"})
+				ui.a11y({role = .Button, name = i18n.tr("Close this tab")})
 				ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM * 0.75)), height = ui.px(math.round(em * GLYPH_BUTTON_EM * 0.75))})
 				if ui.icon_button("pv_tab_x", lucide.X).clicked { p.due_close = t }
 				ui.spacer(ui.px(em * 0.25))
@@ -489,14 +490,14 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 			ui.spacer(ui.px(em * 0.4))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3, font = app.mono, font_size = math.round(em * FS_SMALL)})
-				res := ui.line_edit("###pv_url", &t.field, "localhost:3000 or an address")
+				res := ui.line_edit("###pv_url", &t.field, i18n.tr("localhost:3000 or an address"))
 				p.addr_key = res.box.key
 				if t.focus_address { ui.set_focus(res.box.key); t.focus_address = false }
 				if res.committed { preview_commit(app, t, ui.field_string(&t.field)) }
 			}
 		}
 		ui.spacer(ui.px(em * 0.35))
-		ui.a11y({role = .Button, name = "New browser tab"})
+		ui.a11y({role = .Button, name = i18n.tr("New browser tab")})
 		ui.next({width = ui.px(size), height = ui.px(size)})
 		if ui.icon_button("pv_new", lucide.PLUS).clicked { p.due_new = true }
 		ui.next({width = ui.px(size), height = ui.px(size)})
@@ -522,20 +523,20 @@ preview_panel :: proc(app: ^App, em: f32) {
 			failed := false
 			switch w in t.web {
 			case Web_Failed:
-				msg, failed = fmt.tprintf("The page could not start: %s", w.why), true
+				msg, failed = fmt.tprintf(i18n.tr("The page could not start: %s"), w.why), true
 			case Web_Creating:
-				msg = "Starting the web view…"
+				msg = i18n.tr("Starting the web view…")
 			case Web_Ready:
-				if overlay_open(app) { msg = t.title } else if t.url == "" { msg = PREVIEW_NOTHING }
+				if overlay_open(app) { msg = t.title } else if t.url == "" { msg = i18n.tr(PREVIEW_NOTHING) }
 			case nil:
-				msg = t.asked ? "Starting the web view…" : PREVIEW_NOTHING
+				msg = t.asked ? i18n.tr("Starting the web view…") : i18n.tr(PREVIEW_NOTHING)
 			}
 			if msg != "" {
 				ui.spacer(ui.fill())
 				text("m", msg, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 				if failed {
 					ui.spacer(ui.px(em * 0.5))
-					if ui.button_icon("###pv_again", lucide.REFRESH_CW, "Try again", height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { web_start(app, t) }
+					if ui.button_icon("###pv_again", lucide.REFRESH_CW, i18n.tr("Try again"), height = math.round(em * BUTTON_COMPACT_H_EM)).clicked { web_start(app, t) }
 				}
 				ui.spacer(ui.fill())
 			}

@@ -7,6 +7,7 @@ import "base:runtime"
 import "gt:crash"
 import tk_log "gt:log"
 import "gt:ui"
+import i18n "gt:i18n"
 
 // The log, as context.logger, and the crash handler; `crashed`: the report of the last session when it did not end cleanly
 // (owned, "" none). On the main thread, before the first build (they read and write the report folder).
@@ -28,5 +29,5 @@ log_stop :: proc(logger: runtime.Logger) {
 crash_say :: proc(app: ^App, report: string) {
 	if report == "" { return }
 	app.cx.crash_report = report
-	ui.toast_action(.Warn, proc(user: rawptr) { ui.open((^App)(user).cx.crash_report) }, app, "opencode native stopped unexpectedly last time: click to open its report")
+	ui.toast_action(.Warn, proc(user: rawptr) { ui.open((^App)(user).cx.crash_report) }, app, i18n.tr("opencode native stopped unexpectedly last time: click to open its report"))
 }

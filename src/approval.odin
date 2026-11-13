@@ -9,6 +9,7 @@ import "core:math"
 import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
 Approval :: enum u8 { Configured, Allow_Edits, Allow_All, Ask_All, Custom }
 
@@ -22,25 +23,25 @@ APPROVAL_RULES := [Approval]string{
 }
 
 APPROVAL_WORDS := [Approval]string{
-	.Configured  = "As configured",
-	.Allow_Edits = "Allow edits",
-	.Allow_All   = "Allow everything",
-	.Ask_All     = "Ask for everything",
-	.Custom      = "Custom rules",
+	.Configured  = i18n.later("As configured"),
+	.Allow_Edits = i18n.later("Allow edits"),
+	.Allow_All   = i18n.later("Allow everything"),
+	.Ask_All     = i18n.later("Ask for everything"),
+	.Custom      = i18n.later("Custom rules"),
 }
 
 // What each says in the menu.
 APPROVAL_DETAIL := [Approval]string{
-	.Configured  = "the server's rules decide",
-	.Allow_Edits = "file edits go without asking",
-	.Allow_All   = "nothing is asked; a policy's deny stays",
-	.Ask_All     = "every action waits for you",
-	.Custom      = "rules set elsewhere",
+	.Configured  = i18n.later("the server's rules decide"),
+	.Allow_Edits = i18n.later("file edits go without asking"),
+	.Allow_All   = i18n.later("nothing is asked; a policy's deny stays"),
+	.Ask_All     = i18n.later("every action waits for you"),
+	.Custom      = i18n.later("rules set elsewhere"),
 }
 
 // The word beside the shield in the toolbar ("": the shield alone).
 @(private = "file")
-APPROVAL_SHORT := [Approval]string{.Configured = "", .Allow_Edits = "edits", .Allow_All = "all", .Ask_All = "ask", .Custom = "custom"}
+APPROVAL_SHORT := [Approval]string{.Configured = "", .Allow_Edits = i18n.later("edits"), .Allow_All = i18n.later("all"), .Ask_All = i18n.later("ask"), .Custom = i18n.later("custom")}
 
 // The preset a session's rules are (none or empty: Configured; any other: Custom).
 approval_of :: proc(rules: json.Value) -> Approval {
@@ -88,17 +89,17 @@ approval_button :: proc(app: ^App, em: f32) {
 	case .Ask_All:     color = hex(HEX_GREEN)
 	case .Custom:      color = hex(HEX_PURPLE)
 	}
-	ui.a11y({role = .Button, name = fmt.tprintf("Approvals: %s", APPROVAL_WORDS[mode])})
+	ui.a11y({role = .Button, name = fmt.tprintf(i18n.tr("Approvals: %s"), i18n.tr(APPROVAL_WORDS[mode]))})
 	key := ui.key_from_string(0, "approval_menu")
-	sig := ui.button_icon("###approval", lucide.SHIELD, ui.text_shown(APPROVAL_SHORT[mode]), height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = ui.ctx_menu_is_open(key), icon_color = color, face = .Ghost)
+	sig := ui.button_icon("###approval", lucide.SHIELD, ui.text_shown(i18n.tr(APPROVAL_SHORT[mode])), height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = ui.ctx_menu_is_open(key), icon_color = color, face = .Ghost)
 	if sig.clicked { ui.ctx_menu_open_rect(key, sig.box.rect, sig.box.key) }
-	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(fmt.tprintf("Approvals: %s (%s)", APPROVAL_WORDS[mode], APPROVAL_DETAIL[mode])) } }
+	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(fmt.tprintf(i18n.tr("Approvals: %s (%s)"), i18n.tr(APPROVAL_WORDS[mode]), i18n.tr(APPROVAL_DETAIL[mode]))) } }
 	if ui.ctx_menu(key) {
-		ui.menu_heading("Approvals in this session")
+		ui.menu_heading(i18n.tr("Approvals in this session"))
 		for m in Approval {
 			if m == .Custom && mode != .Custom { continue }   // (shown only when the session has such rules)
 			// (what it does in the shortcut's column: faint, at the right)
-			if ui.menu_item(APPROVAL_WORDS[m], APPROVAL_DETAIL[m], m == mode, enabled = m != .Custom).clicked {
+			if ui.menu_item(i18n.tr(APPROVAL_WORDS[m]), i18n.tr(APPROVAL_DETAIL[m]), m == mode, enabled = m != .Custom).clicked {
 				approval_set(app, app.chat.id, m)
 			}
 		}

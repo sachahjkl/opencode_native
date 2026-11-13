@@ -6,6 +6,7 @@ import "core:math"
 import "core:mem"
 import "core:strings"
 import "gt:ui"
+import i18n "gt:i18n"
 
 
 HEX_TOOL_OUTPUT       :: 0xbdbdbdff
@@ -138,7 +139,7 @@ mono_text :: proc(body: string, extra: int, em, pad: f32, color := Color{}, flus
 		ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###more") {
 			ui.spacer(ui.px(em * pad))
-			text("m", fmt.tprintf("… %d more lines", extra), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
+			text("m", fmt.tprintf(i18n.tr(extra, "… %d more lines", "… %d more lines"), extra), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
 		}
 	}
 }

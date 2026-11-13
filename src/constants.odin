@@ -2,6 +2,7 @@
 // pixels, _MS: in milliseconds, HEX_: sRGB.)
 package ocn
 
+import i18n "gt:i18n"
 
 ////////////////////////////////
 // What waits in the inbox: the list over the composer (queue.odin)
@@ -182,7 +183,7 @@ PREVIEW_TAB_TITLE_MOST :: 24   // of a tab's title in the panel's strip
 PREVIEW_PARKED_W :: 1280 // what a page made out of sight is laid out at, until there is a panel to measure
 PREVIEW_PARKED_H :: 800
 PREVIEW_PARENTS_MOST :: 32   // sub-agents of sub-agents followed up to their session
-PREVIEW_NOTHING :: "Nothing to show yet. Type an address above, or let an agent open one."
+PREVIEW_NOTHING := i18n.later("Nothing to show yet. Type an address above, or let an agent open one.")
 
 ////////////////////////////////
 // The agents' browser tools

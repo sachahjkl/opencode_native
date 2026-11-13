@@ -22,6 +22,7 @@ import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
 import remote "gt:remote"
+import i18n "gt:i18n"
 
 Delivery :: enum u8 { Steer, Queue }
 
@@ -132,7 +133,7 @@ queue_gone :: proc(app: ^App, id: string, delivered: bool, at: Seq) {
 	if id == "" { return }
 	if q.edit.id == id {
 		queue_edit_end(app, .Lost)
-		ui.toast(.Warn, delivered ? "That message was delivered meanwhile: what you wrote stays in the composer" : "That message is no longer waiting: what you wrote stays in the composer")
+		ui.toast(.Warn, delivered ? i18n.tr("That message was delivered meanwhile: what you wrote stays in the composer") : i18n.tr("That message is no longer waiting: what you wrote stays in the composer"))
 	}
 	for it, i in q.items {
 		if it.id == id { item_free(it); ordered_remove(&q.items, i); break }
@@ -179,7 +180,7 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: Seq) {
 		if newer(old.born, asked_at) { append(&next, old); continue }
 		if q.edit.id == old.id {
 			queue_edit_end(app, .Lost)
-			ui.toast(.Warn, "That message is no longer waiting: what you wrote stays in the composer")
+			ui.toast(.Warn, i18n.tr("That message is no longer waiting: what you wrote stays in the composer"))
 		}
 		item_free(old)
 	}
@@ -387,16 +388,16 @@ queue_row :: proc(app: ^App, it: ^Queue_Item, n: int, em: f32) {
 	busy := it.act != .None
 	note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * QUEUE_ROW_H_EM)), axis = .X, cross = .Center})
-	ui.a11y({role = .Group, name = fmt.tprintf("Pending message %d: %s", n, ellipsize(it.text, QUEUE_NAME_CHARS))})
+	ui.a11y({role = .Group, name = fmt.tprintf(i18n.tr("Pending message %d: %s"), n, ellipsize(it.text, QUEUE_NAME_CHARS))})
 	if ui.row(.Center, id = fmt.tprintf("###q_%s", id)) {
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
 		text("n", it.delivery == .Queue ? fmt.tprintf("%d", n) : "›", hex(HEX_FAINT), note, ui.px(em * QUEUE_MARK_W_EM))
 		line := preview_text(it.text)
-		if line == "" { line = "(no text)" }
+		if line == "" { line = i18n.tr("(no text)") }
 		text("t", ellipsize(line, QUEUE_LINE_CHARS), busy ? hex(HEX_FAINT) : hex(HEX_TEXT_SOFT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		if it.files > 0 {
 			ui.spacer(ui.px(em * 0.5))
-			text("f", it.files == 1 ? "1 file" : fmt.tprintf("%d files", it.files), hex(HEX_FAINT), note)
+			text("f", fmt.tprintf(i18n.tr(it.files, "%d file", "%d files"), it.files), hex(HEX_FAINT), note)
 		}
 		wide := app.conversation.column_w > em * QUEUE_WORDS_MIN_EM
 		switch {
@@ -405,12 +406,12 @@ queue_row :: proc(app: ^App, it: ^Queue_Item, n: int, em: f32) {
 			text("e", "editing", accent(), note)
 		case busy:
 			ui.spacer(ui.px(em * 0.7))
-			text("b", it.act == .Sending ? "sending…" : it.act == .Removing ? "removing…" : "changing…", hex(HEX_FAINT), note)
+			text("b", it.act == .Sending ? i18n.tr("sending…") : it.act == .Removing ? i18n.tr("removing…") : i18n.tr("changing…"), hex(HEX_FAINT), note)
 		case:
-			if !it.skills && queue_action("###edit", "Edit", lucide.PENCIL, wide, em) { queue_edit(app, id) }
-			if it.delivery == .Queue && queue_action("###steer", "Steer", lucide.ARROW_RIGHT, wide, em) { queue_steer(app, id) }
-			if it.delivery == .Steer && queue_action("###now", "Send now", lucide.SEND_HORIZONAL, wide, em) { queue_send_now(app, id) }
-			if queue_action("###rm", "Remove", lucide.X, wide, em, .Danger) { queue_remove(app, id) }
+			if !it.skills && queue_action("###edit", i18n.tr("Edit"), lucide.PENCIL, wide, em) { queue_edit(app, id) }
+			if it.delivery == .Queue && queue_action("###steer", i18n.tr("Steer"), lucide.ARROW_RIGHT, wide, em) { queue_steer(app, id) }
+			if it.delivery == .Steer && queue_action("###now", i18n.tr("Send now"), lucide.SEND_HORIZONAL, wide, em) { queue_send_now(app, id) }
+			if queue_action("###rm", i18n.tr("Remove"), lucide.X, wide, em, .Danger) { queue_remove(app, id) }
 		}
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
 	}
@@ -426,7 +427,7 @@ queue_list :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###q_failed") {
 				ui.spacer(ui.px(em * 0.5))
-				if hint_action("###q_again", "What waits for this session could not be read  ·  Try again", em, app.mono) { queue_read(app) }
+				if hint_action("###q_again", i18n.tr("What waits for this session could not be read  ·  Try again"), em, app.mono) { queue_read(app) }
 			}
 			ui.spacer(ui.px(em * 0.25))
 		}
@@ -436,17 +437,17 @@ queue_list :: proc(app: ^App, em: f32) {
 	row_h := math.round(em * QUEUE_ROW_H_EM)
 	list_h := f32(min(n, QUEUE_ROWS_SHOWN)) * row_h
 	ui.next({width = ui.fill(), height = ui.px(head_h + list_h + math.round(em * 0.3)), axis = .Y})
-	ui.a11y({role = .Group, name = "Pending messages"})
+	ui.a11y({role = .Group, name = i18n.tr("Pending messages")})
 	box := ui.build_box({}, "###q_well")
 	box.custom = tray_draw
 	if ui.parent(box) {
 		ui.next({width = ui.fill(), height = ui.px(head_h), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###q_head") {
 			ui.spacer(ui.px(em * TRAY_PAD_EM))
-			text("h", fmt.tprintf("PENDING  %d", n), hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+			text("h", fmt.tprintf(i18n.tr("PENDING  %d"), n), hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.9))
 			// (the row cuts what has no room: what matters comes first)
-			text("w", app.chat.busy ? "not sent yet  ·  queued ones go when the turn ends" : "not sent  ·  the run stopped, these wait", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+			text("w", app.chat.busy ? i18n.tr("not sent yet  ·  queued ones go when the turn ends") : i18n.tr("not sent  ·  the run stopped, these wait"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			ui.spacer(ui.px(em * TRAY_PAD_EM))
 		}
 		ui.next({width = ui.fill(), height = ui.px(list_h)})
@@ -479,13 +480,13 @@ queue_edit_banner :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.85))
 		glyph(lucide.PENCIL, accent(), math.round(em * ICON_SMALL), em * 1.1)
 		ui.spacer(ui.px(em * 0.25))
-		text("t", "Editing a pending message", accent(), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+		text("t", i18n.tr("Editing a pending message"), accent(), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		if len(q.items) > 1 && q.items[len(q.items) - 1].id != q.edit.id && app.conversation.column_w > em * QUEUE_WORDS_MIN_EM {
 			ui.spacer(ui.px(em * 0.6))
-			text("o", "it goes back last", hex(HEX_FAINT), note)
+			text("o", i18n.tr("it goes back last"), hex(HEX_FAINT), note)
 		}
 		ui.spacer(ui.fill())
-		if hint_action("###q_cancel", "Esc  cancel", em, app.mono, intent = .Cancel) { queue_edit_end(app, .Cancel) }
+		if hint_action("###q_cancel", i18n.tr("Esc  cancel"), em, app.mono, intent = .Cancel) { queue_edit_end(app, .Cancel) }
 		ui.spacer(ui.px(em * 0.85))
 	}
 }

@@ -30,6 +30,7 @@ import "gt:term"
 import "gt:ui"
 import lucide "gt:lucide"
 import remote "gt:remote"
+import i18n "gt:i18n"
 
 // In the program, which is one file: the licence asks to go with the code.
 GHOSTTY_LICENSE :: #load("../assets/GHOSTTY-LICENSE.txt", string)
@@ -584,7 +585,7 @@ term_made :: proc(app: ^App, dir: string, v: json.Value) {
 	s := &app.cx.terms
 	t := term_add(app, jget(v, "data"), dir)
 	if t == nil {
-		remote.settle(&s.made, .Failed, "Unreadable answer")
+		remote.settle(&s.made, .Failed, i18n.tr("Unreadable answer"))
 		s.replaces = 0
 		return
 	}
@@ -1128,19 +1129,19 @@ terminals_settle :: proc(app: ^App) {
 term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 	s := &app.cx.terms
 	if t.link < .Lost { return }
-	words := t.link == .Closed ? "This shell ended." : t.given_up ? "The connection to this shell was lost." : "The connection to this shell was lost: trying again…"
+	words := t.link == .Closed ? i18n.tr("This shell ended.") : t.given_up ? i18n.tr("The connection to this shell was lost.") : i18n.tr("The connection to this shell was lost: trying again…")
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * TERM_BANNER_H_EM)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###term_banner") {
 		ui.spacer(ui.px(em * 0.6))
 		text("w", words, hex(t.link == .Closed ? HEX_WEAK : HEX_YELLOW), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		h := math.round(em * BUTTON_COMPACT_H_EM)
 		if t.link == .Closed {
-			if ui.button_icon("###term_restart", lucide.REFRESH_CW, "Restart", height = h, disabled = s.made.state == .Loading).clicked { term_restart(app, t) }
+			if ui.button_icon("###term_restart", lucide.REFRESH_CW, i18n.tr("Restart"), height = h, disabled = s.made.state == .Loading).clicked { term_restart(app, t) }
 		} else if t.given_up {
-			if ui.button_icon("###term_again", lucide.REFRESH_CW, "Reconnect", height = h).clicked { term_reconnect(app, t) }
+			if ui.button_icon("###term_again", lucide.REFRESH_CW, i18n.tr("Reconnect"), height = h).clicked { term_reconnect(app, t) }
 		}
 		ui.spacer(ui.px(em * 0.3))
-		if ui.button_icon("###term_close", lucide.X, "Close", height = h, face = .Ghost).clicked { s.close_due = t.panel }
+		if ui.button_icon("###term_close", lucide.X, i18n.tr("Close"), height = h, face = .Ghost).clicked { s.close_due = t.panel }
 		ui.spacer(ui.px(em * 0.6))
 	}
 }
@@ -1172,19 +1173,19 @@ terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
 @(private = "file")
 term_menu :: proc(app: ^App, t: ^Term) {
 	v := &t.view
-	if ui.menu_item("Copy", v.read_only ? "Ctrl+C" : "Ctrl+Shift+C", icon = lucide.COPY, enabled = term.has_selection(v)).clicked {
+	if ui.menu_item(i18n.tr("Copy"), v.read_only ? "Ctrl+C" : "Ctrl+Shift+C", icon = lucide.COPY, enabled = term.has_selection(v)).clicked {
 		clip_set(term.selection_text(v))
 	}
-	if !v.read_only && ui.menu_item("Paste", "Ctrl+Shift+V", icon = lucide.CLIPBOARD_PASTE).clicked { term_paste(app, t) }
-	if ui.menu_item("Select all", icon = lucide.TEXT_CURSOR_INPUT, enabled = t.vt != nil).clicked { term.select_all(v) }
+	if !v.read_only && ui.menu_item(i18n.tr("Paste"), "Ctrl+Shift+V", icon = lucide.CLIPBOARD_PASTE).clicked { term_paste(app, t) }
+	if ui.menu_item(i18n.tr("Select all"), icon = lucide.TEXT_CURSOR_INPUT, enabled = t.vt != nil).clicked { term.select_all(v) }
 	ui.menu_separator()
-	if ui.menu_item("Zoom in", "Ctrl+=", icon = lucide.PLUS).clicked { term_zoom_set(app, t, v.zoom * term.ZOOM_STEP) }
-	if ui.menu_item("Zoom out", "Ctrl+-", icon = lucide.CHEVRON_DOWN).clicked { term_zoom_set(app, t, v.zoom / term.ZOOM_STEP) }
-	reset := v.zoom != 1 ? fmt.tprintf("Reset the zoom (%d%%)", int(math.round(v.zoom * 100))) : "Reset the zoom"
+	if ui.menu_item(i18n.tr("Zoom in"), "Ctrl+=", icon = lucide.PLUS).clicked { term_zoom_set(app, t, v.zoom * term.ZOOM_STEP) }
+	if ui.menu_item(i18n.tr("Zoom out"), "Ctrl+-", icon = lucide.CHEVRON_DOWN).clicked { term_zoom_set(app, t, v.zoom / term.ZOOM_STEP) }
+	reset := v.zoom != 1 ? fmt.tprintf(i18n.tr("Reset the zoom (%d%%)"), int(math.round(v.zoom * 100))) : i18n.tr("Reset the zoom")
 	if ui.menu_item(reset, "Ctrl+0", icon = lucide.UNDO_2, enabled = v.zoom != 1).clicked { term_zoom_set(app, t, 1) }
 	if o := output_view_of_term(app, t); o != nil {
 		ui.menu_separator()
-		if ui.menu_item("Copy all the output", icon = lucide.COPY, enabled = len(o.raw) > 0).clicked { clip_set(plain_output(string(o.raw[:]))) }
+		if ui.menu_item(i18n.tr("Copy all the output"), icon = lucide.COPY, enabled = len(o.raw) > 0).clicked { clip_set(plain_output(string(o.raw[:]))) }
 	}
 }
 
@@ -1213,7 +1214,7 @@ terminal_strip_end :: proc(app: ^App, d: ^ui.Dock, leaf: i32, em: f32) {
 		if t := term_of_panel(app, p); t != nil && any == nil { any = t }
 	}
 	if any == nil && !stand_in { return }
-	ui.a11y({role = .Button, name = "New terminal"})
+	ui.a11y({role = .Button, name = i18n.tr("New terminal")})
 	ui.next({width = ui.px(math.round(em * TERM_NEW_EM)), height = ui.px(math.round(em * TERM_NEW_EM))})
 	if ui.icon_button("term_new", lucide.PLUS).clicked {
 		if any != nil { s.last_panel = any.panel }   // (in this stack, whichever had the keyboard)
@@ -1225,8 +1226,8 @@ terminal_strip_end :: proc(app: ^App, d: ^ui.Dock, leaf: i32, em: f32) {
 term_label :: proc(t: ^Term) -> string {
 	name := base_name(t.title)
 	name = strings.trim_suffix(strings.trim_suffix(name, ".exe"), ".EXE")
-	tail := t.link == .Closed ? " (ended)" : t.link == .Lost ? " (lost)" : ""
-	return ellipsize(fmt.tprintf("%s%s", name, tail), TERM_TAB_CHARS)
+	shown := t.link == .Closed ? fmt.tprintf(i18n.tr("%s (ended)"), name) : t.link == .Lost ? fmt.tprintf(i18n.tr("%s (lost)"), name) : name
+	return ellipsize(shown, TERM_TAB_CHARS)
 }
 
 // Has the grid rested? (The first size goes at once: a shell starts at the size it will have.)
