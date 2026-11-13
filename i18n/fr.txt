@@ -368,6 +368,9 @@ fr Fermer l'onglet de navigateur
 en Show or hide the sidebar
 fr Afficher ou masquer la barre latérale
 
+en Show or hide the prompt rail
+fr Afficher ou masquer le rail des invites
+
 en What you missed
 fr Ce que vous avez manqué
 
@@ -1346,6 +1349,9 @@ fr Choisir l'icône du projet…
 en Remove the project's icon
 fr Retirer l'icône du projet
 
+en Prompts
+fr Invites
+
 en That message was delivered meanwhile: what you wrote stays in the composer
 fr Ce message a été remis entre-temps : ce que vous avez écrit reste dans la zone de saisie
 
@@ -1701,6 +1707,12 @@ fr Suivre
 
 en Follow new messages to the bottom while you are there.
 fr Suivre les nouveaux messages jusqu'en bas tant que vous y êtes.
+
+en Prompt rail
+fr Rail des invites
+
+en A rail beside the conversation with a dot for each of your prompts, the part in view a band over it: the pointer over a dot shows the prompt, a click goes to it at once. A filter at its top keeps the prompts that say what you type.
+fr Un rail à côté de la conversation, avec un point pour chacune de vos invites et une bande sur la partie visible : le pointeur sur un point montre l'invite, un clic y va tout de suite. Un filtre en haut du rail garde les invites qui contiennent ce que vous tapez.
 
 en Usage
 fr Consommation

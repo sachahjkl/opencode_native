@@ -28,6 +28,7 @@ Conversation :: struct {
 	rect:             Rect,           // the conversation's place (Ctrl and the wheel over it zoom it)
 	docked_w:         f32,            // the conversation's room as a panel of the dock (0: it is not one)
 	was_docked:       bool,           // the conversation was in the dock (preview.odin main_area)
+	prompt_rail:      Prompt_Rail,    // the rail of the prompts beside it (prompt_rail.odin)
 }
 
 ////////////////////////////////
@@ -52,6 +53,9 @@ conversation :: proc(app: ^App, em: f32) {
 		if !app.sidebar.hidden { avail -= app.sidebar.width * sc + math.round(SPLITTER_W_PX * sc) }
 		if app.conversation.docked_w > 0 { avail = app.conversation.docked_w }   // (a panel of the dock: its room)
 		if avail <= 0 { avail = AVAIL_FALLBACK_PX * sc }
+		// (the prompts' rail at the right: the conversation is what is left of the room)
+		rail_w := prompt_rail_w(app, em)
+		avail -= rail_w
 		app.conversation.column_w = 0
 		zoom := content_zoom(app)
 		cem := math.round(em * zoom)   // the conversation's own size: its zoom is not the interface's
@@ -63,23 +67,30 @@ conversation :: proc(app: ^App, em: f32) {
 		}
 		main := ui.parent_box()
 		app.conversation.rect = main.rect
-		ui.next({width = ui.fill(), height = ui.fill()})
-		sb := ui.prev_box("###chat")
-		find_update(app, sb, em)
-		chat_scroll_place(app, sb, em)
-		if ui.scroll_y("###chat") {
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-			if ui.row(id = "###lane") {
-				ui.spacer(ui.px(side))
-				ui.next({width = ui.px(col), height = ui.children_sum(), axis = .Y})
-				if ui.column(id = "###col") {
-					if ui.style({font_size = cem}) {
-						if app.chat.id == "" { home(app, cem) } else { messages(app, cem) }
+		sb: ^ui.Box
+		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
+		if ui.row(id = "###chat_row") {
+			sb = ui.prev_box("###chat")
+			// (before the keys of the conversation: Up and Down are the rail's while it has the keyboard)
+			if rail_w > 0 && sb != nil { prompt_rail(app, sb, rail_w, em) }
+			find_update(app, sb, em)
+			chat_scroll_place(app, sb, em)
+			ui.next({width = ui.fill(), height = ui.fill()})
+			if ui.scroll_y("###chat") {
+				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+				if ui.row(id = "###lane") {
+					ui.spacer(ui.px(side))
+					ui.next({width = ui.px(col), height = ui.children_sum(), axis = .Y})
+					if ui.column(id = "###col") {
+						if ui.style({font_size = cem}) {
+							if app.chat.id == "" { home(app, cem) } else { messages(app, cem) }
+						}
 					}
 				}
 			}
+			app.conversation.scroll_box = ui.prev_box("###chat")
+			if rail_w > 0 { ui.spacer(ui.px(rail_w)) }
 		}
-		app.conversation.scroll_box = ui.prev_box("###chat")
 		chat_scroll_settle(app, sb)
 		if sb != nil && app.chat.id != "" { column_handles(app, sb, main, side, col, avail, em) }
 		dock(app, em, side, col)
@@ -240,11 +251,13 @@ messages :: proc(app: ^App, em: f32) {
 		restore := back != "" && !c.loading
 		if restore { ui.lazy_pin(lz, fmt.tprintf("###msg_%s", back), back_dy) }
 		top_seen := false   // the first message under the top of the view, for Back and Forward (subagents.odin nav_mark)
+		prompt_rail_begin(app)
 		for &m, i in c.messages {
 			// (by its id: a page read before it does not change what it is, its height is still known)
 			if m.id != "" && m.lazy_id == "" { m.lazy_id = fmt.aprintf("###msg_%s", m.id, allocator = c.alloc) }   // (once: this is every message, at every build)
 			id := m.id != "" ? m.lazy_id : fmt.tprintf("###msg_end%d", len(c.messages) - i)
 			held := m.id != "" && (m.id == back || m.id == keep)
+			if m.kind == .User { prompt_rail_place(app, lz.y) }   // (where it starts: built or not)
 			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || held) {
 				item := ui.parent_box()
 				if sb := lz.scroll; sb != nil {
@@ -400,6 +413,7 @@ user_message :: proc(app: ^App, m: ^Message, em: f32) {
 	ui.spacer(ui.px(em * 0.4))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if plate(fmt.tprintf("###u_%s", m.id), top = HEX_USER_PLATE_TOP, bottom = HEX_USER_PLATE_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.09) {
+		prompt_rail_focus(app, m, ui.parent_box())
 		ui.spacer(ui.px(em * 0.75))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###in") {

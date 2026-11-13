@@ -409,9 +409,19 @@ viewer_outside :: proc(p, view, picture, pan: [2]f32) -> bool {
 	return !(p.x >= lo.x && p.x < hi.x && p.y >= lo.y && p.y < hi.y)
 }
 
-// The black behind the picture, where it is zoomed out or moved (ui.preview draws only the picture).
+// The black behind the picture, where it is zoomed out or moved (ui.preview draws only the picture). Its corners are
+// concentric with the dialog's: inset by the padding, a square corner would show a corner in a corner.
 @(private = "file")
-view_well_draw :: proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) { draw_well(dc, b.rect, 0, hex(HEX_VIEWER_WELL)) }
+view_well_draw :: proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) {
+	radius: f32
+	for a := b.parent; a != nil; a = a.parent {
+		if a.name != "modal_image_view" { continue }
+		inset := max(b.rect.min.x - a.rect.min.x, b.rect.min.y - a.rect.min.y)
+		radius = ui.concentric_radius(ui.box_drawn_radii(ui.current_state(), a)[0], inset)
+		break
+	}
+	ui.machined_well(dc, b.rect, radius, hex(HEX_VIEWER_WELL))
+}
 
 // The image viewer (open: Dialog.Viewer): what it shows, and how it is zoomed, moved and sized.
 Image_Viewer :: struct {

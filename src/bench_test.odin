@@ -2137,3 +2137,45 @@ the_view_of_what_was_missed_builds_only_its_rows_in_view :: proc(t: ^testing.T) 
 		testing.expect_value(t, log.groups_made, made)
 	})
 }
+
+// The prompts' rail: a dot for each prompt, in the conversation's order, on a long conversation opened at its bottom. A click on
+// the dot of a prompt far above (never built) puts it at the top of the view in that frame, no glide; its plate has the keyboard,
+// and the view stays on it while the heights around it settle. The setting hides the rail and gives its room back.
+@(test)
+the_prompt_rail_goes_to_a_prompt_at_once :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		rail := &app.conversation.prompt_rail.rail
+		sb := session.get(s, "chat")
+		testing.expect_value(t, len(ui.mark_rail_shown(rail)), BENCH_TURNS)
+		last: f32 = -1
+		for i in 0 ..< BENCH_TURNS {
+			at, ok := ui.mark_rail_dot(rail, sb, i)
+			if !testing.expectf(t, ok, "prompt %d has a dot", i) { return }
+			testing.expectf(t, at.y >= last, "prompt %d below the one before it", i)
+			last = at.y
+		}
+		testing.expect_value(t, ui.mark_rail_id(rail, 10), "msg_10_u")
+		testing.expect(t, session.find(s, "u_msg_10_u") == nil, "not built, far above")
+		at, _ := ui.mark_rail_dot(rail, sb, 10)
+		session.click_at(s, at)
+		sb = session.get(s, "chat")
+		plate := session.find(s, "u_msg_10_u")
+		if !testing.expect(t, plate != nil, "the prompt built") { return }
+		margin := math.round(ui.font_size() * PROMPT_RAIL_MARGIN_EM)
+		top := plate.rect.min.y - sb.rect.min.y
+		testing.expectf(t, top >= 0 && top < margin + ui.font_size() * 2, "at the top of the view: %v", top)
+		testing.expect(t, !sb.view_anim[1].active && sb.view_off.y == sb.view_target.y, "no glide")
+		testing.expect_value(t, session.focused_name(s), "u_msg_10_u")
+		session.frames(s, 20)
+		plate = session.get(s, "u_msg_10_u")
+		testing.expectf(t, abs(plate.rect.min.y - sb.rect.min.y - top) < 1, "still there: %v, was %v", plate.rect.min.y - sb.rect.min.y, top)
+		// hidden: the conversation takes its room back
+		w := sb.rect.max.x - sb.rect.min.x
+		command_run(app, command_find("view.prompt_rail"))
+		session.frames(s, 3)
+		testing.expect(t, session.find(s, "prompt_rail") == nil, "no rail")
+		testing.expectf(t, session.get(s, "chat").rect.max.x - session.get(s, "chat").rect.min.x > w, "wider: %v", w)
+	})
+}

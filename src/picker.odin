@@ -220,28 +220,12 @@ picker :: proc(app: ^App, p: ^Picker, id: string, hint: string, items: []Pick_It
 	width := math.round(em * 26)
 	row_h := math.round(em * 2.0)
 	if ui.popover(fmt.tprintf("###pick_%s", id), p.anchor, width, .Above, align_right = align_right) {
-		ui.spacer(ui.px(em * 0.5))
-		// the search
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-		if ui.row(.Center, id = "###ps") {
-			ui.spacer(ui.px(em * 0.5))
-			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), cross = .Center, radius = 7 * ui.scale()})
-			if ui.well("###psw", .X, flags = {.Focus_Within, .Draw_Focus_Ring}) {
-				ui.spacer(ui.px(em * 0.5))
-				glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_SMALL))
-				if ui.tags("bare") {
-					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-					res := ui.line_edit("###pf", &p.field, {placeholder = hint})
-					if p.fresh { ui.set_focus(res.box.key) }
-					if res.changed { p.sel = 0; p.reveal = true }
-					if res.committed && n > 0 { chosen = picker_take(p, items, hits, rows, p.sel) }
-					if res.cancelled { app.cx.open[.Picker] = false }
-				}
-				text("pn", fmt.tprintf("%d", len(hits)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-				ui.spacer(ui.px(em * 0.6))
-			}
-			ui.spacer(ui.px(em * 0.5))
-		}
+		// the search: the toolkit's band over a list, flush with the popover's top and sides
+		res := ui.search_band("ps", &p.field, {placeholder = hint, count = len(hits)})
+		if p.fresh { ui.set_focus(res.box.key) }
+		if res.changed { p.sel = 0; p.reveal = true }
+		if res.committed && n > 0 { chosen = picker_take(p, items, hits, rows, p.sel) }
+		if res.cancelled { app.cx.open[.Picker] = false }
 		ui.spacer(ui.px(em * 0.4))
 		// the rows: a scroll box (smooth wheel scrolling), the selected row kept in view
 		view_h := f32(clamp(n, 1, PICK_ROWS)) * row_h

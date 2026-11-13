@@ -258,24 +258,12 @@ palette_dialog :: proc(app: ^App, em: f32) {
 		}
 		vl.sel = clamp(vl.sel, 0, max(n - 1, 0))
 		dialog_backdrop()
-		// the search: flush with the palette's top and sides, on a field's darker background, a line under it (the toolkit's
-		// strip, as every palette and menu that searches has it: ui.dialog_top_draw), its top corners the dialog's
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center, radius = ui.parent_box().radius})
-		if ui.row(.Center, id = "###pal_top") {
-			ui.parent_box().custom = ui.dialog_top_draw
-			ui.spacer(ui.px(em * 0.9))
-			glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
-			if ui.tags("bare") {
-				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.45, font_size = math.round(em * FS_BODY)})
-				res := ui.line_edit("###pal_field", &p.field, {placeholder = i18n.tr("Search commands, sessions, agents, models…")})
-				if p.fresh { ui.set_focus(res.box.key) }
-				if res.changed { vl.sel = 0; p.reveal = true }
-				if res.committed && n > 0 { chosen = hits[vl.sel].index }
-				if res.cancelled { app.cx.open[.Palette] = false }
-			}
-			text("n", fmt.tprintf("%d", n), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-			ui.spacer(ui.px(em * 0.9))
-		}
+		// the search: the toolkit's band over a list, flush with the palette's top and sides
+		res := ui.search_band("pal_top", &p.field, {placeholder = i18n.tr("Search commands, sessions, agents, models…"), count = n})
+		if p.fresh { ui.set_focus(res.box.key) }
+		if res.changed { vl.sel = 0; p.reveal = true }
+		if res.committed && n > 0 { chosen = hits[vl.sel].index }
+		if res.cancelled { app.cx.open[.Palette] = false }
 		ui.spacer(ui.px(em * 0.45))
 		if p.reveal && n > 0 { ui.list_select(&vl.list, vl.sel); p.reveal = false }
 		vl.no_typeahead = true   // (letters are the field's)

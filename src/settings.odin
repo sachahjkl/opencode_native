@@ -66,6 +66,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "conversation.tool_lines", title = i18n.later("Tool lines"), description = i18n.later("Lines of a tool's output shown before the rest is counted."), kind = .Int, default = {i = 60}, bounded = true, min = TOOL_LINES_MIN, max = TOOL_LINES_MAX},
 	{name = "conversation.page_size", title = i18n.later("Page size"), description = i18n.later("Messages read at a time (scrolling up reads the next page by itself)."), kind = .Int, default = {i = 80}, bounded = true, min = PAGE_SIZE_MIN, max = PAGE_SIZE_MAX},
 	{name = "conversation.follow", title = i18n.later("Follow"), description = i18n.later("Follow new messages to the bottom while you are there."), kind = .Bool, default = {b = true}},
+	{name = "conversation.prompt_rail", title = i18n.later("Prompt rail"), description = i18n.later("A rail beside the conversation with a dot for each of your prompts, the part in view a band over it: the pointer over a dot shows the prompt, a click goes to it at once. A filter at its top keeps the prompts that say what you type."), kind = .Bool, default = {b = true}},
 	{name = "conversation.usage", title = i18n.later("Usage"), description = i18n.later("Tokens and cost under each answer."), kind = .Bool, default = {b = true}},
 	{name = "conversation.while_running", title = i18n.later("While running"), description = i18n.later("What Enter does while a turn runs: steer the message into the turn (at its next step), or queue it for the end of the turn. Ctrl+Enter does the other. A message waiting in the list can be sent now: that stops what the agent is doing."), kind = .String, default = {s = "steer"}, choices = {"queue", "steer"}, choice_labels = {i18n.later("Queue"), i18n.later("Steer")}},
 	{name = "conversation.image_viewer_size", title = i18n.later("Image viewer size"), description = i18n.later("The size of the image viewer, as a share of the most the window gives a picture. A picture opens no larger than its pixels; drag the viewer's edges or corners to make it larger or smaller."), kind = .Float, default = {f = 1}, bounded = true, min = VIEWER_SCALE_MIN, max = 1},
@@ -108,6 +109,7 @@ Prefs :: struct {
 	tool_lines:   int,
 	page_size:    int,
 	follow:       bool,
+	prompt_rail:  bool,   // conversation.prompt_rail (prompt_rail.odin)
 	usage:        bool,
 	clock24:      bool,
 	ctrl_enter:   bool,
@@ -209,6 +211,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.tool_lines = int(config.int_of(p, "conversation.tool_lines"))
 	s.page_size = int(config.int_of(p, "conversation.page_size"))
 	s.follow = config.bool_of(p, "conversation.follow")
+	s.prompt_rail = config.bool_of(p, "conversation.prompt_rail")
 	s.usage = config.bool_of(p, "conversation.usage")
 	s.clock24 = config.string_of(p, "conversation.clock") == "24h"
 	s.ctrl_enter = config.string_of(p, "composer.send") == "ctrl+enter"
