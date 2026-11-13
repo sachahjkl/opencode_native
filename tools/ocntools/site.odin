@@ -101,10 +101,10 @@ site_changelog :: proc(site, out: string, _: rawptr) -> bool {
 }
 
 // The shop's six pages (pricing, thanks, terms, refunds, privacy, imprint): "Coming soon" until Paddle's client token, the
-// prices and the licence Worker are set here (docs/licence.md of the toolkit, "What the maintainer does at the end").
+// price id and the licence Worker are set here (docs/licence.md of the toolkit, "What the maintainer does at the end").
 SITE_SHOP :: tk_site.Shop{
-	name = "opencode native", product_title = "opencode native Supporter Licence",
-	price = "15&nbsp;&euro;", price_note = "Once. Taxes included.", environment = "sandbox",
+	name = "opencode native", icon = "../img/logo.png", product_title = "opencode native licence",
+	price = "15&nbsp;&euro;", price_note = "", environment = "sandbox", edition = "supporter", price_id = "",
 	thanks = "https://ocn.froment.software/thanks/", help = "https://github.com/sachahjkl/opencode_native/issues",
 	register = "Open the file with opencode native, or paste the key in <em>Settings &rsaquo; Advanced &rsaquo; Licence</em>.",
 	extension = ".ocnlicence", seller = "Froment Software", seller_url = "https://froment.software",

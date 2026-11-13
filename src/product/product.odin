@@ -15,5 +15,5 @@ LICENCE :: licence.Product{
 	file_extension = ".ocnlicence",
 	public_key     = "",
 	dev_public_key = "zHs7wxUEefqH37-vN5cKoTnZOCCFBnmcoQGrw6i3UAk",
-	editions       = {0 = {id = "supporter", title = "Supporter"}, 1 = {id = "patron", title = "Patron"}},
+	editions       = {0 = {id = "supporter", title = "Supporter"}},
 }

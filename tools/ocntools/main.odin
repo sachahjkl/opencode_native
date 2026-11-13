@@ -24,7 +24,7 @@ OCN_PROJECT :: toolbox.Project{
 OCN_LICENCE_TOOL :: toolbox.Licence_Tool{
 	dev_seed = "Z3QtbGljZW5jZS1zYW1wbGUtZGV2LXNlZWQtMDAwMSE",
 	hint     = "Open this file with opencode native, or paste the key in Settings > Advanced.",
-	paddle   = {name = "opencode native Supporter Licence", description = "A personal, perpetual licence that supports opencode native.", amounts = "supporter=1500,patron=4900", currency = "EUR"},
+	paddle   = {name = "opencode native licence", description = "A personal, perpetual licence that supports opencode native.", amounts = "supporter=1500", currency = "EUR"},
 }
 
 COMMANDS :: [?]toolbox.Command{
