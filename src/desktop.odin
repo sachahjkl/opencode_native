@@ -23,7 +23,6 @@ import desktop "gt:desktop"
 import "gt:platform"
 import process "gt:process"
 import setup "gt:setup"
-import lucide "gt:lucide"
 import "gt:ui"
 
 APP_NAME      :: "opencode native"
@@ -87,23 +86,10 @@ setup_config :: proc() -> setup.Config {
 	}
 }
 
-// A button of the Setup dialog as opencode's: a bevel of its kind, with the icon of what it does.
+// A button of the Setup dialog as opencode's: a bevel of the intent and the glyph the dialog gives it (what it does).
 @(private = "file")
-setup_button :: proc(id, label: string, kind: setup.Button_Kind, em: f32, _: rawptr) -> bool {
-	// (the setup's kinds say only how prominent a button is: its intent is what it does)
-	icon, intent := "", ui.Intent.Neutral
-	switch id {
-	case "###setup_uninstall": icon, intent = lucide.TRASH_2, .Danger
-	case "###setup_install":   icon, intent = lucide.CHECK, .Success
-	case "###setup_launch":    icon, intent = lucide.CHEVRON_RIGHT, .Primary
-	case:
-		switch kind {
-		case .Normal: intent = .Neutral
-		case .Accent: intent = .Primary
-		case .Danger: intent = .Danger
-		}
-	}
-	return bevel_button(id, label, icon, intent).clicked
+setup_button :: proc(id, label, glyph: string, intent: ui.Intent, em: f32, _: rawptr) -> bool {
+	return bevel_button(id, label, glyph, intent).clicked
 }
 
 // Called by both Install and Uninstall before the packages write or remove: the record of Setup up to 0.20.0 goes, so that
