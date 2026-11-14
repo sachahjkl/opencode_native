@@ -1094,8 +1094,11 @@ fr Tout acquitter
 en Nothing yet
 fr Rien pour l'instant
 
-en Enter open    A acknowledge    Shift+A the session    Ctrl+Shift+A all
-fr Entrée ouvrir    A acquitter    Maj+A la session    Ctrl+Maj+A tout
+en Enter open    Space unfold    A acknowledge    Shift+A the session    Ctrl+Shift+A all
+fr Entrée ouvrir    Espace déplier    A acquitter    Maj+A la session    Ctrl+Maj+A tout
+
+en Enter open    ← → move    A acknowledge    Shift+A the session    Ctrl+Shift+A all
+fr Entrée ouvrir    ← → parcourir    A acquitter    Maj+A la session    Ctrl+Maj+A tout
 
 en Acknowledge the session
 fr Acquitter la session
@@ -1105,6 +1108,46 @@ fr Acquitter
 
 en Answer
 fr Répondre
+
+en Fold
+fr Replier
+
+en Unfold
+fr Déplier
+
+en REQUEST
+fr DEMANDE
+
+en REPORT
+fr COMPTE RENDU
+
+en FILES
+fr FICHIERS
+
+en ASKED
+fr DEMANDÉ
+
+en COMMAND
+fr COMMANDE
+
+en OUTPUT
+fr SORTIE
+
+en No answer
+fr Pas de réponse
+
+en Could not be read
+fr Lecture impossible
+
+en %d tool call
+en+ %d tool calls
+fr %d appel d'outil
+fr+ %d appels d'outils
+
+en and %d more
+en+ and %d more
+fr et %d autre
+fr+ et %d autres
 
 en The run failed
 fr L'exécution a échoué
@@ -1770,6 +1813,15 @@ fr Tout demander
 
 en When a session asks for a permission or a question and the window is not in front: the taskbar button flashes, and with notifications of the system, one says it.
 fr Quand une session demande une permission ou pose une question alors que la fenêtre n'est pas au premier plan : le bouton de la barre des tâches clignote, et avec les notifications du système, l'une d'elles le dit.
+
+en How "What you missed" shows what happened: one card at a time, with its request, the agent's last answer, the files it touched and its todo list; or a list whose items unfold in place.
+fr Comment « Ce que vous avez manqué » montre ce qui s'est passé : une carte à la fois, avec sa demande, la dernière réponse de l'agent, les fichiers qu'il a modifiés et sa liste de tâches ; ou une liste dont les éléments se déplient sur place.
+
+en Cards
+fr Cartes
+
+en List
+fr Liste
 
 en Badge
 fr Pastille

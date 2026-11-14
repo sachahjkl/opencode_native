@@ -2206,6 +2206,7 @@ the_bell_counts_what_was_missed_and_its_view_answers_the_keys :: proc(t: ^testin
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
 		app.prefs.notices_badge = true
+		pref_set(app, "notices.view", "list")
 		for id in ([3]string{"ses_1", "ses_2", "ses_3"}) {
 			if x := find_session(app, id); testing.expect(t, x != nil && x.parent == "", id) { x.idle, x.viewed = BENCH_EPOCH_MS, 0 }
 		}
@@ -2260,6 +2261,7 @@ the_view_of_what_was_missed_builds_only_its_rows_in_view :: proc(t: ^testing.T) 
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pref_set(app, "notices.view", "list")
 		log := missed_log(app)
 		for i in 0 ..< 300 {
 			notices.put(log, {key = missed_key(app, .Shell, fmt.tprintf("sh_%d", i)), group = missed_group(app, fmt.tprintf("ses_%d", 1 + i / 10)),
@@ -2277,6 +2279,141 @@ the_view_of_what_was_missed_builds_only_its_rows_in_view :: proc(t: ^testing.T) 
 		session.frames(s, 4)
 		testing.expect_value(t, app.missed.rows_stamp, stamp)
 		testing.expect_value(t, log.groups_made, made)
+	})
+}
+
+// The report of each of these sessions, as the server would give it: its prompt and its answer name the session.
+@(private = "file")
+missed_reports_given :: proc(app: ^App, ids: []string) {
+	for id in ids {
+		page := fmt.tprintf(`{{"data":[{{"id":"a","type":"assistant","content":[{{"type":"text","text":"The loader of %s is **fixed**."}},{{"type":"tool","id":"t","name":"edit","state":{{"input":{{"filePath":"src/%s.odin"}}}}}}]}},{{"id":"u","type":"user","text":"Fix the loader of %s"}}]}}`, id, id, id)
+		v, err := json.parse_string(page, parse_integers = true, allocator = context.temp_allocator)
+		assert(err == nil, page)
+		missed_report_load(app, id, v)
+	}
+}
+
+// Three ends nobody saw: three sessions whose runs ended.
+@(private = "file")
+missed_three_ends :: proc(app: ^App, t: ^testing.T) -> [3]string {
+	ids := [3]string{"ses_1", "ses_2", "ses_3"}
+	for id in ids {
+		if x := find_session(app, id); testing.expect(t, x != nil && x.parent == "", id) { x.idle, x.viewed = BENCH_EPOCH_MS, 0 }
+	}
+	marks_changed(app)
+	return ids
+}
+
+@(private = "file")
+card_count :: proc(s: ^session.Session) -> string { return ui.box_text(session.find(s, "card_count")) }
+
+// What was missed shows one card at a time by default, each with its session, its request and its report. Right goes to the
+// next card, Left back; A acknowledges the card shown and the next takes its place; with the history shown, A goes on to
+// the next card.
+@(test)
+what_was_missed_shows_one_card_at_a_time :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		ids := missed_three_ends(app, t)
+		session.frames(s, 2)
+		missed_reports_given(app, ids[:])
+		session.key(s, .N, {.Ctrl, .Shift})
+		session.frames(s, 4)
+		testing.expect(t, app.prefs.notices_cards, "cards: the default")
+		testing.expect(t, session.find(s, "mi_cards") != nil && session.find(s, "mi_list") == nil, "a card, no list")
+		testing.expect_value(t, card_count(s), "1 / 3")
+		testing.expect(t, session.find_text(s, "Session 1 about") != nil, "its session")
+		testing.expect(t, session.find_text(s, "Request") != nil, "its request")
+		testing.expect(t, session.find_text(s, "Fix the loader of ses_1") != nil, "the prompt")
+		testing.expect(t, session.find_text(s, "The loader of ses_1 is fixed") != nil, "the answer, as Markdown")
+		testing.expect(t, session.find_text(s, "src/ses_1.odin") != nil, "the file it wrote")
+		session.key(s, .Right)
+		session.frames(s, 2)
+		testing.expect_value(t, card_count(s), "2 / 3")
+		testing.expect(t, session.find_text(s, "Fix the loader of ses_2") != nil, "the next card")
+		session.key(s, .Left)
+		session.frames(s, 2)
+		testing.expect_value(t, card_count(s), "1 / 3")
+		// A: acknowledged, the next takes its place
+		log := missed_log(app)
+		first := missed_key(app, .End, "ses_1")
+		session.key(s, .A)
+		session.frames(s, 3)
+		testing.expect(t, log.live[first] == nil, "A acknowledges the card shown")
+		testing.expect_value(t, card_count(s), "1 / 2")
+		testing.expect(t, session.find_text(s, "Fix the loader of ses_2") != nil, "the next in its place")
+		// the history shown: what is acknowledged stays a card, A goes on to the next
+		session.click(s, "mi_hist")
+		session.frames(s, 3)
+		testing.expect_value(t, len(app.missed.cards_rows), 3)
+		second := missed_key(app, .End, "ses_2")
+		at := -1
+		for k, i in app.missed.cards_rows { if app.missed.rows[k].entry.key == second { at = i } }
+		if !testing.expect(t, at >= 0 && at < 2, "the second end, not the last card") { return }
+		app.missed.cards.at = at
+		session.frames(s, 2)
+		session.key(s, .A)
+		session.frames(s, 3)
+		testing.expect(t, log.live[second] == nil, "acknowledged")
+		testing.expect_value(t, app.missed.cards.at, at + 1)
+	})
+}
+
+// A wait's card says Answer, not Acknowledge: its act opens the session that waits, and the view closes.
+@(test)
+a_wait_is_answered_from_its_card :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		bench_event(app, `{"type":"permission.asked","data":{"request":{"id":"p1","sessionID":"ses_2","action":"bash","resources":["git push"]}}}`)
+		session.frames(s, 2)
+		command_run(app, command_find("view.notices"))
+		session.frames(s, 4)
+		testing.expect_value(t, card_count(s), "1 / 1")
+		testing.expect(t, session.find_text(s, "bash git push") != nil, "what is asked")
+		settle := session.find(s, "card_settle")
+		if testing.expect(t, settle != nil, "the card's act") { testing.expect(t, session.find_text(s, "Answer") != nil, "Answer") }
+		session.click(s, "card_settle")
+		session.frames(s, 3)
+		testing.expect_value(t, app.chat.id, "ses_2")
+		testing.expect(t, !app.cx.open[.Notices], "the view closes")
+		testing.expect(t, missed_log(app).live[missed_key(app, .Permission, "p1", "ses_2")] != nil, "a wait waits for its answer")
+	})
+}
+
+// The toggle of the header shows the list instead, and the preference keeps it. A row of the list unfolds in place (Right,
+// Space): what it was asked shows under it; Space folds it again.
+@(test)
+what_was_missed_is_a_list_whose_rows_unfold :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		ids := missed_three_ends(app, t)
+		session.frames(s, 2)
+		missed_reports_given(app, ids[:])
+		command_run(app, command_find("view.notices"))
+		session.frames(s, 4)
+		list_seg := named_under(s, session.find(s, "mi_mode"), "seg1")
+		if !testing.expect(t, list_seg != nil, "the toggle") { return }
+		session.click_at(s, session.center(list_seg))
+		session.frames(s, 3)
+		testing.expect(t, !app.prefs.notices_cards, "the list")
+		testing.expect_value(t, config.string_of(&app.cfg_prefs, "notices.view"), "list")
+		testing.expect(t, session.find(s, "mi_list") != nil && session.find(s, "mi_cards") == nil, "a list, no card")
+		sel := app.missed.vl.sel
+		if !testing.expect(t, sel >= 0 && sel < len(app.missed.rows) && app.missed.rows[sel].entry != nil, "an entry is chosen") { return }
+		testing.expect(t, session.find(s, "brief") == nil, "folded")
+		session.key(s, .Right)
+		session.frames(s, 3)
+		testing.expect(t, app.missed.unfolded[app.missed.rows[sel].entry.id], "Right unfolds it")
+		testing.expect(t, session.find(s, "brief") != nil, "unfolded in place")
+		testing.expect(t, session.find_text(s, "Fix the loader of ses_1") != nil, "its request")
+		testing.expect(t, session.find_text(s, "The loader of ses_1 is fixed") != nil, "its answer, as Markdown")
+		testing.expect(t, session.find_text(s, "**fixed**") == nil, "no Markdown marks shown")
+		session.key(s, .Space)
+		session.frames(s, 3)
+		testing.expect(t, session.find(s, "brief") == nil, "Space folds it")
 	})
 }
 

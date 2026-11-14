@@ -77,6 +77,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "notify.finished", title = i18n.later("Finished"), description = i18n.later("When a session that is not in front of you ends its run: nothing, a toast, a toast and the taskbar button flashing, or a notification of the system (a click on it opens the session)."), kind = .String, default = {s = "system"}, choices = {"off", "toast", "flash", "system"}, choice_labels = {i18n.later("Off"), i18n.later("Toast"), i18n.later("Flash"), i18n.later("System")}},
 	{name = "permission.new_sessions", title = i18n.later("New sessions"), description = i18n.later("The approvals a session made here starts with, set on the server (the composer's shield changes them for one session): the server's configured rules, file edits allowed, everything allowed (a policy's deny stays), or every action asked."), kind = .String, default = {s = "configured"}, choices = {"configured", "allow_edits", "allow_all", "ask_all"}, choice_labels = {i18n.later("Configured"), i18n.later("Allow edits"), i18n.later("Allow all"), i18n.later("Ask all")}},
 	{name = "notify.permission", title = i18n.later("Permission"), description = i18n.later("When a session asks for a permission or a question and the window is not in front: the taskbar button flashes, and with notifications of the system, one says it."), kind = .Bool, default = {b = true}},
+	{name = "notices.view", title = i18n.later("View"), description = i18n.later("How \"What you missed\" shows what happened: one card at a time, with its request, the agent's last answer, the files it touched and its todo list; or a list whose items unfold in place."), kind = .String, default = {s = "cards"}, choices = {"cards", "list"}, choice_labels = {i18n.later("Cards"), i18n.later("List")}},
 	{name = "notices.badge", title = i18n.later("Badge"), description = i18n.later("The count of what you missed on the bell of the title bar: runs that ended, questions and permissions that wait, commands, scheduled runs and sub-agents that ended."), kind = .Bool, default = {b = true}},
 	{name = "notices.keep", title = i18n.later("Keep"), description = i18n.later("How many entries that you acknowledged \"What you missed\" keeps in its history. What is not acknowledged yet always stays."), kind = .Int, default = {i = notices.CAP}, bounded = true, min = NOTICES_KEEP_MIN, max = NOTICES_KEEP_MAX},
 	{name = "appearance.throbber", title = i18n.later("Throbber"), description = i18n.later("What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing."), kind = .String, default = {s = "board"}, choices = {"board", "orbit", "scanner", "none"}, choice_labels = {i18n.later("Board"), i18n.later("Orbit"), i18n.later("Scanner"), i18n.later("None")}},
@@ -119,6 +120,7 @@ Prefs :: struct {
 	diff_layout:  diff.Layout,
 	notify:       string,
 	notify_perm:  bool,
+	notices_cards: bool,  // notices.view: "What you missed" shows one card at a time (else a list)
 	notices_badge: bool,  // notices.badge: the bell's count
 	notices_keep: int,    // notices.keep: the history of "What you missed"
 	content_zoom: f32,
@@ -217,6 +219,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.diff_layout = diff_layout_of(config.string_of(p, "conversation.diff_layout"))
 	s.notify = config.string_of(p, "notify.finished")
 	s.notify_perm = config.bool_of(p, "notify.permission")
+	s.notices_cards = config.string_of(p, "notices.view") == "cards"
 	s.notices_badge = config.bool_of(p, "notices.badge")
 	s.notices_keep = int(config.int_of(p, "notices.keep"))
 	if app.missed.opened { app.missed.log.cap = s.notices_keep }   // (the history past it goes at the next entry)
@@ -687,7 +690,7 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "appearance", title = i18n.later("Appearance"), icon = lucide.PALETTE},
 	{category = "window", title = i18n.later("Window"), icon = lucide.APP_WINDOW},
 	{category = "conversation", title = i18n.later("Conversation"), icon = lucide.MESSAGE_SQUARE},
-	{category = "behaviour", title = i18n.later("Behaviour"), icon = lucide.BELL, names = {"composer.send", "sidebar.mode", "sidebar.subagents", "notify.finished", "permission.new_sessions", "notify.permission", "notices.badge", "notices.keep"}},
+	{category = "behaviour", title = i18n.later("Behaviour"), icon = lucide.BELL, names = {"composer.send", "sidebar.mode", "sidebar.subagents", "notify.finished", "permission.new_sessions", "notify.permission", "notices.view", "notices.badge", "notices.keep"}},
 	{category = "scrolling", title = i18n.later("Scrolling"), icon = lucide.SCROLL},
 	{category = "input", title = i18n.later("Input"), icon = lucide.KEYBOARD},
 	{category = "timing", title = i18n.later("Delays and menus"), icon = lucide.TIMER},

@@ -59,11 +59,15 @@ Missed :: struct {
 	server:       int,
 	front:        bool,                          // the window was in front
 	scheduled:    map[string]Missed_Scheduled,   // by session (keys owned)
+	reports:      map[string]Missed_Report,      // what the runs did, by session (keys owned; missed_report.odin)
 	// the view (missed_view.odin), made again when the log, the server or the history toggle changes
 	history:      bool,                          // the acknowledged entries are shown too
 	rows:         [dynamic]Missed_Row,
 	ids:          [dynamic]u64,
 	selectable:   [dynamic]bool,
+	cards_rows:   [dynamic]int,                  // the rows of the entries, in their order: the cards
+	cards:        ui.Card_Stack,
+	unfolded:     map[u64]bool,                  // the entries unfolded in the list, by id
 	rows_made:    bool,
 	rows_log:     u64,
 	rows_server:  int,
@@ -97,6 +101,7 @@ missed_close :: proc(app: ^App) {
 	m.shown = ""
 	m.synced = false
 	missed_rows_free(app)
+	missed_reports_free(app)
 }
 
 // The log, opened in memory when nothing opened it (a test).
@@ -207,6 +212,8 @@ missed_on_screen :: proc(app: ^App, root: string) -> bool {
 @(private = "file")
 missed_put :: proc(app: ^App, kind: Missed_Kind, key, root, title, text: string, outcome: Sub_State, at: f64) -> ^notices.Entry {
 	e, _ := notices.put(missed_log(app), {key = key, group = missed_group(app, root), title = title, text = missed_excerpt(text), kind = u16(kind), outcome = u8(outcome), at = i64(at)})
+	// (a new end: what the run did is read again)
+	if e != nil { missed_report_put(app, missed_report_session(app, e)) }
 	return e
 }
 
@@ -437,6 +444,8 @@ missed_view_open :: proc(app: ^App) {
 	app.cx.open[.Notices] = true
 	app.missed.fresh = true
 	notices.seen_all(missed_log(app))
+	missed_rows_refresh(app)
+	missed_reports_want_open(app)
 }
 
 // The oldest open entry of this server whose session is not the one shown: its session opens (the queue of what was missed).

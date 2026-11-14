@@ -302,6 +302,7 @@ Req_Kind :: enum u8 {
 	Output_State,   // GET /api/shell/:id: ... how it stands
 	Context,        // GET /api/session/:id/context: what the model has in front of it (stats.odin)
 	Session_Viewed, // POST /api/session/:id/view: the end of its last run was seen (sidebar.odin)
+	Missed_Report,  // GET /api/session/:id/message: what a run of a session "What you missed" lists did (missed_report.odin)
 }
 
 Request :: struct {
@@ -572,6 +573,7 @@ quiet_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (t
 	.Output_State     = {json = true, on_ok = output_state_on_ok, on_fail = output_view_on_fail},
 	.Context          = {json = true, life = .Chat, on_ok = context_on_ok, on_fail = quiet_on_fail},
 	.Session_Viewed   = {on_fail = quiet_on_fail},   // (session.viewed says it, to every client; the next list shows it as it stands)
+	.Missed_Report    = {json = true, on_ok = missed_report_on_ok, on_fail = missed_report_on_fail, on_left = missed_report_on_left},   // (life .Server: the view shows it whatever the conversation is)
 }
 
 // The conversation it was asked for is gone: what it says is about nothing shown, success or failure.

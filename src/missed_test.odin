@@ -356,6 +356,107 @@ what_was_missed_is_each_servers :: proc(t: ^testing.T) {
 	app.servers = nil
 }
 
+// A page of a session's messages, the newest first: a run after the prompt "Fix the loader...", and a message of the run
+// before it, which is not this run's.
+MISSED_REPORT_PAGE :: `{"data":[
+	{"id":"m5","type":"assistant","time":{"created":5},"content":[{"type":"text","text":"All done: the loader is fixed."}]},
+	{"id":"m4","type":"assistant","time":{"created":4},"content":[
+		{"type":"tool","id":"t3","name":"todowrite","state":{"status":"completed","input":{"todos":[{"content":"read","status":"completed"},{"content":"fix","status":"in_progress"},{"content":"ship","status":"pending"}]}}},
+		{"type":"tool","id":"t4","name":"edit","state":{"status":"completed","input":{"filePath":"a/b.odin","oldString":"x","newString":"y"}}}]},
+	{"id":"m3","type":"assistant","time":{"created":3},"content":[{"type":"text","text":"First I look."},
+		{"type":"tool","id":"t1","name":"edit","state":{"status":"completed","input":{"filePath":"a/b.odin","oldString":"1","newString":"2"}}},
+		{"type":"tool","id":"t2","name":"write","state":{"status":"completed","input":{"filePath":"c.md","content":"# c"}}}]},
+	{"id":"m2","type":"user","time":{"created":2},"text":"Fix the loader\nand say what broke"},
+	{"id":"m1","type":"assistant","time":{"created":1},"content":[{"type":"text","text":"An older answer."},
+		{"type":"tool","id":"t0","name":"write","state":{"status":"completed","input":{"filePath":"old.txt","content":""}}}]}
+]}`
+
+// The report of a run: its prompt, the agent's last answer whole, the files its tools wrote (each once, in the order of the
+// calls), its last todo list with each item's state. What came before the prompt is another run's.
+@(test)
+a_report_is_what_the_run_did :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	v, err := json.parse_string(MISSED_REPORT_PAGE, parse_integers = true, allocator = context.temp_allocator)
+	testing.expect(t, err == nil)
+	r: Missed_Report
+	defer missed_report_free(&r)
+	missed_report_read(&r, v)
+	testing.expect_value(t, r.request, "Fix the loader\nand say what broke")
+	testing.expect_value(t, r.answer, "All done: the loader is fixed.")
+	testing.expect_value(t, r.tools, 4)
+	if testing.expect_value(t, len(r.files), 2) {
+		testing.expect_value(t, r.files[0], "a/b.odin")
+		testing.expect_value(t, r.files[1], "c.md")
+	}
+	if testing.expect_value(t, len(r.todos), 3) {
+		testing.expect_value(t, r.todos[0], Todo{"read", "completed"})
+		testing.expect_value(t, r.todos[1], Todo{"fix", "in_progress"})
+		testing.expect_value(t, r.todos[2], Todo{"ship", "pending"})
+	}
+	testing.expect_value(t, text_head("one\ntwo\nthree\nfour\nfive", 2), "one\ntwo")
+	// read again: what the first page said goes
+	again, _ := json.parse_string(`{"data":[{"id":"m9","type":"user","text":"Again"}]}`, parse_integers = true, allocator = context.temp_allocator)
+	missed_report_read(&r, again)
+	testing.expect_value(t, r.request, "Again")
+	testing.expect_value(t, r.answer, "")
+	testing.expect_value(t, len(r.files), 0)
+	testing.expect_value(t, len(r.todos), 0)
+}
+
+// An end that is put asks for its report, once: a sync that puts nothing, the view that opens, ask nothing more while it is
+// on its way. The same session's next end asks again.
+@(test)
+an_end_asks_for_its_report_once :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	listed(app, MISSED_LIST)
+	missed_sync(app)
+	testing.expect_value(t, bench_count(.Missed_Report), 2)   // ("ended" and "never")
+	relisted(app)
+	missed_sync(app)
+	missed_view_open(app)
+	testing.expect_value(t, bench_count(.Missed_Report), 2)
+	r := bench_take(t, .Missed_Report)
+	testing.expect_value(t, r.path, "/api/session/ended/message?limit=50&order=desc")
+	bench_answer(app, r, 200, MISSED_REPORT_PAGE)
+	if rep := missed_report_find(app, "ended"); testing.expect(t, rep != nil) {
+		testing.expect_value(t, rep.state, Missed_Report_State.Read)
+		testing.expect_value(t, rep.answer, "All done: the loader is fixed.")
+	}
+	missed_view_open(app)
+	testing.expect_value(t, bench_count(.Missed_Report), 1)   // (read: not asked again)
+	bench_event(app, `{"type":"session.execution.started","data":{"sessionID":"ended"}}`)
+	bench_event(app, `{"type":"session.execution.succeeded","data":{"sessionID":"ended"}}`)
+	testing.expect_value(t, bench_count(.Missed_Report), 2)   // (a new end: read again)
+	// a report that could not be read is said so, and asked again only when asked
+	bench_lost(app, bench_take(t, .Missed_Report))
+	bench_lost(app, bench_take(t, .Missed_Report))
+	if rep := missed_report_find(app, "ended"); testing.expect(t, rep != nil) { testing.expect_value(t, rep.state, Missed_Report_State.Failed) }
+	missed_view_open(app)
+	testing.expect_value(t, bench_count(.Missed_Report), 0)
+}
+
+// A report stays while an entry of the log refers to its session, acknowledged or not; when none does, it goes.
+@(test)
+a_report_goes_with_the_last_entry_of_its_session :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	listed(app, MISSED_LIST)
+	missed_sync(app)
+	r := bench_take(t, .Missed_Report)
+	testing.expect_value(t, r.tag, "ended")
+	bench_answer(app, r, 200, MISSED_REPORT_PAGE)
+	missed_acknowledge(app, missed_key(app, .End, "ended"))
+	missed_rows_refresh(app)
+	testing.expect(t, missed_report_find(app, "ended") != nil, "acknowledged: in the history, with its report")
+	missed_session_gone(app, "ended")
+	missed_rows_refresh(app)
+	testing.expect(t, missed_report_find(app, "ended") == nil, "no entry of it: its report goes")
+	testing.expect(t, missed_report_find(app, "never") != nil, "another session's stays")
+	missed_close(app)
+	testing.expect_value(t, len(app.missed.reports), 0)
+}
+
 @(test)
 an_excerpt_is_one_line_of_whole_characters :: proc(t: ^testing.T) {
 	testing.expect_value(t, missed_excerpt("  first line  \nsecond"), "first line")
