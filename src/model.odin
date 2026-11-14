@@ -116,6 +116,8 @@ Message :: struct {
 	streaming: bool,
 	// a sub-agent's result handed back to this session (a synthetic message whose metadata.source is "subagent")
 	sub_child, sub_state, sub_agent, sub_desc: string,
+	// synthetic: the harness's reports of background jobs that ended, when its text is only those (job_reports.odin)
+	jobs:      []Job_Report,
 	images:    [dynamic]Image_Ref,   // attached to a user's prompt
 	from_page: bool,                 // read from a page (what the stream builds is only pieces)
 	touched:   Seq,                  // the stream's clock when it last changed it (a page asked before that is older: chat_load)
@@ -803,6 +805,8 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 			m.sub_agent = strings.clone(jstr(it, "metadata", "agent"), a)
 			m.sub_desc = strings.clone(jstr(it, "description"), a)
 			m.text = strings.clone(subagent_body(jstr(it, "text")), a)
+		} else if jobs, ok := jobs_parse(m.text, a); ok {
+			m.jobs = jobs
 		}
 	case "shell":
 		m.kind = .Shell

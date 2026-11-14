@@ -145,7 +145,7 @@ bench_sessions :: proc() -> string {
 
 // The App of main, on an offscreen window, with the made-up sessions and conversation loaded. It allocates as the program
 // does, on the heap (the test's allocator tracks each allocation: slower, and the App keeps what it made until it ends).
-@(private = "file")
+@(private)
 bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	context.allocator = runtime.heap_allocator()
 	app = new(App)
@@ -248,6 +248,9 @@ bench_end :: proc(p: rawptr) {
 	app := (^App)(p)
 	context.allocator = runtime.heap_allocator()
 	ui.destroy(&app.state)
+	ui.family_face_destroy(&app.term_family)
+	ui.font_picker_destroy(&app.term_picker)
+	ui.font_families_destroy(&app.term_families)
 	draw.destroy(&app.dc)
 	render.destroy(&app.r)
 	font.destroy(&app.fonts)
@@ -702,6 +705,37 @@ the_menus_have_their_icons :: proc(t: ^testing.T) {
 	})
 }
 
+// The window's commands work over the settings (a view shown as a dialog), their search with the keyboard: Ctrl+K opens
+// the palette there, which lists the settings; F1 shows the keys.
+@(test)
+the_palette_opens_from_the_settings :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		session.key(s, .Comma, {.Ctrl})
+		session.frames(s, 3)
+		testing.expect(t, ui.view_is_open(&app.program_views, SETTINGS_VIEW), "Ctrl+, opens the settings")
+		testing.expect(t, overlay_open(app), "a dialog over the window")
+		session.type_text(s, "font")
+		session.frames(s, 2)
+		session.key(s, .K, {.Ctrl})
+		session.frames(s, 3)
+		testing.expect(t, ui.view_is_open(&app.program_views, COMMANDS_VIEW), "Ctrl+K opens the palette over the settings")
+		session.type_text(s, ":terminal font")
+		session.frames(s, 3)
+		testing.expect(t, session.find_text(s, "Terminal font") != nil, "the palette lists the settings")
+		session.key(s, .Escape)
+		session.frames(s, 2)
+		testing.expect(t, !ui.view_is_open(&app.program_views, COMMANDS_VIEW) && ui.view_is_open(&app.program_views, SETTINGS_VIEW), "the settings under it")
+		session.key(s, .F1)
+		session.frames(s, 3)
+		testing.expect(t, ui.view_is_open(&app.program_views, HELP_VIEW), "F1 shows the keys over the settings")
+		ui.view_close(&app.program_views, HELP_VIEW)
+		ui.view_close(&app.program_views, SETTINGS_VIEW)
+		session.frames(s, 2)
+	})
+}
+
 // An artifact the session made is a card after the message it was made in (the last one, here); a click shows it.
 @(test)
 an_artifact_of_the_session_is_a_card :: proc(t: ^testing.T) {
@@ -861,22 +895,25 @@ the_console_screens :: proc(t: ^testing.T) {
 	})
 }
 
-// The shells have a face of their own, Fira Mono (no ligatures), not the code's; a family of the system when one is asked.
+// The shells have a face of their own, Fira Mono (no ligatures), not the code's; a family of the system when one is
+// asked, once the toolkit's chore loaded it, with no restart; Default brings Fira Mono back.
 @(test)
 the_shells_have_their_own_face :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
-		app, _ := bench_app(t)
+		app, s := bench_app(t)
 		testing.expect(t, app.term_font == app.own.term[0] && app.term_font != app.mono, "Fira Mono, not DM Mono")
 		testing.expect(t, app.term_font_bold == app.own.term[1] && app.term_font_bold != app.term_font, "its bold")
-		testing.expect_value(t, app.term_face, "")
-		pref_set(app, "appearance.text.terminal_font", "DejaVu Sans Mono")
-		defer pref_set(app, "appearance.text.terminal_font", "")
-		if app.term_face != "" {   // (where it is installed)
-			testing.expect_value(t, app.term_face, "DejaVu Sans Mono")
+		pref_set(app, TERMINAL_FONT_PREF, "DejaVu Sans Mono")
+		defer pref_set(app, TERMINAL_FONT_PREF, "")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return !(^App)(s.user).term_family.loading }, "the chore's answer")
+		session.frame(s)
+		if app.term_family.face != 0 {   // (where it is installed)
+			testing.expect_value(t, app.term_font, app.term_family.face)
 			testing.expect(t, app.term_font != app.own.term[0], "the system's")
 		}
-		pref_set(app, "appearance.text.terminal_font", "")
+		pref_set(app, TERMINAL_FONT_PREF, "")
+		session.frame(s)
 		testing.expect(t, app.term_font == app.own.term[0], "back to its own")
 	})
 }
@@ -2687,6 +2724,56 @@ what_was_missed_is_a_list_whose_rows_unfold :: proc(t: ^testing.T) {
 	})
 }
 
+// In the list, Shift+Down selects the next entry too (over its session's header), and A acknowledges both; the third
+// stays. Escape on several keeps the cursor's row alone, the view open; a row unfolded stays selected.
+@(test)
+what_was_missed_acknowledges_every_row_selected :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		pref_set(app, "notices.view", "list")
+		ids := missed_three_ends(app, t)
+		session.frames(s, 2)
+		missed_reports_given(app, ids[:])
+		command_run(app, command_find("view.notices"))
+		session.frames(s, 4)
+		m := &app.missed
+		testing.expect_value(t, len(m.vl.selected), 1)   // (the cursor's row, lit)
+		selected_keys :: proc(m: ^Missed) -> (keys: [dynamic]string) {
+			keys = make([dynamic]string, context.temp_allocator)
+			// (cloned: an entry acknowledged frees its key)
+			for r, k in m.rows { if r.entry != nil && m.ids[k] in m.vl.selected { append(&keys, strings.clone(r.entry.key, context.temp_allocator)) } }
+			return
+		}
+
+		session.key(s, .Down, {.Shift})
+		session.frames(s, 2)
+		testing.expect_value(t, len(m.vl.selected), 2)
+		// Escape: the cursor's row alone, the view still open
+		session.key(s, .Escape)
+		session.frames(s, 2)
+		testing.expect_value(t, len(m.vl.selected), 1)
+		testing.expect(t, ui.view_is_open(&app.program_views, MISSED_VIEW), "the first Escape keeps the view")
+		// Shift+Up: the two again; Right unfolds the cursor's row, which stays selected (another identity)
+		session.key(s, .Up, {.Shift})
+		session.frames(s, 2)
+		session.key(s, .Right)
+		session.frames(s, 3)
+		chosen := selected_keys(m)
+		if !testing.expect_value(t, len(chosen), 2) { return }
+		log := missed_log(app)
+		third := ""
+		for id in ids {
+			key := missed_key(app, .End, id)
+			if key != chosen[0] && key != chosen[1] { third = key }
+		}
+		session.key(s, .A)
+		session.frames(s, 3)
+		testing.expect(t, log.live[chosen[0]] == nil && log.live[chosen[1]] == nil, "A acknowledges both")
+		testing.expect(t, third != "" && log.live[third] != nil, "the third stays")
+	})
+}
+
 // The prompts' marks on the conversation's scroll bar: a mark for each prompt, in the conversation's order, on a long
 // conversation opened at its bottom. A click on the mark of a prompt far above (never built) puts it at the top of the view in
 // that frame, no glide; its plate has the keyboard, and the view stays on it while the heights around it settle. The setting
@@ -2733,5 +2820,59 @@ the_prompt_rail_goes_to_a_prompt_at_once :: proc(t: ^testing.T) {
 		plain, _, _ := ui.scrollbar_rects(session.get(s, "chat"))
 		testing.expectf(t, plain.max.x - plain.min.x < marked.max.x - marked.min.x, "narrower: %v, was %v", plain, marked)
 		testing.expectf(t, plain.min.y < marked.min.y, "from higher: %v, was %v", plain, marked)
+	})
+}
+
+// What a person reads in a call is selectable: the diff an edit shows in the conversation (folded, as it is before it is
+// opened) is selected by a drag and copied by Ctrl+C, as in its full view.
+@(test)
+an_edits_inline_diff_is_selectable :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		page := `{"data":[{"id":"msg_e_a","type":"assistant","finish":"stop","time":{"created":1,"completed":2},"content":[{"type":"tool","id":"call_e","name":"edit","state":{"status":"completed","input":{"filePath":"src/a.odin","oldString":"the old line","newString":"the fresh line"}},"time":{"created":1,"completed":2}}]}],"cursor":{"next":""}}`
+		v, err := json.parse_string(page, allocator = context.temp_allocator)
+		testing.expect(t, err == nil)
+		chat_load(app, v, false)
+		chat_scroll_event(app, Scroll_Signal.Snap)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "lines") != nil }, "the diff, folded")
+		lines := session.find(s, "lines")
+		if lines == nil { return }
+		added := session.find(s, "t", 1, within = lines)   // (its second line: what the edit wrote)
+		if !testing.expect(t, added != nil, "its lines' text") { return }
+		testing.expect(t, .Selectable in added.flags, "selectable")
+		mid := (added.rect.min.y + added.rect.max.y) * 0.5
+		session.drag(s, {added.rect.min.x + 1, mid}, {added.rect.max.x - 1, mid})
+		session.key(s, .C, {.Ctrl})
+		session.frames(s, 2)
+		testing.expectf(t, strings.contains(session.clipboard(s), "the fresh line"), "copied: %q", session.clipboard(s))
+		testing.expect(t, !part_open(app, "call_e", false), "a drag is no click: the call stays folded")
+	})
+}
+
+// The font picker of the settings' page (the program's own control) takes its Escape: the picker closes, the settings stay.
+@(test)
+escape_in_a_font_picker_closes_the_picker_alone :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		settings_open_on(app, "appearance")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "fb_appearance.text.terminal_font") != nil }, "the terminal font's button")
+		session.wait_idle(s)
+		// (opened from the keyboard: the button is far down the page, under the dialog's fold; a click at its centre lands
+		// on the scrim, which closes the settings)
+		button := session.find(s, "fb_appearance.text.terminal_font")
+		if !testing.expect(t, button != nil, "the button") { return }
+		app.state.focus_key = button.key
+		session.frames(s, 2)
+		session.key(s, .F4)
+		// (open, its search field has the keyboard: the field is where its Escape is read)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "fp_field") != nil }, "the picker, open")
+		session.wait_idle(s)
+		if !testing.expect(t, app.term_picker.open, "the picker opens") { return }
+		session.key(s, .Escape)
+		session.wait_idle(s)
+		testing.expect(t, !app.term_picker.open, "Escape closes it")
+		testing.expect(t, ui.view_is_open(&app.program_views, SETTINGS_VIEW), "and the settings stay")
 	})
 }

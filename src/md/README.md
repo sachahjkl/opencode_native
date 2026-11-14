@@ -10,3 +10,5 @@ purpose, the decisions, what was refused.
 
 - [features/views.md](features/views.md): the dialogs and the panels as views; the program's state as the truth of what
   is open; a shell's input in a window of its own; the Preview's page across windows.
+- [features/missed.md](features/missed.md): several entries of What you missed selected and acknowledged at once.
+- [features/job-reports.md](features/job-reports.md): the harness's reports of ended background jobs, read as cards.

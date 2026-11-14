@@ -127,7 +127,7 @@ code_row :: proc(app: ^App, no: int, s: string, k: int, em: f32) {
 	if ui.row(.Center, id = fmt.tprintf("###cl%d", k)) {
 		gutter("n", no, em)
 		ui.spacer(ui.px(em * 0.7))
-		text("t", line_shown(s), hex(HEX_TOOL_OUTPUT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
+		text("t", line_shown(s), hex(HEX_TOOL_OUTPUT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), flags = {.Selectable}}, ui.fill())
 	}
 }
 
@@ -204,7 +204,7 @@ search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut:
 			if ui.row(.Center, id = fmt.tprintf("###sf%d", k)) {
 				ui.spacer(ui.px(em * 0.75))
 				is_file := strings.has_suffix(t, ":") || strings.contains_any(t, "\\/")
-				text("f", strings.trim_suffix(t, ":"), is_file ? hex(HEX_TEXT_SOFT) : hex(HEX_FAINT), ui.Style_Mod{font = is_file ? app.mono_bold : app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
+				text("f", strings.trim_suffix(t, ":"), is_file ? hex(HEX_TEXT_SOFT) : hex(HEX_FAINT), ui.Style_Mod{font = is_file ? app.mono_bold : app.mono, font_size = math.round(em * FS_SMALL), flags = {.Selectable}}, ui.fill())
 			}
 			k += 1
 		}

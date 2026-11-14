@@ -16,7 +16,6 @@ import "core:strconv"
 import "core:strings"
 import "gt:config"
 import desktop "gt:desktop"
-import "gt:font"
 import "gt:platform"
 import i18n "gt:i18n"
 import prefs_page "gt:prefs_page"
@@ -56,8 +55,11 @@ HEX_MCP_NAME       :: 0xf0f0f0ff
 HEX_WORKSPACE_NAME :: 0xe0e0e0ff
 HEX_CATALOG_NAME   :: 0xe8e8e8ff
 
+// The shells' family: the client's own setting, beside the toolkit's three (prefs_page.UI_FONT_PREF...).
+TERMINAL_FONT_PREF :: "appearance.text.terminal_font"
+
 PREF_DEFS := [?]config.Def{
-	{name = "appearance.text.terminal_font", title = i18n.later("Terminal font"), description = i18n.later("The face of the shells: the client's own (automatic: Fira Mono, no ligatures), the system's usual monospace, or any installed family."), kind = .String, default = {s = ""}},
+	{name = TERMINAL_FONT_PREF, title = i18n.later("Terminal font"), description = i18n.later("The family of the shells. Default: the client's own, Fira Mono, with no ligatures."), kind = .String, default = {s = ""}},
 	{name = "appearance.content_zoom", title = i18n.later("Content zoom"), description = i18n.later("Zoom of the conversation alone, whatever the interface's: each session's until it has its own (Ctrl + = / - over it, Ctrl + wheel; Ctrl + 0 brings it back to this one)."), kind = .Float, default = {f = 1}, bounded = true, min = CONTENT_ZOOM_MIN, max = CONTENT_ZOOM_MAX},
 	{name = "conversation.width", title = i18n.later("Width"), description = i18n.later("Widest the conversation column gets, in logical pixels."), kind = .Int, default = {i = 880}, bounded = true, min = COLUMN_W_MIN, max = COLUMN_W_MAX},
 	{name = "conversation.reasoning", title = i18n.later("Reasoning"), description = i18n.later("How the model's reasoning shows: folded under a line, unfolded, or not at all."), kind = .String, default = {s = "collapsed"}, choices = {"collapsed", "expanded", "hidden"}, choice_labels = {i18n.later("Collapsed"), i18n.later("Expanded"), i18n.later("Hidden")}},
@@ -179,9 +181,10 @@ prefs_init :: proc(app: ^App, file: string) {
 	// file): its texts are the English keys, whatever the system's language
 	if file != "" { prefs_page.language_start(&app.cfg_prefs, PROGRAM_CATALOGUES) }
 	// the toolkit's settings applied to it now, then each one as it changes (config.watch): its zoom, density, rounding,
-	// motion, scrolling, delays, text rendering
-	targets := prefs_page.Standard_Targets{}
-	if app.win != nil { targets = {renderer = &app.r, fonts = &app.fonts, partial_redraw = &app.window.partial_redraw} }
+	// motion, scrolling, delays, text rendering, the families of the interface, the answers and code (live: the client's
+	// own faces are their Default; fonts_follow takes the faces in use)
+	targets := prefs_page.Standard_Targets{faces = own_text_faces(app)}
+	if app.win != nil { targets = {renderer = &app.r, fonts = &app.fonts, partial_redraw = &app.window.partial_redraw, faces = own_text_faces(app)} }
 	prefs_page.standard_watch(&app.standard, &app.cfg_prefs, &app.state, targets)
 	prefs_refresh(app)
 }
@@ -236,10 +239,9 @@ prefs_refresh :: proc(app: ^App) {
 	updates_prefs(app)
 	title_apply(app)
 
-	// the faces, when either preference changed (a family is opened once: the font state keeps it)
-	if wanted := fmt.tprintf("%s\n%s\n%s\n%s", config.string_of(p, "appearance.text.ui_font"), config.string_of(p, "appearance.text.mono_font"), config.string_of(p, "appearance.text.prose_font"), config.string_of(p, "appearance.text.terminal_font")); wanted != app.fonts_wanted {
-		fonts_apply(app)
-	}
+	// the shells' family, loaded on a chore (the same family again: nothing); the interface's, the answers' and code's
+	// are the toolkit's (standard_watch), and fonts_follow takes them all
+	ui.family_face_set(&app.state, &app.term_family, strings.trim_space(config.string_of(p, TERMINAL_FONT_PREF)), ui.text_font_source(&app.state))
 
 	theme_refresh(&app.theme)
 	terms_recolour(app)
@@ -663,9 +665,10 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "catalog", title = i18n.later("Providers & skills"), icon = lucide.LIST, build = proc(user: rawptr, em: f32) { page_catalog((^App)(user), em) }},
 }
 
-// The font preferences: their control is this program's (font_button: its faces, the installed families).
+// The preferences whose control is this program's: the terminal font (font_button). The toolkit's three family
+// settings have the toolkit's picker.
 @(private = "file")
-FONT_PREFS := [?]string{"appearance.text.ui_font", "appearance.text.prose_font", "appearance.text.mono_font", "appearance.text.terminal_font"}
+CUSTOM_PREFS := [?]string{TERMINAL_FONT_PREF}
 
 settings_open :: proc(app: ^App) {
 	ui.view_open(&app.program_views, SETTINGS_VIEW, app)
@@ -695,7 +698,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 		themes_file = app.cx.theme.file.path != "" ? &app.cx.theme.file : nil,
 		// (the Updates page: the Updater's state and its buttons under update.auto, as in every program of the toolkit)
 		updater = app.updater, restart = proc(user: rawptr) { app_restart((^App)(user)) },
-		custom_names = FONT_PREFS[:],
+		custom_names = CUSTOM_PREFS[:],
 		custom = proc(user: rawptr, name: string, em: f32) { font_button((^App)(user), name, em) },
 		page_foot = settings_page_foot,
 		licence = licence_page(app), install = &app.install, diagnostics = &app.window,
@@ -733,44 +736,14 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 	}
 }
 
-// The button of a font preference (its face) and its picker: Automatic (the client's own), the other choice, then the
-// installed families, matched as one types.
+// The terminal font's control: the toolkit's font picker (its families read on a chore at its first opening, the
+// monospace ones first), Default naming the client's own Fira Mono.
 font_button :: proc(app: ^App, name: string, em: f32) {
-	term := name == "appearance.text.terminal_font"
-	mono := name == "appearance.text.mono_font" || term
-	prose := name == "appearance.text.prose_font"
-	want := config.string_of(&app.cfg_prefs, name)
-	face := term ? app.term_face : mono ? app.mono_face : prose ? app.prose_face : app.ui_face
-	own := term ? "Fira Mono" : mono ? "DM Mono" : prose ? "Newsreader" : "Hanken Grotesk"
-	second := prose ? FONT_SAME : FONT_SYSTEM
-	// the button names the face in use; a faint word before it says how it was chosen
-	mode, shown: string
-	switch want {
-	case "", FONT_BUILTIN: mode, shown = i18n.tr("auto"), own
-	case FONT_SYSTEM:      mode, shown = i18n.tr("system"), face != "" ? face : own
-	case FONT_SAME:        mode, shown = i18n.tr("same"), app.ui_face != "" ? app.ui_face : "Hanken Grotesk"
-	case:                  mode, shown = face == want ? "" : i18n.tr("not installed"), want
-	}
-	if mode != "" {
-		text("fm", mode, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)})
-		ui.spacer(ui.px(em * 0.5))
-	}
-	sig := ui.button(fmt.tprintf("fb_%s", name), ui.text_shown(shown), o = {width = ui.px(em * 13)})
-	if sig.clicked {
-		if app.picker.open && app.picker.id == name { app.picker.open = false } else { picker_open(app, name, sig.box.rect) }
-	}
-	if !(app.picker.open && app.picker.id == name) { return }
-	if app.font_families == nil { app.font_families = font.system_families(&app.fonts) }
-	items := make([dynamic]Pick_Item, context.temp_allocator)
-	append(&items, Pick_Item{label = i18n.tr("Automatic"), detail = fmt.tprintf(i18n.tr("%s, built in"), own), current = want == "" || want == FONT_BUILTIN})
-	append(&items, Pick_Item{label = prose ? i18n.tr("As the interface") : i18n.tr("System"), detail = prose ? i18n.tr("the interface's face") : i18n.tr("the system's usual face"), current = want == second})
-	for fam in app.font_families { append(&items, Pick_Item{label = fam, current = fam == want}) }
-	if k := picker(app, &app.picker, name, mono ? i18n.tr("Search code fonts") : i18n.tr("Search fonts"), items[:], em, align_right = true); k >= 0 {
-		switch k {
-		case 0: pref_set(app, name, "")
-		case 1: pref_set(app, name, second)
-		case:   pref_set(app, name, app.font_families[k - 2])
-		}
+	app.term_families.source = ui.text_font_source(&app.state)
+	value := strings.trim_space(config.string_of(&app.cfg_prefs, name))
+	ui.next({width = ui.px(math.round(em * 15))})
+	if v, ok := ui.font_picker(fmt.tprintf("###fb_%s", name), &app.term_picker, &app.term_families, value, {default_face = app.own.term[0], monospace = true, name = i18n.tr("Terminal font")}).?; ok {
+		pref_set(app, name, v)
 	}
 }
 

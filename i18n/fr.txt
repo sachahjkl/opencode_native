@@ -993,6 +993,45 @@ fr Finalisation…
 en Finish
 fr Terminer
 
+en Command finished
+fr Commande terminée
+
+en Command failed (exit %s)
+fr Commande en échec (code de sortie %s)
+
+en Command failed
+fr Commande en échec
+
+en Command stopped
+fr Commande arrêtée
+
+en Command running
+fr Commande en cours
+
+en Command ended (%s)
+fr Commande terminée (%s)
+
+en Sub-agent finished
+fr Sous-agent terminé
+
+en Sub-agent stopped: %s
+fr Sous-agent arrêté : %s
+
+en Sub-agent stopped
+fr Sous-agent arrêté
+
+en Sub-agent running
+fr Sous-agent en cours
+
+en Sub-agent ended (%s)
+fr Sous-agent terminé (%s)
+
+en (no output)
+fr (aucune sortie)
+
+en (no report)
+fr (aucun rapport)
+
 en The preferences could not be saved
 fr Impossible d'enregistrer les réglages
 
@@ -1041,9 +1080,6 @@ fr Permission
 en Question
 fr Question
 
-en Command failed
-fr Commande en échec
-
 en Command ended
 fr Commande terminée
 
@@ -1052,9 +1088,6 @@ fr Exécution planifiée
 
 en Sub-agent failed
 fr Sous-agent en échec
-
-en Sub-agent stopped
-fr Sous-agent arrêté
 
 en Sub-agent done
 fr Sous-agent terminé
@@ -1635,8 +1668,8 @@ fr Session importée
 en Terminal font
 fr Police du terminal
 
-en The face of the shells: the client's own (automatic: Fira Mono, no ligatures), the system's usual monospace, or any installed family.
-fr La police des shells : celle du client (automatique : Fira Mono, sans ligatures), la police à chasse fixe habituelle du système, ou toute famille installée.
+en The family of the shells. Default: the client's own, Fira Mono, with no ligatures.
+fr La police des shells. Par défaut : celle du client, Fira Mono, sans ligatures.
 
 en Content zoom
 fr Zoom du contenu
@@ -1940,39 +1973,6 @@ fr La licence du terminal
 
 en The terminal's emulation is Ghostty's, through libghostty-vt.
 fr L'émulation du terminal est celle de Ghostty, via libghostty-vt.
-
-en auto
-fr auto
-
-en system
-fr système
-
-en same
-fr identique
-
-en not installed
-fr non installée
-
-en Automatic
-fr Automatique
-
-en %s, built in
-fr %s, intégrée
-
-en As the interface
-fr Comme l'interface
-
-en the interface's face
-fr la police de l'interface
-
-en the system's usual face
-fr la police habituelle du système
-
-en Search code fonts
-fr Rechercher une police de code
-
-en Search fonts
-fr Rechercher une police
 
 en SERVER
 fr SERVEUR

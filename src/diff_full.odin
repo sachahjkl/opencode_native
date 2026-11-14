@@ -63,9 +63,7 @@ diff_full_view :: proc(v: ^ui.View, d: ^Diff_Full) {
 			if choice("###df_mode", labels, &sel) { pref_set(app, "conversation.diff_layout", diff_layout_name(diff.Layout(sel))) }
 		}
 		ui.spacer(ui.px(em * 0.6))
-		o := diff_options(app, em, d.title)
-		o.selectable = true
-		diff.view("###df_list", &d.doc, app.prefs.diff_layout, o)
+		diff.view("###df_list", &d.doc, app.prefs.diff_layout, diff_options(app, em, d.title))
 		ui.spacer(ui.px(em * 0.6))
 	}
 }

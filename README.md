@@ -89,7 +89,8 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
   the background, scheduled runs and sub-agents that ended, by session, kept across restarts. Each one has its report: the request,
   the agent's last answer, the files it touched, its todo list. One card at a time (← and → go through them), or a list whose rows
   unfold in place (→ or Space). Opening a session acknowledges its end; A acknowledges an entry, a wait goes with its answer, and a
-  notification of the system goes with its entry.
+  notification of the system goes with its entry. In the list, select several entries with Ctrl+click, Shift+click, Shift and the
+  arrows, Ctrl+Space or Ctrl+A: A acknowledges all of them; Shift+A acknowledges the session, Ctrl+Shift+A everything.
 - **The command palette** (Ctrl+K, Ctrl+Shift+P): commands, sessions, agents, models, the server's commands and the switches of the
   settings in one field, narrowed by `>` `@` `/` `#` `:`. F1 lists the keys.
 - **Tool calls by what they do**: a diff for what edits a file, the lines of a file, matches under their file, a command and its
@@ -121,7 +122,7 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 - **Settings** (Ctrl+,): the common settings of the toolkit's programs, searched, with an Advanced part, export and import:
   the theme (27 of them, most dark and light, as the system or always one; themes of your own in `themes.txt`) and the
   finish, the system's title bar or the program's, the fonts of the interface, the answers, code and the shells (built in,
-  the system's, or any installed one, in a searched picker), text rendering, size, zoom, density, rounding, animations,
+  or any installed one, in a searched picker, applied at once), text rendering, size, zoom, density, rounding, animations,
   scrolling, keys and delays, where messages go; how the conversation shows; the send key; sub-agents in the sidebar;
   notifications when a session finishes or asks; the licence that supports the program. And what the server lets one see
   or change: its shell, its MCP servers (connect, disconnect), the usage limits and budgets of an OpenCode workspace, the

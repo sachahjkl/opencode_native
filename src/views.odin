@@ -17,6 +17,7 @@ import "core:strings"
 TOAST_TOP_EM          :: 5.5
 
 build_ui :: proc(app: ^App) {
+	fonts_follow(app)   // (a family the toolkit loaded since the last build: this build draws in it)
 	em := ui.font_size()
 	views_answers(app)
 	app.stats.built = false

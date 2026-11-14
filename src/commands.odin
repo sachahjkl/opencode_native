@@ -23,6 +23,9 @@ Command :: struct {
 	enabled: proc(app: ^App) -> bool,   // nil: always
 	checked: proc(app: ^App) -> bool,   // nil: not a toggle
 	over:    proc(app: ^App) -> bool,   // its key with a dialog over the window (overlay_open): when it still works; nil: never
+	// .Window: the window's (the palette, the keys, the settings, quit): its key works in every page, whatever has the
+	// keyboard, over a view shown as a dialog too (the settings are one): the toolkit takes it from wherever the focus is
+	scope:   ui.Command_Scope,
 }
 
 @(private = "file") has_session :: proc(app: ^App) -> bool { return app.chat.id != "" }
@@ -30,9 +33,9 @@ Command :: struct {
 @(private = "file") can_go_back :: proc(app: ^App) -> bool { return nav_can(app, -1) || back_target(app) != "" }
 
 COMMANDS := [?]Command{
-	{id = "app.palette", title = i18n.later("Command palette"), tags = "commands actions search launcher", group = i18n.later("General"), icon = lucide.SEARCH, keys = "Ctrl+K, Ctrl+Shift+P", key = .K, mods = {.Ctrl}, run = palette_toggle, over = proc(app: ^App) -> bool { return ui.view_is_open(&app.program_views, COMMANDS_VIEW) }},
-	{id = "app.help", title = i18n.later("Keyboard shortcuts"), tags = "keys keybindings hotkeys help cheatsheet", group = i18n.later("General"), icon = lucide.LIST, keys = "F1", key = .F1, run = help_toggle, over = proc(app: ^App) -> bool { return ui.view_is_open(&app.program_views, HELP_VIEW) }},
-	{id = "app.settings", title = i18n.later("Settings"), tags = "preferences options configuration prefs", group = i18n.later("General"), icon = lucide.SLIDERS_HORIZONTAL, keys = "Ctrl+,", key = .Comma, mods = {.Ctrl}, run = settings_open},
+	{id = "app.palette", title = i18n.later("Command palette"), tags = "commands actions search launcher", group = i18n.later("General"), icon = lucide.SEARCH, keys = "Ctrl+K, Ctrl+Shift+P", key = .K, mods = {.Ctrl}, run = palette_toggle, scope = .Window},
+	{id = "app.help", title = i18n.later("Keyboard shortcuts"), tags = "keys keybindings hotkeys help cheatsheet", group = i18n.later("General"), icon = lucide.LIST, keys = "F1", key = .F1, run = help_toggle, scope = .Window},
+	{id = "app.settings", title = i18n.later("Settings"), tags = "preferences options configuration prefs", group = i18n.later("General"), icon = lucide.SLIDERS_HORIZONTAL, keys = "Ctrl+,", key = .Comma, mods = {.Ctrl}, run = settings_open, scope = .Window},
 	{id = "app.refresh", title = i18n.later("Refresh"), tags = "reload sync update fetch", group = i18n.later("General"), icon = lucide.REFRESH_CW, keys = "F5", key = .F5, run = proc(app: ^App) {
 		refresh_sessions(app)
 		if app.chat.id != "" { load_messages(app, app.chat.id) }
@@ -45,7 +48,7 @@ COMMANDS := [?]Command{
 	{id = "app.update_install", title = i18n.later("Install the update"), tags = "upgrade download version", group = i18n.later("General"), icon = lucide.REFRESH_CW, run = update_install_now, enabled = proc(app: ^App) -> bool { return update_phase(app) == .Available }},
 	{id = "app.update_restart", title = i18n.later("Restart to update"), tags = "relaunch reload reboot upgrade", group = i18n.later("General"), icon = lucide.REFRESH_CW, run = app_restart, enabled = proc(app: ^App) -> bool { return update_phase(app) == .Installed }},
 	{id = "app.restart", title = i18n.later("Restart opencode native"), tags = "relaunch reload reboot reopen", group = i18n.later("General"), icon = lucide.POWER, run = app_restart},
-	{id = "app.quit", title = i18n.later("Quit"), tags = "exit close leave", group = i18n.later("General"), icon = lucide.X, keys = "Alt+F4", run = proc(app: ^App) { app.quit = true }},
+	{id = "app.quit", title = i18n.later("Quit"), tags = "exit close leave", group = i18n.later("General"), icon = lucide.X, keys = "Alt+F4", run = proc(app: ^App) { app.quit = true }, scope = .Window},
 
 	{id = "nav.home", title = i18n.later("Home"), tags = "start welcome new", group = i18n.later("Go to"), icon = lucide.MESSAGE_SQUARE, keys = "Ctrl+H", key = .H, mods = {.Ctrl}, run = new_session},
 	{id = "nav.back", title = i18n.later("Back"), tags = "previous return history", group = i18n.later("Go to"), icon = lucide.ARROW_LEFT, keys = "Alt+Left", key = .Left, mods = {.Alt}, enabled = can_go_back, run = proc(app: ^App) { if nav_can(app, -1) { nav_step(app, -1) } else { go_back(app) } }},
@@ -113,19 +116,23 @@ commands_apply :: proc(app: ^App) {
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
-// Whether its key does something now: what is open over the window has the keyboard, unless the command is meant to work there.
+// Whether its key does something now: what is open over the window has the keyboard, unless the command is meant to work
+// there. A window command's works over a view shown as a dialog (the settings, the sheet, the palette itself); a menu,
+// the picker and the file dialog keep the keys while they are open (their Escape and their letters are their own).
 command_keyed :: proc(app: ^App, c: ^Command) -> bool {
 	if !command_enabled(app, c) { return false }
+	if c.scope == .Window { return len(app.state.menus) == 0 && !app.picker.open && !ui.file_dialog_shown(&app.state) }
 	return !overlay_open(app) || (c.over != nil && c.over(app))
 }
 
-// The keys of the table, at the start of a build. The palette has its other name.
+// The keys of the table, at the start of a build. The palette has its other name. A shell with the keyboard took its
+// keys out before (term_events): Ctrl+K and the rest are the shell's there, Ctrl+Shift+T alone comes through.
 commands_keys :: proc(app: ^App) {
 	for &c in COMMANDS {
 		if c.key == .None || !command_keyed(app, &c) { continue }
-		if ui.key_pressed_peek(c.key, c.mods) && ui.key_press(c.key, c.mods) { command_run(app, &c) }
+		if ui.chord_pressed({c.key, c.mods}, c.scope) { command_run(app, &c) }
 	}
-	if c := command_find("app.palette"); command_keyed(app, c) && ui.key_press(.P, {.Ctrl, .Shift}) { command_run(app, c) }
+	if c := command_find("app.palette"); command_keyed(app, c) && ui.chord_pressed({.P, {.Ctrl, .Shift}}, c.scope) { command_run(app, c) }
 }
 
 // The conversation's zoom: the session shown's own, or the preference (appearance.content_zoom), which is every session's that has

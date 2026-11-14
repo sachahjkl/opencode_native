@@ -38,12 +38,12 @@ App :: struct {
 	term_font, term_font_bold: Face_Id,   // the shells' (appearance.terminal_font)
 	own:           Own_Faces,
 	prose_scale:   f32,        // the answers' size, of the text around them
-	prose_face:    string,     // the system face of the answers ("": not one)
-	ui_face:       string,     // the system face of the interface ("": the embedded one)
-	mono_face:     string,     // the same for code
-	term_face:     string,     // the same for the shells
-	fonts_wanted:  string,     // the two font preferences fonts_apply last applied (prefs_refresh compares)
-	font_families: []string,   // the installed families (read when a font picker first opens)
+	// the shells' family (appearance.terminal_font), loaded on a chore by the toolkit (the others are its text faces)
+	term_family:   ui.Family_Face,
+	fonts_serial:  u64,        // the faces' changes fonts_follow last took (ui.text_faces_serial and term_family's)
+	fonts_followed: bool,      // fonts_follow ran once
+	term_picker:   ui.Font_Picker,     // the terminal font's control (font_button)
+	term_families: ui.Font_Families,   // its families, read at its first opening
 
 	cx:             App_Context,       // what the window keeps from frame to frame, beside the panels' own state
 	server_files:   Server_Files,      // the server's files, for the toolkit's file browser (folders.odin)
@@ -53,7 +53,7 @@ App :: struct {
 	server:         int,               // the one connected
 	conn:           ^Conn,             // its connection
 	server_edit:    Server_Edit,
-	picker:         Picker,            // the pickers of the composer (agent, model) and of the settings (fonts) (picker.odin)
+	picker:         Picker,            // the pickers of the composer (agent, model) (picker.odin)
 	activity:       Activity,          // what runs behind the conversation (activity.odin)
 	palette:        Palette,           // Ctrl+K (palette.odin)
 	term_zooms:     Kept_Zooms,        // each shell's zoom, by its id (terminal.odin)
@@ -269,7 +269,8 @@ build_params :: proc(app: ^App, win: ^platform.Window, size: draw.Vec2, events: 
 	return {
 		window_size = size, events = events, dt = dt, animations = animations_on(app),
 		dpi_scale = app.scale > 0 ? app.scale : win.dpi_scale, window = win,
-		base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(30)}, font = app.font, font_size = app.prefs.font_size, text_pad = 6, cursor = .Arrow, radius = 6},
+		// (the client's own face: begin_build puts the family the person chose in its place, ui.set_text_faces)
+		base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(30)}, font = app.own.ui[0], font_size = app.prefs.font_size, text_pad = 6, cursor = .Arrow, radius = 6},
 		clipboard_set = clip_set,   // (no clipboard_get: a paste asks the window's clipboard and waits for nothing, ui.paste_request)
 	}
 }
@@ -453,27 +454,14 @@ deferred_tick :: proc(app: ^App) {
 	if soonest > 0 { ui.wake_within(&app.state, soonest) }
 }
 
-// The faces looked for when the preference is "" (automatic), in order; the toolkit's embedded Roboto and Inconsolata
-// when none is installed (or when the preference says "built-in").
-when ODIN_OS == .Windows {
-	UI_FACES   :: []string{"Segoe UI Variable Text", "Segoe UI"}
-	MONO_FACES :: []string{"Cascadia Mono", "Cascadia Code", "JetBrains Mono", "Consolas"}
-} else {
-	UI_FACES   :: []string{"Inter", "Cantarell", "Noto Sans", "Ubuntu", "DejaVu Sans"}
-	MONO_FACES :: []string{"JetBrains Mono", "Cascadia Mono", "Fira Code", "Noto Sans Mono", "Ubuntu Mono", "DejaVu Sans Mono"}
-}
-FONT_BUILTIN :: "built-in"   // an older preference's value for the embedded face: as automatic
-FONT_SYSTEM  :: "system"     // the preferences' value for the system's usual face
-FONT_SAME    :: "interface"  // appearance.prose_font: the answers in the interface's face
-
 // The client's own faces (open licences, Latin: assets/fonts): the interface, the answers, code. Weights as the code asks them.
 Own_Faces :: struct { ui, prose, mono: [4]font.Font_Id, mono_bold: font.Font_Id, term: [2]font.Font_Id }   // regular, bold, italic, bold italic; the shells' regular and bold
 PROSE_OWN_SCALE  :: 1.08   // Newsreader's small letters are low: larger than the text around it, to read as large
 PROSE_LINE_RATIO :: 1.36   // of the answers' size: the height of their lines
 
 
-// The fonts that do not change: the icons (Lucide, embedded) and the toolkit's own glyphs. The faces of the text come
-// from the preferences (fonts_apply).
+// The fonts that do not change: the icons (Lucide, embedded), the toolkit's own glyphs and the client's own faces of
+// the text. The families the person chooses are the toolkit's to load and apply (fonts_follow).
 load_fonts :: proc(app: ^App) -> bool {
 	ok: bool
 	if app.icons, ok = font.load_embedded(&app.fonts, lucide.DATA); !ok { return false }
@@ -496,39 +484,22 @@ load_fonts :: proc(app: ^App) -> bool {
 	// the shells': Fira Mono, no ligatures (what a shell prints is read sign by sign)
 	term := own(app, #load("../assets/fonts/fira-mono-400.ttf"), regular)
 	app.own.term = {term, own(app, #load("../assets/fonts/fira-mono-700.ttf"), term)}
+	fonts_from_dir(app)
+	// (the faces in use until the first build follows the toolkit's: fonts_follow)
+	app.font, app.prose, app.mono, app.mono_bold = app.own.ui[0], app.own.prose[0], app.own.mono[0], app.own.mono_bold
+	app.prose_scale = PROSE_OWN_SCALE
 	app.term_font, app.term_font_bold = app.own.term[0], app.own.term[1]
 	return ok
 }
 
-// The face of `want` ("" automatic: the client's own; FONT_SYSTEM: the first of `auto` installed; else that family, the
-// client's own when it is not installed). `name` "": the client's own.
-@(private = "file")
-face_resolve :: proc(app: ^App, want: string, auto: []string, builtin: font.Font_Id) -> (id: font.Font_Id, name: string) {
-	if want == FONT_SYSTEM {
-		for a in auto { if f, ok := font.load_system(&app.fonts, a); ok { return f, a } }
-	} else if want != "" && want != FONT_BUILTIN {
-		if f, ok := font.load_system(&app.fonts, want); ok { return f, want }
-	}
-	return builtin, ""
+// The client's own text faces, which the settings' Default draws in (prefs_page.Standard_Targets.faces).
+own_text_faces :: proc(app: ^App) -> ui.Text_Faces {
+	return {.Interface = app.own.ui[0], .Mono = app.own.mono[0], .Prose = app.own.prose[0]}
 }
 
-// Regular, bold, italic, bold italic of a family of the system (what it lacks: the regular).
-@(private = "file")
-system_set :: proc(app: ^App, family: string, regular: font.Font_Id) -> (set: [4]font.Font_Id) {
-	set = {regular, regular, regular, regular}
-	if f, ok := font.load_system(&app.fonts, family, WEIGHT_UI_BOLD); ok { set[1] = f }
-	if f, ok := font.load_system(&app.fonts, family, WEIGHT_REGULAR, .Italic); ok { set[2] = f }
-	if f, ok := font.load_system(&app.fonts, family, WEIGHT_UI_BOLD, .Italic); ok { set[3] = f }
-	return
-}
-
-WEIGHT_MONO_BOLD :: 700
-WEIGHT_UI_BOLD   :: 600
-WEIGHT_REGULAR   :: 400
-
-// --font-dir=<folder>: faces tried from files, nothing installed (ocntools font_proposals): ui, ui-bold, ui-italic,
-// ui-bold-italic, mono, mono-bold and, for the answers when they are another family than the interface, prose, prose-bold,
-// prose-italic, prose-bold-italic (.ttf). A file that is not there leaves what the preferences gave.
+// --font-dir=<folder>: the client's own faces tried from files, nothing installed (ocntools font_proposals): ui,
+// ui-bold, ui-italic, ui-bold-italic, mono, mono-bold and, for the answers when they are another family than the
+// interface, prose, prose-bold, prose-italic, prose-bold-italic (.ttf). A file that is not there leaves the embedded one.
 @(private = "file")
 fonts_from_dir :: proc(app: ^App) {
 	dir := app.cli.font_dir
@@ -537,69 +508,42 @@ fonts_from_dir :: proc(app: ^App) {
 		f, ok := font.load_from_file(&app.fonts, pjoin({dir, fmt.tprintf("%s.ttf", name)}))
 		return ok ? f : or_else_face
 	}
-	app.font = face(app, dir, "ui", app.font)
-	app.mono = face(app, dir, "mono", app.mono)
-	app.mono_bold = face(app, dir, "mono-bold", app.mono)
-	app.state.mono_font = app.mono
-	bold := face(app, dir, "ui-bold", app.font)
-	italic := face(app, dir, "ui-italic", app.font)
-	bi := face(app, dir, "ui-bold-italic", bold)
-	ui.set_family(&app.state, app.font, bold, italic, bi)
-	app.prose = face(app, dir, "prose", app.font)
-	if app.prose != app.font {
-		ui.set_family(&app.state, app.prose, face(app, dir, "prose-bold", app.prose), face(app, dir, "prose-italic", app.prose), face(app, dir, "prose-bold-italic", app.prose))
+	regular := face(app, dir, "ui", app.own.ui[0])
+	bold := face(app, dir, "ui-bold", regular)
+	app.own.ui = {regular, bold, face(app, dir, "ui-italic", regular), face(app, dir, "ui-bold-italic", bold)}
+	mono := face(app, dir, "mono", app.own.mono[0])
+	app.own.mono = {mono, mono, mono, mono}
+	app.own.mono_bold = face(app, dir, "mono-bold", mono)
+	prose := face(app, dir, "prose", regular)
+	app.own.prose = app.own.ui
+	if prose != regular {
+		app.own.prose = {prose, face(app, dir, "prose-bold", prose), face(app, dir, "prose-italic", prose), face(app, dir, "prose-bold-italic", prose)}
 	}
 }
 
-// The text faces from the preferences appearance.font and appearance.mono_font (at start, and when either changes).
-fonts_apply :: proc(app: ^App) {
-	want_ui := config.string_of(&app.cfg_prefs, "appearance.text.ui_font")
-	want_mono := config.string_of(&app.cfg_prefs, "appearance.text.mono_font")
-	want_prose := config.string_of(&app.cfg_prefs, "appearance.text.prose_font")
-	want_term := config.string_of(&app.cfg_prefs, "appearance.text.terminal_font")
-	app.font, app.ui_face = face_resolve(app, want_ui, UI_FACES, app.own.ui[0])
-	mono_face: string
-	app.mono, mono_face = face_resolve(app, want_mono, MONO_FACES, app.own.mono[0])
-	app.mono_bold = app.own.mono_bold
-	if mono_face != "" {
-		app.mono_bold = app.mono
-		if b, ok := font.load_system(&app.fonts, mono_face, WEIGHT_MONO_BOLD); ok { app.mono_bold = b }
-	}
-	app.state.mono_font = app.mono
-	// the shells': their own face (Fira Mono), the system's usual monospace, or a family of the system
-	term_face: string
-	app.term_font, term_face = face_resolve(app, want_term, MONO_FACES, app.own.term[0])
-	app.term_font_bold = app.own.term[1]
-	if term_face != "" {
-		app.term_font_bold = app.term_font
-		if b, ok := font.load_system(&app.fonts, term_face, WEIGHT_MONO_BOLD); ok { app.term_font_bold = b }
-	}
-	delete(app.term_face)
-	app.term_face = strings.clone(term_face)
-	ui_set := app.ui_face != "" ? system_set(app, app.ui_face, app.font) : app.own.ui
-	ui.set_family(&app.state, app.font, ui_set[1], ui_set[2], ui_set[3])
-	// the answers: their own face, the interface's, or a family of the system
-	prose_face := ""
-	prose_own := want_prose == "" || want_prose == FONT_BUILTIN
-	app.prose = app.font
-	if prose_own {
-		app.prose = app.own.prose[0]
-		ui.set_family(&app.state, app.prose, app.own.prose[1], app.own.prose[2], app.own.prose[3])
-	} else if want_prose != FONT_SAME {
-		if f, ok := font.load_system(&app.fonts, want_prose); ok {
-			app.prose, prose_face = f, want_prose
-			set := system_set(app, want_prose, f)
-			ui.set_family(&app.state, f, set[1], set[2], set[3])
-		}
-	}
-	app.prose_scale = prose_own ? PROSE_OWN_SCALE : 1
-	delete(app.prose_face)
-	app.prose_face = strings.clone(prose_face)
-	fonts_from_dir(app)
-	delete(app.mono_face)
-	app.mono_face = strings.clone(mono_face)
-	delete(app.fonts_wanted)
-	app.fonts_wanted = strings.concatenate({want_ui, "\n", want_mono, "\n", want_prose, "\n", want_term})
+// The faces in use, taken from the toolkit's text faces (the family the person chose, loaded on the toolkit's chores,
+// else the client's own) and from the shells' family, when one of them changed (their serials): at the start of a
+// build, after the answers begin_build ran. What is derived from them follows: the bold of code and of the shells (gt:ui
+// loaded it with the family, off this thread), the answers' size.
+fonts_follow :: proc(app: ^App) {
+	s := &app.state
+	serial := ui.text_faces_serial(s) + app.term_family.serial
+	if app.fonts_followed && serial == app.fonts_serial { return }
+	app.fonts_followed, app.fonts_serial = true, serial
+	app.font = ui.state_text_face(s, .Interface)
+	app.mono = ui.state_text_face(s, .Mono)
+	app.prose = ui.state_text_face(s, .Prose)
+	if app.font == 0 { app.font = app.own.ui[0] }   // (a test's State with no faces of the client's)
+	if app.mono == 0 { app.mono = app.own.mono[0] }
+	if app.prose == 0 { app.prose = app.own.prose[0] }
+	app.mono_bold = app.mono == app.own.mono[0] ? app.own.mono_bold : font.styled_face(&app.fonts, app.mono, true, false)
+	// (Newsreader's small letters are low: only the client's own face of the answers is drawn larger)
+	app.prose_scale = app.prose == app.own.prose[0] ? PROSE_OWN_SCALE : 1
+	app.term_font, app.term_font_bold = app.own.term[0], app.own.term[1]
+	if f := app.term_family.face; f != 0 { app.term_font, app.term_font_bold = f, font.styled_face(&app.fonts, f, true, false) }
+	// (the client's own families: their bold and italic are files of its own; a family of the system finds its own)
+	ui.set_family(s, app.own.ui[0], app.own.ui[1], app.own.ui[2], app.own.ui[3])
+	ui.set_family(s, app.own.prose[0], app.own.prose[1], app.own.prose[2], app.own.prose[3])
 }
 
 SCALE_MIN            :: 0.5   // what --scale= accepts
@@ -685,7 +629,8 @@ main :: proc() {
 	main_window_adopt(app)
 	app.announcer = {mode = prefs_page.announce_mode(&app.cfg_prefs), window = app.win, state = &app.state}
 	// (the host was made after the preferences: the user's rendering.partial_redraw, if any, over its own default)
-	prefs_page.standard_apply(&app.cfg_prefs, &app.state, {partial_redraw = &app.window.partial_redraw})
+	// (the client's own faces again: standard_apply sets the text faces it is given)
+	prefs_page.standard_apply(&app.cfg_prefs, &app.state, {partial_redraw = &app.window.partial_redraw, faces = own_text_faces(app)})
 	crash_bar.init(&app.crash_bar, crashed)
 	delete(crashed)
 	app.last_tick = time.tick_now()

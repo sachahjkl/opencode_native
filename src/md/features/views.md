@@ -42,10 +42,18 @@ views (`ui.View_Commands` of the window it is opened over) beside the commands. 
 of the main window (`palette_answer`): not while views are built. The help (F1) stays the program's own view too: it
 lists the composer's keys, which are no commands.
 
+## The window's commands over a dialog
+
+The palette, the keys, the settings and quit are the window's (`scope = .Window` in `COMMANDS`). Their keys work over
+every view shown as a dialog: the settings are one, and the palette lists the settings. `command_keyed` lets them through
+`overlay_open`; a menu, the picker and the file dialog still keep the keys while they are open. A window command needs
+no `over`: it works over a dialog already. The toolkit's `ui.chord_pressed` takes their keys from wherever the focus is.
+
 ## A shell's input
 
 The grid of a shell (and of a command's output) must read its input before the interface does: Ctrl+K, Escape,
-Ctrl+= are the shell's when it has the keyboard. Every window's `input` hook takes them out (`term_events`): the main
+Ctrl+= are the shell's when it has the keyboard. This is the one exception to the window's commands: a shell gets
+Ctrl+K, Ctrl+Shift+P, F1 and Ctrl+, too, and Ctrl+Shift+T alone comes through, to hide the shells from inside them. Every window's `input` hook takes them out (`term_events`): the main
 window's, and a view's window's, which is the main window's hook (host.view_windows gives it). Each window gives its
 input to the grids built in it (`Term.built_in`); the pointer to the grid in front at the event's own position
 (`ui.pointer_on_at`). In a view's window the hook does nothing else: the main window's own work (the conversation's

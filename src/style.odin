@@ -497,8 +497,9 @@ kv_row :: proc(id, k, v: string, em: f32, st: Kv_Row, col := Color{}) {
 	ui.next({width = ui.fill(), height = ui.px(em * st.h), axis = .X, cross = .Center})
 	if ui.row(.Center, id = id) {
 		if st.pad_l > 0 { ui.spacer(ui.px(em * st.pad_l)) }
-		text("k", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * st.key_fs)}, ui.px(em * st.key_w))
-		text("v", v, col.a > 0 ? col : hex(st.val), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * st.val_fs)}, ui.fill())
+		// (what it says is read and copied: selectable, as every text of a tool's call)
+		text("k", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * st.key_fs), flags = {.Selectable}}, ui.px(em * st.key_w))
+		text("v", v, col.a > 0 ? col : hex(st.val), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * st.val_fs), flags = {.Selectable}}, ui.fill())
 		if st.pad_r > 0 { ui.spacer(ui.px(em * st.pad_r)) }
 	}
 }

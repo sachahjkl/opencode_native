@@ -108,7 +108,10 @@ missed_words :: proc(e: ^notices.Entry) -> string {
 
 @(private = "file")
 Missed_Act :: enum u8 {
-	None, Open, Acknowledge, Acknowledge_Group, Acknowledge_All,
+	None, Open,
+	Acknowledge,       // the rows selected (the key A), the cursor's when none is
+	Acknowledge_Row,   // the row `at` alone (its own button)
+	Acknowledge_Group, Acknowledge_All,
 	Fold_Toggle,   // a row of the list unfolds, or folds
 	Retry,         // the report of the row is asked again
 	Settle,        // the middle act of the card: Acknowledge, or Answer for a wait
@@ -116,7 +119,30 @@ Missed_Act :: enum u8 {
 }
 
 @(private = "file")
-Missed_Row_Draw :: struct { selected: bool }
+Missed_Row_Draw :: struct { selected, cursor: bool }
+
+// The list's rows as the selection sees them now (made again when the log changes, an entry unfolds).
+@(private = "file")
+missed_item_rows :: proc(m: ^Missed) -> ui.Item_Rows {
+	return {count = len(m.ids), ids = m.ids[:], selectable = m.selectable[:]}
+}
+
+// The keys of the entries the rows selected hold, in the list's order; the cursor's when none is selected.
+@(private = "file")
+missed_selected_keys :: proc(app: ^App) -> []string {
+	m := &app.missed
+	keys := make([dynamic]string, context.temp_allocator)
+	if len(m.vl.selected) > 0 {
+		for r, k in m.rows {
+			if r.entry != nil && m.ids[k] in m.vl.selected { append(&keys, strings.clone(r.entry.key, context.temp_allocator)) }
+		}
+	}
+	if len(keys) == 0 {
+		if k := m.vl.sel; k >= 0 && k < len(m.rows) && m.rows[k].entry != nil { append(&keys, strings.clone(m.rows[k].entry.key, context.temp_allocator)) }
+	}
+	return keys[:]
+}
+
 
 missed_view :: proc(v: ^ui.View, app: ^App) {
 	m := &app.missed
@@ -156,13 +182,15 @@ missed_list :: proc(app: ^App, em: f32) -> (act: Missed_Act, act_row: int) {
 	n := len(m.rows)
 	act_row = -1
 	vl.no_typeahead = true   // (letters are the view's keys)
+	// (several entries: the toolkit's clicks and keys, Shift and Ctrl with the moves, Ctrl+Space, Ctrl+A)
+	vl.multi = true
 	vl.sel = clamp(vl.sel, 0, max(n - 1, 0))
 	if n > 0 && !m.selectable[vl.sel] && vl.sel + 1 < n { vl.sel += 1 }   // (a header is no row to act on: its first entry)
 	// the keys: read in the dialog (its scope holds them), over every row, built or not
 	if n > 0 {
 		if ui.key_press(.A, {.Ctrl, .Shift}) { act = .Acknowledge_All }
 		if ui.key_press(.A, {.Shift}) { act, act_row = .Acknowledge_Group, vl.sel }
-		if ui.key_press(.A) { act, act_row = .Acknowledge, vl.sel }
+		if ui.key_press(.A) { act, act_row = .Acknowledge, vl.sel }   // (the rows selected: missed_act)
 		// (before the list: it takes the rows' identities of this frame)
 		if ui.key_press(.Right) { missed_fold(app, vl.sel, true) }
 		if ui.key_press(.Left) { missed_fold(app, vl.sel, false) }
@@ -182,16 +210,25 @@ missed_list :: proc(app: ^App, em: f32) -> (act: Missed_Act, act_row: int) {
 				if missed_header(app, r, k, head_h, em) { act, act_row = .Acknowledge_Group, k }
 				continue
 			}
-			clicked, button, chevron, retry := missed_entry_row(app, r, k, k == vl.sel, now, row_h, em)
+			lit := ui.item_selection_has(&vl.selection, missed_item_rows(m), k)
+			s, button, chevron, retry := missed_entry_row(app, r, k, lit, k == vl.sel, now, row_h, em)
+			// (a press selects by the toolkit's rules; a plain click opens, a click with Ctrl or Shift only selects)
+			if s.pressed && !button && !chevron { ui.item_selection_click(&vl.selection, missed_item_rows(m), k, s.mods) }
+			// (a row's own button acts on its row alone: Answer, or Acknowledge)
 			if chevron { act, act_row = .Fold_Toggle, k }
 			else if retry { act, act_row = .Retry, k }
-			else if button { act, act_row = r.entry.state == .Acknowledged || missed_is_wait(r.entry) ? .Open : .Acknowledge, k }
-			else if clicked { act, act_row = .Open, k }
+			else if button { act, act_row = r.entry.state == .Acknowledged || missed_is_wait(r.entry) ? .Open : .Acknowledge_Row, k }
+			else if s.clicked && .Ctrl not_in s.mods && .Shift not_in s.mods { act, act_row = .Open, k }
 			// (built and unfolded: what it shows is read if it is not)
 			if m.unfolded[r.entry.id] { missed_report_want(app, missed_report_session(app, r.entry)) }
 		}
 	}
-	if m.fresh && vl.key != 0 { ui.set_focus(vl.key); m.fresh = false }
+	if m.fresh && vl.key != 0 {
+		ui.set_focus(vl.key)
+		m.fresh = false
+		// (the row the keys are on is lit: what A acknowledges is seen)
+		if n > 0 && len(vl.selected) == 0 { ui.item_selection_one(&vl.selection, missed_item_rows(m), vl.sel) }
+	}
 	missed_foot(app, i18n.tr("Enter open    Space unfold    A acknowledge    Shift+A the session    Ctrl+Shift+A all"), em)
 	return
 }
@@ -266,14 +303,20 @@ missed_act :: proc(app: ^App, act: Missed_Act, at: int) {
 		pref_set(app, "notices.view", act == .Cards ? "cards" : "list")
 		m.fresh = act == .List   // (the list takes the keyboard)
 		return
-	case .Open, .Acknowledge, .Acknowledge_Group, .Fold_Toggle, .Retry, .Settle:
+	case .Acknowledge:
+		// (the list's: every entry selected; the cards': the card shown)
+		if !app.prefs.notices_cards {
+			for key in missed_selected_keys(app) { missed_acknowledge(app, key) }
+			return
+		}
+	case .Open, .Acknowledge_Row, .Acknowledge_Group, .Fold_Toggle, .Retry, .Settle:
 	}
 	if at < 0 || at >= len(m.rows) { return }
 	r := m.rows[at]
 	#partial switch act {
 	case .Open:
 		missed_open_row(app, &r)
-	case .Acknowledge:
+	case .Acknowledge, .Acknowledge_Row:
 		if r.entry != nil { missed_acknowledge(app, r.entry.key) }
 	case .Acknowledge_Group:
 		missed_acknowledge_group(app, r.group)
@@ -310,7 +353,10 @@ missed_fold :: proc(app: ^App, k: int, open: bool) {
 	if k < 0 || k >= len(m.rows) || m.rows[k].entry == nil || missed_row_unfolded(app, k) == open { return }
 	id := m.rows[k].entry.id
 	if open { m.unfolded[id] = true } else { delete_key(&m.unfolded, id) }
+	old := m.ids[k]
 	m.ids[k] = id | (open ? MISSED_OPEN_BIT : 0)
+	// (another id for the same row: its selection follows it)
+	ui.item_selection_rekey(&m.vl.selection, old, m.ids[k])
 	m.rows_stamp += 1
 }
 
@@ -360,25 +406,26 @@ missed_mark :: proc(e: ^notices.Entry, em: f32) {
 }
 
 // An entry: a chevron that unfolds it, its mark, what happened, the excerpt, how long ago, and what to do (Answer for a wait,
-// Acknowledge otherwise); unfolded, what it is about under it. `clicked`: the row; `button`: its button; `retry`: Try again.
+// Acknowledge otherwise); unfolded, what it is about under it. `selected`: lit; `cursor`: the keys' row (its accent bar).
+// `row`: the row's signal; `button`: its button; `retry`: Try again.
 @(private = "file")
-missed_entry_row :: proc(app: ^App, r: ^Missed_Row, k: int, selected: bool, now: f64, h, em: f32) -> (clicked, button, chevron, retry: bool) {
+missed_entry_row :: proc(app: ^App, r: ^Missed_Row, k: int, selected, cursor: bool, now: f64, h, em: f32) -> (row: ui.Signal, button, chevron, retry: bool) {
 	e := r.entry
 	open := app.missed.unfolded[e.id]
 	ui.next({width = ui.fill(), height = open ? ui.children_sum() : ui.px(h), axis = .Y})
 	ui.a11y({role = .Button, name = missed_words(e), description = e.text})
 	rb := ui.build_box({.Clickable}, ui.vlist_row_name(k))
 	rd := ui.frame_new(Missed_Row_Draw)
-	rd.selected = selected
+	rd.selected, rd.cursor = selected, cursor
 	rb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-		if !(^Missed_Row_Draw)(user).selected { return }
+		d := (^Missed_Row_Draw)(user)
 		s := ui.scale()
 		r := b.rect
-		draw_well(dc, r, 0, hex(HEX_PAL_SELECTED))
-		draw.rect(dc, {{r.min.x + 2 * s, r.min.y + 6 * s}, {r.min.x + 4 * s, r.max.y - 6 * s}}, accent(), 1 * s)
+		if d.selected { draw_well(dc, r, 0, hex(HEX_PAL_SELECTED)) }
+		if d.cursor { draw.rect(dc, {{r.min.x + 2 * s, r.min.y + 6 * s}, {r.min.x + 4 * s, r.max.y - 6 * s}}, accent(), 1 * s) }
 	}
 	rb.custom_user = rd
-	clicked = ui.signal(rb).clicked
+	row = ui.signal(rb)
 	if ui.parent(rb) {
 		small := math.round(em * BUTTON_SMALL_H_EM)
 		acked := e.state == .Acknowledged

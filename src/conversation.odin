@@ -318,7 +318,7 @@ message :: proc(app: ^App, c: ^Chat, m: ^Message, i: int, em: f32) {
 		next := i + 1 < len(c.messages) ? &c.messages[i + 1] : nil
 		assistant_message(app, m, em, continues(prev, m), next != nil && continues(m, next) ? next : nil, prev)
 	case .Synthetic:
-		if m.sub_child != "" { subagent_result(app, m, em) } else { note_line(app, m, em, lucide.ZAP, m.text != "" ? first_line(m.text) : i18n.tr("synthetic message")) }
+		if m.sub_child != "" { subagent_result(app, m, em) } else if len(m.jobs) > 0 { job_reports(app, m, em) } else { note_line(app, m, em, lucide.ZAP, m.text != "" ? first_line(m.text) : i18n.tr("synthetic message")) }
 	case .Shell:       note_line(app, m, em, lucide.SQUARE_TERMINAL, fmt.tprintf("$ %s", m.text))
 	case .Compaction:  note_line(app, m, em, lucide.LIST, i18n.tr("Conversation compacted"))
 	case .Idle:        if i < len(c.messages) - 1 { turn_end(app, m, em) }

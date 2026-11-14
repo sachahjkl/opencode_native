@@ -82,7 +82,6 @@ bench_new :: proc() -> ^App {
 	app.prefs.notify = "off"
 	app.cfg_prefs = config.prefs_make()
 	prefs_register(&app.cfg_prefs)
-	app.fonts_wanted = "\n\n\n"   // (the faces stay as they are: pref_set does not load any)
 	views_start(app, "")   // (the views in memory only: the sidebar opens, as at a first start)
 	chat_home(app)
 	return app
@@ -966,14 +965,19 @@ what_is_open_has_the_keys :: proc(t: ^testing.T) {
 	vs := &app.program_views
 	ui.view_open(vs, SETTINGS_VIEW, app)
 	testing.expect(t, !command_keyed(app, new_one), "a shortcut does not act behind a dialog")
-	testing.expect(t, !command_keyed(app, palette))
+	testing.expect(t, command_keyed(app, palette), "a window command works over a dialog")
 	ui.view_close(vs, SETTINGS_VIEW)
 	ui.view_open(vs, COMMANDS_VIEW, app)
 	testing.expect(t, command_keyed(app, palette), "its key closes it")
-	testing.expect(t, !command_keyed(app, help))
+	testing.expect(t, command_keyed(app, help), "over the palette too")
 	ui.view_close(vs, COMMANDS_VIEW)
 	ui.view_open(vs, HELP_VIEW, app)
 	testing.expect(t, command_keyed(app, help))
+	ui.view_close(vs, HELP_VIEW)
+	// (the picker keeps its keys: its letters search, its Escape closes it)
+	app.picker.open = true
+	testing.expect(t, !command_keyed(app, help) && !command_keyed(app, palette), "the picker holds the window's keys")
+	app.picker.open = false
 }
 
 @(test)
