@@ -2020,6 +2020,61 @@ other_folder_browses_the_servers_folders :: proc(t: ^testing.T) {
 	})
 }
 
+// Browse the files, with a server elsewhere: the toolkit's file browser on the session's folder searches its subfolders as one
+// types (the server's search, in the session's location), and the file chosen is mentioned in the prompt from that folder.
+@(test)
+the_files_of_the_session_are_found_and_mentioned :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		files_open(app)
+		session.frames(s, 3)
+		r := bench_take(t, .Server_Files_List)
+		testing.expect_value(t, r.path, "/api/fs/list?path=C%3A%2Fcode%2Fproject_0")
+		bench_answer(app, r, 200, `{"data":[{"path":"src/","type":"directory"},{"path":"README.md","type":"file"}]}`)
+		session.wait_idle(s)
+		testing.expect(t, session.find_text(s, "Mention") != nil, "the act says what it does")
+		session.type_text(s, "main")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return bench_count(.Server_Files_Find) > 0 }, "the search asked once the typing stops")
+		f := bench_take(t, .Server_Files_Find)
+		testing.expect_value(t, f.path, "/api/fs/find?location[directory]=C%3A%2Fcode%2Fproject_0&query=main&limit=200")
+		bench_answer(app, f, 200, `{"data":[{"path":"src/main.odin","type":"file"}]}`)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find_text(s, "src/main.odin") != nil }, "the file found, by its path")
+		session.save_png(s, "files_found.png")
+		session.key(s, .Return)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.file_dialog_shown(&(^App)(s.user).state) }, "chosen")
+		m := &app.composer.mentions
+		testing.expect_value(t, len(m.chosen), 1)
+		if len(m.chosen) == 1 {
+			testing.expect_value(t, m.chosen[0].text, "@src/main.odin")
+			testing.expect_value(t, m.chosen[0].target, "file:///C:/code/project_0/src/main.odin")
+		}
+	})
+}
+
+// Escape in the file browser is the browser's: it did reach the program behind it, which interrupted the running session.
+@(test)
+escape_in_the_file_browser_does_not_interrupt :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil; app.chat.busy = false }
+		app.chat.busy = true
+		folder_choose(app, .New_Session)
+		session.frames(s, 3)
+		bench_answer(app, bench_take(t, .Server_Files_List), 200, `{"data":[]}`)
+		session.frames(s, 2)
+		testing.expect(t, overlay_open(app), "the browser is over the window")
+		session.key(s, .Escape)
+		session.frames(s, 3)
+		testing.expect_value(t, bench_count(.Action), 0)
+		testing.expect(t, !ui.file_dialog_shown(&app.state), "Escape closed it")
+	})
+}
+
 // The server left while a folder was read: the browser is told, and does not wait for an answer that will not come.
 @(test)
 a_folder_read_when_the_server_leaves_ends :: proc(t: ^testing.T) {

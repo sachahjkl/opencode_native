@@ -4,6 +4,7 @@ import "base:runtime"
 import "core:encoding/json"
 import "core:strings"
 import "core:testing"
+import "gt:timefmt"
 
 // A running sub-agent's card finds its session before the server names it (it does when the call ends): the child with the call's
 // description as its title, made after the call started, that no other call names.
@@ -99,7 +100,7 @@ a_tool_calls_time :: proc(t: ^testing.T) {
 a_tool_call_says_when :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	day := f64(MS_PER_S * SECS_PER_DAY)
-	start := day * 20_000 + 3_600_000 + 61_000 - f64(local_offset_minutes()) * 60 * MS_PER_S   // (01:01:01, local)
+	start := day * 20_000 + 3_600_000 + 61_000 - f64(timefmt.local_offset_minutes()) * 60 * MS_PER_S   // (01:01:01, local)
 	p := Part{started_ms = start, ended_ms = start + 12_000}
 	testing.expect_value(t, tool_when(&p, false, start + 60_000, true), "Started 01:01:01, ended 01:01:13")
 	testing.expect_value(t, tool_when(&p, true, start + 1_000, true), "Started 01:01:01, running")

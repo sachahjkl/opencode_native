@@ -903,120 +903,43 @@ the_files_shown_are_those_of_the_artifact_named :: proc(t: ^testing.T) {
 ////////////////////////////////
 // Files
 
-@(private = "file")
-ROWS :: `{"data":[{"path":"src","type":"directory"},{"path":"a.txt","type":"file"}]}`
-
+// The server's source reads and searches inside its location only (the session's folder): the server loads a location for
+// every folder it is asked about. What it found is given from the folder searched.
 @(test)
-the_rows_of_a_folder_are_of_that_folder :: proc(t: ^testing.T) {
+the_servers_files_are_read_and_searched_in_the_sessions_folder :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	f := &app.cx.files
-	files_open(app)
-	bench_answer(app, bench_take(t, .Files_List), 200, ROWS)
-	testing.expect_value(t, len(f.rows), 2)
+	src := server_files(app, `D:\work`)
+	testing.expect(t, .Read in src.caps && src.read != nil && src.find != nil, "a location: a preview and a search")
+	src.read(src, "D:/work/src/a b.txt", 1000, {kind = .Read})
+	r := bench_take(t, .Server_File_Read)
+	testing.expect_value(t, r.path, "/api/fs/read/src/a%20b.txt?location[directory]=D%3A%2Fwork")
+	src.read(src, "D:/other/x.txt", 1000, {kind = .Read})
+	testing.expect_value(t, bench_count(.Server_File_Read), 0)   // (outside: refused here, nothing asked)
+	src.find(src, "D:/work/src", "ab", 50, {kind = .Find})
+	r = bench_take(t, .Server_Files_Find)
+	testing.expect_value(t, r.path, "/api/fs/find?location[directory]=D%3A%2Fwork&query=ab&limit=50")
+	src.find(src, "D:/elsewhere", "ab", 50, {kind = .Find})
+	testing.expect_value(t, bench_count(.Server_Files_Find), 0)
+	bench_answer(app, r, 200, `{"data":[]}`)
 
-	files_open(app)
-	testing.expect_value(t, len(f.rows), 0)
-	testing.expect(t, !remote.shows(&f.read), "not 'This folder is empty.' before any answer")
-	bench_lost(app, bench_take(t, .Files_List))
-	testing.expect_value(t, f.read.state, remote.State.Failed)
-	files_list(app)
-	bench_answer(app, bench_take(t, .Files_List), 200, `{"data":[]}`)
-	testing.expect(t, remote.shows(&f.read), "now it is empty")
+	none := server_files(app)
+	testing.expect(t, none.caps == {} && none.read == nil && none.find == nil, "no location: folders only")
 }
 
-// The root of a folder had no tag: an old root listing matched the new one.
+// A reply replaced is not answered by the request of the one before it.
 @(test)
-an_old_root_listing_does_not_match_the_new_one :: proc(t: ^testing.T) {
+an_older_listing_does_not_answer_the_newer :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	f := &app.cx.files
-	show(app, "a")
-	described(app, t, "a", "D:/a", "p")
-	files_open(app)
-	old := bench_take(t, .Files_List)
-	show(app, "b")
-	described(app, t, "b", "D:/b", "p")
-	files_open(app)
-	bench_answer(app, old, 200, ROWS)
-	testing.expect_value(t, len(f.rows), 0)
-	r := bench_take(t, .Files_List)
-	testing.expect(t, strings.contains(r.path, "D%3A%2Fb"))
-	bench_answer(app, r, 200, `{"data":[{"path":"b.txt","type":"file"}]}`)
-	testing.expect_value(t, f.rows[0].path, "b.txt")
-}
-
-// A search and a folder: the last asked says what the rows are.
-@(test)
-a_search_given_up_does_not_answer_for_the_folder :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	f := &app.cx.files
-	files_open(app)
-	bench_answer(app, bench_take(t, .Files_List), 200, ROWS)
-	ui.line_edit_set(&f.field, "x")
-	files_list(app)
-	testing.expect(t, f.searching)
-	testing.expect(t, remote.shows(&f.read), "what was there stays while one types")
-	search := bench_take(t, .Files_List)
-	ui.line_edit_set(&f.field, "")
-	files_list(app)
-	bench_answer(app, search, 200, `{"data":[{"path":"found/x.txt","type":"file"}]}`)
-	testing.expect_value(t, len(f.rows), 2)
-}
-
-// The version was the hash of the path and the length: a file edited to the same length kept the text of its last reading.
-@(test)
-a_file_read_again_is_shown_again :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	f := &app.cx.files
-	files_open(app)
-	bench_clear(app)
-	file_show(app, "a.txt")
-	bench_answer(app, bench_take(t, .File_Read), 200, "first")
-	v := f.version
-	file_show(app, "a.txt")
-	bench_answer(app, bench_take(t, .File_Read), 200, "other")
-	testing.expect_value(t, f.content, "other")
-	testing.expect(t, f.version != v, "the cache of the text would keep the first")
-}
-
-// Only the path was checked: the same path in the folder before.
-@(test)
-a_file_of_the_folder_before_does_not_show_in_this_one :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	f := &app.cx.files
-	show(app, "a")
-	described(app, t, "a", "D:/a", "p")
-	files_open(app)
-	bench_clear(app)
-	file_show(app, "same.txt")
-	old := bench_take(t, .File_Read)
-	show(app, "b")
-	described(app, t, "b", "D:/b", "p")
-	files_open(app)
-	bench_clear(app)
-	file_show(app, "same.txt")
-	bench_answer(app, old, 200, "of a")
-	testing.expect_value(t, f.content, "")
-	bench_answer(app, bench_take(t, .File_Read), 404, `{"message":"no such file"}`)
-	testing.expect_value(t, f.file_read.message, "no such file")
-	testing.expect(t, !remote.shows(&f.file_read))
-}
-
-@(test)
-a_binary_file_says_so :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	f := &app.cx.files
-	files_open(app)
-	bench_clear(app)
-	file_show(app, "a.bin")
-	bench_answer(app, bench_take(t, .File_Read), 200, "a\x00b")
-	testing.expect(t, f.binary)
-	testing.expect_value(t, f.size, 3)
+	src := server_files(app)
+	src.list(src, "/a", {kind = .List})
+	old := bench_take(t, .Server_Files_List)
+	src.list(src, "/b", {kind = .List})
+	bench_answer(app, old, 200, `{"data":[]}`)
+	testing.expect(t, app.server_files.list.waiting, "the newer still waits")
+	bench_answer(app, bench_take(t, .Server_Files_List), 200, `{"data":[]}`)
+	testing.expect(t, !app.server_files.list.waiting)
 }
 
 ////////////////////////////////
@@ -1347,10 +1270,9 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	bench_answer(app, bench_take(t, .Artifacts), 200, ARTIFACTS)
 	artifact_show(app, "one")
 	bench_answer(app, bench_take(t, .Artifact_Read), 200, ARTIFACT_ONE)
-	files_open(app)
-	bench_answer(app, bench_take(t, .Files_List), 200, ROWS)
-	file_show(app, "a.txt")
-	bench_answer(app, bench_take(t, .File_Read), 200, "text")
+	files_source := server_files(app, "D:/w")
+	files_source.list(files_source, "D:/w", {kind = .List})
+	files_source.read(files_source, "D:/w/a.txt", 100, {kind = .Read})
 	typed(app, "@a")
 	mention_track(app)
 	bench_answer(app, bench_take(t, .Mention_Files), 200, HITS)
@@ -1403,14 +1325,9 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	testing.expect_value(t, a.read.state, remote.State.Idle)
 	testing.expect_value(t, a.file_read.state, remote.State.Idle)
 
-	f := &cx.files
-	testing.expect(t, !cx.open[.Files])
-	testing.expect_value(t, f.dir, "")
-	testing.expect_value(t, f.file, "")
-	testing.expect_value(t, f.content, "")
-	testing.expect_value(t, len(f.rows), 0)
-	testing.expect_value(t, f.read.state, remote.State.Idle)
-	testing.expect_value(t, f.file_read.state, remote.State.Idle)
+	f := &app.server_files
+	testing.expect(t, !f.list.waiting && !f.read.waiting && !f.find.waiting, "nothing waits for the server that left")
+	testing.expect_value(t, f.location, "")
 
 	m := &app.composer.mentions
 	testing.expect(t, !m.open)

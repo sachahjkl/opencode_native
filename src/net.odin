@@ -281,9 +281,9 @@ Req_Kind :: enum u8 {
 	Connect_Begin,  // POST .../connect/oauth, /command
 	Connect_Status, // GET .../connect/oauth/:id, /command/:id
 	Mention_Files,  // GET /api/fs/list, /api/fs/find: what @ proposes (files.odin)
-	Files_List,     // the same for the dialog
 	Server_Files_List, // GET /api/fs/list?path=<absolute>: a folder of the server, for the file browser (folders.odin)
-	File_Read,      // GET /api/fs/read/*
+	Server_File_Read,  // GET /api/fs/read/<path>?location[directory]=: the start of a file, for the file browser's preview (folders.odin)
+	Server_Files_Find, // GET /api/fs/find: the file browser's search in subfolders (folders.odin)
 	Changes_Range,  // GET /api/session/:id/message?type=user: the first prompt, then the last
 	Changes,        // GET /api/session/:id/diff: the files
 	Revert_Staged,  // POST /api/session/:id/revert/stage: the files, written back by then
@@ -553,9 +553,9 @@ quiet_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (t
 	.Connect_Begin    = {json = true, on_ok = connect_begin_on_ok, on_fail = connect_on_fail, on_left = connect_begin_on_left},
 	.Connect_Status   = {json = true, on_ok = connect_status_on_ok, on_fail = connect_status_on_fail},
 	.Mention_Files    = {json = true, on_ok = mention_files_on_ok, on_fail = mention_files_on_fail},
-	.Files_List       = {json = true, on_ok = files_list_on_ok, on_fail = quiet_on_fail},
 	.Server_Files_List = {json = true, on_ok = server_files_list_on_ok, on_fail = server_files_list_on_fail},
-	.File_Read        = {on_ok = file_read_on_ok, on_fail = quiet_on_fail},
+	.Server_File_Read = {on_ok = server_file_read_on_ok, on_fail = server_file_read_on_fail},
+	.Server_Files_Find = {json = true, on_ok = server_files_find_on_ok, on_fail = server_files_find_on_fail},
 	.Changes_Range    = {json = true, on_ok = changes_range_on_ok, on_fail = quiet_on_fail},
 	.Changes          = {json = true, on_ok = changes_on_ok, on_fail = changes_on_fail},
 	.Revert_Staged    = {json = true, on_ok = revert_staged_on_ok, on_fail = revert_on_fail, on_left = revert_staged_on_left},
@@ -846,7 +846,6 @@ dialogs_reread :: proc(app: ^App) {
 	plugins_changed(app)
 	if cx.open[.Schedules] && remote.failed(&cx.schedules.read) { schedules_ask(app) }
 	if cx.open[.Artifacts] && remote.failed(&cx.artifacts.read) { artifacts_ask(app) }
-	if cx.open[.Files] && remote.failed(&cx.files.read) { files_list(app) }
 	if app.stats.open {
 		if remote.failed(&app.stats.read) { stats_ask(app) }
 		context_ask(app)   // (what a step added was missed)

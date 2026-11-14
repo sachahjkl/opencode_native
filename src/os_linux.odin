@@ -1,35 +1,9 @@
-// What the client asks of Linux itself: the local time's offset (libc), a question on the terminal.
+// What the client asks of Linux itself: a question on the terminal.
 package ocn
 
-import "core:c"
 import "core:fmt"
 import "core:os"
 import "core:strings"
-
-foreign import libc "system:c"
-
-
-@(private = "file")
-Tm :: struct {   // glibc's struct tm
-	sec, min, hour, mday, mon, year, wday, yday, isdst: c.int,
-	gmtoff: c.long,
-	zone:   cstring,
-}
-
-@(default_calling_convention = "c", private = "file")
-foreign libc {
-	time :: proc(t: ^c.long) -> c.long ---
-	localtime_r :: proc(t: ^c.long, out: ^Tm) -> ^Tm ---
-}
-
-// Minutes to add to UTC for the machine's local time now (daylight saving included). It may read the zone's file: never on the
-// interface's thread (clock.odin).
-local_offset_read :: proc() -> int {
-	now := time(nil)
-	tm: Tm
-	if localtime_r(&now, &tm) == nil { return 0 }
-	return int(tm.gmtoff) / 60
-}
 
 // (no taskbar button to flash: the toast tells)
 flash_taskbar :: proc(app: ^App) {}

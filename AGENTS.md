@@ -43,3 +43,14 @@ Apply these to every task, before you write code:
 - Automation is a command of `tools/ocntools`, never a shell, batch, PowerShell, Python or Node script.
 - Comments and commit messages are in English. Comments say why.
 - Commits: author and committer `sachahjkl <sacha@sacha.house>`, no attribution trailer, no session link.
+
+## Roadmap
+
+- `ROADMAP.md`, next to `CHANGELOG.md`, holds the planned work of opencode native; no global to-do file keeps it. A work that
+  touches several programs goes in the roadmap of gui_toolkit.
+- Plain Markdown: the title `# Roadmap`, then `## Now`, `## Next` and `## Later` in this order, each a list. No front matter,
+  no metadata, no dates.
+- An entry starts with a short bold summary, then one or two sentences on what it gives the user; continuation lines are
+  indented. If its design exists, it links its intent file in `src/md`.
+- When a work is done, its entry is removed in the same commit as its changelog fragment.
+- `ocntools check` checks the format: the toolkit's changelog check reads `ROADMAP.md` beside `CHANGELOG.md`.

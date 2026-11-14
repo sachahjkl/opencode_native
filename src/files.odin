@@ -11,6 +11,7 @@ import "core:path/filepath"
 import "core:strings"
 import "core:unicode/utf8"
 import "gt:draw"
+import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
 import remote "gt:remote"
@@ -24,7 +25,6 @@ files_dir :: proc(app: ^App) -> string {
 }
 
 // The server writes paths with the separators of its system; a prompt reads better with one kind.
-@(private = "file")
 path_clean :: proc(p: string) -> string {
 	s, _ := strings.replace_all(strings.trim_right(p, `\/`), `\`, "/", context.temp_allocator)
 	return s
@@ -40,20 +40,6 @@ file_uri :: proc(dir, rel: string) -> string {
 		case 'A' ..= 'Z', 'a' ..= 'z', '0' ..= '9', '-', '_', '.', '~', '/', ':': strings.write_byte(&b, c)
 		case: fmt.sbprintf(&b, "%%%02X", c)
 		}
-	}
-	return strings.to_string(b)
-}
-
-// A path in the address of a request: each part escaped, the slashes kept.
-@(private = "file")
-path_escape :: proc(p: string) -> string {
-	b := strings.builder_make(context.temp_allocator)
-	rest := p
-	first := true
-	for part in strings.split_iterator(&rest, "/") {
-		if !first { strings.write_byte(&b, '/') }
-		first = false
-		strings.write_string(&b, url_escape(part))
 	}
 	return strings.to_string(b)
 }
@@ -327,116 +313,41 @@ mentions_forget :: proc(app: ^App) {
 ////////////////////////////////
 // The dialog
 
-File_Row :: struct {
-	path, name: string,
-	directory:  bool,
-}
-
-Files :: struct {
-	fresh:   bool,
-	dir:     string,               // the session's folder (owned)
-	at:      string,               // the folder shown, from it, "": itself (owned)
-	field:   ui.Line_Edit,
-	searching: bool,               // what is read is a search
-	sel:     int,                  // the row the keyboard is on
-	read:    remote.Remote,               // the rows
-	rows:    [dynamic]File_Row,
-	arena:   virtual.Arena,
-	file:    string,               // the file shown (owned, "": none)
-	file_read: remote.Remote,             // it
-	binary:  bool,                 // it is not text
-	content: string,               // (owned)
-	size:    int,
-	version: u64,                  // one more at each reading: its text may have changed whatever its length
-}
-
+// The toolkit's file browser on the session's folder, its subfolders searched as one types: the files chosen are mentioned in
+// the prompt. The folder is the server's: this computer's files when the server is here, else its own (folders.odin).
 @(private = "file")
-files_rows_clear :: proc(f: ^Files) {
-	virtual.arena_destroy(&f.arena)
-	clear(&f.rows)
-	f.sel = 0
-}
-
-// The rows go with the folder they were of. (A search typed further keeps them, until what it finds.)
-@(private = "file")
-files_elsewhere :: proc(f: ^Files) {
-	files_rows_clear(f)
-	remote.reset(&f.read)
-}
-
-files_list :: proc(app: ^App) {
-	f := &app.cx.files
-	word := strings.trim_space(ui.line_edit_string(&f.field))
-	f.searching = word != ""
-	q := location_query(f.dir)
-	amp := q != "" ? "&" : ""
-	remote.begin(&f.read)
-	if f.searching {
-		request(app, .Files_List, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&limit=%d", q, amp, url_escape(word), FILES_FOUND_MAX), reading = &f.read)
-	} else {
-		path := f.at != "" ? fmt.tprintf("%spath=%s", amp, url_escape(f.at)) : ""
-		request(app, .Files_List, "GET", fmt.tprintf("/api/fs/list?%s%s", q, path), reading = &f.read)
-	}
-}
-
-@(private = "file")
-files_clear :: proc(f: ^Files) {
-	delete(f.dir); delete(f.at); delete(f.file); delete(f.content)
-	f.dir, f.at, f.file, f.content = "", "", "", ""
-	f.binary, f.size = false, 0
-	remote.reset(&f.file_read)
-	files_elsewhere(f)
-	ui.line_edit_set(&f.field, "")
+Files_Job :: struct {
+	app: ^App,
+	dir: string,   // the session's folder (owned)
 }
 
 files_open :: proc(app: ^App) {
-	f := &app.cx.files
-	files_clear(f)
-	f.dir = strings.clone(files_dir(app))
-	app.cx.open[.Files], f.fresh = true, true
-	files_list(app)
+	dir := files_dir(app)
+	j := new(Files_Job)
+	j^ = {app, strings.clone(dir)}
+	places: []platform.File_Place
+	if dir != "" { places = {{name = base_name(dir), path = dir}} }
+	ui.file_dialog(&app.state, .Open, {owner = app.win, title = i18n.tr("Files of the session"), start_dir = dir, places = places, multiple = true, all_files = true, find_deep = true, act = i18n.tr("Mention"), remember_id = "session_files"}, proc(r: platform.Dialog_Result, user: rawptr) {
+		j := (^Files_Job)(user)
+		defer { delete(j.dir); free(j) }
+		if r.status != .Chosen { return }
+		a := &j.app.composer.area
+		a.mark = a.cursor
+		for p in r.paths { file_mention(j.app, j.dir, p) }
+	}, j, source = folders_are_here(app) ? nil : server_files(app, dir))
 }
 
-files_forget :: proc(app: ^App) {
-	f := &app.cx.files
-	app.cx.open[.Files] = false
-	files_clear(f)
-}
-
-// Folders first, each kind by name; a search keeps the server's ranking.
-files_load :: proc(app: ^App, v: json.Value) {
-	f := &app.cx.files
-	files_rows_clear(f)
-	_ = virtual.arena_init_growing(&f.arena)
-	a := virtual.arena_allocator(&f.arena)
-	for pass in 0 ..< 2 {
-		for it in jarr(v, "data") {
-			directory := jstr(it, "type") == "directory"
-			if directory != (pass == 0) { continue }
-			p := path_clean(jstr(it, "path"))
-			append(&f.rows, File_Row{strings.clone(p, a), strings.clone(f.searching ? p : filepath.base(p), a), directory})
-		}
-	}
-}
-
-file_show :: proc(app: ^App, path: string) {
-	f := &app.cx.files
-	name := strings.clone(path)
-	delete(f.file)
-	f.file = name
-	file_read(app)
-}
-
-// (Also Try again.)
+// `path` (absolute, the server's) mentioned in the prompt: by its path from the session's folder when it is in it, else whole.
 @(private = "file")
-file_read :: proc(app: ^App) {
-	f := &app.cx.files
-	delete(f.content)
-	f.content, f.binary, f.size = "", false, 0
-	remote.reset(&f.file_read)
-	remote.begin(&f.file_read)
-	q := location_query(f.dir)
-	request(app, .File_Read, "GET", fmt.tprintf("/api/fs/read/%s%s%s", path_escape(f.file), q != "" ? "?" : "", q), reading = &f.file_read)
+file_mention :: proc(app: ^App, dir, path: string) {
+	p := path_clean(path)
+	d := path_clean(dir)
+	if d != "" && strings.has_prefix(p, d) && len(p) > len(d) && p[len(d)] == '/' {
+		rel := p[len(d) + 1:]
+		mention_put(app, .File, rel, file_uri(dir, rel), filepath.base(rel))
+		return
+	}
+	mention_put(app, .File, p, file_uri(filepath.dir(p), filepath.base(p)), filepath.base(p))
 }
 
 // What is shown of `raw`: its beginning when it is long, nothing when it is no text.
@@ -446,151 +357,6 @@ file_text :: proc(raw: string) -> (shown: string, is_text: bool) {
 	shown = raw[:min(len(raw), FILE_VIEW_MAX_BYTES)]
 	for len(shown) > 0 && len(shown) < len(raw) && !utf8.rune_start(raw[len(shown)]) { shown = shown[:len(shown) - 1] }   // (not in the middle of a character)
 	return shown, utf8.valid_string(shown)
-}
-
-file_loaded :: proc(app: ^App, raw: string) {
-	f := &app.cx.files
-	f.size = len(raw)
-	shown, is_text := file_text(raw)
-	f.binary = !is_text
-	if !is_text { return }
-	delete(f.content)
-	f.content = strings.clone(shown)
-	f.version += 1
-}
-
-@(private = "file")
-files_up :: proc(app: ^App) {
-	f := &app.cx.files
-	i := strings.last_index_byte(f.at, '/')
-	up := strings.clone(i >= 0 ? f.at[:i] : "")
-	delete(f.at)
-	f.at = up
-	files_elsewhere(f)
-	files_list(app)
-}
-
-files_dialog :: proc(app: ^App, em: f32) {
-	f := &app.cx.files
-	if !app.cx.open[.Files] { return }
-	if ui.modal("files", &app.cx.open[.Files], dialog_options(app, .Files)) {
-		dialog_backdrop()
-		if ui.dialog_header("fl_head", f.at != "" && !f.searching ? f.at : base_name(f.dir), {close = true}) {
-		}
-		ui.spacer(ui.px(em * 0.5))
-		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
-		if ui.row(id = "###fl_body") {
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-			ui.next({width = ui.px(math.round(em * FILES_LIST_W_EM)), height = ui.fill(), axis = .Y})
-			if ui.column(id = "###fl_left") { files_left(app, em) }
-			ui.spacer(ui.px(em))
-			ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
-			if ui.column(id = "###fl_right") { files_right(app, em) }
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
-		}
-		ui.spacer(ui.px(em * 0.9))
-	}
-	f.fresh = false
-}
-
-// A row chosen: a folder is entered, a file read. False when the rows are not the same any more.
-@(private = "file")
-file_pick :: proc(app: ^App, r: File_Row) -> bool {
-	f := &app.cx.files
-	if !r.directory { file_show(app, r.path); return true }
-	path := strings.clone(r.path)   // (of the arena that goes)
-	delete(f.at)
-	f.at = path
-	ui.line_edit_set(&f.field, "")
-	files_elsewhere(f)
-	files_list(app)
-	return false
-}
-
-@(private = "file")
-files_left :: proc(app: ^App, em: f32) {
-	f := &app.cx.files
-	shows := remote.shows(&f.read)
-	if n := len(f.rows); n > 0 && shows {
-		if ui.key_press(.Down) { f.sel = (f.sel + 1) % n }
-		if ui.key_press(.Up) { f.sel = (f.sel + n - 1) % n }
-	}
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), cross = .Center, radius = 8 * ui.scale()})
-	if ui.well("###fl_well", .X, flags = {.Focus_Within, .Draw_Focus_Ring}) {
-		ui.spacer(ui.px(em * 0.6))
-		glyph(lucide.SEARCH, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
-		if ui.tags("bare") {
-			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.35, font_size = math.round(em * FS_BODY)})
-			res := ui.line_edit("###fl_find", &f.field, {placeholder = i18n.tr("Find a file")})
-			if f.fresh { ui.set_focus(res.box.key) }
-			if res.changed { files_list(app) }
-			if res.cancelled { app.cx.open[.Files] = false }
-			if res.committed && shows && f.sel < len(f.rows) && !file_pick(app, f.rows[f.sel]) { return }
-		}
-	}
-	ui.spacer(ui.px(em * 0.4))
-	ui.next({width = ui.fill(), height = ui.fill()})
-	if ui.scroll_y("###fl_rows") {
-		if f.at != "" && !f.searching {
-			if file_row(app, "###fl_up", "..", lucide.FOLDER, false, em) { files_up(app); return }
-		}
-		if !read_shown(app, "###fl_read", &f.read, em, files_list) { return }
-		if len(f.rows) == 0 { info_line(app, "###fl_none", f.searching ? i18n.tr("Nothing matches.") : i18n.tr("This folder is empty."), em) }
-		for r, i in f.rows {
-			if !file_row(app, fmt.tprintf("###flr%d", i), r.name, r.directory ? lucide.FOLDER : lucide.FILE, i == f.sel, em) { continue }
-			f.sel = i
-			if !file_pick(app, r) { return }
-		}
-	}
-}
-
-@(private = "file")
-file_row :: proc(app: ^App, id, name, icon: string, selected: bool, em: f32) -> bool {
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), axis = .X, cross = .Center, cursor = .Hand})
-	row := ui.build_box({.Clickable}, id)
-	clicked := ui.signal(row).clicked
-	if ui.parent(row) {
-		ui.spacer(ui.px(em * 0.3))
-		glyph(icon, hex(selected ? HEX_BRIGHT : HEX_FAINT), math.round(em * ICON_SMALL), em * 1.1)
-		ui.spacer(ui.px(em * 0.3))
-		text("n", name, hex(selected ? HEX_BRIGHT : HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
-	}
-	return clicked
-}
-
-@(private = "file")
-files_right :: proc(app: ^App, em: f32) {
-	f := &app.cx.files
-	if f.file == "" {
-		info_line(app, "###fl_hint", i18n.tr("Pick a file to read it."), em)
-		return
-	}
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
-	if ui.row(.Center, id = "###fl_bar") {
-		text("p", f.file, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
-		ui.spacer(ui.px(em * 0.5))
-		if ui.button("fl_copy", i18n.tr("Copy path"), lucide.COPY, {height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked {
-			clip_set(fmt.tprintf("%s/%s", strings.trim_right(f.dir, `\/`), f.file))
-		}
-		ui.spacer(ui.px(em * 0.4))
-		if ui.button("fl_mention", i18n.tr("Mention in the prompt"), lucide.PENCIL, {intent = .Primary, height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked {
-			a := &app.composer.area
-			a.mark = a.cursor
-			mention_put(app, .File, f.file, file_uri(f.dir, f.file), filepath.base(f.file))
-			app.cx.open[.Files] = false
-		}
-	}
-	ui.spacer(ui.px(em * 0.5))
-	if !read_shown(app, "###fl_file", &f.file_read, em, file_read) { return }
-	if f.binary {
-		info_line(app, "###fl_bin", fmt.tprintf(i18n.tr(f.size, "Not text: %d bytes. It can still go with a prompt.", "Not text: %d bytes. It can still go with a prompt."), f.size), em)
-		return
-	}
-	if f.size > len(f.content) { info_line(app, "###fl_cut", fmt.tprintf(i18n.tr("The first %d of %d bytes."), len(f.content), f.size), em) }
-	ui.next({width = ui.fill(), height = ui.fill()})
-	if ui.scroll_y("###fl_view") {
-		code_block("###fl_code", strings.trim_prefix(filepath.ext(f.file), "."), f.content, app.mono, version = f.version)
-	}
 }
 
 ////////////////////////////////
@@ -603,6 +369,3 @@ mention_files_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: strin
 	return f == .Refused   // (a server without one, a folder gone: nothing to say)
 }
 
-files_list_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { files_load(app, v) }
-
-file_read_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { file_loaded(app, r.resp) }

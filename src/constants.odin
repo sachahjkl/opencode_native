@@ -212,7 +212,8 @@ GO_BOTTOM_W_EM    :: 6.5
 
 // What can be over the window: App_Context.open says which are (overlay_open). Those in DIALOGS_SIZED can be resized, and
 // layout.dialogs keeps their sizes by position, in this order: a new value goes at the end. (Schedules is as tall as what it holds, and no longer one that is
-// resized: its place stays.) Changes and Output are never in App_Context.open: their own state says it (overlay_open).
+// resized: its place stays. Files is the toolkit's file browser now, which keeps its own size: its place stays too.) Changes
+// and Output are never in App_Context.open: their own state says it (overlay_open).
 Dialog :: enum u8 { Settings, Help, Changes, Files, Schedules, Artifacts, Diff, Output, Palette, Delete, Viewer, Server, Picker, Pair, Rename, Notices, Diagram }
 DIALOGS_SIZED :: bit_set[Dialog]{.Settings, .Help, .Changes, .Files, .Schedules, .Artifacts, .Diff, .Output, .Palette, .Notices, .Diagram}
 // (what they open at and the least they go to, in em: the window has the last word)
@@ -258,8 +259,7 @@ CONNECT_POLL_MS      :: 1500   // how often a login under way is asked about
 CONNECT_POLL_MISSES  :: 5      // readings of it that fail in a row before they stop and the dialog says so
 MENTION_ROWS         :: 7      // what @ proposes at once
 MENTION_DETAIL_CHARS :: 60
-FILES_FOUND_MAX      :: 200    // of a search in the dialog
-FILES_LIST_W_EM      :: 22
+FILES_LIST_W_EM      :: 22     // the list of an artifact's files
 FILE_SNIFF_BYTES     :: 8192   // looked at for a zero byte: not text
 FILE_VIEW_MAX_BYTES  :: 262144 // of a file, shown; the rest is said
 CHANGES_OPEN_FILES :: 6     // the files of a list shown unfolded

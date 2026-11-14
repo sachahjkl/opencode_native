@@ -18,7 +18,7 @@ run_check :: proc(args: []string) -> int {
 		fmt.eprintfln("check: what is %s?", args[i])
 		return EXIT_USAGE
 	}
-	if !changelog_check() { return 1 }
+	if !changelog_check() { return 1 }   // (ROADMAP.md too: the toolkit's changelog check reads it)
 	// (a text of the code with no French, or a French text the code no longer has)
 	if why := toolbox.i18n_catalogue({"src"}, "i18n/fr.txt", "fr", true); why != "" { fmt.eprintfln("check: %s", why); return 1 }
 	// (a scope opened under a negation ends at once: `if !ui.row(...)`)

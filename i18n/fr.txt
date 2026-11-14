@@ -719,31 +719,11 @@ fr Côte à côte
 en The server's experimental options are on
 fr Les options expérimentales du serveur sont activées
 
-en Find a file
-fr Rechercher un fichier
+en Files of the session
+fr Fichiers de la session
 
-en Nothing matches.
-fr Aucun résultat.
-
-en This folder is empty.
-fr Ce dossier est vide.
-
-en Pick a file to read it.
-fr Choisissez un fichier pour le lire.
-
-en Copy path
-fr Copier le chemin
-
-en Mention in the prompt
-fr Mentionner dans l'invite
-
-en Not text: %d bytes. It can still go with a prompt.
-en+ Not text: %d bytes. It can still go with a prompt.
-fr Pas du texte : %d octet. Il peut quand même accompagner une invite.
-fr+ Pas du texte : %d octets. Il peut quand même accompagner une invite.
-
-en The first %d of %d bytes.
-fr Les %d premiers octets sur %d.
+en Mention
+fr Mentionner
 
 en no match
 fr aucun résultat
@@ -753,6 +733,12 @@ fr Démarrer une session dans
 
 en Move the session to
 fr Déplacer la session vers
+
+en Only the files of the session's folder are shown here.
+fr Seuls les fichiers du dossier de la session s'affichent ici.
+
+en The search covers the session's folder only.
+fr La recherche ne couvre que le dossier de la session.
 
 en The server changed.
 fr Le serveur a changé.
@@ -927,6 +913,9 @@ fr Les comptes avec lesquels le serveur se connecte : ce que vous connectez ici 
 
 en Find an integration
 fr Rechercher une intégration
+
+en Nothing matches.
+fr Aucun résultat.
 
 en %d more: search to find them.
 en+ %d more: search to find them.

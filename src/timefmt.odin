@@ -1,8 +1,8 @@
 package ocn
 
-// Every time the program shows, in one place: the toolkit's timefmt formats them; this file adds the local clock's offset
-// (clock.odin reads it off the interface thread), the 24-hour preference, the server's epoch milliseconds, and the few
-// forms that are this program's own (a tool call's tenths, a limit's time left, a server's timings).
+// Every time the program shows, in one place: the toolkit's timefmt formats them, with the local clock's offset it keeps
+// (timefmt.local_offset_minutes, read off the interface thread); this file adds the 24-hour preference, the server's epoch
+// milliseconds, and the few forms that are this program's own (a tool call's tenths, a limit's time left, a server's timings).
 
 import "core:fmt"
 import "core:math"
@@ -30,15 +30,15 @@ age_text :: proc(now, t: f64) -> string {
 // The local time of `t` (epoch ms): "14:32", "2:32 pm" (`clock24`: the preference); `seconds`: "14:32:05". "": not known.
 clock_text :: proc(t: f64, clock24: bool, seconds := false) -> string {
 	if t <= 0 { return "" }
-	return timefmt.clock(t, local_offset_minutes(), {hours12 = !clock24, seconds = seconds})
+	return timefmt.clock(t, timefmt.local_offset_minutes(), {hours12 = !clock24, seconds = seconds})
 }
 
 // The local date of `t` (epoch ms): "Nov 10".
-date_text :: proc(t: f64) -> string { return timefmt.date(t, local_offset_minutes()) }
+date_text :: proc(t: f64) -> string { return timefmt.date(t, timefmt.local_offset_minutes()) }
 
 // Whether two times (epoch ms) are on the same day of the local clock.
 same_local_day :: proc(a, b: f64) -> bool {
-	off := local_offset_minutes()
+	off := timefmt.local_offset_minutes()
 	return timefmt.local_day(a, off) == timefmt.local_day(b, off)
 }
 

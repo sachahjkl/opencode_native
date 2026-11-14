@@ -30,7 +30,7 @@ prompt_rail :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	prompt_rail_sync(app)
 	margin := math.round(em * PROMPT_RAIL_MARGIN_EM)
 	// (the cards say when each prompt was sent, on the reader's clock)
-	o := ui.Scroll_Marks_Options{name = i18n.tr("Prompts"), margin = margin, now_ms = now_epoch_ms(), offset_minutes = local_offset_minutes(), hours12 = !app.prefs.clock24}
+	o := ui.Scroll_Marks_Options{name = i18n.tr("Prompts"), margin = margin, now_ms = now_epoch_ms(), hours12 = !app.prefs.clock24}
 	i := ui.scroll_marks("###prompt_rail", &p.rail, sb, o)
 	if i < 0 { return }
 	id := ui.scroll_marks_id(&p.rail, i)

@@ -134,9 +134,9 @@ commands_keys :: proc(app: ^App) {
 // - Changes: its state machine (Changes_State) says whether it is on screen; a bool beside it could disagree with it.
 // - Output: the view shown is the dialog's subject; nil is its being closed.
 // - The install's dialog: the toolkit's prefs_page.Install keeps its own (install_open_now).
-// - the toolkit's menus (ui.menu), which the toolkit's state holds.
+// - the toolkit's menus (ui.menu) and its file browser (ui.file_dialog), which the toolkit's state holds.
 overlay_open :: proc(app: ^App) -> bool {
-	return app.cx.open != {} || changes_shown(&app.cx.changes) || app.cx.outputs.shown != nil || prefs_page.install_open_now(&app.install) || len(app.state.menus) > 0
+	return app.cx.open != {} || changes_shown(&app.cx.changes) || app.cx.outputs.shown != nil || prefs_page.install_open_now(&app.install) || len(app.state.menus) > 0 || ui.file_dialog_shown(&app.state)
 }
 
 // The conversation's zoom: the session shown's own, or the preference (appearance.content_zoom), which is every session's that has

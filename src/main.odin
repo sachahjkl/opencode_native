@@ -187,7 +187,6 @@ App_Context :: struct {
 	plugins:        Plugins,
 	integrations:   Integrations,         // the Connections page (integrations.odin)
 	background:     map[string]bool,      // the sessions with commands running in the background, and their parents (activity.odin; keys owned)
-	files:          Files,                // the dialog of the folder's files
 	changes:        Changes,              // what a session changed, or would undo (session_tools.odin)
 	forms:          [dynamic]^Form_Req,   // what agents ask and wait for (forms.odin), of every session
 	shared_moved:   bool,                 // something of what every window shows may have changed this frame (detached_still)
@@ -648,7 +647,6 @@ fonts_init :: proc(app: ^App) -> bool {
 
 main :: proc() {
 	opts := cli_start()   // (--help, --version, a line not understood: said, no window; everything else reads app.cli)
-	clock_watch_start()   // (the local time's offset, read here and then by a thread of its own: clock.odin)
 	started := time.tick_now()
 	// --install / --uninstall / --status: the install, without a window
 	if setup.command_alone(opts.command) { os.exit(setup.command_run(opts.command, setup_options(), process.console_write)) }

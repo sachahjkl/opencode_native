@@ -1,11 +1,10 @@
-// What the client asks of Windows itself: the local time's offset, the taskbar button flashing, a message box.
+// What the client asks of Windows itself: the taskbar button flashing, a message box.
 package ocn
 
 import "core:encoding/base64"
 import "core:strings"
 import win "core:sys/windows"
 
-foreign import kernel32 "system:Kernel32.lib"
 foreign import user32_flash "system:User32.lib"
 foreign import crypt32 "system:Crypt32.lib"
 
@@ -21,25 +20,11 @@ foreign crypt32 {
 @(private = "file") CRYPTPROTECT_UI_FORBIDDEN :: u32(1)
 @(private = "file") SEALED_MARK :: "dpapi:"
 
-@(default_calling_convention = "system", private = "file")
-foreign kernel32 {
-	GetTimeZoneInformation :: proc(tzi: ^win.TIME_ZONE_INFORMATION) -> u32 ---
-}
-
 FLASHWINFO :: struct { cbSize: u32, hwnd: win.HWND, dwFlags: u32, uCount: u32, dwTimeout: u32 }
 
 @(default_calling_convention = "system", private = "file")
 foreign user32_flash {
 	FlashWindowEx :: proc(fi: ^FLASHWINFO) -> win.BOOL ---
-}
-
-// Minutes to add to UTC for the machine's local time now (daylight saving included). A system call: never on the interface's
-// thread (clock.odin).
-local_offset_read :: proc() -> int {
-	tzi: win.TIME_ZONE_INFORMATION
-	r := GetTimeZoneInformation(&tzi)
-	bias := int(tzi.Bias) + (r == 2 ? int(tzi.DaylightBias) : int(tzi.StandardBias))
-	return -bias
 }
 
 FLASH_COUNT :: 3   // of the taskbar button
