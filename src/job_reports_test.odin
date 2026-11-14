@@ -23,6 +23,27 @@ second line
 	testing.expect_value(t, r.body, "  first line\nsecond line")
 }
 
+// The harness does not escape a command's own quotes: the value ends at the quote followed by the tag's end and its line's.
+@(test)
+a_command_with_quotes_of_its_own_is_read_whole :: proc(t: ^testing.T) {
+	s := `<shell id="sh_1dba33fe5001" state="completed" command="cd ~/k && nix flake check > /tmp/f.log 2>&1; grep -a "Error\|FAIL" /tmp/f.log | cut -c1-80; bash -c 'echo "x"'">
+tk ci 1
+ - a_test	FAIL: "it broke"
+</shell>`
+	jobs, ok := jobs_parse(s, context.temp_allocator)
+	if !testing.expect(t, ok && len(jobs) == 1, "one report") { return }
+	testing.expect_value(t, jobs[0].id, "sh_1dba33fe5001")
+	testing.expect_value(t, jobs[0].state, Sub_State.Done)
+	testing.expect_value(t, jobs[0].command, `cd ~/k && nix flake check > /tmp/f.log 2>&1; grep -a "Error\|FAIL" /tmp/f.log | cut -c1-80; bash -c 'echo "x"'`)
+	testing.expect_value(t, jobs[0].body, "tk ci 1\n - a_test\tFAIL: \"it broke\"")
+	// (a quote of the command followed by what looks like an attribute of the tag's own, the next one)
+	two, two_ok := jobs_parse(`<shell id="a" command="echo "hi" there" state="failed">x</shell>`, context.temp_allocator)
+	if testing.expect(t, two_ok && len(two) == 1, "one report") {
+		testing.expect_value(t, two[0].command, `echo "hi" there`)
+		testing.expect_value(t, two[0].state, Sub_State.Failed)
+	}
+}
+
 @(test)
 a_report_takes_single_quotes_and_numeric_references :: proc(t: ^testing.T) {
 	jobs, ok := jobs_parse(`<shell id='x' command='echo "hi" &#39;there&#x27;' exit="2"></shell>`, context.temp_allocator)

@@ -102,10 +102,10 @@ job_parse :: proc(s: string) -> (r: Job_Report, rest: string, ok: bool) {
 			for i < len(s) && job_space(s[i]) { i += 1 }
 			if i >= len(s) { return }
 			if q := s[i]; q == '"' || q == '\'' {
-				end := strings.index_byte(s[i + 1:], q)
+				end := job_value_end(s, i + 1, q)
 				if end < 0 { return }
-				value = s[i + 1:i + 1 + end]
-				i += end + 2
+				value = s[i + 1:end]
+				i = end + 1
 			} else {
 				from := i
 				for i < len(s) && !job_space(s[i]) && s[i] != '>' { i += 1 }
@@ -151,6 +151,32 @@ job_settle :: proc(r: ^Job_Report) {
 	}
 	if r.exit_code != "" && r.exit_code != "0" && st != .Cancelled { st = .Failed }
 	r.state = st
+}
+
+// Where a quoted value that starts at `from` ends: its quote `q`, the one followed by another attribute (`name="`) or by
+// the tag's end and its line's; -1: none. The harness does not escape a command's own quotes (`command="grep "a" x"`):
+// the first quote is not always the last. A tag whose body follows on its line ends at the first `q>` of that line.
+@(private = "file")
+job_value_end :: proc(s: string, from: int, q: u8) -> int {
+	tag_end := -1
+	for k := from; k < len(s); k += 1 {
+		if s[k] == '\n' && tag_end >= 0 { break }
+		if s[k] != q { continue }
+		j := k + 1
+		for j < len(s) && (s[j] == ' ' || s[j] == '\t') { j += 1 }
+		if j >= len(s) { return k }
+		// another attribute: a name, then = and a quote
+		n := j
+		for n < len(s) && job_name_byte(s[n]) { n += 1 }
+		if n > j && j > k + 1 && n + 1 < len(s) && s[n] == '=' && (s[n + 1] == '"' || s[n + 1] == '\'') { return k }
+		// the tag's end: at once when its line ends there, else the first one, if no later quote ends its line
+		e := -1
+		if s[j] == '>' { e = j + 1 } else if s[j] == '/' && j + 1 < len(s) && s[j + 1] == '>' { e = j + 2 }
+		if e < 0 { continue }
+		if e >= len(s) || s[e] == '\n' || s[e] == '\r' { return k }
+		if tag_end < 0 { tag_end = k }
+	}
+	return tag_end
 }
 
 @(private = "file")

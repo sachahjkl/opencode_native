@@ -2876,3 +2876,29 @@ escape_in_a_font_picker_closes_the_picker_alone :: proc(t: ^testing.T) {
 		testing.expect(t, ui.view_is_open(&app.program_views, SETTINGS_VIEW), "and the settings stay")
 	})
 }
+
+// A shell floated out of the dock is a window with its header at the top and its grid filling the rest.
+@(test)
+a_floating_shell_shows_its_grid :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		if app.conn == nil { app.conn = bench_conn(app) }   // (the bench has no server: its requests are kept for the test to answer)
+		clear(&bench_sent)
+		terminal_toggle(app)
+		bench_answer(app, bench_take(t, .Pty_List), 200, `{"data":[{"id":"a","title":"bash","status":"running"}]}`)
+		for sh in app.cx.terms.list { term_link_set(app, sh, .Attached) }
+		bench_clear(app)
+		if !testing.expect(t, len(app.cx.terms.list) == 1, "a shell") { return }
+		term_feed(app.cx.terms.list[0], "$ ls\r\nsrc  docs\r\n$ ")
+		session.wait_idle(s)
+		ui.views_command_run(&app.program_views, {id = TERMINAL_VIEW, instance = "a", act = .Float})
+		session.wait_idle(s)
+		session.save_png(s, "floating_shell.png")
+		testing.expect_value(t, ui.view_presentation(&app.program_views, TERMINAL_VIEW, "a"), ui.View_Presentation.Internal)
+		frame, grid := session.find(s, "view_body"), session.find(s, "term_box")
+		if !testing.expect(t, frame != nil && grid != nil, "its body and its grid") { return }
+		testing.expectf(t, grid.rect.max.y - grid.rect.min.y > 0.6 * (frame.rect.max.y - frame.rect.min.y), "the grid fills the body: grid %v, body %v", grid.rect, frame.rect)
+		// (in a window of its own: the toolkit's views_test.a_panel_of_tabs_fills_its_window; the bench has no windows)
+	})
+}
