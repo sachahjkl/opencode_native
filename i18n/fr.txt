@@ -197,18 +197,6 @@ fr %s en entrée · %s en sortie
 en $%s
 fr %s $
 
-en connecting
-fr connexion
-
-en connected
-fr connecté
-
-en reconnecting
-fr reconnexion
-
-en auth refused
-fr authentification refusée
-
 en %d request
 en+ %d requests
 fr %d requête
@@ -1513,6 +1501,21 @@ fr Impossible de protéger le mot de passe de %s : la liste des serveurs n'a pas
 
 en No HTTP client for %s
 fr Pas de client HTTP pour %s
+
+en connecting
+fr connexion
+
+en connected
+fr connecté
+
+en reconnecting
+fr reconnexion
+
+en auth refused
+fr authentification refusée
+
+en Servers
+fr Serveurs
 
 en Edit this server…
 fr Modifier ce serveur…

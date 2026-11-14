@@ -78,8 +78,10 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 - **The composer**: Enter or Ctrl+Enter to send (a setting), the agent and the model of the session in pickers searched
   as one types (subsequence matching, the matched letters lit, the keyboard or the wheel), Stop while it runs. Files
   go with a prompt by the paperclip, a paste or a drop on the window: images, PDF and text files are attached.
-- **Several servers**: this computer's (found by itself), others added from the status bar's server menu (a name, an
-  address, a password), `--url`; switch from the menu. Another computer's server is named in the title bar.
+- **Several servers**: this computer's (found by itself), others added with "+" (a name, an address, a password), `--url`.
+  Each server is a tab at the top of the sidebar: a click on a tab connects to its server, and the tab of the server in use opens
+  its menu (switch, add, edit). Another computer's server is named in the title bar. The bottom left of the status bar shows the
+  state of the link, the versions of OpenCode and of opencode native.
 - **Find in the conversation** (Ctrl+F): every match of the text shown lit, the current one brighter and scrolled into
   view; Enter or F3 for the next, Shift+Enter or Shift+F3 for the previous, Escape to close.
 - **An inbox in the sidebar**: what waits for you first, then what finished and you have not seen, what runs, the rest. The grouping by project is one click away.
@@ -131,7 +133,7 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 
 Without arguments the client uses this computer's opencode server: where the background service runs
 (`~/.local/state/opencode/service.json`, what `opencode service status` prints), else what `~/.config/opencode/service.json`
-asks for; with its password (Basic authentication as `opencode`). Until it answers, the client looks again every few seconds. Others: the status bar's server menu (saved in
+asks for; with its password (Basic authentication as `opencode`). Until it answers, the client looks again every few seconds. Others: the servers' tabs at the top of the sidebar (saved in
 `servers.txt` beside the preferences), or
 
     opencode-native --url=https://host[:port] --password=...
@@ -192,7 +194,7 @@ every step is a command of `tools/ocntools` (`help` lists them; `AGENTS.md`). Th
 | `src/main.odin` | window, loop, fonts, frame pacing (the toolkit's cadence model: a resize step is presented at once) |
 | `src/net.odin`, `src/http.odin` | requests and their answers, the event stream (`ui.post`) |
 | `src/conn.odin`, `src/work_pool.odin` | a connection: its transport, its pool of workers and timed queue, when it is freed |
-| `src/servers.odin` | the servers: discovery, the saved ones, connections, the menu and the dialog |
+| `src/servers.odin` | the servers: discovery, the saved ones, connections, the tabs, the menu and the dialog |
 | `src/model.odin` | sessions, messages, parts and projects; events applied as they stream |
 | `src/views.odin` | the window's layout: its parts, the dialogs over them, the application menu |
 | `src/chrome.odin`, `src/sidebar_rows.odin` | the title bar, the conversation's header, the status bar; the sidebar's rows and menus |

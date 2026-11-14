@@ -245,6 +245,7 @@ Sidebar :: struct {
 	menu_session: string,         // the session the context menu is about (owned)
 	menu_project: string,         // the project the project menu is about (owned)
 	delete_id:    string,         // the session the dialog that deletes it is about
+	server_revealed: int,         // app.server + 1 once its tab was brought into view (server_tabs; 0: not yet)
 }
 
 // The sections the list shows, made again only when what they come from changed. `wanted`: the pointer is over the list.

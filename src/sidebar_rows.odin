@@ -41,7 +41,9 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 sidebar :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.px(app.sidebar.width * ui.scale()), height = ui.fill(), axis = .Y, bg = hex(HEX_BG1), radius = 0})   // (square: its rounded corner notched the bar's edge)
 	if ui.column(flags = {.Draw_Background}, id = "###sidebar") {
-		ui.spacer(ui.px(em * 1.0))
+		ui.spacer(ui.px(em * 0.5))
+		server_tabs(app, em)
+		ui.spacer(ui.px(em * 0.6))
 		pad_row :: proc(em: f32) { ui.spacer(ui.px(em * 0.75)) }
 		// new session + refresh
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})

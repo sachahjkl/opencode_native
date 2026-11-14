@@ -13,9 +13,11 @@ import "core:fmt"
 import "core:math"
 import "core:slice"
 import "core:strings"
+import "core:sync"
 import "core:testing"
 import "core:time"
 import "gt:config"
+import tasks "gt:tasks"
 import "gt:draw"
 import "gt:font"
 import mermaid "gt:mermaid"
@@ -1488,6 +1490,68 @@ a_password_can_be_shown :: proc(t: ^testing.T) {
 		server_edit_open(app, -1)
 		testing.expect(t, !app.server_edit.password_shown, "opened again: hidden")
 		app.cx.open[.Server] = false
+	})
+}
+
+// The chores' one thread, held until a test lets it go: what a click put there waits behind it, in order.
+@(private = "file") chores_gate: sync.Sema
+@(private = "file") chores_passed: bool
+
+// The servers are tabs at the top of the sidebar: one each, the one connected marked. A click on another connects to it; on the one
+// connected, or a right click, the menu of the servers; "+" opens the dialog that adds one. The status bar's bottom left says the link
+// and the versions of OpenCode and of this program, and has no server button any more.
+@(test)
+the_servers_are_tabs_of_the_sidebar :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		append(&app.servers, Server{name = "Work", url = "http://work:4096"})
+		app.server = 1
+		app.server_version = strings.clone("1.4.2")
+		session.frames(s, 3)
+		here, work := session.find(s, "srv_tab0"), session.find(s, "srv_tab1")
+		if !testing.expect(t, here != nil && work != nil, "a tab per server") { return }
+		testing.expect(t, session.find(s, "srv_tab2") == nil, "no other")
+		testing.expect(t, session.find_text(s, "This computer") != nil && session.find_text(s, "Work") != nil, "their names")
+		testing.expect(t, here.a11y != nil && !(here.a11y.selected.? or_else true), "this computer's: not the one connected")
+		testing.expect(t, work.a11y != nil && (work.a11y.selected.? or_else false), "Work's: the one connected")
+
+		// the status bar: the link and the versions, no server button
+		testing.expect(t, session.find(s, "server_btn") == nil, "no server button in the status bar")
+		testing.expect(t, session.find_text(s, "OpenCode 1.4.2") != nil, "OpenCode's version")
+		testing.expect(t, session.find_text(s, "opencode native " + APP_VERSION) != nil, "this program's version")
+		testing.expect(t, session.find_text(s, "connected") != nil, "the link's state")
+
+		// the one connected: its menu, and no connection again
+		seq := app.connect_seq
+		session.click(s, "srv_tab1")
+		testing.expect(t, session.find_text(s, "Edit this server…") != nil, "a click on the one connected: the menu")
+		testing.expect_value(t, app.connect_seq, seq)
+		session.key(s, .Escape)
+		session.wait_idle(s)   // (it fades out)
+		testing.expect(t, session.find_text(s, "Edit this server…") == nil, "Escape closes it")
+		session.click(s, "srv_tab0", .Right)
+		testing.expect(t, session.find_text(s, "Edit this server…") != nil, "a right click on another: the menu")
+		session.key(s, .Escape)
+		session.wait_idle(s)
+		testing.expect_value(t, app.connect_seq, seq)
+
+		// another: connected to (this computer's is found on a chore first: held here, then dropped, so nothing is connected)
+		tasks.add(&app.cx.chores, proc(_: rawptr) { sync.sema_wait(&chores_gate) }, nil)
+		session.click(s, "srv_tab0")
+		testing.expect_value(t, app.connect_seq, seq + 1)
+		app.connect_seq += 1   // (what is read is then for an earlier choice: no connection in a test)
+		tasks.add(&app.cx.chores, proc(_: rawptr) { sync.atomic_store(&chores_passed, true) }, nil)
+		sync.sema_post(&chores_gate)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return sync.atomic_load(&chores_passed) }, "the chores done")
+		session.frames(s, 2)
+		testing.expect_value(t, app.server, 1)
+
+		// "+": the dialog that adds a server
+		session.click(s, "srv_add")
+		testing.expect(t, app.cx.open[.Server] && app.server_edit.index == -1, "the dialog that adds a server")
+		app.cx.open[.Server] = false
+		session.frames(s, 2)
 	})
 }
 
