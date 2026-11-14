@@ -60,24 +60,16 @@ updates_stop :: proc(app: ^App) {
 @(private = "file")
 on_update_news :: proc(data: rawptr, _: u64) { updates_follow((^App)(data)) }
 
-// What changed is said: when asked, or when there is something to do (a version on offer, one in place), with the button
-// that does it.
+// What changed is said once. The status bar's pill shows the phase and its button (a version on offer, its download, a
+// restart): a toast says only what the pill cannot (update.notice).
 updates_follow :: proc(app: ^App) {
 	if app.updater == nil { return }
 	st := update.status(app.updater)
 	if st.serial == app.update_serial { return }
 	app.update_serial = st.serial
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)   // (the status bar and the settings show the state)
-	words := update.status_words(st)
-	#partial switch st.phase {
-	case .Available:
-		ui.announce(&app.announcer, .Good, words, action = proc(user: rawptr) { update.install_now((^App)(user).updater) }, user = app)
-	case .Installed:
-		ui.announce(&app.announcer, .Good, words, action = proc(user: rawptr) { app_restart((^App)(user)) }, user = app)
-		installed_record(app, st.version)
-	case:
-		if st.asked { ui.announce(&app.announcer, st.failed ? .Bad : .Good, words) }
-	}
+	if words, bad := update.notice(st); words != "" { ui.announce(&app.announcer, bad ? .Bad : .Good, words) }
+	if st.phase == .Installed { installed_record(app, st.version) }
 }
 
 // The installed copy: its manifest and its system's record take the new version (desktop_updated), on a task: they are
@@ -139,5 +131,5 @@ update_pill :: proc(app: ^App, em: f32) {
 	case: return
 	}
 	ui.next({height = ui.px(math.round(em * PILL_H_EM))})
-	if prefs_page.update_badge(app.updater, proc(user: rawptr) { app_restart((^App)(user)) }, app) { ui.spacer(ui.px(em * 0.6)) }
+	if prefs_page.update_badge(app.updater, proc(user: rawptr) { app_restart((^App)(user)) }, app) != nil { ui.spacer(ui.px(em * 0.6)) }
 }
