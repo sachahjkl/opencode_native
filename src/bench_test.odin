@@ -1132,16 +1132,22 @@ a_table_s_copy_button_is_over_its_rows :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		app, s := bench_app(t)
 		// up from the bottom until a table's rows are in sight (the conversation builds what is seen)
+		// (the sidebar's edge: its zone's handle; 0 while nothing is docked at the left)
+		side_edge :: proc(app: ^App) -> f32 {
+			line, docked := ui.view_dock_line(&app.program_views, .Left)
+			return docked ? line.max.x : 0
+		}
 		table_in_sight :: proc(s: ^session.Session, app: ^App) -> ^ui.Box {
 			for i := 0; ; i += 1 {
 				b := session.find(s, "rows", i)
 				if b == nil { return nil }
 				// (a table's, in the conversation: the sidebar's list is "rows" too)
-				if b.rect.min.x > app.sidebar.width && b.rect.min.y > 0 && b.rect.max.y < f32(BENCH_SIZE.y) && b.rect.max.x > b.rect.min.x { return b }
+				if b.rect.min.x > side_edge(app) && b.rect.min.y > 0 && b.rect.max.y < f32(BENCH_SIZE.y) && b.rect.max.x > b.rect.min.x { return b }
 			}
 		}
 		rows := table_in_sight(s, app)
-		mid := [2]f32{app.sidebar.width + (f32(BENCH_SIZE.x) - app.sidebar.width) * 0.5, f32(BENCH_SIZE.y) * 0.5}
+		edge := side_edge(app)
+		mid := [2]f32{edge + (f32(BENCH_SIZE.x) - edge) * 0.5, f32(BENCH_SIZE.y) * 0.5}
 		for k := 0; rows == nil && k < 60; k += 1 {
 			session.event(s, {kind = .Scroll, pos = mid, delta = {0, 3}})
 			session.wait_idle(s)   // (the scroll glides: where the table is, once it stands)

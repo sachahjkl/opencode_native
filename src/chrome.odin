@@ -51,13 +51,39 @@ caption_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	ui.caption_face(dc, b.rect, d.top, d.bottom)
 }
 
-// The line between the sidebar and the conversation goes on through the title bar and the status bar: after what a bar puts
-// over the sidebar (`last`, its last box), at least `gap` then the line; a bar with more than the sidebar's width pushes it on.
+// The rule of the left dock zone's handle (the sidebar's edge, where it is docked) goes on through the title bar and the
+// status bar: after what a bar puts over the zone (`last`, its last box), at least `gap` then the line; a bar with more
+// than the zone's width pushes it on. Its place is the handle's own (ui.view_dock_line), never a width of ocn's: the
+// spacer reads the last layout, the drawing this frame's, so the two are on one pixel column during a drag too.
+// No handle (nothing docked at the left, the zone minimised or maximised): the bar's own groove after the gap.
 @(private = "file")
-side_line :: proc(id: string, last: ^ui.Box, gap, sidebar_w: f32) {
-	x := ui.parent_box().rect.min.x + math.round(sidebar_w * ui.scale()) + math.round(SPLITTER_W_PX * ui.scale()) - 2 * px1()
-	ui.spacer(ui.px(max(gap, x - last.rect.max.x)))
-	edge_line(id, vertical = true)
+side_line :: proc(app: ^App, id: string, last: ^ui.Box, gap: f32) {
+	vs := &app.program_views
+	line, docked := ui.view_dock_line(vs, .Left)
+	if !docked {
+		ui.spacer(ui.px(gap))
+		edge_line(id, vertical = true)
+		return
+	}
+	ui.spacer(ui.px(max(gap, line.min.x - last.rect.max.x)))
+	ui.next({width = ui.px(line.max.x - line.min.x), height = ui.fill()})
+	b := ui.build_box({}, id)
+	d := ui.frame_new(Side_Line_Draw)
+	d^ = {vs, ui.color("border")}   // (the handle's colour at rest)
+	b.custom, b.custom_user = side_line_draw, d
+}
+
+@(private = "file")
+Side_Line_Draw :: struct { views: ^ui.Views, color: Color }
+
+@(private = "file")
+side_line_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+	d := (^Side_Line_Draw)(user)
+	line, docked := ui.view_dock_line(d.views, .Left)
+	if !docked { line = b.rect }
+	// (a bar wider than the zone pushed its line on: it stays after the bar's words)
+	x := max(line.min.x, b.rect.min.x)
+	draw.rect(dc, {{x, b.rect.min.y}, {x + (line.max.x - line.min.x), b.rect.max.y}}, d.color)
 }
 
 title_bar :: proc(app: ^App, em: f32) {
@@ -103,7 +129,7 @@ title_bar :: proc(app: ^App, em: f32) {
 		}
 		if hsig.clicked { command_run(app, command_find("nav.home")) }
 		if ui.hovered_for(hsig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Home  (Ctrl+H)")) } }
-		side_line("###tg", b.last, em * 0.9, app.sidebar.width)
+		side_line(app, "###tg", b.last, em * 0.9)
 		ui.spacer(ui.px(em * 1.3))
 		if !app.servers[app.server].local {   // another computer's server: its name first
 			glyph(lucide.GLOBE, ink(hex(HEX_CYAN)), math.round(em * ICON_SMALL))
@@ -259,7 +285,7 @@ status_bar :: proc(app: ^App, em: f32) {
 				text("base", base, hex(HEX_FAINT), small)
 			}
 		}
-		side_line("###sg_status", b.last, em * 0.8, app.sidebar.width)
+		side_line(app, "###sg_status", b.last, em * 0.8)
 		// the versions: the server's, and this program's (names of products: not translated)
 		ui.spacer(ui.px(em * 1.3))
 		if app.server_version != "" {

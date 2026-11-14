@@ -175,14 +175,11 @@ built_state :: proc(app: ^App) -> ^ui.State {
 	return &app.state
 }
 
-// The sidebar: the sessions, the search, the servers. Docked at the window's left, its edge lines up with the bars'.
+// The sidebar: the sessions, the search, the servers. Docked at the window's left, the bars' line goes on from its
+// zone's handle (chrome.odin side_line).
 @(private = "file")
 sidebar_pane :: proc(v: ^ui.View, app: ^App) {
-	em := ui.font_size()
-	at_left := v.presentation == .Panel && v.place.edge == .Left && v.place.space == "" && ui.current_state() == &app.state
-	sidebar(app, em)
-	// (not before it was laid out once: the room is the window's then)
-	if room := ui.view_room(v); at_left && room.x < ui.current_state().window_size.x { app.sidebar.width_next = room.x / ui.scale() }
+	sidebar(app, ui.font_size())
 }
 
 // Ctrl+B: the sidebar shows or goes, wherever the user put it.

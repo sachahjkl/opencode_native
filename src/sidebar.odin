@@ -233,10 +233,8 @@ Side_Kept :: struct {
 	rows_computed, sections_computed: int,   // times each was made (tests)
 }
 
-// The sidebar: its width, its search, what is folded or open in it, what it keeps of the list, what its menus are about.
+// The sidebar: its search, what is folded or open in it, what it keeps of the list, what its menus are about.
 Sidebar :: struct {
-	width:        f32,            // logical pixels, docked at the window's left at the last build (0: it is not there); the bars line up with it
-	width_next:   f32,            // ... as this build's sidebar sets it (window_views.odin sidebar_view)
 	search:       ui.Line_Edit,
 	folded:       map[u64]bool,   // groups folded (hash of the directory)
 	sub_open:     map[u64]bool,   // sessions whose sub-agents are listed under them

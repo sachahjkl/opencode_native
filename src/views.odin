@@ -21,8 +21,6 @@ build_ui :: proc(app: ^App) {
 	em := ui.font_size()
 	views_answers(app)
 	app.stats.built = false
-	// (the bars line up with the sidebar as the last build laid it out)
-	app.sidebar.width, app.sidebar.width_next = app.sidebar.width_next, 0
 	terminals_begin(app)
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(id = "###root") {

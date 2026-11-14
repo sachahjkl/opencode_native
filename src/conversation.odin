@@ -35,7 +35,6 @@ Conversation :: struct {
 ////////////////////////////////
 // Conversation
 
-SPLITTER_W_PX     :: 5
 AVAIL_FALLBACK_PX :: 1000   // before the window has a width
 COLUMN_MIN_W_PX   :: 240
 BOTTOM_SLACK_PX   :: 4      // this near its end the conversation is at its bottom
