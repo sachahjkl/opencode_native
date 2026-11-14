@@ -53,6 +53,8 @@ LAST_SESSION      :: "ls_ses_395"      // the last session of the last group (pr
 SIDEBAR_WHEEL     :: 10
 BENCH_EPOCH_MS    :: 1.7e12
 BENCH_STEP_MS     :: 60000
+BENCH_SLOW_MOTION :: 1000    // the interface's time slowed this many times, where a test reads a movement under way
+OLDER_WHEEL_FROM_SCREENS :: 4   // where the wheel turned up past the top starts from, in screens under the top
 
 // An answer as models write them: headings, paragraphs with inline marks, a list, code, a table.
 BENCH_ANSWER :: `## What changed
@@ -652,13 +654,23 @@ older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session)
 
 	// a wheel turned up past the top while the page is read stops at the top; the page that comes carries that stop along. (It
 	// glided over all of the page to its top: the view jumped, and the next page was asked for at once.)
+	// (from a known place, at rest, well under the top: where the find left the view is the machine's, at the top or still
+	// gliding to its match, and a wheel turned up at the top glides nowhere)
+	sb = session.get(s, "chat")
+	ui.view_jump(sb, sb.size.y * OLDER_WHEEL_FROM_SCREENS)
+	session.wait_idle(s)
 	c.older = strings.clone("more", c.alloc)
 	session.frames(s, 2)
 	sb = session.get(s, "chat")
+	testing.expectf(t, sb.view_off.y > sb.size.y * OLDER_MARGIN && !sb.view_anim[1].active, "under the top, at rest: %v", sb.view_off.y)
+	testing.expect_value(t, bench_count(.Older), 0)
+	// (the interface's time slowed for the frames read: a slow machine's frames would end the glide in them)
+	film_slow_start(app, BENCH_SLOW_MOTION)
 	session.wheel(s, session.center(sb), {0, -200})
 	session.frames(s, 1)
 	sb = session.get(s, "chat")
 	testing.expect(t, sb.view_target.y == 0 && sb.view_anim[1].active, "on its way to the top, stopped there")
+	film_slow_stop(app)
 	if testing.expect_value(t, bench_count(.Older), 1) {
 		post_answer(app, bench_take(t, .Older), older_page(3000, 60, ""))
 		session.wait_idle(s)

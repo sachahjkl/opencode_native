@@ -24,6 +24,13 @@ film_slow_start :: proc(app: ^App, n: f64) {
 	ui.set_clock(&app.state, &app.film.clock)
 }
 
+// The interface's time is the system's again.
+film_slow_stop :: proc(app: ^App) {
+	if app.film.slow <= 1 { return }
+	app.film.slow = 0
+	ui.set_clock(&app.state, nil)
+}
+
 film_slow_tick :: proc(app: ^App) {
 	if app.film.slow <= 1 { return }
 	app.film.clock = app.film.clock_at + time.duration_milliseconds(time.tick_since(app.film.begun)) / app.film.slow
