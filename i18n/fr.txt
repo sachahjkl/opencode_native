@@ -748,6 +748,27 @@ fr Les %d premiers octets sur %d.
 en no match
 fr aucun résultat
 
+en Start a session in
+fr Démarrer une session dans
+
+en Move the session to
+fr Déplacer la session vers
+
+en Cancel
+fr Annuler
+
+en Choose this folder
+fr Choisir ce dossier
+
+en Up
+fr Remonter
+
+en A folder of the server
+fr Un dossier du serveur
+
+en No folder in this one.
+fr Aucun dossier ici.
+
 en Answer: %s
 fr Répondez : %s
 
@@ -813,9 +834,6 @@ fr objectif atteint
 
 en round %d/%d
 fr tour %d/%d
-
-en Start a session in
-fr Démarrer une session dans
 
 en %s refused the password
 fr %s a refusé le mot de passe
@@ -970,9 +988,6 @@ fr La clé
 
 en A name for it (optional)
 fr Un nom pour elle (facultatif)
-
-en Cancel
-fr Annuler
 
 en Connecting…
 fr Connexion…
@@ -1601,9 +1616,6 @@ fr Enregistrer et connecter
 
 en Add and connect
 fr Ajouter et connecter
-
-en Move the session to
-fr Déplacer la session vers
 
 en Session exported
 fr Session exportée

@@ -47,14 +47,7 @@ session_file_free :: proc(data: rawptr) {
 	free(f, a)
 }
 
-session_move_pick :: proc(app: ^App, id: string) {
-	ui.file_dialog(&app.state, .Folder, {owner = app.win, title = i18n.tr("Move the session to"), remember_id = "session_move"}, proc(r: platform.Dialog_Result, user: rawptr) {
-		f := (^Session_File)(user)
-		defer session_file_free(f)
-		if r.status != .Chosen || len(r.paths) == 0 { return }
-		request(f.app, .Session_Moved, "POST", fmt.tprintf("/api/session/%s/move", f.id), fmt.tprintf(`{{"directory":%s}}`, jquote(r.paths[0])), f.id)
-	}, session_file_new(app, id))
-}
+session_move_pick :: proc(app: ^App, id: string) { folder_choose(app, .Move_Session, id) }
 
 // (`redacted`: the server replaces every text by a mark: a file that shows the shape of a session, to share.)
 session_export :: proc(app: ^App, id: string, redacted := false) {

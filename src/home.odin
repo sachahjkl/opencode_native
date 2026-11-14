@@ -6,7 +6,6 @@ import "core:fmt"
 import "core:math"
 import "core:strings"
 import "gt:draw"
-import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
@@ -85,14 +84,6 @@ home_lists :: proc(app: ^App) -> ^Home_Lists {
 // The folders of the latest sessions, the latest first.
 home_folders :: proc(app: ^App) -> []string { return home_lists(app).folders[:] }
 
-@(private = "file")
-home_pick_folder :: proc(app: ^App) {
-	ui.file_dialog(&app.state, .Folder, {owner = app.win, title = i18n.tr("Start a session in"), remember_id = "new_session"}, proc(r: platform.Dialog_Result, user: rawptr) {
-		app := (^App)(user)
-		if r.status == .Chosen && len(r.paths) > 0 { app.chat.new_dir = strings.clone(r.paths[0], app.chat.alloc) }
-	}, app)
-}
-
 home :: proc(app: ^App, em: f32) {
 	now := now_epoch_ms()
 	ui.spacer(ui.px(em * HOME_TOP_EM))
@@ -129,7 +120,7 @@ home :: proc(app: ^App, em: f32) {
 			if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(d) } }
 			if sig.right_clicked { ctx_open(app, .Folder, msg = d) }
 		}
-		if ui.button("hf_other", i18n.tr("Other folder…"), lucide.PLUS, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { home_pick_folder(app) }
+		if ui.button("hf_other", i18n.tr("Other folder…"), lucide.PLUS, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { folder_choose(app, .New_Session) }
 	}
 	ui.spacer(ui.px(em * 1.1))
 

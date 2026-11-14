@@ -282,6 +282,7 @@ Req_Kind :: enum u8 {
 	Connect_Status, // GET .../connect/oauth/:id, /command/:id
 	Mention_Files,  // GET /api/fs/list, /api/fs/find: what @ proposes (files.odin)
 	Files_List,     // the same for the dialog
+	Folders_List,   // GET /api/fs/list?path=<absolute>: the folders of the server, to choose one (folders.odin)
 	File_Read,      // GET /api/fs/read/*
 	Changes_Range,  // GET /api/session/:id/message?type=user: the first prompt, then the last
 	Changes,        // GET /api/session/:id/diff: the files
@@ -553,6 +554,7 @@ quiet_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (t
 	.Connect_Status   = {json = true, on_ok = connect_status_on_ok, on_fail = connect_status_on_fail},
 	.Mention_Files    = {json = true, on_ok = mention_files_on_ok, on_fail = mention_files_on_fail},
 	.Files_List       = {json = true, on_ok = files_list_on_ok, on_fail = quiet_on_fail},
+	.Folders_List     = {json = true, on_ok = folders_list_on_ok, on_fail = quiet_on_fail},
 	.File_Read        = {on_ok = file_read_on_ok, on_fail = quiet_on_fail},
 	.Changes_Range    = {json = true, on_ok = changes_range_on_ok, on_fail = quiet_on_fail},
 	.Changes          = {json = true, on_ok = changes_on_ok, on_fail = changes_on_fail},
@@ -845,6 +847,7 @@ dialogs_reread :: proc(app: ^App) {
 	if cx.open[.Schedules] && remote.failed(&cx.schedules.read) { schedules_ask(app) }
 	if cx.open[.Artifacts] && remote.failed(&cx.artifacts.read) { artifacts_ask(app) }
 	if cx.open[.Files] && remote.failed(&cx.files.read) { files_list(app) }
+	if cx.open[.Folders] && remote.failed(&cx.folders.read) { folders_list(app) }
 	if app.stats.open {
 		if remote.failed(&app.stats.read) { stats_ask(app) }
 		context_ask(app)   // (what a step added was missed)

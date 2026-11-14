@@ -187,6 +187,7 @@ App_Context :: struct {
 	integrations:   Integrations,         // the Connections page (integrations.odin)
 	background:     map[string]bool,      // the sessions with commands running in the background, and their parents (activity.odin; keys owned)
 	files:          Files,                // the dialog of the folder's files
+	folders:        Folders,              // the dialog that chooses a folder of the server
 	changes:        Changes,              // what a session changed, or would undo (session_tools.odin)
 	forms:          [dynamic]^Form_Req,   // what agents ask and wait for (forms.odin), of every session
 	shared_moved:   bool,                 // something of what every window shows may have changed this frame (detached_still)

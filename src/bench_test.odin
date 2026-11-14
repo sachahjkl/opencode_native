@@ -1986,6 +1986,40 @@ a_recent_folder_tells_and_copies_its_path :: proc(t: ^testing.T) {
 	})
 }
 
+// Other folder… of the home page, with a server elsewhere: the dialog of the server's folders. A folder clicked is entered, and
+// Choose this folder makes it the new session's.
+@(test)
+other_folder_browses_the_servers_folders :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		chat_home(app)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "hf_other") != nil }, "the home page built")
+		session.wait_idle(s)
+		session.click(s, "hf_other")
+		session.frames(s, 2)
+		testing.expect(t, app.cx.open[.Folders], "the server's folders")
+		r := bench_take(t, .Folders_List)
+		testing.expect_value(t, r.path, "/api/fs/list?path=C%3A%2Fcode%2Fproject_0")
+		bench_answer(app, r, 200, `{"data":[{"path":"assets","type":"directory"},{"path":"src","type":"directory"},{"path":"README.md","type":"file"}]}`)
+		session.wait_idle(s)
+		testing.expect(t, session.find_text(s, "README.md") == nil, "no file")
+		session.save_png(s, "server_folders.png")
+		session.click(s, "for1")
+		session.frames(s, 2)
+		testing.expect_value(t, app.cx.folders.at, "C:/code/project_0/src")
+		bench_answer(app, bench_take(t, .Folders_List), 200, `{"data":[]}`)
+		session.frames(s, 2)
+		testing.expect(t, session.find(s, "fo_none") != nil, "an empty folder says so")
+		session.click(s, "fo_choose")
+		session.frames(s, 2)
+		testing.expect(t, !app.cx.open[.Folders], "closed")
+		testing.expect_value(t, app.chat.new_dir, "C:/code/project_0/src")
+	})
+}
+
 // A long session opened shows its bottom in the first frame after its page came: it showed an empty view for a frame (the lazy
 // column placed its messages from where the view was before it jumped), then a place above the bottom (what that build measured
 // moved the bottom).
