@@ -4,6 +4,21 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.54.0] - 2026-11-14
+
+### Added
+- **Select several items with Ctrl and Shift in What you missed**: in the list, Ctrl+click, Shift+click, Shift and the arrows, Ctrl+Space and Ctrl+A select several entries, and A acknowledges all of them at once. A plain click still opens the session; Shift+A and Ctrl+Shift+A still acknowledge the session and everything. Escape on several entries keeps the one under the cursor; Escape again closes the view.
+
+### Changed
+- **Reports of background jobs show as cards**: when a command or a sub-agent that ran in the background ends, the conversation shows one line for it, "Command finished" with the start of the command, or "Sub-agent finished" with its task ("stopped" and the reason when it failed), in place of the raw markup. A click opens it: the whole command and its output in the code font, or the sub-agent's report as formatted text, all selectable.
+- **Dialogs and panels go where you put them**: every dialog, the sessions' sidebar, the Preview, the Statistics, each terminal and each command's output can float inside the window, open in a window of its own, or dock at the left, the right or the bottom of the conversation: by the icons and the right-click menu of its header, by a drag of its header or its tab, or from the command palette, which lists these moves. Each one opens again where you left it, at the size you gave it, and the sidebar and the panels that were open at the last quit open again. The terminals keep their tab strip, one shell or several, with a "+" after the last tab for a new shell, and buttons to minimise, maximise or close them. The layout of the old dock and the sizes of the dialogs are not carried over.
+- **The font settings use the toolkit's picker**: the interface, answers, code and terminal fonts are chosen in the font picker of every program of the toolkit, each family drawn in itself, the monospace ones first for code and the terminal. A family is loaded off the window's thread: choosing one no longer stalls the window. The "System" and "As the interface" choices are gone: pick the family by its name; a setting that still says "system" or "interface" draws in the client's own font.
+
+### Fixed
+- **The palette opens from the settings**: while the settings, the sheet of the keys or another dialog was open, Ctrl+K, Ctrl+Shift+P, F1 and Ctrl+, did nothing. They now work there too, and the palette lists the settings from inside them. A shell with the keyboard still takes these keys itself; Ctrl+Shift+T still hides the shells from inside them.
+- **Escape in a font picker of the settings closes the picker only**: the settings stay open.
+- **The text of a tool call can be selected**: the diff an edit shows in the conversation, the lines a read or a search shows, and a call's arguments are selected by a drag and copied with Ctrl+C, as in the full diff view; a click on a call's header still opens it.
+
 ## [0.53.3] - 2026-11-14
 
 ### Fixed
@@ -1609,6 +1624,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.54.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.54.0
 [0.53.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.53.3
 [0.53.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.53.2
 [0.53.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.53.1
