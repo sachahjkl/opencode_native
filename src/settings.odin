@@ -101,7 +101,6 @@ Prefs :: struct {
 	font_size:    f32,
 	zoom:         f32,
 	glow:         bool,   // appearance.glow above 0, in a finish with halos
-	autohide_scrollbars: bool,   // scrolling.autohide_scrollbars: the detached windows' states take it too
 	column_w:     f32,
 	reasoning:    string,
 	expand_tools: bool,
@@ -200,7 +199,6 @@ prefs_refresh :: proc(app: ^App) {
 	s.font_size = look.font_size
 	s.zoom = f32(config.float_of(p, "appearance.zoom"))
 	s.glow = look.glow > 0 && look.finish != .Flat   // (no halos in the flat finish)
-	s.autohide_scrollbars = config.bool_of(p, "scrolling.autohide_scrollbars")
 	s.column_w = f32(config.int_of(p, "conversation.width"))
 	s.reasoning = config.string_of(p, "conversation.reasoning")
 	s.expand_tools = config.bool_of(p, "conversation.expand_tools")

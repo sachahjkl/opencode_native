@@ -194,7 +194,6 @@ chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) -> (moved: bool) {
 	}
 	y = clamp(y, 0, limit)
 	moved = y != sb.view_target.y
-	if moved { ui.scrollbar_reveal(sb) }
 	sb.view_target.y = y
 	// (Home: the start as such, the pages read before it on the way included. Page Up stopped at the top is a place like any
 	// other: a page read then comes above it, and the view stays on what it shows)

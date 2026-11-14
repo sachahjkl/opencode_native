@@ -314,7 +314,6 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 	build :: proc(app: ^App, size: draw.Vec2, events: []platform.Event, dt: f32, again := false) {
 		app.cx.was_gliding = app.cx.gliding
 		app.cx.gliding = false
-		ui.set_scrollbar_autohide(&app.state, app.prefs.autohide_scrollbars)
 		app.state.post_budget = again ? 0 : POSTS_PER_BUILD
 		ui.begin_build(&app.state, build_params(app, app.win, size, events, dt))
 		missed_sync(app)     // (after the events, before their effects: a notification finds its entry)
