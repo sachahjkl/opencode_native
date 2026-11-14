@@ -14,7 +14,9 @@ import i18n "gt:i18n"
 // It is a host.Host, as the main window: its frame goes in the toolkit's order, this program's parts in its hooks. Being resized it is as
 // stable as the main window, by the same means: a composition surface whose buffers keep the monitor's size, shown 1:1 and clipped by the
 // window (below its child windows: the page moved into it would be behind it), and frames from inside the system's loop for as long as the
-// border is held. A step of a resize is this window's alone, at once; when the border rests, the program's whole frame goes on.
+// border is held. A step of a resize is this window's alone, at once; when the border rests, the program's whole frame goes on. On Wayland
+// no loop of the system draws it: the main window's frame draws its step first, before its own work (host_steps), and does not wait for
+// its slot while a step waits. detached_frames only draws what else changed.
 
 Detached :: struct {
 	using window: host.Host,   // win, state, surface, shown
