@@ -145,7 +145,7 @@ home :: proc(app: ^App, em: f32) {
 	// what is worth knowing first
 	ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###h_keys") {
-		if hint_action("###hk1", i18n.tr("Ctrl+K  everything"), em, app.mono) { command_run(app, command_find("app.palette")) }
+		if hint_action("###hk1", i18n.tr("Ctrl+K  everything"), em, app.mono) { palette_show(app) }
 		ui.spacer(ui.px(em * 1.6))
 		if hint_action("###hk2", i18n.tr("Ctrl+Shift+B  preview"), em, app.mono) { command_run(app, command_find("view.preview")) }
 		ui.spacer(ui.px(em * 1.6))

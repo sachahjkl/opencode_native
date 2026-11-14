@@ -245,7 +245,7 @@ web_event_apply :: proc(app: ^App, v: ^Web_View, e: Web_Event) {
 	case .Capture:   browser_capture_done(app, v, e.id, e.data)
 	case .Key:
 		// (the page has the keyboard: what the program answers to must still reach it)
-		if e.ctrl && e.id == u64('K') { command_run(app, command_find("app.palette")) }
+		if e.ctrl && e.id == u64('K') { if palette_shown(app) { palette_hide(app) } else { palette_show(app) } }
 		if e.ctrl && e.id == u64('T') { app.preview.due_new = true }
 		if e.ctrl && e.id == u64('W') { app.preview.due_close = t }
 		if e.id == VK_F1 { command_run(app, command_find("app.help")) }

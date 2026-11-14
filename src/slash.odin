@@ -8,6 +8,23 @@ import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
 
+Slash :: struct { name, description: string }   // a command of the server (owned)
+
+// The server's commands read (stream_up): the composer's `/` list and the palette's (its version moves).
+slash_load :: proc(app: ^App, list: []Slash) {
+	slash_forget(app)
+	append(&app.cx.slash, ..list)
+	app.cx.have_slash = true
+}
+
+// The server left: its commands are not the next one's (stream_up reads those).
+slash_forget :: proc(app: ^App) {
+	for s in app.cx.slash { delete(s.name); delete(s.description) }
+	clear(&app.cx.slash)
+	app.cx.have_slash = false
+	app.palette.server.version += 1
+}
+
 Slash_Pick :: struct {
 	open:      bool,
 	dismissed: bool,      // Escape: closed until the word changes

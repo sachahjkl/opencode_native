@@ -91,8 +91,8 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
   unfold in place (→ or Space). Opening a session acknowledges its end; A acknowledges an entry, a wait goes with its answer, and a
   notification of the system goes with its entry. In the list, select several entries with Ctrl+click, Shift+click, Shift and the
   arrows, Ctrl+Space or Ctrl+A: A acknowledges all of them; Shift+A acknowledges the session, Ctrl+Shift+A everything.
-- **The command palette** (Ctrl+K, Ctrl+Shift+P): commands, sessions, agents, models, the server's commands and the switches of the
-  settings in one field, narrowed by `>` `@` `/` `#` `:`. F1 lists the keys.
+- **The command palette** (Ctrl+K, Ctrl+Shift+P): commands, sessions, agents, models, the server's commands and the settings
+  in one field, narrowed by `>` commands, `@` sessions, `#` models and agents, `:` settings. F1 lists the keys.
 - **Tool calls by what they do**: a diff for what edits a file, the lines of a file, matches under their file, a command and its
   output, a checklist.
 - **What runs in the background**: a tray under the composer (Down, Ctrl+J) with the sub-agents, the shell commands and the whole

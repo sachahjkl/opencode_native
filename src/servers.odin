@@ -448,30 +448,21 @@ SERVER_MENU_KEY :: "server_menu"
 
 // A tab per server, at the top of the sidebar. The one connected stands raised with the state of its link; a click on another
 // connects to it. A click on the one connected, or a right click on any, opens the menu of the servers; "+" adds one. Even a single
-// server has its tab: the choice is always in the same place. Too many for the width: the row scrolls sideways, its edges fade.
+// server has its tab: the choice is always in the same place. Too many for the width: the toolkit's strip, with an arrow
+// on each side that hides tabs and the content faded beyond it, no scroll bar.
 server_tabs :: proc(app: ^App, em: f32) {
 	h := math.round(em * SERVER_TABS_H_EM)
 	ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###srv_tabs") {
 		ui.spacer(ui.px(em * 0.75))
-		// (as wide as its tabs; it shrinks, and scrolls, when the row has less room: "+" stays in view after it)
-		ui.next({width = ui.children_sum(0), height = ui.pct(1), axis = .X, cross = .Center})
-		strip := ui.build_box({.Clip, .View_Scroll_X, .View_Clamp_X, .Allow_Overflow_X}, "###srv_strip")
-		ui.scroll_fades(strip, .X, math.round(em * SERVER_TABS_FADE_EM))
-		_ = ui.signal(strip)   // (the wheel sideways, or Shift+wheel, scrolls it in its signal)
-		ui.a11y_default(strip, {role = .Tab_List, orientation = .X, name = i18n.tr("Servers")})
-		shown: ^ui.Box
-		if ui.parent(strip) {
+		// (as wide as its tabs; it gives way first, and scrolls, when the row has less room: "+" stays in view after it)
+		if ui.strip("###srv_strip", {fade = SERVER_TABS_FADE_EM}) {
+			ui.a11y_default(ui.parent_box(), {role = .Tab_List, orientation = .X, name = i18n.tr("Servers")})
 			for s, i in app.servers {
 				if i > 0 { ui.spacer(ui.px(em * 0.25)) }
-				if b := server_tab(app, s, i, h, em); i == app.server { shown = b }
+				// (the connected one in view when it changes, and in the strip's first frame)
+				if b := server_tab(app, s, i, h, em); i == app.server { ui.strip_reveal(b) }
 			}
-		}
-		// the tab of a server just chosen is brought into view, once (by the last layout: a tab new this frame waits for the next)
-		if shown != nil && app.sidebar.server_revealed != app.server + 1 && shown.rect.max.x > shown.rect.min.x {
-			x := shown.rect.min.x - strip.rect.min.x + strip.view_off.x
-			_ = ui.view_reveal(strip, x, x + shown.rect.max.x - shown.rect.min.x, .X)
-			app.sidebar.server_revealed = app.server + 1
 		}
 		ui.spacer(ui.px(em * 0.3))
 		if ui.button("srv_add", icon = lucide.PLUS, o = {tip = i18n.tr("Add a server…"), height = h - 2 * math.round(em * 0.15)}).clicked { server_edit_open(app, -1) }

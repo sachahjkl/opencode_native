@@ -20,6 +20,7 @@ build_ui :: proc(app: ^App) {
 	fonts_follow(app)   // (a family the toolkit loaded since the last build: this build draws in it)
 	em := ui.font_size()
 	views_answers(app)
+	palette_build(app)   // (its keys read with the window's, before the views read theirs)
 	app.stats.built = false
 	terminals_begin(app)
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
@@ -47,7 +48,8 @@ build_ui :: proc(app: ^App) {
 
 app_menu :: proc(app: ^App, key: string, em: f32) {
 	if ui.menu(key) {   // (as wide as its longest item)
-		if ui.menu_item(i18n.tr("Command palette…"), "Ctrl+K", icon = lucide.COMMAND).clicked { palette_toggle(app) }
+		pc := ui.palette_command()
+		if ui.menu_item(i18n.tr("Command palette…"), ui.command_shortcut(pc), icon = pc.icon).clicked { palette_show(app) }
 		ui.menu_separator()
 		if ui.menu_item(i18n.tr("Home"), "Ctrl+H", icon = lucide.HOME).clicked { command_run(app, command_find("nav.home")) }
 		if ui.menu_item(i18n.tr("New session"), "Ctrl+N", icon = lucide.PLUS).clicked { command_run(app, command_find("session.new")) }

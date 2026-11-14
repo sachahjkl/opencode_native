@@ -74,17 +74,14 @@ HEX_ACT_WELL         :: 0x0a0a0aff
 
 
 ////////////////////////////////
-// The command palette
+// Lists
 
-PALETTE_TOP         :: 0.13     // of the window
-PALETTE_SESSIONS    :: 6        // shown with an empty field
-USAGE_SCORE         :: 150.0    // of a choice of weight 1 (ui.choice_weight), in ui.fuzzy_words' units: more than a word's start (100), less than the whole text over pieces (400)
-HEX_PAL_SELECTED    :: 0x0c0c0cff
+HEX_PAL_SELECTED    :: 0x0c0c0cff   // a list's selected row (the files', what you missed)
 
 ////////////////////////////////
 // Commands
 
-PALETTE_SESSION_CHARS :: 40   // the session a command acts on, beside it in the palette
+PALETTE_SESSION_CHARS :: 40   // the session a command acts on, after it in the palette (its detail)
 TOOL_ELAPSED_TENTHS_S :: 10   // a tool call's time with its tenths under this many seconds (elapsed_text)
 
 ////////////////////////////////
@@ -133,7 +130,7 @@ SIDE_INBOX_ROW_EM :: 2.9   // a row that also says its project
 SIDE_PROJECT_CHARS :: 40   // of that word
 SERVER_TABS_H_EM :: 2.2    // the row of the servers' tabs, at the top
 SERVER_TAB_CHARS :: 24     // of a server's name in its tab (an ellipsis for the rest)
-SERVER_TABS_FADE_EM :: 1.2   // the row's edge fades where tabs are hidden
+SERVER_TABS_FADE_EM :: 1.2   // how far the tabs fade out beyond the strip's arrow (ui.Strip_Options.fade)
 
 ////////////////////////////////
 // The dialogs of schedules and artifacts (schedules.odin)

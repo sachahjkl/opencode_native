@@ -959,24 +959,25 @@ what_is_open_has_the_keys :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	new_one := command_find("session.new")
-	palette := command_find("app.palette")
+	settings := command_find("app.settings")
 	help := command_find("app.help")
-	testing.expect(t, command_keyed(app, new_one) && command_keyed(app, palette))
+	testing.expect(t, command_keyed(app, new_one) && command_keyed(app, settings))
 	vs := &app.program_views
 	ui.view_open(vs, SETTINGS_VIEW, app)
 	testing.expect(t, !command_keyed(app, new_one), "a shortcut does not act behind a dialog")
-	testing.expect(t, command_keyed(app, palette), "a window command works over a dialog")
+	testing.expect(t, command_keyed(app, settings), "a window command works over a dialog")
 	ui.view_close(vs, SETTINGS_VIEW)
-	ui.view_open(vs, COMMANDS_VIEW, app)
-	testing.expect(t, command_keyed(app, palette), "its key closes it")
-	testing.expect(t, command_keyed(app, help), "over the palette too")
-	ui.view_close(vs, COMMANDS_VIEW)
+	// (the palette's own keys are the toolkit's: ui.palette_keys)
+	ui.palette_open(&app.palette.pal)
+	testing.expect(t, !command_keyed(app, new_one), "nor behind the palette")
+	testing.expect(t, command_keyed(app, help), "a window command works over the palette")
+	ui.palette_close(&app.palette.pal)
 	ui.view_open(vs, HELP_VIEW, app)
 	testing.expect(t, command_keyed(app, help))
 	ui.view_close(vs, HELP_VIEW)
 	// (the picker keeps its keys: its letters search, its Escape closes it)
 	app.picker.open = true
-	testing.expect(t, !command_keyed(app, help) && !command_keyed(app, palette), "the picker holds the window's keys")
+	testing.expect(t, !command_keyed(app, help) && !command_keyed(app, settings), "the picker holds the window's keys")
 	app.picker.open = false
 }
 

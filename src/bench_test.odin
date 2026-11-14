@@ -247,6 +247,7 @@ output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 bench_end :: proc(p: rawptr) {
 	app := (^App)(p)
 	context.allocator = runtime.heap_allocator()
+	palette_destroy(app)   // (before its window's state)
 	ui.destroy(&app.state)
 	ui.family_face_destroy(&app.term_family)
 	ui.font_picker_destroy(&app.term_picker)
@@ -442,13 +443,13 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		testing.expect(t, ui.boxes_built(&app.state) < 2 * bottom_boxes, "still only what is seen")
 
 		// the palette, open, its list filtered by what is typed
-		command_run(app, command_find("app.palette"))
+		palette_show(app)
 		session.frames(s, 3)
 		pal := Bench_Case{name = "palette"}
 		profile_begin()
 		for i in 0 ..< BENCH_FRAMES {
 			session.event(s, {kind = .Text, text = char_at(BENCH_FIND, i % 3)})
-			if i % 3 == 2 { ui.line_edit_set(&app.palette.field, "") }
+			if i % 3 == 2 { ui.line_edit_set(&app.palette.pal.field, "") }
 			bench_frame(s, &pal)
 		}
 		profile_end("palette")
@@ -460,9 +461,10 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		for i in 0 ..< BENCH_MODELS {
 			append(&app.models, Model_Info{id = fmt.aprintf("model-%d", i), provider = fmt.aprintf("provider-%d", i % 12), name = fmt.aprintf("Model %d of the bench", i)})
 		}
+		app.cx.catalog_version += 1   // (the models' source reads them again)
 		for query in ([]string{BENCH_PALETTE_SLIPS, "@"}) {
-			ui.line_edit_set(&app.palette.field, query)
-			session.frames(s, 3)
+			ui.line_edit_set(&app.palette.pal.field, query)
+			session.wait_until(s, palette_settled, "the palette's list ranked")
 			rest := Bench_Case{name = query == "@" ? "pal_all" : "pal_slips"}
 			profile_begin()
 			for i in 0 ..< BENCH_FRAMES {
@@ -472,7 +474,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 			profile_end(rest.name)
 			bench_report(&rest)
 		}
-		ui.view_close(&app.program_views, COMMANDS_VIEW)
+		palette_hide(app)
 		session.frames(s, 2)
 
 		// a command's output in its terminal grid, over the conversation: a line in colour comes at each frame, then it rests
@@ -720,13 +722,13 @@ the_palette_opens_from_the_settings :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		session.key(s, .K, {.Ctrl})
 		session.frames(s, 3)
-		testing.expect(t, ui.view_is_open(&app.program_views, COMMANDS_VIEW), "Ctrl+K opens the palette over the settings")
+		testing.expect(t, palette_shown(app), "Ctrl+K opens the palette over the settings")
 		session.type_text(s, ":terminal font")
-		session.frames(s, 3)
-		testing.expect(t, session.find_text(s, "Terminal font") != nil, "the palette lists the settings")
+		session.wait_until(s, palette_settled, "the palette's list ranked")
+		testing.expect(t, palette_row_of(app, &app.palette.settings.source, TERMINAL_FONT_PREF) >= 0, "the palette lists the settings")
 		session.key(s, .Escape)
 		session.frames(s, 2)
-		testing.expect(t, !ui.view_is_open(&app.program_views, COMMANDS_VIEW) && ui.view_is_open(&app.program_views, SETTINGS_VIEW), "the settings under it")
+		testing.expect(t, !palette_shown(app) && ui.view_is_open(&app.program_views, SETTINGS_VIEW), "the settings under it")
 		session.key(s, .F1)
 		session.frames(s, 3)
 		testing.expect(t, ui.view_is_open(&app.program_views, HELP_VIEW), "F1 shows the keys over the settings")
@@ -866,12 +868,11 @@ the_console_screens :: proc(t: ^testing.T) {
 		session.save_png(s, "console_approvals.png")
 		ui.menu_close()
 		session.frames(s, 2)
-		command_run(app, command_find("app.palette"))
-		session.frames(s, 3)
-		ui.line_edit_set(&app.palette.field, "the")
+		palette_up(s, app)
+		palette_type(s, app, "the")
 		session.wait_idle(s)
 		session.save_png(s, "console_palette.png")
-		ui.view_close(&app.program_views, COMMANDS_VIEW)
+		palette_hide(app)
 		a := &app.activity
 		todos_clear(a)
 		for it in ([4][2]string{{"read the code", "completed"}, {"write the fix", "in_progress"}, {"test it", "pending"}, {"ship it", "pending"}}) {
@@ -1512,13 +1513,12 @@ typing_with_nothing_focused_goes_to_the_composer :: proc(t: ^testing.T) {
 		testing.expect(t, app.composer.focused, "it has the keyboard")
 		ui.text_edit_set(&app.composer.area, "")
 		ui.set_focus(0)
-		palette_toggle(app)
-		session.frames(s, 2)
+		palette_up(s, app)
 		ui.set_focus(0)
 		session.type_text(s, "x")
 		session.frames(s, 2)
 		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
-		palette_toggle(app)
+		palette_hide(app)
 	})
 }
 
@@ -1952,23 +1952,6 @@ a_shells_zoom_rewraps_once_at_rest :: proc(t: ^testing.T) {
 	})
 }
 
-// The palette's keys at its foot are apart from the list, by a line as the field is: the field, its line, the list, a line,
-// the keys.
-@(test)
-the_palettes_keys_are_apart_from_its_list :: proc(t: ^testing.T) {
-	unwatched.run(t, proc(t: ^testing.T) {
-		context.allocator = runtime.heap_allocator()
-		app, s := bench_app(t)
-		palette_toggle(app)
-		session.frames(s, 3)
-		list, rule, foot := session.find(s, "pal_list"), session.find(s, "pal_foot_rule"), session.find(s, "pal_foot")
-		if testing.expect(t, list != nil && rule != nil && foot != nil, "the list, a line, the keys") {
-			testing.expect(t, rule.rect.min.y >= list.rect.max.y - 0.5 && rule.rect.max.y <= foot.rect.min.y + 0.5, "the line between them")
-		}
-		palette_toggle(app)
-	})
-}
-
 // A shell's scroll bar is the toolkit's: it is there once the scrollback is longer than the grid, and its thumb dragged up
 // moves the grid's view up the scrollback (the press is the bar's, not the shell's selection).
 @(test)
@@ -2245,37 +2228,43 @@ a_session_opens_at_its_bottom_in_its_first_frame :: proc(t: ^testing.T) {
 	})
 }
 
-// The palette over hundreds of sessions builds the rows in view only, and at rest makes nothing again: it built two hundred
-// rows and matched and ranked every item at each frame, the pointer moving over it enough. A session that comes makes the list again.
+// The palette over hundreds of sessions builds the rows in view only, and at rest neither asks a source nor ranks again
+// (the pointer moving over it). A session that comes is in the list: its source is asked again, once.
 @(test)
 the_palette_at_rest_builds_only_its_rows_in_view :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		command_run(app, command_find("app.palette"))
-		session.frames(s, 3)
-		ui.line_edit_set(&app.palette.field, "@")
-		session.frames(s, 3)
-		found := len(app.palette.hits)
+		p := &app.palette.pal
+		palette_up(s, app)
+		palette_type(s, app, "@")
+		found := ui.palette_row_count(p)
 		testing.expectf(t, found >= 300, "the sessions found: %d", found)
 		rows := 0
-		list := session.find(s, "pal_list")
+		list := session.find(s, "palette_list")
 		if testing.expect(t, list != nil, "the list") {
-			for c := list.first; c != nil; c = c.next { if strings.has_prefix(c.name, "###lrow_") || strings.contains(c.name, "lrow_") { rows += 1 } }
+			for c := list.first; c != nil; c = c.next {
+				name := c.name
+				if strings.has_prefix(name, "palette_") && !strings.has_prefix(name, "palette_h_") && !strings.has_prefix(name, "palette_quiet") && name != "palette_none" { rows += 1 }
+			}
 		}
 		testing.expectf(t, rows > 5 && rows < 60, "the rows in view and a margin: %d built", rows)
-		stamp, kept := app.palette.stamp, raw_data(app.palette.hits)
+		asks, rankings := p.asks, p.rankings
 		for i in 0 ..< 4 {
 			session.move(s, {800 + f32(i % 2), 120})
 			session.frames(s, 1)
 		}
-		testing.expect_value(t, app.palette.stamp, stamp)
-		testing.expect(t, raw_data(app.palette.hits) == kept, "the same hits: not ranked again")
+		testing.expect_value(t, p.asks, asks)
+		testing.expect_value(t, p.rankings, rankings)
 		append(&app.sessions, Session_Info{id = "ses_new", title = "A session that just came", directory = "C:/code/new"})
 		sessions_changed(app)
-		session.frames(s, 2)
-		testing.expect_value(t, len(app.palette.hits), found + 1)
-		ui.view_close(&app.program_views, COMMANDS_VIEW)
+		session.wait_until(s, proc(s: ^session.Session) -> bool {
+			app := (^App)(s.user)
+			return palette_settled(s) && palette_row_of(app, &app.palette.sessions, "ses_new") >= 0
+		}, "the new session listed")
+		testing.expect_value(t, ui.palette_row_count(p), found + 1)
+		testing.expect_value(t, p.asks, asks + 1)
+		palette_hide(app)
 		session.frames(s, 2)
 	})
 }
@@ -2291,14 +2280,14 @@ the_palettes_search_is_a_menus_search_band :: proc(t: ^testing.T) {
 		pref_set(app, "appearance.theme", "OpenCode")
 		pref_set(app, "appearance.mode", "dark")
 		defer pref_set(app, "appearance.mode", "system")
-		command_run(app, command_find("app.palette"))
-		session.frames(s, 3)
+		palette_up(s, app)
 		// a menu over it, something typed in it: its search band shows
 		ui.menu_open("app_menu", ui.Vec2{900, 300})
 		session.frames(s, 3)
 		session.event(s, {kind = .Text, text = 's'})
 		session.frames(s, 3)
-		top, band, list := session.find(s, "pal_top"), session.find(s, "menu_search"), session.find(s, "pal_list")
+		// (the toolkit's palette: its band and its list by their names)
+		top, band, list := session.find(s, "palette_top"), session.find(s, "menu_search"), session.find(s, "palette_list")
 		if !testing.expect(t, top != nil && band != nil && list != nil, "the palette's strip, the menu's band, the list") { return }
 		img := session.capture(s)
 		at :: proc(img: session.Image, b: ^ui.Box) -> session.Color { return session.pixel(img, int(b.rect.min.x) + 6, int((b.rect.min.y + b.rect.max.y) * 0.5)) }
@@ -2306,7 +2295,7 @@ the_palettes_search_is_a_menus_search_band :: proc(t: ^testing.T) {
 		testing.expectf(t, session.near(strip, menu, 2), "the strip %v, the menu's band %v", strip, menu)
 		testing.expectf(t, !session.near(strip, dialog, 4), "the strip %v apart from the dialog %v", strip, dialog)
 		ui.menu_close()
-		ui.view_close(&app.program_views, COMMANDS_VIEW)
+		palette_hide(app)
 		session.frames(s, 2)
 	})
 }
@@ -2366,20 +2355,22 @@ the_palette_arrows_move_the_selection :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		command_run(app, command_find("app.palette"))
-		session.frames(s, 3)
-		testing.expect_value(t, app.palette.vl.sel, 0)
+		p := &app.palette.pal
+		palette_up(s, app)
+		// (the first row that acts: a disabled command is skipped, so the steps are compared, not counted)
+		first := p.sel
 		session.key(s, .Down)
 		session.frames(s, 2)
-		testing.expect_value(t, app.palette.vl.sel, 1)
+		second := p.sel
+		testing.expect(t, second != first, "Down moves it")
 		session.key(s, .Down)
 		session.key(s, .Up)
 		session.frames(s, 2)
-		testing.expect_value(t, app.palette.vl.sel, 1)
+		testing.expect_value(t, p.sel, second)
 		session.key(s, .Up)
 		session.frames(s, 2)
-		testing.expect_value(t, app.palette.vl.sel, 0)
-		ui.view_close(&app.program_views, COMMANDS_VIEW)
+		testing.expect_value(t, p.sel, first)
+		palette_hide(app)
 		session.frames(s, 2)
 	})
 }

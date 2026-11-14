@@ -55,7 +55,7 @@ App :: struct {
 	server_edit:    Server_Edit,
 	picker:         Picker,            // the pickers of the composer (agent, model) (picker.odin)
 	activity:       Activity,          // what runs behind the conversation (activity.odin)
-	palette:        Palette,           // Ctrl+K (palette.odin)
+	palette:        Palette,           // Ctrl+K: the toolkit's palette and ocn's sources (palette.odin)
 	term_zooms:     Kept_Zooms,        // each shell's zoom, by its id (terminal.odin)
 	session_zooms:  Kept_Zooms,        // each session's conversation zoom, by its id (commands.odin content_zoom)
 	stores:         Stores,            // what it remembers beside the preferences, written on workers (stores.odin)
@@ -566,6 +566,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	app.state.icon_font = app.icons   // (Lucide: the menus' icons are its characters)
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
 	views_start(app, views_path(prefs_file))   // (ui.init selected the state: the sidebar's owner)
+	palette_start(app)   // (after the preferences: the settings source reads them)
 	prefs_page.install_init(&app.install, &app.cfg_prefs, setup_options())
 	licence_init(app)
 	term_zooms_load(app)
@@ -620,7 +621,8 @@ main :: proc() {
 	if !opts.no_fixed_surface { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
 	_ = platform.drop_target_enable(app.win, true)   // (files dropped on the window are attached: attach_drop)
 	app_init(app, prefs_path())
-	palette_open(app)   // (after app_init: the memory is read by a task of the state; a test opens none)
+	// (after app_init: the usage memory is read by a task of the state; a test gives none, it keeps it in memory)
+	ui.palette_memory_open(&app.palette.pal, &app.state, pjoin({config_dir(), "palette_choices.txt"}))
 	placement_restore(app)
 	drafts_load(app)   // (what was typed before, in each session: the home page's comes back now)
 	app.previews.host = web_host_system()

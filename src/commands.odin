@@ -23,7 +23,7 @@ Command :: struct {
 	enabled: proc(app: ^App) -> bool,   // nil: always
 	checked: proc(app: ^App) -> bool,   // nil: not a toggle
 	over:    proc(app: ^App) -> bool,   // its key with a dialog over the window (overlay_open): when it still works; nil: never
-	// .Window: the window's (the palette, the keys, the settings, quit): its key works in every page, whatever has the
+	// .Window: the window's (the keys, the settings, quit; the palette's is the toolkit's): its key works in every page, whatever has the
 	// keyboard, over a view shown as a dialog too (the settings are one): the toolkit takes it from wherever the focus is
 	scope:   ui.Command_Scope,
 }
@@ -33,7 +33,6 @@ Command :: struct {
 @(private = "file") can_go_back :: proc(app: ^App) -> bool { return nav_can(app, -1) || back_target(app) != "" }
 
 COMMANDS := [?]Command{
-	{id = "app.palette", title = i18n.later("Command palette"), tags = "commands actions search launcher", group = i18n.later("General"), icon = lucide.SEARCH, keys = "Ctrl+K, Ctrl+Shift+P", key = .K, mods = {.Ctrl}, run = palette_toggle, scope = .Window},
 	{id = "app.help", title = i18n.later("Keyboard shortcuts"), tags = "keys keybindings hotkeys help cheatsheet", group = i18n.later("General"), icon = lucide.LIST, keys = "F1", key = .F1, run = help_toggle, scope = .Window},
 	{id = "app.settings", title = i18n.later("Settings"), tags = "preferences options configuration prefs", group = i18n.later("General"), icon = lucide.SLIDERS_HORIZONTAL, keys = "Ctrl+,", key = .Comma, mods = {.Ctrl}, run = settings_open, scope = .Window},
 	{id = "app.refresh", title = i18n.later("Refresh"), tags = "reload sync update fetch", group = i18n.later("General"), icon = lucide.REFRESH_CW, keys = "F5", key = .F5, run = proc(app: ^App) {
@@ -125,14 +124,14 @@ command_keyed :: proc(app: ^App, c: ^Command) -> bool {
 	return !overlay_open(app) || (c.over != nil && c.over(app))
 }
 
-// The keys of the table, at the start of a build. The palette has its other name. A shell with the keyboard took its
-// keys out before (term_events): Ctrl+K and the rest are the shell's there, Ctrl+Shift+T alone comes through.
+// The keys of the table, at the start of a build (the palette's are the toolkit's: palette_build). A shell with the
+// keyboard took its keys out before (term_events): Ctrl+K and the rest are the shell's there, Ctrl+Shift+T alone comes
+// through.
 commands_keys :: proc(app: ^App) {
 	for &c in COMMANDS {
 		if c.key == .None || !command_keyed(app, &c) { continue }
 		if ui.chord_pressed({c.key, c.mods}, c.scope) { command_run(app, &c) }
 	}
-	if c := command_find("app.palette"); command_keyed(app, c) && ui.chord_pressed({.P, {.Ctrl, .Shift}}, c.scope) { command_run(app, c) }
 }
 
 // The conversation's zoom: the session shown's own, or the preference (appearance.content_zoom), which is every session's that has
@@ -212,6 +211,11 @@ help_view :: proc(v: ^ui.View, app: ^App) {
 						group = c.group
 						ui.spacer(ui.px(em * 0.4))
 						section_label(fmt.tprintf("g%d", i), strings.to_upper(i18n.tr(group), context.temp_allocator), em)
+						if i == 0 {
+							// (the palette's command is the toolkit's, not a line of COMMANDS: first, as the sheet lists it)
+							pc := ui.palette_command()
+							row(app, "###h_palette", ui.command_keys_text(pc), i18n.tr(pc.label), em)
+						}
 					}
 					row(app, fmt.tprintf("###h%d", i), platform.key_text(c.keys), i18n.tr(c.title), em)
 				}

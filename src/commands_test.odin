@@ -12,12 +12,13 @@ no_command_key_types_text :: proc(t: ^testing.T) {
 	}
 }
 
-// The palette, the keys, the settings and quit are the window's: their keys work over the settings and every view shown
-// as a dialog (command_keyed).
+// The keys, the settings and quit are the window's: their keys work over the settings and every view shown as a dialog
+// (command_keyed). The palette's is the toolkit's (ui.palette_command): the table has no line for it.
 @(test)
 the_window_commands :: proc(t: ^testing.T) {
+	testing.expect(t, command_find("app.palette") == nil, "the palette's command is the toolkit's")
 	for c in COMMANDS {
-		want := c.id == "app.palette" || c.id == "app.help" || c.id == "app.settings" || c.id == "app.quit"
+		want := c.id == "app.help" || c.id == "app.settings" || c.id == "app.quit"
 		testing.expectf(t, (c.scope == .Window) == want, "%s: the window's is %v", c.id, want)
 		if c.scope == .Window { testing.expectf(t, c.over == nil, "%s: a window command works over a dialog already", c.id) }
 	}

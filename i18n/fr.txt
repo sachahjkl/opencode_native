@@ -215,14 +215,11 @@ en+ %d unreadable
 fr %d illisible
 fr+ %d illisibles
 
-en Command palette
-fr Palette de commandes
+en Keyboard shortcuts
+fr Raccourcis clavier
 
 en General
 fr Général
-
-en Keyboard shortcuts
-fr Raccourcis clavier
 
 en Settings
 fr Réglages
@@ -1246,23 +1243,26 @@ fr Nouveau code
 en Link copied
 fr Lien copié
 
+en Server commands
+fr Commandes du serveur
+
+en Write
+fr Écrire
+
+en Sessions
+fr Sessions
+
+en Models
+fr Modèles
+
+en Agents
+fr Agents
+
 en Session · %s
 fr Session · %s
 
-en Agent: %s
-fr Agent : %s
-
-en Search commands, sessions, agents, models…
-fr Rechercher des commandes, des sessions, des agents, des modèles…
-
-en Nothing matches
-fr Aucun résultat
-
-en > commands    @ sessions    / server    # models    : settings
-fr > commandes    @ sessions    / serveur    # modèles    : réglages
-
-en Enter run
-fr Entrée exécuter
+en Server
+fr Serveur
 
 en Context
 fr Contexte
@@ -1302,6 +1302,9 @@ fr Sortie
 
 en Status
 fr État
+
+en Nothing matches
+fr Aucun résultat
 
 en Preview
 fr Aperçu
@@ -1993,9 +1996,6 @@ fr aucune
 en Basic (password from service.json)
 fr Basic (mot de passe de service.json)
 
-en Sessions
-fr Sessions
-
 en %d loaded · %d running
 fr %d chargées · %d en cours
 
@@ -2286,9 +2286,6 @@ fr+ … et %d outils de plus
 
 en No tool call in the loaded messages.
 fr Aucun appel d'outil dans les messages chargés.
-
-en Models
-fr Modèles
 
 en %s out
 fr %s en sortie

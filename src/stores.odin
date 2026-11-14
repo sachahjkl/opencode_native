@@ -1,6 +1,7 @@
 // What the program remembers beside its preferences (prefs.txt is gt:config's), in its own folder (config_dir):
 //   settings.txt        "key=value" lines: the Setup dialog's answer, the last session, the last server
-//   palette_choices.txt what the palette ranks first (ui.Choice_Memory, read once the state is there: palette_open)
+//   palette_choices.txt what the palette ranks first, by "<source>:<id>" (the toolkit's palette's usage memory: main's
+//                       ui.palette_memory_open; written when the palette goes, stores_close)
 //   terminal_zoom.txt   "id<TAB>zoom" lines: each shell's zoom (terminal.odin)
 //   session_zoom.txt    "id<TAB>zoom" lines: each session's conversation zoom (commands.odin)
 //   servers.txt         "name<TAB>url<TAB>protected password" lines, readable by the user only (servers.odin)
@@ -49,7 +50,7 @@ stores_open :: proc(app: ^App) {
 stores_close :: proc(app: ^App) {
 	st := &app.stores
 	store.close(&st.settings)
-	ui.choice_memory_close(&app.palette.choices)   // (none opened, a test's: nothing to write)
+	palette_destroy(app)   // (the last palette writes the usage memory, the disk waited for; a test's: in memory)
 	store.close(&st.zooms)
 	store.close(&st.session_zooms)
 	store.close(&st.servers)

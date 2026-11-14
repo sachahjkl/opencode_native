@@ -1,0 +1,61 @@
+# The command palette
+
+opencode native uses the toolkit's palette (`ui.Command_Palette`), the same in every program of the family. Its design,
+its prefixes, its keys and its look are the toolkit's: `ext/gui_toolkit/src/md/features/palette.md` and
+`ext/gui_toolkit/docs/palette.md`. This file says what opencode native gives it (`src/palette.odin`) and why.
+
+## The sources
+
+| Prefix | Source | Items | Choosing |
+|---|---|---|---|
+| `>` | the toolkit's commands source | `COMMANDS`, as a `[]ui.Command` table, one line per command | `command_run` of the command with that id |
+| `>` | the toolkit's views' moves | the views of the window the palette is over | the toolkit runs it |
+| `>` | `server` ("Server commands") | the server's commands (`app.cx.slash`), group "Server" | `/name ` in the composer |
+| `@` | `sessions` | the root sessions | `open_root` |
+| `#` | `models`, `agents` | the models; the agents but the sub-agents | `choose_model`, `choose_agent` |
+| `:` | `prefs_page.palette_settings_add` on `cfg_prefs` | the settings the pages show | the toolkit: a switch flips and the palette stays; another opens the settings on it |
+
+`/` is empty: it is the Paths prefix of the shared table (the session's files, searched by the server), a later step.
+
+## Decisions
+
+- **The shared table first.** Before, ocn had its own prefixes: `@` sessions and agents, `/` the server's commands,
+  `#` models. Now `@` is Go to (the sessions), `#` is Choose (the models and the agents, the one in use marked), and the
+  server's commands are commands (`>`, and the plain search). `/` means a path in every program.
+- **The palette's command is the toolkit's.** Ctrl+K and Ctrl+Shift+P are `ui.palette_command()`, read by
+  `ui.palette_keys` alone. `COMMANDS` has no `app.palette` line; the help view lists the toolkit's command first.
+- **One reader of the keys, gated as the window commands are.** `palette_build` calls `palette_keys` unless the picker
+  or the file dialog holds the window's keys (`command_keyed`'s rule). An open menu holds them in the toolkit.
+- **The commands' table is made once per language.** `palette_table_keep` makes it when `i18n.version()` changes.
+  `disabled` is read only while the palette is open, from the commands that have an `enabled` (a few dozen calls per
+  build), and a change bumps the version. The palette compares the version, never the table.
+- **The sessions are answered on a chore.** There are thousands. `sessions_read` copies what a line needs into the
+  answer's arena once per `sessions_ver`; a chore makes the items; `sessions_done` gives the arena to the palette. A copy
+  at each build was refused: work in proportion to the data at each frame.
+- **The server's commands are what ocn read at the connection** (`stream_up`). The old palette read them again at each
+  opening. The composer's `/` list still reads them again when it opens (a server's plugins add theirs later), and
+  `slash_forget` (called by `slash_load`) bumps the source's version.
+- **Opened from outside a build too.** `palette_show` and `palette_hide` note the wish; the next `palette_build` opens or
+  closes the palette over the main window. A page of the Preview takes Ctrl+K in its own events, outside a build.
+- **The usage memory** is `palette_choices.txt` in `config_dir()`, opened in `main` (a test keeps it in memory). Its
+  keys are `<source>:<id>`: the file of the old palette (`<kind>:<id>`) is not read.
+
+- **A command with `checked` is a switch** (`ui.Command.toggle`): its row shows the mark that `checked` says (read for
+  the rows in view, no version), and choosing it keeps the palette open. The choice still comes back to `palette_run`,
+  which runs the command: the command flips its own state.
+- **A session's command says the session it acts on** ("Session · <title>", `Palette_Commands_Options.details`): the
+  session shown. The details are made again, with a new version, when the session shown or its title changes (one
+  lookup per build while the palette is open).
+
+## What was lost, and why
+
+- **The six last sessions with nothing typed**: the toolkit lists Recent and the commands then; `@` lists the sessions.
+
+## Subtle points
+
+- A choice of a command is found again by its id (`command_find(c.id)`), not by `c.index`: the table can be made again
+  between the ranking and the choice (a change of language).
+- The sessions source's mark is the session shown; the models' is `shown_model` (the session's, or the one chosen for
+  it); the agents' is `shown_agent`.
+- The toolkit's palette is a view of the toolkit (`ui.PALETTE_VIEW`); `overlay_open` sees it through
+  `views_hold_keys`, so the composer does not take what is typed while it is open.

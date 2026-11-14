@@ -27,7 +27,6 @@ CHANGES_VIEW   :: "changes"
 SCHEDULES_VIEW :: "schedules"
 ARTIFACTS_VIEW :: "artifacts"
 DIFF_VIEW      :: "diff"
-COMMANDS_VIEW  :: "command_palette"   // (not "palette": that id is the toolkit's own palette's)
 IMAGE_VIEW     :: "image"
 SERVER_VIEW    :: "server"
 PAIR_VIEW      :: "pair"
@@ -102,8 +101,6 @@ dialogs_register :: proc(app: ^App) {
 	// (as a dialog it hugs its picture at each build: ui.view_size; its grips set the share of the window it takes)
 	ui.view_register(vs, IMAGE_VIEW, image_view, ui.View_Options{title = i18n.later("Image"), icon = lucide.IMAGE, width_em = 72, height_em = 50,
 		min_width_em = VIEWER_MIN_W_EM, resizable = true, backdrop = view_backdrop})
-	ui.view_register(vs, COMMANDS_VIEW, palette_view, ui.View_Options{title = i18n.later("Command palette"), icon = lucide.SEARCH,
-		width_em = 40, height_em = 30, min_width_em = 28, min_height_em = 12, resizable = true, top = PALETTE_TOP, no_header = true, backdrop = view_backdrop})
 	ui.view_register(vs, SCHEDULES_VIEW, schedules_view, ui.View_Options{title = i18n.later("Schedules of this session"), icon = lucide.HISTORY,
 		width_em = SCHEDULES_W_EM, top = SCHEDULES_TOP, backdrop = view_backdrop})
 	ui.view_register(vs, SERVER_VIEW, server_view, ui.View_Options{title = i18n.later("Add a server"), icon = lucide.GLOBE,
@@ -137,7 +134,6 @@ views_answers :: proc(app: ^App) {
 	changes_follow(app)
 	if _, ok := ui.view_ended(vs, DIFF_VIEW); ok { diff_full_close(&app.cx.diff_full) }
 	if _, ok := ui.view_ended(vs, PAIR_VIEW); ok { pair_closed(app) }
-	palette_answer(app)
 	delete_answer(app)
 	rename_answer(app)
 }
