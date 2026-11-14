@@ -96,7 +96,8 @@ schedules_open :: proc(app: ^App, id: string) {
 	set_text(&s.problem, ""); set_text(&s.removing, "")
 	schedules_clear(s)
 	remote.reset(&s.read)
-	app.cx.open[.Schedules], s.fresh = true, true
+	s.fresh = true
+	ui.view_open(&app.program_views, SCHEDULES_VIEW, app)
 	schedules_ask(app)
 }
 
@@ -108,7 +109,7 @@ schedules_ask :: proc(app: ^App) {
 
 schedules_forget :: proc(app: ^App) {
 	s := &app.cx.schedules
-	app.cx.open[.Schedules] = false
+	ui.view_close(&app.program_views, SCHEDULES_VIEW)
 	set_text(&s.session, ""); set_text(&s.removing, "")
 	schedule_form_clear(s)
 	schedules_clear(s)
@@ -143,7 +144,7 @@ schedules_load :: proc(app: ^App, v: json.Value) {
 }
 
 schedule_changed :: proc(app: ^App) {
-	if app.cx.open[.Schedules] { schedules_ask(app) }
+	if ui.view_is_open(&app.program_views, SCHEDULES_VIEW) { schedules_ask(app) }
 }
 
 // (Of the session the form is for: a later one of another session has reset `making`, and this answer was dropped.)
@@ -209,17 +210,15 @@ field_line :: proc(id: string, f: ^ui.Line_Edit, hint: string, em: f32, label :=
 }
 
 // As tall as what it holds, as far as the window goes: past that what is planned scrolls, under the form, and nothing is cut at any
-// size. (A small thing: no sizes to choose. Its place in layout.dialogs stays: they are read by position.)
-schedules_dialog :: proc(app: ^App, em: f32) {
+// size. (A small thing: no sizes to choose.)
+schedules_view :: proc(v: ^ui.View, app: ^App) {
 	s := &app.cx.schedules
-	if !app.cx.open[.Schedules] { return }
-	win := app.state.window_size
+	em := ui.font_size()
 	margin := em * ui.MODAL_MARGIN_EM
+	// (docked: the room of its place; else as tall as what it holds, up to its window's: its own size would hold it)
+	win := v.presentation == .Panel ? ui.view_room(v) + 2 * margin : built_state(app).window_size
 	w := min(math.round(em * SCHEDULES_W_EM), win.x - 2 * margin)
-	if ui.modal("schedules", &app.cx.open[.Schedules], {width_em = w / em, top = SCHEDULES_TOP}) {
-		dialog_backdrop()
-		if ui.dialog_header("sc_head", i18n.tr("Schedules of this session"), {close = true}) {
-		}
+	{
 		ui.spacer(ui.px(em * 0.4))
 		// (what it held at the last build: this one is not laid out yet. The title and the gaps are what the window keeps.)
 		held := em * SCHEDULES_FIRST_H_EM
@@ -384,7 +383,7 @@ artifacts_open :: proc(app: ^App) {
 	artifacts_clear(a)
 	d := chat_dir(app)
 	set_text(&a.dir, d != "" ? d : app.chat.new_dir)
-	app.cx.open[.Artifacts] = true
+	ui.view_open(&app.program_views, ARTIFACTS_VIEW, app)
 	artifacts_ask(app)
 }
 
@@ -397,7 +396,7 @@ artifacts_ask :: proc(app: ^App) {
 
 artifacts_forget :: proc(app: ^App) {
 	a := &app.cx.artifacts
-	app.cx.open[.Artifacts] = false
+	ui.view_close(&app.program_views, ARTIFACTS_VIEW)
 	artifacts_clear(a)
 	set_text(&a.dir, "")
 	app.cx.no_artifacts = false   // (what the next server offers is for it to say: experimental_check)
@@ -431,7 +430,7 @@ artifact_read :: proc(app: ^App) {
 }
 
 artifacts_changed :: proc(app: ^App) {
-	if app.cx.open[.Artifacts] { artifacts_ask(app) }
+	if ui.view_is_open(&app.program_views, ARTIFACTS_VIEW) { artifacts_ask(app) }
 	chat_artifacts_ask(app)
 }
 
@@ -600,13 +599,10 @@ artifact_write_free :: proc(data: rawptr) {
 	free(job, h)
 }
 
-artifacts_dialog :: proc(app: ^App, em: f32) {
+artifacts_view :: proc(v: ^ui.View, app: ^App) {
 	a := &app.cx.artifacts
-	if !app.cx.open[.Artifacts] { return }
-	if ui.modal("artifacts", &app.cx.open[.Artifacts], dialog_options(app, .Artifacts)) {
-		dialog_backdrop()
-		if ui.dialog_header("ar_head", i18n.tr("Artifacts of this folder"), {close = true}) {
-		}
+	em := ui.font_size()
+	{
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 		if ui.row(id = "###ar_body") {
@@ -820,7 +816,7 @@ schedules_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { schedules_load(
 schedule_made_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { schedule_made(app) }
 
 // ("Invalid duration": under the form, with what was typed)
-schedule_made_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) { return app.cx.open[.Schedules] }
+schedule_made_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) { return ui.view_is_open(&app.program_views, SCHEDULES_VIEW) }
 
 schedule_done_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { schedule_changed(app) }
 

@@ -94,6 +94,7 @@ model_tip :: proc(app: ^App, m: Model_Info, em: f32) {
 }
 
 Picker :: struct {
+	open:   bool,      // it shows (a popup anchored to its button, not a view)
 	id:     string,
 	anchor: Rect,
 	field:  ui.Line_Edit,
@@ -121,7 +122,7 @@ HEX_PICK_SELECTED :: 0x0c0c0cff
 
 picker_open :: proc(app: ^App, id: string, anchor: Rect) {
 	p := &app.picker
-	app.cx.open[.Picker], p.id, p.anchor, p.fresh = true, id, anchor, true
+	app.picker.open, p.id, p.anchor, p.fresh = true, id, anchor, true
 	p.sel = 0
 	ui.line_edit_set(&p.field, "")
 	// (read again at each opening: a server that has just started lists its agents and models before its plugins and
@@ -180,7 +181,7 @@ picker_rows :: proc(p: ^Picker, items: []Pick_Item, hits: []ui.Rank_Hit, typed: 
 // `version`: the items' version as the caller counts their changes (0: none kept, they are ranked and laid out again each frame).
 picker :: proc(app: ^App, p: ^Picker, id: string, hint: string, items: []Pick_Item, em: f32, align_right := false, version: u64 = 0) -> (chosen: int) {
 	chosen = -1
-	if !app.cx.open[.Picker] || p.id != id { return }
+	if !app.picker.open || p.id != id { return }
 	needle := ui.line_edit_string(&p.field)
 	hits := ui.rank(needle, items, proc(it: ^Pick_Item, _: rawptr) -> ui.Rank_Entry { return {label = it.label, group = it.group} }, match = ui.rank_fuzzy, cache = &p.search, version = version)
 	if p.fresh { for h in hits { if it := items[h.index]; it.current && it.group != "" { picker_fold(p, it.group, true) } } }
@@ -232,7 +233,7 @@ picker :: proc(app: ^App, p: ^Picker, id: string, hint: string, items: []Pick_It
 		if p.fresh { ui.set_focus(res.box.key) }
 		if res.changed { p.sel = 0; p.reveal = true }
 		if res.committed && n > 0 { chosen = picker_take(p, items, hits, rows, p.sel) }
-		if res.cancelled { app.cx.open[.Picker] = false }
+		if res.cancelled { app.picker.open = false }
 		ui.spacer(ui.px(em * 0.4))
 		// the rows: a scroll box (smooth wheel scrolling), the selected row kept in view
 		view_h := f32(clamp(n, 1, PICK_ROWS)) * row_h
@@ -309,13 +310,13 @@ picker :: proc(app: ^App, p: ^Picker, id: string, hint: string, items: []Pick_It
 		}
 		ui.spacer(ui.px(em * 0.4))
 	}
-	if n > 0 && app.cx.open[.Picker] && !p.fresh && ui.key_press(.Return) && chosen < 0 { chosen = picker_take(p, items, hits, rows, p.sel) }
+	if n > 0 && app.picker.open && !p.fresh && ui.key_press(.Return) && chosen < 0 { chosen = picker_take(p, items, hits, rows, p.sel) }
 	// a press outside closes it (the button that opened it toggles it: its own click closes it)
 	if !p.fresh && ui.mouse_pressed(.Left) {
-		if r, ok := ui.popover_rect(fmt.tprintf("###pick_%s", id)); ok && !rect_has(r, mouse) && !rect_has(p.anchor, mouse) { app.cx.open[.Picker] = false }
+		if r, ok := ui.popover_rect(fmt.tprintf("###pick_%s", id)); ok && !rect_has(r, mouse) && !rect_has(p.anchor, mouse) { app.picker.open = false }
 	}
-	if ui.key_press(.Escape) { app.cx.open[.Picker] = false }
-	if chosen >= 0 { app.cx.open[.Picker] = false }
+	if ui.key_press(.Escape) { app.picker.open = false }
+	if chosen >= 0 { app.picker.open = false }
 	p.fresh = false
 	return
 }

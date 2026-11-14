@@ -197,12 +197,13 @@ chat_header :: proc(app: ^App, em: f32) {
 		c := &app.chat
 		// (its title edited: the line is the title's, the figures and the sub-agents wait)
 		editing := s != nil && renaming_at(app, s.id, .Header)
-		if !editing && len(c.children) > 0 && !(app.conversation.docked_w > 0 && app.conversation.docked_w < em * HEADER_FIGURES_MIN_EM && len(active_children(app)) == 0) {
+		thin := app.conversation.width > 0 && app.conversation.width < em * HEADER_FIGURES_MIN_EM
+		if !editing && len(c.children) > 0 && !(thin && len(active_children(app)) == 0) {
 			subagents_button(app, em)
 			ui.spacer(ui.px(em * 0.6))
 		}
-		// (narrow, as a panel of the dock: the title first, the figures are in the statistics)
-		narrow := editing || app.conversation.docked_w > 0 && app.conversation.docked_w < em * HEADER_FIGURES_MIN_EM
+		// (narrow, between panels: the title first, the figures are in the statistics)
+		narrow := editing || thin
 		if !narrow && c.tokens_in + c.tokens_out > 0 {
 			if pill_button("###tok", fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, lucide.ZAP).clicked { stats_toggle(app) }
 			ui.spacer(ui.px(em * 0.4))

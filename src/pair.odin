@@ -25,7 +25,7 @@ Pair :: struct {
 
 // Opens the dialog with a new code (a code works once: each opening makes one).
 pair_open :: proc(app: ^App) {
-	app.cx.open[.Pair] = true
+	ui.view_open(&app.program_views, PAIR_VIEW, app)
 	pair_new_code(app)
 	request(app, .Info, "GET", "/api/info")   // (the addresses: a tunnel may have come or gone)
 }
@@ -82,30 +82,35 @@ pair_reachable :: proc(urls: []string) -> string {
 	return ""
 }
 
-pair_dialog :: proc(app: ^App, em: f32) {
-	p := &app.pair
-	if !app.cx.open[.Pair] { return }
-	// (the dialog is the block's: ui.modal ends with it)
-	if ui.modal("pair", &app.cx.open[.Pair], {width_em = 40}) {
-		dialog_backdrop()
-		ui.spacer(ui.px(em))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row(id = "###pair") {
-			ui.spacer(ui.px(em * 1.4))
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-			if ui.column() {
-				text("t", i18n.tr("Pair a device"), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
-				pair_body(app, em)
-			}
-			ui.spacer(ui.px(em * 1.4))
-		}
-		ui.spacer(ui.px(em))
+// (its title is the view's header)
+pair_view :: proc(v: ^ui.View, app: ^App) {
+	em := ui.font_size()
+	ui.spacer(ui.px(em))
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
+	if ui.row(id = "###pair") {
+		ui.spacer(ui.px(em * 1.4))
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+		if ui.column() { pair_body(app, v, em) }
+		ui.spacer(ui.px(em * 1.4))
 	}
-	if !app.cx.open[.Pair] { delete(p.code); p.code = "" }
+	ui.spacer(ui.px(em))
+}
+
+// Closed, whichever way: the code goes (it works once, and only for the server it came from).
+pair_closed :: proc(app: ^App) {
+	p := &app.pair
+	delete(p.code)
+	p.code = ""
+}
+
+// The server left: its code with it.
+pair_forget :: proc(app: ^App) {
+	ui.view_close(&app.program_views, PAIR_VIEW)
+	pair_closed(app)
 }
 
 @(private = "file")
-pair_body :: proc(app: ^App, em: f32) {
+pair_body :: proc(app: ^App, v: ^ui.View, em: f32) {
 	p := &app.pair
 	soft := ui.Style_Mod{font_size = math.round(em * FS_LABEL)}
 	note := ui.Style_Mod{font_size = math.round(em * FS_NOTE)}
@@ -144,7 +149,7 @@ pair_body :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.4))
 		mins, secs := int(left) / 60, int(left) % 60
 		pair_note("###x", fmt.tprintf(i18n.tr("The code expires in %d:%02d."), mins, secs), hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
-		ui.wake_within(&app.state, PAIR_TICK_MS)
+		ui.wake_within(built_state(app), PAIR_TICK_MS)
 	} else {
 		pair_note("###x", i18n.tr("This code expired."), hex(HEX_WEAK), soft)
 	}
@@ -158,7 +163,7 @@ pair_body :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.fill())
 		if ui.button("pair_new", i18n.tr("New code"), lucide.REFRESH_CW).clicked { pair_new_code(app) }
 		ui.spacer(ui.px(em * 0.5))
-		if ui.button("pair_close", i18n.tr("Close"), lucide.X).clicked { app.cx.open[.Pair] = false }
+		if ui.button("pair_close", i18n.tr("Close"), lucide.X).clicked { ui.view_end(v, ui.VIEW_CANCELLED) }
 	}
 }
 

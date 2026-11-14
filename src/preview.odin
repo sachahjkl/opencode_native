@@ -1,24 +1,20 @@
-// The Preview panel: a web page beside the conversation, in a dock (the panels can be moved, stacked, floated and folded by
-// their tabs; their layout is a preference). What an agent builds shows here, and the agents can drive it (browser_mcp.odin).
-// The Statistics panel (stats.odin) shares its place: one stack, a tab each, never a second panel at the side.
-// While the panel is closed there is no dock at all: a lone tab strip would only take room. The page is a child window of
-// the system's, over everything the toolkit draws in its place: it steps aside while a dialog or a menu is open.
-// Each session has its own browser, of one tab or several, inside this one panel (preview_views.odin): what is here is the session shown's,
-// and what it does to the page it does to its front tab, unless it is given another.
+// The Preview panel: a web page beside the conversation, a view (PREVIEW_VIEW: docked at its right, floating, in a window of its
+// own, wherever the user puts it). What an agent builds shows here, and the agents can drive it (browser_mcp.odin). The Statistics
+// panel (stats.odin) shares its place at first: one stack, a tab each. The page is a child window of the system's, over everything
+// the toolkit draws in its place: it steps aside while a dialog or a menu is open over it, and follows the view to another window
+// (preview_moved). Each session has its own browser, of one tab or several, inside this one panel (preview_views.odin): what is
+// here is the session shown's, and what it does to the page it does to its front tab, unless it is given another.
 package ocn
 
 import "core:fmt"
 import "core:math"
 import "core:strings"
-import "gt:config"
 import desktop "gt:desktop"
 import "gt:draw"
+import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
-
-// (Panel.Terminal: while there is no shell. The shells are panels too, from TERM_PANEL_BASE.)
-Panel :: enum u32 { Conversation = 1, Preview, Terminal, Stats }
 
 // Who wants a panel: what an agent opens does not move the keyboard.
 Asked_By :: enum u8 { User, Agent }
@@ -72,15 +68,16 @@ Preview :: struct {
 	front:    int,                // the one that shows
 	key:      string,             // the session it is the browser of ("": the home page) (owned)
 	gone:     bool,               // its session was deleted: it is not parked
-	body:     Rect,               // where the page goes, at the last layout (frame pixels)
-	shown:    bool,               // the panel's body was built in this frame
+	body:     Rect,               // where the page goes, at the last layout (frame pixels of the window it is built in)
+	shown:    bool,               // the panel's body was built in this frame (preview_after_frames reads it, then lets go of it)
+	occluded: bool,               // ... and a view floats over it, or a dialog is over it (it steps aside)
 	addr_key: ui.Key,             // the address field: what the page says does not overwrite what one types
 	due_new:  bool,               // what the panel's boxes asked for, done where nothing is built (preview_dues)
 	due_front, due_close: ^Preview_Tab,
 }
 
-// The dock's look: a flat bar, and on it words. No tab has a surface or an edge of its own: the one shown is lit, with a line
-// as wide as it lying on the bar's lower edge. What a tab is shows by what it says, not by a box around it.
+// The look of a session's browser tabs: a flat bar, and on it words. No tab has a surface or an edge of its own: the one shown
+// is lit, with a line as wide as it lying on the bar's lower edge. What a tab is shows by what it says, not by a box around it.
 @(private = "file")
 tab_look_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	if user == nil { return }   // (not the one shown)
@@ -90,135 +87,28 @@ tab_look_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	draw.rect(dc, {{r.min.x + inset, r.max.y - h}, {r.max.x - inset, r.max.y}}, accent())
 }
 
+// The strip's bar under those tabs.
 @(private = "file")
-panel_tab :: proc(user: rawptr, t: ui.Dock_Tab) {
-	app := (^App)(user)
-	em := ui.font_size()
-	t.box.flags -= {.Draw_Hot_Effects}   // (the theme's box under the pointer)
-	t.box.custom, t.box.custom_user = tab_look_draw, t.active ? rawptr(app) : nil
-	if t.panel >= TERM_PANEL_BASE && ui.signal(t.box).clicked { term_focus_ask(app, t.panel) }   // (a shell's tab: to type in it)
-	col := t.active ? hex(HEX_BRIGHT) : t.hot ? hex(HEX_TEXT_SOFT) : hex(HEX_WEAK)
-	ui.spacer(ui.px(em * TAB_PAD_EM))
-	text("t", panel_title(app, t.panel), col, ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
-	ui.spacer(ui.px(em * TAB_PAD_EM))
-}
-
-@(private = "file")
-strip_look :: proc(user: rawptr, d: ^ui.Dock, leaf: i32) {
+strip_look :: proc() {
 	b := ui.parent_box()
-	focus, _ := ui.dock_focus_leaf(d)
-	lit := ui.frame_new(bool)
-	lit^ = focus == leaf
-	b.custom_user = lit
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-		// (the edged style: the stack's strip a window's title, the accent fading out, lit where the focus is)
-		if ui.edged() { ui.caption_face(dc, b.rect, hex(HEX_BG1), hex(HEX_BG1), (^bool)(user)^); return }
+		if ui.edged() { ui.caption_face(dc, b.rect, hex(HEX_BG1), hex(HEX_BG1), false); return }
 		draw.rect(dc, b.rect, hex(HEX_BG1))
 		draw.rect(dc, {{b.rect.min.x, b.rect.max.y - px1()}, b.rect.max}, hex(HEX_LINE))
 	}
 }
 
-@(private = "file")
-strip_end :: proc(user: rawptr, d: ^ui.Dock, leaf: i32) {
-	app := (^App)(user)
-	em := ui.font_size()
-	if p := panel_in_front(app, leaf); p != 0 {
-		ui.a11y({role = .Button, name = i18n.tr("Open in a window")})
-		ui.next({width = ui.px(math.round(em * TERM_NEW_EM)), height = ui.px(math.round(em * TERM_NEW_EM))})
-		if ui.button("panel_win", icon = lucide.APP_WINDOW).clicked { panel_detach(app, p) }
-	}
-	terminal_strip_end(app, d, leaf, em)
+// The Preview's title: its front page's.
+preview_title :: proc(app: ^App) -> string {
+	t := preview_front(&app.preview)
+	return t != nil && t.title != "" ? ellipsize(t.title, 28) : i18n.tr("Preview")
 }
 
-panel_title :: proc(user: rawptr, panel: u32) -> string {
-	app := (^App)(user)
-	if v := output_view_of_panel(app, panel); v != nil { return ellipsize(first_line(v.command), OUTPUT_TITLE_CHARS) }
-	if t := term_of_panel(app, panel); t != nil { return term_label(t) }
-	switch Panel(panel) {
-	case .Conversation: return i18n.tr("Conversation")
-	case .Preview:
-		t := preview_front(&app.preview)
-		return t != nil && t.title != "" ? ellipsize(t.title, 28) : i18n.tr("Preview")
-	case .Terminal:     return i18n.tr("Terminal")
-	case .Stats:        return i18n.tr("Statistics")
-	}
-	return ""
-}
-
-@(private = "file")
-panel_closable :: proc(user: rawptr, panel: u32) -> bool { return Panel(panel) != .Conversation }
-
-// In the saved layout a shell goes by the server's id: another run gives it another panel. A shell gone, a shell of another server: no
-// panel answers to its name, and the layout drops it, with the stack it leaves empty.
-PANEL_SHELL_PREFIX :: "shell-"
-
-panel_name :: proc(user: rawptr, id: u32) -> string {
-	if t := term_of_panel((^App)(user), id); t != nil { return fmt.tprintf("%s%s", PANEL_SHELL_PREFIX, t.id) }
-	switch Panel(id) {
-	case .Conversation: return "conversation"
-	case .Preview:      return "preview"
-	case .Terminal:     return "terminal"
-	case .Stats:        return "statistics"
-	}
-	return ""
-}
-
-panel_of :: proc(user: rawptr, name: string) -> (u32, bool) {
-	if strings.has_prefix(name, PANEL_SHELL_PREFIX) {
-		t := term_find((^App)(user), name[len(PANEL_SHELL_PREFIX):])
-		return t != nil ? t.panel : 0, t != nil
-	}
-	switch name {
-	case "conversation": return u32(Panel.Conversation), true
-	case "preview":      return u32(Panel.Preview), true
-	case "terminal":     return u32(Panel.Terminal), true
-	case "statistics":   return u32(Panel.Stats), true
-	}
-	return 0, false
-}
-
-@(private = "file")
-dock_save :: proc(user: rawptr, d: ^ui.Dock) {
-	pref_set((^App)(user), "layout.dock", ui.dock_format(d, panel_name, user))
-}
-
-// The layout of the preferences, every panel in it.
-dock_setup :: proc(app: ^App) {
-	d := &app.dock
-	ui.dock_init(d)
-	if !ui.dock_parse(d, config.string_of(&app.cfg_prefs, "layout.dock"), panel_of, app) { ui.dock_parse(d, DOCK_DEFAULT, panel_of, app) }
-	if !ui.dock_has(d, u32(Panel.Conversation)) { ui.dock_parse(d, DOCK_DEFAULT, panel_of, app) }
-	// The Preview and the Statistics share a stack: each goes where the other stands, or stood in the layout (it is closed after),
-	// and takes its width; else beside the conversation.
-	beside :: proc(d: ^ui.Dock, other: Panel) -> ui.Dock_Target {
-		return ui.dock_has(d, u32(other)) ? ui.dock_with(d, u32(other)) : ui.dock_beside(d, u32(Panel.Conversation), .Right)
-	}
-	preview := app.preview.open && !panel_detached(app, u32(Panel.Preview))
-	stats := app.stats.open && !panel_detached(app, u32(Panel.Stats))
-	if preview && !ui.dock_has(d, u32(Panel.Preview)) { ui.dock_add(d, u32(Panel.Preview), beside(d, .Stats)) }
-	if stats && !ui.dock_has(d, u32(Panel.Stats)) { ui.dock_add(d, u32(Panel.Stats), beside(d, .Preview)) }
-	// (only what is open, and not in a window of its own, has a tab)
-	if !preview { ui.dock_close(d, u32(Panel.Preview)) }
-	if !stats { ui.dock_close(d, u32(Panel.Stats)) }
-	terminals_dock(app)
-}
-
-// One way out of the dock for every panel, whichever way it is closed: its tab, its key, its menu, the program itself. Nothing keeps a tab
-// whose panel is gone, nor a panel without its tab.
-panel_close :: proc(app: ^App, panel: u32) {
-	switch {
-	case panel == u32(Panel.Preview):
-		app.preview.open = false
-		ui.dock_close(&app.dock, panel)
-		detached_closing(app, panel)
-	case panel == u32(Panel.Stats):
-		app.stats.open = false
-		ui.dock_close(&app.dock, panel)
-	case panel == u32(Panel.Terminal):
-		terminals_hide(app)
-	case:
-		if t := term_of_panel(app, panel); t != nil { term_close(app, t) }
-	}
+// Closed, whichever way: its view, the session's browser (its tabs stay, for when it opens again).
+preview_close :: proc(app: ^App) {
+	app.preview.open = false
+	preview_home(app)
+	ui.view_close(&app.program_views, PREVIEW_VIEW)
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
@@ -243,16 +133,15 @@ preview_missing :: proc() {
 
 preview_toggle :: proc(app: ^App) {
 	if !preview_available() { preview_missing(); return }
-	if app.preview.open { panel_close(app, u32(Panel.Preview)) } else { preview_show(app) }
+	if app.preview.open { preview_close(app) } else { preview_show(app) }
 }
 
 preview_show :: proc(app: ^App, by := Asked_By.User) {
 	p := &app.preview
 	p.open = true
-	dock_setup(app)
 	t := preview_front_made(app, p)
 	preview_revive(app, t)
-	ui.dock_activate(&app.dock, u32(Panel.Preview))
+	ui.view_open(&app.program_views, PREVIEW_VIEW, app, owner = &app.state)   // (one open comes forward: its tab in front)
 	t.focus_address = by == .User && t.url == ""   // (nothing to show yet: what comes next is an address)
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
@@ -274,7 +163,7 @@ preview_open :: proc(app: ^App, url: string, by := Asked_By.User) {
 
 // (What is not on the screen stays where it is: an agent's page does not take the panel from what the user reads.)
 preview_go :: proc(app: ^App, t: ^Preview_Tab, url: string) {
-	if preview_tab_shown(app, t) { ui.dock_activate(&app.dock, u32(Panel.Preview)) }
+	if preview_tab_shown(app, t) && app.preview.open { ui.view_open(&app.program_views, PREVIEW_VIEW, app, owner = &app.state) }
 	web_navigate(app, t, url)
 	ui.line_edit_set(&t.field, url)
 }
@@ -290,7 +179,7 @@ web_state_set :: proc(t: ^Preview_Tab, state: Web_State) {
 // own. Every session's goes, and the next ones start clean.
 preview_forget :: proc(app: ^App) {
 	p := &app.preview
-	if p.open { panel_close(app, u32(Panel.Preview)) }
+	if p.open { preview_close(app) }
 	preview_tabs_clear(app, p)
 	for _, e in app.previews.by_session {
 		preview_free(app, e)
@@ -398,10 +287,7 @@ preview_address :: proc(s: string) -> string {
 }
 
 // The state of the window the panel is in: its focus is there.
-preview_state :: proc(app: ^App) -> ^ui.State {
-	if s := detached_state(app, u32(Panel.Preview)); s != nil { return s }
-	return &app.state
-}
+preview_state :: proc(app: ^App) -> ^ui.State { return view_state(app, PREVIEW_VIEW) }
 
 // The web view's news (on the interface's thread, between two frames).
 preview_set_url :: proc(app: ^App, t: ^Preview_Tab, url: string) {
@@ -419,9 +305,9 @@ preview_set_title :: proc(t: ^Preview_Tab, title: string) {
 @(private = "file")
 preview_strip :: proc(app: ^App, p: ^Preview, em: f32) {
 	if len(p.tabs) < 2 { return }
-	ui.next({width = ui.fill(), height = ui.px(math.round(em * DOCK_TAB_H_EM)), axis = .X, cross = .Center})
+	ui.next({width = ui.fill(), height = ui.px(math.round(em * PREVIEW_TAB_H_EM)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###pv_tabs") {
-		strip_look(app, nil, 0)
+		strip_look()
 		for t, i in p.tabs {
 			in_front := i == p.front
 			title := t.title != "" ? t.title : t.url != "" ? t.url : i18n.tr("New tab")
@@ -507,9 +393,13 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 	edge_line("###pv_edge")
 }
 
-preview_panel :: proc(app: ^App, em: f32) {
+// The panel's view: wherever it is, its page goes where its body is laid out (preview_after_frames).
+preview_view :: proc(v: ^ui.View, app: ^App) {
+	em := ui.font_size()
 	p := &app.preview
-	p.shown = true
+	ui.view_title(v, preview_title(app))
+	// (unseen, it is measured: its page waits for where it shows)
+	if v.shown { p.shown = true }
 	t := preview_front_made(app, p)
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = hex(HEX_PREVIEW_BG), radius = 0})
 	if ui.column(flags = {.Draw_Background}, id = "###pv") {
@@ -517,7 +407,14 @@ preview_panel :: proc(app: ^App, em: f32) {
 		preview_bar(app, t, em)
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X, cross = .Center})
 		b := ui.build_box({}, "###pv_page")
-		p.body = b.rect
+		if v.shown {
+			p.body = b.rect
+			// (a floating view over the page: it steps aside, or it would hide it)
+			p.occluded = false
+			for r in ui.view_occluders(v) {
+				if r.min.x < b.rect.max.x && b.rect.min.x < r.max.x && r.min.y < b.rect.max.y && b.rect.min.y < r.max.y { p.occluded = true }
+			}
+		}
 		if ui.parent(b) {
 			msg := ""
 			failed := false
@@ -527,7 +424,7 @@ preview_panel :: proc(app: ^App, em: f32) {
 			case Web_Creating:
 				msg = i18n.tr("Starting the web view…")
 			case Web_Ready:
-				if overlay_open(app) { msg = t.title } else if t.url == "" { msg = i18n.tr(PREVIEW_NOTHING) }
+				if preview_covered(app) { msg = t.title } else if t.url == "" { msg = i18n.tr(PREVIEW_NOTHING) }
 			case nil:
 				msg = t.asked ? i18n.tr("Starting the web view…") : i18n.tr(PREVIEW_NOTHING)
 			}
@@ -544,49 +441,41 @@ preview_panel :: proc(app: ^App, em: f32) {
 	}
 }
 
-// Where the conversation goes: alone, or as a panel of the dock.
-main_area :: proc(app: ^App, em: f32) {
-	p := &app.preview
-	s := &app.cx.terms
-	p.shown = false
-	terminals_begin(app)
-	defer terminals_settle(app)
-	app.conversation.docked_w = 0
-	// (in the dock or out of it the conversation is other boxes, and their scroll starts at the top: whatever opened or closed a panel)
-	docked := p.open || s.open || app.stats.open
-	if docked != app.conversation.was_docked {
-		app.conversation.was_docked = docked
-		chat_scroll_event(app, Scroll_Hold_View{app.chat.view_msg, app.chat.view_dy})
-	}
-	if !docked { conversation(app, em); return }
-	d := &app.dock
-	ui.next({width = ui.fill(), height = ui.fill()})
-	ui.dock_begin(d, "###dock", {title = panel_title, tab = panel_tab, strip_begin = strip_look, strip_end = strip_end, closable = panel_closable, on_save = dock_save, user = app, close_buttons = true, tab_height = math.round(em * DOCK_TAB_H_EM)})
-	if ui.dock_panel(d, u32(Panel.Conversation)) {
-		app.conversation.docked_w = ui.dock_panel_size(d, u32(Panel.Conversation)).x
-		conversation(app, em)
-	}
-	if p.open && !panel_detached(app, u32(Panel.Preview)) {
-		if ui.dock_panel(d, u32(Panel.Preview)) { preview_panel(app, em) }
-	}
-	if app.stats.open && !panel_detached(app, u32(Panel.Stats)) {
-		if ui.dock_panel(d, u32(Panel.Stats)) {
-			app.stats.width = ui.dock_panel_size(d, u32(Panel.Stats)).x
-			stats_panel(app, em)
-		}
-	}
-	if s.open {
-		for t in s.list {
-			if t.detached { continue }
-			if ui.dock_panel(d, t.panel) { terminal_panel(app, em, t) }
-		}
-		if ui.dock_panel(d, u32(Panel.Terminal)) { terminal_waiting(app, em) }
-	}
-	res := ui.dock_end(d)
-	if res.closed != ui.DOCK_NO_PANEL { panel_close(app, res.closed) }
+// Something of the toolkit's is over the page in the window it is in: a view that floats or a dialog over it (its last
+// build: ui.view_occluders), a menu, the file browser. (The page is a child window of the system's: it would hide them.)
+preview_covered :: proc(app: ^App) -> bool {
+	st := preview_state(app)
+	// (a dialog anywhere: its scrim dims the whole window, the page with it; the page in a dialog: those over it, occluded)
+	dialog := len(st.modals_open) > 0 && ui.view_presentation(&app.program_views, PREVIEW_VIEW) != .Dialog
+	return app.preview.occluded || dialog || len(st.menus) > 0 || ui.file_dialog_shown(st)
 }
 
-// After the frame: the page where its panel was laid out, or out of the way of what the toolkit shows over it.
+// The page follows its view to another window of the system (View_Options.moved), at once: the window it leaves may close
+// before the frame ends. (The web view is told its parent; what it says comes back on its own queue: web_events_drain.)
+preview_moved :: proc(data: rawptr, win: ^platform.Window) {
+	app := (^App)(data)
+	app.previews.win = win == app.win ? nil : win
+	preview_move(app, win)
+}
+
+// The panel closes: its page goes back to the main window first, as a window of its own closes with what is in it.
+preview_home :: proc(app: ^App) {
+	if app.previews.win != nil { preview_moved(app, app.win) }
+}
+
+// After the frames of every window (the main one, then the views'): the page where its panel was laid out, or out of the
+// way of what the toolkit shows over it.
+preview_after_frames :: proc(app: ^App) {
+	preview_place(app, preview_covered(app))
+	app.preview.shown = false
+}
+
+// The window the panel is in (the main one until it moved).
+preview_panel_window :: proc(app: ^App) -> ^platform.Window {
+	return app.previews.win != nil ? app.previews.win : app.win
+}
+
+// The page where the panel's body was laid out (`over`: something of the toolkit's is over it: out of the way).
 preview_place :: proc(app: ^App, over: bool) {
 	p := &app.preview
 	t := preview_front(p)

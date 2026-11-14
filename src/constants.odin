@@ -171,11 +171,9 @@ ORBIT_DOTS          :: 3
 ////////////////////////////////
 // The Preview panel
 
-DOCK_DEFAULT :: "dock1 x0.560([*conversation] [*preview])"
 HEX_PREVIEW_BG :: 0x0d0d0dff
-TAB_PAD_EM     :: 0.9    // a tab's word, from its ends
-TAB_LINE_INSET_EM :: 0.6 // the line under the tab shown, from them
-DOCK_TAB_H_EM  :: 2.1
+TAB_LINE_INSET_EM :: 0.6 // the line under the browser's tab shown, from its ends
+PREVIEW_TAB_H_EM  :: 2.1 // the strip of a session's browser tabs
 MODEL_TIP_LINE_EM  :: 1.45   // a line of a model's tooltip
 MODEL_TIP_LABEL_EM :: 5.0    // its labels' column
 HEADER_FIGURES_MIN_EM :: 40   // a conversation narrower than this keeps its title, not its figures
@@ -210,16 +208,6 @@ GO_BOTTOM_W_EM    :: 6.5
 ////////////////////////////////
 // Pacing, and the status bar's rate
 
-// What can be over the window: App_Context.open says which are (overlay_open). Those in DIALOGS_SIZED can be resized, and
-// layout.dialogs keeps their sizes by position, in this order: a new value goes at the end. (Schedules is as tall as what it holds, and no longer one that is
-// resized: its place stays. Files is the toolkit's file browser now, which keeps its own size: its place stays too.) Changes
-// and Output are never in App_Context.open: their own state says it (overlay_open).
-Dialog :: enum u8 { Settings, Help, Changes, Files, Schedules, Artifacts, Diff, Output, Palette, Delete, Viewer, Server, Picker, Pair, Rename, Notices, Diagram }
-DIALOGS_SIZED :: bit_set[Dialog]{.Settings, .Help, .Changes, .Files, .Schedules, .Artifacts, .Diff, .Output, .Palette, .Notices, .Diagram}
-// (what they open at and the least they go to, in em: the window has the last word)
-DIALOG_PREFERRED_EM := #partial [Dialog][2]f32{.Settings = {62, 44}, .Help = {42, 44}, .Changes = {62, 46}, .Files = {74, 48}, .Schedules = {54, 44}, .Artifacts = {70, 46}, .Diff = {130, 80}, .Output = {96, 56}, .Palette = {40, 30}, .Notices = {60, 42}, .Diagram = {80, 52}}
-DIALOG_MIN_EM       := #partial [Dialog][2]f32{.Settings = {40, 24}, .Help = {30, 20}, .Changes = {34, 20}, .Files = {44, 22}, .Schedules = {36, 22}, .Artifacts = {44, 22}, .Diff = {50, 24}, .Output = {44, 20}, .Palette = {28, 12}, .Notices = {36, 18}, .Diagram = {26, 14}}
-DIALOGS_SAVED_WITH_STATS :: 7   // sizes in a layout.dialogs written when Statistics was a dialog, the second of them
 NOTICES_KEEP_MIN     :: 20     // acknowledged entries "What you missed" keeps (notices.keep)
 NOTICES_KEEP_MAX     :: 2000
 MISSED_ROW_H_EM      :: 2.2    // a row of "What you missed"
@@ -236,12 +224,10 @@ TERM_READ_MS         :: 5      // what a key may wait for its shell's thread
 TERM_SIZE_QUIET_MS   :: 150.0  // a shell is told its size once the grid has rested this long: each size it takes, it paints again
 TERM_PAINT_QUIET_MS  :: 60.0   // told, it has painted once nothing came for this long
 TERM_PAINT_MOST_MS   :: 400.0  // and at the latest: a shell that says nothing is shown as it is
-TERM_PANEL_BASE      :: 1000   // a shell's id in the dock is this and up: Panel's values stay under it
-OUTPUT_PANEL_BASE    :: 1_000_000   // a command's output in a window of its own (output_view.odin): never a shell's
 OUTPUT_POLL_MS       :: 200    // between two readings of a command that prints nothing
 OUTPUT_KEEP_BYTES    :: 8 * 1024 * 1024   // of what it printed, for Copy: the terminal keeps its own scrollback
 OUTPUT_BAR_H_EM      :: 2.3    // the bar under the grid
-OUTPUT_TITLE_CHARS   :: 60     // of the command, as a window's title
+OUTPUT_TITLE_CHARS   :: 60     // of the command, as its view's title
 TERM_OUT_MAX         :: 1 << 20   // bytes waiting for a socket on its way: past that, what is typed is dropped
 TERM_RETRIES         :: 8      // a lost socket is opened again this many times, then on a click or when the server answers again
 TERM_RETRY_MS        :: 500    // before the first of them; each wait doubles
@@ -249,7 +235,7 @@ TERM_RETRY_MOST_MS   :: 8000   // ... up to this
 TERM_RETRY_STEP_MS   :: 100    // how soon a wait hears it is over
 TERM_STABLE_MS       :: 5000   // a socket that stayed this long counts as a success: the attempts start over
 TERM_BANNER_H_EM     :: 2.4    // what says a shell ended
-TERM_NEW_EM          :: 1.7    // the + of a strip, as high as the dock's own buttons
+TERM_NEW_EM          :: 1.7    // the + of a shell's header
 TERM_FAINT           :: 0.6
 TERM_CURSOR_ALPHA    :: 0.6
 HEX_TERM_BG          :: 0x0d0d0dff
@@ -263,9 +249,6 @@ FILES_LIST_W_EM      :: 22     // the list of an artifact's files
 FILE_SNIFF_BYTES     :: 8192   // looked at for a zero byte: not text
 FILE_VIEW_MAX_BYTES  :: 262144 // of a file, shown; the rest is said
 CHANGES_OPEN_FILES :: 6     // the files of a list shown unfolded
-DETACHED_W         :: 900   // a shell's own window, when it opens
-DETACHED_H         :: 560
-DETACHED_DT_S      :: 0.016 // of a frame there: a grid has no animation that a step would show
 CHANGES_DIFF_LINES :: 400   // of a file, before the rest is counted
 
 FORM_BODY_H_EM     :: 20     // the most what a form asks takes, then it scrolls

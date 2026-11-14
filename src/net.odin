@@ -841,11 +841,11 @@ stream_up :: proc(app: ^App) {
 @(private = "file")
 dialogs_reread :: proc(app: ^App) {
 	cx := &app.cx
-	if app.cx.open[.Settings] { server_facts_load(app) }
+	if ui.view_is_open(&app.program_views, SETTINGS_VIEW) { server_facts_load(app) }
 	integrations_reread(app)
 	plugins_changed(app)
-	if cx.open[.Schedules] && remote.failed(&cx.schedules.read) { schedules_ask(app) }
-	if cx.open[.Artifacts] && remote.failed(&cx.artifacts.read) { artifacts_ask(app) }
+	if ui.view_is_open(&app.program_views, SCHEDULES_VIEW) && remote.failed(&cx.schedules.read) { schedules_ask(app) }
+	if ui.view_is_open(&app.program_views, ARTIFACTS_VIEW) && remote.failed(&cx.artifacts.read) { artifacts_ask(app) }
 	if app.stats.open {
 		if remote.failed(&app.stats.read) { stats_ask(app) }
 		context_ask(app)   // (what a step added was missed)

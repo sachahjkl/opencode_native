@@ -83,6 +83,7 @@ bench_new :: proc() -> ^App {
 	app.cfg_prefs = config.prefs_make()
 	prefs_register(&app.cfg_prefs)
 	app.fonts_wanted = "\n\n\n"   // (the faces stay as they are: pref_set does not load any)
+	views_start(app, "")   // (the views in memory only: the sidebar opens, as at a first start)
 	chat_home(app)
 	return app
 }
@@ -962,15 +963,16 @@ what_is_open_has_the_keys :: proc(t: ^testing.T) {
 	palette := command_find("app.palette")
 	help := command_find("app.help")
 	testing.expect(t, command_keyed(app, new_one) && command_keyed(app, palette))
-	app.cx.open[.Settings] = true
+	vs := &app.program_views
+	ui.view_open(vs, SETTINGS_VIEW, app)
 	testing.expect(t, !command_keyed(app, new_one), "a shortcut does not act behind a dialog")
 	testing.expect(t, !command_keyed(app, palette))
-	app.cx.open[.Settings] = false
-	app.cx.open[.Palette] = true
+	ui.view_close(vs, SETTINGS_VIEW)
+	ui.view_open(vs, COMMANDS_VIEW, app)
 	testing.expect(t, command_keyed(app, palette), "its key closes it")
 	testing.expect(t, !command_keyed(app, help))
-	app.cx.open[.Palette] = false
-	app.cx.open[.Help] = true
+	ui.view_close(vs, COMMANDS_VIEW)
+	ui.view_open(vs, HELP_VIEW, app)
 	testing.expect(t, command_keyed(app, help))
 }
 
@@ -981,7 +983,7 @@ commands_asked_together_all_run :: proc(t: ^testing.T) {
 	command_run(app, command_find("view.sidebar"))
 	command_run(app, command_find("app.help"))
 	commands_apply(app)
-	testing.expect(t, app.sidebar.hidden && app.cx.open[.Help])
+	testing.expect(t, !ui.view_is_open(&app.program_views, SIDEBAR_VIEW) && ui.view_is_open(&app.program_views, HELP_VIEW))
 	testing.expect_value(t, len(app.cx.commands_due), 0)
 }
 

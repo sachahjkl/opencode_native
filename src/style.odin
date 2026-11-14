@@ -204,18 +204,19 @@ PULSE_LIT_MIN  :: 0.45
 PULSE_LIT_SPAN :: 0.55
 SCANNER_RATE   :: 0.0028
 
-// Something pulses, in the window being built: the next frame soon. (detached_asks tells the loop of a window's.)
-animate :: proc(app: ^App) { ui.wake_within(app.cx.built != nil ? app.cx.built : &app.state, ANIMATION_WAIT_MS) }
+// Something pulses, in the window being built: the next frame soon. (A view's window counts in the loop's wait: hosts_wait.)
+animate :: proc(app: ^App) { ui.wake_within(built_state(app), ANIMATION_WAIT_MS) }
 
 px1 :: proc() -> f32 { return max(1, math.round(ui.scale())) }
 
 radii4 :: proc(r: f32) -> [4]f32 { return {r, r, r, r} }
 
-// appearance.rounding, for what this program draws itself as the toolkit does for its own boxes: the window being drawn's (0: square).
+// appearance.rounding, for what this program draws itself as the toolkit does for its own boxes. (A view's window follows
+// the main window's rounding: ui.style_follow.)
 corners :: proc() -> f32 {
 	app := the_app
 	if app == nil { return 1 }
-	return ui.rounding(app.cx.built != nil ? app.cx.built : &app.state)
+	return ui.rounding(built_state(app))
 }
 
 ////////////////////////////////
@@ -226,7 +227,7 @@ corners :: proc() -> f32 {
 // (appearance.rounding).
 
 // A raised, machined surface; pressed, it sinks. `glow`: a halo of that colour under the pointer.
-// `drawn`: the radius is as drawn already (a control in a dialog's corner: ui.modal_corner), not one the rounding scales.
+// `drawn`: the radius is as drawn already (a control in a corner the toolkit drew), not one the rounding scales.
 draw_bevel :: proc(dc: ^draw.Context, r: Rect, radius_asked: f32, base: Color, hot, pressed: f32, glow: Color = CLEAR, drawn := false) {
 	ui.machined_bevel(dc, r, drawn ? radius_asked : radius_asked * corners(), base, hot, pressed, glow)
 }
@@ -374,8 +375,8 @@ groove :: proc(id: string = "", thickness: f32 = 0, across := false) {
 	b.custom_user = rawptr(uintptr((p.layout_axis == .X) != across ? 1 : 0))
 }
 
-// Right after ui.modal opened: the window behind the dialog shows through its scrim, blurred and darkened. (The scrim
-// is the box ui.modal builds just before the panel, the current parent.)
+// First in a view shown as a dialog (view_backdrop): the window behind it shows through its scrim, blurred and darkened.
+// (The scrim is the box the dialog builds just before its panel, the current parent.)
 dialog_backdrop :: proc() {
 	scrim := ui.parent_box().prev
 	if scrim == nil { return }

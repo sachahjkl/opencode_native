@@ -81,11 +81,9 @@ theme_set :: proc(app: ^App, asked: int, light_asked: bool) {
 theme_windows :: proc(app: ^App) {
 	dark := !app.cx.theme.light
 	if app.win != nil { platform.set_dark_title(app.win, dark) }
-	for d in app.cx.detached { if d.win != nil { platform.set_dark_title(d.win, dark) } }
 	// what each frame is cleared to: the theme's ground, which shows where nothing is drawn (it stayed the first theme's: a light line
 	// under the title bar once the theme went dark)
-	app.window.background = hex(HEX_BG0)
-	for d in app.cx.detached { d.window.background = hex(HEX_BG0) }
+	app.window.background = hex(HEX_BG0)   // (the windows of the views take both from it: host.view_windows)
 }
 
 // Whether what is shown is a light version (its surfaces are flat: the machined reliefs are made for the dark).

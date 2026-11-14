@@ -224,8 +224,8 @@ diagram_box :: proc(app: ^App, doc: ^svg.Document, code: string, em: f32) {
 // The scale of a diagram at the conversation's size: its text as large as the text around it.
 diagram_scale :: proc(em: f32) -> f32 { return em / DIAGRAM_FONT_PX }
 
-// The viewer of a diagram (open: Dialog.Diagram): its text, the direction it is laid out in, and its zoom and pan. The dialog's
-// size is the person's (layout.dialogs), any shape: the diagram fits it, then zooms and moves inside it (ui.preview).
+// The viewer of a diagram (DIAGRAM_VIEW): its text, the direction it is laid out in, and its zoom and pan. The view's size is
+// the person's (the views keep it), any shape: the diagram fits it, then zooms and moves inside it (ui.preview).
 Diagram_Viewer :: struct {
 	code:      string,              // (owned)
 	own:       mermaid.Direction,   // the direction its text says (.Text: it takes none, there is no choice)
@@ -241,7 +241,7 @@ diagram_view_open :: proc(app: ^App, code: string) {
 	delete(v.code)
 	v^ = {code = strings.clone(code), own = mermaid.direction_of(code), focus = true}
 	ui.preview_reset(&v.preview)
-	app.cx.open[.Diagram] = true
+	ui.view_open(&app.program_views, DIAGRAM_VIEW, app)
 }
 
 // The layout of the viewer's diagram that is shown: the one chosen once it is laid out, the one shown before meanwhile
@@ -261,19 +261,18 @@ diagram_view_shown :: proc(app: ^App, v: ^Diagram_Viewer, dark: bool) -> (d: ^Di
 
 // The viewer of a diagram: a dialog of the size the person gives it, the diagram fitted in it; the wheel moves it, Ctrl and
 // the wheel (a touchpad's pinch) zoom it, a drag moves it, the keys and the buttons zoom it; a graph is laid out in the direction chosen.
-diagram_viewer :: proc(app: ^App, em: f32) {
+diagram_view :: proc(view: ^ui.View, app: ^App) {
 	v := &app.diagram_view
-	if !app.cx.open[.Diagram] { return }
+	em := ui.font_size()
 	dark := !app.cx.theme.light
 	d, key, waiting := diagram_view_shown(app, v, dark)
-	if d == nil || d.why != "" { app.cx.open[.Diagram] = false; return }
+	if d == nil || d.why != "" { ui.view_end(view, ui.VIEW_CANCELLED); return }
 	if key != v.shown {
 		v.shown = key
 		ui.preview_reset(&v.preview)   // (another shape: it fits again)
 	}
-	if ui.modal("diagram_view", &app.cx.open[.Diagram], dialog_options(app, .Diagram)) {
-		dialog_backdrop()
-		if ui.dialog_header("dv_head", i18n.tr("Mermaid diagram"), {icon = lucide.GIT_FORK, close = true}) {
+	{
+		if ui.view_header_tools(view) {
 			if waiting {
 				text("dv_wait", i18n.tr("Laying out…"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.6))

@@ -1,4 +1,4 @@
-// The Statistics panel: a tab of the stack the Preview is in (preview.odin dock_setup), opened by the header's token pill. It follows the
+// The Statistics panel: a view (STATS_VIEW), at first a tab of the stack the Preview is in, opened by the header's token pill. It follows the
 // session shown, live, on what the stream says, and never takes the keyboard. Its figures; what fills its context against the
 // model's window (GET /api/session/:id/context, read again when a step ends: the server gives the messages, not their sizes, so sizes are
 // estimated from their text and scaled to what the last step really sent); its pace; what the loaded messages did (tools, models); its
@@ -60,6 +60,7 @@ Stats_Context :: struct {
 // the loaded messages, and their readings.
 Stats_View :: struct {
 	open:            bool,
+	built:           bool,            // its view was built in the last frame (a tab under another is not: stats_toggle)
 	width:           f32,             // the panel's width, at this build
 	project:         Project_Stats,
 	read:            remote.Remote,          // the project's totals
@@ -70,22 +71,34 @@ Stats_View :: struct {
 
 stats_open :: proc(app: ^App) {
 	app.stats.open = true
-	dock_setup(app)
-	ui.dock_activate(&app.dock, u32(Panel.Stats))
+	ui.view_open(&app.program_views, STATS_VIEW, app, owner = &app.state)   // (one open comes forward: its tab in front)
 	stats_ask(app)
 	context_ask(app)
+	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+}
+
+stats_close :: proc(app: ^App) {
+	app.stats.open = false
+	ui.view_close(&app.program_views, STATS_VIEW)
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
 // Shown, hidden. (Open, but under the Preview's tab: it comes up. What the pill is for is to see it.)
 stats_toggle :: proc(app: ^App) {
 	switch {
-	case !app.stats.open:                         stats_open(app)
-	case !ui.dock_shown(&app.dock, u32(Panel.Stats)):
-		ui.dock_activate(&app.dock, u32(Panel.Stats))
+	case !app.stats.open:                                stats_open(app)
+	case !view_seen(app, STATS_VIEW, app.stats.built):
+		ui.view_open(&app.program_views, STATS_VIEW, app, owner = &app.state)
 		app.settle = max(app.settle, FRAMES_AFTER_INPUT)
-	case:                                         panel_close(app, u32(Panel.Stats))
+	case:                                                stats_close(app)
 	}
+}
+
+// The panel's view: it follows the session shown, at the width it is given.
+stats_view :: proc(v: ^ui.View, app: ^App) {
+	app.stats.built = true
+	app.stats.width = ui.view_room(v).x
+	stats_panel(app, ui.font_size())
 }
 
 // The totals of the project of the session shown, nothing of the one before. (Also Try again.)
@@ -109,7 +122,7 @@ stats_follow :: proc(app: ^App) {
 }
 
 stats_forget :: proc(app: ^App) {
-	if app.stats.open { panel_close(app, u32(Panel.Stats)) }
+	if app.stats.open { stats_close(app) }
 	ps := &app.stats.project
 	virtual.arena_destroy(&ps.arena)
 	ps^ = {}

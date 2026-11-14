@@ -200,15 +200,15 @@ context_menu :: proc(app: ^App, em: f32) {
 			if m := find_msg(app, app.ctx_menu.target.msg); m != nil && app.ctx_menu.target.part < len(m.parts) { tool_menu(app, m, &m.parts[app.ctx_menu.target.part]) }
 		case .Image:
 			image := app.ctx_menu.target.image
-			if ui.menu_item(i18n.tr("Copy image"), app.cx.open[.Viewer] ? "Ctrl+C" : "", icon = lucide.COPY).clicked { image_copy(app, image) }
-			if !app.cx.open[.Viewer] {
+			if ui.menu_item(i18n.tr("Copy image"), image_view_shown(app) ? "Ctrl+C" : "", icon = lucide.COPY).clicked { image_copy(app, image) }
+			if !image_view_shown(app) {
 				if ui.menu_item(i18n.tr("Open in the viewer"), icon = lucide.ZOOM_IN).clicked { image_view_open(app, image) }
 			}
 		case .Folder:
 			if ui.menu_item(i18n.tr("Copy the path"), icon = lucide.COPY).clicked { clip_set(app.ctx_menu.target.msg); ui.announce(&app.announcer, .Good, i18n.tr("Copied")) }
 		case .Diagram:
 			code := app.ctx_menu.target.msg
-			viewed := app.cx.open[.Diagram]
+			viewed := ui.view_is_open(&app.program_views, DIAGRAM_VIEW)
 			if ui.menu_item(i18n.tr("Copy as PNG"), viewed ? "Ctrl+C" : "", icon = lucide.IMAGE).clicked { diagram_copy_png(app, code, viewed ? app.diagram_view.direction : .Text) }
 			if ui.menu_item(i18n.tr("Copy the text"), icon = lucide.COPY).clicked { clip_set(code); ui.announce(&app.announcer, .Good, i18n.tr("Copied")) }
 			if !viewed {
@@ -287,7 +287,7 @@ quote_chip :: proc(app: ^App, em: f32) {
 // Rename
 
 Rename :: struct {
-	at:    Rename_At,   // in place, where the title is (a double click on it); or the dialog (Dialog.Rename)
+	at:    Rename_At,   // in place, where the title is (a double click on it); .None: the prompt (RENAME_VIEW), or nothing
 	fresh: bool,
 	held:  bool,        // in place: the field had the keyboard (losing it commits, as a click elsewhere)
 	shown: bool,        // in place: its field was built in this build (or it began in it)
@@ -297,21 +297,31 @@ Rename :: struct {
 
 Rename_At :: enum u8 { None, Header, Side }
 
-rename_open :: proc(app: ^App, id: string) {
+// The field holds session `id`'s title, selected.
+@(private = "file")
+rename_prepare :: proc(app: ^App, id: string) {
 	r := &app.rename
 	delete(r.id)
 	r.id = strings.clone(id)
-	app.cx.open[.Rename], r.fresh, r.at = true, true, .None
+	r.fresh, r.at = true, .None
 	s := find_session(app, id)
 	if s == nil && app.chat.have_self && app.chat.self.id == id { s = &app.chat.self }
 	ui.line_edit_set(&r.field, s != nil ? s.title : "")
 	ui.line_edit_select_all(&r.field)
 }
 
+// The title of session `id`, asked in a dialog (the toolkit's prompt: its field has the keyboard as it opens).
+rename_open :: proc(app: ^App, id: string) {
+	rename_prepare(app, id)
+	app.rename.fresh = false
+	ui.prompt_open(RENAME_VIEW, &app.rename.field, {title = i18n.tr("Rename the session"), placeholder = i18n.tr("Title"), act = i18n.tr("Rename"), width_em = 28})
+}
+
 // The title of session `id`, edited where it is shown (`at`): Enter or a click elsewhere keeps it, Escape leaves it as it was.
 rename_inline :: proc(app: ^App, id: string, at: Rename_At) {
-	rename_open(app, id)
-	app.cx.open[.Rename], app.rename.at, app.rename.held, app.rename.shown = false, at, false, true
+	ui.view_close(&app.program_views, RENAME_VIEW)
+	rename_prepare(app, id)
+	app.rename.at, app.rename.held, app.rename.shown = at, false, true
 }
 
 // Whether session `id`'s title is being edited at `at`: then rename_in_place stands where its words would.
@@ -342,22 +352,25 @@ rename_in_place :: proc(app: ^App, em, font_size, height: f32, fit := false) {
 	}
 }
 
-rename_dialog :: proc(app: ^App, em: f32) {
+// After the sidebar and the conversation are built: a title edited in place that neither built (another session shown, its
+// row scrolled away) is left as it was.
+rename_follow :: proc(app: ^App) {
 	r := &app.rename
-	// (built after the sidebar and the conversation: a title edited in place that neither built - another session shown, its row
-	// scrolled away - is left as it was)
 	if r.at != .None && !r.shown { r.at = .None }
 	r.shown = false
-	if !app.cx.open[.Rename] { return }
-	r.fresh = false   // (the prompt's field has the keyboard as it opens)
-	if ui.prompt("rename", &app.cx.open[.Rename], &r.field, {title = i18n.tr("Rename the session"), placeholder = i18n.tr("Title"), act = i18n.tr("Rename"), width_em = 28}) == .Confirmed { rename_commit(app) }
+}
+
+// The prompt's answer, in a build of the main window.
+rename_answer :: proc(app: ^App) {
+	if ui.prompt_answer(RENAME_VIEW) == .Confirmed { rename_commit(app) }
 }
 
 @(private = "file")
 rename_commit :: proc(app: ^App) {
 	r := &app.rename
 	t := strings.trim_space(ui.line_edit_string(&r.field))
-	app.cx.open[.Rename], r.at = false, .None
+	ui.view_close(&app.program_views, RENAME_VIEW)
+	r.at = .None
 	if t == "" { return }
 	if s := find_session(app, r.id); s != nil && s.title == t { return }   // (nothing changed: nothing to ask)
 	rename_session(app, r.id, t)

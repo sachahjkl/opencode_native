@@ -3,14 +3,15 @@
 // is answered as Ghostty answers it. The grid on the screen is the toolkit's widget (gt:term): this file is its source, the emulation
 // read and told through term.Source.
 //
-// A shell is a tab of the dock (preview.odin): moved, stacked, split and closed like any panel. Its panel id is its own, from
-// TERM_PANEL_BASE; the saved layout names it by the server's id, and a name no shell answers to is dropped there. Panel.Terminal is
-// what stands in the dock while there is no shell yet: the reading of the list, a failure and its Try again.
+// A shell is a view (TERMINAL_VIEW, an instance per shell, named by the server's id): at first a tab along the bottom of the
+// conversation, moved, stacked, split, floated, put in a window of its own and closed like any view. The instance "" is what
+// stands there while there is no shell yet: the reading of the list, a failure and its Try again.
 //
 // A thread per shell owns its WebSocket: it reads, posts what comes, and sends what waits in the shell's outbox between two reads. The
-// interface only ever puts bytes in that box: it never waits for the network, whatever the shell does. The keys of the focused shell are taken out of the frame's events
-// before the interface sees them (term_events): Ctrl+K belongs to the shell there, and Escape does not stop a run. Ctrl+Shift+C and V
-// copy and paste. A shell outlives the program and a lost socket: it is found again when the panel opens, its output replayed by the
+// interface only ever puts bytes in that box: it never waits for the network, whatever the shell does. A shell reads the input of the
+// window it is built in: its keys are taken out of that window's events before the interface sees them (term_events, the input
+// hook of the main window and of the views' windows): Ctrl+K belongs to the shell there, and Escape does not stop a run.
+// Ctrl+Shift+C and V copy and paste. A shell outlives the program and a lost socket: it is found again when the panel opens, its output replayed by the
 // server, and a socket that drops is opened again where it stopped. A shell lives on one server: Term.server is the connection everything
 // about it goes by, and leaving that server leaves its shells running there (terminals_forget).
 package ocn
@@ -56,7 +57,6 @@ Term :: struct {
 	id, title, dir: string,   // (owned)
 	server: ^Conn,            // the server it lives on: what is asked about it goes there
 	app:    ^App,             // what its size is told through (nil: an output's grid, no shell to tell)
-	panel:  u32,              // its tab in the dock
 	link:   Term_Link,
 	given_up: bool,           // Lost, and its thread is over: a click, or the server coming back, starts another
 	// The grid on the screen: what is drawn, selected, typed, scrolled and zoomed (gt:term). Its source is the emulation
@@ -83,27 +83,26 @@ Term :: struct {
 	told_ms:  f64,             // when the shell took a size: what it paints then comes in pieces (0: nothing is awaited)
 	fed_ms:   f64,             // when it last wrote
 	asked_ms: f64,             // when the size on its way left (0: none is)
-	shown:  bool,              // its panel was built in this build
-	detached: bool,            // in a window of its own (detached.odin): no tab, and no part in the main window's input
+	shown:  bool,              // its view was built in this frame, and seen (term_shown_reset at the main window's build)
+	built_in: ^ui.State,       // the window's State its last build ran in: the main one's input goes to it by term_events
 }
 
 // The user asked for a shell to have the keyboard. It takes it when it is there, unless the focus went elsewhere meanwhile: an answer
-// does not move the keyboard by itself. (`panel` 0: the next shell, the one on its way.)
-Term_Focus_Ask :: struct { on: bool, panel: u32, from: ui.Key }
+// does not move the keyboard by itself. (`term` nil: the next shell, the one on its way.)
+Term_Focus_Ask :: struct { on: bool, term: ^Term, from: ui.Key }
 
 Terminals :: struct {
-	only:    ^Term,            // while a window of its own is built: the one shell input may reach
-	open:    bool,             // the shells have their tabs (hidden: they run on, out of the dock)
+	open:    bool,             // the shells have their views (hidden: they run on, closed)
 	read:    remote.Remote,           // the list of the server's shells
 	made:    remote.Remote,           // a new shell on its way
 	make_after: bool,          // one was asked for while the list was read: what it says comes first
 	list:    [dynamic]^Term,
 	gone:    [dynamic]^Term,   // closed in this frame: what was built for them is still to be drawn (terminals_reap)
-	next_panel: u32,
-	last_panel: u32,           // the last shell that had the keyboard: a new one goes beside it
-	replaces:   u32,           // a shell restarted: the new one takes its tab
-	close_due:  u32,           // a tab to close once the frame is built
-	focused: ^Term,            // has the keyboard, in the last build (shown, and its grid has the focus)
+	last:     ^Term,           // the last shell that had the keyboard: it comes in front when the shells are shown
+	replaces: ^Term,           // a shell restarted: the new one takes its place
+	close_due: ^Term,          // a shell to close once the frame is built
+	waiting_built: bool,       // what stands there while there is no shell was built in the last frame
+	focused: ^Term,            // has the keyboard, in its last build (its grid has the focus of its window)
 	ask:     Term_Focus_Ask,
 	pressed: ^Term,            // a button is held on its grid (Term.view.press): the pointer goes to it until it is let go
 	menu_for: ^Term,           // a right click asked for its menu (at menu_at): its next build opens it
@@ -188,7 +187,6 @@ terms_recolour :: proc(app: ^App) {
 }
 
 term_free :: proc(t: ^Term) {
-	if t.detached { detached_forget(the_app, t.panel) }
 	if t.conn != nil { sync.atomic_store(&t.conn.stop, true) }
 	if t.vt != nil {
 		ghostty_tracked_grid_ref_free(t.sel_anchor)
@@ -395,11 +393,11 @@ term_of_conn :: proc(app: ^App, c: ^Term_Conn) -> ^Term {
 	return nil
 }
 
-term_of_panel :: proc(app: ^App, panel: u32) -> ^Term {
-	if panel < TERM_PANEL_BASE { return nil }
-	for t in app.cx.terms.list { if t.panel == panel { return t } }
-	if v := output_view_of_panel(app, panel); v != nil { return v.term }
-	return nil
+// Whether `t` is one of the shells (a pointer kept across frames may name one closed since).
+term_alive :: proc(app: ^App, t: ^Term) -> bool {
+	if t == nil { return false }
+	for o in app.cx.terms.list { if o == t { return true } }
+	return false
 }
 
 ////////////////////////////////
@@ -419,57 +417,49 @@ terminals_ask :: proc(app: ^App) {
 	request(app, .Pty_List, "GET", term_list_path(dir), tag = dir, reading = &s.read)
 }
 
-// The next shell built, or `panel`'s, takes the keyboard. Only the user asks.
-term_focus_ask :: proc(app: ^App, panel: u32 = 0) {
-	app.cx.terms.ask = {on = true, panel = panel, from = ui.focus_key()}
+// The next shell built, or `t`, takes the keyboard. Only the user asks.
+term_focus_ask :: proc(app: ^App, t: ^Term = nil) {
+	app.cx.terms.ask = {on = true, term = t, from = ui.focus_key()}
 }
 
 // (a build of `t` asks: the request ends here, whichever way. A shell on its way is not the one already shown.)
 term_takes_focus :: proc(s: ^Terminals, t: ^Term, focus: ui.Key) -> bool {
 	a := &s.ask
-	if !a.on || a.panel != t.panel { return false }
+	if !a.on || a.term != t { return false }
 	a.on = false
 	return focus == a.from
 }
 
-// Every shell has its tab, and nothing else does: Panel.Terminal while there is no shell to show.
-terminals_dock :: proc(app: ^App) {
+// The shells' views follow what is open: each shell has its view, and nothing else does; the instance "" while there is no shell
+// to show. (One open is left where it is: opened again, it would come in front of its stack.)
+terminals_views :: proc(app: ^App) {
 	s := &app.cx.terms
-	d := &app.dock
-	stand_in := u32(Panel.Terminal)
+	vs := &app.program_views
 	if !s.open {
-		for t in s.list { ui.dock_close(d, t.panel) }
-		ui.dock_close(d, stand_in)
+		for t in s.list { ui.view_close(vs, TERMINAL_VIEW, t.id) }
+		ui.view_close(vs, TERMINAL_VIEW)
 		return
 	}
-	if len(s.list) == 0 {
-		if !ui.dock_has(d, stand_in) { ui.dock_add(d, stand_in, ui.Dock_Target{place = .Edge_Bottom}) }
-		return
+	for t in s.list {
+		if !ui.view_is_open(vs, TERMINAL_VIEW, t.id) { ui.view_open(vs, TERMINAL_VIEW, app, t.id, owner = &app.state) }
 	}
-	for t in s.list { term_dock(app, t) }
-	ui.dock_close(d, stand_in)
+	if len(s.list) > 0 {
+		ui.view_close(vs, TERMINAL_VIEW)
+	} else if !ui.view_is_open(vs, TERMINAL_VIEW) {
+		ui.view_open(vs, TERMINAL_VIEW, app, owner = &app.state)
+	}
 }
 
-// A shell with no tab goes where the shells are: in the stand-in's place, beside the last one used, else along the bottom edge.
-@(private = "file")
-term_dock :: proc(app: ^App, t: ^Term) {
-	s := &app.cx.terms
-	d := &app.dock
-	if t.detached || ui.dock_has(d, t.panel) { return }
-	beside := u32(Panel.Terminal)
-	if !ui.dock_has(d, beside) { beside = s.last_panel }
-	if beside == 0 || !ui.dock_has(d, beside) {
-		beside = 0
-		for o in s.list { if o != t && ui.dock_has(d, o.panel) { beside = o.panel } }
-	}
-	ui.dock_add(d, t.panel, beside != 0 ? ui.dock_with(d, beside) : ui.Dock_Target{place = .Edge_Bottom})
+// `t` in front of its stack (nil: what stands there while there is no shell).
+term_front :: proc(app: ^App, t: ^Term) {
+	ui.view_open(&app.program_views, TERMINAL_VIEW, app, t != nil ? t.id : "", owner = &app.state)
 }
 
 // Whether one of the shells can be seen.
 @(private = "file")
 terminals_seen :: proc(app: ^App) -> bool {
-	for t in app.cx.terms.list { if ui.dock_shown(&app.dock, t.panel) { return true } }
-	return ui.dock_shown(&app.dock, u32(Panel.Terminal))
+	for t in app.cx.terms.list { if view_seen(app, TERMINAL_VIEW, t.shown, t.id) { return true } }
+	return view_seen(app, TERMINAL_VIEW, app.cx.terms.waiting_built)
 }
 
 // Shown, hidden: the shells run on either way. (Open, but under another tab: it comes up. What the key is for is to see them.)
@@ -479,11 +469,11 @@ terminal_toggle :: proc(app: ^App) {
 	case !s.open:
 		terminals_show(app)
 	case !terminals_seen(app):
-		panel := s.last_panel != 0 && term_of_panel(app, s.last_panel) != nil ? s.last_panel : len(s.list) > 0 ? s.list[0].panel : u32(Panel.Terminal)
-		ui.dock_activate(&app.dock, panel)
-		term_focus_ask(app, panel >= TERM_PANEL_BASE ? panel : 0)
+		t := term_alive(app, s.last) ? s.last : len(s.list) > 0 ? s.list[0] : nil
+		term_front(app, t)
+		term_focus_ask(app, t)
 	case:
-		panel_close(app, u32(Panel.Terminal))
+		terminals_hide(app)
 	}
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
@@ -498,11 +488,11 @@ terminal_new :: proc(app: ^App) {
 terminals_show :: proc(app: ^App) {
 	s := &app.cx.terms
 	s.open = true
-	dock_setup(app)
-	panel := len(s.list) > 0 ? s.list[0].panel : 0
-	if term_of_panel(app, s.last_panel) != nil { panel = s.last_panel }
-	term_focus_ask(app, panel)
-	if panel != 0 { ui.dock_activate(&app.dock, panel) }
+	terminals_views(app)
+	t := len(s.list) > 0 ? s.list[0] : nil
+	if term_alive(app, s.last) { t = s.last }
+	term_focus_ask(app, t)
+	if t != nil { term_front(app, t) }
 	switch {
 	case s.read.state == .Loading:
 	case !remote.shows(&s.read):  terminals_ask(app)
@@ -510,7 +500,7 @@ terminals_show :: proc(app: ^App) {
 	}
 }
 
-// Out of the dock, every tab: the shells stay, their threads read on, and the keyboard goes back to the conversation.
+// Every view closed: the shells stay, their threads read on, and the keyboard goes back to the conversation.
 terminals_hide :: proc(app: ^App) {
 	s := &app.cx.terms
 	had_keys := s.focused != nil
@@ -519,7 +509,7 @@ terminals_hide :: proc(app: ^App) {
 	s.focused = nil
 	s.ask = {}
 	s.make_after = false
-	terminals_dock(app)
+	terminals_views(app)
 	if had_keys { app.composer.focus_next = true }
 }
 
@@ -533,8 +523,6 @@ term_add :: proc(app: ^App, it: json.Value, dir: string) -> ^Term {
 	t.view.zoom = zoom_of(&app.term_zooms, id, 1)
 	t.server = app.conn
 	t.app = app
-	t.panel = TERM_PANEL_BASE + s.next_panel
-	s.next_panel += 1
 	append(&s.list, t)
 	term_connect(app, t)
 	return t
@@ -546,12 +534,12 @@ terminals_load :: proc(app: ^App, dir: string, v: json.Value) {
 	added := false
 	for it in jarr(v, "data") { if jstr(it, "status") == "running" && term_add(app, it, dir) != nil { added = true } }
 	if s.open {
-		if added { dock_setup(app) }
+		if added { terminals_views(app) }
 		if len(s.list) == 0 || s.make_after {
 			term_make(app, dir, term_next_title(s))
-		} else if s.ask.on && s.ask.panel == 0 {
-			s.ask.panel = s.list[len(s.list) - 1].panel   // (what was asked for is what was found)
-			ui.dock_activate(&app.dock, s.ask.panel)
+		} else if s.ask.on && s.ask.term == nil {
+			s.ask.term = s.list[len(s.list) - 1]   // (what was asked for is what was found)
+			term_front(app, s.ask.term)
 		}
 	}
 	s.make_after = false
@@ -586,31 +574,22 @@ term_made :: proc(app: ^App, dir: string, v: json.Value) {
 	t := term_add(app, jget(v, "data"), dir)
 	if t == nil {
 		remote.settle(&s.made, .Failed, i18n.tr("Unreadable answer"))
-		s.replaces = 0
+		s.replaces = nil
 		return
 	}
-	if s.ask.on && s.ask.panel == 0 { s.ask.panel = t.panel }
-	replaced := term_of_panel(app, s.replaces)
-	s.replaces = 0
-	if !s.open { if replaced != nil { term_forget_one(app, replaced) }; return }
-	d := &app.dock
-	if replaced != nil {
-		// (its place in its strip, its stack, its split: what was restarted is the same tab to the reader)
-		at := 0
-		leaf := ui.dock_leaf_of(d, replaced.panel)
-		for p, k in ui.dock_tabs(d, leaf) { if p == replaced.panel { at = k } }
-		if leaf != ui.DOCK_NONE { ui.dock_add(d, t.panel, ui.Dock_Target{place = .Tab, node = leaf, index = at}) }
-		term_forget_one(app, replaced)
-	}
-	term_dock(app, t)
-	ui.dock_close(d, u32(Panel.Terminal))
-	ui.dock_activate(d, t.panel)
+	if s.ask.on && s.ask.term == nil { s.ask.term = t }
+	replaced := term_alive(app, s.replaces) ? s.replaces : nil
+	s.replaces = nil
+	if replaced != nil { term_forget_one(app, replaced) }   // (the new one opens where the shells go: the views' memory)
+	if !s.open { return }
+	terminals_views(app)
+	term_front(app, t)
 }
 
 // What failed for a new shell: told in the panel while there is no other, by a toast else.
 term_made_failed :: proc(app: ^App) -> (told: bool) {
 	s := &app.cx.terms
-	s.replaces = 0
+	s.replaces = nil
 	return s.open && len(s.list) == 0
 }
 
@@ -624,13 +603,16 @@ pty_made_on_left :: proc(app: ^App, r: ^Request) {
 	request(app, .Action, "DELETE", fmt.tprintf("/api/pty/%s%s%s", url_escape(id), q != "" ? "?" : "", q), conn = r.conn)
 }
 
-// Out of the client, and of the dock. It is freed after the frame (terminals_reap): this build's box may still draw it.
+// Out of the client, and its view closed. It is freed after the frame (terminals_reap): this build's box may still draw it.
 @(private = "file")
 term_forget_one :: proc(app: ^App, t: ^Term) {
 	s := &app.cx.terms
 	if s.pressed == t { term_press_end(s) }
 	if s.focused == t { s.focused = nil }
-	ui.dock_close(&app.dock, t.panel)
+	if s.last == t { s.last = nil }
+	if s.close_due == t { s.close_due = nil }
+	if s.ask.term == t { s.ask = {} }
+	ui.view_close(&app.program_views, TERMINAL_VIEW, t.id)
 	for o, i in s.list { if o == t { ordered_remove(&s.list, i); break } }
 	if t.conn != nil { sync.atomic_store(&t.conn.stop, true) }
 	append(&s.gone, t)
@@ -648,15 +630,16 @@ term_close :: proc(app: ^App, t: ^Term) {
 		s.ask = {}
 		if had_keys { app.composer.focus_next = true }
 	} else if had_keys {
-		for o in s.list { if ui.dock_shown(&app.dock, o.panel) { term_focus_ask(app, o.panel); break } }
+		for o in s.list { if view_seen(app, TERMINAL_VIEW, o.shown, o.id) { term_focus_ask(app, o); break } }
 	}
+	if len(s.list) == 0 { terminals_views(app) }
 }
 
-// A shell that ended begins again, in the same tab, the same folder.
+// A shell that ended begins again, in the same folder.
 term_restart :: proc(app: ^App, t: ^Term) {
 	s := &app.cx.terms
 	if s.made.state == .Loading { return }
-	s.replaces = t.panel
+	s.replaces = t
 	term_focus_ask(app)
 	term_make(app, t.dir, t.title)
 }
@@ -681,13 +664,12 @@ terminals_forget :: proc(app: ^App) {
 	s := &app.cx.terms
 	term_press_end(s)
 	for len(s.list) > 0 { term_forget_one(app, s.list[len(s.list) - 1]) }
-	ui.dock_close(&app.dock, u32(Panel.Terminal))
-	app.dock.drag = {}   // (a tab held: it would come back when dropped)
+	ui.view_close(&app.program_views, TERMINAL_VIEW)
 	s.open = false
 	s.focused = nil
 	s.ask = {}
 	s.make_after = false
-	s.last_panel, s.replaces, s.close_due = 0, 0, 0
+	s.last, s.replaces, s.close_due = nil, nil, nil
 	remote.reset(&s.read)
 	remote.reset(&s.made)
 }
@@ -1028,15 +1010,19 @@ term_format :: proc(t: ^Term, allocator: runtime.Allocator) -> string {
 ////////////////////////////////
 // Input
 
-// The shell whose grid is under `p`: shown, and no floating panel over it.
-term_at :: proc(app: ^App, p: [2]f32) -> ^Term {
-	d := &app.dock
-	if t := app.cx.terms.only; t != nil { return term.contains(&t.view, p) ? t : nil }
-	for t in app.cx.terms.list {
-		if !t.shown || t.detached || !term.contains(&t.view, p) { continue }
-		leaf := ui.dock_leaf_at(d, p - d.origin)
-		if leaf == ui.DOCK_NONE || leaf == ui.dock_leaf_of(d, t.panel) { return t }
-	}
+// Whether the grid of `t`, built in the window of `st`, is under `p` with nothing over it (a floating window, a dialog's
+// scrim): by that window's last layout, at the event's own position. (No box of the last layout: nothing over it.)
+@(private = "file")
+term_under :: proc(st: ^ui.State, t: ^Term, p: [2]f32) -> bool {
+	if t == nil || t.vt == nil || !t.shown || t.built_in != st || !term.contains(&t.view, p) { return false }
+	b := ui.box_of(st, t.view.box)
+	return b == nil || ui.pointer_on_at(b, p)
+}
+
+// The grid of the window of `st` under `p`: a shell's, or a command's output's.
+term_at :: proc(app: ^App, st: ^ui.State, p: [2]f32) -> ^Term {
+	for t in app.cx.terms.list { if term_under(st, t, p) { return t } }
+	for v in app.cx.outputs.list { if !v.gone && term_under(st, v.term, p) { return v.term } }
 	return nil
 }
 
@@ -1047,14 +1033,22 @@ term_press_end :: proc(s: ^Terminals) {
 	if t != nil { term.press_end(&t.view) }
 }
 
-// Before the interface sees them: what goes to a shell is taken out. Returns what is left. The keys go to the shell that has the keyboard,
-// the pointer to the one that holds a press, else to the one it is over: both are shown, as the last build says, or there is none.
-term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
+// Before a window's interface sees them (its input hook: the main window's, a view's window's): what goes to a grid built in
+// it (a shell's, a command's output's) is taken out. Returns what is left. The keys go to the grid that has the keyboard (a
+// dialog that opens over it takes the focus, and the keys with it); none while a menu is open. The pointer goes to the grid
+// that holds a press, else to the one it is over, with nothing over it.
+term_events :: proc(app: ^App, st: ^ui.State, events: []platform.Event) -> []platform.Event {
 	s := &app.cx.terms
-	if s.only == nil && (!s.open || len(s.list) == 0) { return events }   // (the tabs hidden, a shell in its window still hears; a command's output is no shell of the list)
-	if s.only == nil && overlay_open(app) {
-		if s.pressed == nil || !s.pressed.view.read_only { term_press_end(s) }   // (a selection in the dialog: that overlay is its own)
-		return events
+	keyboard := s.focused
+	if keyboard != nil && (keyboard.built_in != st || len(st.menus) > 0) { keyboard = nil }
+	pressed := s.pressed
+	if pressed != nil && pressed.built_in != st { pressed = nil }
+	// (a dialog or a menu opened over a shell's selection: the release will not come to it. A selection inside the dialog
+	// is the dialog's own: a command's output, a shell the user put in a dialog)
+	covered := st == &app.state ? overlay_open(app) : len(st.modals_open) > 0 || len(st.menus) > 0
+	if pressed != nil && covered && !pressed.view.read_only && ui.view_presentation(&app.program_views, TERMINAL_VIEW, pressed.id) != .Dialog {
+		term_press_end(s)
+		pressed = nil
 	}
 	kept := 0
 	for e in events {
@@ -1062,38 +1056,45 @@ term_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
 		t: ^Term
 		#partial switch e.kind {
 		case .Key_Press, .Key_Release, .Text:
-			t = s.focused
+			t = keyboard
 			if t == nil || t.vt == nil { t = nil; break }
 			if e.kind == .Key_Press && e.key == .T && e.mods == {.Ctrl, .Shift} { break }   // (the key that hides the shells works from inside them)
 			out = term.event(&t.view, e)
 		case .Scroll, .Mouse_Press:
-			t = term_at(app, e.pos)
-			if t == nil || t.vt == nil { t = nil; break }
+			t = term_at(app, st, e.pos)
+			if t == nil { break }
 			out = term.event(&t.view, e)
 			if t.view.press != .None && s.pressed != t {
 				term_press_end(s)
-				s.pressed = t
+				s.pressed, pressed = t, t
 			}
 		case .Mouse_Release, .Mouse_Move:
-			t = s.pressed
-			if t == nil { t = term_at(app, e.pos) }
+			t = pressed
+			if t == nil { t = term_at(app, st, e.pos) }
 			if t == nil || t.vt == nil { t = nil; break }
 			out = term.event(&t.view, e)
-			if s.pressed == t && t.view.press == .None { s.pressed = nil }
+			if s.pressed == t && t.view.press == .None { s.pressed, pressed = nil, nil }
 		}
-		switch out {
-		case .Ignored, .Taken:
-		case .Copy:   clip_set(term.selection_text(&t.view))
-		case .Paste:  term_paste(app, t)
-		case .Menu:   s.menu_for, s.menu_at = t, e.pos
-		case .Zoomed: term_zoom_keep(app, t)
-		}
+		term_outcome(app, t, out, e.pos)
 		if out == .Ignored {
 			events[kept] = e
 			kept += 1
 		}
 	}
 	return events[:kept]
+}
+
+// What the grid could not do alone.
+@(private = "file")
+term_outcome :: proc(app: ^App, t: ^Term, out: term.Outcome, at: [2]f32) {
+	s := &app.cx.terms
+	switch out {
+	case .Ignored, .Taken:
+	case .Copy:   clip_set(term.selection_text(&t.view))
+	case .Paste:  term_paste(app, t)
+	case .Menu:   s.menu_for, s.menu_at = t, at
+	case .Zoomed: term_zoom_keep(app, t)
+	}
 }
 
 @(private = "file")
@@ -1104,24 +1105,37 @@ term_paste :: proc(app: ^App, t: ^Term) {
 ////////////////////////////////
 // The panel
 
-// Before the panels of a build: what was shown is shown again only if it is built.
+// Before the views of the main window's build: what was shown is shown again only if it is built.
 terminals_begin :: proc(app: ^App) {
-	for t in app.cx.terms.list { if !t.detached { t.shown = false } }
+	s := &app.cx.terms
+	for t in s.list { t.shown = false }
+	for v in app.cx.outputs.list { v.term.shown = false }
+	s.waiting_built = false
 }
 
-// After them: who has the keyboard now, from what was really built. A shell hidden, under another tab, in a folded stack has neither the keys
-// nor the pointer. A button held on a grid that is gone, or that lost the press to something else (a menu, another box), is let go.
-terminals_settle :: proc(app: ^App) {
+// After the main window's build, its late views too (end_build): a grid of this window that was not built (its view closed,
+// under another tab, in a folded stack) has neither the keys nor the pointer.
+terminals_end :: proc(app: ^App) {
 	s := &app.cx.terms
-	s.focused = nil
-	focus := ui.focus_key()
-	for t in s.list {
-		if t.shown && !t.detached && focus != 0 && t.view.box == focus {
-			s.focused = t
-			s.last_panel = t.panel
-		}
+	// (a button held on a grid that lost the press to something else, a menu, another box, is let go too)
+	if t := s.pressed; t != nil && t.built_in == &app.state && (!t.shown || ui.active_key() != t.view.box) { term_press_end(s) }
+	if t := s.focused; t != nil && t.built_in == &app.state && !t.shown { s.focused = nil }
+}
+
+// In a grid's build: who has the keyboard, from what is really built (a shell hidden, under another tab, in a folded stack
+// has neither the keys nor the pointer). A button held on it that lost the press to something else (a menu, another box) is
+// let go.
+@(private = "file")
+term_settle :: proc(app: ^App, t: ^Term) {
+	s := &app.cx.terms
+	t.shown, t.built_in = true, ui.current_state()
+	if ui.focus_key() == t.view.box && t.view.box != 0 {
+		s.focused = t
+		if term_alive(app, t) { s.last = t }
+	} else if s.focused == t {
+		s.focused = nil
 	}
-	if t := s.pressed; t != nil && !t.detached && (!t.shown || overlay_open(app) || ui.active_key() != t.view.box) { term_press_end(s) }
+	if s.pressed == t && ui.active_key() != t.view.box { term_press_end(s) }
 }
 
 // What says a shell is not there, and what can be done about it.
@@ -1141,7 +1155,7 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 			if ui.button("term_again", i18n.tr("Reconnect"), lucide.REFRESH_CW, {height = h}).clicked { term_reconnect(app, t) }
 		}
 		ui.spacer(ui.px(em * 0.3))
-		if ui.button("term_close", i18n.tr("Close"), lucide.X, {face = .Ghost, height = h}).clicked { s.close_due = t.panel }
+		if ui.button("term_close", i18n.tr("Close"), lucide.X, {face = .Ghost, height = h}).clicked { s.close_due = t }
 		ui.spacer(ui.px(em * 0.6))
 	}
 }
@@ -1155,15 +1169,40 @@ term_style :: proc(app: ^App, em: f32) -> term.Style {
 	}
 }
 
-// A shell, in its panel.
-terminal_panel :: proc(app: ^App, em: f32, t: ^Term) {
+// A shell's view: what stands there while there is no shell (instance ""), else the shell named by its instance.
+terminal_view :: proc(v: ^ui.View, app: ^App) {
+	em := ui.font_size()
+	s := &app.cx.terms
+	if v.instance == "" {
+		s.waiting_built = s.waiting_built || v.shown
+		terminal_waiting(app, em)
+		return
+	}
+	t := term_find(app, v.instance)
+	if t == nil { return }   // (closed in this frame: its view goes)
+	ui.view_title(v, term_label(t))
+	// (docked, the strip's "+" makes another: View_Options.new_tab. Floating or in a window of its own, the view holds one
+	// shell and has no strip: its header has the "+")
+	if v.presentation != .Panel {
+		if ui.view_header_tools(v) {
+			ui.a11y({role = .Button, name = i18n.tr("New terminal")})
+			ui.next({width = ui.px(math.round(em * TERM_NEW_EM)), height = ui.px(math.round(em * TERM_NEW_EM))})
+			if ui.button("term_new", icon = lucide.PLUS).clicked { term_create(app) }
+		}
+	}
+	terminal_panel(app, em, t, v.shown)
+}
+
+// A grid in its view: a shell's, or a command's output's. (`shown` false: its view is measured unseen; it reads no input.
+// `focus`: it takes the keyboard in this build.)
+terminal_panel :: proc(app: ^App, em: f32, t: ^Term, shown := true, focus := false) {
 	s := &app.cx.terms
 	term_banner(app, t, em)
 	// (the picture read last holds the screen from before the shell's new size, until it has painted the new one)
 	t.view.hold = term_painting(ui.now_ms(), t.told_ms, t.fed_ms, t.asked_ms)
-	term.build(&t.view, term_style(app, em), term_takes_focus(s, t, ui.focus_key()))
+	term.build(&t.view, term_style(app, em), focus || term_takes_focus(s, t, ui.focus_key()))
 	if text, ok := ui.paste_answer(t.view.box); ok { term.paste(&t.view, text) }
-	t.shown = true
+	if shown { term_settle(app, t) }
 	menu := fmt.tprintf("term_menu_%x", u64(t.view.box))
 	if s.menu_for == t { ui.menu_open(menu, s.menu_at); s.menu_for = nil }
 	if ui.menu(menu, em * TERM_MENU_EM) { term_menu(app, t) }
@@ -1189,7 +1228,7 @@ term_menu :: proc(app: ^App, t: ^Term) {
 	}
 }
 
-// What stands in the dock while there is no shell: the reading of the list or of the new shell, and how it ended.
+// What stands where the shells go while there is no shell: the reading of the list or of the new shell, and how it ended.
 terminal_waiting :: proc(app: ^App, em: f32) {
 	s := &app.cx.terms
 	ui.spacer(ui.px(em * 0.8))
@@ -1201,24 +1240,6 @@ terminal_waiting :: proc(app: ^App, em: f32) {
 			if read_shown(app, "###term_read", &s.read, em, terminals_ask) { read_shown(app, "###term_made", &s.made, em, term_create) }
 		}
 		ui.spacer(ui.px(em))
-	}
-}
-
-// The end of a strip that holds a shell: the way to another. (Panel.Terminal's too: the list on its way answers for it.)
-terminal_strip_end :: proc(app: ^App, d: ^ui.Dock, leaf: i32, em: f32) {
-	s := &app.cx.terms
-	any: ^Term
-	stand_in := false
-	for p in ui.dock_tabs(d, leaf) {
-		if p == u32(Panel.Terminal) { stand_in = true }
-		if t := term_of_panel(app, p); t != nil && any == nil { any = t }
-	}
-	if any == nil && !stand_in { return }
-	ui.a11y({role = .Button, name = i18n.tr("New terminal")})
-	ui.next({width = ui.px(math.round(em * TERM_NEW_EM)), height = ui.px(math.round(em * TERM_NEW_EM))})
-	if ui.button("term_new", icon = lucide.PLUS).clicked {
-		if any != nil { s.last_panel = any.panel }   // (in this stack, whichever had the keyboard)
-		term_create(app)
 	}
 }
 
@@ -1261,12 +1282,12 @@ term_size_answered :: proc(app: ^App, id: string) {
 	term_size_send(app, t)
 }
 
-// The banner's Close, in the dock or in a window of its own: after the frame, whichever built it.
+// The banner's Close, wherever its view is: after the frame, whichever window built it.
 terms_close_due :: proc(app: ^App) {
 	s := &app.cx.terms
-	if s.close_due == 0 { return }
-	panel_close(app, s.close_due)
-	s.close_due = 0
+	t := s.close_due
+	s.close_due = nil
+	if term_alive(app, t) { term_close(app, t) }
 }
 
 // What comes due after a size: the shell is told, or its picture shown. (A frame, where the window may be at rest.)

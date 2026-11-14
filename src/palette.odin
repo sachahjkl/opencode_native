@@ -1,7 +1,9 @@
 // The command palette (Ctrl+K): one field that reaches everything. What the program does (commands.odin), the sessions, the
-// agents, the models, the server's own commands and the settings (a switch flips; the others open the settings on themselves).
-// A first character narrows it: > commands, @ sessions, / the server's commands, # models, : settings. What was chosen before
-// comes first (ui.Choice_Memory: it fades with a half-life of two weeks, palette_choices.txt beside the preferences).
+// agents, the models, the server's own commands, the settings (a switch flips; the others open the settings on themselves)
+// and the moves of the views open (float one, dock it, put it in a window of its own, re-attach it, close it: the toolkit's
+// View_Commands). A first character narrows it: > commands, @ sessions, / the server's commands, # models, : settings. What
+// was chosen before comes first (ui.Choice_Memory: it fades with a half-life of two weeks, palette_choices.txt beside the
+// preferences). It is a view of its own (COMMANDS_VIEW), opened over the window it is asked from.
 package ocn
 
 import "core:fmt"
@@ -17,7 +19,7 @@ import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
 
-Pal_Kind :: enum u8 { Command, Session, Agent, Model, Slash, Switch, Setting }
+Pal_Kind :: enum u8 { Command, Session, Agent, Model, Slash, Switch, Setting, View }
 
 Pal_Item :: struct {
 	kind:   Pal_Kind,
@@ -28,7 +30,7 @@ Pal_Item :: struct {
 	icon:   string,
 	tags:   []string, // other words it is found by (a command's, a setting's)
 	cmd:    ^Command,
-	index:  int,      // in app.models
+	index:  int,      // in app.models; a view's move: in Palette.view_cmds
 	toggle: bool,     // it is a switch (its state: pal_item_on, read for the rows shown)
 }
 
@@ -47,6 +49,9 @@ Palette :: struct {
 	ids:     [dynamic]u64,       // each hit's identity, for its rows (the list measures them by it)
 	arena:   virtual.Arena,
 	vl:      ui.Virtual_List,    // only the rows in view are built; `vl.sel`: the row chosen
+	view_cmds: ui.View_Commands, // the moves of the views of the window it is open in, made again only when the views change
+	owner:   ^ui.State,          // that window's (the one it was opened over)
+	chosen:  Maybe(Pal_Item),    // what the view ended on: done in the main window's next build (palette_answer)
 }
 
 Slash :: struct { name, description: string }   // a command of the server (owned)
@@ -61,8 +66,10 @@ choice_key :: proc(it: ^Pal_Item) -> string { return fmt.tprintf("%d:%s", int(it
 
 palette_toggle :: proc(app: ^App) {
 	p := &app.palette
-	if app.cx.open[.Palette] { app.cx.open[.Palette] = false; return }
-	app.cx.open[.Palette], p.fresh, p.vl.sel, p.stamp = true, true, 0, 0
+	if ui.view_is_open(&app.program_views, COMMANDS_VIEW) { ui.view_close(&app.program_views, COMMANDS_VIEW); return }
+	p.fresh, p.vl.sel, p.stamp = true, 0, 0
+	p.owner = built_state(app)   // (asked from a view's window: its views' moves; else the main window's)
+	ui.view_open(&app.program_views, COMMANDS_VIEW, app, owner = p.owner)
 	ui.line_edit_set(&p.field, "")
 	// (read again at each opening, as the composer's `/` list does: slash_track)
 	if !flying(app, .Slash, "") { request(app, .Slash, "GET", "/api/command") }
@@ -94,6 +101,12 @@ palette_items :: proc(app: ^App, only: rune, searching: bool) -> []Pal_Item {
 			if c.group == "Session" && shown != "" { it.detail = shown }
 			if c.checked != nil { it.toggle = true }
 			append(&items, it)
+		}
+		// the moves of the views open in its window (but its own: moving the palette from itself is no help)
+		vc := &app.palette.view_cmds
+		for c, i in vc.commands {
+			if vc.acts[i].id == COMMANDS_VIEW { continue }
+			append(&items, Pal_Item{kind = .View, id = fmt.tprintf("%s/%s/%v", vc.acts[i].id, vc.acts[i].instance, vc.acts[i].act), title = c.label, detail = c.group, icon = c.icon, index = i})
 		}
 	}
 	if want(only, '@') {
@@ -148,7 +161,7 @@ pal_item_on :: proc(app: ^App, it: ^Pal_Item) -> bool {
 		m := app.models[it.index]
 		return m.id == shown && m.provider == provider
 	case .Switch: return config.bool_of(&app.cfg_prefs, it.id)
-	case .Session, .Slash, .Setting: return false
+	case .Session, .Slash, .Setting, .View: return false
 	}
 	return false
 }
@@ -168,6 +181,7 @@ palette_stamp :: proc(app: ^App, text: string) -> u64 {
 	mix(&h, u64(len(app.cx.slash)))
 	mix(&h, hash.fnv64a(transmute([]u8)app.chat.id))
 	mix(&h, app.palette.choices.version)   // (the file read after the start, a choice made: the order moves)
+	mix(&h, app.palette.view_cmds.serial)  // (a view opened, closed, moved: its moves)
 	// (which commands can act now: a command that cannot is not listed)
 	for &c, i in COMMANDS { mix(&h, u64(i) << 1 | u64(command_enabled(app, &c))) }
 	return h | 1
@@ -178,6 +192,7 @@ palette_stamp :: proc(app: ^App, text: string) -> u64 {
 @(private = "file")
 palette_refresh :: proc(app: ^App, text: string) {
 	p := &app.palette
+	_ = ui.views_commands_update(&p.view_cmds, &app.program_views, owner = p.owner)
 	stamp := palette_stamp(app, text)
 	if stamp == p.stamp { return }
 	p.stamp = stamp
@@ -208,12 +223,24 @@ palette_refresh :: proc(app: ^App, text: string) {
 	}
 }
 
-// Done when it is chosen. (open_root and command_run wait for the end of the frame; the others only note a value.)
+// What it ended on, done in the main window's build after it closed (views_answers): a view's move is not made while
+// views are built. (open_root and command_run wait for the end of the frame; the others only note a value.)
+palette_answer :: proc(app: ^App) {
+	p := &app.palette
+	if _, ended := ui.view_ended(&app.program_views, COMMANDS_VIEW); !ended { return }
+	if it, ok := p.chosen.?; ok {
+		p.chosen = nil
+		palette_choose(app, &it)
+	}
+}
+
 @(private = "file")
 palette_choose :: proc(app: ^App, it: ^Pal_Item) {
-	ui.choice_note(&app.palette.choices, choice_key(it))
-	app.cx.open[.Palette] = false
+	if it.kind != .View { ui.choice_note(&app.palette.choices, choice_key(it)) }   // (a move is not a habit: its view may be gone)
 	switch it.kind {
+	case .View:
+		vc := &app.palette.view_cmds
+		if it.index < len(vc.acts) { ui.views_command_run(&app.program_views, vc.acts[it.index]) }
 	case .Command: command_run(app, it.cmd)
 	case .Session: open_root(app, it.id)
 	case .Agent: choose_agent(app, it.id)
@@ -233,9 +260,9 @@ palette_choose :: proc(app: ^App, it: ^Pal_Item) {
 @(private = "file")
 Pal_Row_Draw :: struct { selected: bool }
 
-palette_dialog :: proc(app: ^App, em: f32) {
+palette_view :: proc(v: ^ui.View, app: ^App) {
 	p := &app.palette
-	if !app.cx.open[.Palette] { return }
+	em := ui.font_size()
 	palette_refresh(app, ui.line_edit_string(&p.field))
 	items, hits := p.items, p.hits
 	n := len(hits)
@@ -245,10 +272,9 @@ palette_dialog :: proc(app: ^App, em: f32) {
 	chosen := -1
 	row_h := math.round(em * 2.1)
 	vl := &p.vl
-	// (resizable, its size kept as the dialogs' are; its top held where a palette is)
-	if ui.modal("palette", &app.cx.open[.Palette], dialog_options(app, .Palette, top = PALETTE_TOP)) {
-		// (read inside the dialog: an open dialog holds the keys from the code built outside it. The field keeps the keyboard:
-		// the list's keys are read here; a click on the list gives it the keys, and it reads them itself)
+	{
+		// (the field keeps the keyboard: the list's keys are read here; a click on the list gives it the keys, and it reads
+		// them itself)
 		if n > 0 {
 			sel := vl.sel
 			if ui.key_press(.Down) { sel = (sel + 1) % n; p.reveal = true }
@@ -259,13 +285,12 @@ palette_dialog :: proc(app: ^App, em: f32) {
 			vl.sel = sel
 		}
 		vl.sel = clamp(vl.sel, 0, max(n - 1, 0))
-		dialog_backdrop()
 		// the search: the toolkit's band over a list, flush with the palette's top and sides
+		if p.fresh { ui.focus_next_field() }   // (its first build: what is typed next is the field's, wherever it shows)
 		res := ui.search_band("pal_top", &p.field, {placeholder = i18n.tr("Search commands, sessions, agents, models…"), count = n})
-		if p.fresh { ui.set_focus(res.box.key) }
 		if res.changed { vl.sel = 0; p.reveal = true }
 		if res.committed && n > 0 { chosen = hits[vl.sel].index }
-		if res.cancelled { app.cx.open[.Palette] = false }
+		if res.cancelled { ui.view_end(v, ui.VIEW_CANCELLED) }
 		ui.spacer(ui.px(em * 0.45))
 		if p.reveal && n > 0 { ui.list_select(&vl.list, vl.sel); p.reveal = false }
 		vl.no_typeahead = true   // (letters are the field's)
@@ -276,7 +301,7 @@ palette_dialog :: proc(app: ^App, em: f32) {
 				if ui.tags("weak") { ui.label(fmt.tprintf("%s###none", i18n.tr("Nothing matches"))) }
 			}
 			if vl.activated && n > 0 { chosen = hits[vl.sel].index }
-			if vl.cancelled { app.cx.open[.Palette] = false }
+			if vl.cancelled { ui.view_end(v, ui.VIEW_CANCELLED) }
 			for k in rows.first ..< rows.last {
 				h := hits[k]
 				it := &items[h.index]
@@ -323,7 +348,10 @@ palette_dialog :: proc(app: ^App, em: f32) {
 		}
 	}
 	p.fresh = false
-	if chosen >= 0 { palette_choose(app, &items[chosen]) }
+	if chosen >= 0 {
+		p.chosen = items[chosen]
+		ui.view_end(v, 0)
+	}
 }
 
 // A setting's title as the settings say it ("Notify › Permission", temp memory); the name is still found by what is typed

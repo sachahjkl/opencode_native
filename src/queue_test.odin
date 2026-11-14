@@ -7,7 +7,6 @@ import "base:runtime"
 import "core:fmt"
 import "core:strings"
 import "core:testing"
-import "gt:config"
 import "gt:ui"
 import remote "gt:remote"
 
@@ -578,68 +577,40 @@ what_was_steered_goes_on_after_an_interruption_as_a_prompt_can :: proc(t: ^testi
 ////////////////////////////////
 // The Statistics panel
 
-@(private = "file")
-same_stack :: proc(app: ^App) -> bool {
-	a, b := ui.dock_leaf_of(&app.dock, u32(Panel.Stats)), ui.dock_leaf_of(&app.dock, u32(Panel.Preview))
-	return a >= 0 && a == b
-}
-
+// The Statistics and the Preview open where the other is: one place at the conversation's right, a tab each.
 @(test)
-statistics_join_the_preview_and_the_preview_joins_them :: proc(t: ^testing.T) {
+statistics_and_the_preview_share_their_place :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	show(app, "s")
-	app.preview.open = true
-	dock_setup(app)
-	stats_open(app)
-	testing.expect(t, same_stack(app), "a tab of the Preview's stack")
-	testing.expect(t, ui.dock_shown(&app.dock, u32(Panel.Stats)))
-	panel_close(app, u32(Panel.Preview))
-	testing.expect(t, ui.dock_has(&app.dock, u32(Panel.Stats)))
-	app.preview.open = true
-	dock_setup(app)
-	testing.expect(t, same_stack(app), "the Preview comes back beside them")
-	testing.expect(t, ui.dock_leaf_of(&app.dock, u32(Panel.Conversation)) != ui.dock_leaf_of(&app.dock, u32(Panel.Stats)))
-}
-
-@(test)
-alone_they_open_where_the_preview_opens :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
+	vs := &app.program_views
 	show(app, "s")
 	stats_open(app)
-	got := ui.dock_format(&app.dock, panel_name, app)
-	testing.expect(t, strings.contains(got, "x0.560"), got)   // (the default layout's width, not a new panel's)
-	testing.expect(t, !strings.contains(got, "preview"), got)
-}
-
-@(test)
-a_saved_layout_holds_them_and_does_not_open_them :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	pref_set(app, "layout.dock", "dock1 x0.500([*conversation] [*statistics preview])")
-	dock_setup(app)
-	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Stats)), "closed: no tab")
+	testing.expect(t, ui.view_is_open(vs, STATS_VIEW))
+	testing.expect_value(t, ui.view_presentation(vs, STATS_VIEW), ui.View_Presentation.Panel)
+	testing.expect(t, !ui.view_is_open(vs, PREVIEW_VIEW), "the Preview is not opened with them")
 	app.preview.open = true
-	stats_open(app)
-	testing.expect(t, same_stack(app))
+	ui.view_open(vs, PREVIEW_VIEW, app)
+	preview_close(app)
+	testing.expect(t, ui.view_is_open(vs, STATS_VIEW), "the Preview closed, they stay")
+	testing.expect(t, !ui.view_is_open(vs, PREVIEW_VIEW))
 }
 
 @(test)
 the_pill_toggles_and_brings_up :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	vs := &app.program_views
 	show(app, "s")
-	app.preview.open = true
-	dock_setup(app)
 	stats_toggle(app)
-	testing.expect(t, app.stats.open)
-	ui.dock_activate(&app.dock, u32(Panel.Preview))
+	testing.expect(t, app.stats.open && ui.view_is_open(vs, STATS_VIEW))
+	// (a panel not built in the last frame is a tab under another: the pill brings it up, it does not close it)
+	app.stats.built = false
 	stats_toggle(app)
-	testing.expect(t, app.stats.open && ui.dock_shown(&app.dock, u32(Panel.Stats)), "under the other tab, it comes up")
+	testing.expect(t, app.stats.open && ui.view_is_open(vs, STATS_VIEW), "under the other tab, it comes up")
+	app.stats.built = true
 	stats_toggle(app)
 	testing.expect(t, !app.stats.open)
-	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Stats)))
+	testing.expect(t, !ui.view_is_open(vs, STATS_VIEW))
 }
 
 @(test)
@@ -748,22 +719,9 @@ leaving_a_server_closes_the_panel :: proc(t: ^testing.T) {
 	bench_answer(app, bench_take(t, .Context), 200, CONTEXT)
 	stats_forget(app)
 	testing.expect(t, !app.stats.open)
-	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Stats)))
+	testing.expect(t, !ui.view_is_open(&app.program_views, STATS_VIEW))
 	testing.expect_value(t, len(app.stats.session_context.groups), 0)
 	testing.expect_value(t, app.stats.context_read.state, remote.State.Idle)
-}
-
-// Sizes are saved by position: Statistics was the second dialog.
-@(test)
-a_saved_size_stays_with_its_dialog :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	pref_set(app, "layout.dialogs", "100x1 200x2 300x3 400x4 500x5 600x6 700x7")
-	dialogs_track(app)
-	testing.expect_value(t, app.cx.dialogs[.Settings].x, 100)
-	testing.expect_value(t, app.cx.dialogs[.Help].x, 300)
-	testing.expect_value(t, app.cx.dialogs[.Artifacts].x, 700)
-	testing.expect_value(t, config.string_of(&app.cfg_prefs, "layout.dialogs"), "100x1 200x2 300x3 400x4 500x5 600x6 700x7")   // (nothing changed: nothing written)
 }
 
 // A steered message stuck behind a long step: Send now interrupts the run, and what was steered goes as a prompt at once.

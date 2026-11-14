@@ -75,5 +75,5 @@ setup_frame :: proc(app: ^App, em: f32) {
 	logo_follow_accent(app)
 	app.install.logo = nil
 	if app.logo.tex != 0 { app.install.logo = setup.Logo{app.logo.tex, app.logo.size} }
-	if prefs_page.install_frame(&app.install, em) == .Launched { app.quit = true }   // (the installed copy starts at the end: main)
+	if prefs_page.install_frame(&app.install) == .Launched { app.quit = true }   // (the installed copy starts at the end: main)
 }

@@ -118,16 +118,15 @@ Missed_Act :: enum u8 {
 @(private = "file")
 Missed_Row_Draw :: struct { selected: bool }
 
-missed_dialog :: proc(app: ^App, em: f32) {
+missed_view :: proc(v: ^ui.View, app: ^App) {
 	m := &app.missed
-	if !app.cx.open[.Notices] { return }
+	em := ui.font_size()
 	missed_rows_refresh(app)
 	cards := app.prefs.notices_cards
 	act := Missed_Act.None
 	act_row := -1
-	if ui.modal("notices", &app.cx.open[.Notices], dialog_options(app, .Notices)) {
-		dialog_backdrop()
-		if ui.dialog_header("mi_head", i18n.tr("What you missed"), {close = true}) {
+	{
+		if ui.view_header_tools(v) {
 			small := math.round(em * BUTTON_SMALL_H_EM)
 			modes := [2]string{i18n.tr("Cards"), i18n.tr("List")}
 			mode := cards ? 0 : 1
@@ -175,7 +174,7 @@ missed_list :: proc(app: ^App, em: f32) -> (act: Missed_Act, act_row: int) {
 	if rows, ok := ui.vlist("###mi_list", vl, m.ids[:], selectable = m.selectable[:], ids_version = m.rows_stamp); ok {
 		if n == 0 { missed_none(app, row_h) }
 		if vl.activated && n > 0 { act, act_row = .Open, vl.sel }
-		if vl.cancelled { app.cx.open[.Notices] = false }
+		if vl.cancelled { ui.view_close(&app.program_views, MISSED_VIEW) }
 		now := now_epoch_ms()
 		for k in rows.first ..< rows.last {
 			r := &m.rows[k]
@@ -294,7 +293,7 @@ missed_act :: proc(app: ^App, act: Missed_Act, at: int) {
 @(private = "file")
 missed_open_row :: proc(app: ^App, r: ^Missed_Row) {
 	if r.root != "" && r.root != app.chat.id { open_root(app, r.root) }
-	app.cx.open[.Notices] = false
+	ui.view_close(&app.program_views, MISSED_VIEW)
 }
 
 @(private = "file")

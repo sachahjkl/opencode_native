@@ -151,7 +151,6 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	app = new(App)
 	the_app = app
 	append(&app.servers, Server{name = "This computer", local = true})
-	app.sidebar.width = SIDEBAR_W_DEFAULT
 	app.chat_scroll = Scroll_Following{}
 	app.link = .Online
 	chat_reset(&app.chat)
@@ -193,9 +192,11 @@ output_view_built :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
 	testing.expectf(t, strings.has_prefix(term_text(v.term), "$ cargo build"), "the command, at the head of the grid: %q", term_text(v.term))
 	// a drag over the grid selects, and Ctrl+C copies it
 	if g := session.find(s, "term_box"); g != nil {
-		y := g.rect.min.y + v.term.view.metrics.cell_h * 1.5   // (its second row: the first is the command)
-		from := [2]f32{g.rect.min.x + 12, y}
-		to := [2]f32{g.rect.min.x + 160, y}
+		// (its second row: the first is the command; from the grid's origin, inside its box's padding)
+		o := v.term.view.origin
+		y := o.y + v.term.view.metrics.cell_h * 1.5
+		from := [2]f32{o.x + v.term.view.metrics.cell_w * 0.25, y}   // (in its first cell)
+		to := [2]f32{o.x + 160, y}
 		session.move(s, from)
 		session.event(s, {kind = .Mouse_Press, button = .Left, pos = from})
 		session.frames(s, 1)
@@ -337,7 +338,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		// a double click on the title edits it in place: Enter keeps it, Escape leaves it, a click elsewhere keeps it
 		session.click(s, "title_b", count = 2)
 		session.frames(s, 2)
-		testing.expect(t, app.rename.at == .Header && session.find(s, "ren_f") != nil && !app.cx.open[.Rename], "the header's title, a field in place")
+		testing.expect(t, app.rename.at == .Header && session.find(s, "ren_f") != nil && !ui.view_is_open(&app.program_views, RENAME_VIEW), "the header's title, a field in place")
 		session.key(s, .A, {.Ctrl})
 		session.type_text(s, "Frame pacing")
 		session.frames(s, 1)
@@ -468,7 +469,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 			profile_end(rest.name)
 			bench_report(&rest)
 		}
-		app.cx.open[.Palette] = false
+		ui.view_close(&app.program_views, COMMANDS_VIEW)
 		session.frames(s, 2)
 
 		// a command's output in its terminal grid, over the conversation: a line in colour comes at each frame, then it rests
@@ -724,8 +725,8 @@ an_artifact_of_the_session_is_a_card :: proc(t: ^testing.T) {
 		session.save_png(s, "artifact_card.png")
 		session.click(s, "art_art_1")
 		session.frames(s, 2)
-		testing.expect(t, app.cx.open[.Artifacts] && app.cx.artifacts.shown == "art_1", "a click shows it")
-		app.cx.open[.Artifacts] = false
+		testing.expect(t, ui.view_is_open(&app.program_views, ARTIFACTS_VIEW) && app.cx.artifacts.shown == "art_1", "a click shows it")
+		ui.view_close(&app.program_views, ARTIFACTS_VIEW)
 	})
 }
 
@@ -808,7 +809,7 @@ the_console_theme_is_edged :: proc(t: ^testing.T) {
 		session.wait_idle(s)
 		testing.expect(t, session.find(s, "st_Tokens") != nil, "the tokens' section")
 		session.save_png(s, "console.png")
-		panel_close(app, u32(Panel.Stats))
+		stats_close(app)
 	})
 }
 
@@ -822,7 +823,7 @@ the_console_screens :: proc(t: ^testing.T) {
 		settings_open(app)
 		session.wait_idle(s)
 		session.save_png(s, "console_settings.png")
-		app.cx.open[.Settings] = false
+		ui.view_close(&app.program_views, SETTINGS_VIEW)
 		// the approvals' shield and its menu, in the composer's toolbar
 		session.wait_idle(s)
 		testing.expect(t, session.find(s, "approval") != nil, "the shield")
@@ -836,7 +837,7 @@ the_console_screens :: proc(t: ^testing.T) {
 		ui.line_edit_set(&app.palette.field, "the")
 		session.wait_idle(s)
 		session.save_png(s, "console_palette.png")
-		app.cx.open[.Palette] = false
+		ui.view_close(&app.program_views, COMMANDS_VIEW)
 		a := &app.activity
 		todos_clear(a)
 		for it in ([4][2]string{{"read the code", "completed"}, {"write the fix", "in_progress"}, {"test it", "pending"}, {"ship it", "pending"}}) {
@@ -980,12 +981,13 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 			app.viewer.ref = image_ref_clone(image_ref("not decoded here", .Bytes, "image/png", "picture.png"))
 			app.viewer.key = 0x5eed
 			app.images[app.viewer.key] = {state = .Ready, tex = tex, w = W, h = H, used = app.frame_no}
-			app.cx.open[.Viewer], app.viewer.grown, app.viewer.focus = true, false, true
+			app.viewer.focus, app.viewer.grown = true, false
+			ui.view_open(&app.program_views, IMAGE_VIEW, app)
 			ui.preview_reset(&app.viewer.view)
 		}
 		open(app, tex)
 		session.frames(s, 3)
-		view, panel := session.find(s, "view"), session.find(s, "modal_image_view")
+		view, panel := session.find(s, "view"), session.find(s, "modal_view_image")
 		testing.expect(t, view != nil && panel != nil, "the viewer")
 		if view == nil || panel == nil { return }
 		em := ui.font_size()
@@ -993,20 +995,21 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		vs := view.rect.max - view.rect.min
 		ps := panel.rect.max - panel.rect.min
 		testing.expect_value(t, vs, [2]f32{W, H} * ui.scale())   // (the window has room: its pixels)
-		testing.expect_value(t, ps.y, vs.y + pad + bar)
+		head := session.get(s, "view_header")   // (the view's header: the dialog's top)
+		testing.expect_value(t, ps.y, vs.y + pad + bar + head.rect.max.y - head.rect.min.y)
 		testing.expect_value(t, ps.x, max(vs.x + 2 * pad, math.round(em * VIEWER_MIN_W_EM)))
 		// a press on the picture keeps it; zoomed out, a press beside the picture closes it
 		session.click_at(s, view.rect.min + 5)
-		testing.expect(t, app.cx.open[.Viewer], "a press on the picture")
+		testing.expect(t, ui.view_is_open(&app.program_views, IMAGE_VIEW), "a press on the picture")
 		app.viewer.view.zoom = 0.5
 		session.frames(s, 2)
 		// (the other corner: a second press where the first was would be a double click, which zooms)
 		session.click_at(s, view.rect.max - 5)
-		testing.expect(t, !app.cx.open[.Viewer], "a press beside the picture closes it")
+		testing.expect(t, !ui.view_is_open(&app.program_views, IMAGE_VIEW), "a press beside the picture closes it")
 		// its corner, outward: the picture grows past its pixels, as far as the pointer goes, and the size is kept (a share of the room)
 		open(app, tex)
 		session.frames(s, 3)
-		view, panel = session.find(s, "view"), session.find(s, "modal_image_view")
+		view, panel = session.find(s, "view"), session.find(s, "modal_view_image")
 		before := view.rect.max - view.rect.min
 		testing.expect_value(t, before, [2]f32{W, H} * ui.scale())
 		corner := panel.rect.max - 3
@@ -1020,7 +1023,8 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		testing.expectf(t, abs(after.x - (before.x + 100)) < 2, "the corner moved 50 px: both sides 100 px, past its pixels: %v", after)
 		testing.expectf(t, abs(after.x / after.y - 2) < 0.02, "its shape kept: %v", after)
 		room := app.state.window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
-		full := viewer_frame({W, H}, room, {2 * pad, pad + bar}, ui.scale(), 1, math.round(em * VIEWER_MIN_W_EM)).full
+		head = session.get(s, "view_header")
+		full := viewer_frame({W, H}, room, {2 * pad, pad + bar + head.rect.max.y - head.rect.min.y}, ui.scale(), 1, math.round(em * VIEWER_MIN_W_EM)).full
 		kept := config.float_of(&app.cfg_prefs, "conversation.image_viewer_size")
 		testing.expectf(t, abs(kept - f64(after.x / full.x)) < 0.01, "kept as a share of the room: %v", kept)
 		// opened again: a picture that fits opens at its pixels, whatever the share kept
@@ -1046,7 +1050,7 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		session.event(s, {kind = .Key_Press, key = .Escape})
 		session.frames(s, 3)
-		testing.expect(t, !app.cx.open[.Viewer], "Escape closes it")
+		testing.expect(t, !ui.view_is_open(&app.program_views, IMAGE_VIEW), "Escape closes it")
 	})
 }
 
@@ -1495,11 +1499,11 @@ a_password_can_be_shown :: proc(t: ^testing.T) {
 		session.click(s, "reveal")
 		testing.expect(t, app.server_edit.password_shown, "shown")
 		testing.expect_value(t, shown(s), "hunter2")
-		app.cx.open[.Server] = false
+		ui.view_close(&app.program_views, SERVER_VIEW)
 		session.frames(s, 2)
 		server_edit_open(app, -1)
 		testing.expect(t, !app.server_edit.password_shown, "opened again: hidden")
-		app.cx.open[.Server] = false
+		ui.view_close(&app.program_views, SERVER_VIEW)
 	})
 }
 
@@ -1559,8 +1563,8 @@ the_servers_are_tabs_of_the_sidebar :: proc(t: ^testing.T) {
 
 		// "+": the dialog that adds a server
 		session.click(s, "srv_add")
-		testing.expect(t, app.cx.open[.Server] && app.server_edit.index == -1, "the dialog that adds a server")
-		app.cx.open[.Server] = false
+		testing.expect(t, ui.view_is_open(&app.program_views, SERVER_VIEW) && app.server_edit.index == -1, "the dialog that adds a server")
+		ui.view_close(&app.program_views, SERVER_VIEW)
 		session.frames(s, 2)
 	})
 }
@@ -1762,7 +1766,7 @@ a_diagram_is_zoomed_moved_and_laid_out_in_the_viewer :: proc(t: ^testing.T) {
 		session.click(s, "diagram")
 		session.wait_idle(s)
 		dv := &app.diagram_view
-		testing.expect(t, app.cx.open[.Diagram] && dv.code != "", "a click opens the viewer on it")
+		testing.expect(t, ui.view_is_open(&app.program_views, DIAGRAM_VIEW) && dv.code != "", "a click opens the viewer on it")
 		testing.expect_value(t, dv.own, mermaid.Direction.Left_Right)
 		view := session.find(s, "dv_view")
 		if !testing.expect(t, view != nil, "the view") { return }
@@ -1820,7 +1824,7 @@ a_diagram_is_zoomed_moved_and_laid_out_in_the_viewer :: proc(t: ^testing.T) {
 		testing.expectf(t, inked > len(pic.pixels) / 50, "its boxes, lines and words: %d", inked)
 		session.event(s, {kind = .Key_Press, key = .Escape})
 		session.frames(s, 3)
-		testing.expect(t, !app.cx.open[.Diagram], "Escape closes it")
+		testing.expect(t, !ui.view_is_open(&app.program_views, DIAGRAM_VIEW), "Escape closes it")
 	})
 }
 
@@ -2127,10 +2131,10 @@ the_commands_are_read_again_when_the_list_opens :: proc(t: ^testing.T) {
 		// (the agents' and the models' pickers, read once at the connection as the commands were)
 		picker_open(app, "agent", {})
 		testing.expect_value(t, bench_count(.Agents), 1)
-		app.cx.open[.Picker] = false
+		app.picker.open = false
 		picker_open(app, "model", {})
 		testing.expect_value(t, bench_count(.Models), 1)
-		app.cx.open[.Picker] = false
+		app.picker.open = false
 	})
 }
 
@@ -2228,7 +2232,7 @@ the_palette_at_rest_builds_only_its_rows_in_view :: proc(t: ^testing.T) {
 		sessions_changed(app)
 		session.frames(s, 2)
 		testing.expect_value(t, len(app.palette.hits), found + 1)
-		app.cx.open[.Palette] = false
+		ui.view_close(&app.program_views, COMMANDS_VIEW)
 		session.frames(s, 2)
 	})
 }
@@ -2259,7 +2263,7 @@ the_palettes_search_is_a_menus_search_band :: proc(t: ^testing.T) {
 		testing.expectf(t, session.near(strip, menu, 2), "the strip %v, the menu's band %v", strip, menu)
 		testing.expectf(t, !session.near(strip, dialog, 4), "the strip %v apart from the dialog %v", strip, dialog)
 		ui.menu_close()
-		app.cx.open[.Palette] = false
+		ui.view_close(&app.program_views, COMMANDS_VIEW)
 		session.frames(s, 2)
 	})
 }
@@ -2298,17 +2302,17 @@ a_buttons_colour_says_what_it_does :: proc(t: ^testing.T) {
 			testing.expectf(t, session.near(got, want, 3), "%s (%v): its face %v, the soft fill %v", name, intent, got, want)
 		}
 		session.leave(s)   // (a face under the pointer is lit: not its fill)
-		app.cx.open[.Delete] = true
+		delete_ask(app, "ses_colour")
 		session.wait_idle(s)
 		face(t, s, "confirm_act", .Danger)
 		face(t, s, "confirm_cancel", .Neutral)   // (a Cancel is neutral: only the act carries its intent)
-		app.cx.open[.Delete] = false
+		ui.view_close(&app.program_views, DELETE_VIEW)
 		session.frames(s, 2)
 		rename_open(app, "ses_colour")
 		session.wait_idle(s)
 		face(t, s, "prompt_ok", .Primary)
 		face(t, s, "prompt_cancel", .Neutral)
-		app.cx.open[.Rename] = false
+		ui.view_close(&app.program_views, RENAME_VIEW)
 		session.frames(s, 2)
 	})
 }
@@ -2332,7 +2336,7 @@ the_palette_arrows_move_the_selection :: proc(t: ^testing.T) {
 		session.key(s, .Up)
 		session.frames(s, 2)
 		testing.expect_value(t, app.palette.vl.sel, 0)
-		app.cx.open[.Palette] = false
+		ui.view_close(&app.program_views, COMMANDS_VIEW)
 		session.frames(s, 2)
 	})
 }
@@ -2403,8 +2407,9 @@ a_running_command_is_inspected_from_its_row :: proc(t: ^testing.T) {
 		session.wait_idle(s)   // (the conversation follows its end, which the row made longer: what is clicked stands still)
 		session.click(s, "bginspect")
 		session.frames(s, 2)
-		v := app.cx.outputs.shown
-		testing.expect(t, v != nil && v.shell == "sh_7", "its output, in its view")
+		list := app.cx.outputs.list
+		v := len(list) > 0 ? list[len(list) - 1] : nil
+		testing.expect(t, v != nil && v.shell == "sh_7" && ui.view_is_open(&app.program_views, OUTPUT_VIEW, v.name), "its output, in its view")
 	})
 }
 
@@ -2482,7 +2487,7 @@ the_bell_counts_what_was_missed_and_its_view_answers_the_keys :: proc(t: ^testin
 		}
 		session.key(s, .N, {.Ctrl, .Shift})
 		session.frames(s, 3)
-		testing.expect(t, app.cx.open[.Notices], "Ctrl+Shift+N opens the view")
+		testing.expect(t, ui.view_is_open(&app.program_views, MISSED_VIEW), "Ctrl+Shift+N opens the view")
 		testing.expect(t, session.find(s, "badge_count") == nil, "shown: nothing New")
 		key1, key2 := missed_key(app, .End, "ses_1"), missed_key(app, .End, "ses_2")
 		log := missed_log(app)
@@ -2492,12 +2497,12 @@ the_bell_counts_what_was_missed_and_its_view_answers_the_keys :: proc(t: ^testin
 		session.key(s, .Return)
 		session.frames(s, 3)
 		testing.expect_value(t, app.chat.id, "ses_1")
-		testing.expect(t, !app.cx.open[.Notices], "the view closes")
+		testing.expect(t, !ui.view_is_open(&app.program_views, MISSED_VIEW), "the view closes")
 		testing.expect(t, log.live[key1] == nil, "opened: acknowledged")
 		// A: the entry chosen
 		session.key(s, .N, {.Ctrl, .Shift})
 		session.frames(s, 3)
-		testing.expect(t, app.cx.open[.Notices])
+		testing.expect(t, ui.view_is_open(&app.program_views, MISSED_VIEW))
 		chosen := app.missed.vl.sel
 		if testing.expect(t, chosen >= 0 && chosen < len(app.missed.rows) && app.missed.rows[chosen].entry != nil, "an entry is chosen") {
 			key := app.missed.rows[chosen].entry.key
@@ -2516,7 +2521,7 @@ the_bell_counts_what_was_missed_and_its_view_answers_the_keys :: proc(t: ^testin
 		testing.expect_value(t, acknowledged(app), 2)
 		session.key(s, .Escape)
 		session.frames(s, 2)
-		testing.expect(t, !app.cx.open[.Notices], "Escape closes it")
+		testing.expect(t, !ui.view_is_open(&app.program_views, MISSED_VIEW), "Escape closes it")
 	})
 }
 
@@ -2642,7 +2647,7 @@ a_wait_is_answered_from_its_card :: proc(t: ^testing.T) {
 		session.click(s, "card_settle")
 		session.frames(s, 3)
 		testing.expect_value(t, app.chat.id, "ses_2")
-		testing.expect(t, !app.cx.open[.Notices], "the view closes")
+		testing.expect(t, !ui.view_is_open(&app.program_views, MISSED_VIEW), "the view closes")
 		testing.expect(t, missed_log(app).live[missed_key(app, .Permission, "p1", "ses_2")] != nil, "a wait waits for its answer")
 	})
 }

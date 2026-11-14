@@ -377,8 +377,11 @@ server_view_forget :: proc(app: ^App) {
 @(private = "file")
 server_dialogs_forget :: proc(app: ^App) {
 	app.cx.due[.Refresh], app.cx.due[.Facts], app.cx.due[.Children], app.cx.due[.Context] = {}, {}, {}, {}
-	app.cx.open[.Picker] = false
-	app.cx.open[.Delete], app.cx.open[.Rename], app.rename.at = false, false, .None   // (their ids were that server's: nothing acts on one with what came from the other)
+	app.picker.open = false
+	// (their ids were that server's: nothing acts on one with what came from the other)
+	ui.view_close(&app.program_views, DELETE_VIEW)
+	ui.view_close(&app.program_views, RENAME_VIEW)
+	app.rename.at = .None
 	sidebar_hold_end(app)
 	delete(app.composer.fork_prompt)
 	app.composer.fork_prompt = ""
@@ -401,14 +404,13 @@ server_known_end :: proc(app: ^App) {
 	virtual.arena_destroy(&app.proj_arena)
 	app.known = {}
 	app.cx.sessions_ver += 1   // (no list, no busy, no waits: what was made from them goes)
-	app.cx.open[.Pair] = false   // (its code was that server's; the dialog's state is in known, its being open is not)
+	pair_forget(app)   // (its code was that server's)
 }
 
 // The window closes. Every connection's threads are told; none is waited for, workers included (one may be blocked in a read: the
 // process ends with it).
 threads_stop :: proc(app: ^App) {
 	for c in app.cx.conns { conn_stop(c) }
-	detached_stop(app)
 	terminals_stop(app)
 	browser_stop(app)
 }
@@ -535,7 +537,7 @@ Server_Edit :: struct {
 
 server_edit_open :: proc(app: ^App, i: int) {
 	e := &app.server_edit
-	app.cx.open[.Server] = true
+	ui.view_open(&app.program_views, SERVER_VIEW, app)
 	e.password_shown = false   // (each time it opens, hidden)
 	e.index = i
 	if i >= 0 {
@@ -565,12 +567,12 @@ server_menu :: proc(app: ^App, key: string, em: f32) {
 
 SERVER_DIALOG_TOP :: 0.2   // of the window's height
 
-server_dialog :: proc(app: ^App, em: f32) {
+server_view :: proc(v: ^ui.View, app: ^App) {
 	e := &app.server_edit
-	if ui.modal("server", &app.cx.open[.Server], {width_em = 32, top = SERVER_DIALOG_TOP}) {
-		dialog_backdrop()
+	em := ui.font_size()
+	ui.view_title(v, e.index >= 0 ? i18n.tr("Edit the server") : i18n.tr("Add a server"))
+	{
 		pad :: proc(em: f32) { ui.spacer(ui.px(em * DIALOG_MARGIN_EM)) }
-		if ui.dialog_header("sv_head", e.index >= 0 ? i18n.tr("Edit the server") : i18n.tr("Add a server"), {icon = lucide.GLOBE, close = true}) {}
 		ui.spacer(ui.px(em * 0.9))
 		field :: proc(id, label, hint: string, f: ^ui.Line_Edit, em: f32, secret := false, reveal: ^bool = nil) -> ui.Edit_Result {
 			res: ui.Edit_Result
@@ -623,12 +625,12 @@ server_dialog :: proc(app: ^App, em: f32) {
 			if e.index >= 0 {
 				if ui.button("rm", i18n.tr("Remove"), lucide.TRASH_2, {intent = .Danger}).clicked {
 					server_remove(app, e.index)
-					app.cx.open[.Server] = false
+					ui.view_end(v, ui.VIEW_CANCELLED)
 				}
 			}
 			ui.spacer(ui.fill())
 			if taken { text("tk", i18n.tr("That name is taken"), hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
-			if ui.button("cancel", i18n.tr("Cancel")).clicked { app.cx.open[.Server] = false }
+			if ui.button("cancel", i18n.tr("Cancel")).clicked { ui.view_end(v, ui.VIEW_CANCELLED) }
 			ui.spacer(ui.px(em * 0.5))
 			if ui.button("ok", ui.text_shown(e.index >= 0 ? i18n.tr("Save and connect") : i18n.tr("Add and connect")), lucide.CHECK, {intent = .Success, disabled = !valid}).clicked { save = true }
 			pad(em)
@@ -649,7 +651,7 @@ server_dialog :: proc(app: ^App, em: f32) {
 				i = len(app.servers) - 1
 			}
 			servers_save(app, forget = forget)
-			app.cx.open[.Server] = false
+			ui.view_end(v, ui.VIEW_CANCELLED)
 			server_connect(app, i)
 		}
 		ui.spacer(ui.px(em * 1.2))

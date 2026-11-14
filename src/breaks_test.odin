@@ -70,42 +70,41 @@ a_drag_ends_with_the_shell_told_its_size_whenever_it_stops :: proc(t: ^testing.T
 	}
 }
 
+// A window's input goes to a grid built in it: a shell in a view's window hears that window (its input hook is the main
+// window's), and the main window types nothing into it.
 @(test)
-a_shell_in_its_window_still_hears_with_the_tabs_hidden :: proc(t: ^testing.T) {
+a_window_types_only_into_its_own_grids :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	shells_open(t, app, "a", "b")
 	s := &app.cx.terms
 	b := s.list[1]
-	d := new(Detached)
-	d.panel = b.panel
-	d.win = new(platform.Window)
-	append(&app.cx.detached, d)
-	b.detached = true
-	ui.dock_close(&app.dock, b.panel)
-	ui.dock_activate(&app.dock, s.list[0].panel)
-
-	terminal_toggle(app)
-	testing.expect(t, !s.open)
-	testing.expect(t, panel_detached(app, b.panel))
-
-	s.only, s.focused = b, b   // (what detached_frame does)
+	other: ui.State
+	s.focused, b.built_in = b, &other
 	ev := []platform.Event{{kind = .Text, text = 'x'}}
-	_ = term_events(app, ev)
-	s.only, s.focused = nil, nil
+	left := term_events(app, &app.state, ev)
+	testing.expect_value(t, len(left), 1)
+	testing.expect_value(t, len(b.conn.out), 0)
+	ev = []platform.Event{{kind = .Text, text = 'x'}}
+	left = term_events(app, &other, ev)
+	testing.expect_value(t, len(left), 0)
 	testing.expect_value(t, string(b.conn.out[:]), "x")
+	s.focused = nil
 }
 
-// The banner's Close does not depend on a dock that is built: with the tabs hidden nothing is.
+// The banner's Close does not depend on where its view is: closed, a shell's view is built nowhere.
 @(test)
-the_close_of_a_shell_in_its_window_needs_no_dock :: proc(t: ^testing.T) {
+the_close_of_a_shell_needs_no_build :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	shells_open(t, app, "a")
 	s := &app.cx.terms
-	s.close_due = s.list[0].panel
+	id := strings.clone(s.list[0].id, context.temp_allocator)
+	s.close_due = s.list[0]
 	terms_close_due(app)
-	testing.expect_value(t, s.close_due, u32(0))
+	testing.expect(t, s.close_due == nil)
+	testing.expect_value(t, len(s.list), 0)
+	testing.expect(t, !ui.view_is_open(&app.program_views, TERMINAL_VIEW, id), "its view went with it")
 }
 
 @(test)
@@ -152,9 +151,9 @@ a_tab_the_limit_took_before_its_address_loads_what_was_asked :: proc(t: ^testing
 	testing.expect_value(t, front.url, "http://slow.local/")
 }
 
-// The address being typed in the panel's own window: its focus is in that window's state.
+// The address being typed in the panel: its focus is in the state of the window the panel is in.
 @(test)
-what_is_typed_in_the_panels_window_stays_through_a_redirect :: proc(t: ^testing.T) {
+what_is_typed_in_the_panel_stays_through_a_redirect :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	app.win = new(platform.Window)
@@ -165,17 +164,12 @@ what_is_typed_in_the_panels_window_stays_through_a_redirect :: proc(t: ^testing.
 	preview_go(app, tab, "http://a.local/")
 	web_event_add(tab.view, .Ready, 0, nil)
 	web_events_drain(app)
-	d := new(Detached)
-	d.panel = u32(Panel.Preview)
-	d.win = new(platform.Window)
-	append(&app.cx.detached, d)
 	app.preview.addr_key = 42
-	d.state.focus_key = 42
+	app.state.focus_key = 42
 	ui.line_edit_set(&tab.field, "http://typing")
 	web_event_add(tab.view, .Source, 0, transmute([]u8)string("http://redirected.local/"))
 	web_events_drain(app)
 	testing.expect_value(t, ui.line_edit_string(&tab.field), "http://typing")
-	clear(&app.cx.detached)
 }
 
 // What a dialog holds came from the server left.
@@ -183,44 +177,12 @@ what_is_typed_in_the_panels_window_stays_through_a_redirect :: proc(t: ^testing.
 leaving_a_server_closes_what_acts_on_its_sessions :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	app.cx.open[.Delete], app.cx.open[.Rename] = true, true
+	delete_ask(app, "s")
+	rename_open(app, "s")
+	vs := &app.program_views
+	testing.expect(t, ui.view_is_open(vs, DELETE_VIEW) && ui.view_is_open(vs, RENAME_VIEW))
 	server_forget(app)
-	testing.expect(t, !app.cx.open[.Delete] && !app.cx.open[.Rename])
-}
-
-// A window's own needs reach the loop, which looks at the main state alone.
-@(test)
-what_a_window_waits_for_wakes_the_program :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	app.settle = 0
-	s: ui.State
-	ui.set_clock(&s, &bench_clock)
-	s.wake_ms = 400
-	detached_asks(app, &s, false)
-	testing.expect_value(t, app.settle, 0)
-	testing.expect(t, ui.wake_in_ms(&app.state) > 0, "the delay is the loop's too")
-	detached_asks(app, &s, true)
-	testing.expect_value(t, app.settle, FRAMES_AFTER_INPUT)
-}
-
-@(test)
-a_panels_window_looks_as_the_main_one :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	m := &app.state
-	ui.set_density(m, 1.2)
-	ui.set_rounding(m, 0.5)
-	m.mono_font = 7
-	m.icon_font = 9
-	app.prefs.autohide_scrollbars = true
-	s: ui.State
-	detached_style(app, &s)
-	testing.expect_value(t, s.density, m.density)
-	testing.expect_value(t, s.rounding, m.rounding)
-	testing.expect_value(t, s.mono_font, m.mono_font)
-	testing.expect_value(t, s.icon_font, m.icon_font)
-	testing.expect(t, s.scrollbar_autohide)
+	testing.expect(t, !ui.view_is_open(vs, DELETE_VIEW) && !ui.view_is_open(vs, RENAME_VIEW))
 }
 
 ////////////////////////////////
@@ -305,20 +267,3 @@ the_answer_a_change_of_folder_waited_for_is_not_lost :: proc(t: ^testing.T) {
 	testing.expect_value(t, answers_sent(true), 1)
 }
 
-// A pointer passing over the main window builds nothing in the others; what they show changing, or their own input, does.
-@(test)
-a_window_of_its_own_rests_while_nothing_it_shows_changes :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	d := new(Detached)
-	d.win = new(platform.Window)
-	d.win.size, d.shown = {800, 600}, {800, 600}
-	ui.set_clock(&d.state, &bench_clock)
-	testing.expect(t, detached_still(app, d, false))
-	testing.expect(t, !detached_still(app, d, true), "its own input")
-	app.cx.shared_moved = true
-	testing.expect(t, !detached_still(app, d, false), "what every window shows")
-	app.cx.shared_moved = false
-	d.win.size = {900, 600}
-	testing.expect(t, !detached_still(app, d, false), "its size")
-}

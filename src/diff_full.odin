@@ -26,7 +26,7 @@ diff_full_open :: proc(app: ^App, title, patch: string) {
 	diff_full_close(d)
 	d.title = strings.clone(title)
 	diff.doc_set(&d.doc, patch)
-	app.cx.open[.Diff] = true
+	ui.view_open(&app.program_views, DIFF_VIEW, d)
 }
 
 diff_full_open_file :: proc(app: ^App, path: string) {
@@ -41,13 +41,13 @@ diff_full_close :: proc(d: ^Diff_Full) {
 	d^ = {}
 }
 
-diff_full_dialog :: proc(app: ^App, em: f32) {
-	d := &app.cx.diff_full
-	open := &app.cx.open[.Diff]
-	if !open^ { return }
-	if ui.modal("diff_full", open, dialog_options(app, .Diff)) {
-		dialog_backdrop()
-		if ui.dialog_header("df_head", d.title, {close = true}) {
+// (closed by the user: views_answers frees what it showed)
+diff_full_view :: proc(v: ^ui.View, d: ^Diff_Full) {
+	app := the_app
+	em := ui.font_size()
+	ui.view_title(v, d.title)
+	{
+		if ui.view_header_tools(v) {
 			text("a", fmt.tprintf("+%d", d.doc.added), hex(HEX_GREEN), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
 			ui.spacer(ui.px(em * 0.5))
 			text("d", fmt.tprintf("-%d", d.doc.removed), hex(HEX_RED), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
@@ -68,5 +68,4 @@ diff_full_dialog :: proc(app: ^App, em: f32) {
 		diff.view("###df_list", &d.doc, app.prefs.diff_layout, o)
 		ui.spacer(ui.px(em * 0.6))
 	}
-	if !open^ { diff_full_close(d) }
 }

@@ -11,6 +11,10 @@ import "core:testing"
 import "gt:platform"
 import "gt:ui"
 
+// Whether the Preview's view is open.
+@(private = "file")
+pv_open :: proc(app: ^App) -> bool { return ui.view_is_open(&app.program_views, PREVIEW_VIEW) }
+
 Bench_View :: struct {
 	urls:    [dynamic]string,   // every navigation asked for (owned)
 	window:  ^platform.Window,
@@ -152,7 +156,7 @@ two_sessions_keep_their_page :: proc(t: ^testing.T) {
 	testing.expect_value(t, fr(app).url, "http://a.local/")
 	testing.expect_value(t, fr(app).title, "Page A")
 	testing.expect_value(t, ui.line_edit_string(&fr(app).field), "http://a.local/")
-	testing.expect_value(t, panel_title(app, u32(Panel.Preview)), "Page A")
+	testing.expect_value(t, preview_title(app), "Page A")
 	testing.expect_value(t, len(bench_views), 2)
 }
 
@@ -225,16 +229,16 @@ a_session_that_never_opened_it_has_no_tab_and_no_view :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	with_page(app, "a", "http://a.local/", "A")
-	testing.expect(t, ui.dock_has(&app.dock, u32(Panel.Preview)), "its tab")
+	testing.expect(t, pv_open(app), "its tab")
 	go_to(app, "b")
 	testing.expect(t, !app.preview.open, "not open")
-	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Preview)), "no tab")
+	testing.expect(t, !pv_open(app), "no tab")
 	testing.expect_value(t, len(bench_views), 1)
 	go_to(app, "c")
 	testing.expect_value(t, len(app.previews.by_session), 1)   // (a's alone: b held nothing)
 	go_to(app, "a")
-	testing.expect(t, ui.dock_has(&app.dock, u32(Panel.Preview)), "back with its session")
-	testing.expect(t, ui.dock_shown(&app.dock, u32(Panel.Preview)), "in front")
+	testing.expect(t, pv_open(app), "back with its session")
+	testing.expect(t, pv_open(app), "in front")
 }
 
 @(test)
@@ -243,25 +247,15 @@ a_closed_tab_is_that_sessions_alone :: proc(t: ^testing.T) {
 	app := bench_new()
 	with_page(app, "a", "http://a.local/", "A")
 	with_page(app, "b", "http://b.local/", "B")
-	panel_close(app, u32(Panel.Preview))
+	preview_close(app)
 	testing.expect(t, !app.preview.open, "b's closed")
 	go_to(app, "a")
 	testing.expect(t, app.preview.open, "a's is not")
-	testing.expect(t, ui.dock_has(&app.dock, u32(Panel.Preview)), "and has its tab")
+	testing.expect(t, pv_open(app), "and has its tab")
 	go_to(app, "b")
 	testing.expect(t, !app.preview.open, "b's stayed closed")
-	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Preview)), "no tab")
+	testing.expect(t, !pv_open(app), "no tab")
 	testing.expect_value(t, fr(app).url, "http://b.local/")   // (closed is not forgotten: Ctrl+Shift+B brings it)
-}
-
-// What is saved holds the panel: a session without a browser does not take its place from the others.
-@(test)
-another_session_is_no_change_of_the_layout :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	with_page(app, "a", "http://a.local/", "A")
-	go_to(app, "b")
-	testing.expect_value(t, app.dock.saved, app.dock.serial)
 }
 
 @(test)
@@ -392,7 +386,7 @@ a_server_left_forgets_every_sessions_page :: proc(t: ^testing.T) {
 	for b in bench_views { testing.expect(t, b.closed, "every view") }
 	testing.expect_value(t, len(app.preview.tabs), 0)
 	testing.expect(t, !app.preview.open, "closed")
-	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Preview)), "no tab")
+	testing.expect(t, !pv_open(app), "no tab")
 	web_event_add(parked, .Title, 0, words("late"))   // (a script's answer on its way as it closed)
 	testing.expect_value(t, len(parked.events), 0)
 }
@@ -416,19 +410,16 @@ a_deleted_session_takes_its_browser :: proc(t: ^testing.T) {
 ////////////////////////////////
 // The panel's window
 
+// The panel's view went to a window of its own (what the toolkit tells it: View_Options.moved).
 @(private = "file")
-in_a_window :: proc(app: ^App) -> ^Detached {
-	d := new(Detached)
-	d.panel = u32(Panel.Preview)
-	d.win = new(platform.Window)
-	append(&app.cx.detached, d)
-	preview_move(app, d.win)
-	ui.dock_close(&app.dock, d.panel)
-	return d
+in_a_window :: proc(app: ^App) -> ^platform.Window {
+	w := new(platform.Window)
+	preview_moved(app, w)
+	return w
 }
 
 @(test)
-the_window_of_the_panel_follows_the_session_shown :: proc(t: ^testing.T) {
+the_page_shown_follows_the_panel_to_its_window :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	app.win = new(platform.Window)
@@ -437,29 +428,28 @@ the_window_of_the_panel_follows_the_session_shown :: proc(t: ^testing.T) {
 	with_page(app, "b", "http://b.local/", "B")
 	b := fake(fr(app))
 	go_to(app, "a")
-	d := in_a_window(app)
-	testing.expect(t, a.window == d.win, "a's page in it")
+	w := in_a_window(app)
+	testing.expect(t, a.window == w, "a's page in it")
 	go_to(app, "b")
-	testing.expect(t, b.window == d.win, "b's now")
+	testing.expect(t, b.window == w, "b's now")
 	testing.expect(t, a.window == app.win, "a's waits in the main window")
-	go_to(app, "c")
-	testing.expect(t, b.window == app.win, "c has none: nothing stays in it")
-	testing.expect(t, !d.closing, "the window stays, with an empty panel")
-	testing.expect(t, !app.preview.open, "and c has opened nothing")
-	go_to(app, "a")
-	testing.expect(t, a.window == d.win, "back")
-	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Preview)), "no tab while it has a window")
+	preview_moved(app, app.win)   // (re-attached)
+	testing.expect(t, b.window == app.win, "back in the main window")
 }
 
+// Its window goes with the view: the page comes back to the main window before.
 @(test)
-closing_the_panel_closes_its_window :: proc(t: ^testing.T) {
+closing_the_panel_brings_its_page_home :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	app.win = new(platform.Window)
 	with_page(app, "a", "http://a.local/", "A")
-	d := in_a_window(app)
-	panel_close(app, u32(Panel.Preview))
-	testing.expect(t, d.closing, "that way it goes")
+	a := fake(fr(app))
+	_ = in_a_window(app)
+	preview_close(app)
+	testing.expect(t, a.window == app.win, "in the main window")
+	testing.expect(t, app.previews.win == nil)
+	testing.expect(t, !pv_open(app))
 }
 
 // A view on its way cannot be moved: its Ready brings it to where the panel went meanwhile.
@@ -471,11 +461,11 @@ a_view_on_its_way_finds_the_panel_where_it_went :: proc(t: ^testing.T) {
 	go_to(app, "a")
 	preview_show(app)
 	b := fake(fr(app))
-	d := in_a_window(app)
+	w := in_a_window(app)
 	testing.expect(t, b.window == app.win, "not yet")
 	web_said(app, .Ready, 0, nil)
 	web_events_drain(app)
-	testing.expect(t, b.window == d.win, "there")
+	testing.expect(t, b.window == w, "there")
 }
 
 ////////////////////////////////
@@ -519,7 +509,7 @@ an_agent_opens_its_sessions_browser_without_showing_it :: proc(t: ^testing.T) {
 	testing.expect(t, !fake(preview_front(e)).visible, "out of sight")
 	testing.expect(t, fake(preview_front(e)).bounds[2] > 0, "at a size its page can be read at")
 	go_to(app, "other")
-	testing.expect(t, ui.dock_has(&app.dock, u32(Panel.Preview)), "its tab when its session shows")
+	testing.expect(t, pv_open(app), "its tab when its session shows")
 }
 
 @(test)
@@ -679,14 +669,13 @@ two_tabs_of_a_session_keep_their_pages :: proc(t: ^testing.T) {
 	two := second_tab(app, "http://two.local/", "Two")
 	testing.expect(t, fake(one) != fake(two), "a view each")
 	testing.expect(t, !fake(one).visible, "the one behind is hidden")
-	testing.expect_value(t, panel_title(app, u32(Panel.Preview)), "Two")
+	testing.expect_value(t, preview_title(app), "Two")
 	preview_tab_front(app, &app.preview, one)
 	testing.expect_value(t, ui.line_edit_string(&fr(app).field), "http://one.local/")
-	testing.expect_value(t, panel_title(app, u32(Panel.Preview)), "One")
+	testing.expect_value(t, preview_title(app), "One")
 	testing.expect_value(t, len(fake(one).urls), 1)
 	testing.expect_value(t, len(fake(two).urls), 1)
-	testing.expect(t, ui.dock_has(&app.dock, u32(Panel.Preview)), "one panel")
-	testing.expect_value(t, len(ui.dock_tabs(&app.dock, ui.dock_leaf_of(&app.dock, u32(Panel.Preview)))), 1)
+	testing.expect(t, pv_open(app), "one panel")
 }
 
 @(test)
@@ -741,7 +730,7 @@ closing_the_last_tab_closes_the_panel_of_that_session_alone :: proc(t: ^testing.
 	with_page(app, "b", "http://b.local/", "B")
 	preview_tab_close_front(app)
 	testing.expect(t, !app.preview.open, "closed")
-	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Preview)), "no tab in the dock")
+	testing.expect(t, !pv_open(app), "no tab in the dock")
 	testing.expect_value(t, len(app.preview.tabs), 0)
 	go_to(app, "a")
 	testing.expect(t, app.preview.open, "the other session's stays")

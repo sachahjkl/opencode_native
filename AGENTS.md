@@ -44,6 +44,12 @@ Apply these to every task, before you write code:
 - Comments and commit messages are in English. Comments say why.
 - Commits: author and committer `sachahjkl <sacha@sacha.house>`, no attribution trailer, no session link.
 
+## Intent
+
+This project follows https://srcmd.org: the intent of a feature, a data model or an API is Markdown in `src/md`, near the
+code. Read [src/md/README.md](src/md/README.md) first. Change the intent first, then the code and the tests; a change of
+design changes its intent file in the same commit.
+
 ## Roadmap
 
 - `ROADMAP.md`, next to `CHANGELOG.md`, holds the planned work of opencode native; no global to-do file keeps it. A work that

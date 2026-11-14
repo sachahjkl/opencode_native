@@ -1,8 +1,9 @@
 package ocn
 
 // A command's output as a terminal shows it, with nothing to type into: colours, what a progress bar redraws, the scrollback, a selection. A
-// dialog, or a window of its own for a large or a second screen. A command that runs is followed; when it ends the view says so and offers to
-// close, as watching no longer serves. One that has ended shows what it printed.
+// view (OUTPUT_VIEW, an instance per command): a dialog first, floated, docked or in a window of its own for a large or a second screen,
+// as the user puts it. A command that runs is followed; when it ends the view says so and offers to close, as watching no longer serves.
+// One that has ended shows what it printed.
 //
 // It is a Term of the terminal's, connected to nothing (its grid read only: Term.view.read_only): the bytes come from GET /api/shell/:id/output, which is the server's
 // for as long as it keeps the command, or from the call's own text once it does not. A pipe's lines end in a bare newline where a terminal
@@ -13,14 +14,13 @@ import "core:fmt"
 import "core:math"
 import "core:strings"
 import "gt:draw"
-import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
 
 Output_View :: struct {
-	term:     ^Term,           // (not in the terminal's list: no tab, no socket)
-	panel:    u32,             // the id of its window, from OUTPUT_PANEL_BASE
+	term:     ^Term,           // (not in the terminal's list: no shell, no socket)
+	name:     string,          // its view's instance (owned)
 	shell:    string,          // the server's command ("": what a call handed back, in its text) (owned)
 	tool:     string,          // the call it came from, "": none (owned)
 	command:  string,          // (owned)
@@ -40,19 +40,12 @@ Output_View :: struct {
 	lost:     bool,            // the server no longer has it, and it ended who knows how
 	dropped:  bool,            // the server kept only the end of what it printed
 	gone:     bool,            // closed: it goes after the frame, what was built for it is still to be drawn
+	focused_once: bool,        // its grid took the keyboard, as its view showed (output_view_view); again at each showing
 }
 
 Output_Views :: struct {
 	list:   [dynamic]^Output_View,
-	shown:  ^Output_View,   // in the dialog
-	window: ^Output_View,   // to go to a window of its own, after the frame
 	next:   u32,
-}
-
-output_view_of_panel :: proc(app: ^App, panel: u32) -> ^Output_View {
-	if panel < OUTPUT_PANEL_BASE { return nil }
-	for v in app.cx.outputs.list { if v.panel == panel { return v } }
-	return nil
 }
 
 // The view whose grid `t` is (nil: a shell of the tabs).
@@ -72,25 +65,22 @@ output_view_new :: proc(app: ^App, shell, tool, command, dir: string) -> ^Output
 	o := &app.cx.outputs
 	v := new(Output_View)
 	o.next += 1
-	v.panel = OUTPUT_PANEL_BASE + o.next
+	v.name = fmt.aprintf("%d", o.next)
 	v.shell, v.tool, v.command, v.dir = strings.clone(shell), strings.clone(tool), strings.clone(command), strings.clone(dir)
 	v.status = .Running
 	v.term = term_new(shell != "" ? shell : tool, command, dir)
-	v.term.view.read_only, v.term.detached, v.term.panel = true, true, v.panel   // (detached: no part in the main window's input)
+	v.term.view.read_only = true
 	term_feed(v.term, "\x1b[?25l")   // (nothing is typed here: no cursor)
 	output_view_echo(v)
 	append(&o.list, v)
 	return v
 }
 
-// What is on the screen comes forward, rather than a second view of the same thing.
+// What is on the screen comes forward (its window raised, its tab in front), rather than a second view of the same thing.
 @(private = "file")
 output_view_show :: proc(app: ^App, v: ^Output_View) {
-	if w := detached_window(app, v.panel); w != nil {
-		platform.raise_window(w)
-		return
-	}
-	app.cx.outputs.shown = v
+	v.focused_once = false
+	ui.view_open(&app.program_views, OUTPUT_VIEW, v, v.name)
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
@@ -249,13 +239,10 @@ output_view_failed :: proc(app: ^App, r: ^Request) {
 	output_view_read(app, v, OUTPUT_POLL_MS)
 }
 
-// It goes after the frame, or with its window.
+// Its view closes at once; it goes after the frame (output_views_tick).
 output_view_close :: proc(app: ^App, v: ^Output_View) {
-	o := &app.cx.outputs
 	v.gone = true
-	if o.shown == v { o.shown = nil }
-	if o.window == v { o.window = nil }
-	detached_closing(app, v.panel)
+	ui.view_close(&app.program_views, OUTPUT_VIEW, v.name)
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
 
@@ -264,49 +251,27 @@ output_view_free :: proc(app: ^App, v: ^Output_View) {
 	o := &app.cx.outputs
 	s := &app.cx.terms
 	if s.pressed == v.term { term_press_end(s) }
+	if s.focused == v.term { s.focused = nil }
 	for x, i in o.list {
 		if x == v { ordered_remove(&o.list, i); break }
 	}
-	v.term.detached = false   // (it has no window to leave)
 	term_free(v.term)
-	delete(v.shell); delete(v.tool); delete(v.command); delete(v.dir); delete(v.fallback); delete(v.raw)
+	delete(v.shell); delete(v.tool); delete(v.command); delete(v.dir); delete(v.fallback); delete(v.raw); delete(v.name)
 	free(v)
 }
 
-// Its window closed, by whatever way.
-output_view_window_left :: proc(app: ^App, panel: u32) {
-	if v := output_view_of_panel(app, panel); v != nil { output_view_free(app, v) }
-}
-
-// After the frame: nothing of what was built holds them any more, and a window is not made in a build.
+// After the frame: nothing of what was built holds them any more. (The windows of the views are framed after the main
+// window's after_frame, in the same frame: a view closed in the frame is not built there.)
 output_views_tick :: proc(app: ^App) {
 	o := &app.cx.outputs
-	if v := o.window; v != nil {
-		o.window = nil
-		if o.shown == v { o.shown = nil }
-		panel_detach(app, v.panel)
-		if !panel_detached(app, v.panel) { o.shown = v }   // (no window: the renderer refused it)
-	}
 	#reverse for v in o.list {
-		if v.gone && !panel_detached(app, v.panel) { output_view_free(app, v) }
+		if v.gone { output_view_free(app, v) }
 	}
 }
 
 // The server left: what is shown of its commands goes with it.
 output_views_forget :: proc(app: ^App) {
 	for v in app.cx.outputs.list { output_view_close(app, v) }
-}
-
-// What the dialog's grid is given, before anything else sees it. What it does not take (Escape above all) goes on to the dialog.
-output_view_events :: proc(app: ^App, events: []platform.Event) -> []platform.Event {
-	v := app.cx.outputs.shown
-	if v == nil || v.term.vt == nil { return events }
-	s := &app.cx.terms
-	keyboard := s.focused
-	s.only, s.focused = v.term, v.term
-	left := term_events(app, events)
-	s.only, s.focused = nil, keyboard
-	return left
 }
 
 // How it stands, as a sub-agent's state (its mark: state_mark), as a command of the activity does (job_state).
@@ -348,7 +313,7 @@ output_bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 // How it stands, and what can be done with it, under the grid. It stays where it is whatever the size of the window; what gives way is the
 // text in its middle. Ended as one watched, that text says so, and Close is what stands out.
 @(private = "file")
-output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
+output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32) {
 	running := !v.over
 	word, color := output_view_word(v), output_view_word_color(v)
 	note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}
@@ -377,42 +342,33 @@ output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
 			clip_set(plain_output(string(v.raw[:])))
 			ui.announce(&app.announcer, .Good, i18n.tr("Output copied"))
 		}
-		if !in_window {
-			ui.spacer(ui.px(em * 0.2))
-			if ui.button("out_win", i18n.tr("Window"), lucide.APP_WINDOW, {face = .Ghost, height = h, quiet = true}).clicked { app.cx.outputs.window = v }
-		}
-		if !in_window || v.seen_end {
-			ui.spacer(ui.px(em * 0.2))
-			if ui.button("out_close", i18n.tr("Close"), o = {face = v.seen_end ? .Raised : .Ghost, height = h, quiet = !v.seen_end}).clicked { output_view_close(app, v) }
-		}
+		ui.spacer(ui.px(em * 0.2))
+		if ui.button("out_close", i18n.tr("Close"), o = {face = v.seen_end ? .Raised : .Ghost, height = h, quiet = !v.seen_end}).clicked { output_view_close(app, v) }
 		ui.spacer(ui.px(em * 0.5))
 	}
 }
 
-// The grid, all the room there is, and the bar. (In the dialog, an edge: its corners are round, the grid's are not.)
-output_view_body :: proc(app: ^App, v: ^Output_View, em: f32, in_window: bool) {
+// The view: the grid, all the room there is, and the bar. (In a dialog or a floating window, an edge: its corners are round,
+// the grid's are not; docked or in a window of its own, the grid goes to the edges.)
+output_view_view :: proc(view: ^ui.View, v: ^Output_View) {
+	app := the_app
+	em := ui.font_size()
+	ui.view_title(view, ellipsize(first_line(v.command), OUTPUT_TITLE_CHARS))
 	if !v.over { animate(app) }
-	inset := in_window ? 0 : math.round(em * 0.55)
+	inset := view.presentation == .Dialog || view.presentation == .Internal ? math.round(em * 0.55) : 0
 	ui.spacer(ui.px(inset))
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 	if ui.row(id = "###out_body") {
 		ui.spacer(ui.px(inset))
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
-		if ui.column(id = "###out_grid") { terminal_panel(app, em, v.term) }
+		// (its grid takes the keyboard in the first build that shows it: a dialog that shows gives the keyboard to its first
+		// stop, and the keys of an output are its grid's, Ctrl+C its copy)
+		focus := view.shown && !v.focused_once
+		if focus { v.focused_once = true }
+		if ui.column(id = "###out_grid") { terminal_panel(app, em, v.term, view.shown, focus) }
 		ui.spacer(ui.px(inset))
 	}
-	output_view_bar(app, v, em, in_window)
-}
-
-output_view_dialog :: proc(app: ^App, em: f32) {
-	v := app.cx.outputs.shown
-	if v == nil { return }
-	open := true
-	if ui.modal("output", &open, dialog_options(app, .Output)) {
-		dialog_backdrop()
-		output_view_body(app, v, em, false)   // (its bar has the Close)
-	}
-	if !open { output_view_close(app, v) }
+	output_view_bar(app, v, em)
 }
 
 ////////////////////////////////

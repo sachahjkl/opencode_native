@@ -437,12 +437,12 @@ missed_acknowledge_where :: proc(app: ^App, group: string) -> (n: int) {
 
 // Opens the view, or closes it. Opened, what was New is Seen.
 missed_toggle :: proc(app: ^App) {
-	if app.cx.open[.Notices] { app.cx.open[.Notices] = false; return }
+	if ui.view_is_open(&app.program_views, MISSED_VIEW) { ui.view_close(&app.program_views, MISSED_VIEW); return }
 	missed_view_open(app)
 }
 
 missed_view_open :: proc(app: ^App) {
-	app.cx.open[.Notices] = true
+	ui.view_open(&app.program_views, MISSED_VIEW, app)
 	app.missed.fresh = true
 	notices.seen_all(missed_log(app))
 	missed_rows_refresh(app)

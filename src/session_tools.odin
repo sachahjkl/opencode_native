@@ -448,22 +448,22 @@ changes_say :: proc(c: ^Changes) -> string {
 	return count
 }
 
-changes_dialog :: proc(app: ^App, em: f32) {
-	c := &app.cx.changes
-	if !changes_shown(c) { return }
-	open := true
-	changes_modal(app, &open, em)
-	if !open { changes_close(app) }
+// The view follows the state machine (Changes_State), each build of the main window: it is open while the state says it is
+// on screen. (The user's close is changes_close: views_answers.)
+changes_follow :: proc(app: ^App) {
+	shown := changes_shown(&app.cx.changes)
+	if shown != ui.view_is_open(&app.program_views, CHANGES_VIEW) {
+		if shown { ui.view_open(&app.program_views, CHANGES_VIEW, app) } else { ui.view_close(&app.program_views, CHANGES_VIEW) }
+	}
 }
 
-@(private = "file")
-changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
+changes_view :: proc(view: ^ui.View, app: ^App) {
 	c := &app.cx.changes
+	em := ui.font_size()
 	v, viewing := c.state.(Changes_Viewing)
 	_, staging := c.state.(Changes_Staging)
-	if ui.modal("changes", open, dialog_options(app, .Changes)) {
-		dialog_backdrop()
-		if ui.dialog_header("ch_head", !viewing ? i18n.tr("Go back to this prompt") : v.from != "" ? i18n.tr("What this prompt changed") : i18n.tr("What this session changed"), {close = true}) {}
+	ui.view_title(view, !viewing ? i18n.tr("Go back to this prompt") : v.from != "" ? i18n.tr("What this prompt changed") : i18n.tr("What this session changed"))
+	{
 		// (under the header, as wide as the dialog: the corner is the close cross's only beside the header)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###ch_sub") {
@@ -519,7 +519,7 @@ changes_modal :: proc(app: ^App, open: ^bool, em: f32) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###ch_foot") {
 				ui.spacer(ui.fill())
-				if ui.button("ch_cancel", i18n.tr("Cancel")).clicked { open^ = false }
+				if ui.button("ch_cancel", i18n.tr("Cancel")).clicked { ui.view_end(view, ui.VIEW_CANCELLED) }
 				ui.spacer(ui.px(em * 0.5))
 				if ui.button("ch_go", i18n.tr("Go back"), lucide.UNDO_2, {intent = .Danger, disabled = staging}).clicked { revert_commit(app) }
 				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))

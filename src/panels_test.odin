@@ -35,15 +35,21 @@ open_shells :: proc(t: ^testing.T, app: ^App, ids: ..string, loc := #caller_loca
 	bench_clear(app)
 }
 
-// A shell as a build leaves it: shown, its grid in place.
+// A shell as a build of the main window leaves it: shown, its grid in place, the keyboard on it.
 @(private = "file")
 built :: proc(app: ^App, s: ^Term, key: ui.Key, focused := true) {
-	s.shown, s.view.box = true, key
+	s.shown, s.view.box, s.built_in = true, key, &app.state
 	s.view.rect = {{0, 0}, {800, 400}}
 	s.view.metrics.cell_w, s.view.metrics.cell_h = 8, 16
-	if focused { ui.set_focus(key) }
-	terminals_settle(app)
+	if focused {
+		ui.set_focus(key)
+		app.cx.terms.focused, app.cx.terms.last = s, s
+	}
 }
+
+// Whether a shell's view is open ("": what stands there while there is none).
+@(private = "file")
+term_view_open :: proc(app: ^App, id: string) -> bool { return ui.view_is_open(&app.program_views, TERMINAL_VIEW, id) }
 
 @(private = "file")
 outbox :: proc(s: ^Term) -> string { return string(s.conn.out[:]) }
@@ -61,60 +67,27 @@ BODY_ONE_SHELL :: `{"data":{"id":"new","title":"Terminal 1","status":"running"}}
 // Shells are tabs
 
 @(test)
-each_shell_is_a_tab_along_the_bottom :: proc(t: ^testing.T) {
+each_shell_is_a_view_along_the_bottom :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	open_shells(t, app, "a", "b")
-	d := &app.dock
 	s := &app.cx.terms
 	testing.expect_value(t, len(s.list), 2)
-	testing.expect(t, ui.dock_has(d, s.list[0].panel) && ui.dock_has(d, s.list[1].panel), "each has its tab")
-	testing.expect_value(t, ui.dock_leaf_of(d, s.list[0].panel), ui.dock_leaf_of(d, s.list[1].panel))
-	testing.expect(t, ui.dock_leaf_of(d, s.list[0].panel) != ui.dock_leaf_of(d, u32(Panel.Conversation)), "beside the conversation")
-	testing.expect(t, !ui.dock_has(d, u32(Panel.Terminal)), "no tab says Terminal over them")
-	testing.expect_value(t, panel_title(app, s.list[0].panel), "pwsh")
-	testing.expect(t, s.list[0].panel >= TERM_PANEL_BASE, "the panels of the enum stay apart")
+	testing.expect(t, term_view_open(app, "a") && term_view_open(app, "b"), "each has its view")
+	testing.expect_value(t, ui.view_presentation(&app.program_views, TERMINAL_VIEW, "a"), ui.View_Presentation.Panel)
+	testing.expect(t, !term_view_open(app, ""), "nothing says Terminal over them")
+	testing.expect_value(t, term_label(s.list[0]), "pwsh")
 }
 
 @(test)
 what_stands_for_the_shells_gives_them_its_place :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	pref_set(app, "layout.dock", "dock1 x0.700([*conversation] [*terminal])")   // (a layout of an earlier version)
 	terminal_toggle(app)
-	d := &app.dock
-	place := ui.dock_leaf_of(d, u32(Panel.Terminal))
-	testing.expect(t, place != ui.DOCK_NONE, "something says the list is being read")
+	testing.expect(t, term_view_open(app, ""), "something says the list is being read")
 	bench_answer(app, bench_take(t, .Pty_List), 200, shells("a"))
-	s := app.cx.terms.list[0]
-	testing.expect(t, !ui.dock_has(d, u32(Panel.Terminal)), "it goes")
-	testing.expect(t, ui.dock_leaf_of(d, s.panel) != ui.dock_leaf_of(d, u32(Panel.Conversation)), "the shell stands where it stood")
-}
-
-@(test)
-a_saved_layout_finds_its_shells_again_and_forgets_the_others :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	pref_set(app, "layout.dock", "dock1 x0.500([*conversation] y0.500([*shell-a] [*shell-gone]))")
-	open_shells(t, app, "a")
-	d := &app.dock
-	s := app.cx.terms.list[0]
-	testing.expect_value(t, len(ui.dock_leaves(d, d.main)), 2)   // (the stack of what is gone goes with it)
-	testing.expect(t, ui.dock_has(d, s.panel), "the shell has its tab")
-	testing.expect_value(t, d.nodes[d.main].axis, ui.Axis.X)   // (beside the conversation, as saved: not along the bottom)
-	for leaf in ui.dock_leaves(d, d.main) { testing.expect(t, ui.dock_tab_count(d, leaf) > 0, "no empty stack") }
-	testing.expect_value(t, panel_name(app, s.panel), "shell-a")
-}
-
-@(test)
-a_layout_of_shells_gone_leaves_nothing_behind :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	pref_set(app, "layout.dock", "dock1 y0.700([*conversation] [*shell-x,shell-y])")
-	dock_setup(app)
-	d := &app.dock
-	testing.expect_value(t, len(ui.dock_leaves(d, d.main)), 1)
-	testing.expect(t, ui.dock_has(d, u32(Panel.Conversation)), "the conversation stays")
+	testing.expect(t, !term_view_open(app, ""), "it goes")
+	testing.expect(t, term_view_open(app, "a"), "the shell has its view")
 }
 
 @(test)
@@ -123,18 +96,33 @@ hiding_keeps_the_shells_showing_brings_them_back :: proc(t: ^testing.T) {
 	app := bench_new()
 	open_shells(t, app, "a", "b")
 	s := &app.cx.terms
-	panels := [2]u32{s.list[0].panel, s.list[1].panel}
 	built(app, s.list[0], 11)
 	terminal_toggle(app)
 	testing.expect(t, !s.open, "hidden")
 	testing.expect_value(t, len(s.list), 2)
 	testing.expect_value(t, bench_count(.Action), 0)   // (no DELETE)
-	testing.expect(t, !ui.dock_has(&app.dock, panels[0]) && !ui.dock_has(&app.dock, panels[1]), "no tab left")
+	testing.expect(t, !term_view_open(app, "a") && !term_view_open(app, "b"), "no view left")
 	testing.expect(t, app.composer.focus_next, "the keyboard goes back to the conversation")
 	terminal_toggle(app)
 	testing.expect(t, s.open, "shown")
-	testing.expect(t, ui.dock_has(&app.dock, panels[0]) && ui.dock_has(&app.dock, panels[1]), "both are back")
+	testing.expect(t, term_view_open(app, "a") && term_view_open(app, "b"), "both are back")
 	testing.expect_value(t, bench_count(.Pty_List) + bench_count(.Pty_Made), 0)   // (nothing to read, nothing to make)
+}
+
+// The user's close of a shell's view closes the shell, as its tab's did.
+@(test)
+the_close_of_a_shells_view_closes_the_shell :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	open_shells(t, app, "a", "b")
+	ui.views_command_run(&app.program_views, {id = TERMINAL_VIEW, instance = "a", act = .Close})
+	views_answers(app)
+	r := bench_take(t, .Action)
+	testing.expect_value(t, r.method, "DELETE")
+	testing.expect(t, strings.has_prefix(r.path, "/api/pty/a"), "that shell")
+	bench_answer(app, r, 200, "")
+	testing.expect(t, term_find(app, "a") == nil && term_find(app, "b") != nil)
+	terminals_reap(app)
 }
 
 // Shift+Insert is the terminals' other paste, Ctrl+Insert their other copy: the program's, not keys sent to the shell (Insert
@@ -148,7 +136,7 @@ shift_insert_pastes_ctrl_insert_copies :: proc(t: ^testing.T) {
 	built(app, s, 11)
 	for mods in ([2]platform.Modifiers{{.Shift}, {.Ctrl}}) {
 		ev := []platform.Event{{kind = .Key_Press, key = .Insert, mods = mods}}
-		testing.expect_value(t, len(term_events(app, ev)), 0)
+		testing.expect_value(t, len(term_events(app, &app.state, ev)), 0)
 	}
 	testing.expect(t, !strings.contains(outbox(s), "[2~"), "no Insert key sent to the shell")
 }
@@ -161,7 +149,7 @@ the_toggle_key_reaches_the_program_from_inside_a_shell :: proc(t: ^testing.T) {
 	s := app.cx.terms.list[0]
 	built(app, s, 11)
 	ev := []platform.Event{{kind = .Key_Press, key = .T, mods = {.Ctrl, .Shift}}}
-	testing.expect_value(t, len(term_events(app, ev)), 1)
+	testing.expect_value(t, len(term_events(app, &app.state, ev)), 1)
 	testing.expect_value(t, outbox(s), "")
 }
 
@@ -171,19 +159,18 @@ closing_a_tab_closes_its_shell_the_last_one_the_area :: proc(t: ^testing.T) {
 	app := bench_new()
 	open_shells(t, app, "a", "b")
 	s := &app.cx.terms
-	panel_close(app, s.list[0].panel)
+	term_close(app, s.list[0])
 	r := bench_take(t, .Action)
 	testing.expect_value(t, r.method, "DELETE")
 	testing.expect(t, strings.has_prefix(r.path, "/api/pty/a"), "that shell")
 	bench_answer(app, r, 200, "")
 	testing.expect(t, s.open, "the other stays")
-	panel_close(app, s.list[0].panel)
+	term_close(app, s.list[0])
 	bench_answer(app, bench_take(t, .Action), 200, "")
 	testing.expect(t, !s.open, "nothing left: the area closes")
 	testing.expect_value(t, len(s.list), 0)
+	testing.expect(t, !term_view_open(app, "a") && !term_view_open(app, "b") && !term_view_open(app, ""), "no view left")
 	terminals_reap(app)
-	dock_setup(app)
-	testing.expect_value(t, len(ui.dock_leaves(&app.dock, app.dock.main)), 1)
 }
 
 // A shell closed in a frame was built in it: its box draws it once more.
@@ -193,7 +180,7 @@ a_shell_closed_stays_until_the_frame_is_drawn :: proc(t: ^testing.T) {
 	app := bench_new()
 	open_shells(t, app, "a")
 	s := app.cx.terms.list[0]
-	panel_close(app, s.panel)
+	term_close(app, s)
 	testing.expect_value(t, len(app.cx.terms.gone), 1)
 	testing.expect_value(t, s.id, "a")
 	terminals_reap(app)
@@ -202,13 +189,11 @@ a_shell_closed_stays_until_the_frame_is_drawn :: proc(t: ^testing.T) {
 }
 
 @(test)
-what_ended_shows_it_and_can_restart_in_its_tab :: proc(t: ^testing.T) {
+what_ended_shows_it_and_can_restart :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	open_shells(t, app, "a", "b")
 	s := app.cx.terms.list[0]
-	panel := s.panel
-	leaf := ui.dock_leaf_of(&app.dock, panel)
 	term_link_set(app, s, .Closed)
 	testing.expect(t, strings.contains(term_label(s), "(ended)"), "its tab says it")
 	term_restart(app, s)
@@ -217,10 +202,10 @@ what_ended_shows_it_and_can_restart_in_its_tab :: proc(t: ^testing.T) {
 	testing.expect_value(t, bench_count(.Pty_Made), 0)
 	bench_answer(app, r, 200, BODY_ONE_SHELL)
 	testing.expect_value(t, bench_count(.Action), 0)   // (nothing to close: it ended)
-	testing.expect(t, !ui.dock_has(&app.dock, panel), "the old tab went")
+	testing.expect(t, !term_view_open(app, "a"), "the old view went")
 	n := term_find(app, "new")
 	testing.expect(t, n != nil, "the new shell is there")
-	testing.expect_value(t, ui.dock_tabs(&app.dock, leaf)[0], n.panel)   // (in the same place of its strip)
+	testing.expect(t, term_view_open(app, "new"), "with its view")
 }
 
 ////////////////////////////////
@@ -236,10 +221,10 @@ a_hidden_shell_takes_no_key :: proc(t: ^testing.T) {
 	testing.expect(t, app.cx.terms.focused == s, "it has the keyboard")
 	// (under another tab: the next build does not build it)
 	terminals_begin(app)
-	terminals_settle(app)
+	terminals_end(app)
 	testing.expect(t, app.cx.terms.focused == nil, "nobody has it")
 	ev := []platform.Event{{kind = .Text, text = 'x'}, {kind = .Key_Press, key = .Return}}
-	testing.expect_value(t, len(term_events(app, ev)), 2)
+	testing.expect_value(t, len(term_events(app, &app.state, ev)), 2)
 	testing.expect_value(t, outbox(s), "")
 }
 
@@ -251,9 +236,9 @@ a_hidden_shell_takes_no_wheel_nor_press :: proc(t: ^testing.T) {
 	s := app.cx.terms.list[0]
 	built(app, s, 11)
 	terminals_begin(app)
-	terminals_settle(app)
+	terminals_end(app)
 	ev := []platform.Event{{kind = .Scroll, pos = {10, 10}, delta = {0, 1}}, {kind = .Mouse_Press, pos = {10, 10}, button = .Left}}
-	testing.expect_value(t, len(term_events(app, ev)), 2)
+	testing.expect_value(t, len(term_events(app, &app.state, ev)), 2)
 	testing.expect(t, s.view.press != .Select, "no selection begins on it")
 	testing.expect(t, app.cx.terms.pressed == nil, "nothing held")
 }
@@ -318,13 +303,12 @@ leaving_a_server_lets_go_of_its_shells :: proc(t: ^testing.T) {
 	app := bench_new()
 	open_shells(t, app, "a")
 	s := &app.cx.terms
-	panel := s.list[0].panel
 	conn := s.list[0].conn
 	server_forget(app)
 	testing.expect_value(t, len(s.list), 0)
 	testing.expect(t, sync.atomic_load(&conn.stop), "its thread stops")
 	testing.expect_value(t, bench_count(.Action), 0)   // (it runs on, there)
-	testing.expect(t, !ui.dock_has(&app.dock, panel), "no tab left")
+	testing.expect(t, !term_view_open(app, "a"), "no view left")
 	testing.expect(t, !s.open, "and no shell is made on the next server for this")
 	testing.expect_value(t, s.read.state, remote.State.Idle)
 	terminals_reap(app)
@@ -340,7 +324,7 @@ what_is_asked_of_a_shell_goes_to_its_server :: proc(t: ^testing.T) {
 	app.conn = bench_conn(app)   // (however it came to be another)
 	term.size_set(&s.view, 100, 30, {8, 16})
 	testing.expect(t, bench_take(t, .Pty_Size).conn == home, "the size")
-	panel_close(app, s.panel)
+	term_close(app, s)
 	testing.expect(t, bench_take(t, .Action).conn == home, "the DELETE")
 	app.conn = home
 	bench_sent_clear_pending(app, 2)
@@ -595,7 +579,7 @@ the_wheel_and_a_new_size_keep_a_selection :: proc(t: ^testing.T) {
 	before := term.selection_text(&s.view)
 	testing.expect(t, strings.has_prefix(before, "line "), "a line selected")
 	ev := []platform.Event{{kind = .Scroll, pos = {10, 10}, delta = {0, -1}}}
-	testing.expect_value(t, len(term_events(app, ev)), 0)
+	testing.expect_value(t, len(term_events(app, &app.state, ev)), 0)
 	testing.expect_value(t, term.selection_text(&s.view), before)
 	term.size_set(&s.view, 100, 30, {8, 16})
 	testing.expect_value(t, term.selection_text(&s.view), before)
@@ -627,10 +611,10 @@ a_drag_ends_when_a_menu_opens :: proc(t: ^testing.T) {
 	s := app.cx.terms.list[0]
 	built(app, s, 11)
 	ev := []platform.Event{{kind = .Mouse_Press, pos = {10, 10}, button = .Left}}
-	_ = term_events(app, ev)
+	_ = term_events(app, &app.state, ev)
 	testing.expect(t, s.view.press == .Select, "it began")
-	app.cx.open[.Help] = true
-	_ = term_events(app, nil)
+	help_open(app)
+	_ = term_events(app, &app.state, nil)
 	testing.expect(t, s.view.press != .Select, "the release will not come here")
 	testing.expect(t, app.cx.terms.pressed == nil, "nothing held")
 }
@@ -643,9 +627,9 @@ a_drag_ends_when_what_is_held_is_another_box :: proc(t: ^testing.T) {
 	s := app.cx.terms.list[0]
 	built(app, s, 11)
 	ev := []platform.Event{{kind = .Mouse_Press, pos = {10, 10}, button = .Left}}
-	_ = term_events(app, ev)
+	_ = term_events(app, &app.state, ev)
 	app.state.active_key[.Left] = 99
-	terminals_settle(app)
+	terminals_end(app)
 	testing.expect(t, s.view.press != .Select, "it stops")
 }
 
@@ -658,11 +642,11 @@ a_program_hears_the_release_outside_the_grid :: proc(t: ^testing.T) {
 	built(app, s, 11)
 	term_feed(s, "\x1b[?1000h")
 	press := []platform.Event{{kind = .Mouse_Press, pos = {10, 10}, button = .Left}}
-	_ = term_events(app, press)
+	_ = term_events(app, &app.state, press)
 	testing.expect(t, outbox(s) != "", "the press")
 	clear(&s.conn.out)
 	release := []platform.Event{{kind = .Mouse_Release, pos = {5000, 10}, button = .Left}}
-	_ = term_events(app, release)
+	_ = term_events(app, &app.state, release)
 	testing.expect(t, outbox(s) != "", "the release, wherever the pointer went")
 	testing.expect(t, app.cx.terms.pressed == nil, "nothing held")
 }
@@ -676,10 +660,10 @@ a_program_hears_the_release_when_the_shell_goes :: proc(t: ^testing.T) {
 	built(app, s, 11)
 	term_feed(s, "\x1b[?1000h")
 	press := []platform.Event{{kind = .Mouse_Press, pos = {10, 10}, button = .Left}}
-	_ = term_events(app, press)
+	_ = term_events(app, &app.state, press)
 	clear(&s.conn.out)
 	terminals_begin(app)
-	terminals_settle(app)
+	terminals_end(app)
 	testing.expect(t, outbox(s) != "", "or it stays held for ever")
 }
 
@@ -687,15 +671,28 @@ a_program_hears_the_release_when_the_shell_goes :: proc(t: ^testing.T) {
 // The panels
 
 @(test)
-closing_the_preview_leaves_no_tab :: proc(t: ^testing.T) {
+closing_the_preview_leaves_no_view :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	open_shells(t, app, "a")   // (the dock stays: the ghost would be seen)
+	open_shells(t, app, "a")
 	preview_show(app)
-	testing.expect(t, ui.dock_has(&app.dock, u32(Panel.Preview)), "its tab")
-	panel_close(app, u32(Panel.Preview))
+	testing.expect(t, ui.view_is_open(&app.program_views, PREVIEW_VIEW), "its view")
+	preview_close(app)
 	testing.expect(t, !app.preview.open, "closed")
-	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Preview)), "and its tab with it")
+	testing.expect(t, !ui.view_is_open(&app.program_views, PREVIEW_VIEW), "and its view with it")
+	testing.expect(t, term_view_open(app, "a"), "the shells stay")
+}
+
+// The user's close of the Preview's view (its cross, its menu, the palette) is the program's close.
+@(test)
+the_close_of_the_previews_view_closes_the_preview :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	preview_show(app)
+	ui.views_command_run(&app.program_views, {id = PREVIEW_VIEW, act = .Close})
+	views_answers(app)
+	testing.expect(t, !app.preview.open)
+	testing.expect_value(t, len(app.preview.tabs), 1)   // (closed is not forgotten: Ctrl+Shift+B brings it)
 }
 
 @(test)
@@ -704,7 +701,7 @@ what_an_agent_opens_leaves_the_keyboard_where_it_is :: proc(t: ^testing.T) {
 	app := bench_new()
 	preview_show(app, .Agent)
 	testing.expect(t, !preview_front(&app.preview).focus_address, "the address bar stays out of it")
-	panel_close(app, u32(Panel.Preview))
+	preview_close(app)
 	preview_show(app)
 	testing.expect(t, preview_front(&app.preview).focus_address, "what the user opens takes it")
 }
@@ -791,7 +788,7 @@ a_server_left_takes_the_page_with_it :: proc(t: ^testing.T) {
 	server_forget(app)
 	p := &app.preview
 	testing.expect(t, !p.open, "closed")
-	testing.expect(t, !ui.dock_has(&app.dock, u32(Panel.Preview)), "no tab")
+	testing.expect(t, !ui.view_is_open(&app.program_views, PREVIEW_VIEW), "no view")
 	testing.expect_value(t, len(p.tabs), 0)
 	testing.expect_value(t, len(app.previews.views), 0)
 	web_events_drain(app)
@@ -808,7 +805,6 @@ bench_link :: proc(app: ^App) -> ^Browser_Link {
 	l.socket, l.serial = 1, 1
 	app.conn.browser = l
 	app.preview.open = true
-	dock_setup(app)
 	tab := preview_front_made(app, &app.preview)
 	web_start(app, tab)
 	web_state_set(tab, Web_Ready{})
@@ -1194,12 +1190,12 @@ each_shell_has_its_own_zoom_kept_by_its_id :: proc(t: ^testing.T) {
 	a, b := app.cx.terms.list[0], app.cx.terms.list[1]
 	built(app, a, 11)
 	ev := []platform.Event{{kind = .Key_Press, key = .Equal, mods = {.Ctrl}}}
-	testing.expect_value(t, len(term_events(app, ev)), 0)
+	testing.expect_value(t, len(term_events(app, &app.state, ev)), 0)
 	testing.expect_value(t, outbox(a), "")
 	testing.expect(t, a.view.zoom > 1.05 && b.view.zoom == 1, "the one with the keyboard only")
-	b.shown, b.view.box, b.view.rect = true, 12, {{0, 500}, {800, 900}}
+	b.shown, b.view.box, b.view.rect, b.built_in = true, 12, {{0, 500}, {800, 900}}, &app.state   // (built in the main window: its input is the main window's)
 	wheel := []platform.Event{{kind = .Scroll, pos = {10, 600}, delta = {0, 1}, mods = {.Ctrl}}}
-	testing.expect_value(t, len(term_events(app, wheel)), 0)
+	testing.expect_value(t, len(term_events(app, &app.state, wheel)), 0)
 	testing.expect(t, b.view.zoom < 0.95, "the one under the wheel")
 	// the program again: the same shells, their zooms
 	store.flush(&app.stores.zooms)

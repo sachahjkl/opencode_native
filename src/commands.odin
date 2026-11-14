@@ -30,8 +30,8 @@ Command :: struct {
 @(private = "file") can_go_back :: proc(app: ^App) -> bool { return nav_can(app, -1) || back_target(app) != "" }
 
 COMMANDS := [?]Command{
-	{id = "app.palette", title = i18n.later("Command palette"), tags = "commands actions search launcher", group = i18n.later("General"), icon = lucide.SEARCH, keys = "Ctrl+K, Ctrl+Shift+P", key = .K, mods = {.Ctrl}, run = palette_toggle, over = proc(app: ^App) -> bool { return app.cx.open[.Palette] }},
-	{id = "app.help", title = i18n.later("Keyboard shortcuts"), tags = "keys keybindings hotkeys help cheatsheet", group = i18n.later("General"), icon = lucide.LIST, keys = "F1", key = .F1, run = proc(app: ^App) { app.cx.open[.Help] = !app.cx.open[.Help] }, over = proc(app: ^App) -> bool { return app.cx.open[.Help] }},
+	{id = "app.palette", title = i18n.later("Command palette"), tags = "commands actions search launcher", group = i18n.later("General"), icon = lucide.SEARCH, keys = "Ctrl+K, Ctrl+Shift+P", key = .K, mods = {.Ctrl}, run = palette_toggle, over = proc(app: ^App) -> bool { return ui.view_is_open(&app.program_views, COMMANDS_VIEW) }},
+	{id = "app.help", title = i18n.later("Keyboard shortcuts"), tags = "keys keybindings hotkeys help cheatsheet", group = i18n.later("General"), icon = lucide.LIST, keys = "F1", key = .F1, run = help_toggle, over = proc(app: ^App) -> bool { return ui.view_is_open(&app.program_views, HELP_VIEW) }},
 	{id = "app.settings", title = i18n.later("Settings"), tags = "preferences options configuration prefs", group = i18n.later("General"), icon = lucide.SLIDERS_HORIZONTAL, keys = "Ctrl+,", key = .Comma, mods = {.Ctrl}, run = settings_open},
 	{id = "app.refresh", title = i18n.later("Refresh"), tags = "reload sync update fetch", group = i18n.later("General"), icon = lucide.REFRESH_CW, keys = "F5", key = .F5, run = proc(app: ^App) {
 		refresh_sessions(app)
@@ -79,14 +79,13 @@ COMMANDS := [?]Command{
 	{id = "session.import", title = i18n.later("Import a session"), tags = "load open json", group = i18n.later("Session"), icon = lucide.FILE, run = session_import_pick},
 	{id = "session.copy_id", title = i18n.later("Copy the session ID"), tags = "clipboard identifier", group = i18n.later("Session"), icon = lucide.COPY, run = proc(app: ^App) { clip_set(app.chat.id) }, enabled = has_session},
 
-	{id = "view.panel_window", title = i18n.later("Open this panel in a window"), tags = "detach popout float separate", group = i18n.later("View"), icon = lucide.APP_WINDOW, run = panel_window_open, enabled = panel_window_can},
 	{id = "view.preview", title = i18n.later("Show or hide the Preview panel"), tags = "browser web page", group = i18n.later("View"), icon = lucide.GLOBE, keys = "Ctrl+Shift+B", key = .B, mods = {.Ctrl, .Shift}, run = preview_toggle, checked = proc(app: ^App) -> bool { return app.preview.open }},
 	// (Their keys are the panel's, read while it has the keyboard: elsewhere Ctrl+W is a shell's, and a composer's to ignore.)
 	{id = "view.preview_tab", title = i18n.later("New browser tab"), tags = "preview web page url", group = i18n.later("View"), icon = lucide.PLUS, keys = "Ctrl+T", run = preview_tab_new},
 	{id = "view.preview_tab_close", title = i18n.later("Close browser tab"), tags = "preview web page", group = i18n.later("View"), icon = lucide.X, keys = "Ctrl+W", run = preview_tab_close_front, enabled = preview_tab_can_close},
-	{id = "view.sidebar", title = i18n.later("Show or hide the sidebar"), tags = "sessions list toggle collapse", group = i18n.later("View"), icon = lucide.MENU, keys = "Ctrl+B", key = .B, mods = {.Ctrl}, run = proc(app: ^App) { app.sidebar.hidden = !app.sidebar.hidden }, checked = proc(app: ^App) -> bool { return !app.sidebar.hidden }},
+	{id = "view.sidebar", title = i18n.later("Show or hide the sidebar"), tags = "sessions list toggle collapse", group = i18n.later("View"), icon = lucide.MENU, keys = "Ctrl+B", key = .B, mods = {.Ctrl}, run = sidebar_toggle, checked = proc(app: ^App) -> bool { return ui.view_is_open(&app.program_views, SIDEBAR_VIEW) }},
 	{id = "view.prompt_rail", title = i18n.later("Show or hide the prompt marks"), tags = "minimap rail scrollbar overview ruler timeline prompts messages navigate jump outline", group = i18n.later("View"), icon = lucide.LIST, run = proc(app: ^App) { pref_set(app, "conversation.prompt_rail", app.prefs.prompt_rail ? "false" : "true") }, checked = proc(app: ^App) -> bool { return app.prefs.prompt_rail }},
-	{id = "view.notices", title = i18n.later("What you missed"), tags = "notifications inbox missed events log bell unread", group = i18n.later("View"), icon = lucide.BELL, keys = "Ctrl+Shift+N", key = .N, mods = {.Ctrl, .Shift}, run = missed_toggle, over = proc(app: ^App) -> bool { return app.cx.open[.Notices] }},
+	{id = "view.notices", title = i18n.later("What you missed"), tags = "notifications inbox missed events log bell unread", group = i18n.later("View"), icon = lucide.BELL, keys = "Ctrl+Shift+N", key = .N, mods = {.Ctrl, .Shift}, run = missed_toggle, over = proc(app: ^App) -> bool { return ui.view_is_open(&app.program_views, MISSED_VIEW) }},
 	{id = "notices.next", title = i18n.later("Next missed"), tags = "notifications queue next unread inbox", group = i18n.later("Go to"), icon = lucide.ARROW_RIGHT, run = missed_next},
 	{id = "view.sidebar_mode", title = i18n.later("Switch the sidebar's mode (inbox, projects)"), tags = "inbox projects folders group", group = i18n.later("View"), icon = lucide.LIST, run = sidebar_mode_next},
 	{id = "view.content_in", title = i18n.later("Zoom in the conversation"), tags = "bigger larger font size text", group = i18n.later("View"), icon = lucide.PLUS, keys = "Ctrl+=", run = proc(app: ^App) { content_zoom_by(app, ui.feel(&app.state).zoom_step) }},
@@ -127,16 +126,6 @@ commands_keys :: proc(app: ^App) {
 		if ui.key_pressed_peek(c.key, c.mods) && ui.key_press(c.key, c.mods) { command_run(app, &c) }
 	}
 	if c := command_find("app.palette"); command_keyed(app, c) && ui.key_press(.P, {.Ctrl, .Shift}) { command_run(app, c) }
-}
-
-// A dialog, a picker or a menu is over the window. What reads the keyboard behind them asks here. A new dialog is a Dialog, and
-// its being open is App_Context.open: then it is in this answer. What is not there says it in its own state:
-// - Changes: its state machine (Changes_State) says whether it is on screen; a bool beside it could disagree with it.
-// - Output: the view shown is the dialog's subject; nil is its being closed.
-// - The install's dialog: the toolkit's prefs_page.Install keeps its own (install_open_now).
-// - the toolkit's menus (ui.menu) and its file browser (ui.file_dialog), which the toolkit's state holds.
-overlay_open :: proc(app: ^App) -> bool {
-	return app.cx.open != {} || changes_shown(&app.cx.changes) || app.cx.outputs.shown != nil || prefs_page.install_open_now(&app.install) || len(app.state.menus) > 0 || ui.file_dialog_shown(&app.state)
 }
 
 // The conversation's zoom: the session shown's own, or the preference (appearance.content_zoom), which is every session's that has
@@ -184,10 +173,16 @@ content_zoom_events :: proc(app: ^App, events: []platform.Event) {
 	}
 }
 
-// The keys of the table as a dialog: what can be done, by group.
-help_dialog :: proc(app: ^App, em: f32) {
-	if ui.modal("help", &app.cx.open[.Help], dialog_options(app, .Help)) {
-		dialog_backdrop()
+help_open :: proc(app: ^App) { ui.view_open(&app.program_views, HELP_VIEW, app) }
+
+help_toggle :: proc(app: ^App) {
+	if ui.view_is_open(&app.program_views, HELP_VIEW) { ui.view_close(&app.program_views, HELP_VIEW) } else { help_open(app) }
+}
+
+// The keys of the table as a view: what can be done, by group. (Its title is the view's header.)
+help_view :: proc(v: ^ui.View, app: ^App) {
+	em := ui.font_size()
+	{
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###help_scroll") {
 		ui.spacer(ui.px(em))
@@ -196,7 +191,6 @@ help_dialog :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 1.2))
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
-				text("t", i18n.tr("Keyboard shortcuts"), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE), height = ui.px(em * 2)}, ui.fill())
 				row :: proc(app: ^App, id, keys, what: string, em: f32) {
 					ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 					if ui.row(.Center, id = id) {

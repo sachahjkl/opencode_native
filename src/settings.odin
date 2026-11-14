@@ -86,8 +86,6 @@ PREF_DEFS := [?]config.Def{
 	{name = "session.provider", description = "The provider of that model.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "session.variant", description = "How hard that model thinks (one of its variants; empty: its default).", kind = .String, default = {s = ""}, hidden = true},
 	{name = "browser.tools", title = i18n.later("Tools"), description = i18n.later("Let the agents drive the Preview panel (open pages, read them, click, run scripts): the browser tools, while this window is open."), kind = .Bool, default = {b = true}},
-	{name = "layout.dock", description = "Where the panels are, as the dock writes it.", kind = .String, default = {s = ""}, hidden = true},
-	{name = "layout.dialogs", description = "The sizes the dialogs were given (settings, statistics, shortcuts), in ems.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "window.placement", description = "Where the window was (platform.placement_text): it opens there again.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "general.start", title = i18n.later("Start"), description = i18n.later("What the window opens on: the home page, or the session it showed when it closed (the latest one if it showed none yet)."), kind = .String, default = {s = "last"}, choices = {"home", "last"}, choice_labels = {i18n.later("Home"), i18n.later("Last")}},
 	{name = "advanced.experimental", title = i18n.later("Experimental"), description = i18n.later("Turn on the experimental options of a server on this computer, in its configuration file. What you set there yourself stays."), kind = .Bool, default = {b = true}},
@@ -635,46 +633,7 @@ saved_done_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) 
 }
 
 ////////////////////////////////
-// The sizes of the dialogs
-
-// What layout.dialogs says, once, then what the person changed, written when the pointer lets go.
-dialogs_track :: proc(app: ^App) {
-	cx := &app.cx
-	if !cx.dialogs_read {
-		cx.dialogs_read = true
-		rest := config.string_of(&app.cfg_prefs, "layout.dialogs")
-		// (by position: the size of a dialog that went must not fall on the next one)
-		if len(strings.fields(rest, context.temp_allocator)) == DIALOGS_SAVED_WITH_STATS {
-			first, _ := strings.split_iterator(&rest, " ")
-			_, _ = strings.split_iterator(&rest, " ")
-			rest = fmt.tprintf("%s %s", first, rest)
-		}
-		for d in DIALOGS_SIZED {
-			field, _ := strings.split_iterator(&rest, " ")
-			wh := strings.split(field, "x", context.temp_allocator)
-			if len(wh) != 2 { continue }
-			cx.dialogs[d] = {f32(strconv.parse_f64(wh[0]) or_else 0), f32(strconv.parse_f64(wh[1]) or_else 0)}
-		}
-		cx.dialogs_saved = cx.dialogs
-	}
-	if cx.dialogs == cx.dialogs_saved || ui.active_key() != 0 { return }
-	cx.dialogs_saved = cx.dialogs
-	b := strings.builder_make(context.temp_allocator)
-	for d in DIALOGS_SIZED { fmt.sbprintf(&b, "%.1fx%.1f ", cx.dialogs[d].x, cx.dialogs[d].y) }
-	pref_set(app, "layout.dialogs", strings.trim_space(strings.to_string(b)))
-}
-
-// The options of a dialog that the person resizes: its preferred and smallest sizes, and the size kept (layout.dialogs).
-dialog_options :: proc(app: ^App, d: Dialog, top: Maybe(f32) = nil) -> ui.Modal_Options {
-	return {
-		width_em = DIALOG_PREFERRED_EM[d].x, height_em = DIALOG_PREFERRED_EM[d].y,
-		min_width_em = DIALOG_MIN_EM[d].x, min_height_em = DIALOG_MIN_EM[d].y,
-		size = &app.cx.dialogs[d], top = top,
-	}
-}
-
-////////////////////////////////
-// The dialog
+// The view
 
 // The settings dialog: its pages (prefs_page: the client's preferences, from the registry, and the server's pages).
 Settings_View :: struct {
@@ -711,7 +670,7 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 FONT_PREFS := [?]string{"appearance.text.ui_font", "appearance.text.prose_font", "appearance.text.mono_font", "appearance.text.terminal_font"}
 
 settings_open :: proc(app: ^App) {
-	app.cx.open[.Settings] = true
+	ui.view_open(&app.program_views, SETTINGS_VIEW, app)
 	prefs_page.focus_search(&app.settings.prefs)
 	server_facts_load(app)
 }
@@ -745,14 +704,10 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 	}
 }
 
-settings_dialog :: proc(app: ^App, em: f32) {
-	if ui.modal("settings", &app.cx.open[.Settings], dialog_options(app, .Settings)) {
-		dialog_backdrop()
-		if ui.dialog_header("settings_head", i18n.tr("Settings"), {close = true}) {}
-		// one sidebar for every page: the toolkit's page holds the client's preferences and the server's pages alike
-		ui.next({width = ui.fill(), height = ui.fill()})
-		prefs_page.build(&app.settings.prefs, &app.cfg_prefs, settings_options(app))
-	}
+settings_view :: proc(v: ^ui.View, app: ^App) {
+	// one sidebar for every page: the toolkit's page holds the client's preferences and the server's pages alike
+	ui.next({width = ui.fill(), height = ui.fill()})
+	prefs_page.build(&app.settings.prefs, &app.cfg_prefs, settings_options(app))
 }
 
 // Under a page's preferences: what is not a setting (the folder, the program, the terminal's licence). The Updates page
@@ -804,9 +759,9 @@ font_button :: proc(app: ^App, name: string, em: f32) {
 	}
 	sig := ui.button(fmt.tprintf("fb_%s", name), ui.text_shown(shown), o = {width = ui.px(em * 13)})
 	if sig.clicked {
-		if app.cx.open[.Picker] && app.picker.id == name { app.cx.open[.Picker] = false } else { picker_open(app, name, sig.box.rect) }
+		if app.picker.open && app.picker.id == name { app.picker.open = false } else { picker_open(app, name, sig.box.rect) }
 	}
-	if !(app.cx.open[.Picker] && app.picker.id == name) { return }
+	if !(app.picker.open && app.picker.id == name) { return }
 	if app.font_families == nil { app.font_families = font.system_families(&app.fonts) }
 	items := make([dynamic]Pick_Item, context.temp_allocator)
 	append(&items, Pick_Item{label = i18n.tr("Automatic"), detail = fmt.tprintf(i18n.tr("%s, built in"), own), current = want == "" || want == FONT_BUILTIN})

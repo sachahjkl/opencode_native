@@ -354,12 +354,14 @@ image_view_open :: proc(app: ^App, ref: Image_Ref) {
 	app.viewer.key = (ref.key ~ u64(image_dim(app, 0)) * HASH_MIX_B) | 1
 	image_ref_delete(&app.viewer.ref)
 	app.viewer.ref = image_ref_clone(ref)
-	app.cx.open[.Viewer] = true
 	ui.preview_reset(&app.viewer.view)
 	app.viewer.focus = true
 	app.viewer.resize_from = {}
 	app.viewer.grown = false
+	ui.view_open(&app.program_views, IMAGE_VIEW, app)
 }
+
+image_view_shown :: proc(app: ^App) -> bool { return ui.view_is_open(&app.program_views, IMAGE_VIEW) }
 
 IMAGE_NAME_CHARS :: 80
 HEX_VIEWER_NAME  :: 0xe0e0e0ff
@@ -370,7 +372,7 @@ VIEWER_MIN_W_EM  :: 26    // what the bar needs: a small picture gets room on it
 VIEWER_SCALE_MIN :: 0.2   // the smallest viewer, of the most the window gives a picture (conversation.image_viewer_size)
 VIEW_NATIVE_MAX  :: 8     // times the image's pixels at the interface's scale (ui.preview's zoom_max)
 
-// Where the viewer is, from the image alone: the panel hugs the picture, so all the black around it is outside the viewer.
+// Where the viewer is, from the image alone: the dialog hugs the picture, so all the black around it is outside the viewer.
 Viewer_Frame :: struct {
 	full:    [2]f32,   // the picture at the scale 1: the most `room` gives it
 	picture: [2]f32,   // its box: `full` times the scale chosen, whole pixels
@@ -416,10 +418,10 @@ view_well_draw :: proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) {
 	// (the state of the window drawn, as corners(): ui.current_state is the open build's, nil while a frame is drawn)
 	app := the_app
 	if app == nil { ui.machined_well(dc, b.rect, 0, hex(HEX_VIEWER_WELL)); return }
-	state := app.cx.built != nil ? app.cx.built : &app.state
+	state := view_state(app, IMAGE_VIEW)
 	radius: f32
 	for a := b.parent; a != nil; a = a.parent {
-		if a.name != "modal_image_view" { continue }
+		if a.name != fmt.tprintf("modal_view_%s", IMAGE_VIEW) { continue }
 		inset := max(b.rect.min.x - a.rect.min.x, b.rect.min.y - a.rect.min.y)
 		radius = ui.concentric_radius(ui.box_drawn_radii(state, a)[0], inset)
 		break
@@ -427,52 +429,62 @@ view_well_draw :: proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) {
 	ui.machined_well(dc, b.rect, radius, hex(HEX_VIEWER_WELL))
 }
 
-// The image viewer (open: Dialog.Viewer): what it shows, and how it is zoomed, moved and sized.
+// The image viewer (IMAGE_VIEW): what it shows, and how it is zoomed, moved and sized. As a dialog it hugs its picture
+// (ui.view_size, at each build); docked, floating or in a window of its own, the picture fits the room it is given.
 Image_Viewer :: struct {
 	key:         u64,
 	ref:         Image_Ref,   // what is shown: what Copy decodes again whole (its data and name owned)
 	view:        ui.Preview,  // the zoom (times what fits) and the pan of the picture
 	focus:       bool,        // just opened: the keyboard goes to the picture (its keys zoom and move it)
-	resize_from: [3]f32,      // a grip of the viewer held: the dialog's size (logical pixels) and scale at its press ({}: none)
+	resize_from: [3]f32,      // a grip of the viewer held: the dialog's size (ems) and scale at its press ({}: none)
 	grown:       bool,        // the viewer's grips were dragged since it opened: its picture may pass its pixels (viewer_frame)
 	start:       Image_Ref,   // --image=<file>: opened in the viewer once it is decoded (its data owned)
 }
 
-// An image still being decoded: a moment, over the conversation dimmed.
+// An image still being decoded: a moment.
 @(private = "file")
 image_viewer_wait :: proc(app: ^App, em: f32) {
 	animate(app)
-	if ui.modal("image_view", &app.cx.open[.Viewer], {width_em = 12}) {
-		dialog_backdrop()
-		ui.spacer(ui.px(em))
-		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
-		if ui.tags("weak") { ui.label(fmt.tprintf("%s###view_wait", i18n.tr("Opening the image…"))) }
-		ui.spacer(ui.px(em))
-	}
+	ui.spacer(ui.px(em))
+	ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
+	if ui.tags("weak") { ui.label(fmt.tprintf("%s###view_wait", i18n.tr("Opening the image…"))) }
+	ui.spacer(ui.px(em))
 }
 
-image_viewer :: proc(app: ^App, em: f32) {
-	image_view_wait(app)
-	if !app.cx.open[.Viewer] { return }
+image_view :: proc(v: ^ui.View, app: ^App) {
+	em := ui.font_size()
 	sc := ui.scale()
 	// what is shown: its pixels, and its texture
 	e, ok := &app.images[app.viewer.key]
-	if !ok || e.state == .Failed { app.cx.open[.Viewer] = false; return }
+	if !ok || e.state == .Failed { ui.view_end(v, ui.VIEW_CANCELLED); return }
 	e.used = app.frame_no
+	name := app.viewer.ref.name != "" ? app.viewer.ref.name : i18n.tr("image")
+	ui.view_title(v, ellipsize(name, IMAGE_NAME_CHARS))
 	if e.state == .Pending { image_viewer_wait(app, em); return }
 	source := [2]f32{f32(e.w), f32(e.h)}
 	pad, bar := math.round(em * VIEWER_PAD_EM), math.round(em * VIEWER_BAR_EM)
 	chrome := [2]f32{2 * pad, pad + bar}
-	room := app.state.window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
-	f := viewer_frame(source, room, chrome, sc, app.prefs.viewer_scale, math.round(em * VIEWER_MIN_W_EM), app.viewer.grown)
+	min_w := math.round(em * VIEWER_MIN_W_EM)
+	dialog := v.presentation == .Dialog
+	f: Viewer_Frame
+	if dialog {
+		// (the dialog hugs the picture: the share of the window the person chose, its pixels at most until they grow it)
+		room := built_state(app).window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
+		// (the view's header is the dialog's too: as tall as the last layout made it, its title wrapped or not)
+		head := ui.prev_box("###view_header")
+		head_h := head != nil ? head.rect.max.y - head.rect.min.y : ui.dense(em * ui.DIALOG_HEADER_EM)
+		f = viewer_frame(source, room, chrome + {0, head_h}, sc, app.prefs.viewer_scale, min_w, app.viewer.grown)
+		asked := f.panel / em
+		ui.view_size(v, asked.x, asked.y)
+		// (its grips: the size the person gives it, while the press lasts, is the scale asked)
+		if size := ui.view_dialog_size(&app.program_views, IMAGE_VIEW); size != {} && size != asked { viewer_resized(app, size, asked, f, em) }
+		viewer_resize_end(app)
+	} else {
+		f = viewer_frame(source, ui.view_room(v), chrome, sc, 1, min_w, grown = true)
+	}
 	view := f.picture
-	// (the dialog's size in ems, as ui.modal keeps it: its grips write it)
-	asked := f.panel / em
-	size := asked
 	closing := false
-	natural := viewer_frame(source, room, chrome, sc, 1, math.round(em * VIEWER_MIN_W_EM)).panel / em
-	if ui.modal("image_view", &app.cx.open[.Viewer], {width_em = natural.x, height_em = natural.y, size = &size}) {
-		dialog_backdrop()
+	{
 		// a press around the picture closes the viewer, as one outside the dialog does (the buttons and the grips are over it)
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 		around := ui.build_box({.Clickable}, "###view_around")
@@ -507,7 +519,6 @@ image_viewer :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(bar), axis = .X, cross = .Center})
 			if ui.row(.Center) {
 				ui.spacer(ui.px(em))
-				name := app.viewer.ref.name != "" ? app.viewer.ref.name : i18n.tr("image")
 				text("n", ellipsize(name, IMAGE_NAME_CHARS), hex(HEX_VIEWER_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 				ui.spacer(ui.px(em * 0.6))
 				zoom := f.fit * app.viewer.view.zoom / sc * 100
@@ -522,33 +533,30 @@ image_viewer :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.3))
 				if ui.button("zoom_fit", i18n.tr("Fit"), o = {height = bh}).clicked { ui.preview_reset(&app.viewer.view) }
 				ui.spacer(ui.px(em * 0.8))
-				if ui.button("close", i18n.tr("Close"), lucide.X, {height = bh}).clicked { app.cx.open[.Viewer] = false }
+				if ui.button("close", i18n.tr("Close"), lucide.X, {height = bh}).clicked { ui.view_end(v, ui.VIEW_CANCELLED) }
 				ui.spacer(ui.px(em))
 			}
 		}
 	}
 	// (a press that closes the menu over the viewer is the menu's)
-	if closing && !ui.menu_any_open() { app.cx.open[.Viewer] = false }
-	viewer_resized(app, size, asked, f, em)
+	if closing && !ui.menu_any_open() { ui.view_end(v, ui.VIEW_CANCELLED) }
 }
 
-// The grips of the dialog moved (or a double click on one sent it back to its size): the picture takes the new size, its shape kept, and
-// the size chosen is saved once the pointer lets go.
+// The grips of the dialog moved: the picture takes the new size, its shape kept (the scale from the size at the press, by
+// the side that moved most). (`size`, `asked`: the dialog's, in ems)
 @(private = "file")
 viewer_resized :: proc(app: ^App, size, asked: [2]f32, f: Viewer_Frame, em: f32) {
-	switch {
-	case size == {}:
-		app.prefs.viewer_scale = 1
-		app.viewer.resize_from = {}
-		app.viewer.grown = false
-	case size != asked:
-		// (from the size shown: a picture held to its pixels shows less than the share saved)
-		if app.viewer.resize_from == {} { app.viewer.resize_from = {asked.x, asked.y, f.picture.x / f.full.x} }
-		app.viewer.grown = true
-		from := app.viewer.resize_from
-		app.prefs.viewer_scale = viewer_scale_of((size - from.xy) * em, f.full, from.z)
-	}
-	if ui.active_key() != 0 { return }
+	// (from the size shown: a picture held to its pixels shows less than the share saved)
+	if app.viewer.resize_from == {} { app.viewer.resize_from = {asked.x, asked.y, f.picture.x / f.full.x} }
+	app.viewer.grown = true
+	from := app.viewer.resize_from
+	app.prefs.viewer_scale = viewer_scale_of((size - from.xy) * em, f.full, from.z)
+}
+
+// The grip let go: the size chosen is saved (conversation.image_viewer_size), for the next pictures too.
+@(private = "file")
+viewer_resize_end :: proc(app: ^App) {
+	if ui.active_key() != 0 || app.viewer.resize_from == {} { return }
 	app.viewer.resize_from = {}
 	if abs(f64(app.prefs.viewer_scale) - config.float_of(&app.cfg_prefs, "conversation.image_viewer_size")) > SLIDER_EPSILON {
 		pref_set_float(app, "conversation.image_viewer_size", app.prefs.viewer_scale)

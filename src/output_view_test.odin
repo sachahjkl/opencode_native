@@ -6,6 +6,18 @@ import "core:fmt"
 import "core:strings"
 import "core:testing"
 import "gt:platform"
+import "gt:ui"
+
+// Whether its view is open (each command has its own: OUTPUT_VIEW, by its name).
+@(private = "file")
+output_shown :: proc(app: ^App, v: ^Output_View) -> bool { return v != nil && ui.view_is_open(&app.program_views, OUTPUT_VIEW, v.name) }
+
+// The view opened last.
+@(private = "file")
+output_last :: proc(app: ^App) -> ^Output_View {
+	list := app.cx.outputs.list
+	return len(list) > 0 ? list[len(list) - 1] : nil
+}
 
 @(private = "file")
 state_json :: proc(status: string, exit := -1) -> string {
@@ -22,7 +34,7 @@ output_json :: proc(text: string, cursor: int, size := -1, truncated := false) -
 running_view :: proc(t: ^testing.T, app: ^App) -> ^Output_View {
 	v := output_view_open_shell(app, "sh_1", "cargo build", "S:\\x")
 	bench_answer(app, bench_take(t, .Output_State), 200, state_json("running"))
-	testing.expect(t, app.cx.outputs.shown == v, "it opens in the dialog")
+	testing.expect(t, output_shown(app, v), "its view opens")
 	return v
 }
 
@@ -105,7 +117,7 @@ a_view_closed_drops_what_comes_after_it :: proc(t: ^testing.T) {
 	v := running_view(t, app)
 	r := bench_take(t, .Output_Read)
 	output_view_close(app, v)
-	testing.expect(t, app.cx.outputs.shown == nil)
+	testing.expect(t, !output_shown(app, v))
 	output_views_tick(app)
 	bench_answer(app, r, 200, output_json("late", 4))
 	testing.expect_value(t, bench_count(.Output_Read), 0)
@@ -139,11 +151,12 @@ what_is_kept_for_copy_stops_at_its_limit :: proc(t: ^testing.T) {
 the_keys_are_for_reading_only :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	_ = running_view(t, app)
+	v := running_view(t, app)
+	// (its grid has the keyboard, in the main window: as its build leaves it)
+	app.cx.terms.focused, v.term.built_in = v.term, &app.state
 	ev := []platform.Event{{kind = .Text, text = 'x'}, {kind = .Key_Press, key = .Escape}, {kind = .Key_Release, key = .Escape}}
-	left := output_view_events(app, ev)
+	left := term_events(app, &app.state, ev)
 	testing.expect_value(t, len(left), 3)
-	testing.expect(t, app.cx.terms.only == nil && app.cx.terms.focused == nil, "the shells' keyboard is as it was")
 	testing.expect(t, overlay_open(app), "it is a dialog: the keys of the program wait")
 }
 
@@ -176,7 +189,7 @@ a_call_with_only_its_text_shows_that :: proc(t: ^testing.T) {
 	p := test_tool("shell", `{"command":"false"}`, "hello\n", .Error)
 	p.tool_id = "c1"
 	output_view_open_part(app, &p)
-	v := app.cx.outputs.shown
+	v := output_last(app)
 	testing.expect(t, v != nil && v.over && !v.seen_end)
 	testing.expect_value(t, v.command, "false")
 	word := output_view_word(v)
@@ -195,7 +208,7 @@ a_silent_command_at_work_can_be_inspected :: proc(t: ^testing.T) {
 	p.tool_id = "c1"
 	testing.expect(t, output_view_can(&p), "at work: something to look at")
 	output_view_open_part(app, &p)
-	v := app.cx.outputs.shown
+	v := output_last(app)
 	if !testing.expect(t, v != nil, "its view") { return }
 	testing.expect(t, !v.over && v.status == .Running, "at work, waiting")
 	bench_meta(&p, `{"shellID":"sh_7"}`)
@@ -206,7 +219,7 @@ a_silent_command_at_work_can_be_inspected :: proc(t: ^testing.T) {
 	q := test_tool("shell", `{"command":"sleep 5 > /dev/null"}`, "", .Running)
 	q.tool_id = "c2"
 	output_view_open_part(app, &q)
-	w := app.cx.outputs.shown
+	w := output_last(app)
 	q.status = .Done
 	tool_set_output(&q, "done\n", context.allocator)
 	output_view_part_changed(app, &q)
@@ -220,7 +233,7 @@ leaving_the_server_closes_the_views :: proc(t: ^testing.T) {
 	app := bench_new()
 	v := running_view(t, app)
 	server_forget(app)
-	testing.expect(t, v.gone && app.cx.outputs.shown == nil)
+	testing.expect(t, v.gone && !output_shown(app, v))
 	output_views_tick(app)
 	testing.expect_value(t, len(app.cx.outputs.list), 0)
 }

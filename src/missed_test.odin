@@ -10,6 +10,7 @@ import "core:math/rand"
 import "core:strings"
 import "core:testing"
 import "gt:platform"
+import "gt:ui"
 import notices "gt:notices"
 
 @(private = "file")
@@ -251,7 +252,7 @@ the_count_is_what_was_not_shown_yet :: proc(t: ^testing.T) {
 	missed_rows_refresh(app)
 	testing.expect_value(t, app.missed.new_here, 2)
 	missed_toggle(app)
-	testing.expect(t, app.cx.open[.Notices])
+	testing.expect(t, ui.view_is_open(&app.program_views, MISSED_VIEW))
 	missed_rows_refresh(app)
 	testing.expect_value(t, app.missed.new_here, 0)
 	testing.expect(t, open_entry(app, .End, "ended") != nil && open_entry(app, .End, "never") != nil, "seen, not acknowledged")

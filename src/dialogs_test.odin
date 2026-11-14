@@ -830,7 +830,7 @@ what_was_typed_stays_for_its_session :: proc(t: ^testing.T) {
 	s := &app.cx.schedules
 	schedules_open(app, "a")
 	schedule_typed(s, "kept")
-	app.cx.open[.Schedules] = false
+	ui.view_close(&app.program_views, SCHEDULES_VIEW)
 	schedules_open(app, "a")
 	testing.expect_value(t, ui.line_edit_string(&s.prompt), "kept")
 }
@@ -1172,7 +1172,7 @@ a_page_read_again_replaces_what_it_said :: proc(t: ^testing.T) {
 the_pages_are_read_after_the_server_has_done_it :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	app.cx.open[.Settings] = true
+	ui.view_open(&app.program_views, SETTINGS_VIEW, app)
 	mcp_switch(app, "x", true)
 	bench_clock += FACTS_DEBOUNCE_MS * DEFERRED_MOST * 2
 	deferred_tick(app)
@@ -1212,7 +1212,7 @@ a_shell_the_server_refused_is_not_shown_as_set :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	f := &app.facts
-	app.cx.open[.Settings] = true
+	ui.view_open(&app.program_views, SETTINGS_VIEW, app)
 	server_facts_load(app)
 	facts_answered(app, t)
 	testing.expect_value(t, f.shell, "/bin/old")
@@ -1308,7 +1308,7 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	testing.expect_value(t, p.check.state, remote.State.Idle)
 
 	s := &cx.schedules
-	testing.expect(t, !cx.open[.Schedules])
+	testing.expect(t, !ui.view_is_open(&app.program_views, SCHEDULES_VIEW))
 	testing.expect_value(t, s.session, "")
 	testing.expect_value(t, len(s.list), 0)
 	testing.expect_value(t, ui.line_edit_string(&s.prompt), "")
@@ -1317,7 +1317,7 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	testing.expect(t, !cx.no_schedules && !cx.no_artifacts)
 
 	a := &cx.artifacts
-	testing.expect(t, !cx.open[.Artifacts])
+	testing.expect(t, !ui.view_is_open(&app.program_views, ARTIFACTS_VIEW))
 	testing.expect_value(t, a.dir, "")
 	testing.expect_value(t, a.shown, "")
 	testing.expect_value(t, len(a.list), 0)

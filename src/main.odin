@@ -64,7 +64,7 @@ App :: struct {
 	browser:        Browser,           // the agents' tools on that page (browser_mcp.odin)
 	updater:        ^update.Updater,   // a new version: checked, downloaded, in place (updates.odin; nil: none started)
 	update_serial:  int,               // the updater's state last said (updates_follow)
-	dock:           ui.Dock,           // ... and the panels' layout
+	program_views:  ui.Views,          // the dialogs, the sidebar, the panels, the windows of their own, and how each was last shown (window_views.odin; `views` is host.Shared's: their windows)
 	rename:         Rename,            // a session's title (context_menus.odin)
 	find:           Find,              // find in the conversation (find.odin)
 	scale:          f32,               // --scale=<factor>: the interface's scale whatever the screen says (0: the screen's)
@@ -155,7 +155,6 @@ App_Context :: struct {
 	outgoing:       [dynamic]^Outgoing,   // prompts between the composer and the server (outgoing.odin)
 	outgoing_last:  u64,               // ... the last one's id
 	waits_unread:   bool,              // the stream just came up: what sessions wait on, asked before it, is read from the next list
-	built:          ^ui.State,         // the state of a window of its own, while it is built (nil: the main one)
 	answers_spent:  [dynamic]^virtual.Arena,   // what this frame's answers were read into (net.odin)
 	effects:        [dynamic]Effect,   // what the model asked of the interface, done by the build (effects.odin)
 	image_queue:    [dynamic]^Decode_Job,      // images waiting for a decoder, the last asked for first (images.odin)
@@ -170,12 +169,6 @@ App_Context :: struct {
 	reopen:         Nav_Place,         // what was shown when this computer's server moved (servers_rediscover), owned, id "": none
 	gliding:        bool,              // a panel's height moves in this build
 	was_gliding:    bool,              // ... it did in the last one
-	// the dialogs over the window, the one place that says which (overlay_open). Bools, not a bit_set: ui.modal closes one
-	// through a ^bool, which it keeps until modal_end
-	open:           [Dialog]bool,
-	dialogs:        [Dialog]Vec2,      // the sizes given to the dialogs (ems, {}: what they prefer)
-	dialogs_saved:  [Dialog]Vec2,
-	dialogs_read:   bool,
 	no_schedules, no_artifacts: bool,     // the server does not offer them (experimental.odin)
 	terms:          Terminals,            // the Terminal panel (terminal.odin)
 	outputs:        Output_Views,         // commands' output, read as a terminal shows it (output_view.odin)
@@ -183,13 +176,12 @@ App_Context :: struct {
 	artifacts:      Artifacts,
 	chat_arts:      Chat_Artifacts,   // the artifacts the session shown made: cards in its conversation (schedules.odin)
 	diff_full:      Diff_Full,            // diff_full.odin
-	detached:       [dynamic]^Detached,   // detached.odin
 	plugins:        Plugins,
 	integrations:   Integrations,         // the Connections page (integrations.odin)
 	background:     map[string]bool,      // the sessions with commands running in the background, and their parents (activity.odin; keys owned)
 	changes:        Changes,              // what a session changed, or would undo (session_tools.odin)
 	forms:          [dynamic]^Form_Req,   // what agents ask and wait for (forms.odin), of every session
-	shared_moved:   bool,                 // something of what every window shows may have changed this frame (detached_still)
+	shared_moved:   bool,                 // something of what every window shows may have changed this frame (posts_moved)
 	posts_run_seen: u64,                  // ... the count of posts run at the last frame, the events of the stream left out (posts_moved)
 	events_run:     u64,                  // the events of the stream applied (event_take: each says itself whether it moved anything)
 	unreadable:     Unreadable_Log,       // what could not be read as JSON (unreadable.odin)
@@ -221,8 +213,12 @@ Frame_Times :: struct {
 clip_set :: proc(text: string) { ui.window_clipboard_set(text) }
 
 // The main window is a host.Host (host_adopt: the window, the device loaded on a thread and the fonts are this program's own start). Its
-// frame is the toolkit's, in the order its parts must come (host.host_frame); what is this program's goes in its hooks.
-frame :: proc(app: ^App, inner := false) { host.host_frame(&app.window, inner) }
+// frame is the toolkit's, in the order its parts must come (host.host_frame); what is this program's goes in its hooks. The windows
+// of the views come after it, in it; then the page of the Preview goes where its panel was laid out, in whichever window.
+frame :: proc(app: ^App, inner := false) {
+	host.host_frame(&app.window, inner)
+	if !inner { preview_after_frames(app) }
+}
 
 main_window_adopt :: proc(app: ^App) {
 	host.host_adopt(&app.window, &app.gfx, app.win, nil, app)
@@ -278,16 +274,17 @@ build_params :: proc(app: ^App, win: ^platform.Window, size: draw.Vec2, events: 
 	}
 }
 
-// What the main window's input is, before the interface sees it: what goes to a shell or a command's output is taken out.
+// What a window's input is, before the interface sees it: what goes to a shell or a command's output shown in that window is
+// taken out. The windows of the views have this hook too (host.view_windows: their owner's): there, only that.
 @(private = "file")
 main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
 	app := (^App)(h.user)
+	if h.owner != nil { return term_events(app, &h.state, read) }   // (a view's window: its grids' keys, nothing of the main window's)
 	theme_follow_system(app)   // (the system went light or dark: an integer compared)
 	events := read
 	app.cx.shared_moved = false
 	for e in events { if e.kind != .Mouse_Move && e.kind != .Scroll { app.cx.shared_moved = true } }   // (a pointer that passes over this window changes nothing in another)
-	events = output_view_events(app, events)
-	events = term_events(app, events)
+	events = term_events(app, &app.state, events)
 	for e in events {
 		if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() }
 		if e.kind == .Scroll || e.kind == .Key_Press { chat_scroll_event(app, Scroll_Signal.Restore_End) }   // (the reader goes elsewhere: the view is theirs)
@@ -301,7 +298,6 @@ main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
 		}
 	}
 	content_zoom_events(app, events)
-	dialogs_track(app)
 	return events
 }
 
@@ -327,6 +323,7 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 		app.conversation.scroll_box = nil   // (only now: the answers begin_build ran read the last build's, a page placed by chat_load above all)
 		build_ui(app)
 		ui.end_build()
+		terminals_end(app)   // (after the views built at the end of the build)
 		app.frame_times.builds += 1
 	}
 	app.frame_times = {}
@@ -382,7 +379,7 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 	app.frame_times.build = time.tick_since(t_build)
 }
 
-// Between two frames: what the frame set off, what the page said, what is due, then the windows of their own.
+// Between two frames: what the frame set off, what the page said, what is due. (The windows of the views come after it: host_frame.)
 @(private = "file")
 main_after_frame :: proc(h: ^host.Host) {
 	app := (^App)(h.user)
@@ -401,12 +398,10 @@ main_after_frame :: proc(h: ^host.Host) {
 	commands_apply(app)
 	preview_follow(app)
 	terms_close_due(app)
-	if !panel_detached(app, u32(Panel.Preview)) { preview_place(app, overlay_open(app) || ui.dock_held(&app.dock)) }
 	browser_tick(app)
 	servers_rediscover(app)
 	activity_tick(app)
 	deferred_tick(app)
-	detached_frames(app)
 }
 
 // What the posts run in this frame may have changed in every window: an answer, a shell's output, a word of the stream's link. An event of the
@@ -430,7 +425,7 @@ frame_held_ms :: proc(app: ^App, size: draw.Vec2) -> int {
 due_run :: proc(app: ^App, k: Due) {
 	switch k {
 	case .Refresh:   refresh_sessions(app)
-	case .Facts:     if app.cx.open[.Settings] { server_facts_load(app) }   // (an action of the settings: connect an MCP server, revoke a permission)
+	case .Facts:     if ui.view_is_open(&app.program_views, SETTINGS_VIEW) { server_facts_load(app) }   // (an action of the settings: connect an MCP server, revoke a permission)
 	case .Children:  load_children(app)
 	case .Context:   if app.stats.open { context_ask(app) }
 	case .Restore:   chat_scroll_event(app, Scroll_Signal.Restore_End)   // (the way back got nowhere: the view is the reader's)
@@ -627,6 +622,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	ui.init(&app.state, &app.fonts, &app.theme)
 	app.state.icon_font = app.icons   // (Lucide: the menus' icons are its characters)
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
+	views_start(app, views_path(prefs_file))   // (ui.init selected the state: the sidebar's owner)
 	prefs_page.install_init(&app.install, &app.cfg_prefs, setup_options())
 	licence_init(app)
 	term_zooms_load(app)
@@ -658,7 +654,6 @@ main :: proc() {
 
 	app := new(App)
 	the_app = app
-	app.sidebar.width = SIDEBAR_W_DEFAULT
 	app.cli = opts
 	app.start_session = opts.session   // --session=<id>: the session opened at start (else the latest)
 	app.scale = opts.scale
@@ -729,15 +724,18 @@ main :: proc() {
 		if opts.settings_page != "" { settings_open_on(app, opts.settings_page) } else { settings_open(app) }
 	}
 	platform.show_window(app.win)
+	// (the windows of the views are the main window's: host_frame makes their frames after its own, hosts_wait counts them)
+	hosts := [1]^host.Host{&app.window}
 	for !platform.is_closed(app.win) && !app.quit {
-		if app.settle == 0 && !ui.needs_frame(&app.state) {
+		if due, _ := host.hosts_due(hosts[:]); !due {
 			film_slow_tick(app)
-			platform.wait_event(app.win, ui.wake_in_ms(&app.state))
-			app.slept = true
+			host.hosts_wait(hosts[:])
 		}
 		frame(app)   // (what it still owes goes down there: host_frame)
 		placement_track(app)
 	}
+	// (after the last build: which views were open is written, their windows close)
+	ui.views_destroy(&app.program_views)
 	threads_stop(app)
 	updates_stop(app)   // (before the state's posts close: no news after it)
 	if app.cx.due[.Drafts].due_ms != 0 { drafts_save(app) }   // (what was typed in the last second)

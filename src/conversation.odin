@@ -26,8 +26,9 @@ Conversation :: struct {
 	column_drag_from: f32,            // the conversation's width when a handle of it was pressed (column_handles)
 	height:           f32,            // of the conversation, at the last frame
 	rect:             Rect,           // the conversation's place (Ctrl and the wheel over it zoom it)
-	docked_w:         f32,            // the conversation's room as a panel of the dock (0: it is not one)
-	was_docked:       bool,           // the conversation was in the dock (preview.odin main_area)
+	width:            f32,            // the conversation's room, frame pixels (this frame)
+	beside_px:        f32,            // what the views beside it took of the window's width at the last layout (views.odin main_area)
+	layout_win_w:     f32,            // ... the window's width then
 	prompt_rail:      Prompt_Rail,    // the marks of the prompts on its scroll bar (prompt_rail.odin)
 }
 
@@ -48,11 +49,10 @@ conversation :: proc(app: ^App, em: f32) {
 	if ui.column(flags = {.Draw_Background}, id = "###main") {
 		sc := ui.scale()
 		// this frame's width, from the window (the box's own size is the last frame's: a resize would lag a frame behind):
-		// the window less the sidebar and the splitter
-		avail := f32(app.win.size.x)
-		if !app.sidebar.hidden { avail -= app.sidebar.width * sc + math.round(SPLITTER_W_PX * sc) }
-		if app.conversation.docked_w > 0 { avail = app.conversation.docked_w }   // (a panel of the dock: its room)
+		// the window less the views beside it
+		avail := f32(app.win.size.x) - app.conversation.beside_px
 		if avail <= 0 { avail = AVAIL_FALLBACK_PX * sc }
+		app.conversation.width = avail
 		app.conversation.column_w = 0
 		zoom := content_zoom(app)
 		cem := math.round(em * zoom)   // the conversation's own size: its zoom is not the interface's

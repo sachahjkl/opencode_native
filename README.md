@@ -96,15 +96,19 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
   output, a checklist.
 - **What runs in the background**: a tray under the composer (Down, Ctrl+J) with the sub-agents, the shell commands and the whole
   todo list; Enter opens, Delete stops.
-- **The Preview panel** (Ctrl+Shift+B, Windows): a browser for each session, with tabs, beside the conversation, in a dock; agents drive it through the MCP server
+- **The Preview panel** (Ctrl+Shift+B, Windows): a browser for each session, with tabs, beside the conversation; agents drive it through the MCP server
   `preview` the client hosts.
+- **Every dialog and panel where you want it**: the sidebar, the Preview, the Statistics, each shell, each command's output and
+  every dialog float inside the window, open in a window of their own, or dock at the left, the right or the bottom of the
+  conversation (their header's icons and menu, a drag, the command palette). Each opens again where you left it, at its size
+  (`views.txt` beside the preferences).
 - **Updates** (Windows, Linux): channels `stable` and `beta`, signed manifests, nothing installed without you ([docs/updates.md](docs/updates.md)).
 - **Back and Forward**, as in a browser: buttons in the title bar, Alt+Left and Alt+Right, the side buttons of the mouse. The view goes
   back to the very place it was read. The logo goes home.
 - **What an agent asks**: its questions and any form of the server over the composer, one question at a time, in tabs, then a review.
   The sidebar lights a session that waits for you, a sub-agent's question comes up in its parent.
 - **Permission requests** answered in place (once, always, reject).
-- **A terminal** with Ghostty's emulation (libghostty-vt): each shell of the server a tab of the dock or a window of its own, wherever it runs, kept when the program closes.
+- **A terminal** with Ghostty's emulation (libghostty-vt): each shell of the server a panel under the conversation, a floating window or a window of its own, wherever it runs, kept when the program closes.
 - **Schedules** that wake a session, **artifacts** of a folder, **plugins** of the server. The server's experimental options are turned on by default, in its configuration, on this computer.
 - **Connections**: the integrations of the server, connected with a key, a browser login or what is on the machine; several accounts of each.
 - **Messages wait in view**: while a turn runs, Enter queues a message for its end and Ctrl+Enter sends it now. What waits is listed above the composer, in order: edit it, send it now, remove it.
@@ -165,7 +169,8 @@ TLS is rustls, checked against the system's trust store.
 | `--frames=N` | N frames of a hidden window, then exit (a check that it runs; it says how long the first frame took) |
 
 Preferences live in `%APPDATA%\opencode-native\prefs.txt` on Windows, `~/.config/opencode-native/prefs.txt` on Linux (only
-what differs from the defaults), the servers in `servers.txt` beside them, what you missed in `notices.txt`;
+what differs from the defaults), the servers in `servers.txt` beside them, what you missed in `notices.txt`, where the dialogs
+and panels are in `views.txt`;
 `OPENCODE_NATIVE_NO_SETUP=1` never offers Setup. `TOOLKIT_DEVTOOLS=<port>` lets a script drive the window over the Chrome
 DevTools Protocol on 127.0.0.1, and Chrome's own DevTools inspect it (gui_toolkit's docs/devtools.md): for development only,
 since a program on this computer can then type into a session.
@@ -198,7 +203,8 @@ every step is a command of `tools/ocntools` (`help` lists them; `AGENTS.md`). Th
 | `src/conn.odin`, `src/work_pool.odin` | a connection: its transport, its pool of workers and timed queue, when it is freed |
 | `src/servers.odin` | the servers: discovery, the saved ones, connections, the tabs, the menu and the dialog |
 | `src/model.odin` | sessions, messages, parts and projects; events applied as they stream |
-| `src/views.odin` | the window's layout: its parts, the dialogs over them, the application menu |
+| `src/views.odin` | the window's layout: its parts, the conversation the views go around, the application menu |
+| `src/window_views.odin` | the views (gui_toolkit's): every dialog and panel declared, where the user put each, their answers |
 | `src/chrome.odin`, `src/sidebar_rows.odin` | the title bar, the conversation's header, the status bar; the sidebar's rows and menus |
 | `src/conversation.odin`, `src/message_parts.odin`, `src/text_wells.odin` | the conversation, its messages, the tool timeline and reasoning, text in wells |
 | `src/composer.odin` | the dock and the composer |

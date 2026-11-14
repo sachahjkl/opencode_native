@@ -450,7 +450,7 @@ tool_call :: proc(app: ^App, to: Browser_To, id, name: string, args: json.Value,
 	switch name {
 	case "tabs_focus":
 		preview_tab_front(app, p, t)
-		if p == &app.preview { ui.dock_activate(&app.dock, u32(Panel.Preview)) }
+		if p == &app.preview && p.open { ui.view_open(&app.program_views, PREVIEW_VIEW, app, owner = &app.state) }   // (in front of its stack)
 		reply_tab(t, to, id)
 	case "tabs_open", "navigate":
 		url := jstr(args, "url")

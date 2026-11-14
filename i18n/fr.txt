@@ -347,9 +347,6 @@ fr Importer une session
 en Copy the session ID
 fr Copier l'identifiant de la session
 
-en Open this panel in a window
-fr Ouvrir ce panneau dans une fenêtre
-
 en Show or hide the Preview panel
 fr Afficher ou masquer le panneau Aperçu
 
@@ -605,11 +602,11 @@ fr Cité dans la zone de saisie
 en Comment
 fr Commenter
 
-en Title
-fr Titre
-
 en Rename the session
 fr Renommer la session
+
+en Title
+fr Titre
 
 en Rename
 fr Renommer
@@ -662,9 +659,6 @@ fr %s en entrée · %s en sortie · %s
 en An independent project: not built by the OpenCode team, and not affiliated with them.
 fr Un projet indépendant : ni conçu par l'équipe d'OpenCode, ni affilié à elle.
 
-en No window: the renderer refused it
-fr Pas de fenêtre : le moteur de rendu l'a refusée
-
 en not a diagram: %s
 fr pas un diagramme : %s
 
@@ -676,9 +670,6 @@ fr Afficher son texte
 
 en A diagram
 fr Un diagramme
-
-en Mermaid diagram
-fr Diagramme Mermaid
 
 en Laying out…
 fr Mise en page…
@@ -1189,14 +1180,8 @@ fr Terminé : rien de plus ne viendra.
 en The server kept the end of it.
 fr Le serveur n'en a gardé que la fin.
 
-en Window
-fr Fenêtre
-
 en The server made no pairing code
 fr Le serveur n'a produit aucun code d'association
-
-en Pair a device
-fr Associer un appareil
 
 en Asking the server for a code…
 fr Demande d'un code au serveur…
@@ -1285,17 +1270,8 @@ fr Sortie
 en Status
 fr État
 
-en Open in a window
-fr Ouvrir dans une fenêtre
-
-en Conversation
-fr Conversation
-
 en Preview
 fr Aperçu
-
-en Statistics
-fr Statistiques
 
 en No Preview panel on Linux: let agents use your own browser with OpenCode Browse. Click to see it
 fr Pas de panneau Aperçu sous Linux : laissez les agents utiliser votre propre navigateur avec OpenCode Browse. Cliquez pour le voir
@@ -1881,6 +1857,9 @@ fr Écran
 en Uncapped
 fr Sans limite
 
+en Conversation
+fr Conversation
+
 en Sidebar
 fr Barre latérale
 
@@ -1904,6 +1883,9 @@ fr CLIENT
 
 en Appearance
 fr Apparence
+
+en Window
+fr Fenêtre
 
 en Behaviour
 fr Comportement
@@ -2569,9 +2551,6 @@ fr Bêta
 en Restart it by hand: it could not be started
 fr Redémarrez-le vous-même : il n'a pas pu être lancé
 
-en Sidebar width
-fr Largeur de la barre latérale
-
 en Command palette…
 fr Palette de commandes…
 
@@ -2586,3 +2565,12 @@ fr Sessions des sous-agents dans la liste
 
 en About opencode native
 fr À propos d'opencode native
+
+en Statistics
+fr Statistiques
+
+en Mermaid diagram
+fr Diagramme Mermaid
+
+en Pair a device
+fr Associer un appareil

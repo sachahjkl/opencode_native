@@ -45,6 +45,7 @@ Previews :: struct {
 	by_session: map[string]^Preview,    // the browsers of the sessions not shown (keys: their own)
 	clock:      u64,                    // what Preview_Tab.used counts in
 	tabs_made:  u64,                    // what the tabs' ids count
+	win:        ^platform.Window,       // the window the panel is in (nil: the main one)
 }
 
 // The view exists, or is on its way. One that failed is made anew: a failure holds for this attempt, not for ever.
@@ -235,7 +236,7 @@ preview_tab_close :: proc(app: ^App, p: ^Preview, t: ^Preview_Tab) {
 	ordered_remove(&p.tabs, at)
 	if len(p.tabs) == 0 {
 		p.front = 0
-		if p == &app.preview { panel_close(app, u32(Panel.Preview)) } else { p.open = false }
+		if p == &app.preview { preview_close(app) } else { p.open = false }
 		return
 	}
 	if at < p.front { p.front -= 1 }
@@ -330,7 +331,7 @@ preview_entry :: proc(app: ^App, key: string) -> ^Preview {
 
 // The window a tab's page belongs in: what is not on the screen waits in the main one, whatever becomes of the panel's.
 preview_window :: proc(app: ^App, t: ^Preview_Tab) -> ^platform.Window {
-	if preview_tab_shown(app, t) { if w := detached_window(app, u32(Panel.Preview)); w != nil { return w } }
+	if preview_tab_shown(app, t) { return preview_panel_window(app) }
 	return app.win
 }
 
@@ -360,10 +361,10 @@ preview_follow :: proc(app: ^App) {
 // Hidden and parked, the next one brought: its pages as they were left, never loaded again unless the limit took their view.
 @(private = "file")
 preview_switch :: proc(app: ^App, key: string) {
-	d := &app.dock
 	old := &app.preview
-	window := detached_window(app, u32(Panel.Preview))
-	was_open, was_front := old.open, ui.dock_shown(d, u32(Panel.Preview))
+	vs := &app.program_views
+	// (a panel in a window of its own keeps its window: it shows the next session's page, or an empty panel)
+	windowed := ui.view_is_open(vs, PREVIEW_VIEW) && ui.view_presentation(vs, PREVIEW_VIEW) == .External
 	if t := preview_front(old); t != nil { tab_leave(app, t) }
 	preview_park(app)
 
@@ -381,15 +382,14 @@ preview_switch :: proc(app: ^App, key: string) {
 		tab_bring(app, t)
 	}
 
-	// (A panel in a window of its own has no tab: the window just shows the next page, or an empty panel.)
-	if window == nil {
+	// (the panel opens or closes with the session's browser; its place is the views' memory, which this does not change. One
+	// under another tab stays there: opened again, it would come in front)
+	if !windowed {
 		if !p.open {
-			ui.dock_close(d, u32(Panel.Preview))
-		} else {
-			if !ui.dock_has(d, u32(Panel.Preview)) { dock_setup(app) }
-			if !was_open || was_front { ui.dock_activate(d, u32(Panel.Preview)) }
+			ui.view_close(vs, PREVIEW_VIEW)
+		} else if !ui.view_is_open(vs, PREVIEW_VIEW) {
+			ui.view_open(vs, PREVIEW_VIEW, app, owner = &app.state)
 		}
-		d.saved = d.serial   // (another session shown is no change of the layout: the panel keeps its place in what is saved)
 	}
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }

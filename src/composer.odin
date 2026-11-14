@@ -93,9 +93,9 @@ composer :: proc(app: ^App, em: f32) {
 	// Enter sends, Shift+Enter breaks the line (the editor itself breaks on Enter and commits on Ctrl+Enter). While a turn runs
 	// one way queues and the other sends now: Enter and Ctrl+Enter, or in Ctrl+Enter mode Ctrl+Enter and Ctrl+Shift+Enter.
 	submit, other := false, false
-	keys := app.composer.focused && !app.cx.open[.Picker]
+	keys := app.composer.focused && !app.picker.open
 	// (the tray's keys with the focus nowhere too: a click on one of its rows leaves it there)
-	if app.activity.open && !app.cx.open[.Picker] && (app.composer.focused || ui.focus_key() == 0) { activity_keys(app) }
+	if app.activity.open && !app.picker.open && (app.composer.focused || ui.focus_key() == 0) { activity_keys(app) }
 	if keys { mention_keys(app) }
 	if keys { slash_keys(app) }
 	if keys { history_track(app) }
@@ -178,13 +178,13 @@ composer :: proc(app: ^App, em: f32) {
 			agent := shown_agent(app)
 			if agent == "" { agent = "build" }
 			// (the narrowest toolbar: the agent and the variant by their glyphs, their names in the tips)
-			asig := ui.button("agent", ui.text_shown(fit >= 3 ? "" : agent), lucide.BOT, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.cx.open[.Picker] && app.picker.id == "agent", tip = fit >= 3 ? agent : ""})
-			if asig.clicked { if app.cx.open[.Picker] && app.picker.id == "agent" { app.cx.open[.Picker] = false } else { picker_open(app, "agent", asig.box.rect) } }
+			asig := ui.button("agent", ui.text_shown(fit >= 3 ? "" : agent), lucide.BOT, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "agent", tip = fit >= 3 ? agent : ""})
+			if asig.clicked { if app.picker.open && app.picker.id == "agent" { app.picker.open = false } else { picker_open(app, "agent", asig.box.rect) } }
 			ui.spacer(ui.px(em * 0.4))
 			model, _ := shown_model(app)
 			if model == "" { model = i18n.tr("default model") }
-			msig := ui.button("model", ui.text_shown(model), lucide.CPU, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.cx.open[.Picker] && app.picker.id == "model"})
-			if msig.clicked { if app.cx.open[.Picker] && app.picker.id == "model" { app.cx.open[.Picker] = false } else { picker_open(app, "model", msig.box.rect) } }
+			msig := ui.button("model", ui.text_shown(model), lucide.CPU, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "model"})
+			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(app, "model", msig.box.rect) } }
 			variant_button(app, em, fit >= 3)
 			ui.spacer(ui.px(em * 0.4))
 			if app.chat.id != "" { approval_button(app, em) }   // (a session's: a new one has none yet)
@@ -277,7 +277,7 @@ composer_panels :: proc(app: ^App, em: f32) {
 
 composer_pickers :: proc(app: ^App, agent: string, em: f32) {
 	p := &app.picker
-	if !app.cx.open[.Picker] || (p.id != "agent" && p.id != "model") { return }
+	if !app.picker.open || (p.id != "agent" && p.id != "model") { return }
 	// the items of the one open, made when it opens or the server's list changed (catalog_version), not at each frame
 	if p.fresh || p.items_version != app.cx.catalog_version {
 		p.items_version = app.cx.catalog_version

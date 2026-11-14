@@ -13,10 +13,6 @@ import lucide "gt:lucide"
 import i18n "gt:i18n"
 
 
-SIDEBAR_W_DEFAULT     :: 290
-SIDEBAR_W_MIN         :: 200
-SIDEBAR_W_MAX         :: 520
-
 HEX_SUB_OFF_TITLE     :: 0x7a7a7aff
 
 ////////////////////////////////
@@ -39,7 +35,7 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 }
 
 sidebar :: proc(app: ^App, em: f32) {
-	ui.next({width = ui.px(app.sidebar.width * ui.scale()), height = ui.fill(), axis = .Y, bg = hex(HEX_BG1), radius = 0})   // (square: its rounded corner notched the bar's edge)
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = hex(HEX_BG1), radius = 0})   // (square: its rounded corner notched the bar's edge; as wide as its view)
 	if ui.column(flags = {.Draw_Background}, id = "###sidebar") {
 		ui.spacer(ui.px(em * 0.5))
 		server_tabs(app, em)
@@ -330,12 +326,26 @@ session_menu :: proc(app: ^App, em: f32) {
 			if ui.menu_item(i18n.tr("Open a terminal here"), icon = lucide.TERMINAL).clicked { terminal_open(s.directory) }
 		}
 		ui.menu_separator()
-		if ui.menu_item(i18n.tr("Delete…"), icon = lucide.TRASH_2).clicked {
-			delete(app.sidebar.delete_id)
-			app.sidebar.delete_id = strings.clone(app.sidebar.menu_session)
-			app.cx.open[.Delete] = true
-		}
+		if ui.menu_item(i18n.tr("Delete…"), icon = lucide.TRASH_2).clicked { delete_ask(app, app.sidebar.menu_session) }
 	}
+}
+
+// The question before a session is deleted (the toolkit's confirmation; its options are cloned as it opens).
+delete_ask :: proc(app: ^App, id: string) {
+	delete(app.sidebar.delete_id)
+	app.sidebar.delete_id = strings.clone(id)
+	title := i18n.tr("this session")
+	if s := find_session(app, id); s != nil { title = s.title }
+	ui.confirm_open(DELETE_VIEW, {title = i18n.tr("Delete the session?"), note = fmt.tprintf(i18n.tr("“%s” and its messages will be removed from the server."), title), act = i18n.tr("Delete"), width_em = 26})
+}
+
+// Its answer, in a build of the main window.
+delete_answer :: proc(app: ^App) {
+	if ui.confirm_answer(DELETE_VIEW) != .Confirmed || app.sidebar.delete_id == "" { return }
+	delete_session(app, app.sidebar.delete_id)
+	if app.sidebar.delete_id == app.chat.id { new_session(app) }
+	nav_forget(app, app.sidebar.delete_id)
+	refresh_soon(app)
 }
 
 // A project's menu (a right click on its header in the sidebar).
@@ -343,15 +353,3 @@ project_menu :: proc(app: ^App, em: f32) {
 	if ui.menu("project_menu", em * 17) { project_icon_items(app, app.sidebar.menu_project) }
 }
 
-delete_dialog :: proc(app: ^App, em: f32) {
-	if !app.cx.open[.Delete] { return }
-	title := i18n.tr("this session")
-	if s := find_session(app, app.sidebar.delete_id); s != nil { title = s.title }
-	o := ui.Confirm_Options{title = i18n.tr("Delete the session?"), note = fmt.tprintf(i18n.tr("“%s” and its messages will be removed from the server."), title), act = i18n.tr("Delete"), width_em = 26}
-	if ui.confirm("delete", &app.cx.open[.Delete], o) == .Confirmed {
-		delete_session(app, app.sidebar.delete_id)
-		if app.sidebar.delete_id == app.chat.id { new_session(app) }
-		nav_forget(app, app.sidebar.delete_id)
-		refresh_soon(app)
-	}
-}
