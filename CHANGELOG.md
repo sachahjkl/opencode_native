@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.53.1] - 2026-11-14
+
+### Fixed
+- **Slash commands are listed again**: when opencode native started with the server, it read the server's commands before the server had them all, and kept that empty list until it was restarted: / in the composer and the palette listed nothing. The commands, the agents and the models are now read again each time their list opens.
+
 ## [0.53.0] - 2026-11-14
 
 ### Changed
@@ -1593,6 +1598,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.53.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.53.1
 [0.53.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.53.0
 [0.52.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.52.0
 [0.51.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.51.0
