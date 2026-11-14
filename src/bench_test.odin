@@ -812,15 +812,13 @@ the_console_theme_is_edged :: proc(t: ^testing.T) {
 	})
 }
 
-// The screens in Kernel, for the eye (build/session/bench_app/console_*.png): the settings, the palette, the activity with
-// its todos, a shell. What each shows is checked elsewhere; here, that each opens in the theme.
+// The screens for the eye (build/session/bench_app/console_*.png), as the program looks by default (its own theme, OpenCode):
+// the settings, the palette, the activity with its todos, a shell. What each shows is checked elsewhere; here, that each opens.
 @(test)
 the_console_screens :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		pref_set(app, "appearance.theme", "Kernel")
-		defer pref_set(app, "appearance.theme", "OpenCode")
 		settings_open(app)
 		session.wait_idle(s)
 		session.save_png(s, "console_settings.png")
