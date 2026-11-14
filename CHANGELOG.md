@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.50.2] - 2026-11-14
+
+### Fixed
+- **A table's stripes are square, from side to side**: a striped row of a table in an answer stood off the table's sides with rounded corners of its own; it now runs up to the table's edge, and only the table is rounded.
+
 ## [0.50.1] - 2026-11-14
 
 ### Fixed
@@ -1565,6 +1570,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.50.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.50.2
 [0.50.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.50.1
 [0.50.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.50.0
 [0.49.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.49.1
