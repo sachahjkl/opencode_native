@@ -4,6 +4,16 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.55.0] - 2026-11-14
+
+### Changed
+- **The server tabs scroll with arrows**: when the tabs do not fit the sidebar, an arrow on each side that hides tabs brings the next ones into view, and the tabs fade out beyond it; there is no scroll bar.
+- **The command palette is the toolkit's**: it looks and works as in the other programs of the family, with a hint row of its prefixes at its foot.
+  - `>` the commands, the moves of the views and the server's commands (under "Server": one chosen is written in the composer); `@` the sessions; `#` the models and the agents, the one in use marked; `:` the settings. `/` no longer lists the server's commands, and the agents moved from `@` to `#`.
+  - With nothing typed, it shows what you chose lately, then the commands by group. Commands that cannot act now are greyed and listed last.
+  - A setting or a command that is a switch (the sidebar, the Statistics, the prompt marks…) shows its state, flips, and the palette stays open. A session's command says the session it acts on.
+  - What you chose before is remembered again from the start: the old list of choices is not read.
+
 ## [0.54.1] - 2026-11-14
 
 ### Fixed
@@ -1630,6 +1640,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.55.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.55.0
 [0.54.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.54.1
 [0.54.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.54.0
 [0.53.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.53.3
