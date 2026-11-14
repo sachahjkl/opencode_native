@@ -4,6 +4,12 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.50.0] - 2026-11-14
+
+### Changed
+- **The servers are tabs at the top of the sessions panel**: a tab for each server, with the state of its link; a click on a tab connects to its server, "+" adds a server, the tab of the server in use opens its menu. The bottom left of the status bar now shows the state of the link and the versions of OpenCode and of opencode native.
+- **"What you missed" shows what happened**: each notification has its request, the agent's last answer, the files it touched and its todo list. It shows one card at a time by default (←, Acknowledge, →, or the arrow keys and A; a question or a permission says Answer and opens its session), or a list whose items unfold in place (the chevron, → or Space). The choice is kept, and it is also in Settings, Behaviour.
+
 ## [0.49.1] - 2026-11-14
 
 ### Fixed
@@ -1554,6 +1560,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.50.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.50.0
 [0.49.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.49.1
 [0.49.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.49.0
 [0.48.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.48.1
