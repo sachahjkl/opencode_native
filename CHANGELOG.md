@@ -4,6 +4,12 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.53.3] - 2026-11-14
+
+### Fixed
+- **The update is shown once**: the status bar's button alone says that a new version is on offer, downloading or ready to restart; no message pops up to say it again. A failed update is said in a message.
+- **A permission names every command it asks about**: in What you missed, the line showed only the first resource of the request, so a compound shell command looked like it asked about `[ -f "$f" ]` while the rule was about `dd` in the same command. It names them all now.
+
 ## [0.53.2] - 2026-11-14
 
 ### Fixed
@@ -1603,6 +1609,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.53.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.53.3
 [0.53.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.53.2
 [0.53.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.53.1
 [0.53.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.53.0
