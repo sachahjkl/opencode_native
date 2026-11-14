@@ -131,6 +131,9 @@ SIDEBAR_HOLD_MS  :: 3000   // the pointer still over the list this long: it is n
 SIDE_MODES_H_EM  :: 1.9    // the switch of the modes, in its own smaller size
 SIDE_INBOX_ROW_EM :: 2.9   // a row that also says its project
 SIDE_PROJECT_CHARS :: 40   // of that word
+SERVER_TABS_H_EM :: 2.2    // the row of the servers' tabs, at the top
+SERVER_TAB_CHARS :: 24     // of a server's name in its tab (an ellipsis for the rest)
+SERVER_TABS_FADE_EM :: 1.2   // the row's edge fades where tabs are hidden
 
 ////////////////////////////////
 // The dialogs of schedules and artifacts (schedules.odin)

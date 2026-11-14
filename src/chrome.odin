@@ -246,45 +246,26 @@ status_bar :: proc(app: ^App, em: f32) {
 		b.custom = bar_draw
 		b.custom_user = d
 		small := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
-		ui.spacer(ui.px(em * 0.35))
-		// the server: a button that opens the menu of the servers (switch, add, edit)
-		up := online(app)
-		col := up ? hex(HEX_GREEN) : app.link == .Auth_Refused ? hex(HEX_RED) : hex(HEX_YELLOW)
-		ui.next({width = ui.children_sum(), height = ui.px(h - 4 * ui.scale()), axis = .X, cross = .Center})
-		sb := ui.build_box({.Clickable, .Focusable}, "###server_btn")
-		sb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-			if b.hot_t > FADE_VISIBLE || b.active_t > FADE_VISIBLE { draw_bevel(dc, b.rect, 5 * ui.scale(), hex(HEX_BG3), b.hot_t, b.active_t * b.hot_t) }
-		}
-		ssig := ui.signal(sb)
-		skey := "server_menu"
-		if ssig.clicked { ui.menu_open(skey, sb.rect, sb.key) }
-		if ui.parent(sb) {
-			ui.spacer(ui.px(em * 0.45))
-			// (connected is the normal state: a pip; a lamp breathes while it is not)
-			if up { pip("###online", col, em * 0.8) } else { lamp("###online", col, 1, pulse = true, size = em * 0.8); animate(app) }
+		ui.spacer(ui.px(em * 0.8))
+		// the link to the server: its state and its address (the server is chosen in the sidebar's tabs: server_tabs)
+		ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###link") {
+			link_lamp(app, "###online", em * 0.8)
 			ui.spacer(ui.px(em * 0.4))
-			if len(app.servers) > 1 || !app.servers[app.server].local {
-				text("sn", i18n.tr(server_name(app)), up ? hex(HEX_TEXT) : col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-				ui.spacer(ui.px(em * 0.5))
+			text("st", link_word(app), online(app) ? hex(HEX_WEAK) : link_color(app), small)
+			if base := server_base(app); base != "" {
+				ui.spacer(ui.px(em * 0.6))
+				text("base", base, hex(HEX_FAINT), small)
 			}
-			state: string
-			switch app.link {
-			case .Connecting:   state = i18n.tr("connecting")
-			case .Online:       state = i18n.tr("connected")
-			case .Retrying:     state = i18n.tr("reconnecting")
-			case .Auth_Refused: state = i18n.tr("auth refused")
-			}
-			text("st", fmt.tprintf("%s  %s", state, server_base(app)), up ? hex(HEX_WEAK) : col, small)
-			ui.spacer(ui.px(em * 0.35))
-			glyph(lucide.CHEVRON_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY))
-			ui.spacer(ui.px(em * 0.45))
 		}
-		server_menu(app, skey, em)
+		side_line("###sg_status", b.last, em * 0.8, app.sidebar.width)
+		// the versions: the server's, and this program's (names of products: not translated)
+		ui.spacer(ui.px(em * 1.3))
 		if app.server_version != "" {
-			side_line("###sg_status", sb, em * 0.8, app.sidebar.width)
-			ui.spacer(ui.px(em * 1.3))
-			text("v", fmt.tprintf("opencode %s", app.server_version), hex(HEX_FAINT), small)
+			text("v", fmt.tprintf("OpenCode %s", app.server_version), hex(HEX_FAINT), small)
+			ui.spacer(ui.px(em * 0.8))
 		}
+		text("ocn_v", "opencode native " + APP_VERSION, hex(HEX_FAINT), small)
 		ui.spacer(ui.fill())
 		update_pill(app, em)
 		pend := int(app.pending)

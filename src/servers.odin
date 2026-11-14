@@ -10,6 +10,7 @@ import "core:mem/virtual"
 import "core:strings"
 import "core:thread"
 import store "gt:store"
+import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
 import remote "gt:remote"
@@ -413,7 +414,116 @@ threads_stop :: proc(app: ^App) {
 }
 
 ////////////////////////////////
-// The interface: the status bar's server menu, the dialog that adds or edits one
+// The interface: the servers' tabs at the top of the sidebar, their menu, the link's state, the dialog that adds or edits one
+
+// The state of the link to the server connected: a pip when it is up (the normal state), a lamp that breathes while it is not.
+link_lamp :: proc(app: ^App, id: string, size: f32) {
+	if online(app) { pip(id, hex(HEX_GREEN), size); return }
+	lamp(id, link_color(app), 1, pulse = true, size = size)
+	animate(app)
+}
+
+link_color :: proc(app: ^App) -> Color {
+	switch app.link {
+	case .Online:       return hex(HEX_GREEN)
+	case .Auth_Refused: return hex(HEX_RED)
+	case .Connecting, .Retrying:
+	}
+	return hex(HEX_YELLOW)
+}
+
+link_word :: proc(app: ^App) -> string {
+	switch app.link {
+	case .Connecting:   return i18n.tr("connecting")
+	case .Online:       return i18n.tr("connected")
+	case .Retrying:     return i18n.tr("reconnecting")
+	case .Auth_Refused: return i18n.tr("auth refused")
+	}
+	return ""
+}
+
+SERVER_MENU_KEY :: "server_menu"
+
+// A tab per server, at the top of the sidebar. The one connected stands raised with the state of its link; a click on another
+// connects to it. A click on the one connected, or a right click on any, opens the menu of the servers; "+" adds one. Even a single
+// server has its tab: the choice is always in the same place. Too many for the width: the row scrolls sideways, its edges fade.
+server_tabs :: proc(app: ^App, em: f32) {
+	h := math.round(em * SERVER_TABS_H_EM)
+	ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center})
+	if ui.row(.Center, id = "###srv_tabs") {
+		ui.spacer(ui.px(em * 0.75))
+		// (as wide as its tabs; it shrinks, and scrolls, when the row has less room: "+" stays in view after it)
+		ui.next({width = ui.children_sum(0), height = ui.pct(1), axis = .X, cross = .Center})
+		strip := ui.build_box({.Clip, .View_Scroll_X, .View_Clamp_X, .Allow_Overflow_X}, "###srv_strip")
+		ui.scroll_fades(strip, .X, math.round(em * SERVER_TABS_FADE_EM))
+		_ = ui.signal(strip)   // (the wheel sideways, or Shift+wheel, scrolls it in its signal)
+		ui.a11y_default(strip, {role = .Tab_List, orientation = .X, name = i18n.tr("Servers")})
+		shown: ^ui.Box
+		if ui.parent(strip) {
+			for s, i in app.servers {
+				if i > 0 { ui.spacer(ui.px(em * 0.25)) }
+				if b := server_tab(app, s, i, h, em); i == app.server { shown = b }
+			}
+		}
+		// the tab of a server just chosen is brought into view, once (by the last layout: a tab new this frame waits for the next)
+		if shown != nil && app.sidebar.server_revealed != app.server + 1 && shown.rect.max.x > shown.rect.min.x {
+			x := shown.rect.min.x - strip.rect.min.x + strip.view_off.x
+			_ = ui.view_reveal(strip, x, x + shown.rect.max.x - shown.rect.min.x, .X)
+			app.sidebar.server_revealed = app.server + 1
+		}
+		ui.spacer(ui.px(em * 0.3))
+		if ui.button("srv_add", icon = lucide.PLUS, o = {tip = i18n.tr("Add a server…"), height = h - 2 * math.round(em * 0.15)}).clicked { server_edit_open(app, -1) }
+		ui.spacer(ui.px(em * 0.75))
+	}
+	server_menu(app, SERVER_MENU_KEY, em)
+}
+
+@(private = "file")
+Server_Tab_Draw :: struct { current: bool }
+
+// The one connected raised, as the plate of a choice; the others flat until the pointer is over them.
+@(private = "file")
+server_tab_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+	d := (^Server_Tab_Draw)(user)
+	if d.current {
+		draw_bevel(dc, b.rect, 5 * ui.scale(), hex(HEX_BTN_FACE), b.hot_t, b.active_t * b.hot_t)
+	} else if b.hot_t > FADE_VISIBLE || b.active_t > FADE_VISIBLE {
+		draw_bevel(dc, b.rect, 5 * ui.scale(), hex(HEX_BG3), b.hot_t, b.active_t * b.hot_t)
+	}
+}
+
+// A server's tab: the state of its link when it is the one connected (another's is not known: a faint pip), its name.
+@(private = "file")
+server_tab :: proc(app: ^App, s: Server, i: int, h, em: f32) -> ^ui.Box {
+	current := i == app.server
+	name := i18n.tr(s.name)   // ("This computer" and "Command line" are the program's words)
+	ui.next({width = ui.children_sum(), height = ui.px(h - 2 * math.round(em * 0.15)), axis = .X, cross = .Center, cursor = .Hand})
+	b := ui.build_box({.Clickable, .Focusable}, fmt.tprintf("###srv_tab%d", i))
+	d := ui.frame_new(Server_Tab_Draw)
+	d.current = current
+	b.custom, b.custom_user = server_tab_draw, d
+	sig := ui.signal(b)
+	ui.a11y_default(b, {role = .Tab, name = name, selected = current, position = i + 1, set_size = len(app.servers), description = s.url})
+	if ui.parent(b) {
+		ui.spacer(ui.px(em * 0.55))
+		if current { link_lamp(app, "###srv_lamp", em * 0.8) } else { pip("###srv_lamp", hex(HEX_FAINT), em * 0.8) }
+		ui.spacer(ui.px(em * 0.4))
+		col := current ? hex(HEX_BRIGHT) : sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK)
+		text("n", ellipsize(name, SERVER_TAB_CHARS), col, ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+		if current {
+			ui.spacer(ui.px(em * 0.3))
+			glyph(lucide.CHEVRON_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
+		}
+		ui.spacer(ui.px(em * 0.55))
+	}
+	switch {
+	case sig.right_clicked:      ui.menu_open(SERVER_MENU_KEY, ui.mouse_pos(), b.key)
+	case sig.clicked && current: ui.menu_open(SERVER_MENU_KEY, b.rect, b.key)
+	case sig.clicked:            server_connect(app, i)
+	}
+	if s.url != "" && ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(s.url) } }
+	return b
+}
 
 Server_Edit :: struct {
 	index:    int,          // the server edited (-1: a new one)
