@@ -46,6 +46,7 @@ App :: struct {
 	font_families: []string,   // the installed families (read when a font picker first opens)
 
 	cx:             App_Context,       // what the window keeps from frame to frame, beside the panels' own state
+	server_files:   Server_Files,      // the server's files, for the toolkit's file browser (folders.odin)
 
 	// the server
 	servers:        [dynamic]Server,   // (servers.odin) this computer's first
@@ -187,7 +188,6 @@ App_Context :: struct {
 	integrations:   Integrations,         // the Connections page (integrations.odin)
 	background:     map[string]bool,      // the sessions with commands running in the background, and their parents (activity.odin; keys owned)
 	files:          Files,                // the dialog of the folder's files
-	folders:        Folders,              // the dialog that chooses a folder of the server
 	changes:        Changes,              // what a session changed, or would undo (session_tools.odin)
 	forms:          [dynamic]^Form_Req,   // what agents ask and wait for (forms.odin), of every session
 	shared_moved:   bool,                 // something of what every window shows may have changed this frame (detached_still)

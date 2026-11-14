@@ -57,7 +57,6 @@ build_ui :: proc(app: ^App) {
 	diff_full_dialog(app, em)
 	output_view_dialog(app, em)
 	files_dialog(app, em)
-	folders_dialog(app, em)
 	palette_dialog(app, em)
 	missed_dialog(app, em)
 	context_menu(app, em)

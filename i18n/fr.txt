@@ -754,20 +754,8 @@ fr Démarrer une session dans
 en Move the session to
 fr Déplacer la session vers
 
-en Cancel
-fr Annuler
-
-en Choose this folder
-fr Choisir ce dossier
-
-en Up
-fr Remonter
-
-en A folder of the server
-fr Un dossier du serveur
-
-en No folder in this one.
-fr Aucun dossier ici.
+en The server changed.
+fr Le serveur a changé.
 
 en Answer: %s
 fr Répondez : %s
@@ -988,6 +976,9 @@ fr La clé
 
 en A name for it (optional)
 fr Un nom pour elle (facultatif)
+
+en Cancel
+fr Annuler
 
 en Connecting…
 fr Connexion…

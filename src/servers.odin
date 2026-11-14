@@ -325,7 +325,7 @@ server_connect_now :: proc(app: ^App, i: int) {
 // that says something is on its way, since the answer will be dropped (answer) and could not lower it. A Remote is reset there too.
 Feature :: enum u8 {
 	View, Activity, Find, Waits, Permissions, Forms, Busy, Slash, Queue, Outgoing, Dialogs, Known, Facts, Stats, Changes, Integrations, Plugins,
-	Schedules, Artifacts, Files, Folders, Mentions, Terminals, Outputs, Browser, Preview,
+	Schedules, Artifacts, Files, Server_Files, Mentions, Terminals, Outputs, Browser, Preview,
 }
 
 @(rodata) FEATURE_FORGET := [Feature]proc(app: ^App){
@@ -349,7 +349,7 @@ Feature :: enum u8 {
 	.Schedules    = schedules_forget,
 	.Artifacts    = artifacts_forget,
 	.Files        = files_forget,
-	.Folders      = folders_forget,
+	.Server_Files = server_files_forget,
 	.Mentions     = mentions_forget,
 	.Terminals    = terminals_forget,
 	.Outputs      = output_views_forget,

@@ -544,7 +544,7 @@ files_left :: proc(app: ^App, em: f32) {
 	}
 }
 
-// (also the server's folders' rows: folders.odin)
+@(private = "file")
 file_row :: proc(app: ^App, id, name, icon: string, selected: bool, em: f32) -> bool {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), axis = .X, cross = .Center, cursor = .Hand})
 	row := ui.build_box({.Clickable}, id)

@@ -1986,8 +1986,8 @@ a_recent_folder_tells_and_copies_its_path :: proc(t: ^testing.T) {
 	})
 }
 
-// Other folder… of the home page, with a server elsewhere: the dialog of the server's folders. A folder clicked is entered, and
-// Choose this folder makes it the new session's.
+// Other folder… of the home page, with a server elsewhere: the toolkit's file browser shows the server's folders (its answer
+// names them relative to its own folder: by their names here). A folder entered and chosen is the new session's.
 @(test)
 other_folder_browses_the_servers_folders :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
@@ -1999,24 +1999,46 @@ other_folder_browses_the_servers_folders :: proc(t: ^testing.T) {
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "hf_other") != nil }, "the home page built")
 		session.wait_idle(s)
 		session.click(s, "hf_other")
-		session.frames(s, 2)
-		testing.expect(t, app.cx.open[.Folders], "the server's folders")
-		r := bench_take(t, .Folders_List)
+		session.frames(s, 3)
+		r := bench_take(t, .Server_Files_List)
 		testing.expect_value(t, r.path, "/api/fs/list?path=C%3A%2Fcode%2Fproject_0")
-		bench_answer(app, r, 200, `{"data":[{"path":"assets","type":"directory"},{"path":"src","type":"directory"},{"path":"README.md","type":"file"}]}`)
+		bench_answer(app, r, 200, `{"location":{"directory":"/srv"},"data":[{"path":"../code/project_0/assets/","type":"directory"},{"path":"../code/project_0/src/","type":"directory"},{"path":"../code/project_0/README.md","type":"file"}]}`)
 		session.wait_idle(s)
-		testing.expect(t, session.find_text(s, "README.md") == nil, "no file")
+		testing.expect(t, session.find_text(s, "assets") != nil && session.find_text(s, "src") != nil, "its folders, by name")
 		session.save_png(s, "server_folders.png")
-		session.click(s, "for1")
+		session.key(s, .Down)
 		session.frames(s, 2)
-		testing.expect_value(t, app.cx.folders.at, "C:/code/project_0/src")
-		bench_answer(app, bench_take(t, .Folders_List), 200, `{"data":[]}`)
+		session.key(s, .Return)
+		session.frames(s, 3)
+		r = bench_take(t, .Server_Files_List)
+		testing.expect_value(t, r.path, "/api/fs/list?path=C%3A%2Fcode%2Fproject_0%2Fassets")
+		bench_answer(app, r, 200, `{"data":[]}`)
+		session.frames(s, 3)
+		session.click(s, "fb_act")
+		session.frames(s, 3)
+		testing.expect_value(t, app.chat.new_dir, "C:/code/project_0/assets")
+	})
+}
+
+// The server left while a folder was read: the browser is told, and does not wait for an answer that will not come.
+@(test)
+a_folder_read_when_the_server_leaves_ends :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		folder_choose(app, .New_Session)
+		session.frames(s, 3)
+		old := bench_take(t, .Server_Files_List)
+		server_files_forget(app)
+		session.frames(s, 3)
+		testing.expect(t, session.find_text(s, "The server changed.") != nil, "said")
+		bench_answer(app, old, 200, `{"data":[{"path":"late","type":"directory"}]}`)
+		session.frames(s, 3)
+		testing.expect(t, session.find_text(s, "late") == nil, "the old answer shows nothing")
+		session.click(s, "fb_cancel")
 		session.frames(s, 2)
-		testing.expect(t, session.find(s, "fo_none") != nil, "an empty folder says so")
-		session.click(s, "fo_choose")
-		session.frames(s, 2)
-		testing.expect(t, !app.cx.open[.Folders], "closed")
-		testing.expect_value(t, app.chat.new_dir, "C:/code/project_0/src")
 	})
 }
 
