@@ -4,6 +4,12 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.54.1] - 2026-11-14
+
+### Fixed
+- **The title bar's and the status bar's line meet the sidebar's edge**: the vertical line of both bars is on the same pixel column as the edge between the sidebar and the conversation, while you drag that edge, after you release it, and at every display scale.
+- **Every background job's report shows as a card.** A command whose own quotes are not escaped in its report (`grep "Error"`) was shown as raw markup.
+
 ## [0.54.0] - 2026-11-14
 
 ### Added
@@ -1624,6 +1630,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.54.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.54.1
 [0.54.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.54.0
 [0.53.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.53.3
 [0.53.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.53.2
