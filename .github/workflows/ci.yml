@@ -46,6 +46,10 @@ jobs:
         shell: cmd
         run: call build.bat
 
+      # (a program that Windows refuses to start, a broken manifest, once shipped unseen: the built one must answer)
+      - name: Starts (its icon, its console launcher's version)
+        run: build/ocntools.exe launcher
+
       - name: Tests
         run: odin test src -collection:gt=ext/gui_toolkit/src -out:build/test.exe -define:ODIN_TEST_THREADS=1 -define:MERMAID_NATIVE_LINK=false   # (one test with a window at a time)
 

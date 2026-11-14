@@ -46,3 +46,9 @@ run_check :: proc(args: []string) -> int {
 	fmt.printfln("check: all passed, %s is new", out)
 	return 0
 }
+
+// The built program starts on Windows: a broken manifest once shipped a program that Windows refused to start, unseen
+// by a build that only compiles. The CI's Windows job runs it after its build; elsewhere it says nothing.
+run_launcher :: proc(args: []string) -> int {
+	return toolbox.check_launcher(OCN_PROJECT) ? 0 : 1
+}

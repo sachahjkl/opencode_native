@@ -40,6 +40,7 @@ COMMANDS :: [?]toolbox.Command{
 	{name = "logo", usage = "[--out folder] [--hint 0|1|2]: the logo (assets/logo*.png) and the icon (opencode-native.ico), drawn by the toolkit's paint package", run = run_logo},
 	{name = "vt", usage = "[--check] [--headers folder]: src/vt_gen.odin, the numbers and calls of libghostty-vt, from its headers", run = run_vt},
 	{name = "check", usage = "[--out file]: the tests of the program, of its Rust code and of this tool, then a build that must be new", run = run_check},
+	{name = "launcher", usage = "(Windows) the built program starts: its icon, and its console launcher answers its version", run = run_launcher},
 	{name = "live", usage = "[link|password|prompt|diff|browser|folders] [--exe file]: the real program on the real server, failures made to happen; what it made is removed", run = run_live},
 	{name = "clean", usage = "what a live run that did not end left in the demo folder, and only that", run = run_clean},
 	{name = "measure", usage = "[find] [--runs n] [--exe file]: the start and the memory of the real program, or a file search; the figures that may be published", run = run_measure},
