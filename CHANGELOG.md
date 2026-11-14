@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.50.1] - 2026-11-14
+
+### Fixed
+- **opencode native starts on Windows**: Windows refused to start 0.49.0 to 0.50.0 (their manifest was broken). This version starts; a copy stuck on one of those is updated by installing this version by hand from the site.
+
 ## [0.50.0] - 2026-11-14
 
 ### Changed
@@ -1560,6 +1565,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.50.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.50.1
 [0.50.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.50.0
 [0.49.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.49.1
 [0.49.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.49.0
