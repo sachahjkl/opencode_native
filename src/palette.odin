@@ -64,7 +64,8 @@ palette_toggle :: proc(app: ^App) {
 	if app.cx.open[.Palette] { app.cx.open[.Palette] = false; return }
 	app.cx.open[.Palette], p.fresh, p.vl.sel, p.stamp = true, true, 0, 0
 	ui.line_edit_set(&p.field, "")
-	if !app.cx.have_slash { request(app, .Slash, "GET", "/api/command") }
+	// (read again at each opening, as the composer's `/` list does: slash_track)
+	if !flying(app, .Slash, "") { request(app, .Slash, "GET", "/api/command") }
 }
 
 slash_load :: proc(app: ^App, list: []Slash) {

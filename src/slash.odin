@@ -55,8 +55,10 @@ slash_track :: proc(app: ^App) {
 		p.sel, p.dismissed = 0, false
 	}
 	if p.dismissed { return }
+	// (read again at each opening, whatever was read before: a server that has just started lists its commands before its
+	// plugins add theirs, and a list read once would stay that one for the program's life; the one read shows meanwhile)
+	if !p.open && !flying(app, .Slash, "") { request(app, .Slash, "GET", "/api/command") }
 	p.open = true
-	if !app.cx.have_slash && !flying(app, .Slash, "") { request(app, .Slash, "GET", "/api/command") }
 }
 
 slash_shown :: proc(app: ^App) -> bool {

@@ -2054,6 +2054,86 @@ the_files_of_the_session_are_found_and_mentioned :: proc(t: ^testing.T) {
 	})
 }
 
+// `/` and `@` typed in the composer, as a person types them: each opens its list over the text, Down moves in it and Tab
+// puts the choice in the composer.
+@(test)
+the_composers_prefixes_open_their_lists :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		append(&app.cx.slash, Slash{strings.clone("help"), strings.clone("Show the help")}, Slash{strings.clone("review"), strings.clone("Review the changes")})
+		app.cx.have_slash = true
+		// (a file dialog opened and closed before: it kept the keyboard it had taken)
+		folder_choose(app, .New_Session)
+		session.frames(s, 3)
+		bench_answer(app, bench_take(t, .Server_Files_List), 200, `{"data":[]}`)
+		session.frames(s, 2)
+		session.click(s, "fb_cancel")
+		session.frames(s, 3)
+		testing.expect(t, !ui.file_dialog_shown(&app.state), "closed")
+		app.composer.focus_next = true
+		session.frames(s, 3)
+		session.type_text(s, "/re")
+		session.frames(s, 3)
+		testing.expect(t, slash_shown(app), "the commands' list")
+		testing.expect(t, session.find(s, "slash_list") != nil, "built over the text")
+		session.key(s, .Tab)
+		session.frames(s, 3)
+		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "/review ")
+
+		ui.text_edit_set(&app.composer.area, "")
+		app.composer.focus_next = true
+		session.frames(s, 2)
+		session.type_text(s, "see @rea")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return bench_count(.Mention_Files) > 0 }, "the files asked")
+		bench_answer(app, bench_take(t, .Mention_Files), 200, `{"location":{"directory":"C:/code/project_0"},"data":[{"path":"README.md","type":"file"}]}`)
+		session.frames(s, 3)
+		testing.expect(t, mention_shown(app), "the files' list")
+		session.key(s, .Tab)
+		session.frames(s, 3)
+		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "see @README.md ")
+	})
+}
+
+// The commands read as the server started had none yet (its plugins add theirs later): read once, that empty list stayed for the
+// program's life, and `/` never listed anything. A `/` list that opens reads them again; what comes in shows.
+@(test)
+the_commands_are_read_again_when_the_list_opens :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		app.composer.focus_next = true
+		session.frames(s, 3)
+		session.type_text(s, "/")
+		session.frames(s, 2)
+		bench_answer(app, bench_take(t, .Slash), 200, `{"data":[]}`)   // (the server, just started)
+		session.frames(s, 2)
+		testing.expect(t, !slash_shown(app), "nothing to list")
+		session.key(s, .Backspace)
+		session.frames(s, 2)
+		session.type_text(s, "/")
+		session.frames(s, 2)
+		testing.expect_value(t, bench_count(.Slash), 1)
+		bench_answer(app, bench_take(t, .Slash), 200, `{"data":[{"name":"review","description":"Review the changes"}]}`)
+		session.frames(s, 2)
+		testing.expect(t, slash_shown(app), "the commands that came since")
+		session.type_text(s, "r")
+		session.frames(s, 2)
+		testing.expect_value(t, bench_count(.Slash), 0)   // (a word typed further is the same list: one reading per opening)
+		// (the agents' and the models' pickers, read once at the connection as the commands were)
+		picker_open(app, "agent", {})
+		testing.expect_value(t, bench_count(.Agents), 1)
+		app.cx.open[.Picker] = false
+		picker_open(app, "model", {})
+		testing.expect_value(t, bench_count(.Models), 1)
+		app.cx.open[.Picker] = false
+	})
+}
+
 // Escape in the file browser is the browser's: it did reach the program behind it, which interrupted the running session.
 @(test)
 escape_in_the_file_browser_does_not_interrupt :: proc(t: ^testing.T) {

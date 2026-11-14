@@ -124,6 +124,12 @@ picker_open :: proc(app: ^App, id: string, anchor: Rect) {
 	app.cx.open[.Picker], p.id, p.anchor, p.fresh = true, id, anchor, true
 	p.sel = 0
 	ui.line_edit_set(&p.field, "")
+	// (read again at each opening: a server that has just started lists its agents and models before its plugins and
+	// integrations add theirs, and a list read once at the connection would stay that one; the one read shows meanwhile)
+	switch id {
+	case "agent": if !flying(app, .Agents, "") { request(app, .Agents, "GET", "/api/agent") }
+	case "model": if !flying(app, .Models, "") { request(app, .Models, "GET", "/api/model") }
+	}
 }
 
 // A row of the list: an item (`hit` in the hits), or the header of `group` (`hit` -1).
