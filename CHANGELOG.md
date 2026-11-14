@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.51.0] - 2026-11-14
+
+### Changed
+- **A file picker of its own, the same everywhere**: every file and folder dialog is now drawn by opencode native, in its theme: a path you can click or type, places, a sortable list that you filter by typing, a preview of text and images, and New folder. With a server on another machine, it shows the folders of that server, and the folders of your recent sessions as places. The system dialog is still there: Settings, General, File dialogs.
+
 ## [0.50.3] - 2026-11-14
 
 ### Added
@@ -1575,6 +1580,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.51.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.51.0
 [0.50.3]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.50.3
 [0.50.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.50.2
 [0.50.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.50.1
