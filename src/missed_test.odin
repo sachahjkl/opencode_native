@@ -217,6 +217,20 @@ opening_a_session_acknowledges_its_end :: proc(t: ^testing.T) {
 	testing.expect(t, open_entry(app, .Permission, "p1", "waits") == nil, "answered")
 }
 
+// A permission's line names every resource of the request: a compound shell command is asked as a whole, and its first
+// command is not always the one a rule asks about.
+@(test)
+a_permissions_line_names_every_resource :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	listed(app, MISSED_LIST)
+	bench_event(app, `{"type":"permission.asked","data":{"request":{"id":"p1","sessionID":"waits","action":"shell","resources":["[ -f \"$f\" ]","dd if=\"$f\"","od -A d \"$f\""]}}}`)
+	missed_sync(app)
+	if e := open_entry(app, .Permission, "p1", "waits"); testing.expect(t, e != nil, "the wait") {
+		testing.expect_value(t, e.text, `shell [ -f "$f" ] · dd if="$f" · od -A d "$f"`)
+	}
+}
+
 // A new end of a session whose end is open counts on the same entry; the view's count of what is New goes to 0 when the view
 // opens, and the entries stay.
 @(test)

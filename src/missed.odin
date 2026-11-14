@@ -379,12 +379,13 @@ missed_sync :: proc(app: ^App) {
 	}
 }
 
-// A permission in a line, from what is kept of it (permission_words reads the event's).
+// A permission in a line, from what is kept of it (permission_words reads the event's). Every resource is named: one shell
+// call is asked as a whole, and its first command is not always the one a rule asks about.
 @(private = "file")
 permission_line :: proc(p: ^Permission) -> string {
 	if m := strings.trim_space(p.message); m != "" { return first_line(m) }
-	if len(p.resources) > 0 { return strings.concatenate({p.action, " ", p.resources[0]}, context.temp_allocator) }
-	return p.action
+	if len(p.resources) == 0 { return p.action }
+	return strings.concatenate({p.action, " ", strings.join(p.resources[:], " · ", context.temp_allocator)}, context.temp_allocator)
 }
 
 @(private = "file")
