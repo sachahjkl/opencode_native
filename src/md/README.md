@@ -14,6 +14,8 @@ purpose, the decisions, what was refused.
 - [features/job-reports.md](features/job-reports.md): the harness's reports of ended background jobs, read as cards.
 - [features/background-subagents.md](features/background-subagents.md): sub-agents run in the background (opencode
   2.3.0): the child's state and its reports decide, never the call's quick return.
+- [features/remote-localhost.md](features/remote-localhost.md): a remote server's localhost in the browser panel is
+  that server's machine: translated in `web_navigate`, said in the address bar.
 - [features/jump.md](features/jump.md): Jump to message (Ctrl+Alt+G): a chooser over the session's prompts; why a
   palette of its own.
 - [features/queue-first.md](features/queue-first.md): Alt+Enter queues a prompt first while a run works; the inbox

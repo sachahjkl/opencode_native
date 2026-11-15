@@ -2,8 +2,6 @@
 
 ## Now
 
-- **A remote server's local addresses in the browser panel.** A page at localhost or 127.0.0.1 of a remote server's
-  session is that server's machine: the panel opens it at the server's host, the port kept, and its address bar says so.
 - **A session's id in a message opens it** (opencode 2.3.0, as the entries below). A `ses_…` word in a message is a
   link to that session: gui_toolkit 0.267's link words, after the migration to gui_toolkit 0.266.
 - **A Mermaid diagram maximised.** The diagram's viewer fills the window, with zoom and pan: gui_toolkit 0.267's

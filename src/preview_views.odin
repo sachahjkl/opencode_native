@@ -102,11 +102,41 @@ web_parent :: proc(t: ^Preview_Tab, w: ^platform.Window) {
 }
 
 // (Until the page says where it went, what was asked is its address: the limit may take the view before it does, preview_trim.)
-web_navigate :: proc(app: ^App, t: ^Preview_Tab, url: string) {
+// Every navigation of a tab comes here, whatever asked for it: a remote server's loopback address is translated to its
+// host (preview_reach). Returns the address the page goes to (temp memory).
+web_navigate :: proc(app: ^App, t: ^Preview_Tab, url: string) -> (reached: string) {
+	from: string
+	reached, from = preview_reach(app, url)
+	delete(t.mapped)
+	t.mapped = strings.clone(from)
 	t.asked = true
-	if t.url == "" { t.url = strings.clone(url) }
+	if t.url == "" { t.url = strings.clone(reached) }
 	if t.view == nil { web_start(app, t) }
-	if v := t.view; v != nil { app.previews.host.navigate(v.native, url) }
+	if v := t.view; v != nil { app.previews.host.navigate(v.native, reached) }
+	return
+}
+
+// Where `url` is reached from here (src/md/features/remote-localhost.md): for a remote server, a loopback host is that
+// server's machine, so it becomes the server's host, the rest kept; `from` is the host it was ("" : not translated).
+// Temp memory.
+preview_reach :: proc(app: ^App, url: string) -> (reached, from: string) {
+	if app.conn == nil || url_is_here(app.conn.http.base) { return url, "" }
+	lo, hi, ok := url_host_span(url)
+	if !ok || !host_is_here(url[lo:hi]) { return url, "" }
+	base := app.conn.http.base
+	slo, shi, sok := url_host_span(base)
+	if !sok || shi <= slo { return url, "" }
+	return strings.concatenate({url[:lo], base[slo:shi], url[hi:]}, context.temp_allocator), url[lo:hi]
+}
+
+// The translated host of the page shown, while it is on the server's host (a page that went elsewhere by its own
+// links says nothing): what the address bar's mark says.
+preview_mapped_shown :: proc(app: ^App, t: ^Preview_Tab) -> string {
+	if t.mapped == "" || app.conn == nil { return "" }
+	lo, hi, ok := url_host_span(t.url)
+	slo, shi, sok := url_host_span(app.conn.http.base)
+	if !ok || !sok || t.url[lo:hi] != app.conn.http.base[slo:shi] { return "" }
+	return t.mapped
 }
 
 web_act :: proc(t: ^Preview_Tab, what: Web_Act) {
@@ -221,7 +251,7 @@ preview_tab_front :: proc(app: ^App, p: ^Preview, t: ^Preview_Tab) {
 tab_free :: proc(app: ^App, t: ^Preview_Tab) {
 	web_close(app, t)
 	delete(t.navs)
-	delete(t.url); delete(t.title); delete(t.id)
+	delete(t.url); delete(t.title); delete(t.id); delete(t.mapped)
 	ui.line_edit_destroy(&t.field)
 	free(t)
 }

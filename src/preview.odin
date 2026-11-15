@@ -48,6 +48,7 @@ Preview_Tab :: struct {
 	id:       string,             // what the agents call it: the same for its whole life (owned)
 	field:    ui.Line_Edit,      // the address
 	url:      string,             // what the page shows (owned)
+	mapped:   string,             // the loopback host its last navigation translated to the server's ("": none; owned)
 	title:    string,             // (owned)
 	navs:     [dynamic]u64,       // the navigations under way: one can begin before the last ends
 	web:      Web_State,
@@ -164,8 +165,7 @@ preview_open :: proc(app: ^App, url: string, by := Asked_By.User) {
 // (What is not on the screen stays where it is: an agent's page does not take the panel from what the user reads.)
 preview_go :: proc(app: ^App, t: ^Preview_Tab, url: string) {
 	if preview_tab_shown(app, t) && app.preview.open { ui.view_open(&app.program_views, PREVIEW_VIEW, app, owner = &app.state) }
-	web_navigate(app, t, url)
-	ui.line_edit_set(&t.field, url)
+	ui.line_edit_set(&t.field, web_navigate(app, t, url))
 }
 
 preview_loading :: proc(t: ^Preview_Tab) -> bool { return len(t.navs) > 0 }
@@ -380,6 +380,16 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 				p.addr_key = res.box.key
 				if t.focus_address { ui.set_focus(res.box.key); t.focus_address = false }
 				if res.committed { preview_commit(app, t, ui.line_edit_string(&t.field)) }
+			}
+			// (a remote server's loopback address, opened at its host: said where the address is read)
+			if mapped := preview_mapped_shown(app, t); mapped != "" {
+				ui.spacer(ui.px(em * 0.3))
+				ui.next({width = ui.text_size(em * 0.4), height = ui.px(math.round(em * 1.3)), font_size = math.round(em * FS_CAPTION), radius = math.round(em * 0.3), bg = with_alpha(accent(), 0.16), fg = accent()})
+				b := ui.build_box({.Draw_Text, .Draw_Background, .No_Text_Trunc}, fmt.tprintf("%s###pv_mapped", i18n.tr("on the server")))
+				if ui.hovered_for(ui.signal(b)) {
+					if ui.tooltip() { ui.tooltip_text(fmt.tprintf(i18n.tr("%s is the server's machine: opened at its address"), mapped)) }
+				}
+				ui.spacer(ui.px(em * 0.3))
 			}
 		}
 		ui.spacer(ui.px(em * 0.35))

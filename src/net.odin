@@ -92,17 +92,30 @@ same_server :: proc(host_a: string, port_a: u16, host_b: string, port_b: u16) ->
 	return host_a == host_b || (host_is_here(host_a) && host_is_here(host_b))
 }
 
-host_is_here :: proc(h: string) -> bool { return h == "localhost" || h == "::1" || h == "[::1]" || strings.has_prefix(h, "127.") }
+// A loopback host: the machine that reads it (0.0.0.0 as a place to go is that machine too).
+host_is_here :: proc(h: string) -> bool {
+	return h == "localhost" || h == "::1" || h == "[::1]" || h == "0.0.0.0" || strings.has_prefix(h, "127.")
+}
+
+// Where the host of `url` is, in bytes ("http://[::1]:5173/x": its brackets included). ok false: no "://".
+url_host_span :: proc(url: string) -> (lo, hi: int, ok: bool) {
+	at := strings.index(url, "://")
+	if at < 0 { return }
+	lo = at + 3
+	rest := url[lo:]
+	if strings.has_prefix(rest, "[") {
+		end := strings.index_byte(rest, ']')
+		if end < 0 { return }
+		return lo, lo + end + 1, true
+	}
+	cut := strings.index_any(rest, ":/?#")
+	return lo, cut < 0 ? len(url) : lo + cut, true
+}
 
 // Whether a server's files are this computer's: "http://127.0.0.1:4096", "https://[::1]:4096".
 url_is_here :: proc(url: string) -> bool {
-	_, _, rest := strings.partition(url, "://")
-	if strings.has_prefix(rest, "[") {
-		end := strings.index_byte(rest, ']')
-		return end > 0 && host_is_here(rest[:end + 1])
-	}
-	cut := strings.index_any(rest, ":/")
-	return host_is_here(cut < 0 ? rest : rest[:cut])
+	lo, hi, ok := url_host_span(url)
+	return ok && host_is_here(url[lo:hi])
 }
 
 ////////////////////////////////

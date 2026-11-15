@@ -1348,6 +1348,12 @@ fr Fermer cet onglet
 en localhost:3000 or an address
 fr localhost:3000 ou une adresse
 
+en on the server
+fr sur le serveur
+
+en %s is the server's machine: opened at its address
+fr %s désigne la machine du serveur : ouvert à son adresse
+
 en The page could not start: %s
 fr La page n'a pas pu démarrer : %s
 

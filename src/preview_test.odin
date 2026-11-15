@@ -271,6 +271,38 @@ the_home_page_has_a_browser_of_its_own :: proc(t: ^testing.T) {
 	testing.expect_value(t, fr(app).url, "http://home.local/")
 }
 
+// A remote server's loopback address is its machine (src/md/features/remote-localhost.md): the panel loads it at the
+// server's host, the port and the path kept, and the address bar says so; a local server's stays as it is.
+@(test)
+a_remote_servers_localhost_opens_at_its_host :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	app.conn.http.base = "https://box.example:4096"
+	with_page(app, "s1", "http://127.0.0.1:5173/x", "App")
+	testing.expect_value(t, fake(fr(app)).urls[0], "http://box.example:5173/x")
+	testing.expect_value(t, ui.line_edit_string(&fr(app).field), "http://box.example:5173/x")
+	// (the page says where it is: the address it was sent to, as a web view does)
+	web_said(app, .Source, 0, words("http://box.example:5173/x"))
+	web_events_drain(app)
+	testing.expect_value(t, preview_mapped_shown(app, fr(app)), "127.0.0.1")
+	// its own link elsewhere: the mark goes
+	web_said(app, .Source, 0, words("https://docs.example.org/"))
+	web_events_drain(app)
+	testing.expect_value(t, preview_mapped_shown(app, fr(app)), "")
+	for c in ([][2]string{{"http://localhost:3000/", "http://box.example:3000/"}, {"http://0.0.0.0:8080", "http://box.example:8080"}, {"http://[::1]:9000/a?b", "http://box.example:9000/a?b"}, {"https://example.org/x", "https://example.org/x"}}) {
+		got, _ := preview_reach(app, c[0])
+		testing.expect_value(t, got, c[1])
+	}
+	app.conn.http.base = "http://[fd00::5]:4096"
+	got, _ := preview_reach(app, "http://127.0.0.1:5173/x")
+	testing.expect_value(t, got, "http://[fd00::5]:5173/x")
+	// a server of this computer: its loopback is this one's
+	app.conn.http.base = "http://127.0.0.1:4096"
+	with_page(app, "s2", "http://127.0.0.1:5173/x", "App")
+	testing.expect_value(t, fake(fr(app)).urls[len(fake(fr(app)).urls) - 1], "http://127.0.0.1:5173/x")
+	testing.expect_value(t, preview_mapped_shown(app, fr(app)), "")
+}
+
 @(test)
 what_is_open_beside_a_first_prompt_stays_with_its_session :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
