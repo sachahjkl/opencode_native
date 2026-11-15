@@ -50,7 +50,8 @@ dock :: proc(app: ^App, em: f32, side, col: f32) {
 			}
 			forms_dock(app, em)
 			queue_list(app, em)
-			composer(app, em)
+			// (the free usage used up and nothing paid: nothing the composer sends could run)
+			if free_limit_active(app) { free_limit_panel(app, em) } else { composer(app, em) }
 			activity_tray(app, em)
 			ui.spacer(ui.px(em * 1.1))
 		}

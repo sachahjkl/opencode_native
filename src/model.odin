@@ -1163,6 +1163,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 
 	visible = true
 	if kind == "session.inbox.enqueued" { missed_inbox(app, sid, d) }   // (a schedule's prompt, in any session: its run is the schedule's)
+	if kind == "session.step.failed" { free_limit_note(app, ev) }   // (the free usage is the network's: any session)
 	switch kind {
 	case "session.execution.started":
 		busy_event(app, sid, true)

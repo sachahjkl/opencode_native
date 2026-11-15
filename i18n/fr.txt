@@ -794,6 +794,18 @@ fr Autre chose
 en Your answer
 fr Votre réponse
 
+en Free limit reached
+fr Limite gratuite atteinte
+
+en Free usage resets at %s. Connect a provider or subscribe to Go to continue.
+fr L'usage gratuit reprend à %s. Connectez un fournisseur ou abonnez-vous à Go pour continuer.
+
+en Subscribe to Go · $10/mo
+fr S'abonner à Go · 10 $/mois
+
+en Connect provider
+fr Connecter un fournisseur
+
 en Goal
 fr Objectif
 

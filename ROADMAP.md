@@ -7,7 +7,6 @@
 - **A Mermaid diagram maximised.** The diagram's viewer fills the window, with zoom and pan: gui_toolkit 0.267's
   maximised dialog (`view_maximise`), after the migration to gui_toolkit 0.266.
 - **Tab numbers while the modifier is held.** Holding the key of the tab shortcuts shows each tab's number.
-- **The free-limit panel.** When the server says the free limit is reached, a panel takes the composer's place.
 - **MCP events and freeform tools (experimental).** Subscribe to `experimental.mcp.event` when the flag is on; the
   model's capabilities now list freeform tool input; the session's throughput is measured from the first token.
 
