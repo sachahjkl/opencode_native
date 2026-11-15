@@ -1,5 +1,5 @@
 // Several opencode servers: the desktop app's on this computer (service.json, always first), those the user added
-// (%APPDATA%\opencode-native\servers.txt), the one of --url. One is connected at a time; switching drops everything
+// (config_dir(): %APPDATA%\FromentSoftware\OpencodeNative\servers.txt), the one of --url. One is connected at a time; switching drops everything
 // read from the last one and reads the new one.
 package ocn
 

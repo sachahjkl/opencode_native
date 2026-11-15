@@ -256,6 +256,7 @@ bench_end :: proc(p: rawptr) {
 	palette_destroy(app)   // (before its window's state)
 	pictures.cache_destroy(&app.pictures)   // (before the renderer: its textures)
 	ui.destroy(&app.state)
+	ui.keymap_destroy(&app.keymap)
 	ui.family_face_destroy(&app.term_family)
 	ui.font_picker_destroy(&app.term_picker)
 	ui.font_families_destroy(&app.term_families)

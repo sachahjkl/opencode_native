@@ -16,7 +16,7 @@ licence_init :: proc(app: ^App) {
 	if app.prefs_file == "" { return }
 	prefs_page.licence_init(&app.licence, &app.state, {
 		store = {product = product.LICENCE, path = pjoin({config_dir(), fmt.tprintf("licence%s", product.LICENCE.file_extension)}), accept_dev = ODIN_DEBUG},
-		name = APP_NAME, pricing_url = LICENCE_PRICING_URL, owner = app.win,
+		name = APP_TITLE, pricing_url = LICENCE_PRICING_URL, owner = app.win,
 	})
 }
 

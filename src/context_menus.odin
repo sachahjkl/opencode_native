@@ -133,7 +133,7 @@ message_menu :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message) {
 	if ui.has_selection(&app.state) {
 		sel := ui.selected_text(&app.state, context.temp_allocator)
 		if ui.menu_item(i18n.tr("Quote"), "", icon = lucide.QUOTE).clicked { quote_text(app, pane, sel, false) }
-		if ui.menu_item(i18n.tr("Quote with a comment"), "Ctrl+Q", icon = lucide.MESSAGE_SQUARE_QUOTE).clicked { quote_text(app, pane, sel, true) }
+		if ui.menu_item(i18n.tr("Quote with a comment"), command_shortcut(app, "session.quote"), icon = lucide.MESSAGE_SQUARE_QUOTE).clicked { quote_text(app, pane, sel, true) }
 		if ui.menu_item(i18n.tr("Copy the selection"), "Ctrl+C", icon = lucide.COPY).clicked { copied(sel, i18n.tr("Selection copied")) }
 		ui.menu_separator()
 	}

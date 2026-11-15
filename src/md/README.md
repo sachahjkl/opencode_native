@@ -41,3 +41,7 @@ purpose, the decisions, what was refused.
   its own size and why.
 - [features/setup.md](features/setup.md): gt:setup's screen with ocn's content (identity, logo, vendor); no note,
   no screen of its own.
+- [features/keys.md](features/keys.md): the commands' keys through the toolkit's keymap: a person's key replaces a
+  command's own; the keys read elsewhere, shown here.
+- [features/folders.md](features/folders.md): the program's folders and its install in its vendor's
+  (FromentSoftware/OpencodeNative), the earlier folders moved once; the title a person reads.

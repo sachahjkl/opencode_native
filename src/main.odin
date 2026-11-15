@@ -107,6 +107,9 @@ App :: struct {
 	announcer:        ui.Announcer,     // says what an act did (Copied, Exported): the system's notifications or the window's toasts (general.messages)
 	licence:          prefs_page.Licence,   // the licence that supports the program (licence.odin): the settings' Licence page
 	standard:         prefs_page.Standard_Watch,   // applies the toolkit's settings as they change (settings.odin prefs_init)
+	// the person's keys and aliases (keys.custom, keys.aliases: standard_watch reads and writes them); every window's
+	// state reads it, the commands' keys through it (commands_keys)
+	keymap:           ui.Keymap,
 	prefs_writer:     config.User_Writer,   // writes them off the loop, once a round when they changed (main_after_frame)
 	prefs:            Prefs,          // their plain values
 	facts:            Server_Facts,   // what the server said for the settings pages
@@ -572,6 +575,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	app.changelog.english = CHANGELOG   // (the settings' What's new page, a test's app too)
 	ui.init(&app.state, &app.fonts, &app.theme)
 	app.state.icon_font = app.icons   // (Lucide: the menus' icons are its characters)
+	ui.keymap_use(&app.state, &app.keymap)   // (the views' own windows read their owner's)
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
 	views_start(app, views_path(prefs_file))   // (ui.init selected the state: the sidebar's owner)
 	palette_start(app)   // (after the preferences: the settings source reads them)
@@ -616,6 +620,7 @@ fonts_init :: proc(app: ^App) -> bool {
 main :: proc() {
 	opts := cli_start()   // (--help, --version, a line not understood: said, no window; everything else reads app.cli)
 	started := time.tick_now()
+	folders_move()   // (before anything reads the folders: --status and the single instance key on the configuration's)
 	// --install / --uninstall / --status: the install, without a window
 	if setup.command_alone(opts.command) { cli.exit(setup.command_run(opts.command, setup_options(), process.console_write)) }
 	// one window per person: a second start hands what it asks to the first and ends, before it writes or shows anything
@@ -641,7 +646,7 @@ main :: proc() {
 	// a composition swap chain whose buffers keep the monitor's size while the window is resized: the window shows their
 	// top-left part 1:1, clipped by its client area, so a frame of the old size is never stretched over the new one (as
 	// Wren's browser.window.fixed_surface). Where DirectComposition is missing it is an ordinary swap chain.
-	app.win = platform.open_window(APP_NAME, {WINDOW_W, WINDOW_H}, transparent = true, integrated_title = true)
+	app.win = platform.open_window(APP_TITLE, {WINDOW_W, WINDOW_H}, transparent = true, integrated_title = true)
 	if app.win == nil { fmt.eprintln("opencode-native: no window"); os.exit(1) }
 	title_apply(app)   // (the preferences were read before the window was there)
 	if !fonts_init(app) { fmt.eprintln("opencode-native: no UI font"); os.exit(1) }
@@ -717,6 +722,7 @@ main :: proc() {
 	if app.cx.due[.Drafts].due_ms != 0 { drafts_save(app) }   // (what was typed in the last second)
 	config.user_writer_stop(&app.prefs_writer, &app.cfg_prefs)
 	stores_close(app)   // (waits for the disk: the window is gone, nothing waits on a frame)
+	ui.keymap_destroy(&app.keymap)   // (after the preferences' writer: the palette changes it no more)
 	zooms_destroy(app)
 	ui.post_close(&app.state)
 	prefs_page.install_end(&app.install)

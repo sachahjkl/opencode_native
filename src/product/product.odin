@@ -9,7 +9,7 @@ import licence "gt:licence"
 // accepts its licences, a release never).
 LICENCE :: licence.Product{
 	name           = "opencode-native",
-	title          = "opencode native",
+	title          = "Opencode Native",
 	version_tag    = "OCN1",
 	sign_context   = "opencode-native-licence-v1\n",
 	file_extension = ".ocnlicence",

@@ -128,12 +128,11 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
   or change: its shell, its MCP servers (connect, disconnect), the usage limits and budgets of an OpenCode workspace, the
   saved permissions (revoke), providers, models, agents, skills, commands, the configuration files.
 - **Desktop integration** without administrator rights: Setup installs the running copy for the user, and opens by itself to offer an upgrade when a newer copy starts over an older install. On Windows: a
-  Start menu shortcut with its AppUserModelID, a Settings > Apps entry, an uninstaller. On Linux: `~/.local/share`, an
+  Start menu shortcut with its AppUserModelID, a Settings > Apps entry, an uninstaller. On Linux: `~/.local/opt/FromentSoftware/OpencodeNative`, an
   entry in the applications menu and its icon. In the install folder a manifest (`opencode-native-install.txt`) lists the
   version and the files placed: the uninstall removes exactly these. On NixOS, Setup advises the Nix package, and still makes a
   classic install on request: nix-build makes a profile of the libraries it needs, and the installed copy runs with it.
-  A copy that runs from the Nix store is never offered an install or an update. An install made by Setup 0.20.0 or
-  earlier shows as one to repair: Repair (or Uninstall) handles it in one click. The `setup` and `desktop` packages of
+  A copy that runs from the Nix store is never offered an install or an update. The `setup` and `desktop` packages of
   gui_toolkit do the work.
 
 ## The server
@@ -155,7 +154,7 @@ TLS is rustls, checked against the system's trust store.
 | `--server=<name>` | a saved server at start |
 | `--session=<id>` | open that session at start |
 | `--search=<text>` | the sidebar's search, filled at start |
-| `--install` | install this copy for the user, or repair the install, without a window (Windows: `%LOCALAPPDATA%\Programs\opencode-native`, Start menu, Settings > Apps; Linux: `~/.local/share/opencode-native`, the applications menu, the icon) |
+| `--install` | install this copy for the user, or repair the install, without a window (Windows: `%LOCALAPPDATA%\Programs\FromentSoftware\OpencodeNative`, Start menu, Settings > Apps; Linux: `~/.local/opt/FromentSoftware/OpencodeNative`, the applications menu, the icon) |
 | `--uninstall` | remove it, without a window; the files of a copy that runs go when it ends |
 | `--status` | prints what is installed (where, its version, the menu entry, the start with the session, the PATH); exit code 0 installed (a Nix package too), 2 needs repair, 1 not installed |
 | `--setup` | open the install's dialog at start (Settings > Apps' Uninstall runs it); the settings' Installation page shows the same |
@@ -169,7 +168,7 @@ TLS is rustls, checked against the system's trust store.
 | `--settings[=page]` | open the settings at start (on that page: general, connections...) |
 | `--frames=N` | N frames of a hidden window, then exit (a check that it runs; it says how long the first frame took) |
 
-Preferences live in `%APPDATA%\opencode-native\prefs.txt` on Windows, `~/.config/opencode-native/prefs.txt` on Linux (only
+Preferences live in `%APPDATA%\FromentSoftware\OpencodeNative\prefs.txt` on Windows, `~/.config/FromentSoftware/OpencodeNative/prefs.txt` on Linux (only
 what differs from the defaults), the servers in `servers.txt` beside them, what you missed in `notices.txt`, where the dialogs
 and panels are in `views.txt`;
 `OPENCODE_NATIVE_NO_SETUP=1` never offers Setup. `TOOLKIT_DEVTOOLS=<port>` lets a script drive the window over the Chrome

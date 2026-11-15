@@ -8,7 +8,6 @@
 // for it. What is chosen in one of ocn's sources is done in palette_build, at the top of the next build.
 package ocn
 
-import "base:runtime"
 import "core:fmt"
 import "core:mem/virtual"
 import "core:strings"
@@ -201,11 +200,12 @@ palette_table_keep :: proc(app: ^App) {
 		for &c, i in COMMANDS {
 			// (in English: the palette says them in the language in use, and finds them by their English too)
 			// (a command with a state on or off is a switch: its row has the mark, and choosing it keeps the palette)
-			// (its id: the usage memory's key, and the toolkit's for the person's own key)
-			table[i] = {id = c.id, label = c.title, group = c.group, icon = c.icon, tags = strings.fields(c.tags, a), scope = c.scope, toggle = c.checked != nil}
-			if c.key != .None { table[i].keys = slice_of_one(ui.Chord{c.key, c.mods}, a) }
+			// (its id: the usage memory's key, and the keymap's for the person's own key)
+			table[i] = {id = c.id, label = c.title, group = c.group, icon = c.icon, tags = strings.fields(c.tags, a), keys = c.keys, scope = c.scope, toggle = c.checked != nil}
 		}
 		p.table = table
+		// (before the first commands_keys: a person's key on an id not known yet takes no chord)
+		ui.keymap_known(&app.keymap, table)
 		resize(&p.disabled, len(COMMANDS))
 	}
 	for ci, k in p.gated {
@@ -248,13 +248,6 @@ palette_commands_give :: proc(app: ^App) {
 			return c.checked != nil && c.checked((^App)(user))
 		},
 	})
-}
-
-@(private = "file")
-slice_of_one :: proc(c: ui.Chord, a: runtime.Allocator) -> []ui.Chord {
-	s := make([]ui.Chord, 1, a)
-	s[0] = c
-	return s
 }
 
 // A choice of one of ocn's sources (the toolkit's acted already).
@@ -304,7 +297,7 @@ server_read :: proc(p: ^ui.Command_Palette, src: ^ui.Palette_Source, q: ui.Palet
 	a.items = make([]ui.Palette_Item, len(all), al)
 	server := i18n.tr("Server")
 	for s, i in all {
-		group := i < len(CLIENT_COMMANDS) ? APP_NAME : server
+		group := i < len(CLIENT_COMMANDS) ? APP_TITLE : server
 		a.items[i] = ui.palette_item_clone({id = s.name, title = fmt.tprintf("/%s", s.name), detail = s.description, icon = lucide.SQUARE_TERMINAL, group = group}, al)
 	}
 	ui.palette_answer(q, &a)

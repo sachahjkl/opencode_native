@@ -311,7 +311,7 @@ session_menu :: proc(app: ^App, em: f32) {
 	key := "session_menu"
 	if ui.menu(key, em * 17) {
 		if ui.menu_item(i18n.tr("Open"), icon = lucide.EXTERNAL_LINK).clicked { open_root(app, app.sidebar.menu_session) }
-		if ui.menu_item(i18n.tr("Rename…"), "F2", icon = lucide.PENCIL).clicked { rename_open(app, app.sidebar.menu_session) }
+		if ui.menu_item(i18n.tr("Rename…"), command_shortcut(app, "session.rename"), icon = lucide.PENCIL).clicked { rename_open(app, app.sidebar.menu_session) }
 		if ui.menu_item(i18n.tr("Fork"), icon = lucide.GIT_FORK).clicked { fork_session(app, app.sidebar.menu_session, "") }
 		if ui.menu_item(i18n.tr("Move to a folder…"), icon = lucide.FOLDER_INPUT).clicked { session_move_pick(app, app.sidebar.menu_session) }
 		if s := find_session(app, app.sidebar.menu_session); s != nil { project_icon_items(app, s.project) }

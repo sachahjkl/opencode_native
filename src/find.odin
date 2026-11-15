@@ -163,10 +163,9 @@ find_bar :: proc(app: ^App, pane: ^Chat_Pane, em: f32, right, top: f32) {
 
 FIND_RADIUS :: 7
 
-// The keys that work anywhere in the window.
+// The keys that work anywhere in the window while the bar is open (Ctrl+F is the command session.find's).
 find_keys :: proc(app: ^App, pane: ^Chat_Pane) {
 	if pane.chat.id == "" || overlay_open(app) { return }
-	if ui.key_press(.F, {.Ctrl}) { find_open(app, pane) }
 	if pane.find.open {
 		if ui.key_press(.F3) { find_step(app, pane, 1) }
 		if ui.key_press(.F3, {.Shift}) { find_step(app, pane, -1) }

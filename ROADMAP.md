@@ -2,9 +2,6 @@
 
 ## Now
 
-- **Personal keys and aliases.** The commands read their keys through the toolkit's keymap (`ui.Keymap`, its
-  `src/md/features/keymap.md`): a key set from the palette (Ctrl+Enter) replaces a command's own, and the settings show
-  the Keys page. Until then the Keys settings are not registered.
 - **Tab numbers while the modifier is held** (opencode 2.3.0). Holding Ctrl shows the number of each tab that Ctrl+1 to Ctrl+9 opens, as
   the desktop does after 400 ms. opencode native has no such shortcuts yet: decide first which list gets them (the
   sidebar's sessions, the server tabs).
