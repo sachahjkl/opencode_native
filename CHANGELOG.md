@@ -4,6 +4,16 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.62.0] - 2026-11-15 20:59
+
+### Added
+- **One window, and --quit.** A second start of opencode native shows what it asks (--session, --find, --image, the settings...) in the window that runs and brings it to the front, instead of a second window on the same files. --quit ends the window that runs as Quit does, and --status says whether one runs.
+
+### Changed
+- **The agent and model buttons open a chooser**: the command palette's list, with the agents or the models alone. The one in use is marked, and a search finds a model by its name or its provider. A model's row shows its context size. The model's tooltip (prices, limits) and the provider headings that folded are gone.
+- **Toolkit controls in more places.** The sidebar, the full diff and the schedule editor choose with the toolkit's segmented control. A saved permission's effect is a coloured pill. The "Orbit" throbber is now "Spinner": a turning arc. A tool call's times say "today" or "yesterday".
+- **One image decoder**: pictures (PNG, JPEG, WebP, GIF, BMP) are now decoded by the toolkit's own decoder, the same in every program of the family; WebP is built in, with no system library.
+
 ## [0.61.0] - 2026-11-15 19:37
 
 ### Changed
@@ -1725,6 +1735,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.62.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.62.0
 [0.61.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.61.0
 [0.60.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.60.0
 [0.59.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.59.2
