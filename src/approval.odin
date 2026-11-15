@@ -3,6 +3,7 @@
 // The server decides and every client sees the same (session.permissions): nothing is answered here in its place.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -48,7 +49,7 @@ approval_of :: proc(rules: json.Value) -> Approval {
 	list, is_list := rules.(json.Array)
 	if rules == nil || (is_list && len(list) == 0) { return .Configured }
 	if !is_list || len(list) != 1 { return .Custom }
-	action, resource, effect := jstr(list[0], "action"), jstr(list[0], "resource"), jstr(list[0], "effect")
+	action, resource, effect := tk_json.text(list[0], "action"), tk_json.text(list[0], "resource"), tk_json.text(list[0], "effect")
 	switch {
 	case action == "edit" && resource == "*" && effect == "allow": return .Allow_Edits
 	case action == "*" && resource == "*" && effect == "allow":    return .Allow_All
@@ -120,7 +121,7 @@ approval_of_pref :: proc(name: string) -> Approval {
 // What makes a session in `directory` ("": the server's): its place, and the rules of the preset new sessions take.
 new_session_body :: proc(app: ^App, directory: string) -> string {
 	fields := make([dynamic]string, context.temp_allocator)
-	if directory != "" { append(&fields, fmt.tprintf(`"location":{{"directory":%s}}`, jquote(directory))) }
+	if directory != "" { append(&fields, fmt.tprintf(`"location":{{"directory":%s}}`, tk_json.quote(directory))) }
 	if mode := app.prefs.new_sessions; mode != .Configured { append(&fields, fmt.tprintf(`"permissions":%s`, APPROVAL_RULES[mode])) }
 	return fmt.tprintf("{{%s}}", strings.join(fields[:], ",", context.temp_allocator))
 }

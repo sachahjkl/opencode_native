@@ -4,6 +4,7 @@
 // app: there is nothing here to run it.
 package ocn
 
+import tk_json "gt:json"
 import "base:runtime"
 
 import "core:encoding/json"
@@ -120,11 +121,11 @@ schedules_forget :: proc(app: ^App) {
 
 // How the server's description reads.
 when_text :: proc(w: json.Value) -> string {
-	switch jstr(w, "type") {
-	case "in":    return fmt.tprintf("once, in %s", jstr(w, "in"))
-	case "at":    return fmt.tprintf("once, at %s", jstr(w, "at"))
-	case "every": return fmt.tprintf("every %s", jstr(w, "every"))
-	case "cron":  return fmt.tprintf("cron %s", jstr(w, "cron"))
+	switch tk_json.text(w, "type") {
+	case "in":    return fmt.tprintf("once, in %s", tk_json.text(w, "in"))
+	case "at":    return fmt.tprintf("once, at %s", tk_json.text(w, "at"))
+	case "every": return fmt.tprintf("every %s", tk_json.text(w, "every"))
+	case "cron":  return fmt.tprintf("cron %s", tk_json.text(w, "cron"))
 	}
 	return ""
 }
@@ -134,11 +135,11 @@ schedules_load :: proc(app: ^App, v: json.Value) {
 	schedules_clear(s)
 	_ = virtual.arena_init_growing(&s.arena)
 	a := virtual.arena_allocator(&s.arena)
-	for it in jarr(v, "data") {
+	for it in tk_json.array(v, "data") {
 		append(&s.list, Schedule{
-			id = strings.clone(jstr(it, "id"), a), name = strings.clone(jstr(it, "name"), a), prompt = strings.clone(jstr(it, "action", "prompt"), a),
-			when_text = strings.clone(when_text(jget(it, "when")), a), status = schedule_status(jstr(it, "status")), outcome = strings.clone(jstr(it, "lastOutcome"), a),
-			next = jnum(it, "nextDueAt"), remaining = int(jnum(it, "remainingRuns")), runs = int(jnum(it, "runCount")),
+			id = strings.clone(tk_json.text(it, "id"), a), name = strings.clone(tk_json.text(it, "name"), a), prompt = strings.clone(tk_json.text(it, "action", "prompt"), a),
+			when_text = strings.clone(when_text(tk_json.get(it, "when")), a), status = schedule_status(tk_json.text(it, "status")), outcome = strings.clone(tk_json.text(it, "lastOutcome"), a),
+			next = tk_json.number(it, "nextDueAt"), remaining = int(tk_json.number(it, "remainingRuns")), runs = int(tk_json.number(it, "runCount")),
 		})
 	}
 }
@@ -170,9 +171,9 @@ schedule_body :: proc(session, prompt, name, value: string, mode: When_Mode) -> 
 	if p == "" { return "", i18n.tr("Say what to ask") }
 	if w == "" { return "", i18n.tr("Say when") }
 	b := strings.builder_make(context.temp_allocator)
-	fmt.sbprintf(&b, `{{"sessionID":%s,`, jquote(session))
-	if n != "" { fmt.sbprintf(&b, `"name":%s,`, jquote(n)) }
-	fmt.sbprintf(&b, `"when":{{"%s":%s}},"prompt":%s}}`, WHEN_MODES[mode].key, jquote(w), jquote(p))
+	fmt.sbprintf(&b, `{{"sessionID":%s,`, tk_json.quote(session))
+	if n != "" { fmt.sbprintf(&b, `"name":%s,`, tk_json.quote(n)) }
+	fmt.sbprintf(&b, `"when":{{"%s":%s}},"prompt":%s}}`, WHEN_MODES[mode].key, tk_json.quote(w), tk_json.quote(p))
 	return strings.to_string(b), ""
 }
 
@@ -406,8 +407,8 @@ artifacts_load :: proc(app: ^App, v: json.Value) {
 	a := &app.cx.artifacts
 	al := arena_renew(&a.arena)
 	clear(&a.list)
-	for it in jarr(v, "data") {
-		append(&a.list, Artifact{strings.clone(jstr(it, "id"), al), strings.clone(jstr(it, "title"), al), strings.clone(jstr(it, "entry"), al), strings.clone(jstr(it, "url"), al), strings.clone(jstr(it, "provider"), al)})
+	for it in tk_json.array(v, "data") {
+		append(&a.list, Artifact{strings.clone(tk_json.text(it, "id"), al), strings.clone(tk_json.text(it, "title"), al), strings.clone(tk_json.text(it, "entry"), al), strings.clone(tk_json.text(it, "url"), al), strings.clone(tk_json.text(it, "provider"), al)})
 	}
 }
 
@@ -457,9 +458,9 @@ chat_artifacts_load :: proc(app: ^App, of: string, v: json.Value) {
 	al := arena_renew(&c.arena)
 	clear(&c.list)
 	c.of = strings.clone(of, al)
-	for it in jarr(v, "data") {
-		if jstr(it, "sessionID") != of { continue }
-		append(&c.list, Chat_Artifact{strings.clone(jstr(it, "id"), al), strings.clone(jstr(it, "title"), al), jnum(it, "time", "created")})
+	for it in tk_json.array(v, "data") {
+		if tk_json.text(it, "sessionID") != of { continue }
+		append(&c.list, Chat_Artifact{strings.clone(tk_json.text(it, "id"), al), strings.clone(tk_json.text(it, "title"), al), tk_json.number(it, "time", "created")})
 	}
 }
 
@@ -522,8 +523,8 @@ artifact_loaded :: proc(app: ^App, v: json.Value) {
 	artifact_files_clear(a)
 	_ = virtual.arena_init_growing(&a.files_arena)
 	al := virtual.arena_allocator(&a.files_arena)
-	files, _ := jget(v, "data", "files").(json.Object)
-	entry := jstr(v, "data", "info", "entry")
+	files, _ := tk_json.get(v, "data", "files").(json.Object)
+	entry := tk_json.text(v, "data", "info", "entry")
 	for path, value in files {
 		content, is_text := value.(json.String)
 		if !is_text { continue }
@@ -720,23 +721,23 @@ plugins_load :: proc(app: ^App, v: json.Value) {
 	a := arena_renew(&p.arena)
 	clear(&p.list)
 	for pass in 0 ..< 2 {
-		for it in jarr(v, "data") {
-			kind := jstr(it, "source", "type")
+		for it in tk_json.array(v, "data") {
+			kind := tk_json.text(it, "source", "type")
 			if (kind == "builtin") != (pass == 1) { continue }
-			target := jstr(it, "source", "target")
-			if target == "" { target = jstr(it, "source", "path") }
+			target := tk_json.text(it, "source", "target")
+			if target == "" { target = tk_json.text(it, "source", "path") }
 			features := strings.builder_make(context.temp_allocator)
-			f := jget(it, "features")
+			f := tk_json.get(it, "features")
 			for name in ([]string{"server", "tui", "rpc", "gui"}) {
-				if !jbool(f, name) { continue }
+				if !tk_json.boolean(f, name) { continue }
 				if strings.builder_len(features) > 0 { strings.write_string(&features, ", ") }
 				strings.write_string(&features, name)
 			}
-			src := jget(it, "source")
+			src := tk_json.get(it, "source")
 			append(&p.list, Plugin{
-				id = strings.clone(jstr(it, "id"), a), kind = strings.clone(kind, a), target = strings.clone(target, a), version = strings.clone(jstr(it, "source", "version"), a),
-				error = strings.clone(jstr(it, "state", "error"), a), outdated = jbool(src, "outdated"), updating = jbool(src, "updating"),
-				failed = jstr(it, "state", "status") == "failed", features = strings.clone(strings.to_string(features), a),
+				id = strings.clone(tk_json.text(it, "id"), a), kind = strings.clone(kind, a), target = strings.clone(target, a), version = strings.clone(tk_json.text(it, "source", "version"), a),
+				error = strings.clone(tk_json.text(it, "state", "error"), a), outdated = tk_json.boolean(src, "outdated"), updating = tk_json.boolean(src, "updating"),
+				failed = tk_json.text(it, "state", "status") == "failed", features = strings.clone(strings.to_string(features), a),
 			})
 		}
 	}
@@ -799,7 +800,7 @@ plugin_row :: proc(app: ^App, it: ^Plugin, i: int, em: f32) {
 		if it.outdated && it.target != "" {
 			ui.spacer(ui.px(em * 0.4))
 			if ui.button("pl_up", ui.text_shown(it.updating ? i18n.tr("Updating…") : i18n.tr("Update")), o = {intent = .Success, height = math.round(em * BUTTON_SMALL_H_EM), disabled = it.updating}).clicked {
-				request(app, .Plugin_Update, "POST", "/api/plugin/update", fmt.tprintf(`{{"targets":[%s]}}`, jquote(it.target)))
+				request(app, .Plugin_Update, "POST", "/api/plugin/update", fmt.tprintf(`{{"targets":[%s]}}`, tk_json.quote(it.target)))
 				it.updating = true
 			}
 		}

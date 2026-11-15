@@ -1,5 +1,6 @@
 package ocn
 
+import tk_json "gt:json"
 import "base:runtime"
 import "core:encoding/json"
 import "core:fmt"
@@ -21,13 +22,13 @@ output_last :: proc(app: ^App) -> ^Output_View {
 
 @(private = "file")
 state_json :: proc(status: string, exit := -1) -> string {
-	if exit >= 0 { return fmt.tprintf(`{{"data":{{"id":"sh_1","status":%s,"exit":%d,"time":{{"started":1000,"completed":3000}}}}}}`, jquote(status), exit) }
-	return fmt.tprintf(`{{"data":{{"id":"sh_1","status":%s,"time":{{"started":1000}}}}}}`, jquote(status))
+	if exit >= 0 { return fmt.tprintf(`{{"data":{{"id":"sh_1","status":%s,"exit":%d,"time":{{"started":1000,"completed":3000}}}}}}`, tk_json.quote(status), exit) }
+	return fmt.tprintf(`{{"data":{{"id":"sh_1","status":%s,"time":{{"started":1000}}}}}}`, tk_json.quote(status))
 }
 
 @(private = "file")
 output_json :: proc(text: string, cursor: int, size := -1, truncated := false) -> string {
-	return fmt.tprintf(`{{"data":{{"output":%s,"cursor":%d,"size":%d,"truncated":%v}}}}`, jquote(text), cursor, size >= 0 ? size : cursor, truncated)
+	return fmt.tprintf(`{{"data":{{"output":%s,"cursor":%d,"size":%d,"truncated":%v}}}}`, tk_json.quote(text), cursor, size >= 0 ? size : cursor, truncated)
 }
 
 @(private = "file")

@@ -5,6 +5,7 @@
 // one, and the server sees it by itself. A server elsewhere: its file is not here, and the dialogs say what it answers.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import tasks "gt:tasks"
 import "core:os"
@@ -15,9 +16,9 @@ import i18n "gt:i18n"
 // The options the server's schema offers that are plain switches, and whether a feature of ours is among them.
 experimental_keys :: proc(spec: json.Value, allocator := context.temp_allocator) -> []string {
 	keys := make([dynamic]string, allocator)
-	props, _ := jget(spec, "components", "schemas", "Config.InfoEncoded", "properties", "experimental", "properties").(json.Object)
+	props, _ := tk_json.get(spec, "components", "schemas", "Config.InfoEncoded", "properties", "experimental", "properties").(json.Object)
 	for k, v in props {
-		if jstr(v, "type") == "boolean" { append(&keys, strings.clone(k, allocator)) }
+		if tk_json.text(v, "type") == "boolean" { append(&keys, strings.clone(k, allocator)) }
 	}
 	return keys[:]
 }
@@ -105,7 +106,7 @@ config_with_experimental :: proc(text: string, keys: []string, allocator := cont
 		for k, i in keys {
 			if i > 0 { strings.write_byte(&b, ',') }
 			strings.write_string(&b, "\n    ")
-			strings.write_string(&b, jquote(k))
+			strings.write_string(&b, tk_json.quote(k))
 			strings.write_string(&b, ": true")
 		}
 		strings.write_string(&b, "\n  }")
@@ -128,7 +129,7 @@ config_with_experimental :: proc(text: string, keys: []string, allocator := cont
 	strings.write_string(&b, text[:at + 1])
 	for k, i in missing {
 		strings.write_string(&b, "\n    ")
-		strings.write_string(&b, jquote(k))
+		strings.write_string(&b, tk_json.quote(k))
 		strings.write_string(&b, ": true")
 		if !empty || i < len(missing) - 1 { strings.write_byte(&b, ',') }
 	}
@@ -203,7 +204,7 @@ experimental_write :: proc(conn: ^Conn, keys: []string) -> bool {
 	docs, _ := v.(json.Array)
 	path := ""
 	for d in docs {
-		if jstr(d, "type") == "document" && jstr(d, "path") != "" { path = jstr(d, "path") }
+		if tk_json.text(d, "type") == "document" && tk_json.text(d, "path") != "" { path = tk_json.text(d, "path") }
 	}
 	if path == "" { return false }
 	data, read_err := os.read_entire_file(path, a)

@@ -10,6 +10,7 @@
 package ocn
 
 import "core:crypto"
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:strings"
@@ -112,7 +113,7 @@ prompt_body :: proc(p: Prompt_Parts, allocator := context.allocator) -> string {
 	for a in p.files { size += len(a.uri) + len(a.name) + PROMPT_FILE_SPARE_BYTES }
 	b := strings.builder_make(0, size, allocator)
 	strings.write_string(&b, `{"text":`)
-	jquote_into(&b, p.text)
+	tk_json.quote_into(&b, p.text)
 	prompt_fields_into(&b, p.files, p.mentions, p.text)
 	strings.write_string(&b, p.fields)
 	strings.write_byte(&b, '}')
@@ -188,7 +189,7 @@ outgoing_replaced :: proc(app: ^App, out: u64, go: bool) {
 
 // What the answers to the prompt's requests do (net.odin REQ_FACTS).
 created_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	if id := jstr(v, "data", "id"); id != "" {
+	if id := tk_json.text(v, "data", "id"); id != "" {
 		outgoing_created(app, r, id)
 	} else {
 		answer_failed(app, r, .Unreadable, i18n.tr("Unreadable answer"))
@@ -255,7 +256,7 @@ outgoing_command :: proc(app: ^App, text, name, rest: string, fields := "") {
 command_set :: proc(o: ^Outgoing, name, rest, fields: string) {
 	delete(o.path); delete(o.body)
 	o.path = fmt.aprintf("/api/session/%s/command", o.session)
-	o.body = fmt.aprintf(`{{"name":%s,"text":%s%s}}`, jquote(name), jquote(rest), fields)
+	o.body = fmt.aprintf(`{{"name":%s,"text":%s%s}}`, tk_json.quote(name), tk_json.quote(rest), fields)
 }
 
 // "/name what follows" before the server's commands are read (they are read again when the stream comes back, dropped when a
@@ -291,7 +292,7 @@ outgoing_catalog :: proc(app: ^App) {
 // A prompt out of the inbox (queue.odin inbox_take_on_ok): `body` goes as it is, what it says is what would come back.
 outgoing_inbox :: proc(app: ^App, session, body: string) {
 	v := json_of_own(app, "inbox prompt", body)
-	o := outgoing_new(app, .Sending, session, jstr(v, "text"))
+	o := outgoing_new(app, .Sending, session, tk_json.text(v, "text"))
 	o.body = strings.clone(body)
 	prompt_parts(v, &o.files, &o.mentions)
 	outgoing_send(app, o)
@@ -299,15 +300,15 @@ outgoing_inbox :: proc(app: ^App, session, body: string) {
 
 // What goes with a prompt's JSON, as the composer holds it.
 prompt_parts :: proc(v: json.Value, files: ^[dynamic]Attachment, mentions: ^[dynamic]Mention) {
-	for f in jarr(v, "files") {
-		uri, name := jstr(f, "uri"), jstr(f, "name")
-		if mention := jget(f, "mention"); mention != nil {
-			append(mentions, Mention{.File, strings.clone(jstr(mention, "text")), strings.clone(uri), strings.clone(name)})
+	for f in tk_json.array(v, "files") {
+		uri, name := tk_json.text(f, "uri"), tk_json.text(f, "name")
+		if mention := tk_json.get(f, "mention"); mention != nil {
+			append(mentions, Mention{.File, strings.clone(tk_json.text(mention, "text")), strings.clone(uri), strings.clone(name)})
 		} else {
 			append(files, attachment_of(uri, name))
 		}
 	}
-	for g in jarr(v, "agents") { append(mentions, Mention{.Agent, strings.clone(jstr(g, "mention", "text")), strings.clone(jstr(g, "name")), strings.clone("")}) }
+	for g in tk_json.array(v, "agents") { append(mentions, Mention{.Agent, strings.clone(tk_json.text(g, "mention", "text")), strings.clone(tk_json.text(g, "name")), strings.clone("")}) }
 }
 
 // The session is made. Whoever went elsewhere meanwhile stays there: the prompt goes on without them.
@@ -334,7 +335,7 @@ outgoing_setup :: proc(app: ^App, out: u64, next: Out_Stage) {
 	if next == .Agent {
 		if agent := config.string_of(p, "session.agent"); agent != "" {
 			o.stage = .Agent
-			request(app, .Session_Agent, "POST", fmt.tprintf("/api/session/%s/agent", o.session), fmt.tprintf(`{{"agent":%s}}`, jquote(agent)), o.session, out = o.id)
+			request(app, .Session_Agent, "POST", fmt.tprintf("/api/session/%s/agent", o.session), fmt.tprintf(`{{"agent":%s}}`, tk_json.quote(agent)), o.session, out = o.id)
 			if shown { c.chose_agent = strings.clone(agent, c.alloc) }
 			return
 		}

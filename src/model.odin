@@ -2,6 +2,7 @@
 // pending permission requests. Loaded from the API, then kept current by the event stream.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:mem"
@@ -267,7 +268,7 @@ shown_variant :: proc(app: ^App) -> string {
 
 // The variant of a model reference ({"model": {"id", "providerID", "variant"}}): the server says "default" for none.
 variant_of :: proc(v: json.Value) -> string {
-	s := jstr(v, "model", "variant")
+	s := tk_json.text(v, "model", "variant")
 	return s == "default" ? "" : s
 }
 
@@ -287,8 +288,8 @@ model_word :: proc(model, variant: string) -> string {
 
 // The body that gives a session its model ("" variant: the model's default).
 model_body :: proc(model, provider, variant: string) -> string {
-	if variant == "" { return fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s}}}}`, jquote(model), jquote(provider)) }
-	return fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s,"variant":%s}}}}`, jquote(model), jquote(provider), jquote(variant))
+	if variant == "" { return fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s}}}}`, tk_json.quote(model), tk_json.quote(provider)) }
+	return fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s,"variant":%s}}}}`, tk_json.quote(model), tk_json.quote(provider), tk_json.quote(variant))
 }
 
 // Another conversation is shown: what a request's worker reads of it (req_unwanted). Not Chat.gen itself: chat_reset writes it as a
@@ -358,16 +359,16 @@ marks_changed :: proc(app: ^App) { app.cx.marks_ver += 1 }
 
 session_from_json :: proc(it: json.Value, a: mem.Allocator) -> Session_Info {
 	return {
-		id = strings.clone(jstr(it, "id"), a), title = strings.clone(jstr(it, "title"), a),
-		parent = strings.clone(jstr(it, "parentID"), a), directory = strings.clone(jstr(it, "location", "directory"), a),
-		agent = strings.clone(jstr(it, "agent"), a), model = strings.clone(jstr(it, "model", "id"), a),
-		provider = strings.clone(jstr(it, "model", "providerID"), a), outcome = strings.clone(jstr(it, "outcome"), a),
+		id = strings.clone(tk_json.text(it, "id"), a), title = strings.clone(tk_json.text(it, "title"), a),
+		parent = strings.clone(tk_json.text(it, "parentID"), a), directory = strings.clone(tk_json.text(it, "location", "directory"), a),
+		agent = strings.clone(tk_json.text(it, "agent"), a), model = strings.clone(tk_json.text(it, "model", "id"), a),
+		provider = strings.clone(tk_json.text(it, "model", "providerID"), a), outcome = strings.clone(tk_json.text(it, "outcome"), a),
 		variant = strings.clone(variant_of(it), a),
-		project = strings.clone(jstr(it, "projectID"), a),
-		created = jnum(it, "time", "created"), updated = jnum(it, "time", "updated"), idle = jnum(it, "time", "idle"), viewed = jnum(it, "time", "viewed"), archived = jnum(it, "time", "archived"),
-		cost = jnum(it, "cost"), tokens_in = jnum(it, "tokens", "input"), tokens_out = jnum(it, "tokens", "output"),
-		reasoning = jnum(it, "tokens", "reasoning"), cache_read = jnum(it, "tokens", "cache", "read"), cache_write = jnum(it, "tokens", "cache", "write"),
-		approval = approval_of(jget(it, "permissions")),
+		project = strings.clone(tk_json.text(it, "projectID"), a),
+		created = tk_json.number(it, "time", "created"), updated = tk_json.number(it, "time", "updated"), idle = tk_json.number(it, "time", "idle"), viewed = tk_json.number(it, "time", "viewed"), archived = tk_json.number(it, "time", "archived"),
+		cost = tk_json.number(it, "cost"), tokens_in = tk_json.number(it, "tokens", "input"), tokens_out = tk_json.number(it, "tokens", "output"),
+		reasoning = tk_json.number(it, "tokens", "reasoning"), cache_read = tk_json.number(it, "tokens", "cache", "read"), cache_write = tk_json.number(it, "tokens", "cache", "write"),
+		approval = approval_of(tk_json.get(it, "permissions")),
 	}
 }
 
@@ -378,18 +379,18 @@ projects_load :: proc(app: ^App, v: json.Value) {
 	a := arena_renew(&app.proj_arena)
 	app.projects = make(map[string]Project_Logo, allocator = a)
 	list, _ := v.(json.Array)
-	if list == nil { list = jarr(v, "data") }
+	if list == nil { list = tk_json.array(v, "data") }
 	for it in list {
-		icon := jget(it, "icon")
-		url := jstr(icon, "override")
+		icon := tk_json.get(it, "icon")
+		url := tk_json.text(icon, "override")
 		overridden := strings.has_prefix(url, "data:")
-		if !overridden { url = jstr(icon, "url") }
-		p := Project_Logo{color = strings.clone(jstr(icon, "color"), a), worktree = strings.clone(jstr(it, "worktree"), a), overridden = overridden}
+		if !overridden { url = tk_json.text(icon, "url") }
+		p := Project_Logo{color = strings.clone(tk_json.text(icon, "color"), a), worktree = strings.clone(tk_json.text(it, "worktree"), a), overridden = overridden}
 		if strings.has_prefix(url, "data:image/") {
 			p.ref = image_ref(strings.clone(url, a), .Data_Url, "image", strings.clone(base_name(p.worktree), a))
 			p.has_ref = true
 		}
-		app.projects[strings.clone(jstr(it, "id"), a)] = p
+		app.projects[strings.clone(tk_json.text(it, "id"), a)] = p
 	}
 }
 
@@ -410,9 +411,9 @@ chat_project :: proc(app: ^App) -> string {
 // The session shown, as the server describes it (its parent, its outcome, its totals).
 self_load :: proc(app: ^App, v: json.Value, asked_at: Seq) {
 	c := &app.chat
-	c.self = session_from_json(jget(v, "data"), c.alloc)
+	c.self = session_from_json(tk_json.get(v, "data"), c.alloc)
 	c.have_self = true
-	if revert := jget(v, "data", "revert"); revert != nil { revert_found(app, c.id, revert, asked_at) }
+	if revert := tk_json.get(v, "data", "revert"); revert != nil { revert_found(app, c.id, revert, asked_at) }
 	if c.self.parent != "" {
 		if p := find_session(app, c.self.parent); p != nil {
 			c.parent_title = strings.clone(p.title, c.alloc)
@@ -423,14 +424,14 @@ self_load :: proc(app: ^App, v: json.Value, asked_at: Seq) {
 }
 
 parent_load :: proc(app: ^App, v: json.Value) {
-	app.chat.parent_title = strings.clone(jstr(v, "data", "title"), app.chat.alloc)
+	app.chat.parent_title = strings.clone(tk_json.text(v, "data", "title"), app.chat.alloc)
 }
 
 // The sub-agents of the session shown (its children), newest first.
 children_load :: proc(app: ^App, v: json.Value) {
 	c := &app.chat
 	a := arena_renew(&c.children_arena)
-	list := jarr(v, "data")
+	list := tk_json.array(v, "data")
 	c.children = make([dynamic]Session_Info, 0, len(list), a)
 	c.child_ids = make(map[string]bool, len(list), a)
 	for it in list {
@@ -453,7 +454,7 @@ load_children :: proc(app: ^App) {
 sessions_load :: proc(app: ^App, v: json.Value) {
 	a := arena_renew(&app.sess_arena)
 	app.sessions = make([dynamic]Session_Info, a)
-	for it in jarr(v, "data") { append(&app.sessions, session_from_json(it, a)) }
+	for it in tk_json.array(v, "data") { append(&app.sessions, session_from_json(it, a)) }
 	slice.sort_by(app.sessions[:], proc(x, y: Session_Info) -> bool { return x.updated > y.updated })
 	sessions_changed(app)
 	app.sessions_loaded = true
@@ -498,36 +499,36 @@ models_clear :: proc(app: ^App) {
 // (read again at each reconnection and each change of what is connected: an answer replaces the list)
 agents_load :: proc(app: ^App, v: json.Value) {
 	agents_clear(app)
-	for it in jarr(v, "data") {
-		if jbool(it, "hidden") { continue }
+	for it in tk_json.array(v, "data") {
+		if tk_json.boolean(it, "hidden") { continue }
 		append(&app.agents, Agent_Info{
-			id = strings.clone(jstr(it, "id")), name = strings.clone(jstr(it, "name")),
-			description = strings.clone(jstr(it, "description")), mode = strings.clone(jstr(it, "mode")),
+			id = strings.clone(tk_json.text(it, "id")), name = strings.clone(tk_json.text(it, "name")),
+			description = strings.clone(tk_json.text(it, "description")), mode = strings.clone(tk_json.text(it, "mode")),
 		})
 	}
 }
 
 models_load :: proc(app: ^App, v: json.Value) {
 	models_clear(app)
-	for it in jarr(v, "data") {
-		if jstr(it, "type") != "" && jstr(it, "type") != "chat" { continue }
-		if _, has := jget(it, "enabled").(json.Boolean); has && !jbool(it, "enabled") { continue }
+	for it in tk_json.array(v, "data") {
+		if tk_json.text(it, "type") != "" && tk_json.text(it, "type") != "chat" { continue }
+		if _, has := tk_json.get(it, "enabled").(json.Boolean); has && !tk_json.boolean(it, "enabled") { continue }
 		m := Model_Info{
-			id = strings.clone(jstr(it, "id")), provider = strings.clone(jstr(it, "providerID")),
-			name = strings.clone(jstr(it, "name")), family = strings.clone(jstr(it, "family")),
-			ctx_len = jnum(it, "limit", "context"), out_len = jnum(it, "limit", "output"),
-			status = strings.clone(jstr(it, "status")), released = jnum(it, "time", "released"),
+			id = strings.clone(tk_json.text(it, "id")), provider = strings.clone(tk_json.text(it, "providerID")),
+			name = strings.clone(tk_json.text(it, "name")), family = strings.clone(tk_json.text(it, "family")),
+			ctx_len = tk_json.number(it, "limit", "context"), out_len = tk_json.number(it, "limit", "output"),
+			status = strings.clone(tk_json.text(it, "status")), released = tk_json.number(it, "time", "released"),
 		}
-		if prices := jarr(it, "cost"); len(prices) > 0 {
+		if prices := tk_json.array(it, "cost"); len(prices) > 0 {
 			m.priced = true
-			m.price_in, m.price_out, m.price_cached = jnum(prices[0], "input"), jnum(prices[0], "output"), jnum(prices[0], "cache", "read")
+			m.price_in, m.price_out, m.price_cached = tk_json.number(prices[0], "input"), tk_json.number(prices[0], "output"), tk_json.number(prices[0], "cache", "read")
 		}
-		if _, known := jget(it, "capabilities", "tools").(json.Boolean); known { m.tools_known, m.tools = true, jbool(it, "capabilities", "tools") }
+		if _, known := tk_json.get(it, "capabilities", "tools").(json.Boolean); known { m.tools_known, m.tools = true, tk_json.boolean(it, "capabilities", "tools") }
 		words := make([dynamic]string, context.temp_allocator)
-		for w in jarr(it, "capabilities", "input") { if s, is := w.(json.String); is { append(&words, string(s)) } }
+		for w in tk_json.array(it, "capabilities", "input") { if s, is := w.(json.String); is { append(&words, string(s)) } }
 		m.inputs = strings.join(words[:], ", ")
 		clear(&words)
-		for variant in jarr(it, "variants") { append(&words, jstr(variant, "id")) }
+		for variant in tk_json.array(it, "variants") { append(&words, tk_json.text(variant, "id")) }
 		m.efforts = strings.join(words[:], ", ")
 		append(&app.models, m)
 	}
@@ -541,7 +542,7 @@ models_load :: proc(app: ^App, v: json.Value) {
 // list was asked for is newer than it: a run that started is not stopped by it, one that ended does not start again.
 active_load :: proc(app: ^App, v: json.Value, asked_at := max(Seq)) {
 	cx := &app.cx
-	obj, _ := jget(v, "data").(json.Object)
+	obj, _ := tk_json.get(v, "data").(json.Object)
 	busy_newer :: proc(cx: ^App_Context, id: string, asked_at: Seq) -> bool { return newer(cx.busy_seq[id] or_else 0, asked_at) }
 	over := make([dynamic]string, context.temp_allocator)
 	for id in app.busy { if id not_in obj && !busy_newer(cx, id, asked_at) { append(&over, strings.clone(id, context.temp_allocator)) } }
@@ -594,15 +595,15 @@ permission_free :: proc(p: Permission) {
 }
 
 permission_add :: proc(app: ^App, v: json.Value) {
-	id := jstr(v, "id")
+	id := tk_json.text(v, "id")
 	if id == "" || waits_were_answered(app, id) { return }
 	for p in app.permissions { if p.id == id { return } }
-	res := jarr(v, "resources")
+	res := tk_json.array(v, "resources")
 	list := make([]string, len(res))
 	for r, i in res { if s, ok := r.(json.String); ok { list[i] = strings.clone(string(s)) } }
 	append(&app.permissions, Permission{
-		id = strings.clone(id), session = strings.clone(jstr(v, "sessionID")), action = strings.clone(jstr(v, "action")),
-		message = strings.clone(jstr(v, "message")), resources = list, born = app.cx.stream_seq,
+		id = strings.clone(id), session = strings.clone(tk_json.text(v, "sessionID")), action = strings.clone(tk_json.text(v, "action")),
+		message = strings.clone(tk_json.text(v, "message")), resources = list, born = app.cx.stream_seq,
 	})
 	marks_changed(app)
 }
@@ -614,7 +615,7 @@ permissions_replace :: proc(app: ^App, session: string, list: json.Array, asked_
 		p := app.permissions[i]
 		if p.session != session || p.replying || newer(p.born, asked_at) { continue }
 		listed := false
-		for it in list { if jstr(it, "id") == p.id { listed = true; break } }
+		for it in list { if tk_json.text(it, "id") == p.id { listed = true; break } }
 		if !listed { permission_free(p); ordered_remove(&app.permissions, i); marks_changed(app) }
 	}
 	for it in list { permission_add(app, it) }
@@ -655,9 +656,9 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(Seq)) {
 	c.loading = false
 	c.loaded = true
 	page := make([dynamic]Message, a)
-	items := jarr(v, "data")
+	items := tk_json.array(v, "data")
 	#reverse for it in items {
-		id := jstr(it, "id")
+		id := tk_json.text(it, "id")
 		if queue_holds(app, id) { continue }   // (it waits: it has not been sent)
 		old := id != "" ? find_message(c, id) : nil
 		if older && old != nil { continue }
@@ -667,7 +668,7 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(Seq)) {
 		if m.kind == .Idle && len(page) > 0 && page[len(page) - 1].kind == .Idle { continue }
 		append(&page, m)
 	}
-	cursor := strings.clone(jstr(v, "cursor", "next"), a)
+	cursor := strings.clone(tk_json.text(v, "cursor", "next"), a)
 	if older {
 		c.loading_older = false
 		c.older = cursor
@@ -733,38 +734,38 @@ message_keep_newer :: proc(m, old: ^Message) {
 @(private = "file")
 message_final :: proc(m: ^Message, it: json.Value) -> bool {
 	if !m.from_page { return false }
-	return m.kind != .Assistant || (m.completed > 0 && m.completed == jnum(it, "time", "completed"))
+	return m.kind != .Assistant || (m.completed > 0 && m.completed == tk_json.number(it, "time", "completed"))
 }
 
 message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 	m: Message
 	m.from_page = true
-	m.id = strings.clone(jstr(it, "id"), a)
-	m.created = jnum(it, "time", "created")
-	m.completed = jnum(it, "time", "completed")
+	m.id = strings.clone(tk_json.text(it, "id"), a)
+	m.created = tk_json.number(it, "time", "created")
+	m.completed = tk_json.number(it, "time", "completed")
 	m.parts = make([dynamic]Part, a)
-	switch jstr(it, "type") {
+	switch tk_json.text(it, "type") {
 	case "user":
 		m.kind = .User
-		m.text = strings.clone(jstr(it, "text"), a)
-		message_images(&m, jarr(it, "files"), a)
+		m.text = strings.clone(tk_json.text(it, "text"), a)
+		message_images(&m, tk_json.array(it, "files"), a)
 	case "assistant":
 		m.kind = .Assistant
-		m.agent = strings.clone(jstr(it, "agent"), a)
-		m.model = strings.clone(jstr(it, "model", "id"), a)
-		m.provider = strings.clone(jstr(it, "model", "providerID"), a)
+		m.agent = strings.clone(tk_json.text(it, "agent"), a)
+		m.model = strings.clone(tk_json.text(it, "model", "id"), a)
+		m.provider = strings.clone(tk_json.text(it, "model", "providerID"), a)
 		m.variant = strings.clone(variant_of(it), a)
-		m.finish = strings.clone(jstr(it, "finish"), a)
-		m.cost = jnum(it, "cost")
-		m.tokens_in = jnum(it, "tokens", "input")
-		m.tokens_out = jnum(it, "tokens", "output")
-		m.reasoning = jnum(it, "tokens", "reasoning")
-		m.cache_read = jnum(it, "tokens", "cache", "read")
+		m.finish = strings.clone(tk_json.text(it, "finish"), a)
+		m.cost = tk_json.number(it, "cost")
+		m.tokens_in = tk_json.number(it, "tokens", "input")
+		m.tokens_out = tk_json.number(it, "tokens", "output")
+		m.reasoning = tk_json.number(it, "tokens", "reasoning")
+		m.cache_read = tk_json.number(it, "tokens", "cache", "read")
 		m.streaming = m.completed == 0
 		ord := [Part_Kind]int{}
-		for p in jarr(it, "content") {
+		for p in tk_json.array(it, "content") {
 			part: Part
-			switch jstr(p, "type") {
+			switch tk_json.text(p, "type") {
 			case "text":      part.kind = .Text
 			case "reasoning": part.kind = .Reasoning
 			case "tool":      part.kind = .Tool
@@ -774,29 +775,29 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 			ord[part.kind] += 1
 			part.done = true   // (the last one of a message that runs is not: after this loop)
 			if part.kind == .Tool {
-				part.tool_id = strings.clone(jstr(p, "id"), a)
-				part.tool_name = strings.clone(jstr(p, "name"), a)
-				st := jget(p, "state")
-				switch jstr(st, "status") {
+				part.tool_id = strings.clone(tk_json.text(p, "id"), a)
+				part.tool_name = strings.clone(tk_json.text(p, "name"), a)
+				st := tk_json.get(p, "state")
+				switch tk_json.text(st, "status") {
 				case "streaming", "pending": part.status = .Pending
 				case "running":   part.status = .Running
 				case "completed": part.status = .Done
 				case "error":     part.status = .Error
 				case:             part.status = .Unknown   // (it says nothing of a run: it must not animate)
 				}
-				tool_set_input(&part, jget(st, "input"), a)
-				tool_set_meta(&part, jget(st, "metadata"), a)
-				part.started_ms = jnum(p, "time", "created")
-				part.ended_ms = jnum(p, "time", "completed")
+				tool_set_input(&part, tk_json.get(st, "input"), a)
+				tool_set_meta(&part, tk_json.get(st, "metadata"), a)
+				part.started_ms = tk_json.number(p, "time", "created")
+				part.ended_ms = tk_json.number(p, "time", "completed")
 				if part.status == .Error {
-					tool_set_output(&part, error_text(jget(st, "error")), a)
+					tool_set_output(&part, error_text(tk_json.get(st, "error")), a)
 				} else {
-					tool_set_output(&part, content_text(jarr(st, "content")), a)
-					content_images(&part, jarr(st, "content"), a)
+					tool_set_output(&part, content_text(tk_json.array(st, "content")), a)
+					content_images(&part, tk_json.array(st, "content"), a)
 				}
 			} else {
 				part.text = make([dynamic]u8, a)
-				append(&part.text, jstr(p, "text"))
+				append(&part.text, tk_json.text(p, "text"))
 				if part.kind == .Reasoning && len(part.text) == 0 { continue }   // (signed, empty: the provider hides it)
 			}
 			append(&m.parts, part)
@@ -806,32 +807,32 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 		synthetic_set(&m, it, a)
 	case "shell":
 		m.kind = .Shell
-		m.text = strings.clone(jstr(it, "command"), a)
-		m.shell_id = strings.clone(jstr(it, "shellID"), a)
+		m.text = strings.clone(tk_json.text(it, "command"), a)
+		m.shell_id = strings.clone(tk_json.text(it, "shellID"), a)
 	case "compaction":
 		m.kind = .Compaction
 	case "idle":
 		m.kind = .Idle
-		m.finish = strings.clone(jstr(it, "outcome"), a)
+		m.finish = strings.clone(tk_json.text(it, "outcome"), a)
 	case "agent-switched":
 		m.kind, m.switched = .Switch, .Agent
-		m.agent = strings.clone(jstr(it, "agent"), a)
-		m.text, m.previous = m.agent, strings.clone(jstr(it, "previous"), a)
+		m.agent = strings.clone(tk_json.text(it, "agent"), a)
+		m.text, m.previous = m.agent, strings.clone(tk_json.text(it, "previous"), a)
 	case "model-switched":
 		m.kind, m.switched = .Switch, .Model
-		m.model, m.provider = strings.clone(jstr(it, "model", "id"), a), strings.clone(jstr(it, "model", "providerID"), a)
+		m.model, m.provider = strings.clone(tk_json.text(it, "model", "id"), a), strings.clone(tk_json.text(it, "model", "providerID"), a)
 		m.variant = strings.clone(variant_of(it), a)
 		m.text = strings.clone(model_word(m.model, m.variant), a)
-		if prev := jget(it, "previous"); prev != nil {
-			m.previous = strings.clone(model_word(jstr(prev, "id"), jstr(prev, "variant") == "default" ? "" : jstr(prev, "variant")), a)
+		if prev := tk_json.get(it, "previous"); prev != nil {
+			m.previous = strings.clone(model_word(tk_json.text(prev, "id"), tk_json.text(prev, "variant") == "default" ? "" : tk_json.text(prev, "variant")), a)
 		}
 	case "location-switched":
 		m.kind, m.switched = .Switch, .Location
-		m.text = strings.clone(jstr(it, "location", "directory"), a)
-		m.previous = strings.clone(jstr(it, "previous", "location", "directory"), a)
+		m.text = strings.clone(tk_json.text(it, "location", "directory"), a)
+		m.previous = strings.clone(tk_json.text(it, "previous", "location", "directory"), a)
 	case:
 		m.kind = .Other
-		m.text = strings.clone(jstr(it, "type"), a)
+		m.text = strings.clone(tk_json.text(it, "type"), a)
 	}
 	return m
 }
@@ -839,13 +840,13 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 // The images among the files of a prompt.
 message_images :: proc(m: ^Message, files: json.Array, a: mem.Allocator) {
 	for f in files {
-		mime := jstr(f, "mime")
+		mime := tk_json.text(f, "mime")
 		if !strings.has_prefix(mime, "image/") { continue }
 		if m.images == nil { m.images = make([dynamic]Image_Ref, a) }
-		if src := jstr(f, "source", "uri"); jstr(f, "data") == "" && strings.has_prefix(src, "data:") {
-			append(&m.images, image_ref(strings.clone(src, a), .Data_Url, strings.clone(mime, a), strings.clone(jstr(f, "name"), a)))
+		if src := tk_json.text(f, "source", "uri"); tk_json.text(f, "data") == "" && strings.has_prefix(src, "data:") {
+			append(&m.images, image_ref(strings.clone(src, a), .Data_Url, strings.clone(mime, a), strings.clone(tk_json.text(f, "name"), a)))
 		} else {
-			append(&m.images, image_ref(strings.clone(jstr(f, "data"), a), .Base64, strings.clone(mime, a), strings.clone(jstr(f, "name"), a)))
+			append(&m.images, image_ref(strings.clone(tk_json.text(f, "data"), a), .Base64, strings.clone(mime, a), strings.clone(tk_json.text(f, "name"), a)))
 		}
 	}
 }
@@ -853,7 +854,7 @@ message_images :: proc(m: ^Message, files: json.Array, a: mem.Allocator) {
 error_text :: proc(v: json.Value) -> string {
 	#partial switch x in v {
 	case json.String: return string(x)
-	case json.Object: return jstr(v, "message")
+	case json.Object: return tk_json.text(v, "message")
 	}
 	return ""
 }
@@ -861,14 +862,14 @@ error_text :: proc(v: json.Value) -> string {
 // The images among a tool's content (`{type: "file", uri: "data:image/...;base64,...", mime, name}`).
 content_images :: proc(p: ^Part, list: json.Array, a: mem.Allocator) {
 	for c in list {
-		if jstr(c, "type") != "file" { continue }
-		mime, uri := jstr(c, "mime"), jstr(c, "uri")
+		if tk_json.text(c, "type") != "file" { continue }
+		mime, uri := tk_json.text(c, "mime"), tk_json.text(c, "uri")
 		if !strings.has_prefix(mime, "image/") && !strings.has_prefix(uri, "data:image/") { continue }
 		if p.images == nil { p.images = make([dynamic]Image_Ref, a) }
 		if strings.has_prefix(uri, "data:") {
-			append(&p.images, image_ref(strings.clone(uri, a), .Data_Url, strings.clone(mime, a), strings.clone(jstr(c, "name"), a)))
-		} else if d := jstr(c, "data"); d != "" {
-			append(&p.images, image_ref(strings.clone(d, a), .Base64, strings.clone(mime, a), strings.clone(jstr(c, "name"), a)))
+			append(&p.images, image_ref(strings.clone(uri, a), .Data_Url, strings.clone(mime, a), strings.clone(tk_json.text(c, "name"), a)))
+		} else if d := tk_json.text(c, "data"); d != "" {
+			append(&p.images, image_ref(strings.clone(d, a), .Base64, strings.clone(mime, a), strings.clone(tk_json.text(c, "name"), a)))
 		}
 	}
 }
@@ -876,7 +877,7 @@ content_images :: proc(p: ^Part, list: json.Array, a: mem.Allocator) {
 content_text :: proc(list: json.Array) -> string {
 	b := strings.builder_make(context.temp_allocator)
 	for c in list {
-		if t := jstr(c, "text"); t != "" {
+		if t := tk_json.text(c, "text"); t != "" {
 			if strings.builder_len(b) > 0 { strings.write_byte(&b, '\n') }
 			strings.write_string(&b, t)
 		}
@@ -887,15 +888,15 @@ content_text :: proc(list: json.Array) -> string {
 // A synthetic message from `it`, a stored message or an inbox item's payload (the same fields: text, description, metadata).
 synthetic_set :: proc(m: ^Message, it: json.Value, a: mem.Allocator) {
 	m.kind = .Synthetic
-	m.text = strings.clone(jstr(it, "text"), a)
-	if jstr(it, "metadata", "source") == "subagent" {
-		m.sub_child = strings.clone(jstr(it, "metadata", "childID"), a)
-		m.sub_state = strings.clone(jstr(it, "metadata", "state"), a)
-		m.sub_agent = strings.clone(jstr(it, "metadata", "agent"), a)
-		m.sub_desc = strings.clone(jstr(it, "description"), a)
+	m.text = strings.clone(tk_json.text(it, "text"), a)
+	if tk_json.text(it, "metadata", "source") == "subagent" {
+		m.sub_child = strings.clone(tk_json.text(it, "metadata", "childID"), a)
+		m.sub_state = strings.clone(tk_json.text(it, "metadata", "state"), a)
+		m.sub_agent = strings.clone(tk_json.text(it, "metadata", "agent"), a)
+		m.sub_desc = strings.clone(tk_json.text(it, "description"), a)
 		// (metadata.state keeps the period's real status: only the tag says the child's own work still runs)
-		m.sub_running = subagent_tag_state(jstr(it, "text")) == "running"
-		m.text = strings.clone(subagent_body(jstr(it, "text")), a)
+		m.sub_running = subagent_tag_state(tk_json.text(it, "text")) == "running"
+		m.text = strings.clone(subagent_body(tk_json.text(it, "text")), a)
 	} else if jobs, ok := jobs_parse(m.text, a); ok {
 		m.jobs = jobs
 	}
@@ -927,13 +928,13 @@ subagent_body :: proc(s: string) -> string {
 
 // What the server says of a tool call as it runs (a sub-agent's session).
 tool_set_meta :: proc(p: ^Part, meta: json.Value, a: mem.Allocator) {
-	if sid := jstr(meta, "sessionID"); sid != "" && p.sub_session == "" { p.sub_session = strings.clone(sid, a) }
+	if sid := tk_json.text(meta, "sessionID"); sid != "" && p.sub_session == "" { p.sub_session = strings.clone(sid, a) }
 	// (a sub-agent's call returns at once with this status: the child it launched works on)
-	if (p.tool_name == "subagent" || p.sub_agent != "") && jstr(meta, "status") == "running" { p.sub_launched = true }
-	if id := jstr(meta, "shellID"); id != "" && p.shell_id == "" { p.shell_id = strings.clone(id, a) }
-	if files := jarr(meta, "files"); len(files) > 0 {
+	if (p.tool_name == "subagent" || p.sub_agent != "") && tk_json.text(meta, "status") == "running" { p.sub_launched = true }
+	if id := tk_json.text(meta, "shellID"); id != "" && p.shell_id == "" { p.shell_id = strings.clone(id, a) }
+	if files := tk_json.array(meta, "files"); len(files) > 0 {
 		b := strings.builder_make(context.temp_allocator)
-		for f in files { strings.write_string(&b, jstr(f, "patch")) }
+		for f in files { strings.write_string(&b, tk_json.text(f, "patch")) }
 		// (each progress event says it again: the same patch is not read again)
 		if patch := strings.to_string(b); patch != "" && patch != p.patch { part_patch_set(p, strings.clone(patch, a), a) }
 	}
@@ -954,7 +955,7 @@ tool_set_output :: proc(p: ^Part, output: string, a: mem.Allocator) {
 // never parses the input.
 tool_set_input :: proc(p: ^Part, input: json.Value, a: mem.Allocator) {
 	if input == nil { return }
-	p.input = strings.clone(jtext(input), a)
+	p.input = strings.clone(tk_json.to_text(input, "  "), a)
 	p.fields, p.input_object = nil, false
 	if obj, is := input.(json.Object); is {
 		p.input_object = true
@@ -971,7 +972,7 @@ tool_set_input :: proc(p: ^Part, input: json.Value, a: mem.Allocator) {
 	// counts: what an edit or a write made is made from it (part_patch).
 	text_of :: proc(p: ^Part, v: json.Value, keys: ..string) -> (s: string, ok: bool) {
 		for k in keys {
-			if _, is := jget(v, k).(json.String); !is { continue }
+			if _, is := tk_json.get(v, k).(json.String); !is { continue }
 			for f in p.fields { if f.key == k { return f.value, true } }
 		}
 		return
@@ -979,27 +980,27 @@ tool_set_input :: proc(p: ^Part, input: json.Value, a: mem.Allocator) {
 	p.command, _ = text_of(p, input, "command")
 	p.command_line = ""
 	if p.command != "" { p.command_line = strings.concatenate({"$ ", p.command}, a) }
-	p.background = jbool(input, "background")
+	p.background = tk_json.boolean(input, "background")
 	p.file_path, _ = text_of(p, input, "filePath")
 	if p.file_path == "" { p.file_path, _ = text_of(p, input, "path") }
 	p.todos, p.has_todos = nil, false
-	if list := jarr(input, "todos"); list != nil {
+	if list := tk_json.array(input, "todos"); list != nil {
 		p.todos = make([]Todo, len(list), a)
-		for t, i in list { p.todos[i] = Todo{strings.clone(jstr(t, "content"), a), strings.clone(jstr(t, "status"), a)} }
+		for t, i in list { p.todos[i] = Todo{strings.clone(tk_json.text(t, "content"), a), strings.clone(tk_json.text(t, "status"), a)} }
 		p.has_todos = true
 	}
 	p.old_text, p.has_old = text_of(p, input, "oldString", "old_string")
 	p.new_text, _ = text_of(p, input, "newString", "new_string")
 	p.content, p.has_content = text_of(p, input, "content")
-	if p.tool_name == "subagent" || (jstr(input, "agent") != "" && jstr(input, "prompt") != "") {
-		p.sub_agent = strings.clone(jstr(input, "agent"), a)
-		p.sub_desc = strings.clone(jstr(input, "description"), a)
-		p.sub_prompt = strings.clone(jstr(input, "prompt"), a)
-		p.sub_model = strings.clone(jstr(input, "model"), a)
-		if sid := jstr(input, "sessionID"); sid != "" { p.sub_session = strings.clone(sid, a) }   // (a sub-agent resumed)
+	if p.tool_name == "subagent" || (tk_json.text(input, "agent") != "" && tk_json.text(input, "prompt") != "") {
+		p.sub_agent = strings.clone(tk_json.text(input, "agent"), a)
+		p.sub_desc = strings.clone(tk_json.text(input, "description"), a)
+		p.sub_prompt = strings.clone(tk_json.text(input, "prompt"), a)
+		p.sub_model = strings.clone(tk_json.text(input, "model"), a)
+		if sid := tk_json.text(input, "sessionID"); sid != "" { p.sub_session = strings.clone(sid, a) }   // (a sub-agent resumed)
 	}
 	for k in ([]string{"description", "command", "filePath", "path", "pattern", "query", "url", "prompt", "name"}) {
-		if s := jstr(input, k); s != "" {
+		if s := tk_json.text(input, k); s != "" {
 			s := s
 			if i := strings.index_byte(s, '\n'); i >= 0 { s = s[:i] }
 			p.subject = strings.clone(s, a)
@@ -1044,7 +1045,7 @@ agents_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { agents_load(app, v
 
 models_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { models_load(app, v) }
 
-permissions_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { permissions_replace(app, r.tag, jarr(v, "data"), r.asked_at) }
+permissions_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { permissions_replace(app, r.tag, tk_json.array(v, "data"), r.asked_at) }
 
 permission_reply_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 	waits_gone(app, r.tag)
@@ -1119,7 +1120,7 @@ queue_delivered :: proc(app: ^App, id: string, created: f64) {
 	c := &app.chat
 	if it := queue_find(app, id); it != nil && find_message(c, id) == nil {
 		v := json_of_own(app, "queued payload", it.payload)
-		user_message_add(c, id, it.text, jarr(v, "files"), created)
+		user_message_add(c, id, it.text, tk_json.array(v, "files"), created)
 	}
 	queue_gone(app, id, true, c.seq)
 }
@@ -1152,9 +1153,9 @@ tool_part :: proc(c: ^Chat, m: ^Message, id: string) -> ^Part {
 // a dialog, a toast; false for what no window shows, a delta of a session nobody looks at above all, the bulk of a busy stream. (Each
 // kind of the first switch is rare and shows somewhere: it counts as seen without a finer rule.)
 apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
-	kind := jstr(ev, "type")
-	d := jget(ev, "data")
-	sid := jstr(d, "sessionID")
+	kind := tk_json.text(ev, "type")
+	d := tk_json.get(ev, "data")
+	sid := tk_json.text(d, "sessionID")
 	c := &app.chat
 	mine := sid != "" && sid == c.id
 	a := c.alloc
@@ -1182,7 +1183,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		}
 		refresh_soon(app)
 	case "session.viewed":
-		session_viewed(app, sid, jnum(d, "idle"))
+		session_viewed(app, sid, tk_json.number(d, "idle"))
 		refresh_soon(app)   // (what is seen is the server's to say: its list has the last word)
 	case "shell.created", "shell.exited", "shell.deleted":
 		activity_poke(app)
@@ -1204,14 +1205,14 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		refresh_soon(app)
 		children_soon(app)
 	case GOAL_EVENT:
-		goal_set(app, sid, jget(d, "goal"))
+		goal_set(app, sid, tk_json.get(d, "goal"))
 	case "session.agent.selected", "session.model.selected":
 		// (from here or elsewhere: the composer says it now, the page read again brings its line into the conversation)
 		if !mine { return false }
 		if kind == "session.agent.selected" {
-			c.agent = strings.clone(jstr(d, "agent"), a)
+			c.agent = strings.clone(tk_json.text(d, "agent"), a)
 		} else {
-			c.model, c.provider = strings.clone(jstr(d, "model", "id"), a), strings.clone(jstr(d, "model", "providerID"), a)
+			c.model, c.provider = strings.clone(tk_json.text(d, "model", "id"), a), strings.clone(tk_json.text(d, "model", "providerID"), a)
 			c.variant = strings.clone(variant_of(d), a)
 		}
 		refresh_soon(app)
@@ -1228,30 +1229,30 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		if mine && kind == "session.revert.committed" { load_messages(app, sid) }
 		refresh_soon(app)
 	case "permission.asked":
-		req := jget(d, "request")
+		req := tk_json.get(d, "request")
 		if req == nil { req = d }
 		permission_add(app, req)
-		asker := jstr(req, "sessionID")
+		asker := tk_json.text(req, "sessionID")
 		detail := permission_words(req)
 		if asker != c.id { effect_session_toast(app, .Warn, asker, i18n.tr("Permission"), detail) }
-		effect_waiting(app, missed_key(app, .Permission, jstr(req, "id"), asker), asker, "Permission", detail)
+		effect_waiting(app, missed_key(app, .Permission, tk_json.text(req, "id"), asker), asker, "Permission", detail)
 	case "session.permissions":   // (a session's approval mode, set here or by another client)
-		approval_seen(app, sid, approval_of(jget(d, "permissions")))
+		approval_seen(app, sid, approval_of(tk_json.get(d, "permissions")))
 	case "permission.replied":
-		id := jstr(d, "id")
-		if id == "" { id = jstr(d, "requestID") }
+		id := tk_json.text(d, "id")
+		if id == "" { id = tk_json.text(d, "requestID") }
 		waits_gone(app, id)
 		permission_remove(app, id)
 	case "form.created":
-		form := jget(d, "form")
+		form := tk_json.get(d, "form")
 		form_add(app, form)
-		asker := jstr(form, "sessionID")
+		asker := tk_json.text(form, "sessionID")
 		detail := form_words(form)
 		if asker != "" && asker != c.id && !is_child(c, asker) { effect_session_toast(app, .Warn, asker, i18n.tr("Question"), detail) }   // (no session: shown in the conversation, no toast)
-		effect_waiting(app, asker != "" ? missed_key(app, .Question, jstr(form, "id"), asker) : "", asker, "Question", detail)
+		effect_waiting(app, asker != "" ? missed_key(app, .Question, tk_json.text(form, "id"), asker) : "", asker, "Question", detail)
 	case "form.replied", "form.cancelled":
-		waits_gone(app, jstr(d, "id"))
-		form_remove(app, jstr(d, "id"))
+		waits_gone(app, tk_json.text(d, "id"))
+		form_remove(app, tk_json.text(d, "id"))
 	case:
 		visible = false
 	}
@@ -1260,54 +1261,54 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 	chat_changed(c)   // (what follows changes the messages, or their parts)
 	visible = true
 
-	mid := jstr(d, "assistantMessageID")
+	mid := tk_json.text(d, "assistantMessageID")
 	switch kind {
 	case "session.inbox.enqueued":
-		item := jget(d, "item")
-		id := jstr(d, "inboxID")
-		if jstr(item, "type") == "user" {
-			if !c.busy && delivery_of(jstr(item, "delivery")) == .Steer {
+		item := tk_json.get(d, "item")
+		id := tk_json.text(d, "inboxID")
+		if tk_json.text(item, "type") == "user" {
+			if !c.busy && delivery_of(tk_json.text(item, "delivery")) == .Steer {
 				// (nothing runs: it does not wait, it goes. The bottom is followed if it was: this does not fetch a reader who went up. Sending it did, submit_prompt)
-				if find_message(c, id) == nil { user_message_add(c, id, jstr(item, "payload", "text"), jarr(item, "payload", "files"), jnum(ev, "created")) }
+				if find_message(c, id) == nil { user_message_add(c, id, tk_json.text(item, "payload", "text"), tk_json.array(item, "payload", "files"), tk_json.number(ev, "created")) }
 			} else {
 				queue_add(app, id, item, c.seq)
 			}
-		} else if jstr(item, "type") == "synthetic" && find_message(c, id) == nil {
+		} else if tk_json.text(item, "type") == "synthetic" && find_message(c, id) == nil {
 			// (a report of a sub-agent or of a job: shown as it comes, not at its delivery, which waits for the run's next step)
-			synthetic_add(c, id, jget(item, "payload"), jnum(ev, "created"))
+			synthetic_add(c, id, tk_json.get(item, "payload"), tk_json.number(ev, "created"))
 		}
 	case "session.inbox.delivered":
-		queue_delivered(app, jstr(d, "inboxID"), jnum(ev, "created"))
+		queue_delivered(app, tk_json.text(d, "inboxID"), tk_json.number(ev, "created"))
 	case "session.inbox.cancelled":
-		id := jstr(d, "inboxID")
+		id := tk_json.text(d, "inboxID")
 		if queue_shown_as_sent(app, id) { chat_drop(c, id) }
 		queue_gone(app, id, false, c.seq)
 	case "session.inbox.delivery.changed":
-		queue_delivery_changed(app, jstr(d, "inboxID"), delivery_of(jstr(d, "delivery")), c.seq)
+		queue_delivery_changed(app, tk_json.text(d, "inboxID"), delivery_of(tk_json.text(d, "delivery")), c.seq)
 	case "session.step.started":
 		m := assistant(c, mid)
-		m.agent = strings.clone(jstr(d, "agent"), a)
-		m.model = strings.clone(jstr(d, "model", "id"), a)
-		m.provider = strings.clone(jstr(d, "model", "providerID"), a)
+		m.agent = strings.clone(tk_json.text(d, "agent"), a)
+		m.model = strings.clone(tk_json.text(d, "model", "id"), a)
+		m.provider = strings.clone(tk_json.text(d, "model", "providerID"), a)
 		m.variant = strings.clone(variant_of(d), a)
-		m.created = jnum(d, "started")
+		m.created = tk_json.number(d, "started")
 		m.streaming = true
 		c.model, c.provider, c.agent, c.variant = m.model, m.provider, m.agent, m.variant
 	case "session.text.started", "session.reasoning.started":
-		_ = text_part(c, assistant(c, mid), kind == "session.text.started" ? .Text : .Reasoning, int(jnum(d, "ordinal")))
+		_ = text_part(c, assistant(c, mid), kind == "session.text.started" ? .Text : .Reasoning, int(tk_json.number(d, "ordinal")))
 	case "session.text.delta", "session.reasoning.delta":
-		p := text_part(c, assistant(c, mid), kind == "session.text.delta" ? .Text : .Reasoning, int(jnum(d, "ordinal")))
-		append(&p.text, jstr(d, "delta"))
+		p := text_part(c, assistant(c, mid), kind == "session.text.delta" ? .Text : .Reasoning, int(tk_json.number(d, "ordinal")))
+		append(&p.text, tk_json.text(d, "delta"))
 	case "session.text.ended", "session.reasoning.ended":
 		m := assistant(c, mid)
 		k := kind == "session.text.ended" ? Part_Kind.Text : .Reasoning
-		t := jstr(d, "text")
+		t := tk_json.text(d, "text")
 		if k == .Reasoning && t == "" {
 			// nothing to show (a hidden chain of thought): drop the empty part
-			for p, i in m.parts { if p.kind == k && p.ordinal == int(jnum(d, "ordinal")) && len(p.text) == 0 { ordered_remove(&m.parts, i); break } }
+			for p, i in m.parts { if p.kind == k && p.ordinal == int(tk_json.number(d, "ordinal")) && len(p.text) == 0 { ordered_remove(&m.parts, i); break } }
 			return
 		}
-		p := text_part(c, m, k, int(jnum(d, "ordinal")))
+		p := text_part(c, m, k, int(tk_json.number(d, "ordinal")))
 		// (another text than the deltas made: another buffer. What was read from a text is kept by its place and its length, and a
 		// text only grows in its buffer: markdown.read, link_runs)
 		if string(p.text[:]) != t {
@@ -1316,58 +1317,58 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		}
 		p.done = true
 	case "session.tool.input.started":
-		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
-		p.tool_name = strings.clone(jstr(d, "name"), a)
+		p := tool_part(c, assistant(c, mid), tk_json.text(d, "id"))
+		p.tool_name = strings.clone(tk_json.text(d, "name"), a)
 		p.status = .Pending
 	case "session.tool.called":
-		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
+		p := tool_part(c, assistant(c, mid), tk_json.text(d, "id"))
 		had := p.sub_session
-		tool_set_input(p, jget(d, "input"), a)
+		tool_set_input(p, tk_json.get(d, "input"), a)
 		if p.sub_session != had { subs_changed(c) }   // (a sub-agent resumed: its session is named)
 		p.status = .Running
-		p.started_ms = jnum(ev, "created")
+		p.started_ms = tk_json.number(ev, "created")
 	case "session.tool.progress":
-		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
+		p := tool_part(c, assistant(c, mid), tk_json.text(d, "id"))
 		had := p.sub_session
-		tool_set_meta(p, jget(d, "metadata"), a)
+		tool_set_meta(p, tk_json.get(d, "metadata"), a)
 		if p.sub_session != had { subs_changed(c) }
 		if p.sub_session != "" { children_soon(app) }
 		output_view_part_changed(app, p)
 	case "session.tool.success":
-		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
+		p := tool_part(c, assistant(c, mid), tk_json.text(d, "id"))
 		p.status = .Done
 		p.done = true
-		tool_set_output(p, content_text(jarr(d, "content")), a)
-		content_images(p, jarr(d, "content"), a)
-		p.ended_ms = jnum(ev, "created")
-		tool_set_meta(p, jget(d, "metadata"), a)
+		tool_set_output(p, content_text(tk_json.array(d, "content")), a)
+		content_images(p, tk_json.array(d, "content"), a)
+		p.ended_ms = tk_json.number(ev, "created")
+		tool_set_meta(p, tk_json.get(d, "metadata"), a)
 		// (a sub-agent's call that ends launched its child, or handed back its result: which calls launch is read again)
 		if p.sub_session != "" { subs_changed(c); children_soon(app) }
 		output_view_part_changed(app, p)
 	case "session.tool.failed":
-		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
+		p := tool_part(c, assistant(c, mid), tk_json.text(d, "id"))
 		p.status = .Error
 		p.done = true
-		tool_set_output(p, error_text(jget(d, "error")), a)
+		tool_set_output(p, error_text(tk_json.get(d, "error")), a)
 		if p.sub_session != "" { subs_changed(c) }   // (it launched nothing: its child is not awaited)
 		output_view_part_changed(app, p)
 	case "session.step.ended":
 		m := assistant(c, mid)
 		m.streaming = false
-		m.finish = strings.clone(jstr(d, "finish"), a)
-		m.cost = jnum(d, "cost")
-		m.tokens_in = jnum(d, "tokens", "input")
-		m.tokens_out = jnum(d, "tokens", "output")
-		m.reasoning = jnum(d, "tokens", "reasoning")
-		m.cache_read = jnum(d, "tokens", "cache", "read")
+		m.finish = strings.clone(tk_json.text(d, "finish"), a)
+		m.cost = tk_json.number(d, "cost")
+		m.tokens_in = tk_json.number(d, "tokens", "input")
+		m.tokens_out = tk_json.number(d, "tokens", "output")
+		m.reasoning = tk_json.number(d, "tokens", "reasoning")
+		m.cache_read = tk_json.number(d, "tokens", "cache", "read")
 		stats_context_soon(app)
 	case "session.compaction.ended":
 		stats_context_soon(app)
 	case "session.usage.updated":
-		c.cost = jnum(d, "cost")
-		c.tokens_in = jnum(d, "tokens", "input")
-		c.tokens_out = jnum(d, "tokens", "output")
-		c.cache_read = jnum(d, "tokens", "cache", "read")
+		c.cost = tk_json.number(d, "cost")
+		c.tokens_in = tk_json.number(d, "tokens", "input")
+		c.tokens_out = tk_json.number(d, "tokens", "output")
+		c.cache_read = tk_json.number(d, "tokens", "cache", "read")
 	}
 	return true   // (an event of the session shown)
 }
@@ -1386,7 +1387,7 @@ child_event :: proc(app: ^App, kind, sid: string, d, ev: json.Value) -> bool {
 	key := sid
 	live, has := c.live[sid]
 	if !has { key = strings.clone(sid, a) }
-	now := jnum(ev, "created")
+	now := tk_json.number(ev, "created")
 	if now == 0 { now = now_epoch_ms() }
 	switch kind {
 	case "session.step.started":
@@ -1397,17 +1398,17 @@ child_event :: proc(app: ^App, kind, sid: string, d, ev: json.Value) -> bool {
 	case "session.text.started", "session.text.delta":
 		live.activity = "writing"
 	case "session.tool.input.started":
-		live.activity = strings.clone(jstr(d, "name"), a)
+		live.activity = strings.clone(tk_json.text(d, "name"), a)
 	case "session.tool.called":
 		live.tools += 1
 		tmp: Part
 		tmp.tool_name = live.activity
-		tool_set_input(&tmp, jget(d, "input"), context.temp_allocator)
+		tool_set_input(&tmp, tk_json.get(d, "input"), context.temp_allocator)
 		live.activity = tmp.subject != "" ? strings.clone(strings.concatenate({live.activity, ": ", tmp.subject}, context.temp_allocator), a) : live.activity
 	case "session.usage.updated":
-		live.cost = jnum(d, "cost")
-		live.tokens_in = jnum(d, "tokens", "input") + jnum(d, "tokens", "cache", "read")
-		live.tokens_out = jnum(d, "tokens", "output")
+		live.cost = tk_json.number(d, "cost")
+		live.tokens_in = tk_json.number(d, "tokens", "input") + tk_json.number(d, "tokens", "cache", "read")
+		live.tokens_out = tk_json.number(d, "tokens", "output")
 	case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted", "session.idle":
 		live.activity = ""
 		children_soon(app)

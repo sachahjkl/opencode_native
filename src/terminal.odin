@@ -16,6 +16,8 @@
 // about it goes by, and leaving that server leaves its shells running there (terminals_forget).
 package ocn
 
+import store "gt:store"
+import tk_json "gt:json"
 import "base:runtime"
 import "core:encoding/json"
 import "core:fmt"
@@ -258,8 +260,8 @@ term_frame :: proc(c: ^Term_Conn, frame: string) -> (output: bool) {
 	if len(frame) == 0 { return false }
 	if frame[0] == 0 {
 		v, err := json.parse_string(frame[1:], parse_integers = true, allocator = context.temp_allocator)
-		if err == nil && jget(v, "cursor") != nil {
-			c.cursor = i64(jnum(v, "cursor"))
+		if err == nil && tk_json.get(v, "cursor") != nil {
+			c.cursor = i64(tk_json.number(v, "cursor"))
 			return false
 		}
 	}
@@ -277,7 +279,7 @@ term_backoff_ms :: proc(tries: int) -> int { return min(TERM_RETRY_MS << uint(cl
 term_listed :: proc(list: string, id: string) -> bool {
 	v, err := json.parse_string(list, parse_integers = true, allocator = context.temp_allocator)
 	if err != nil { return true }   // (nothing can be said from that: tried again)
-	for it in jarr(v, "data") { if jstr(it, "id") == id { return jstr(it, "status") == "running" } }
+	for it in tk_json.array(v, "data") { if tk_json.text(it, "id") == id { return tk_json.text(it, "status") == "running" } }
 	return false
 }
 
@@ -517,10 +519,10 @@ terminals_hide :: proc(app: ^App) {
 @(private = "file")
 term_add :: proc(app: ^App, it: json.Value, dir: string) -> ^Term {
 	s := &app.cx.terms
-	id := jstr(it, "id")
+	id := tk_json.text(it, "id")
 	if id == "" || term_find(app, id) != nil { return nil }
-	t := term_new(id, jstr(it, "title"), dir)
-	t.view.zoom = zoom_of(&app.term_zooms, id, 1)
+	t := term_new(id, tk_json.text(it, "title"), dir)
+	t.view.zoom = f32(store.kept_of(&app.term_zooms, id, 1))
 	t.server = app.conn
 	t.app = app
 	append(&s.list, t)
@@ -532,7 +534,7 @@ term_add :: proc(app: ^App, it: json.Value, dir: string) -> ^Term {
 terminals_load :: proc(app: ^App, dir: string, v: json.Value) {
 	s := &app.cx.terms
 	added := false
-	for it in jarr(v, "data") { if jstr(it, "status") == "running" && term_add(app, it, dir) != nil { added = true } }
+	for it in tk_json.array(v, "data") { if tk_json.text(it, "status") == "running" && term_add(app, it, dir) != nil { added = true } }
 	if s.open {
 		if added { terminals_views(app) }
 		if len(s.list) == 0 || s.make_after {
@@ -566,12 +568,12 @@ term_make :: proc(app: ^App, dir, title: string) {
 	s := &app.cx.terms
 	if s.made.state == .Loading { return }
 	remote.begin(&s.made)
-	request(app, .Pty_Made, "POST", term_list_path(dir), fmt.tprintf(`{{"title":%s}}`, jquote(title)), dir, reading = &s.made)
+	request(app, .Pty_Made, "POST", term_list_path(dir), fmt.tprintf(`{{"title":%s}}`, tk_json.quote(title)), dir, reading = &s.made)
 }
 
 term_made :: proc(app: ^App, dir: string, v: json.Value) {
 	s := &app.cx.terms
-	t := term_add(app, jget(v, "data"), dir)
+	t := term_add(app, tk_json.get(v, "data"), dir)
 	if t == nil {
 		remote.settle(&s.made, .Failed, i18n.tr("Unreadable answer"))
 		s.replaces = nil
@@ -597,7 +599,7 @@ term_made_failed :: proc(app: ^App) -> (told: bool) {
 pty_made_on_left :: proc(app: ^App, r: ^Request) {
 	if !r.ok || r.status >= 400 { return }
 	v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	id := jstr(v, "data", "id")
+	id := tk_json.text(v, "data", "id")
 	if id == "" { return }
 	q := location_query(r.tag)
 	request(app, .Action, "DELETE", fmt.tprintf("/api/pty/%s%s%s", url_escape(id), q != "" ? "?" : "", q), conn = r.conn)
@@ -1310,9 +1312,9 @@ terms_size_due :: proc(app: ^App) {
 // Each shell's zoom
 
 // The shells' zooms, by their id on the server: a shell found again (the program started again, the server come back) has
-// its own. The server keeps a shell's title and size only: the zooms are the client's (Kept_Zooms, terminal_zoom.txt). A
+// its own. The server keeps a shell's title and size only: the zooms are the client's (store.Kept, terminal_zoom.txt). A
 // shell closed from here leaves the file.
-term_zooms_load :: proc(app: ^App) { zooms_load(&app.term_zooms, &app.stores.zooms, term.ZOOM_MIN, term.ZOOM_MAX) }
+term_zooms_load :: proc(app: ^App) { store.kept_load(&app.term_zooms, &app.stores.zooms, f64(term.ZOOM_MIN), f64(term.ZOOM_MAX)) }
 
 // A shell's zoom (term.zoom_set: within its bounds), kept.
 term_zoom_set :: proc(app: ^App, t: ^Term, zoom: f32) {
@@ -1327,10 +1329,10 @@ term_zoom_keep :: proc(app: ^App, t: ^Term) {
 	app.cx.due[.Term_Size] = {}
 	ui.deferred_ask(&app.cx.due[.Term_Size], term.ZOOM_REST_MS)
 	if term_find(app, t.id) != t { return }
-	zoom_keep(&app.term_zooms, &app.stores.zooms, t.id, t.view.zoom, 1)
+	store.kept_set(&app.term_zooms, t.id, f64(t.view.zoom), 1)
 }
 
-term_zoom_forget :: proc(app: ^App, id: string) { zoom_forget(&app.term_zooms, &app.stores.zooms, id) }
+term_zoom_forget :: proc(app: ^App, id: string) { store.kept_forget(&app.term_zooms, id) }
 
 ////////////////////////////////
 // What the answers to its requests do (net.odin REQ_FACTS)

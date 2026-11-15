@@ -8,6 +8,7 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:strings"
 import "core:testing"
+import tk_json "gt:json"
 import "gt:ui"
 import remote "gt:remote"
 
@@ -350,7 +351,7 @@ admitted :: proc(id, text: string) -> string { return fmt.tprintf(`{{"data":%s}}
 @(private = "file")
 copy_id :: proc(t: ^testing.T, r: ^Request, loc := #caller_location) -> string {
 	v, _ := json.parse_string(r.body, parse_integers = true, allocator = context.temp_allocator)
-	id := strings.clone(jstr(v, "id"), context.temp_allocator)
+	id := strings.clone(tk_json.text(v, "id"), context.temp_allocator)
 	testing.expectf(t, strings.has_prefix(id, "msg_") && len(id) == 30, "a minted id: %q", r.body, loc = loc)
 	return id
 }

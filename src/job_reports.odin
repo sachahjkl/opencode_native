@@ -228,6 +228,26 @@ entity_rune :: proc(name: string) -> (rune, bool) {
 ////////////////////////////////
 // The cards
 
+// What the cards show, as the message's Copy gives it (temp memory): a command, `$ ` before it, then its output; a
+// sub-agent's report, its Markdown as written. Two reports apart by an empty line. Never the markup they came in.
+jobs_text :: proc(jobs: []Job_Report) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	for r, k in jobs {
+		if k > 0 { strings.write_string(&b, "\n\n") }
+		switch r.kind {
+		case .Shell:
+			if r.command != "" {
+				fmt.sbprintf(&b, "$ %s", r.command)
+				if r.body != "" { strings.write_byte(&b, '\n') }
+			}
+			strings.write_string(&b, r.body)
+		case .Subagent:
+			strings.write_string(&b, r.body)
+		}
+	}
+	return strings.to_string(b)
+}
+
 // The reports of message `m`, one card each: one line while folded, so that several in a row stay compact.
 job_reports :: proc(app: ^App, m: ^Message, em: f32) {
 	for &r, k in m.jobs {

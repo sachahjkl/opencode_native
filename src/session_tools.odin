@@ -12,6 +12,7 @@
 // server was left.
 package ocn
 
+import tk_json "gt:json"
 import "base:runtime"
 
 import "core:encoding/json"
@@ -111,7 +112,7 @@ session_import_file :: proc(app: ^App, path: string) {
 		defer session_file_free(f)
 		if !f.ok { ui.announce(&f.app.announcer, .Bad, i18n.tr("The file could not be read")); return }
 		v, bad := json.parse(transmute([]u8)f.body, parse_integers = true, allocator = context.temp_allocator)
-		id := jstr(v, "info", "id")
+		id := tk_json.text(v, "info", "id")
 		if bad != nil || id == "" { ui.announce(&f.app.announcer, .Bad, i18n.tr("This file is not an exported session")); return }
 		request(f.app, .Session_Import, "POST", "/api/experimental/session/import", f.body, id)
 	}, f, session_file_free)
@@ -266,9 +267,9 @@ changes_range :: proc(app: ^App, v: json.Value) {
 	c := &app.cx.changes
 	s, viewing := &c.state.(Changes_Viewing)
 	if !viewing { return }
-	list := jarr(v, "data")
+	list := tk_json.array(v, "data")
 	if len(list) == 0 { return }   // (no prompt yet)
-	msg := jstr(list[0], "id")
+	msg := tk_json.text(list[0], "id")
 	remote.begin(&c.read)
 	if s.step == .First {
 		s.first = strings.clone(msg)
@@ -298,7 +299,7 @@ revert_stage :: proc(app: ^App, id, msg, prompt: string) {
 	changes_reset(c)
 	c.state = Changes_Staging{session = session, message = message, prompt = words}
 	remote.begin(&c.revert)
-	request(app, .Revert_Staged, "POST", fmt.tprintf("/api/session/%s/revert/stage", session), fmt.tprintf(`{{"messageID":%s,"files":true}}`, jquote(message)), session, reading = &c.revert)
+	request(app, .Revert_Staged, "POST", fmt.tprintf("/api/session/%s/revert/stage", session), fmt.tprintf(`{{"messageID":%s,"files":true}}`, tk_json.quote(message)), session, reading = &c.revert)
 }
 
 @(private = "file")
@@ -307,11 +308,11 @@ changes_fill :: proc(c: ^Changes, list: json.Array) {
 	_ = virtual.arena_init_growing(&c.arena)
 	a := virtual.arena_allocator(&c.arena)
 	for it, i in list {
-		more, _ := jget(it, "more").(json.Boolean)
-		patch := strings.clone(jstr(it, "patch"), a)
+		more, _ := tk_json.get(it, "more").(json.Boolean)
+		patch := strings.clone(tk_json.text(it, "patch"), a)
 		append(&c.files, File_Change{
-			file = strings.clone(jstr(it, "file"), a), patch = patch, diff = diff.parse(patch, a), status = strings.clone(jstr(it, "status"), a),
-			additions = int(jnum(it, "additions")), deletions = int(jnum(it, "deletions")), more = bool(more), open = i < CHANGES_OPEN_FILES,
+			file = strings.clone(tk_json.text(it, "file"), a), patch = patch, diff = diff.parse(patch, a), status = strings.clone(tk_json.text(it, "status"), a),
+			additions = int(tk_json.number(it, "additions")), deletions = int(tk_json.number(it, "deletions")), more = bool(more), open = i < CHANGES_OPEN_FILES,
 		})
 	}
 }
@@ -319,7 +320,7 @@ changes_fill :: proc(c: ^Changes, list: json.Array) {
 // A diff is a list.
 changes_load :: proc(app: ^App, v: json.Value) {
 	c := &app.cx.changes
-	if _, viewing := c.state.(Changes_Viewing); viewing { changes_fill(c, jarr(v, "data")) }
+	if _, viewing := c.state.(Changes_Viewing); viewing { changes_fill(c, tk_json.array(v, "data")) }
 }
 
 // A stage has its files under "files", beside the snapshot it went back to. Closed in the meantime: it is cancelled at once.
@@ -327,9 +328,9 @@ revert_staged :: proc(app: ^App, v: json.Value) {
 	c := &app.cx.changes
 	s, staging := c.state.(Changes_Staging)
 	if !staging { return }
-	c.state = Changes_Staged{session = s.session, message = s.message, prompt = s.prompt, no_snapshot = jstr(v, "data", "snapshot") == ""}
+	c.state = Changes_Staged{session = s.session, message = s.message, prompt = s.prompt, no_snapshot = tk_json.text(v, "data", "snapshot") == ""}
 	if s.closed { revert_cancel(app); return }
-	changes_fill(c, jarr(v, "data", "files"))
+	changes_fill(c, tk_json.array(v, "data", "files"))
 }
 
 // `revert`, the session's staged going back, as its description has it: this session was left there. (`asked_at`: a description read
@@ -338,10 +339,10 @@ revert_found :: proc(app: ^App, id: string, revert: json.Value, asked_at: Seq) {
 	c := &app.cx.changes
 	if _, closed := c.state.(Changes_Closed); !closed || newer(c.gone_seq, asked_at) { return }
 	c.state = Changes_Staged{
-		session = strings.clone(id), message = strings.clone(jstr(revert, "messageID")),
-		found = true, no_snapshot = jstr(revert, "snapshot") == "",
+		session = strings.clone(id), message = strings.clone(tk_json.text(revert, "messageID")),
+		found = true, no_snapshot = tk_json.text(revert, "snapshot") == "",
 	}
-	changes_fill(c, jarr(revert, "files"))
+	changes_fill(c, tk_json.array(revert, "files"))
 }
 
 // Escape, the cross, a click outside, Cancel. Nothing stays staged by being closed: the files go back.
@@ -542,7 +543,7 @@ session_export_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { session_ex
 session_import_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 	refresh_soon(app)
 	// (the reader who went elsewhere meanwhile stays there: it is in the sidebar)
-	if id := jstr(v, "data", "id"); id != "" && r.gen == app.chat.gen { open_root(app, id) }
+	if id := tk_json.text(v, "data", "id"); id != "" && r.gen == app.chat.gen { open_root(app, id) }
 	ui.announce(&app.announcer, .Good, i18n.tr("Session imported"))
 }
 

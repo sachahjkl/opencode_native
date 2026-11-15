@@ -115,16 +115,9 @@ pjoin :: proc(parts: []string) -> string {
 	return s
 }
 
-// The client's own files (preferences, servers): %APPDATA%\opencode-native on Windows, $XDG_CONFIG_HOME/opencode-native
-// (~/.config/opencode-native) elsewhere.
-config_dir :: proc() -> string {
-	when ODIN_OS == .Windows {
-		return pjoin({os.get_env("APPDATA", context.temp_allocator), "opencode-native"})
-	} else {
-		if d := os.get_env("XDG_CONFIG_HOME", context.temp_allocator); d != "" { return pjoin({d, "opencode-native"}) }
-		return pjoin({os.get_env("HOME", context.temp_allocator), ".config", "opencode-native"})
-	}
-}
+// The client's own files (preferences, servers): the toolkit's configuration folder, %APPDATA%\opencode-native on
+// Windows, $XDG_CONFIG_HOME/opencode-native (~/.config/opencode-native) on Linux (temp memory).
+config_dir :: proc() -> string { return platform.user_dir(.Config, "opencode-native", context.temp_allocator) }
 
 // The command line's report: the standard output, or the console of the process that started a Windows program with a window.
 say :: proc(format: string, args: ..any) {

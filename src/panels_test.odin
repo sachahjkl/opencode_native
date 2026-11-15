@@ -4,6 +4,7 @@ package ocn
 // agents. What needs a window, a socket or a web view is not here: their logic is, in what those call. (The updates are the
 // toolkit's Updater, tested there: gt:update's updater_test, its channels too.)
 
+import tk_json "gt:json"
 import "base:runtime"
 import "core:fmt"
 import "core:os"
@@ -21,7 +22,7 @@ import remote "gt:remote"
 shells :: proc(ids: ..string) -> string {
 	b := strings.builder_make(context.temp_allocator)
 	strings.write_string(&b, `{"data":[`)
-	for id, i in ids { fmt.sbprintf(&b, `%s{{"id":%s,"title":"C:\\sh\\pwsh.exe","status":"running"}}`, i > 0 ? "," : "", jquote(id)) }
+	for id, i in ids { fmt.sbprintf(&b, `%s{{"id":%s,"title":"C:\\sh\\pwsh.exe","status":"running"}}`, i > 0 ? "," : "", tk_json.quote(id)) }
 	strings.write_string(&b, `]}`)
 	return strings.to_string(b)
 }
@@ -824,7 +825,7 @@ sent :: proc(l: ^Browser_Link) -> string {
 
 @(private = "file")
 call :: proc(app: ^App, l: ^Browser_Link, id: int, name: string, socket: u64 = 1) {
-	browser_message(app, {l, socket}, fmt.tprintf(`{{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{{"name":%s,"arguments":{{"url":"http://x"}}}}}}`, id, jquote(name)))
+	browser_message(app, {l, socket}, fmt.tprintf(`{{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{{"name":%s,"arguments":{{"url":"http://x"}}}}}}`, id, tk_json.quote(name)))
 }
 
 @(test)
@@ -1209,7 +1210,7 @@ each_shell_has_its_own_zoom_kept_by_its_id :: proc(t: ^testing.T) {
 	// back to 1: forgotten; closed: forgotten
 	term_zoom_set(app, a, 1)
 	term_close(app, b)
-	testing.expect_value(t, len(app.term_zooms.by_id), 0)
+	testing.expect_value(t, len(app.term_zooms.values), 0)
 	store.close(&app.stores.zooms)   // (what was set last, on the disk)
 	data, _ := os.read_entire_file(file, context.temp_allocator)
 	testing.expect_value(t, string(data), "")

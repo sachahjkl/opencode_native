@@ -509,9 +509,7 @@ image_view :: proc(v: ^ui.View, app: ^App) {
 					on := ui.pointer_on(b)
 					picture := source * res.fit * pv.zoom
 					if on && ui.mouse_pressed(.Left) && viewer_outside(ui.mouse_pos() - b.rect.min, view, picture, pv.pan) { closing = true }
-					if on && ui.mouse_pressed(.Right) && !app.ctx_menu.taken {
-						ctx_open(app, .Image, image = app.viewer.ref)
-					}
+					if ui.context_take(b) { ctx_open(app, .Image, image = app.viewer.ref) }
 					if ui.key_press(.C, {.Ctrl}) { image_copy(app, app.viewer.ref) }
 				}
 				ui.spacer(ui.fill())

@@ -5,6 +5,7 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:strings"
 import "core:testing"
+import tk_json "gt:json"
 import "gt:timefmt"
 
 // A running sub-agent's card finds its session before the server names it (it does when the call ends): the child with the call's
@@ -149,7 +150,7 @@ bg_launch :: proc(app: ^App, msg, call, child, desc: string, follow_up := false)
 @(private = "file")
 bg_report :: proc(app: ^App, id, child, state, body: string) {
 	text := fmt.tprintf("<subagent sessionID=\"%s\" state=\"%s\" description=\"Look\">\n%s\n</subagent>", child, state, body)
-	bench_event(app, fmt.tprintf(`{{"type":"session.inbox.enqueued","created":20,"data":{{"sessionID":"s","inboxID":"%s","item":{{"type":"synthetic","delivery":"steer","payload":{{"text":%s,"description":"Look","metadata":{{"source":"subagent","childID":"%s","agent":"general","state":"completed"}}}}}}}}}}`, id, jquote(text), child))
+	bench_event(app, fmt.tprintf(`{{"type":"session.inbox.enqueued","created":20,"data":{{"sessionID":"s","inboxID":"%s","item":{{"type":"synthetic","delivery":"steer","payload":{{"text":%s,"description":"Look","metadata":{{"source":"subagent","childID":"%s","agent":"general","state":"completed"}}}}}}}}}}`, id, tk_json.quote(text), child))
 }
 
 @(private = "file")

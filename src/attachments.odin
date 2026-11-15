@@ -4,6 +4,7 @@
 // can read on its own machine.
 package ocn
 
+import tk_json "gt:json"
 import "base:runtime"
 import "core:encoding/base64"
 import "core:fmt"
@@ -228,79 +229,29 @@ attach_drop_event :: proc(app: ^App, e: platform.Event) {
 	}
 }
 
-// A paste in the composer (Ctrl+V, Shift+Insert, its menu's Paste). The clipboard belongs to another program, which may be slow
-// or hung: its files, its image and its text are asked at once (platform.clipboard_request) and each answer is taken as it
-// comes (composer_paste_event); nothing waits for them. When all three came, what the clipboard held decides: files are
-// attached; an image is attached when no text came with it (a spreadsheet's cells come as both); text goes in at the caret.
-Composer_Paste :: struct {
-	files, image, text: u64,   // the requests not answered yet (0: answered)
-	paths: [dynamic]string,    // (owned)
-	data:  []u8,               // the image, still encoded (owned)
-	mime:  string,             // ... its type (owned)
-	words: string,             // (owned)
-}
+// What the composer's paste takes besides text (the toolkit's paste: files win, then text, then an image, so a
+// spreadsheet's cells, which come as both, go in as text): files attached; an image attached as it came when it is PNG
+// or JPEG, else (a Windows DIB) decoded and encoded as PNG on the job's thread.
+COMPOSER_PASTE :: ui.Paste_Kinds{.Text, .Files, .Image}
 
-composer_paste :: proc(app: ^App) {
-	p := &app.composer.paste
-	composer_paste_clear(p)   // (a paste asked again: the last one's answers are dropped)
-	p.files = platform.clipboard_request(app.win, .Files)
-	p.image = platform.clipboard_request(app.win, .Image)
-	p.text = platform.clipboard_request(app.win, .Text)
-}
-
-// An event of the main window: an answer to the paste waiting is kept (an event's strings live until the next poll).
-composer_paste_event :: proc(app: ^App, e: platform.Event) {
-	if e.kind != .Clipboard_Data { return }
-	p := &app.composer.paste
-	r := e.clipboard
-	switch {
-	case r.id == p.files:
-		p.files = 0
-		if r.ok { for x in r.files { append(&p.paths, strings.clone(x)) } }
-	case r.id == p.image:
-		p.image = 0
-		if r.ok { p.data, p.mime = slice_clone(r.data, context.allocator), strings.clone(r.mime) }
-	case r.id == p.text:
-		p.text = 0
-		if r.ok { p.words = strings.clone(r.text) }
-	case:
-		return
-	}
-	if p.files == 0 && p.image == 0 && p.text == 0 { composer_paste_done(app) }
-}
-
-@(private = "file")
-composer_paste_done :: proc(app: ^App) {
-	p := &app.composer.paste
-	defer composer_paste_clear(p)
-	switch {
-	case len(p.paths) > 0:
-		for x in p.paths { attach_path(app, x) }
-	case len(p.data) > 0 && p.words == "":
+composer_paste_take :: proc(app: ^App, a: ui.Paste_Answer) {
+	#partial switch a.kind {
+	case .Files:
+		for x in a.files { attach_path(app, x) }
+	case .Image:
+		img := a.image
+		if len(img.data) == 0 { return }
 		n := attach_number(app)
 		switch {
-		case ascii.equal_fold(p.mime, "image/png"):  attach_bytes(app, p.data, "image/png", fmt.tprintf("pasted-%d.png", n))
-		case ascii.equal_fold(p.mime, "image/jpeg"): attach_bytes(app, p.data, "image/jpeg", fmt.tprintf("pasted-%d.jpg", n))
+		case ascii.equal_fold(img.mime, "image/png"):  attach_bytes(app, img.data, "image/png", fmt.tprintf("pasted-%d.png", n))
+		case ascii.equal_fold(img.mime, "image/jpeg"): attach_bytes(app, img.data, "image/jpeg", fmt.tprintf("pasted-%d.jpg", n))
 		case:
-			// (another type, a Windows DIB: decoded and encoded as PNG on the job's thread)
 			h := runtime.heap_allocator()
 			job := new(Attach_Job, h)
-			job^ = {name = fmt.aprintf("pasted-%d.png", n, allocator = h), mime = "image/png", data = slice_clone(p.data, h), decode = strings.clone(p.mime, h)}
+			job^ = {name = fmt.aprintf("pasted-%d.png", n, allocator = h), mime = "image/png", data = slice_clone(img.data, h), decode = strings.clone(img.mime, h)}
 			attach_start(app, job)
 		}
-	case p.words != "":
-		// (as the editor's own paste makes them: its line ends and no tabs)
-		text, _ := strings.replace_all(p.words, "\r\n", "\n", context.temp_allocator)
-		text, _ = strings.replace_all(text, "\r", "\n", context.temp_allocator)
-		text, _ = strings.replace_all(text, "\t", "    ", context.temp_allocator)
-		area_insert(&app.composer.area, text)
 	}
-}
-
-composer_paste_clear :: proc(p: ^Composer_Paste) {
-	for x in p.paths { delete(x) }
-	delete(p.paths); delete(p.data); delete(p.mime); delete(p.words)
-	p^ = {}
 }
 
 // The number in the name of an image pasted or dropped: past those attached and those on their way.
@@ -332,9 +283,9 @@ prompt_fields_into :: proc(b: ^strings.Builder, attachments: []Attachment, menti
 	for a in attachments {
 		strings.write_string(b, files == 0 ? `,"files":[` : ",")
 		strings.write_string(b, `{"uri":`)
-		jquote_into(b, a.uri)
+		tk_json.quote_into(b, a.uri)
 		strings.write_string(b, `,"name":`)
-		jquote_into(b, a.name)
+		tk_json.quote_into(b, a.name)
 		strings.write_byte(b, '}')
 		files += 1
 	}
@@ -343,7 +294,7 @@ prompt_fields_into :: proc(b: ^strings.Builder, attachments: []Attachment, menti
 		mention, ok := mention_json(&m, text)
 		if !ok { continue }   // (taken out of the text since)
 		strings.write_string(b, files == 0 ? `,"files":[` : ",")
-		fmt.sbprintf(b, `{{"uri":%s,"name":%s,"mention":%s}}`, jquote(m.target), jquote(m.name), mention)
+		fmt.sbprintf(b, `{{"uri":%s,"name":%s,"mention":%s}}`, tk_json.quote(m.target), tk_json.quote(m.name), mention)
 		files += 1
 	}
 	if files > 0 { strings.write_byte(b, ']') }
@@ -353,7 +304,7 @@ prompt_fields_into :: proc(b: ^strings.Builder, attachments: []Attachment, menti
 		mention, ok := mention_json(&m, text)
 		if !ok { continue }
 		strings.write_string(b, agents == 0 ? `,"agents":[` : ",")
-		fmt.sbprintf(b, `{{"name":%s,"mention":%s}}`, jquote(m.target), mention)
+		fmt.sbprintf(b, `{{"name":%s,"mention":%s}}`, tk_json.quote(m.target), mention)
 		agents += 1
 	}
 	if agents > 0 { strings.write_byte(b, ']') }

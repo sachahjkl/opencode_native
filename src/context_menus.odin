@@ -1,8 +1,9 @@
-// The menus of a right click: on a message, a tool call, a link's message, the composer, a session. A right press is looked
-// at where each thing is built, the innermost first (the first to take it keeps it); the menu is built once, at the end of the
-// build, for what was noted.
+// The menus of a right click: on a message, a tool call, a link's message, the composer, a session. A right press is taken
+// where each thing is built, by the toolkit's rule (ui.context_take: the innermost first, one a build); the menu is built
+// once, at the end of the build, for what was noted.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -21,10 +22,9 @@ Ctx_Target :: struct {
 	image:  Image_Ref,  // the image (owned: the message that holds it can be read again before the menu is used)
 }
 
-// The menu of a right click: what it is about, and whether this build's right press found it.
+// The menu of a right click: what it is about (which block took the press: ui.context_take).
 Ctx_Menu :: struct {
 	target: Ctx_Target,
-	taken:  bool,   // a right press of this build found its target
 }
 
 // The chip at the end of a selection (quote_chip).
@@ -39,14 +39,12 @@ Quote_Chip :: struct {
 // last message, which the conversation scrolls under it, has the press), and nothing in it took the press first (it is checked
 // after what is in it: the innermost keeps it).
 ctx_check :: proc(app: ^App, b: ^ui.Box, kind: Ctx_Kind, msg := "", part := 0, image := Image_Ref{}) {
-	if app.ctx_menu.taken || !ui.mouse_pressed(.Right) || b == nil || overlay_open(app) { return }
-	if !ui.pointer_on(b) { return }
+	if b == nil || overlay_open(app) || !ui.context_take(b) { return }
 	ctx_open(app, kind, msg, part, image)
 }
 
 // The menu of `kind`, where the pointer is (a dialog opens its own: ctx_check leaves what is under a dialog alone).
 ctx_open :: proc(app: ^App, kind: Ctx_Kind, msg := "", part := 0, image := Image_Ref{}) {
-	app.ctx_menu.taken = true
 	delete(app.ctx_menu.target.msg)
 	image_ref_delete(&app.ctx_menu.target.image)
 	app.ctx_menu.target = {kind = kind, msg = strings.clone(msg), part = part, image = image_ref_clone(image)}
@@ -75,7 +73,7 @@ answer_text :: proc(m: ^Message) -> string {
 fork_session :: proc(app: ^App, id, before: string, prompt := "") {
 	delete(app.composer.fork_prompt)
 	app.composer.fork_prompt = strings.clone(prompt)
-	body := before != "" ? fmt.tprintf(`{{"before":%s}}`, jquote(before)) : "{}"
+	body := before != "" ? fmt.tprintf(`{{"before":%s}}`, tk_json.quote(before)) : "{}"
 	request(app, .Forked, "POST", fmt.tprintf("/api/session/%s/fork", id), body, id)
 }
 
@@ -148,7 +146,9 @@ message_menu :: proc(app: ^App, m: ^Message) {
 		ui.menu_separator()
 		fork_item(app, m)
 	case .Synthetic, .Shell:
-		if ui.menu_item(i18n.tr("Copy"), icon = lucide.COPY, disabled = m.text == "").clicked { copied(m.text, i18n.tr("Text copied")) }
+		// (reports of background jobs: what their cards show, not their markup)
+		t := len(m.jobs) > 0 ? jobs_text(m.jobs) : m.text
+		if ui.menu_item(i18n.tr("Copy"), icon = lucide.COPY, disabled = t == "").clicked { copied(t, i18n.tr("Text copied")) }
 		if m.shell_id != "" { if ui.menu_item(i18n.tr("Inspect the output"), icon = lucide.SQUARE_TERMINAL).clicked { output_view_open_shell(app, m.shell_id, m.text, chat_dir(app)) } }
 		ui.menu_separator()
 		fork_item(app, m)
@@ -183,12 +183,11 @@ tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
 
 // At the end of the build, for what a right press noted.
 context_menu :: proc(app: ^App, em: f32) {
-	app.ctx_menu.taken = false
 	quote_chip(app, em)
 	key := CTX_MENU_KEY
 	// (the composer's is a text field's: the toolkit's, on its area)
 	if app.ctx_menu.target.kind == .Composer {
-		ui.edit_menu(key, &app.composer.area, app.composer.edit_key)
+		ui.edit_menu(key, &app.composer.area, app.composer.edit_key, .Plain, COMPOSER_PASTE)
 		return
 	}
 	if ui.menu(key) {
@@ -381,7 +380,7 @@ rename_commit :: proc(app: ^App) {
 // What the answers to its requests do (net.odin REQ_FACTS)
 
 forked_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	id := jstr(v, "data", "id")
+	id := tk_json.text(v, "data", "id")
 	if id == "" { return }
 	refresh_sessions(app)
 	if r.gen == app.chat.gen {

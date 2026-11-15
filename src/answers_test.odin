@@ -83,6 +83,7 @@ bench_new :: proc() -> ^App {
 	app.cfg_prefs = config.prefs_make()
 	prefs_register(&app.cfg_prefs)
 	views_start(app, "")   // (the views in memory only: the sidebar opens, as at a first start)
+	zooms_load(app)
 	chat_home(app)
 	return app
 }

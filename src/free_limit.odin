@@ -5,6 +5,7 @@ package ocn
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
+import tk_json "gt:json"
 import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
@@ -23,11 +24,11 @@ Free_Limit :: struct {
 
 // A step refused for the free limit, in any session: when it resets.
 free_limit_note :: proc(app: ^App, ev: json.Value) {
-	d := jget(ev, "data")
-	if jstr(d, "error", "type") != "provider.free-limit" { return }
-	created := jnum(ev, "created")
+	d := tk_json.get(ev, "data")
+	if tk_json.text(d, "error", "type") != "provider.free-limit" { return }
+	created := tk_json.number(ev, "created")
 	if created <= 0 { created = now_epoch_ms() }
-	retry := jget(d, "error", "retryAfterMs")
+	retry := tk_json.get(d, "error", "retryAfterMs")
 	after := f64(FREE_LIMIT_FALLBACK_MS)
 	if n, ok := retry.(json.Float); ok && n >= 0 && n <= FREE_LIMIT_MAX_RETRY_MS { after = f64(n) }
 	if n, ok := retry.(json.Integer); ok && n >= 0 && n <= FREE_LIMIT_MAX_RETRY_MS { after = f64(n) }

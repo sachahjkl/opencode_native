@@ -19,7 +19,6 @@ HEX_PERM_DETAIL       :: 0xd8c8b0ff
 // The composer: its text and focus, what goes with the prompt, and what each session's composer keeps while another is shown.
 Composer :: struct {
 	area:        ui.Text_Edit,
-	paste:       Composer_Paste,          // a paste whose answers are on their way (attachments.odin)
 	focused:     bool,
 	focus_next:  bool,                    // the composer takes the focus at its next build
 	edit_key:    ui.Key,                  // the editor's box: what a paste of its menu (ui.edit_menu) answers to
@@ -130,8 +129,6 @@ composer :: proc(app: ^App, em: f32) {
 				// of the last line first: what tells is that it did not move.)
 				down := false
 				caret0 := app.composer.area.cursor
-				// (the composer's own paste, not the editor's: what the clipboard holds may be files or an image)
-				if keys && (ui.key_press(.V, {.Ctrl}) || ui.key_press(.Insert, {.Shift})) { composer_paste(app) }
 				if keys && !app.activity.open {
 					browsing := history_browsing(app)
 					if ui.key_pressed_peek(.Up) && (browsing || composer_on_first_line(app)) {
@@ -156,9 +153,12 @@ composer :: proc(app: ^App, em: f32) {
 				if !overlay_open(app) && ui.focus_key() == 0 && typed_word(app) { ui.type_to_field(ui.key_from_string(ui.parent_box().key, "###composer")) }
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_BODY), text_pad = em * 0.5})
 				// (own_menu: the menu is the whole card's, ctx_check below; it is ui.edit_menu on this area)
-				res := ui.text_edit("###composer", &app.composer.area, {placeholder = i18n.tr("Ask anything…"), wrap = true, auto_height = true, min_lines = 2, max_lines = COMPOSER_MAX_LINES, own_menu = true})
+				// (a paste may give files or an image: the editor takes text, the composer attaches the rest, the toolkit's one
+				// answer; Ctrl+V, Shift+Insert and its menu's Paste alike)
+				res := ui.text_edit("###composer", &app.composer.area, {placeholder = i18n.tr("Ask anything…"), wrap = true, auto_height = true, min_lines = 2, max_lines = COMPOSER_MAX_LINES, own_menu = true, paste = COMPOSER_PASTE})
 				app.composer.focused = res.focused
 				app.composer.edit_key = res.box.key
+				if a, ok := ui.paste_answer(res.box.key, {.Files, .Image}); ok { composer_paste_take(app, a) }
 				mention_track(app)
 				slash_track(app)
 				if app.composer.focus_next { ui.set_focus(res.box.key); app.composer.focus_next = false }

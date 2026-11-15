@@ -3,6 +3,7 @@ package ocn
 // What a review set out to break, and did: each case as it was shown, so that it stays mended. (The file of what is reviewed: a test that
 // belongs to a feature lives with it.)
 
+import tk_json "gt:json"
 import "base:runtime"
 import "core:fmt"
 import "core:strings"
@@ -15,7 +16,7 @@ import "gt:ui"
 shells_json :: proc(ids: ..string) -> string {
 	b := strings.builder_make(context.temp_allocator)
 	strings.write_string(&b, `{"data":[`)
-	for id, i in ids { fmt.sbprintf(&b, `%s{{"id":%s,"title":"sh","status":"running"}}`, i > 0 ? "," : "", jquote(id)) }
+	for id, i in ids { fmt.sbprintf(&b, `%s{{"id":%s,"title":"sh","status":"running"}}`, i > 0 ? "," : "", tk_json.quote(id)) }
 	strings.write_string(&b, `]}`)
 	return strings.to_string(b)
 }

@@ -5,6 +5,7 @@
 // sub-agents; and the project's totals from the server (GET /api/experimental/session/stats?project=..&tools=detail).
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:hash"
@@ -178,49 +179,49 @@ tokens_of :: proc(s: string) -> f64 { return f64(len(s)) / CTX_BYTES_PER_TOKEN }
 
 @(private = "file")
 context_message :: proc(x: ^Stats_Context, m: json.Value) {
-	id := jstr(m, "id")
+	id := tk_json.text(m, "id")
 	text_part :: proc(x: ^Stats_Context, group, t, key: string) {
 		if t != "" { context_add(x, group, preview_text(t), t, key, tokens_of(t)) }
 	}
-	switch jstr(m, "type") {
+	switch tk_json.text(m, "type") {
 	case "user":
-		text_part(x, i18n.tr("Your prompts"), jstr(m, "text"), id)
-		for f, i in jarr(m, "files") {
+		text_part(x, i18n.tr("Your prompts"), tk_json.text(m, "text"), id)
+		for f, i in tk_json.array(m, "files") {
 			key := fmt.tprintf("%s_f%d", id, i)
-			name := jstr(f, "name") != "" ? jstr(f, "name") : "attachment"
-			image := strings.has_prefix(jstr(f, "mime"), "image/")
-			context_add(x, i18n.tr("Attached files"), name, "", key, image ? CTX_IMAGE_TOKENS : f64(len(jstr(f, "data"))) * 0.75 / CTX_BYTES_PER_TOKEN)
+			name := tk_json.text(f, "name") != "" ? tk_json.text(f, "name") : "attachment"
+			image := strings.has_prefix(tk_json.text(f, "mime"), "image/")
+			context_add(x, i18n.tr("Attached files"), name, "", key, image ? CTX_IMAGE_TOKENS : f64(len(tk_json.text(f, "data"))) * 0.75 / CTX_BYTES_PER_TOKEN)
 		}
 	case "synthetic", "system":
-		text_part(x, i18n.tr("Notes to the model"), jstr(m, "text"), id)
+		text_part(x, i18n.tr("Notes to the model"), tk_json.text(m, "text"), id)
 	case "skill":
-		context_add(x, i18n.tr("Skills"), jstr(m, "name"), jstr(m, "text"), id, tokens_of(jstr(m, "text")))
+		context_add(x, i18n.tr("Skills"), tk_json.text(m, "name"), tk_json.text(m, "text"), id, tokens_of(tk_json.text(m, "text")))
 	case "shell":
-		t := fmt.tprintf("$ %s\n%s", jstr(m, "command"), jstr(m, "output", "output"))
-		context_add(x, i18n.tr("Shell commands"), jstr(m, "command"), t, id, tokens_of(t))
+		t := fmt.tprintf("$ %s\n%s", tk_json.text(m, "command"), tk_json.text(m, "output", "output"))
+		context_add(x, i18n.tr("Shell commands"), tk_json.text(m, "command"), t, id, tokens_of(t))
 	case "compaction":
-		text_part(x, i18n.tr("Summary of what came before"), jstr(m, "summary"), id)
+		text_part(x, i18n.tr("Summary of what came before"), tk_json.text(m, "summary"), id)
 	case "assistant":
-		for p, i in jarr(m, "content") {
+		for p, i in tk_json.array(m, "content") {
 			key := fmt.tprintf("%s_%d", id, i)
-			switch jstr(p, "type") {
-			case "text":      text_part(x, i18n.tr("Answers"), jstr(p, "text"), key)
-			case "reasoning": text_part(x, i18n.tr("Reasoning"), jstr(p, "text"), key)
+			switch tk_json.text(p, "type") {
+			case "text":      text_part(x, i18n.tr("Answers"), tk_json.text(p, "text"), key)
+			case "reasoning": text_part(x, i18n.tr("Reasoning"), tk_json.text(p, "text"), key)
 			case "tool":
-				st := jget(p, "state")
-				name := jstr(p, "name")
+				st := tk_json.get(p, "state")
+				name := tk_json.text(p, "name")
 				call: Part
 				call.tool_name = name
-				tool_set_input(&call, jget(st, "input"), context.temp_allocator)
-				out := jstr(st, "status") == "error" ? error_text(jget(st, "error")) : content_text(jarr(st, "content"))
+				tool_set_input(&call, tk_json.get(st, "input"), context.temp_allocator)
+				out := tk_json.text(st, "status") == "error" ? error_text(tk_json.get(st, "error")) : content_text(tk_json.array(st, "content"))
 				t := fmt.tprintf("%s\n\n%s", call.input, out)
 				context_add(x, fmt.tprintf(i18n.tr("Tool: %s"), name), call.subject != "" ? call.subject : name, t, key, tokens_of(t))
 			}
 		}
-		used := jnum(m, "tokens", "input") + jnum(m, "tokens", "cache", "read")
+		used := tk_json.number(m, "tokens", "input") + tk_json.number(m, "tokens", "cache", "read")
 		if used > 0 {
 			x.total = used
-			x.model = strings.clone(jstr(m, "model", "id"), virtual.arena_allocator(&x.arena))
+			x.model = strings.clone(tk_json.text(m, "model", "id"), virtual.arena_allocator(&x.arena))
 		}
 	}
 }
@@ -233,7 +234,7 @@ context_load :: proc(app: ^App, session: string, v: json.Value) {
 	x^ = {session = strings.clone(session)}
 	_ = virtual.arena_init_growing(&x.arena)
 	x.groups = make([dynamic]Ctx_Group, virtual.arena_allocator(&x.arena))
-	for m in jarr(v, "data") { context_message(x, m) }
+	for m in tk_json.array(v, "data") { context_message(x, m) }
 	sum := 0.0
 	for g in x.groups { sum += g.tokens }
 	if x.total > 0 && sum > x.total {
@@ -252,23 +253,23 @@ context_load :: proc(app: ^App, session: string, v: json.Value) {
 stats_load :: proc(app: ^App, v: json.Value) {
 	ps := &app.stats.project
 	a := virtual.arena_allocator(&ps.arena)
-	d := jget(v, "data")
-	ps.sessions, ps.subagents = int(jnum(d, "sessions")), int(jnum(d, "subagents"))
-	ps.prompts, ps.steps = int(jnum(d, "prompts")), int(jnum(d, "steps"))
-	ps.tokens_in, ps.tokens_out, ps.reasoning = jnum(d, "tokens", "input"), jnum(d, "tokens", "output"), jnum(d, "tokens", "reasoning")
-	ps.cache_read, ps.cache_write, ps.cost = jnum(d, "tokens", "cache", "read"), jnum(d, "tokens", "cache", "write"), jnum(d, "cost")
-	ps.active_days, ps.streak = int(jnum(d, "activeDays")), int(jnum(d, "streak"))
-	ps.from, ps.to = jnum(d, "range", "from"), jnum(d, "range", "to")
-	ps.calls = int(jnum(d, "tools", "totals", "calls"))
-	ps.succeeded = int(jnum(d, "tools", "totals", "succeeded"))
-	ps.failed = int(jnum(d, "tools", "totals", "failed"))
+	d := tk_json.get(v, "data")
+	ps.sessions, ps.subagents = int(tk_json.number(d, "sessions")), int(tk_json.number(d, "subagents"))
+	ps.prompts, ps.steps = int(tk_json.number(d, "prompts")), int(tk_json.number(d, "steps"))
+	ps.tokens_in, ps.tokens_out, ps.reasoning = tk_json.number(d, "tokens", "input"), tk_json.number(d, "tokens", "output"), tk_json.number(d, "tokens", "reasoning")
+	ps.cache_read, ps.cache_write, ps.cost = tk_json.number(d, "tokens", "cache", "read"), tk_json.number(d, "tokens", "cache", "write"), tk_json.number(d, "cost")
+	ps.active_days, ps.streak = int(tk_json.number(d, "activeDays")), int(tk_json.number(d, "streak"))
+	ps.from, ps.to = tk_json.number(d, "range", "from"), tk_json.number(d, "range", "to")
+	ps.calls = int(tk_json.number(d, "tools", "totals", "calls"))
+	ps.succeeded = int(tk_json.number(d, "tools", "totals", "succeeded"))
+	ps.failed = int(tk_json.number(d, "tools", "totals", "failed"))
 	ps.tools = make([dynamic]Tool_Count, a)
-	for t in jarr(d, "tools", "usage") {
-		append(&ps.tools, Tool_Count{strings.clone(jstr(t, "name"), a), int(jnum(t, "calls")), int(jnum(t, "failed")), jnum(t, "durationP50")})
+	for t in tk_json.array(d, "tools", "usage") {
+		append(&ps.tools, Tool_Count{strings.clone(tk_json.text(t, "name"), a), int(tk_json.number(t, "calls")), int(tk_json.number(t, "failed")), tk_json.number(t, "durationP50")})
 	}
 	ps.models = make([dynamic]Model_Count, a)
-	for m in jarr(d, "models") {
-		append(&ps.models, Model_Count{strings.clone(jstr(m, "model", "id"), a), int(jnum(m, "steps")), jnum(m, "tokens", "input") + jnum(m, "tokens", "cache", "read"), jnum(m, "tokens", "output"), jnum(m, "cost")})
+	for m in tk_json.array(d, "models") {
+		append(&ps.models, Model_Count{strings.clone(tk_json.text(m, "model", "id"), a), int(tk_json.number(m, "steps")), tk_json.number(m, "tokens", "input") + tk_json.number(m, "tokens", "cache", "read"), tk_json.number(m, "tokens", "output"), tk_json.number(m, "cost")})
 	}
 }
 

@@ -5,6 +5,7 @@
 // composer: while the tray is open the arrows, Enter, Delete and Escape are the tray's, and typing closes it.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -256,16 +257,16 @@ job_find :: proc(a: ^Activity, id: string) -> ^Shell_Job {
 }
 
 job_fill :: proc(j: ^Shell_Job, it: json.Value) {
-	switch jstr(it, "status") {
+	switch tk_json.text(it, "status") {
 	case "running": j.status = .Running
 	case "killed":  j.status = .Killed
 	case "timeout": j.status = .Timeout
 	case:           j.status = .Exited
 	}
-	j.started = jnum(it, "time", "started")
-	j.ended = jnum(it, "time", "completed")
-	if _, has := jget(it, "exit").(json.Null); !has && jget(it, "exit") != nil {
-		j.exit, j.has_exit = int(jnum(it, "exit")), true
+	j.started = tk_json.number(it, "time", "started")
+	j.ended = tk_json.number(it, "time", "completed")
+	if _, has := tk_json.get(it, "exit").(json.Null); !has && tk_json.get(it, "exit") != nil {
+		j.exit, j.has_exit = int(tk_json.number(it, "exit")), true
 	}
 }
 
@@ -280,8 +281,8 @@ job_ours :: proc(app: ^App, j: ^Shell_Job) -> bool {
 activity_jobs_load :: proc(app: ^App, v: json.Value, session: string) {
 	if session != app.chat.id { return }
 	for &j in app.activity.jobs { j.background = false }
-	for it in jarr(v, "data") {
-		if j := job_find(&app.activity, jstr(it, "shellID")); j != nil { j.background = true }
+	for it in tk_json.array(v, "data") {
+		if j := job_find(&app.activity, tk_json.text(it, "shellID")); j != nil { j.background = true }
 	}
 }
 
@@ -297,8 +298,8 @@ background_load :: proc(app: ^App, v: json.Value) {
 	for k in bg { delete(k) }
 	clear(bg)
 	mark :: proc(bg: ^map[string]bool, id: string) { if id != "" && id not_in bg^ { bg[strings.clone(id)] = true } }
-	for it in jarr(v, "data") {
-		id := jstr(it, "sessionID")
+	for it in tk_json.array(v, "data") {
+		id := tk_json.text(it, "sessionID")
 		mark(bg, id)
 		for s := find_session(app, id); s != nil && s.parent != ""; s = find_session(app, s.parent) { mark(bg, s.parent) }
 	}
@@ -332,12 +333,12 @@ activity_shells_load :: proc(app: ^App, v: json.Value, dir: string) {
 	a := &app.activity
 	if dir != a.dir { return }
 	for &j in a.jobs { j.seen = false }
-	for it in jarr(v, "data") {
-		id := jstr(it, "id")
+	for it in tk_json.array(v, "data") {
+		id := tk_json.text(it, "id")
 		if id == "" { continue }
 		j := job_find(a, id)
 		if j == nil {
-			append(&a.jobs, Shell_Job{id = strings.clone(id), command = strings.clone(jstr(it, "command")), cwd = strings.clone(jstr(it, "cwd")), session = strings.clone(jstr(it, "metadata", "sessionID"))})
+			append(&a.jobs, Shell_Job{id = strings.clone(id), command = strings.clone(tk_json.text(it, "command")), cwd = strings.clone(tk_json.text(it, "cwd")), session = strings.clone(tk_json.text(it, "metadata", "sessionID"))})
 			j = &a.jobs[len(a.jobs) - 1]
 			job_read(app, j)
 		}
@@ -364,7 +365,7 @@ activity_shell_load :: proc(app: ^App, v: json.Value, id: string) {
 	j := job_find(&app.activity, id)
 	if j == nil { return }
 	was := j.status
-	job_fill(j, jget(v, "data"))
+	job_fill(j, tk_json.get(v, "data"))
 	job_ended(app, j, was)
 	job_read(app, j)   // (what it printed last)
 }
@@ -373,12 +374,12 @@ activity_shell_load :: proc(app: ^App, v: json.Value, id: string) {
 activity_output_load :: proc(app: ^App, v: json.Value, id: string) {
 	j := job_find(&app.activity, id)
 	if j == nil { return }
-	out := jstr(v, "data", "output")
+	out := tk_json.text(v, "data", "output")
 	if out != "" {
 		append(&j.tail, out)
 		if over := len(j.tail) - ACT_TAIL_BYTES; over > 0 { remove_range(&j.tail, 0, over) }
 	}
-	if c := int(jnum(v, "data", "cursor")); c > j.cursor { j.cursor = c }
+	if c := int(tk_json.number(v, "data", "cursor")); c > j.cursor { j.cursor = c }
 }
 
 // A command of the background that was running and is no longer: what was missed has it. (One that holds its session's turn
@@ -404,20 +405,20 @@ activity_peek_load :: proc(app: ^App, v: json.Value, id: string) {
 	if !ok { return }
 	p.read_ms = ui.now_ms()
 	lines := make([dynamic]string, context.temp_allocator)
-	items := jarr(v, "data")
+	items := tk_json.array(v, "data")
 	#reverse for it in items {   // (newest first in the answer)
-		if jstr(it, "type") != "assistant" { continue }
-		for c in jarr(it, "content") {
-			switch jstr(c, "type") {
+		if tk_json.text(it, "type") != "assistant" { continue }
+		for c in tk_json.array(it, "content") {
+			switch tk_json.text(c, "type") {
 			case "text":
-				rest := jstr(c, "text")
+				rest := tk_json.text(c, "text")
 				for line in strings.split_lines_iterator(&rest) {
 					if t := strings.trim_space(line); t != "" { append(&lines, t) }
 				}
 			case "tool":
 				tmp: Part
-				tool_set_input(&tmp, jget(c, "state", "input"), context.temp_allocator)
-				append(&lines, fmt.tprintf("› %s%s%s", jstr(c, "name"), tmp.subject != "" ? "  " : "", tmp.subject))
+				tool_set_input(&tmp, tk_json.get(c, "state", "input"), context.temp_allocator)
+				append(&lines, fmt.tprintf("› %s%s%s", tk_json.text(c, "name"), tmp.subject != "" ? "  " : "", tmp.subject))
 			}
 		}
 	}
@@ -454,20 +455,20 @@ todos_scan_load :: proc(app: ^App, r: ^Request, v: json.Value) {
 	sc.pages += 1
 	best: json.Value
 	best_at := -1.0
-	for m in jarr(v, "data") {
-		at := jnum(m, "time", "created")
-		for p in jarr(m, "content") {
-			if jstr(p, "type") != "tool" || !strings.contains(jstr(p, "name"), "todo") { continue }
-			if list := jarr(p, "state", "input", "todos"); list != nil && at >= best_at { best, best_at = p, at }
+	for m in tk_json.array(v, "data") {
+		at := tk_json.number(m, "time", "created")
+		for p in tk_json.array(m, "content") {
+			if tk_json.text(p, "type") != "tool" || !strings.contains(tk_json.text(p, "name"), "todo") { continue }
+			if list := tk_json.array(p, "state", "input", "todos"); list != nil && at >= best_at { best, best_at = p, at }
 		}
 	}
 	if best_at >= 0 {
-		for t in jarr(best, "state", "input", "todos") { append(&sc.todos, Todo{strings.clone(jstr(t, "content")), strings.clone(jstr(t, "status"))}) }
+		for t in tk_json.array(best, "state", "input", "todos") { append(&sc.todos, Todo{strings.clone(tk_json.text(t, "content")), strings.clone(tk_json.text(t, "status"))}) }
 		sc.found, sc.over = true, true
 		a.todos_sig = 0   // (read again: the list is there)
 		return
 	}
-	next := jstr(v, "cursor", "next")
+	next := tk_json.text(v, "cursor", "next")
 	if next == "" || sc.pages >= TODO_SCAN_PAGES {
 		sc.over = true
 		a.todos_sig = 0   // (read again: none, the list last known goes)

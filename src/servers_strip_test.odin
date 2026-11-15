@@ -30,6 +30,7 @@ the_server_tabs_scroll_with_arrows :: proc(t: ^testing.T) {
 		view := session.find(s, "strip_view", within = tabs)
 		if !testing.expect(t, view != nil, "the strip's view") { return }
 		testing.expectf(t, view.view_off.x > 0, "scrolled toward the end: %v", view.view_off.x)
+		session.save_png(s, "server_strip_scrolled.png")
 		left := session.find(s, "strip_left", within = tabs)
 		testing.expectf(t, left != nil, "the arrow at the start now (offset %v, limit %v, view %v)", view.view_off.x, ui.view_limit(view, .X), view.rect)
 	})

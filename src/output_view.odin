@@ -9,6 +9,7 @@ package ocn
 // for as long as it keeps the command, or from the call's own text once it does not. A pipe's lines end in a bare newline where a terminal
 // expects the return with it: output_view_feed adds it.
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -197,13 +198,13 @@ output_view_ends :: proc(app: ^App, v: ^Output_View, seen: bool) {
 output_view_output_load :: proc(app: ^App, data: json.Value, id: string) {
 	v := output_view_of_shell(app, id)
 	if v == nil { return }
-	out := jstr(data, "data", "output")
-	if jbool(data, "data", "truncated") { v.dropped = true }
-	if c := int(jnum(data, "data", "cursor")); c > v.cursor { v.cursor = c }
+	out := tk_json.text(data, "data", "output")
+	if tk_json.boolean(data, "data", "truncated") { v.dropped = true }
+	if c := int(tk_json.number(data, "data", "cursor")); c > v.cursor { v.cursor = c }
 	output_view_feed(v, out)
 	if out != "" { app.settle = max(app.settle, FRAMES_AFTER_INPUT) }
 	switch {
-	case v.cursor < int(jnum(data, "data", "size")): output_view_read(app, v)
+	case v.cursor < int(tk_json.number(data, "data", "size")): output_view_read(app, v)
 	case v.draining:                                 output_view_ends(app, v, v.watched)
 	case out != "":                                  output_view_read(app, v, OUTPUT_POLL_MS)
 	case:                                            output_view_ask_state(app, v)
@@ -215,7 +216,7 @@ output_view_state_load :: proc(app: ^App, data: json.Value, id: string) {
 	v := output_view_of_shell(app, id)
 	if v == nil { return }
 	job: Shell_Job
-	job_fill(&job, jget(data, "data"))
+	job_fill(&job, tk_json.get(data, "data"))
 	v.status, v.exit, v.has_exit, v.started, v.ended = job.status, job.exit, job.has_exit, job.started, job.ended
 	if job.status == .Running {
 		output_view_read(app, v, v.watched ? OUTPUT_POLL_MS : 0)

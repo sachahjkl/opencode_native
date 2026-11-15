@@ -15,6 +15,7 @@
 // that agent, and another takes what is shown, until the agent is done (browser_links_follow).
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/base64"
 import "core:encoding/json"
 import "core:fmt"
@@ -333,12 +334,12 @@ reply :: proc(to: Browser_To, id, result: string) { browser_send(to, fmt.tprintf
 // What a call gives back, as text.
 @(private = "file")
 reply_text :: proc(to: Browser_To, id, s: string, is_error := false) {
-	reply(to, id, fmt.tprintf(`{{"content":[{{"type":"text","text":%s}}],"isError":%v}}`, jquote(s), is_error))
+	reply(to, id, fmt.tprintf(`{{"content":[{{"type":"text","text":%s}}],"isError":%v}}`, tk_json.quote(s), is_error))
 }
 
 @(private = "file")
 tab_json :: proc(t: ^Preview_Tab) -> string {
-	return fmt.tprintf(`{{"id":%s,"url":%s,"title":%s,"loading":%v,"canGoBack":%v,"canGoForward":%v,"generation":0}}`, jquote(t.id), jquote(t.url), jquote(t.title), preview_loading(t), web_can(t, .Back), web_can(t, .Forward))
+	return fmt.tprintf(`{{"id":%s,"url":%s,"title":%s,"loading":%v,"canGoBack":%v,"canGoForward":%v,"generation":0}}`, tk_json.quote(t.id), tk_json.quote(t.url), tk_json.quote(t.title), preview_loading(t), web_can(t, .Back), web_can(t, .Forward))
 }
 
 @(private = "file")
@@ -349,7 +350,7 @@ tabs_json :: proc(p: ^Preview) -> string {
 		strings.write_string(&b, tab_json(t))
 	}
 	front := preview_front(p)
-	return fmt.tprintf(`{{"tabs":[%s],"focusedTabID":%s}}`, strings.to_string(b), front != nil ? jquote(front.id) : "null")
+	return fmt.tprintf(`{{"tabs":[%s],"focusedTabID":%s}}`, strings.to_string(b), front != nil ? tk_json.quote(front.id) : "null")
 }
 
 @(private = "file")
@@ -376,7 +377,7 @@ run_script :: proc(app: ^App, t: ^Preview_Tab, to: Browser_To, id, code: string)
 // `ref` and the words of a script: quoted for the page, whatever they hold.
 @(private = "file")
 element_js :: proc(ref, body: string) -> string {
-	return fmt.tprintf(`(()=>{{const e=document.querySelector('[data-ocn-ref="'+%s+'"]');if(!e)return 'no element with that ref: take a new snapshot';%s}})()`, jquote(ref), body)
+	return fmt.tprintf(`(()=>{{const e=document.querySelector('[data-ocn-ref="'+%s+'"]');if(!e)return 'no element with that ref: take a new snapshot';%s}})()`, tk_json.quote(ref), body)
 }
 
 // A step of the page's history, when it has one to take: a step that cannot happen would be waited for until the call's limit.
@@ -414,7 +415,7 @@ browser_tab :: proc(app: ^App, session, tab: string) -> (^Preview, ^Preview_Tab)
 @(private = "file")
 browser_new_tab :: proc(app: ^App, p: ^Preview, args: json.Value) -> ^Preview_Tab {
 	if f := preview_front(p); f != nil && preview_tab_blank(f) { return f }
-	focus, given := jget(args, "focus").(json.Boolean)
+	focus, given := tk_json.get(args, "focus").(json.Boolean)
 	return preview_tab_add(app, p, front = !given || bool(focus))
 }
 
@@ -425,7 +426,7 @@ tool_call :: proc(app: ^App, to: Browser_To, id, name: string, args: json.Value,
 		return
 	}
 	t: ^Preview_Tab
-	if tab := jstr(args, "tabID"); tab != "" {
+	if tab := tk_json.text(args, "tabID"); tab != "" {
 		p, t = browser_tab(app, session, tab)
 		if t == nil {
 			reply_text(to, id, fmt.tprintf("There is no tab %s in this session: tabs_list says which there are.", tab), true)
@@ -453,7 +454,7 @@ tool_call :: proc(app: ^App, to: Browser_To, id, name: string, args: json.Value,
 		if p == &app.preview && p.open { ui.view_open(&app.program_views, PREVIEW_VIEW, app, owner = &app.state) }   // (in front of its stack)
 		reply_tab(t, to, id)
 	case "tabs_open", "navigate":
-		url := jstr(args, "url")
+		url := tk_json.text(args, "url")
 		if url == "" { url = "about:blank" }
 		wait_for(app, t, to, id, Wait_Load{}, true)
 		preview_go(app, t, url)
@@ -465,14 +466,14 @@ tool_call :: proc(app: ^App, to: Browser_To, id, name: string, args: json.Value,
 	case "snapshot":
 		run_script(app, t, to, id, SNAPSHOT_JS)
 	case "click":
-		run_script(app, t, to, id, element_js(jstr(args, "ref"), `e.scrollIntoView({block:'center'});e.click();return 'clicked'`))
+		run_script(app, t, to, id, element_js(tk_json.text(args, "ref"), `e.scrollIntoView({block:'center'});e.click();return 'clicked'`))
 	case "fill":
-		body := fmt.tprintf(`e.focus();const t=%s;if('value' in e){{e.value=t}}else{{e.textContent=t}}e.dispatchEvent(new Event('input',{{bubbles:true}}));e.dispatchEvent(new Event('change',{{bubbles:true}}));return 'filled'`, jquote(jstr(args, "text")))
-		run_script(app, t, to, id, element_js(jstr(args, "ref"), body))
+		body := fmt.tprintf(`e.focus();const t=%s;if('value' in e){{e.value=t}}else{{e.textContent=t}}e.dispatchEvent(new Event('input',{{bubbles:true}}));e.dispatchEvent(new Event('change',{{bubbles:true}}));return 'filled'`, tk_json.quote(tk_json.text(args, "text")))
+		run_script(app, t, to, id, element_js(tk_json.text(args, "ref"), body))
 	case "scroll":
-		run_script(app, t, to, id, fmt.tprintf(`window.scrollBy(%f,%f);'x='+scrollX+' y='+scrollY`, jnum(args, "deltaX"), jnum(args, "deltaY")))
+		run_script(app, t, to, id, fmt.tprintf(`window.scrollBy(%f,%f);'x='+scrollX+' y='+scrollY`, tk_json.number(args, "deltaX"), tk_json.number(args, "deltaY")))
 	case "evaluate":
-		run_script(app, t, to, id, jstr(args, "expression"))
+		run_script(app, t, to, id, tk_json.text(args, "expression"))
 	case "console":
 		run_script(app, t, to, id, `(window.__ocn_log||[]).join('\n')||'(nothing logged)'`)
 	case "screenshot":
@@ -494,21 +495,21 @@ browser_message :: proc(app: ^App, to: Browser_To, text: string) {
 	if app.conn == nil || to.link.conn != app.conn || sync.atomic_load(&to.link.stop) || sync.atomic_load(&to.link.socket) != to.socket { return }
 	v, err := json.parse_string(text, parse_integers = true, allocator = context.temp_allocator)
 	if err != nil { return }
-	method := jstr(v, "method")
-	idv := jget(v, "id")
+	method := tk_json.text(v, "method")
+	idv := tk_json.get(v, "id")
 	if idv == nil { return }   // (a notification)
-	id := jtext(idv)
+	id := tk_json.to_text(idv, "  ")
 	switch method {
 	case "initialize":
-		version := jstr(v, "params", "protocolVersion")
+		version := tk_json.text(v, "params", "protocolVersion")
 		if version == "" { version = BROWSER_PROTOCOL }
-		reply(to, id, fmt.tprintf(`{{"protocolVersion":%s,"capabilities":{{"tools":{{}}}},"serverInfo":{{"name":"opencode-native","version":%s}}}}`, jquote(version), jquote(APP_VERSION)))
+		reply(to, id, fmt.tprintf(`{{"protocolVersion":%s,"capabilities":{{"tools":{{}}}},"serverInfo":{{"name":"opencode-native","version":%s}}}}`, tk_json.quote(version), tk_json.quote(APP_VERSION)))
 	case "ping":
 		reply(to, id, "{}")
 	case "tools/list":
 		reply(to, id, fmt.tprintf(`{{"tools":%s}}`, BROWSER_TOOLS))
 	case "tools/call":
-		tool_call(app, to, id, jstr(v, "params", "name"), jget(v, "params", "arguments"), jstr(v, "params", "_meta", BROWSER_SESSION_META))
+		tool_call(app, to, id, tk_json.text(v, "params", "name"), tk_json.get(v, "params", "arguments"), tk_json.text(v, "params", "_meta", BROWSER_SESSION_META))
 	case:
 		browser_send(to, fmt.tprintf(`{{"jsonrpc":"2.0","id":%s,"error":{{"code":-32601,"message":"method not found"}}}}`, id))
 	}

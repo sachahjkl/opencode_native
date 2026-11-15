@@ -3,6 +3,7 @@
 // frame still read.
 package ocn
 
+import store "gt:store"
 import "core:fmt"
 import "core:math"
 import "core:strings"
@@ -138,7 +139,7 @@ commands_keys :: proc(app: ^App) {
 
 // The conversation's zoom: the session shown's own, or the preference (appearance.content_zoom), which is every session's that has
 // none of its own and the home page's.
-content_zoom :: proc(app: ^App) -> f32 { return zoom_of(&app.session_zooms, app.chat.id, app.prefs.content_zoom) }
+content_zoom :: proc(app: ^App) -> f32 { return f32(store.kept_of(&app.session_zooms, app.chat.id, f64(app.prefs.content_zoom))) }
 
 // The session shown's zoom (kept in session_zoom.txt); on the home page, the preference.
 content_zoom_set :: proc(app: ^App, z: f32) {
@@ -147,14 +148,14 @@ content_zoom_set :: proc(app: ^App, z: f32) {
 		pref_set_float(app, "appearance.content_zoom", zoom)
 		return
 	}
-	zoom_keep(&app.session_zooms, &app.stores.session_zooms, app.chat.id, zoom, app.prefs.content_zoom)
+	store.kept_set(&app.session_zooms, app.chat.id, f64(zoom), f64(app.prefs.content_zoom))
 }
 
 content_zoom_by :: proc(app: ^App, factor: f32) { content_zoom_set(app, content_zoom(app) * factor) }
 
 // Back to the preference: the session follows it again.
 content_zoom_reset :: proc(app: ^App) {
-	if app.chat.id == "" { content_zoom_set(app, 1) } else { zoom_forget(&app.session_zooms, &app.stores.session_zooms, app.chat.id) }
+	if app.chat.id == "" { content_zoom_set(app, 1) } else { store.kept_forget(&app.session_zooms, app.chat.id) }
 }
 
 // What the toolkit would make of the window's zoom, where it is the conversation's that is meant: Ctrl and the wheel over

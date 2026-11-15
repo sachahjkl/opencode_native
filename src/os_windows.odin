@@ -2,8 +2,28 @@
 package ocn
 
 import "core:encoding/base64"
+import "core:os"
 import "core:strings"
 import win "core:sys/windows"
+import "gt:platform"
+
+// The opencode server's own folder of `kind` (temp memory; "": no home). Not the toolkit's standard folder (%APPDATA%,
+// %LOCALAPPDATA%): the server keeps the XDG layout under the user's home on Windows too, %USERPROFILE%\.config\opencode
+// and %USERPROFILE%\.local\state\opencode.
+opencode_dir :: proc(kind: platform.User_Dir) -> string {
+	under: string
+	#partial switch kind {
+	case .Config: under = ".config"
+	case .Data:   under = ".local/share"
+	case .State:  under = ".local/state"
+	case .Cache:  under = ".cache"
+	case:         return ""
+	}
+	home := os.get_env("USERPROFILE", context.temp_allocator)
+	if home == "" { home = os.get_env("HOME", context.temp_allocator) }
+	if home == "" { return "" }
+	return pjoin({home, under, "opencode"})
+}
 
 foreign import user32_flash "system:User32.lib"
 foreign import crypt32 "system:Crypt32.lib"

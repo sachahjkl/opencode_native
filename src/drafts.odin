@@ -8,6 +8,7 @@
 // a mention's file is the server's; they live as long as the program.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:strings"
@@ -38,7 +39,7 @@ drafts_json :: proc(app: ^App) -> string {
 	put :: proc(b: ^strings.Builder, n: ^int, id, text: string) {
 		if strings.trim_space(text) == "" { return }
 		if n^ > 0 { strings.write_byte(b, ',') }
-		fmt.sbprintf(b, "%s:%s", jquote(id), jquote(text))
+		fmt.sbprintf(b, "%s:%s", tk_json.quote(id), tk_json.quote(text))
 		n^ += 1
 	}
 	for id, d in app.composer.drafts { if id != app.chat.id { put(&b, &n, id, d.text) } }

@@ -14,6 +14,7 @@
 // sub-agent's wait or end goes under the session at the top of its tree).
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:strings"
 import "core:unicode/utf8"
@@ -269,11 +270,11 @@ missed_sub_text :: proc(app: ^App, sid: string) -> string {
 
 // A message came into a session's inbox: a schedule's prompt starts a run that is that schedule's.
 missed_inbox :: proc(app: ^App, sid: string, d: json.Value) {
-	id := jstr(d, "inboxID")
+	id := tk_json.text(d, "inboxID")
 	if sid == "" || !strings.has_prefix(id, MISSED_SCHEDULED_ID) { return }
-	text := jstr(d, "item", "payload", "metadata", "schedule", "name")
-	if text == "" { text = jstr(d, "item", "metadata", "schedule", "name") }
-	if text == "" { text = jstr(d, "item", "payload", "text") }
+	text := tk_json.text(d, "item", "payload", "metadata", "schedule", "name")
+	if text == "" { text = tk_json.text(d, "item", "metadata", "schedule", "name") }
+	if text == "" { text = tk_json.text(d, "item", "payload", "text") }
 	m := &app.missed
 	if old, ok := m.scheduled[sid]; ok {
 		delete(old.id); delete(old.text)
