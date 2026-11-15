@@ -1201,7 +1201,7 @@ terminal_panel :: proc(app: ^App, em: f32, t: ^Term, shown := true, focus := fal
 	// (the picture read last holds the screen from before the shell's new size, until it has painted the new one)
 	t.view.hold = term_painting(ui.now_ms(), t.told_ms, t.fed_ms, t.asked_ms)
 	term.build(&t.view, term_style(app, em), focus || term_takes_focus(s, t, ui.focus_key()))
-	if text, ok := ui.paste_answer(t.view.box); ok { term.paste(&t.view, text) }
+	if a, ok := ui.paste_answer(t.view.box, {.Text}); ok { term.paste(&t.view, a.text) }
 	if shown { term_settle(app, t) }
 	menu := fmt.tprintf("term_menu_%x", u64(t.view.box))
 	if s.menu_for == t { ui.menu_open(menu, s.menu_at); s.menu_for = nil }
