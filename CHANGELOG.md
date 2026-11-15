@@ -4,6 +4,19 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.56.0] - 2026-11-15
+
+### Added
+- **A cut text shows itself whole**: the ... at the end of a title or a value too long for its place opens, on a click, a bubble with the whole text, to select and copy. It stays until its cross, Escape or a click outside it.
+
+### Changed
+- **Steer has its own icon**: a ship wheel, on the send button while a run works and on the pending messages, to tell it from Send.
+- **Escape stops a run in two presses**: the first Escape no longer cuts the run. A red banner at the top of the composer says that a second Escape stops it, and goes after two seconds. Ctrl+Esc and the Stop buttons still stop at once.
+
+### Fixed
+- **The image viewer keeps a long path inside its header**: the file's path ran under the close cross; it now wraps.
+- **A view in a window of its own closes again on Wayland**: its close button put it back in place; the window stayed on the screen before. The palette also puts the whole word first: a search for a name ranks the item whose word ends there above a longer one that starts with it.
+
 ## [0.55.1] - 2026-11-15
 
 ### Fixed
@@ -1645,6 +1658,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.56.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.56.0
 [0.55.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.55.1
 [0.55.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.55.0
 [0.54.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.54.1
