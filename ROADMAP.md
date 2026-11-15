@@ -7,8 +7,8 @@
   children and their reports as they come, and never treat a call's quick return as the child's end.
 - **Order the queue from the composer.** Alt+Enter puts the follow-up first in the queue; Ctrl+Enter steers the next
   queued prompt, as the desktop app does.
-- **A session's id is found and opened.** A session id in a message opens that session; the session's own id is easy to
-  copy from its header or menu.
+- **A session's id in a message opens it.** A `ses_…` word in a message is a link to that session. It needs the
+  toolkit's link words (a word that starts with a prefix made a link), after the migration to gui_toolkit 0.266.
 - **A Mermaid diagram maximised.** The diagram's viewer fills the window, with zoom and pan.
 - **Each server's shell chosen from its menu.** The terminal's shell is a choice of the server's menu.
 - **Tab numbers while the modifier is held.** Holding the key of the tab shortcuts shows each tab's number.

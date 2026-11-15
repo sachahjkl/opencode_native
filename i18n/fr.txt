@@ -176,6 +176,12 @@ fr Accueil
 en Home  (Ctrl+H)
 fr Accueil  (Ctrl+H)
 
+en Copy the session ID
+fr Copier l'identifiant de la session
+
+en Session ID copied
+fr Identifiant de la session copié
+
 en parent session
 fr session parente
 
@@ -343,9 +349,6 @@ fr Exporter la session sans son texte
 
 en Import a session
 fr Importer une session
-
-en Copy the session ID
-fr Copier l'identifiant de la session
 
 en Show or hide the Preview panel
 fr Afficher ou masquer le panneau Aperçu

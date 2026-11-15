@@ -167,6 +167,23 @@ base_name :: proc(path: string) -> string {
 	return p
 }
 
+// The session's id at the end of the header's folder line, weak: a click copies it.
+@(private = "file")
+session_id_copy_hint :: proc(app: ^App, id: string, em: f32) -> bool {
+	sig: ui.Signal
+	if ui.style(ui.Style_Mod{font_size = math.round(em * FS_CAPTION), font = app.mono}) {
+		sig = ui.button("###session_id", id, lucide.HASH, {face = .Link})
+	}
+	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Copy the session ID")) } }
+	return sig.clicked
+}
+
+// The session's id to the clipboard, and said.
+session_id_copy :: proc(app: ^App, id: string) {
+	clip_set(id)
+	ui.announce(&app.announcer, .Good, i18n.tr("Session ID copied"))
+}
+
 chat_header :: proc(app: ^App, em: f32) {
 	h := math.round(em * (app.chat.have_self && app.chat.self.parent != "" ? 4.3 : 3.3))   // (a sub-agent: a breadcrumb line above its title)
 	ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center})
@@ -217,7 +234,15 @@ chat_header :: proc(app: ^App, em: f32) {
 				}
 			}
 			dir := s != nil ? s.directory : app.chat.new_dir
-			text("dir", dir != "" ? dir : i18n.tr("default folder"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2), flags = dir != "" ? {.Selectable} : {}}, ui.fill())
+			ui.next({width = ui.fill(), height = ui.px(em * 1.2), axis = .X, cross = .Center})
+			if ui.row(.Center, id = "###dir_row") {
+				text("dir", dir != "" ? dir : i18n.tr("default folder"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2), flags = dir != "" ? {.Selectable} : {}}, ui.fill())
+				// (the session's id, as opencode 2.3.0 shows it: a click copies it)
+				if s != nil {
+					ui.spacer(ui.px(em * 0.8))
+					if session_id_copy_hint(app, s.id, em) { session_id_copy(app, s.id) }
+				}
+			}
 			ui.spacer(ui.fill())
 		}
 		c := &app.chat

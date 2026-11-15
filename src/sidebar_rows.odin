@@ -319,7 +319,7 @@ session_menu :: proc(app: ^App, em: f32) {
 		if ui.menu_item(i18n.tr("Export…"), icon = lucide.DOWNLOAD).clicked { session_export(app, app.sidebar.menu_session) }
 		if ui.menu_item(i18n.tr("Export without the text…"), icon = lucide.FILE_DOWN).clicked { session_export(app, app.sidebar.menu_session, redacted = true) }
 		ui.menu_separator()
-		if ui.menu_item(i18n.tr("Copy session ID"), icon = lucide.HASH).clicked { clip_set(app.sidebar.menu_session) }
+		if ui.menu_item(i18n.tr("Copy session ID"), icon = lucide.HASH).clicked { session_id_copy(app, app.sidebar.menu_session) }
 		if s := find_session(app, app.sidebar.menu_session); s != nil {
 			if ui.menu_item(i18n.tr("Copy folder path"), icon = lucide.CLIPBOARD_COPY).clicked { clip_set(s.directory) }
 			if ui.menu_item(i18n.tr("Show the folder"), icon = lucide.FOLDER_OPEN).clicked { reveal_path(s.directory) }
