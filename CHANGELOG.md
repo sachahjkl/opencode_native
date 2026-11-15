@@ -4,6 +4,17 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.59.0] - 2026-11-15 14:44
+
+### Added
+- **A diagram maximised**: the Mermaid viewer, and every resizable dialog, has a Maximise button (or a double click on its header) that fills the window, with zoom and pan; Restore gives its size back.
+- **A session's id opens it**: a ses_… in a message is a link; a click opens that session, and Back comes back, as in opencode 2.3.0.
+- **What's new**: the settings have a page that shows what changed, version by version, with the time of each release. After an update, a message that stays until it is clicked opens it.
+
+### Changed
+- **The frame rate is a setting of Rendering**: it moved from Advanced to the Rendering settings, the same in every program of the family. A rate chosen before is not carried over: choose it again there.
+- **A server switch without a blink**: the status bar keeps the last server's version and counts until the new one has said its own, then the words that change morph in place; no 0 sessions, no empty version, no label that jumps.
+
 ## [0.58.0] - 2026-11-15 13:28
 
 ### Changed
@@ -1691,6 +1702,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.59.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.59.0
 [0.58.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.58.0
 [0.57.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.57.1
 [0.57.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.57.0
