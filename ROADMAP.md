@@ -2,13 +2,9 @@
 
 ## Now
 
-What opencode 2.3.0 (https://opencode.ai/changelog/v2.3.0) brings that opencode native must follow:
-
-- **Sub-agents run in the background by default.** A sub-agent's call returns at once and the child reports when it goes
+- **Sub-agents run in the background by default** (opencode 2.3.0, like every entry down to the MCP events). A sub-agent's call returns at once and the child reports when it goes
   idle, several at a time, while the parent goes on; a report can say the child's own work still runs. Show the running
   children and their reports as they come, and never treat a call's quick return as the child's end.
-- **Jump to an earlier prompt.** A command (Ctrl+Alt+G, and in the palette) searches the session's prompts and scrolls
-  the conversation to the one chosen.
 - **Order the queue from the composer.** Alt+Enter puts the follow-up first in the queue; Ctrl+Enter steers the next
   queued prompt, as the desktop app does.
 - **A session's id is found and opened.** A session id in a message opens that session; the session's own id is easy to

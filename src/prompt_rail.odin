@@ -33,9 +33,15 @@ prompt_rail :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	o := ui.Scroll_Marks_Options{name = i18n.tr("Prompts"), margin = margin, now_ms = now_epoch_ms(), hours12 = !app.prefs.clock24}
 	i := ui.scroll_marks("###prompt_rail", &p.rail, sb, o)
 	if i < 0 { return }
-	id := ui.scroll_marks_id(&p.rail, i)
+	prompt_go(app, ui.scroll_marks_id(&p.rail, i), em)
+}
+
+// The conversation goes to prompt `id`, and the prompt's plate takes the keyboard: a mark of the rail, a choice of Jump
+// to message (jump.odin).
+prompt_go :: proc(app: ^App, id: string, em: f32) {
+	p := &app.conversation.prompt_rail
 	// (the view goes there now; the column keeps it on the prompt while the heights around it settle)
-	chat_scroll_event(app, Scroll_Restore{id, -margin})
+	chat_scroll_event(app, Scroll_Restore{id, -math.round(em * PROMPT_RAIL_MARGIN_EM)})
 	delete(p.focus)
 	p.focus = strings.clone(id)
 }

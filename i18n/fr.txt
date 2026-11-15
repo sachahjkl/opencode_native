@@ -290,6 +290,9 @@ fr Afficher ou masquer le panneau des statistiques
 en Rename the session…
 fr Renommer la session…
 
+en Jump to message…
+fr Aller à un message…
+
 en Fork the session
 fr Bifurquer la session
 
@@ -1035,6 +1038,12 @@ fr (aucune sortie)
 en (no report)
 fr (aucun rapport)
 
+en Prompts
+fr Invites
+
+en Go
+fr Aller
+
 en The preferences could not be saved
 fr Impossible d'enregistrer les réglages
 
@@ -1362,9 +1371,6 @@ fr Choisir l'icône du projet…
 
 en Remove the project's icon
 fr Retirer l'icône du projet
-
-en Prompts
-fr Invites
 
 en That message was delivered meanwhile: what you wrote stays in the composer
 fr Ce message a été remis entre-temps : ce que vous avez écrit reste dans la zone de saisie

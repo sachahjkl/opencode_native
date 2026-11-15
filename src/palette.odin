@@ -93,6 +93,7 @@ palette_start :: proc(app: ^App) {
 // Before the window's state goes (the last palette writes the usage memory).
 palette_destroy :: proc(app: ^App) {
 	p := &app.palette
+	jump_destroy(app)
 	ui.palette_destroy(&p.pal)
 	virtual.arena_destroy(&p.table_arena)
 	virtual.arena_destroy(&p.details_arena)
@@ -137,6 +138,7 @@ palette_build :: proc(app: ^App) {
 	if !app.picker.open && !ui.file_dialog_shown(&app.state) { _ = ui.palette_keys(&p.pal) }
 	// (the toolkit's sources act in palette_chosen: a setting, a view's move)
 	if c, ok := ui.palette_chosen(&p.pal); ok { palette_run(app, c) }
+	jump_build(app)   // (Jump to message: a palette of its own, after this one, whose command may have asked for it)
 }
 
 // The commands' table kept: made again when the language changed (the keys' texts are said in it), `disabled` when a

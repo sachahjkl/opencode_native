@@ -56,6 +56,7 @@ App :: struct {
 	picker:         Picker,            // the pickers of the composer (agent, model) (picker.odin)
 	activity:       Activity,          // what runs behind the conversation (activity.odin)
 	palette:        Palette,           // Ctrl+K: the toolkit's palette and ocn's sources (palette.odin)
+	jump:           Jump,              // Ctrl+Alt+G: Jump to message, a chooser of the session's prompts (jump.odin)
 	term_zooms:     Kept_Zooms,        // each shell's zoom, by its id (terminal.odin)
 	session_zooms:  Kept_Zooms,        // each session's conversation zoom, by its id (commands.odin content_zoom)
 	stores:         Stores,            // what it remembers beside the preferences, written on workers (stores.odin)
