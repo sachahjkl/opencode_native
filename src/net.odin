@@ -169,6 +169,8 @@ Req_Kind :: enum u8 {
 	Pair,           // POST /api/pair: a code that pairs a device (pair.odin)
 	Slash,          // GET /api/command: the server's commands (the palette, "/name" in the composer)
 	Forked,         // POST /api/session/:id/fork: the new session
+	Btw_Fork,       // POST /api/session/:id/fork: /btw's fork, an Outgoing (outgoing.odin outgoing_aside)
+	Btw_Aside,      // POST /api/session/:id/synthetic: its preamble, before its prompt
 	Session_Agent,  // a new session takes the agent chosen last (outgoing.odin outgoing_setup)
 	Session_Model,  // ... and the model
 	Session_Choice, // POST /api/session/:id/agent, /model: what the reader picked
@@ -447,6 +449,8 @@ quiet_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (t
 	.Goal             = {json = true, life = .Chat_Gen, on_ok = goal_on_ok, on_fail = quiet_on_fail},   // (a server without the goal plugin: nothing to say)
 	.Pair             = {json = true, on_ok = pair_on_ok, on_fail = pair_on_fail},   // (the server's, whatever is shown)
 	.Forked           = {json = true, on_ok = forked_on_ok},
+	.Btw_Fork         = {json = true, on_ok = btw_forked_on_ok, on_fail = btw_forked_on_fail},
+	.Btw_Aside        = {on_ok = btw_aside_on_ok, on_fail = btw_aside_on_fail},
 	.Session_Agent    = {on_ok = session_agent_on_ok, on_fail = session_agent_on_fail},
 	.Session_Model    = {on_ok = session_model_on_ok, on_fail = session_model_on_fail},
 	.Session_Choice   = {on_fail = session_choice_on_fail},

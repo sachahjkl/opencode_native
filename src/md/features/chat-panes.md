@@ -66,8 +66,54 @@ Everything that read `app.chat` or `app.composer` reads the pane it is given.
 - **What is keyed by session or part stays in `App`**: the drafts (`App.drafts`), the parts opened (`App.expanded`: a part's
   id names one part of one session; the stats panel uses it too). The restore clock of a way back is the pane's view state.
 - **The main view's own features keep `main_pane`**: the history (Back, Forward), the sidebar, the commands, the palette,
-  the title bar, the activity tray, the statistics, "What you missed", the context menu, `open_chat` and the home page's
-  folder. They act on the main view; Layer 2 decides which of them a panel has.
+  the title bar, the activity tray, the statistics, "What you missed", `open_chat` and the home page's folder. They act
+  on the main view; Layer 2 decides which of them a panel has (the context menu became the pane's).
+
+## Layer 2 decisions: the panel
+
+- **One panel, one pane**: `App.btw` is the slot of the pane `BTW_VIEW` shows (0: none). A second `/btw` shows its fork
+  in the same pane. Several asides at once would need a view instance per pane; nothing asks for it yet.
+- **`pane_show` and `pane_close`** (chat_pane.odin): a pane other than the main view shows a session as `open_chat` does,
+  without what is the main view's (Back and Forward, the last session kept, the activity, What you missed). Closing it
+  keeps its composer's text in the session's draft, frees its slot and moves its mark: what was asked for it is dropped.
+- **The panel's title is its tab**: `BTW_VIEW` has `tabs_always`, its tab says the fork's title (`ui.view_title`), the
+  strip carries "Open in the main view" (`ui.view_header_tools`). The body has no header of its own: a second title
+  would say the same thing twice. Floating or in a window of its own, the view's header says it.
+- **The same build**: `conversation(app, pane, em, width)` builds both; the panel gives its room (`ui.view_room`). What is
+  the main view's stays out of the panel: the session header, the column's handles (they set a preference), the
+  activity strip and tray, Find (the toolkit has one find per window: two panes would take it from each other).
+- **The keyboard's pane** (`keys_pane`): the panel's when the focus is in its view, else the main view's. Page Up and
+  Down scroll that pane only. Each composer reads its own keys (Enter, Escape twice, `@`, `/`, the history) while it
+  has the focus; typing with nothing focused goes to the main composer. The armed stop is cleared only by the pane
+  that shows its session.
+- **A right click records its pane** (`Ctx_Target.pane`): the message, its fork, "Edit in the composer", the composer's
+  own menu act on that pane. A selection's quote goes to the pane under the pointer when it was made.
+- **A dropped file** goes to the composer of the pane under the pointer (`pane_at`); in a window of its own the panel
+  has no drop (the main window's drop only).
+- **What was global and is the pane's**: the throbber's word (two runs would flip one board between their words), the
+  Mermaid width (the column of the pane that builds it: `md_config` carries the pane), the "Latest" pill's animation.
+- **The session deleted** closes the panel that shows it; a server switch closes it too (its session is the old
+  server's).
+
+## Layer 3 decisions: /btw
+
+- **A client command** (`CLIENT_COMMANDS`, slash.odin): listed first in the composer's `/` list and the palette's `>`,
+  read before a server command (`submit_prompt` runs it before `slash_send`). With no text, or no session shown, it does
+  nothing: the text stays.
+- **One Outgoing** carries it (outgoing.odin, stages `Forking` then `Aside`): its text comes back to the composer it
+  came from when the fork fails (`/btw ...` as typed), and to the fork's when the prompt fails. A server switch on the
+  way gives it back to the home page, as any prompt not sent.
+- **The fork point**: the last message; while a run streams, before the answer that streams (`fork_before`).
+- **The title**: `btw: <first words>`, a PATCH as soon as the fork is made. The server (opencode 2.3.0) titles a fork
+  `<parent's title> (fork #N)`; its own title is generated only for a root session still untitled
+  (`SessionTitle.isUntitled`), and a generated title is not written when the title changed meanwhile. So the PATCH is
+  never overridden, whatever arrives first: no need to wait for the first answer.
+- **The preamble is a synthetic message**: the prompt body has no system or instructions field (`PromptInput`: text,
+  files, agents, skills). `POST /api/session/<id>/synthetic` with `resume: false` admits it without starting a run;
+  the prompt follows on its answer (two requests have no order otherwise), and its run reads both in order. Its
+  `metadata.source` is `ocn.btw`: the display hides it, as the server keeps it apart. A delimiter in the prompt's text
+  was refused: the text would carry the preamble into the history, the title generator and every other client.
+- **The keyboard stays** in the composer that sent `/btw`: the panel opens without the focus.
 
 ## Layers
 

@@ -77,7 +77,8 @@ app_menu :: proc(app: ^App, key: string, em: f32) {
 }
 
 global_keys :: proc(app: ^App) {
-	find_keys(app, main_pane(app))   // (the keyboard's pane: the main view)
+	// (Find is the main view's: chat-panes.md, Layer 2)
+	if keys_pane(app) == main_pane(app) { find_keys(app, main_pane(app)) }
 	commands_keys(app)
 }
 
@@ -104,5 +105,5 @@ main_area :: proc(app: ^App, em: f32) {
 	b := ui.parent_box()
 	if w := b.rect.max.x - b.rect.min.x; w > 0 && c.layout_win_w > 0 { c.beside_px = max(c.layout_win_w - w, 0) }
 	c.layout_win_w = f32(app.win.size.x)
-	conversation(app, pane, em)
+	conversation(app, pane, em, f32(app.win.size.x) - c.beside_px)
 }

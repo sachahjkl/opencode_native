@@ -47,7 +47,8 @@ escape_stop_clear :: proc(app: ^App) {
 // without other input.
 escape_stop_banner :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	if !escape_stop_armed(app, pane) {
-		if app.escape_stop.session != "" { escape_stop_clear(app) }
+		// (only what this pane armed, or what no pane shows: another pane's stop is armed in its own composer)
+		if s := app.escape_stop.session; s != "" && (s == pane.chat.id || !pane_shows(app, s)) { escape_stop_clear(app) }
 		return
 	}
 	ui.wake_within(built_state(app), max(1, int(math.ceil(app.escape_stop.until - ui.now_ms()))))

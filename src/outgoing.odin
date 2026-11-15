@@ -25,6 +25,8 @@ Out_Stage :: enum u8 {
 	Model,      // ... and the model
 	Catalog,    // "/name ...": waits for the server's commands, which say whether it is one (outgoing_catalog)
 	Taking,     // the pending message it replaces leaves the inbox first (queue.odin)
+	Forking,    // /btw: the fork of its session on its way (btw.odin)
+	Aside,      // ... then the preamble, in the fork, before the prompt
 	Sending,    // the prompt's own POST on its way
 	Returned,   // it failed: waits for the composer of its session
 }
@@ -160,6 +162,53 @@ outgoing_composer :: proc(app: ^App, pane: ^Chat_Pane, text, directory: string, 
 	o.fields = fields
 	outgoing_takes_composer(app, pane, o)
 	outgoing_send(app, o)
+}
+
+// `/btw <text>` from `pane`: the fork of its session (`before`: fork_before's message, "" all of it) is made, then shown in the
+// panel, its preamble sent, then the text (btw_forked, btw_aside_sent). Until the fork exists it is the composer's it came from:
+// what fails comes back there as it was typed.
+outgoing_aside :: proc(app: ^App, pane: ^Chat_Pane, before, text: string) {
+	o := outgoing_new(app, pane, .Forking, pane.chat.id, strings.concatenate({"/btw ", text}, context.temp_allocator))
+	body := before != "" ? fmt.tprintf(`{{"before":%s}}`, tk_json.quote(before)) : "{}"
+	request(app, .Btw_Fork, "POST", fmt.tprintf("/api/session/%s/fork", o.session), body, o.session, out = o.id, pane = pane)
+}
+
+// The fork is made: from here the prompt is the fork's (its text without the command), and goes from the panel's pane.
+btw_forked_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	id := tk_json.text(v, "data", "id")
+	if id == "" { answer_failed(app, r, .Unreadable, i18n.tr("Unreadable answer")); return }
+	refresh_sessions(app)
+	o := outgoing_find(app, r.out)
+	if o == nil || o.stage != .Forking { return }
+	_, text, _ := slash_split(o.text)
+	text = strings.clone(text)
+	delete(o.text)
+	delete(o.session)
+	o.text, o.session = text, strings.clone(id)
+	rename_session(app, id, btw_title(text))
+	pane := btw_open(app, id)
+	o.pane, o.stage = pane_index(app, pane), .Aside
+	request(app, .Btw_Aside, "POST", fmt.tprintf("/api/session/%s/synthetic", id), btw_preamble_body(), id, out = o.id, pane = pane)
+}
+
+btw_forked_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	outgoing_answered(app, r, false)
+	return false
+}
+
+// The preamble is admitted (or not: the prompt goes all the same, the aside without its framing): the prompt follows it, in that
+// order (two requests on their way have none).
+btw_aside_sent :: proc(app: ^App, out: u64) {
+	o := outgoing_find(app, out)
+	if o == nil || o.stage != .Aside { return }
+	outgoing_send(app, o)
+}
+
+btw_aside_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { btw_aside_sent(app, r.out) }
+
+btw_aside_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	btw_aside_sent(app, r.out)
+	return false
 }
 
 // The composer's prompt in the place of pending message `item`: that one leaves the inbox first (queue_replaced).

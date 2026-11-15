@@ -214,10 +214,10 @@ attach_pick :: proc(app: ^App, pane: ^Chat_Pane) {
 	}, pane)
 }
 
-// A drag over the window from another program: files, an image or text it carries go to the composer at the drop, where
-// the composer is (a dialog open over it refuses the drop).
+// A drag over the window from another program: files, an image or text it carries go to the composer of the pane under the
+// pointer (a dialog open over it refuses the drop).
 attach_drop_event :: proc(app: ^App, e: platform.Event) {
-	pane := main_pane(app)
+	pane := pane_at(app, e.pos != {} ? e.pos : app.state.mouse)
 	#partial switch e.kind {
 	case .Drop_Enter, .Drop_Over:
 		platform.drop_set_effect(app.win, overlay_open(app) ? nil : platform.Drop_Effect.Copy)

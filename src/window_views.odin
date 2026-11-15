@@ -1,7 +1,7 @@
 package ocn
 
 // The views (gui_toolkit's views, its docs/views.md): every dialog, the sessions' sidebar and the panels beside the
-// conversation (the Preview, the Statistics, each shell). Each is a build procedure on the program's data, declared once
+// conversation (the Preview, the Statistics, /btw's aside, each shell). Each is a build procedure on the program's data, declared once
 // (views_start). The toolkit builds it where the user puts it: a dialog, a floating window inside the window, a window
 // of its own, or a panel docked at an edge of the conversation. It keeps that choice, the sizes, the panels' places and
 // which were open at the last quit in views.txt beside the preferences. The conversation is the window's content, not a
@@ -75,6 +75,10 @@ panels_register :: proc(app: ^App) {
 		under_children = true, moved = preview_moved})
 	ui.view_register(vs, STATS_VIEW, stats_view, ui.View_Options{title = i18n.later("Statistics"), icon = lucide.GAUGE,
 		home = .Panel, home_place = {edge = .Right}, extent_em = PREVIEW_EM, width_em = PREVIEW_EM, min_width_em = PANEL_MIN_EM})
+	// (/btw's fork: its tab, shown with the panel alone, says its title; its strip has "Open in the main view": btw.odin)
+	ui.view_register(vs, BTW_VIEW, btw_view, ui.View_Options{title = i18n.later("Aside"), icon = lucide.MESSAGE_CIRCLE,
+		home = .Panel, home_place = {edge = .Right}, extent_em = PREVIEW_EM, width_em = PREVIEW_EM, height_em = 40, min_width_em = PANEL_MIN_EM,
+		tabs_always = true})
 	// (the shells' strip shows with one shell too: its tab says which, its "+" makes another, as a terminal's does. Its
 	// label is translated once here: the language is read before (prefs_init))
 	ui.view_register(vs, TERMINAL_VIEW, terminal_view, ui.View_Options{title = i18n.later("Terminal"), icon = lucide.SQUARE_TERMINAL,
@@ -121,6 +125,7 @@ views_answers :: proc(app: ^App) {
 	vs := &app.program_views
 	if _, ok := ui.view_ended(vs, PREVIEW_VIEW); ok { preview_close(app) }
 	if _, ok := ui.view_ended(vs, STATS_VIEW); ok { app.stats.open = false }
+	if _, ok := ui.view_ended(vs, BTW_VIEW); ok { btw_close(app) }
 	if _, ok := ui.view_ended(vs, TERMINAL_VIEW); ok { terminals_hide(app) }
 	s := &app.cx.terms
 	for i := len(s.list) - 1; i >= 0; i -= 1 {

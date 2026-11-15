@@ -20,6 +20,7 @@ Ctx_Target :: struct {
 	msg:    string,     // the message; a diagram's text; a folder's path (owned)
 	part:   int,        // its tool call
 	image:  Image_Ref,  // the image (owned: the message that holds it can be read again before the menu is used)
+	pane:   int,        // the slot of the pane it was opened in: its message, its composer (ctx_pane)
 }
 
 // The menu of a right click: what it is about (which block took the press: ui.context_take).
@@ -33,27 +34,34 @@ Quote_Chip :: struct {
 	at:           Rect,
 	kept:         string,   // what it quotes (owned)
 	serial, done: u64,      // which selection, and the last one quoted
+	pane:         int,      // the slot of the pane under the pointer when the selection was made: its composer quotes it
 }
 
 // A right press on `b` opens the menu of `kind`: on it with nothing drawn over it there (ui.pointer_on: the composer over the
 // last message, which the conversation scrolls under it, has the press), and nothing in it took the press first (it is checked
-// after what is in it: the innermost keeps it).
-ctx_check :: proc(app: ^App, b: ^ui.Box, kind: Ctx_Kind, msg := "", part := 0, image := Image_Ref{}) {
+// after what is in it: the innermost keeps it). `pane`: the one it is built in (nil: the main view).
+ctx_check :: proc(app: ^App, b: ^ui.Box, kind: Ctx_Kind, msg := "", part := 0, image := Image_Ref{}, pane: ^Chat_Pane = nil) {
 	if b == nil || overlay_open(app) || !ui.context_take(b) { return }
-	ctx_open(app, kind, msg, part, image)
+	ctx_open(app, kind, msg, part, image, pane)
 }
 
 // The menu of `kind`, where the pointer is (a dialog opens its own: ctx_check leaves what is under a dialog alone).
-ctx_open :: proc(app: ^App, kind: Ctx_Kind, msg := "", part := 0, image := Image_Ref{}) {
+ctx_open :: proc(app: ^App, kind: Ctx_Kind, msg := "", part := 0, image := Image_Ref{}, pane: ^Chat_Pane = nil) {
 	delete(app.ctx_menu.target.msg)
 	image_ref_delete(&app.ctx_menu.target.image)
-	app.ctx_menu.target = {kind = kind, msg = strings.clone(msg), part = part, image = image_ref_clone(image)}
+	app.ctx_menu.target = {kind = kind, msg = strings.clone(msg), part = part, image = image_ref_clone(image), pane = pane_index(app, pane != nil ? pane : main_pane(app))}
 	ui.menu_open(CTX_MENU_KEY, ui.mouse_pos())
 }
 
+// The pane the menu was opened in; the main view when that pane closed since.
 @(private = "file")
-find_msg :: proc(app: ^App, id: string) -> ^Message {
-	pane := main_pane(app)
+ctx_pane :: proc(app: ^App) -> ^Chat_Pane {
+	i := app.ctx_menu.target.pane
+	return pane_is_shown(app, i) ? &app.panes[i] : main_pane(app)
+}
+
+@(private = "file")
+find_msg :: proc(pane: ^Chat_Pane, id: string) -> ^Message {
 	for &m in pane.chat.messages { if m.id == id { return &m } }
 	return nil
 }
@@ -92,16 +100,16 @@ fork_before :: proc(c: ^Chat, m: ^Message) -> string {
 	return ""
 }
 
-// "Fork from here", on the session shown, a sub-agent's as any other: the server makes a session of its own of it, parent of nothing.
+// "Fork from here", on the session `pane` shows, a sub-agent's as any other: the server makes a session of its own of it, parent of
+// nothing. (It opens in the main view, whichever pane it came from.)
 @(private = "file")
-fork_from :: proc(app: ^App, m: ^Message) {
-	pane := main_pane(app)
+fork_from :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message) {
 	fork_session(app, pane.chat.id, fork_before(&pane.chat, m), m.kind == .User ? m.text : "")
 }
 
 @(private = "file")
-fork_item :: proc(app: ^App, m: ^Message) {
-	if ui.menu_item(m.streaming ? i18n.tr("Fork before this answer") : i18n.tr("Fork from here"), icon = lucide.COPY).clicked { fork_from(app, m) }
+fork_item :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message) {
+	if ui.menu_item(m.streaming ? i18n.tr("Fork before this answer") : i18n.tr("Fork from here"), icon = lucide.COPY).clicked { fork_from(app, pane, m) }
 }
 
 @(private = "file")
@@ -121,12 +129,11 @@ first_url :: proc(s: string) -> string {
 }
 
 @(private = "file")
-message_menu :: proc(app: ^App, m: ^Message) {
-	pane := main_pane(app)
+message_menu :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message) {
 	if ui.has_selection(&app.state) {
 		sel := ui.selected_text(&app.state, context.temp_allocator)
-		if ui.menu_item(i18n.tr("Quote"), "", icon = lucide.QUOTE).clicked { quote_text(app, sel, false) }
-		if ui.menu_item(i18n.tr("Quote with a comment"), "Ctrl+Q", icon = lucide.MESSAGE_SQUARE_QUOTE).clicked { quote_text(app, sel, true) }
+		if ui.menu_item(i18n.tr("Quote"), "", icon = lucide.QUOTE).clicked { quote_text(app, pane, sel, false) }
+		if ui.menu_item(i18n.tr("Quote with a comment"), "Ctrl+Q", icon = lucide.MESSAGE_SQUARE_QUOTE).clicked { quote_text(app, pane, sel, true) }
 		if ui.menu_item(i18n.tr("Copy the selection"), "Ctrl+C", icon = lucide.COPY).clicked { copied(sel, i18n.tr("Selection copied")) }
 		ui.menu_separator()
 	}
@@ -138,7 +145,7 @@ message_menu :: proc(app: ^App, m: ^Message) {
 			pane.composer.focus_next = true
 		}
 		ui.menu_separator()
-		fork_item(app, m)
+		fork_item(app, pane, m)
 		if ui.menu_item(i18n.tr("What this prompt changed"), icon = lucide.FILE).clicked { changes_open(app, pane.chat.id, m.id) }
 		if ui.menu_item(i18n.tr("Go back to here…"), icon = lucide.UNDO_2, disabled = pane.chat.busy).clicked { revert_stage(app, pane.chat.id, m.id, m.text) }
 	case .Assistant:
@@ -148,14 +155,14 @@ message_menu :: proc(app: ^App, m: ^Message) {
 			if ui.menu_item(i18n.tr("Open the link"), icon = lucide.GLOBE).clicked { preview_open(app, url) }
 		}
 		ui.menu_separator()
-		fork_item(app, m)
+		fork_item(app, pane, m)
 	case .Synthetic, .Shell:
 		// (reports of background jobs: what their cards show, not their markup)
 		t := len(m.jobs) > 0 ? jobs_text(m.jobs) : m.text
 		if ui.menu_item(i18n.tr("Copy"), icon = lucide.COPY, disabled = t == "").clicked { copied(t, i18n.tr("Text copied")) }
 		if m.shell_id != "" { if ui.menu_item(i18n.tr("Inspect the output"), icon = lucide.SQUARE_TERMINAL).clicked { output_view_open_shell(app, m.shell_id, m.text, chat_dir(app)) } }
 		ui.menu_separator()
-		fork_item(app, m)
+		fork_item(app, pane, m)
 	case .Compaction, .Idle, .Switch, .Other:
 		if ui.menu_item(i18n.tr("Copy"), icon = lucide.COPY, disabled = m.text == "").clicked { copied(m.text, i18n.tr("Text copied")) }
 	}
@@ -163,7 +170,7 @@ message_menu :: proc(app: ^App, m: ^Message) {
 
 // (`m` holds the call: most of an answer at work is its tool calls, and a press on one comes here.)
 @(private = "file")
-tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
+tool_menu :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, p: ^Part) {
 	if ui.menu_item(i18n.tr("Copy the output"), icon = lucide.COPY, disabled = p.output == "").clicked { copied(p.output, i18n.tr("Output copied")) }
 	if p.patch != "" { if ui.menu_item(i18n.tr("Copy the diff"), icon = lucide.COPY).clicked { copied(p.patch, i18n.tr("Diff copied")) } }
 	if c := p.command; c != "" {
@@ -182,12 +189,12 @@ tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
 		if ui.menu_item(i18n.tr("Open the link"), icon = lucide.GLOBE).clicked { preview_open(app, url) }
 	}
 	ui.menu_separator()
-	fork_item(app, m)
+	fork_item(app, pane, m)
 }
 
 // At the end of the build, for what a right press noted.
 context_menu :: proc(app: ^App, em: f32) {
-	pane := main_pane(app)
+	pane := ctx_pane(app)
 	quote_chip(app, em)
 	key := CTX_MENU_KEY
 	// (the composer's is a text field's: the toolkit's, on its area)
@@ -199,9 +206,9 @@ context_menu :: proc(app: ^App, em: f32) {
 		switch app.ctx_menu.target.kind {
 		case .None, .Composer:
 		case .Message:
-			if m := find_msg(app, app.ctx_menu.target.msg); m != nil { message_menu(app, m) }
+			if m := find_msg(pane, app.ctx_menu.target.msg); m != nil { message_menu(app, pane, m) }
 		case .Tool:
-			if m := find_msg(app, app.ctx_menu.target.msg); m != nil && app.ctx_menu.target.part < len(m.parts) { tool_menu(app, m, &m.parts[app.ctx_menu.target.part]) }
+			if m := find_msg(pane, app.ctx_menu.target.msg); m != nil && app.ctx_menu.target.part < len(m.parts) { tool_menu(app, pane, m, &m.parts[app.ctx_menu.target.part]) }
 		case .Image:
 			image := app.ctx_menu.target.image
 			if ui.menu_item(i18n.tr("Copy image"), image_view_shown(app) ? "Ctrl+C" : "", icon = lucide.COPY).clicked { image_copy(app, image) }
@@ -225,10 +232,9 @@ context_menu :: proc(app: ^App, em: f32) {
 ////////////////////////////////
 // Quoting what is selected
 
-// `text` as a quote at the end of the composer, a line left under it for what one has to say about it. `comment`: the
+// `text` as a quote at the end of `pane`'s composer, a line left under it for what one has to say about it. `comment`: the
 // keyboard goes there.
-quote_text :: proc(app: ^App, text: string, comment: bool) {
-	pane := main_pane(app)
+quote_text :: proc(app: ^App, pane: ^Chat_Pane, text: string, comment: bool) {
 	t := strings.trim_space(text)
 	if t == "" { return }
 	b := strings.builder_make(context.temp_allocator)
@@ -241,8 +247,16 @@ quote_text :: proc(app: ^App, text: string, comment: bool) {
 	if comment { pane.composer.focus_next = true } else { ui.announce(&app.announcer, .Good, i18n.tr("Quoted in the composer")) }
 }
 
+// Ctrl+Q: to the composer of the pane the selection was made in (quote_chip noted it).
 quote_selection :: proc(app: ^App) {
-	quote_text(app, ui.selected_text(&app.state, context.temp_allocator), true)
+	quote_text(app, quote_pane(app), ui.selected_text(&app.state, context.temp_allocator), true)
+}
+
+// The pane under the pointer when the selection was made; the main view when it closed since.
+@(private = "file")
+quote_pane :: proc(app: ^App) -> ^Chat_Pane {
+	i := app.quote.pane
+	return pane_is_shown(app, i) ? &app.panes[i] : main_pane(app)
 }
 
 // The chip of selection `serial`: a new one goes where the pointer ended it (true). One that comes back, a dialog that hid it closed,
@@ -269,6 +283,7 @@ quote_chip :: proc(app: ^App, em: f32) {
 		if quote_place(q, serial, ui.mouse_pos()) {
 			delete(q.kept)
 			q.kept = ui.selected_text(s)
+			q.pane = pane_index(app, pane_at(app, ui.mouse_pos()))
 		}
 	}
 	if !q.open { return }
@@ -280,7 +295,7 @@ quote_chip :: proc(app: ^App, em: f32) {
 			commented := ui.button("q2", i18n.tr("Comment"), o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM)}).clicked
 			ui.spacer(ui.px(em * 0.35))
 			if quoted || commented {
-				quote_text(app, q.kept, commented)
+				quote_text(app, quote_pane(app), q.kept, commented)
 				q.done = q.serial
 				q.open = false
 			}

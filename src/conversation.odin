@@ -28,6 +28,7 @@ Conversation :: struct {
 	beside_px:        f32,            // what the views beside it took of the window's width at the last layout (views.odin main_area)
 	layout_win_w:     f32,            // ... the window's width then
 	prompt_rail:      Prompt_Rail,    // the marks of the prompts on its scroll bar (prompt_rail.odin)
+	root:             ui.Key,         // its column's box, at its last build (pane_at: what is under the pointer)
 }
 
 ////////////////////////////////
@@ -41,17 +42,19 @@ OPENED_FOLLOW_MS  :: 2000   // a conversation just opened follows its bottom tha
 PAGE_SCROLL       :: 0.9    // of the view: the end of the last page stays in sight
 LINE_SCROLL_EM    :: 3
 
-conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+// `avail`: its width this frame (0: not known yet). The main view's and the panel's (btw.odin): what is the main view's alone
+// (its header, the column's handles, Find) is built in the main view only (chat-panes.md, Layer 2).
+conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32, avail: f32) {
+	is_main := pane == main_pane(app)
 	// The pane's whole column is its zoom zone, not the messages' scroll box alone: the zoom keys follow the keyboard
 	// focus, which is mostly in the composer (the dock, below the messages). Keyed by the session shown, so another
 	// session shows its own zoom in this build; the home page ("") has the zone's own, not remembered.
 	zoom := ui.zoom_zone(&pane.zone, pane.chat.id)
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = hex(HEX_BG0), radius = 0})
 	if ui.column(flags = {.Draw_Background}, id = "###main") {
+		pane.conversation.root = ui.parent_box().key
 		sc := ui.scale()
-		// this frame's width, from the window (the box's own size is the last frame's: a resize would lag a frame behind):
-		// the window less the views beside it
-		avail := f32(app.win.size.x) - pane.conversation.beside_px
+		avail := avail
 		if avail <= 0 { avail = AVAIL_FALLBACK_PX * sc }
 		pane.conversation.width = avail
 		pane.conversation.column_w = 0
@@ -59,7 +62,7 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		col := max(COLUMN_MIN_W_PX * sc, min(app.prefs.column_w * sc * zoom, avail - em * 3))
 		side := max(em * 1.5, (avail - col) * 0.5)
 		pane.conversation.column_w = col
-		if pane.chat.id != "" {
+		if pane.chat.id != "" && is_main {
 			chat_header(app, em)
 		}
 		main := ui.parent_box()
@@ -69,7 +72,7 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			sb = ui.prev_box("###chat")
 			// (before the keys of the conversation: Up and Down are the marks' while they have the keyboard)
 			if prompt_rail_on(app, pane) && sb != nil { prompt_rail(app, pane, sb, em) }
-			find_update(app, pane, sb, em)
+			if is_main { find_update(app, pane, sb, em) }
 			chat_scroll_place(app, pane, sb, em)
 			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.scroll_y("###chat") {
@@ -87,10 +90,10 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			pane.conversation.scroll_box = ui.prev_box("###chat")
 		}
 		chat_scroll_settle(app, pane, sb)
-		if sb != nil && pane.chat.id != "" { column_handles(app, pane, sb, main, side, col, avail, em, zoom) }
+		if sb != nil && pane.chat.id != "" && is_main { column_handles(app, pane, sb, main, side, col, avail, em, zoom) }
 		dock(app, pane, em, side, col)
 		// the find bar over the conversation's top-right corner, under the header
-		find_bar(app, pane, em, avail - em * 1.4, sb != nil ? sb.rect.min.y - main.rect.min.y + em * 0.6 : em * 4)
+		if is_main { find_bar(app, pane, em, avail - em * 1.4, sb != nil ? sb.rect.min.y - main.rect.min.y + em * 0.6 : em * 4) }
 		go_bottom_pill(app, pane, sb, main, avail, em)
 	}
 }
@@ -142,7 +145,8 @@ column_handles :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, side, col
 go_bottom_pill :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, avail, em: f32) {
 	if sb == nil || pane.chat.id == "" { return }
 	far := ui.view_limit(sb) - sb.view_off.y > sb.size.y * GO_BOTTOM_SCREENS
-	t := ui.anim(ui.key_from_string(0, "go_bottom"), far ? 1 : 0, GO_BOTTOM_RATE)
+	// (each pane's: one key for two would show the pill of one over the other)
+	t := ui.anim(ui.key_from_u64(ui.key_from_string(0, "go_bottom"), u64(pane_index(app, pane))), far ? 1 : 0, GO_BOTTOM_RATE)
 	if t < 0.02 { return }
 	h := math.round(em * BUTTON_COMPACT_H_EM)
 	w := math.round(em * GO_BOTTOM_W_EM)
@@ -176,16 +180,17 @@ go_bottom_pill :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, avail, em
 
 // The keyboard scrolls the conversation, before this build reads where it is. Page Up and Page Down whatever has the focus
 // (the composer too: the conversation is what one reads while typing); the arrows, Home and End when they mean nothing else:
-// not in a text field, not while the focus is moved with the keyboard (a click gives a button the focus, and no ring).
-chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) -> (moved: bool) {
-	if overlay_open(app) { return }
+// not in a text field, not while the focus is moved with the keyboard (a click gives a button the focus, and no ring). Only the
+// keyboard's pane: two panes would scroll together.
+chat_keys :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) -> (moved: bool) {
+	if overlay_open(app) || keys_pane(app) != pane { return }
 	limit := ui.view_limit(sb)
 	y := sb.view_target.y
 	if ui.key_press(.Page_Up) { y -= sb.size.y * PAGE_SCROLL }
 	if ui.key_press(.Page_Down) { y += sb.size.y * PAGE_SCROLL }
 	f := ui.box_from_key(ui.focus_key())
 	top := false
-	if f == nil || (.Text_Input not_in f.flags && !app.state.focus_visible) {
+	if f == nil || (.Text_Input not_in f.flags && !built_state(app).focus_visible) {
 		if ui.key_press(.Up) { y -= em * LINE_SCROLL_EM }
 		if ui.key_press(.Down) { y += em * LINE_SCROLL_EM }
 		if ui.key_press(.Home) { y, top = 0, true }
@@ -232,7 +237,8 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	// (The item is the if's block, like a row's; the column ends with this block: the space of the last messages skipped
 	// goes before what follows.)
 	{
-		lz := ui.lazy_begin(all = pane.chat.loading, sweep = ui.find_sweep())
+		// (Find is the main view's: the toolkit has one find per window, and asking its sweep starts it)
+		lz := ui.lazy_begin(all = pane.chat.loading, sweep = pane == main_pane(app) ? ui.find_sweep() : {})
 		// (a view going back to where it was: the column keeps it on its message, however the heights around it settle. A page read
 		// above: the message the view holds is built whatever, frame moves the view by as much as the page pushed it down. Copied:
 		// a click in this build changes the state that owns them)
@@ -261,7 +267,7 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 					}
 				}
 				message(app, pane, &m, i, em)
-				ctx_check(app, ui.parent_box(), .Message, m.id)
+				ctx_check(app, ui.parent_box(), .Message, m.id, pane = pane)
 				// (what was made while this message was the last: up to the next one; before the first message, at the first)
 				from := i == 0 ? 0 : m.created
 				to := i + 1 < len(c.messages) ? c.messages[i + 1].created : max(f64)
@@ -506,7 +512,7 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 			switch p.kind {
 			case .Text:
 				if len(p.text) > 0 {
-					markdown.view(md_doc(&pane.chat, pid), pid, string(p.text[:]), md_config(app, hex(HEX_ANSWER_TEXT)))
+					markdown.view(md_doc(&pane.chat, pid), pid, string(p.text[:]), md_config(app, hex(HEX_ANSWER_TEXT), pane))
 					ui.spacer(ui.px(em * 0.6))
 				}
 			case .Reasoning: reasoning_part(app, pane, &p, pid, em)
@@ -516,7 +522,7 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 				above := i > 0 ? plain_tool(&m.parts[i - 1]) : cont && prev != nil && len(prev.parts) > 0 && plain_tool(&prev.parts[len(prev.parts) - 1])
 				below := i + 1 < len(m.parts) ? plain_tool(&m.parts[i + 1]) : next != nil && len(next.parts) > 0 && plain_tool(&next.parts[0])
 				tool_part(app, pane, &p, pid, em, above, below)
-				ctx_check(app, ui.prev_box(fmt.tprintf("###tp_%s", pid)), .Tool, m.id, i)
+				ctx_check(app, ui.prev_box(fmt.tprintf("###tp_%s", pid)), .Tool, m.id, i, pane = pane)
 			}
 		}
 		if app.prefs.usage && !m.streaming && m.tokens_out > 0 && m.finish == "stop" {

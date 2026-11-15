@@ -366,7 +366,8 @@ server_forget :: proc(app: ^App) {
 
 @(private = "file")
 server_view_forget :: proc(app: ^App) {
-	pane := main_pane(app)   // (the main view goes home; Layer 1 has no other pane to close)
+	pane := main_pane(app)   // (the main view goes home, the panel closes: its session is the server's left)
+	btw_close(app)
 	chat_home(app)
 	remote.reset(&pane.read)
 	for id in app.nav.drilled { delete(id) }

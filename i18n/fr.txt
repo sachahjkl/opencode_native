@@ -164,6 +164,12 @@ fr Joindre des fichiers
 en This system has no file dialog
 fr Ce système n'a pas de boîte de dialogue de fichiers
 
+en Aside
+fr Aparté
+
+en Open in the main view
+fr Ouvrir dans la vue principale
+
 en Back  (Alt+Left)
 fr Précédent  (Alt+Gauche)
 
@@ -2153,6 +2159,9 @@ fr Supprimer la session ?
 
 en “%s” and its messages will be removed from the server.
 fr « %s » et ses messages seront supprimés du serveur.
+
+en Ask something aside: a fork of this session, in a panel
+fr Poser une question en aparté : une bifurcation de cette session, dans un panneau
 
 en Your prompts
 fr Vos invites
