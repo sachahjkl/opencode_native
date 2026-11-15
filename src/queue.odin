@@ -10,6 +10,8 @@
 // The server can change an item's delivery, not its text: an item edited is taken out and queued again, and goes to the end. It
 // stays in place until Enter, so that Cancel changes nothing. If it is delivered meanwhile, what was typed stays in the composer.
 //
+// Alt+Enter while a turn runs queues a prompt first: the others are admitted again behind it (queue_first_start).
+//
 // A run interrupted leaves what is queued parked: nothing here sends it. It stays in the list, which says so, with Steer.
 // What is steered waits for the run's next step: Send now stops what the agent is doing and sends it at once (queue_send_now),
 // as Escape then Enter would.
@@ -18,6 +20,7 @@ package ocn
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
+import "core:strconv"
 import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -26,8 +29,8 @@ import i18n "gt:i18n"
 
 Delivery :: enum u8 { Steer, Queue }
 
-// What is on its way for an item: one thing at a time.
-Queue_Act :: enum u8 { None, Sending, Removing, Replacing }
+// What is on its way for an item: one thing at a time. (Moving: a reorder copies it, then cancels it: queue_first_start.)
+Queue_Act :: enum u8 { None, Sending, Removing, Replacing, Moving }
 
 Queue_Item :: struct {
 	id, text: string,      // (owned)
@@ -54,6 +57,35 @@ Queue :: struct {
 	gone:    Gone_List,   // what left it lately
 	read:    remote.Remote,
 	edit:    Queue_Edit,
+	first:   Queue_First,
+}
+
+// Alt+Enter's reorder: one at a time (src/md/features/queue-first.md).
+Queue_First_Phase :: enum u8 {
+	Idle,
+	Copying,       // the copy of moves[at] is on its way
+	Cancelling,    // every copy is in: the cancel of moves[at]'s original is on its way
+	Withdrawing,   // stopped or done: what is still on its way is awaited (pending, copying)
+}
+
+// A queued prompt that a reorder admits again, then cancels. (strings owned)
+Queue_Move :: struct {
+	original, copy: string,   // copy: the id minted for it before its POST (message_id_new); "": not sent yet
+	payload:        string,   // the original's, as the reorder found it
+	left:      bool,          // the original left by another way than its own cancel: its copy is a duplicate
+	withdrawn: bool,          // the copy's DELETE is on its way, or answered
+}
+
+Queue_First :: struct {
+	phase:   Queue_First_Phase,
+	run:     u64,      // in the tags of its requests: an answer of another run is an orphan
+	lead:    string,   // the prompt put first (owned)
+	moves:   [dynamic]Queue_Move,
+	at:      int,
+	copying: bool,     // a copy's POST is on its way
+	pending: int,      // the copies' DELETEs on their way
+	outs:    [dynamic]u64,      // Alt+Enter's prompts on their way (Outgoing ids)
+	waiting: [dynamic]string,   // ... admitted, waiting for the machine (owned)
 }
 
 // How the composer's prompt would go now. (Idle: nothing runs, it goes as it always did.)
@@ -119,8 +151,10 @@ queue_add :: proc(app: ^App, id: string, v: json.Value, born: Seq) {
 }
 
 // The answer to a prompt: the server has it. Should the stream be late or down, the list is right all the same.
-queue_prompt_answered :: proc(app: ^App, session: string, v: json.Value) {
+queue_prompt_answered :: proc(app: ^App, r: ^Request, v: json.Value) {
+	session := r.tag
 	item := jget(v, "data")
+	defer queue_first_admitted(app, r.out, jstr(item, "id"))   // (whatever the list does with it: the reorder reads it again)
 	if session != app.chat.id || jstr(item, "type") != "user" { return }
 	if !app.chat.busy && delivery_of(jstr(item, "delivery")) == .Steer { return }   // (it goes at once)
 	if queue_shown_as_sent(app, jstr(item, "id")) { return }
@@ -139,6 +173,7 @@ queue_gone :: proc(app: ^App, id: string, delivered: bool, at: Seq) {
 		if it.id == id { item_free(it); ordered_remove(&q.items, i); break }
 	}
 	gone_add(&q.gone, id, at, QUEUE_GONE_MAX, delivered)
+	queue_first_gone(app, id, delivered)
 }
 
 queue_delivery_changed :: proc(app: ^App, id: string, to: Delivery, at: Seq) {
@@ -175,6 +210,7 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: Seq) {
 		if delivery_of(jstr(it, "delivery")) == .Steer && queue_shown_as_sent(app, id) { continue }
 		append(&next, item_of(id, it, 0))
 	}
+	dropped := make([dynamic]string, context.temp_allocator)
 	for &old in q.items {
 		if old.id == "" { continue }
 		if newer(old.born, asked_at) { append(&next, old); continue }
@@ -182,10 +218,13 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: Seq) {
 			queue_edit_end(app, .Lost)
 			ui.announce(&app.announcer, .Warn, i18n.tr("That message is no longer waiting: what you wrote stays in the composer"))
 		}
+		append(&dropped, strings.clone(old.id, context.temp_allocator))
 		item_free(old)
 	}
 	delete(q.items)
 	q.items = next
+	// (how they left is not said: a reorder takes them as gone, as their events would have said)
+	for id in dropped { queue_first_gone(app, id, false) }
 	gone_settled(&q.gone, asked_at)
 	for it in q.items { chat_drop(&app.chat, it.id) }   // (a page read before this list)
 }
@@ -194,6 +233,7 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: Seq) {
 queue_switch :: proc(app: ^App) {
 	q := &app.cx.queue
 	if queue_editing(app) { queue_edit_end(app, .Cancel) }
+	queue_first_abort(app)
 	for it in q.items { item_free(it) }
 	clear(&q.items)
 	gone_clear(&q.gone)
@@ -375,6 +415,315 @@ queue_replace_failed :: proc(app: ^App, r: ^Request) {
 }
 
 ////////////////////////////////
+// Queue first (Alt+Enter: src/md/features/queue-first.md)
+
+// The server has no move: the other queued prompts are admitted again after the one put first, then their originals cancelled.
+// Admitted before cancelled, so that a failure only has to take the copies back: nothing queued is ever lost.
+
+// Alt+Enter's prompt left (outgoing_composer): its reorder starts when its answer gives its id.
+queue_first_await :: proc(app: ^App, out: u64) {
+	if out != 0 { append(&app.cx.queue.first.outs, out) }
+}
+
+// A prompt's answer. (Not one of Alt+Enter's: nothing.)
+queue_first_admitted :: proc(app: ^App, out: u64, id: string) {
+	f := &app.cx.queue.first
+	for o, i in f.outs {
+		if o != out { continue }
+		unordered_remove(&f.outs, i)
+		if id != "" { append(&f.waiting, strings.clone(id)) }
+		queue_first_next(app)
+		return
+	}
+}
+
+// It failed: it comes back to the composer (outgoing_answered), there is nothing to move.
+queue_first_dropped :: proc(app: ^App, out: u64) {
+	f := &app.cx.queue.first
+	for o, i in f.outs { if o == out { unordered_remove(&f.outs, i); return } }
+}
+
+// A second Alt+Enter while a reorder runs waits for it: its prompt went at once, its reorder starts on the list as it is
+// then. The newest ends first, as the key says; queued at the end instead, it would do the opposite of what it says.
+@(private = "file")
+queue_first_next :: proc(app: ^App) {
+	f := &app.cx.queue.first
+	for f.phase == .Idle && len(f.waiting) > 0 {
+		id := f.waiting[0]
+		ordered_remove(&f.waiting, 0)
+		queue_first_start(app, id)
+		delete(id)
+	}
+}
+
+// Every other queued prompt moves behind `id`, in its order: those before it and those after it (another client's), so that it
+// is first of all. A busy one (being steered, removed, edited) leaves the queue as it is: the prompt stays where it went.
+@(private = "file")
+queue_first_start :: proc(app: ^App, id: string) {
+	q := &app.cx.queue
+	f := &q.first
+	it := queue_find(app, id)
+	if it == nil || it.delivery != .Queue || q.session != app.chat.id || !online(app) { return }
+	ahead := false
+	for x in q.items {
+		if x.delivery != .Queue { continue }
+		ahead = x.id != id
+		break
+	}
+	if !ahead { return }   // (first already)
+	for x in q.items {
+		if x.delivery == .Queue && x.id != id && (x.act != .None || q.edit.id == x.id) { return }
+	}
+	for &x in q.items {
+		if x.delivery != .Queue || x.id == id { continue }
+		x.act = .Moving
+		append(&f.moves, Queue_Move{original = strings.clone(x.id), payload = strings.clone(x.payload)})
+	}
+	f.run += 1
+	f.lead = strings.clone(id)
+	f.phase, f.at = .Copying, 0
+	first_copy(app)
+}
+
+// "run:id": which reorder a request is of.
+@(private = "file")
+first_tag :: proc(run: u64, id: string) -> string { return fmt.tprintf("%d:%s", run, id) }
+
+@(private = "file")
+first_tag_read :: proc(tag: string) -> (run: u64, id: string) {
+	i := strings.index_byte(tag, ':')
+	if i < 0 { return }
+	run, _ = strconv.parse_u64(tag[:i])
+	return run, tag[i + 1:]
+}
+
+@(private = "file")
+first_path :: proc(app: ^App, id: string) -> string {
+	return fmt.tprintf("/api/session/%s/inbox/%s", app.cx.queue.session, id)
+}
+
+// The copy of moves[at]: its payload said again as a prompt, queued, not starting a run of its own. Its id is minted here,
+// before it goes, as the desktop does: the copy is known by it whatever comes first, its event or its answer, and one whose
+// answer never came (the server may have taken it) can still be taken back.
+@(private = "file")
+first_copy :: proc(app: ^App) {
+	f := &app.cx.queue.first
+	m := &f.moves[f.at]
+	m.copy = message_id_new(context.allocator)
+	body := prompt_of_payload(json_of_own(app, "queued payload", m.payload))
+	body = fmt.tprintf(`{{"id":%s,%s,"delivery":"queue","resume":false}}`, jquote(m.copy), body[1:len(body) - 1])
+	f.copying = true
+	request(app, .Queue_First_Copy, "POST", fmt.tprintf("/api/session/%s/prompt", app.cx.queue.session), body, first_tag(f.run, m.copy))
+}
+
+// The original of moves[at] goes; one that left by itself is passed. None left: done.
+@(private = "file")
+first_cancel :: proc(app: ^App) {
+	f := &app.cx.queue.first
+	for f.at < len(f.moves) && f.moves[f.at].left { f.at += 1 }
+	if f.at == len(f.moves) {
+		f.phase = .Withdrawing   // (the duplicates' DELETEs may still be on their way)
+		first_settle(app)
+		return
+	}
+	m := &f.moves[f.at]
+	request(app, .Queue_First_Cancel, "DELETE", first_path(app, m.original), tag = first_tag(f.run, m.original))
+}
+
+@(private = "file")
+first_withdraw :: proc(app: ^App, m: ^Queue_Move) {
+	f := &app.cx.queue.first
+	m.withdrawn = true
+	f.pending += 1
+	request(app, .Queue_First_Withdraw, "DELETE", first_path(app, m.copy), tag = first_tag(f.run, m.copy))
+}
+
+// The queue changed under the copies, or one failed: the copies admitted go back, the queue is as it was.
+@(private = "file")
+first_stop :: proc(app: ^App) {
+	f := &app.cx.queue.first
+	f.phase = .Withdrawing
+	// (not the copy at `at`, on its way: a DELETE could reach the server before its POST. Its answer withdraws it)
+	for &m, k in f.moves {
+		if k >= f.at { break }
+		if m.copy != "" && !m.withdrawn { first_withdraw(app, &m) }
+	}
+	first_settle(app)
+}
+
+// Nothing more on its way: the machine is free for the next Alt+Enter.
+@(private = "file")
+first_settle :: proc(app: ^App) {
+	q := &app.cx.queue
+	f := &q.first
+	if f.phase != .Withdrawing || f.pending > 0 || f.copying { return }
+	for m in f.moves {
+		if it := queue_find(app, m.original); it != nil && it.act == .Moving { it.act = .None }
+	}
+	first_clear(f)
+	queue_first_next(app)
+}
+
+@(private = "file")
+first_clear :: proc(f: ^Queue_First) {
+	for m in f.moves { delete(m.original); delete(m.copy); delete(m.payload) }
+	clear(&f.moves)
+	delete(f.lead)
+	f.lead = ""
+	f.phase, f.at, f.pending, f.copying = .Idle, 0, 0, false
+}
+
+// The copy shows once its original is gone: until then the original holds its place, and each prompt shows once.
+queue_hidden :: proc(app: ^App, id: string) -> bool {
+	for m in app.cx.queue.first.moves {
+		if m.copy == id { return m.withdrawn || queue_find(app, m.original) != nil }
+	}
+	return false
+}
+
+// Something left the list during a reorder (queue_gone).
+@(private = "file")
+queue_first_gone :: proc(app: ^App, id: string, delivered: bool) {
+	f := &app.cx.queue.first
+	switch f.phase {
+	case .Idle, .Withdrawing:
+	case .Copying:
+		// (the desktop's "Queued prompts changed before reordering": the prompt put first stays where it is)
+		if id == f.lead { first_stop(app); return }
+		for m in f.moves {
+			if m.original == id || m.copy == id { first_stop(app); return }
+		}
+	case .Cancelling:
+		for &m, k in f.moves {
+			if m.original != id { continue }
+			// (its own cancel is the one at `at`, or one before: what else takes it out leaves its copy a duplicate.
+			// A cancel answers 204 for what was delivered too: only the event says it was)
+			if delivered || k > f.at {
+				if k > f.at { m.left = true }
+				if m.copy != "" && !m.withdrawn { first_withdraw(app, &m) }
+			}
+			return
+		}
+	}
+}
+
+// The session or the server left. What is admitted is not left half done: copies go back, or, all being in, the originals go.
+@(private = "file")
+queue_first_abort :: proc(app: ^App) {
+	f := &app.cx.queue.first
+	switch f.phase {
+	case .Idle, .Withdrawing:
+	case .Copying:
+		// (the one on its way: an orphan, its answer withdraws it)
+		for &m, k in f.moves { if k < f.at && !m.withdrawn { first_withdraw(app, &m) } }
+	case .Cancelling:
+		for m, k in f.moves {
+			if k > f.at && !m.left { request(app, .Queue_First_Cancel, "DELETE", first_path(app, m.original), tag = first_tag(0, m.original)) }
+		}
+	}
+	first_clear(f)
+	f.run += 1   // (what is still on its way is an orphan now)
+	clear(&f.outs)
+	for id in f.waiting { delete(id) }
+	clear(&f.waiting)
+}
+
+// A copy that nobody expects (its reorder stopped or left): it goes back, on the server and the session it went to.
+@(private = "file")
+first_orphan :: proc(app: ^App, r: ^Request, id: string) {
+	session := strings.trim_prefix(r.path, "/api/session/")
+	if i := strings.index_byte(session, '/'); i >= 0 { session = session[:i] }
+	request(app, .Queue_First_Withdraw, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", session, id), tag = first_tag(0, id), conn = r.conn)
+}
+
+// (the tag names the copy: its minted id, which is its id in the inbox)
+queue_first_copy_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	f := &app.cx.queue.first
+	run, id := first_tag_read(r.tag)
+	if run != f.run || !f.copying { first_orphan(app, r, id); return }
+	f.copying = false
+	m := &f.moves[f.at]
+	if f.phase == .Withdrawing {
+		first_withdraw(app, m)
+		first_settle(app)
+		return
+	}
+	queue_add(app, m.copy, jget(v, "data"), queue_tick(app))
+	f.at += 1
+	if f.at < len(f.moves) { first_copy(app); return }
+	f.phase, f.at = .Cancelling, 0
+	first_cancel(app)
+}
+
+// Refused, it is not in the inbox. Without an answer, or with one that cannot be read, the server may have it: it is
+// withdrawn by its id (a 404 says it never got there). Either way the queue is as it was; the toast says what failed.
+queue_first_copy_on_fail :: proc(app: ^App, r: ^Request, failure: Failure, message: string) -> (told: bool) {
+	f := &app.cx.queue.first
+	run, id := first_tag_read(r.tag)
+	taken := failure != .Refused && failure != .Auth
+	if run != f.run || !f.copying {
+		if taken { first_orphan(app, r, id) }
+		return false
+	}
+	f.copying = false
+	if taken { first_withdraw(app, &f.moves[f.at]) }
+	if f.phase == .Copying { first_stop(app) } else { first_settle(app) }
+	return false
+}
+
+// (the server left: unless it refused it, it is taken back there)
+queue_first_copy_on_left :: proc(app: ^App, r: ^Request) {
+	if r.ok && r.status >= 400 { return }
+	_, id := first_tag_read(r.tag)
+	first_orphan(app, r, id)
+}
+
+queue_first_cancel_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	f := &app.cx.queue.first
+	run, id := first_tag_read(r.tag)
+	if run != f.run || f.phase != .Cancelling || f.moves[f.at].original != id { return }
+	queue_gone(app, id, false, queue_tick(app))   // (said by the stream first, delivered: that stays, gone_add)
+	f.at += 1
+	first_cancel(app)
+}
+
+// An original that cannot be cancelled stays, and so do those after it: their copies go back. The content is intact, the order
+// partly moved.
+queue_first_cancel_on_fail :: proc(app: ^App, r: ^Request, failure: Failure, message: string) -> (told: bool) {
+	f := &app.cx.queue.first
+	run, id := first_tag_read(r.tag)
+	if run != f.run || f.phase != .Cancelling || f.moves[f.at].original != id { return false }
+	for &m, k in f.moves {
+		if k >= f.at && m.copy != "" && !m.withdrawn { first_withdraw(app, &m) }
+	}
+	f.phase = .Withdrawing
+	first_settle(app)
+	return false
+}
+
+queue_first_withdraw_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	f := &app.cx.queue.first
+	run, id := first_tag_read(r.tag)
+	if run == 0 || run != f.run { return }
+	queue_gone(app, id, false, queue_tick(app))
+	f.pending -= 1
+	first_settle(app)
+}
+
+// The copy stays: a duplicate the reader sees (it is no longer hidden) and can remove. A 404 is no failure: the server never
+// took that copy (its POST failed on the way), or it left already.
+queue_first_withdraw_on_fail :: proc(app: ^App, r: ^Request, failure: Failure, message: string) -> (told: bool) {
+	if r.status == 404 { queue_first_withdraw_on_ok(app, r, nil); return true }
+	f := &app.cx.queue.first
+	run, id := first_tag_read(r.tag)
+	if run == 0 || run != f.run { return false }
+	for &m in f.moves { if m.copy == id { m.withdrawn = false } }
+	f.pending -= 1
+	first_settle(app)
+	return false
+}
+
+////////////////////////////////
 // The list over the composer
 
 // `id` of its row, and the words or the glyph that say it, as the room allows.
@@ -433,7 +782,8 @@ queue_row :: proc(app: ^App, it: ^Queue_Item, n: int, em: f32) {
 queue_list :: proc(app: ^App, em: f32) {
 	q := &app.cx.queue
 	if q.session != app.chat.id { return }
-	n := len(q.items)
+	n := 0
+	for it in q.items { if !queue_hidden(app, it.id) { n += 1 } }
 	if n == 0 {
 		if q.read.state == .Failed {   // (a server without an inbox refuses: that has nothing to say)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
@@ -468,11 +818,11 @@ queue_list :: proc(app: ^App, em: f32) {
 			if ui.column(id = "###q_rows") {
 				shown := 0
 				// (an action may take its item out: the list is walked by id)
-				ids := make([]string, n, context.temp_allocator)
+				ids := make([]string, len(q.items), context.temp_allocator)
 				for it, i in q.items { ids[i] = strings.clone(it.id, context.temp_allocator) }
 				for id in ids {
 					it := queue_find(app, id)
-					if it == nil { continue }
+					if it == nil || queue_hidden(app, id) { continue }
 					if it.delivery == .Queue { shown += 1 }
 					queue_row(app, it, shown, em)
 				}

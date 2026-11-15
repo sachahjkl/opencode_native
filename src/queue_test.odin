@@ -4,6 +4,7 @@ package ocn
 // the order it wants, events given by hand. The shapes are the server's (2.2.5): what the spec does not say was read in its code.
 
 import "base:runtime"
+import "core:encoding/json"
 import "core:fmt"
 import "core:strings"
 import "core:testing"
@@ -329,6 +330,215 @@ the_other_way_with_nothing_written_steers_the_first_queued :: proc(t: ^testing.T
 	bench_event(app, `{"type":"session.execution.succeeded","data":{"sessionID":"s"}}`)
 	submit_prompt(app, true)
 	testing.expect_value(t, bench_count(.Queue_Steer), 0)   // (nothing runs)
+}
+
+////////////////////////////////
+// Queue first (Alt+Enter)
+
+// The ids the list over the composer shows, in its order.
+@(private = "file")
+shown_ids :: proc(app: ^App) -> string {
+	ids := make([dynamic]string, context.temp_allocator)
+	for it in app.cx.queue.items { if !queue_hidden(app, it.id) { append(&ids, it.id) } }
+	return strings.join(ids[:], " ", context.temp_allocator)
+}
+
+@(private = "file")
+admitted :: proc(id, text: string) -> string { return fmt.tprintf(`{{"data":%s}}`, item_json(id, text, "queue")) }
+
+// The id a copy was minted with, as its body says it.
+@(private = "file")
+copy_id :: proc(t: ^testing.T, r: ^Request, loc := #caller_location) -> string {
+	v, _ := json.parse_string(r.body, parse_integers = true, allocator = context.temp_allocator)
+	id := strings.clone(jstr(v, "id"), context.temp_allocator)
+	testing.expectf(t, strings.has_prefix(id, "msg_") && len(id) == 30, "a minted id: %q", r.body, loc = loc)
+	return id
+}
+
+@(test)
+a_message_id_is_the_servers_ascending_format :: proc(t: ^testing.T) {
+	MS :: i64(1_763_200_000_123)
+	a := message_id_at(MS)
+	b := message_id_at(MS)
+	c := message_id_at(MS + 1)
+	testing.expect_value(t, len(a), 4 + 12 + MESSAGE_ID_RANDOM)
+	testing.expect_value(t, a[:16], fmt.tprintf("msg_%012x", (u64(MS) * 0x1000 + 1) & 0xffff_ffff_ffff))
+	testing.expect_value(t, b[:16], fmt.tprintf("msg_%012x", (u64(MS) * 0x1000 + 2) & 0xffff_ffff_ffff))
+	testing.expect_value(t, c[:16], fmt.tprintf("msg_%012x", (u64(MS + 1) * 0x1000 + 1) & 0xffff_ffff_ffff))   // (the counter restarts)
+	testing.expect(t, a < b && b < c, "ascending, in one millisecond too")
+	for r in a[16:] { testing.expect(t, strings.contains_rune(MESSAGE_ID_CHARS, r), a) }
+	testing.expect(t, strings.has_prefix(message_id_new(), "msg_"))
+}
+
+// Two prompts queued, one steered; Alt+Enter: "n" goes queued, then q1 and q2 are admitted again behind it, then their
+// originals cancelled. Each prompt shows once all along; the steered one stays where it is.
+@(private = "file")
+alt_enter_two_queued :: proc(t: ^testing.T, app: ^App) {
+	running(app, "s")
+	enqueued(app, "s1", "steered", "steer")
+	enqueued(app, "q1", "one", "queue")
+	enqueued(app, "q2", "two", "queue")
+	ui.text_edit_set(&app.composer.area, "urgent")
+	submit_prompt(app, first = true)
+	p := bench_take(t, .Prompt)
+	testing.expect(t, strings.contains(p.body, `"delivery":"queue"`), p.body)
+	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
+	testing.expect_value(t, bench_count(.Queue_First_Copy), 0)   // (its id first)
+	bench_answer(app, p, 200, admitted("n", "urgent"))
+}
+
+@(test)
+alt_enter_queues_the_prompt_first :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	alt_enter_two_queued(t, app)
+	c1 := bench_take(t, .Queue_First_Copy)
+	testing.expect_value(t, c1.path, "/api/session/s/prompt")
+	testing.expect(t, strings.contains(c1.body, `"text":"one"`), c1.body)
+	testing.expect(t, strings.contains(c1.body, `"delivery":"queue"`), c1.body)
+	testing.expect(t, strings.contains(c1.body, `"resume":false`), c1.body)
+	testing.expect_value(t, bench_count(.Queue_First_Copy), 0)   // (one at a time)
+	testing.expect_value(t, queue_find(app, "q1").act, Queue_Act.Moving)
+	id1 := copy_id(t, c1)
+	enqueued(app, id1, "one", "queue")   // (its event before its answer: known by its id already)
+	testing.expect_value(t, shown_ids(app), "s1 q1 q2 n")
+	bench_answer(app, c1, 200, admitted(id1, "one"))
+	c2 := bench_take(t, .Queue_First_Copy)
+	testing.expect(t, strings.contains(c2.body, `"text":"two"`), c2.body)
+	id2 := copy_id(t, c2)
+	testing.expect(t, id1 != id2)
+	testing.expect_value(t, bench_count(.Queue_First_Cancel), 0)   // (every copy in before an original goes)
+	bench_answer(app, c2, 200, admitted(id2, "two"))
+	testing.expect_value(t, shown_ids(app), "s1 q1 q2 n")
+	x1 := bench_take(t, .Queue_First_Cancel)
+	testing.expect_value(t, x1.method, "DELETE")
+	testing.expect_value(t, x1.path, "/api/session/s/inbox/q1")
+	testing.expect_value(t, bench_count(.Queue_First_Cancel), 0)
+	bench_answer(app, x1, 204, "")
+	testing.expect_value(t, shown_ids(app), fmt.tprintf("s1 q2 n %s", id1))
+	x2 := bench_take(t, .Queue_First_Cancel)
+	testing.expect_value(t, x2.path, "/api/session/s/inbox/q2")
+	bench_answer(app, x2, 204, "")
+	testing.expect_value(t, shown_ids(app), fmt.tprintf("s1 n %s %s", id1, id2))
+	testing.expect_value(t, len(app.cx.queue.items), 4)
+	testing.expect_value(t, app.cx.queue.first.phase, Queue_First_Phase.Idle)
+	for it in app.cx.queue.items { testing.expect_value(t, it.act, Queue_Act.None) }
+	testing.expect_value(t, bench_count(.Queue_First_Withdraw), 0)
+}
+
+@(test)
+a_reorder_whose_copy_fails_leaves_the_queue_as_it_was :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	alt_enter_two_queued(t, app)
+	c1 := bench_take(t, .Queue_First_Copy)
+	id1 := copy_id(t, c1)
+	bench_answer(app, c1, 200, admitted(id1, "one"))
+	bench_answer(app, bench_take(t, .Queue_First_Copy), 500, `{"message":"file gone"}`)   // (refused: not in the inbox)
+	w := bench_take(t, .Queue_First_Withdraw)
+	testing.expect_value(t, w.method, "DELETE")
+	testing.expect_value(t, w.path, fmt.tprintf("/api/session/s/inbox/%s", id1))
+	testing.expect_value(t, bench_count(.Queue_First_Withdraw), 0)
+	testing.expect_value(t, shown_ids(app), "s1 q1 q2 n")   // (the copy hidden while it goes back)
+	bench_answer(app, w, 204, "")
+	testing.expect_value(t, shown_ids(app), "s1 q1 q2 n")
+	testing.expect_value(t, len(app.cx.queue.items), 4)
+	testing.expect_value(t, bench_count(.Queue_First_Cancel), 0)
+	testing.expect_value(t, app.cx.queue.first.phase, Queue_First_Phase.Idle)
+	for it in app.cx.queue.items { testing.expect_value(t, it.act, Queue_Act.None) }
+}
+
+// The run's end delivers q1 while q2's copy is on its way: the queue changed, the reorder stops, both copies go back.
+@(test)
+a_prompt_delivered_during_a_reorder_stops_it :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	alt_enter_two_queued(t, app)
+	c1 := bench_take(t, .Queue_First_Copy)
+	id1 := copy_id(t, c1)
+	bench_answer(app, c1, 200, admitted(id1, "one"))
+	c2 := bench_take(t, .Queue_First_Copy)
+	id2 := copy_id(t, c2)
+	delivered(app, "q1")
+	w1 := bench_take(t, .Queue_First_Withdraw)
+	testing.expect_value(t, w1.path, fmt.tprintf("/api/session/s/inbox/%s", id1))
+	testing.expect_value(t, bench_count(.Queue_First_Withdraw), 0)   // (not the one on its way: its DELETE could pass its POST)
+	bench_answer(app, c2, 200, admitted(id2, "two"))
+	w2 := bench_take(t, .Queue_First_Withdraw)
+	testing.expect_value(t, w2.path, fmt.tprintf("/api/session/s/inbox/%s", id2))
+	testing.expect_value(t, shown_ids(app), "s1 q2 n")
+	bench_answer(app, w1, 204, "")
+	testing.expect_value(t, app.cx.queue.first.phase, Queue_First_Phase.Withdrawing)   // (c2's DELETE still on its way)
+	bench_answer(app, w2, 204, "")
+	testing.expect_value(t, shown_ids(app), "s1 q2 n")
+	testing.expect_value(t, len(app.cx.queue.items), 3)
+	testing.expect_value(t, bench_count(.Queue_First_Cancel), 0)
+	testing.expect_value(t, bench_count(.Queue_First_Copy), 0)
+	testing.expect_value(t, app.cx.queue.first.phase, Queue_First_Phase.Idle)
+	testing.expect_value(t, queue_find(app, "q2").act, Queue_Act.None)
+}
+
+// The server took q2's copy (its event says so, with the minted id), then the answer was lost: it is taken back by that id.
+@(test)
+a_copy_whose_answer_was_lost_is_withdrawn_by_its_id :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	alt_enter_two_queued(t, app)
+	c1 := bench_take(t, .Queue_First_Copy)
+	id1 := copy_id(t, c1)
+	bench_answer(app, c1, 200, admitted(id1, "one"))
+	c2 := bench_take(t, .Queue_First_Copy)
+	id2 := copy_id(t, c2)
+	enqueued(app, id2, "two", "queue")
+	testing.expect_value(t, shown_ids(app), "s1 q1 q2 n")
+	bench_lost(app, c2)
+	paths := make(map[string]^Request, allocator = context.temp_allocator)
+	for _ in 0 ..< 2 { w := bench_take(t, .Queue_First_Withdraw); paths[w.path] = w }
+	testing.expect_value(t, bench_count(.Queue_First_Withdraw), 0)
+	w1, ok1 := paths[fmt.tprintf("/api/session/s/inbox/%s", id1)]
+	w2, ok2 := paths[fmt.tprintf("/api/session/s/inbox/%s", id2)]
+	testing.expect(t, ok1 && ok2, "both copies go back")
+	testing.expect_value(t, shown_ids(app), "s1 q1 q2 n")
+	if ok1 && ok2 {
+		bench_answer(app, w1, 204, "")
+		bench_answer(app, w2, 204, "")
+	}
+	testing.expect_value(t, shown_ids(app), "s1 q1 q2 n")
+	testing.expect_value(t, len(app.cx.queue.items), 4)
+	testing.expect_value(t, bench_count(.Queue_First_Cancel), 0)
+	testing.expect_value(t, app.cx.queue.first.phase, Queue_First_Phase.Idle)
+	for it in app.cx.queue.items { testing.expect_value(t, it.act, Queue_Act.None) }
+}
+
+// The answer was lost and the server never took it: the DELETE by its id answers 404, which is done, not a failure.
+@(test)
+a_withdraw_of_a_copy_never_taken_is_done :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	alt_enter_two_queued(t, app)
+	c1 := bench_take(t, .Queue_First_Copy)
+	id1 := copy_id(t, c1)
+	bench_lost(app, c1)
+	w := bench_take(t, .Queue_First_Withdraw)
+	testing.expect_value(t, w.path, fmt.tprintf("/api/session/s/inbox/%s", id1))
+	bench_answer(app, w, 404, `{"message":"not found"}`)
+	testing.expect_value(t, app.cx.queue.first.phase, Queue_First_Phase.Idle)
+	testing.expect_value(t, shown_ids(app), "s1 q1 q2 n")
+	testing.expect_value(t, bench_count(.Queue_First_Cancel), 0)
+}
+
+@(test)
+when_nothing_runs_alt_enter_sends_as_enter :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	show(app, "s")
+	ui.text_edit_set(&app.composer.area, "hello")
+	submit_prompt(app, first = true)
+	r := bench_take(t, .Prompt)
+	testing.expect(t, !strings.contains(r.body, "delivery"), r.body)
+	testing.expect_value(t, len(app.cx.queue.first.outs), 0)
+	bench_answer(app, r, 200, admitted("n", "hello"))
+	testing.expect_value(t, bench_count(.Queue_First_Copy), 0)
 }
 
 @(test)

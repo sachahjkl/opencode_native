@@ -9,9 +9,11 @@
 // (outgoing_return); it never lands in another session's composer. A first prompt belongs to the home page.
 package ocn
 
+import "core:crypto"
 import "core:encoding/json"
 import "core:fmt"
 import "core:strings"
+import "core:time"
 import "gt:config"
 import "gt:ui"
 import i18n "gt:i18n"
@@ -117,6 +119,33 @@ prompt_body :: proc(p: Prompt_Parts, allocator := context.allocator) -> string {
 	return strings.to_string(b)
 }
 
+// A message id as the server makes them (opencode's packages/schema/src/identifier.ts, ascending): "msg_", 12 hex digits of
+// the low 48 bits of ms * 0x1000 + a counter that restarts each millisecond, then 14 random characters. A prompt that carries
+// one is known by it before its answer, and whether or not an answer comes (queue.odin, the copies of a reorder).
+@(rodata) MESSAGE_ID_CHARS := "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+MESSAGE_ID_RANDOM :: 14
+
+// (per thread: only the interface's mints them; a test's thread has its own)
+@(thread_local) message_id_ms: i64
+@(thread_local) message_id_counter: u64
+
+message_id_new :: proc(allocator := context.temp_allocator) -> string {
+	return message_id_at(time.to_unix_nanoseconds(time.now()) / 1_000_000, allocator)
+}
+
+// (`ms` given: the test of two ids in one millisecond)
+message_id_at :: proc(ms: i64, allocator := context.temp_allocator) -> string {
+	if ms != message_id_ms { message_id_ms, message_id_counter = ms, 0 }
+	message_id_counter += 1
+	value := (u64(ms) * 0x1000 + message_id_counter) & 0xffff_ffff_ffff
+	raw: [MESSAGE_ID_RANDOM]byte
+	crypto.rand_bytes(raw[:])
+	b := strings.builder_make(0, 4 + 12 + MESSAGE_ID_RANDOM, allocator)
+	fmt.sbprintf(&b, "msg_%012x", value)
+	for x in raw { strings.write_byte(&b, MESSAGE_ID_CHARS[int(x) % len(MESSAGE_ID_CHARS)]) }
+	return strings.to_string(b)
+}
+
 // The composer's prompt, to the session shown, or to a new one in `directory` from the home page. (`fields`: send_as_fields)
 outgoing_composer :: proc(app: ^App, text, directory: string, fields := "") {
 	if app.chat.id == "" {
@@ -174,11 +203,12 @@ created_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> 
 prompt_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 	// (the stream may say a prompt without its files: what was attached shows as soon as it is stored)
 	if strings.contains(r.body, `"files":`) && r.gen == app.chat.gen && r.tag == app.chat.id { load_messages(app, r.tag) }
-	queue_prompt_answered(app, r.tag, v)
+	queue_prompt_answered(app, r, v)
 	outgoing_answered(app, r, true)
 }
 
 prompt_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	queue_first_dropped(app, r.out)
 	outgoing_answered(app, r, false)
 	return false
 }

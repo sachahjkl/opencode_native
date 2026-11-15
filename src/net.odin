@@ -299,6 +299,9 @@ Req_Kind :: enum u8 {
 	Queue_Cancel,   // DELETE .../inbox/:message: it does not go (the tag: the item)
 	Queue_Replace,  // DELETE .../inbox/:message: it gives way to its edited text, an Outgoing (the tag: the item)
 	Queue_Check,    // GET .../message/:message: it answers 204 for what was delivered too; only a stored message says so
+	Queue_First_Copy,     // POST /api/session/:id/prompt: a queued prompt admitted again behind Alt+Enter's (the tag: "run:original")
+	Queue_First_Cancel,   // DELETE .../inbox/:message: ... then its original goes (the tag: "run:original")
+	Queue_First_Withdraw, // DELETE .../inbox/:message: a copy taken back, the reorder stopped (the tag: "run:copy")
 	Output_Read,    // GET /api/shell/:id/output: for a view of a command (output_view.odin; the tag: the command)
 	Output_State,   // GET /api/shell/:id: ... how it stands
 	Context,        // GET /api/session/:id/context: what the model has in front of it (stats.odin)
@@ -571,6 +574,9 @@ quiet_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (t
 	.Queue_Cancel     = {on_ok = queue_item_on_ok, on_fail = queue_item_on_fail},
 	.Queue_Replace    = {on_ok = queue_replace_on_ok, on_fail = queue_replace_on_fail, on_left = queue_replace_on_left},
 	.Queue_Check      = {on_ok = queue_check_on_ok, on_fail = queue_check_on_fail, on_left = queue_check_on_left},
+	.Queue_First_Copy     = {json = true, on_ok = queue_first_copy_on_ok, on_fail = queue_first_copy_on_fail, on_left = queue_first_copy_on_left},
+	.Queue_First_Cancel   = {on_ok = queue_first_cancel_on_ok, on_fail = queue_first_cancel_on_fail},
+	.Queue_First_Withdraw = {on_ok = queue_first_withdraw_on_ok, on_fail = queue_first_withdraw_on_fail},
 	.Output_Read      = {json = true, on_ok = output_read_on_ok, on_fail = output_view_on_fail},
 	.Output_State     = {json = true, on_ok = output_state_on_ok, on_fail = output_view_on_fail},
 	.Context          = {json = true, life = .Chat, on_ok = context_on_ok, on_fail = quiet_on_fail},

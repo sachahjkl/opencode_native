@@ -92,7 +92,7 @@ COMPOSER_BUTTON_W_EM :: 2.6
 composer :: proc(app: ^App, em: f32) {
 	// Enter sends, Shift+Enter breaks the line (the editor itself breaks on Enter and commits on Ctrl+Enter). While a turn runs
 	// one way queues and the other sends now: Enter and Ctrl+Enter, or in Ctrl+Enter mode Ctrl+Enter and Ctrl+Shift+Enter.
-	submit, other := false, false
+	submit, other, first := false, false, false
 	keys := app.composer.focused && !app.picker.open
 	// (the tray's keys with the focus nowhere too: a click on one of its rows leaves it there)
 	if app.activity.open && !app.picker.open && (app.composer.focused || ui.focus_key() == 0) { activity_keys(app) }
@@ -106,6 +106,9 @@ composer :: proc(app: ^App, em: f32) {
 		if ui.key_press(.Return, {.Shift}) { area_insert(&app.composer.area, "\n") }
 	}
 	if app.composer.focused && app.prefs.ctrl_enter && ui.key_press(.Return, {.Ctrl, .Shift}) { submit, other = true, true }
+	// Alt+Enter: queued first while a turn runs (queue_first_start), in either mode. Not while @ or / proposes: their Enter
+	// takes a choice, and Alt+Enter is not one.
+	if keys && !mention_shown(app) && !slash_shown(app) && ui.key_press(.Return, {.Alt}) { submit, first = true, true }
 	ui.next({width = ui.fill(), height = ui.children_sum(), radius = 11 * ui.scale()})
 	if ui.well("###composer_well", .Y, flags = {.Focus_Within, .Draw_Focus_Ring}) {
 		// (its menu on all of it, the bar of its buttons and around the text too, after what is in it: an image keeps its own)
@@ -236,7 +239,7 @@ composer :: proc(app: ^App, em: f32) {
 			composer_pickers(app, agent, em)
 		}
 	}
-	if submit { submit_prompt(app, other) }
+	if submit { submit_prompt(app, other, first) }
 }
 
 // What the composer's toolbar leaves out to stay within itself: 1, the keys' hint; 2, the send button's word too. A step is taken
@@ -373,15 +376,26 @@ prompt_restore :: proc(app: ^App, text: string) {
 
 // Enter, or Send. While the session it would go to is starting it stays in the composer: nothing is lost, the button says it. While a
 // turn runs `other` is the way that is not Enter's (composer_send_as); what is being edited goes back where it was, whichever.
-submit_prompt :: proc(app: ^App, other := false) {
+// `first` (Alt+Enter): while a turn runs it is queued first (queue_first_start); otherwise it is Enter.
+submit_prompt :: proc(app: ^App, other := false, first := false) {
 	t := strings.clone(strings.trim_space(ui.text_edit_string(&app.composer.area)), context.temp_allocator)
 	empty := t == "" && len(app.composer.attachments) == 0
 	// (the other way, nothing written, while a run works: the first queued prompt is steered into it, as opencode 2.3.0's
 	// desktop does)
-	if empty && other && app.chat.busy && !queue_editing(app) { queue_steer_first(app); return }
+	if empty && other && !first && app.chat.busy && !queue_editing(app) { queue_steer_first(app); return }
 	if empty || !online(app) || composer_held(app) { return }
 	history_leave(app, false)
 	if queue_editing(app) { queue_edit_commit(app, t); return }
+	if first && composer_send_as(app) != .Idle {
+		fields := send_as_fields(.Queue)
+		// (a command is not a prompt the inbox can admit again: it goes queued, where it falls)
+		if !slash_send(app, t, fields) {
+			outgoing_composer(app, t, app.chat.new_dir, fields)
+			queue_first_await(app, app.cx.outgoing_last)
+		}
+		ui.text_edit_set(&app.composer.area, "")
+		return
+	}
 	as := composer_send_as(app, other)
 	fields := send_as_fields(as)
 	if app.chat.id == "" || !slash_send(app, t, fields) { outgoing_composer(app, t, app.chat.new_dir, fields) }

@@ -5,8 +5,6 @@
 - **Sub-agents run in the background by default** (opencode 2.3.0, like every entry down to the MCP events). A sub-agent's call returns at once and the child reports when it goes
   idle, several at a time, while the parent goes on; a report can say the child's own work still runs. Show the running
   children and their reports as they come, and never treat a call's quick return as the child's end.
-- **Queue first from the composer.** Alt+Enter, while a run works, puts the follow-up first in the queue, as the desktop
-  app does. The server cannot reorder its inbox: what is behind is cancelled and sent again after it, in its order.
 - **A session's id in a message opens it.** A `ses_…` word in a message is a link to that session. It needs the
   toolkit's link words (a word that starts with a prefix made a link), after the migration to gui_toolkit 0.266.
 - **A Mermaid diagram maximised.** The diagram's viewer fills the window, with zoom and pan.

@@ -14,6 +14,8 @@ purpose, the decisions, what was refused.
 - [features/job-reports.md](features/job-reports.md): the harness's reports of ended background jobs, read as cards.
 - [features/jump.md](features/jump.md): Jump to message (Ctrl+Alt+G): a chooser over the session's prompts; why a
   palette of its own.
+- [features/queue-first.md](features/queue-first.md): Alt+Enter queues a prompt first while a run works; the inbox
+  re-admitted in order, admit before cancel, the reorder's state machine.
 - [features/escape-stop.md](features/escape-stop.md): Escape stops a run in two presses; the banner in the composer.
 - [features/palette.md](features/palette.md): the toolkit's palette with ocn's sources; the shared prefixes; what was
   lost and why.
