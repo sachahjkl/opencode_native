@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.61.0] - 2026-11-15 19:37
+
+### Changed
+- **One set of zoom keys.** Ctrl+= (or Ctrl++), Ctrl+- and Ctrl+0 zoom the conversation while the keyboard is in it (its composer, its messages), and the interface elsewhere. Ctrl+wheel zooms what is under the pointer. Ctrl+Shift+= no longer zooms the interface. Each session keeps its own zoom, in every pane that shows it.
+
 ## [0.60.0] - 2026-11-15 17:55
 
 ### Added
@@ -1720,6 +1725,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.61.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.61.0
 [0.60.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.60.0
 [0.59.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.59.2
 [0.59.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.59.1

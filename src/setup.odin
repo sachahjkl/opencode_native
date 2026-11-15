@@ -10,7 +10,7 @@ import "gt:render"
 import setup "gt:setup"
 import "gt:ui"
 
-APP_VERSION :: "0.60.0"
+APP_VERSION :: "0.61.0"
 // What changed, version by version: the settings' What's new page (in the program, beside its site's changelog).
 CHANGELOG :: #load("../CHANGELOG.md", string)
 
