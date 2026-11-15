@@ -31,5 +31,7 @@ purpose, the decisions, what was refused.
 - [features/escape-stop.md](features/escape-stop.md): Escape stops a run in two presses; the banner in the composer.
 - [features/single-instance.md](features/single-instance.md): one window per person: a second start hands its
   command line to the window that runs; `--quit` ends it as Quit does; the starts that stay on their own.
+- [features/images.md](features/images.md): the images and logos over the toolkit's picture cache; which bytes an
+  image is; base64 decoded at a miss only.
 - [features/palette.md](features/palette.md): the toolkit's palette with ocn's sources; the shared prefixes; what was
   lost and why.

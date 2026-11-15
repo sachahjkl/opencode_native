@@ -211,7 +211,7 @@ every step is a command of `tools/ocntools` (`help` lists them; `AGENTS.md`). Th
 | `src/composer.odin` | the dock and the composer |
 | `src/markdown.odin` | Markdown, shown by the toolkit's `markdown` package: ocn's faces, colours, links and code blocks |
 | `src/subagents.odin` | sub-agent cards, results, navigation, the running strip, the sidebar tree |
-| `src/images.odin` | image decoding (worker threads), the texture cache, thumbnails, the viewer, logos |
+| `src/images.odin` | an image's bytes (base64, data URLs) for the toolkit's picture cache (`gt:pictures`), thumbnails, the viewer, logos |
 | `src/settings.odin` | preferences (`gt:config`) and the settings dialog, with the server's pages |
 | `src/stats.odin` | the statistics of a session and of its project |
 | `src/style.odin` | the palette, the icons, the machined surfaces |

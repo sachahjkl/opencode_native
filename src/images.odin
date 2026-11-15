@@ -1,10 +1,8 @@
-// Images: those attached to prompts, those tools hand back (screenshots, images read), and projects' logos. Each is
-// decoded by the toolkit's gt:image (PNG, JPEG, WebP, GIF, BMP) on a worker thread, scaled down to the size it is shown at (a
-// thumbnail's, the viewer's: the whole of it), then kept as a texture keyed by a hash of its data and that size. The
-// textures together hold no more than IMAGE_BUDGET_BYTES, the ones shown longest ago going first; a few decoders work at a
-// time, and an image no longer shown when its turn comes is not decoded. (A 2048-pixel texture for every thumbnail of a
-// long conversation held a gigabyte; a find that built them all decoded them all at once.) Thumbnails open the viewer,
-// a dialog exactly around the image fitted to the window, at the size the person chose; both copy the image (image_copy).
+// Images: those attached to prompts, those tools hand back (screenshots, images read), and projects' logos. Their textures
+// are the toolkit's picture cache (gt:pictures, app.pictures: size classes, a byte budget, decodes off the interface's
+// thread); this file says which bytes an image is (its file, base64 text, a data URL) and how it is shown (src/md/features/images.md).
+// Thumbnails open the viewer, a dialog exactly around the image fitted to the window, at the size the person chose; both copy
+// the image (image_copy).
 package ocn
 
 import "base:runtime"
@@ -16,13 +14,12 @@ import "gt:image"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
-import "core:sync"
 import "gt:config"
-import tasks "gt:tasks"
 import "gt:draw"
 import "gt:platform"
 import "gt:render"
 import "gt:ui"
+import pictures "gt:pictures"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
 
@@ -52,224 +49,94 @@ image_ref :: proc(data: string, encoding: Image_Encoding, mime, name: string) ->
 }
 
 // A copy that owns its data, mime and name (image_ref_delete frees them).
-image_ref_clone :: proc(ref: Image_Ref) -> Image_Ref {
+image_ref_clone :: proc(ref: Image_Ref, allocator := context.allocator) -> Image_Ref {
 	if ref.key == 0 { return {} }
-	return {key = ref.key, data = strings.clone(ref.data), encoding = ref.encoding, mime = strings.clone(ref.mime), name = strings.clone(ref.name)}
+	return {key = ref.key, data = strings.clone(ref.data, allocator), encoding = ref.encoding, mime = strings.clone(ref.mime, allocator), name = strings.clone(ref.name, allocator)}
 }
 
-image_ref_delete :: proc(ref: ^Image_Ref) {
-	delete(ref.data)
-	delete(ref.mime)
-	delete(ref.name)
+image_ref_delete :: proc(ref: ^Image_Ref, allocator := context.allocator) {
+	delete(ref.data, allocator)
+	delete(ref.mime, allocator)
+	delete(ref.name, allocator)
 	ref^ = {}
 }
 
-Image_State :: enum u8 { Pending, Ready, Failed }
-
-Image_Entry :: struct {
-	state:   Image_State,
-	tex:     render.Texture,
-	w, h:    int,
-	used:    u64,      // the frame it was last shown in
-	error:   string,   // (owned)
-}
-
-IMAGE_BUDGET_BYTES :: 96 << 20    // the pixels of every texture kept (those shown in this frame and the last ones stay whatever)
-IMAGE_MAX_DIM_PX   :: 2048        // what a decode scales down to, when the textures allow more
-IMAGE_DECODERS     :: 3           // decodes at a time
-IMAGE_CLASS_STEP_PX :: 256        // the sizes decoded at: powers of two up to it, then its multiples
-IMAGE_KEEP_FRAMES  :: 2           // an image shown this many frames ago is still shown (its decode goes on, its texture stays)
-
-Decode_Job :: struct {
-	app:      ^App,   // (for its thread: the_app is the interface's)
-	key:      u64,
-	data:     string,   // (owned copy)
-	encoding: Image_Encoding,
-	max_dim:  u32,
-	mips:     bool,   // the whole image (the viewer: shown much smaller than it is); a thumbnail is decoded at its size, sharper without
-	copy:     bool,   // for the clipboard (image_copy): its pixels at full size, no texture
-	// the answer
-	img:      image.Image,   // straight RGBA8, at most max_dim on its longest side (heap)
-	error:    string,        // why it could not be read (a literal, or the heap)
-	ok:       bool,
-}
-
-// The picture of `data` (its bytes, base64 text, or a data URL whose text after the first comma is base64), fitted inside
-// `max_dim` x `max_dim` when larger (0: as it is), in the heap. The toolkit's decoder: PNG, JPEG, WebP, GIF (its first
-// frame), BMP. `why` says what went wrong.
-image_decode_data :: proc(data: string, encoding: Image_Encoding, max_dim: u32) -> (img: image.Image, why: string) {
-	h := runtime.heap_allocator()
-	raw := transmute([]u8)data
-	if encoding != .Bytes {
-		text := data
-		if encoding == .Data_Url {
-			comma := strings.index_byte(text, ',')
-			if comma < 0 { return {}, "not a data URL" }
-			text = text[comma + 1:]
-		}
-		// (base64 split over lines, as a mail or a pasted block holds it)
+// The file's bytes of `ref`: its own data when it is Bytes, else its base64 decoded in `allocator` (`owned`). Text that is
+// no base64 is given as it is: the cache then says it is no picture file.
+image_bytes :: proc(ref: Image_Ref, allocator := context.allocator) -> (data: []u8, owned: bool) {
+	raw := transmute([]u8)ref.data
+	if ref.encoding == .Bytes { return raw, false }
+	text := ref.data
+	if ref.encoding == .Data_Url {
+		comma := strings.index_byte(text, ',')
+		if comma < 0 { return raw, false }
+		text = text[comma + 1:]
+	}
+	// (base64 split over lines, as a mail or a pasted block holds it)
+	if strings.contains_any(text, " \n\r\t") {
 		clean := strings.builder_make(0, len(text), context.temp_allocator)
 		for c in transmute([]u8)text { if c != ' ' && c != '\n' && c != '\r' && c != '\t' { strings.write_byte(&clean, c) } }
-		decoded, err := base64.decode(strings.to_string(clean), allocator = h)
-		if err != nil { delete(decoded, h); return {}, "not base64" }
-		raw = decoded
+		text = strings.to_string(clean)
 	}
-	defer if encoding != .Bytes { delete(raw, h) }
-	whole, format, ok := image.decode(raw, h)
-	if !ok { return {}, format == .Unknown ? "a format it does not read" : "damaged" }
-	if max_dim == 0 || (whole.width <= int(max_dim) && whole.height <= int(max_dim)) { return whole, "" }
-	defer image.destroy(&whole, h)
-	// (fitted, its proportions kept, each side at least a pixel)
-	k := f64(max_dim) / f64(max(whole.width, whole.height))
-	w, hh := max(1, int(math.round(f64(whole.width) * k))), max(1, int(math.round(f64(whole.height) * k)))
-	fitted := image.resize(whole, w, hh, .Bilinear, h)
-	if len(fitted.pixels) == 0 { return {}, "no memory for it" }
-	return fitted, ""
+	decoded, err := base64.decode(text, allocator = allocator)
+	if err != nil { return raw, false }   // (base64.decode freed its buffer)
+	return decoded, true
 }
 
-// The longest side an image is decoded at for a place whose longest side is `need` frame pixels (0: the whole image, up to
-// what a texture holds). In classes: places of nearly one size share a texture, and a window resized does not decode again.
-image_dim :: proc(app: ^App, need: f32) -> u32 {
-	return image_dim_class(need, u32(min(IMAGE_MAX_DIM_PX, render.max_texture_size(&app.r))))
-}
-
-// (`most`: the longest side a texture may have here)
-image_dim_class :: proc(need: f32, most: u32) -> u32 {
-	if need <= 0 { return most }
-	n := u32(max(1, math.ceil(need)))
-	c: u32 = 32
-	if n <= IMAGE_CLASS_STEP_PX {
-		for c < n { c *= 2 }
-	} else {
-		c = (n + IMAGE_CLASS_STEP_PX - 1) / IMAGE_CLASS_STEP_PX * IMAGE_CLASS_STEP_PX
-	}
-	return min(c, most)
-}
-
-// The texture of `ref` for a place whose longest side is `need` frame pixels (0: the whole image), its decode asked for the first
-// time (nil: no image).
-image_get :: proc(app: ^App, ref: Image_Ref, need: f32) -> ^Image_Entry {
+// The picture of `ref` in the toolkit's cache, for a place whose longest side is `need` frame pixels (0: the whole image, for
+// the viewer); nil: no image. Its bytes are made only when the cache does not hold that size: its base64 is not decoded at
+// each frame.
+picture :: proc(app: ^App, ref: Image_Ref, need: f32) -> ^pictures.Picture {
 	if ref.key == 0 || ref.data == "" { return nil }
-	dim := image_dim(app, need)
-	key := (ref.key ~ u64(dim) * HASH_MIX_B) | 1
-	if e, ok := &app.images[key]; ok {
-		e.used = app.frame_no
-		return e
-	}
-	app.images[key] = {state = .Pending, used = app.frame_no}
-	job := new(Decode_Job)
-	job^ = {app = app, key = key, data = strings.clone(ref.data), encoding = ref.encoding, max_dim = dim, mips = need <= 0}
-	sync.atomic_add(&app.pending, 1)
-	append(&app.cx.image_queue, job)
-	images_pump(app)
-	return &app.images[key]
-}
-
-// Decoders for what waits, the last asked for first (what is on screen now, when the view went by many). What is no longer shown
-// when its turn comes is let go: asked again if it is shown again.
-images_pump :: proc(app: ^App) {
-	q := &app.cx.image_queue
-	for app.cx.image_decoding < IMAGE_DECODERS && len(q) > 0 {
-		job := pop(q)
-		if e, ok := app.images[job.key]; !ok || e.used + IMAGE_KEEP_FRAMES < app.frame_no {
-			delete_key(&app.images, job.key)
-			delete(job.data)
-			free(job)
-			sync.atomic_sub(&app.pending, 1)
-			continue
-		}
-		app.cx.image_decoding += 1
-		tasks.add(ui.chores(), image_decode_run, job)
-	}
-}
-
-// On a thread of the chores: the decode, its answer posted to the interface's thread.
-@(private = "file")
-image_decode_run :: proc(data: rawptr) {
-	job := (^Decode_Job)(data)
-	job.img, job.error = image_decode_data(job.data, job.encoding, job.max_dim)
-	job.ok = job.error == ""
-	if !ui.post(&job.app.state, image_decoded, job) { decode_job_free(job) }
-}
-
-@(private = "file")
-decode_job_free :: proc(job: ^Decode_Job) {
-	image.destroy(&job.img, runtime.heap_allocator())
-	delete(job.data)
-	free(job)
-}
-
-// The image's pixels on the system's clipboard, at the size of its file. (The textures are scaled down, and the GPU's are not read
-// back: the data is decoded again whole, on a thread, outside the queue of what is shown.)
-image_copy :: proc(app: ^App, ref: Image_Ref) {
-	if ref.key == 0 || ref.data == "" { return }
-	job := new(Decode_Job)
-	job^ = {app = app, data = strings.clone(ref.data), encoding = ref.encoding, max_dim = 0, copy = true}
-	sync.atomic_add(&app.pending, 1)
-	tasks.add(ui.chores(), image_decode_run, job)
-}
-
-// On the interface's thread: the pixels become a texture, or go to the clipboard.
-@(private = "file")
-image_decoded :: proc(data: rawptr, word: u64) {
-	app := the_app
-	job := (^Decode_Job)(data)
-	defer decode_job_free(job)
-	sync.atomic_sub(&app.pending, 1)
-	w, h := job.img.width, job.img.height
-	if job.copy {
-		pixels := platform.Clipboard_Image{rgba = job.img.pixels, size = {w, h}}
-		switch {
-		case !job.ok || w == 0 || h == 0: ui.announce(&app.announcer, .Bad, i18n.tr("The image could not be copied: it is unreadable"))
-		case !platform.clipboard_set_image(app.win, pixels): ui.announce(&app.announcer, .Bad, i18n.tr("The image could not be copied"))
-		case: ui.announce(&app.announcer, .Good, i18n.tr("Image copied"))
-		}
-		return
-	}
-	defer images_pump(app)
-	app.cx.image_decoding -= 1
-	e, ok := &app.images[job.key]
-	if !ok { return }
-	if !job.ok || w == 0 || h == 0 {
-		image_failed(e, job.error)
-		return
-	}
-	e.tex = render.create_texture_rgba(&app.r, w, h, mips = job.mips)
-	if e.tex == 0 { image_failed(e, i18n.tr("no room for its texture")); return }
-	render.update_texture_rgba(&app.r, e.tex, 0, 0, w, h, job.img.pixels)
-	e.w, e.h = w, h
-	e.state = .Ready
-	images_trim(app)
-}
-
-image_failed :: proc(e: ^Image_Entry, why: string) {
-	e.state = .Failed
-	delete(e.error)
-	e.error = strings.clone(why)
+	if p := pictures.get(&app.pictures, ref.key, nil, need); p != nil { return p }
+	h := runtime.heap_allocator()
+	data, owned := image_bytes(ref, h)
+	defer if owned { delete(data, h) }
+	return pictures.get(&app.pictures, ref.key, data, need)
 }
 
 // What a picture that cannot be shown says of itself.
-image_failed_words :: proc(e: ^Image_Entry) -> string {
-	return e.error != "" ? fmt.tprintf(i18n.tr("image unreadable: %s"), e.error) : i18n.tr("image unreadable")
+picture_failed_words :: proc(p: ^pictures.Picture) -> string {
+	return fmt.tprintf(i18n.tr("image unreadable: %s"), pictures.failure_words(p.why))
 }
 
-// Keeps the textures within IMAGE_BUDGET_BYTES: the ones shown longest ago go (they are decoded again when shown).
-images_trim :: proc(app: ^App) {
-	held := 0
-	for _, e in app.images { held += e.w * e.h * 4 }
-	for held > IMAGE_BUDGET_BYTES {
-		oldest: u64
-		best := max(u64)
-		for k, e in app.images {
-			if e.state != .Pending && e.used < best && e.used + IMAGE_KEEP_FRAMES < app.frame_no { best, oldest = e.used, k }
+// A copy for the clipboard: the file decoded whole on the chores (heap; copy_job_free).
+@(private = "file")
+Copy_Job :: struct { app: ^App, ref: Image_Ref, img: image.Image, ok: bool }
+
+// The image's pixels on the system's clipboard, at the size of its file. (The cache's textures are scaled down, and the
+// GPU's are not read back: the file is decoded again whole, on the chores.)
+image_copy :: proc(app: ^App, ref: Image_Ref) {
+	if ref.key == 0 || ref.data == "" { return }
+	h := runtime.heap_allocator()
+	job := new(Copy_Job, h)
+	job^ = {app = app, ref = image_ref_clone(ref, h)}
+	ui.task(&app.state, proc(data: rawptr) {
+		j := (^Copy_Job)(data)
+		h := runtime.heap_allocator()
+		bytes, owned := image_bytes(j.ref, h)
+		defer if owned { delete(bytes, h) }
+		j.img, _, j.ok = image.decode(bytes, h)
+	}, proc(data: rawptr, _: u64) {
+		j := (^Copy_Job)(data)
+		defer copy_job_free(j)
+		app := j.app
+		w, h := j.img.width, j.img.height
+		switch {
+		case !j.ok || w == 0 || h == 0: ui.announce(&app.announcer, .Bad, i18n.tr("The image could not be copied: it is unreadable"))
+		case !platform.clipboard_set_image(app.win, {rgba = j.img.pixels, size = {w, h}}): ui.announce(&app.announcer, .Bad, i18n.tr("The image could not be copied"))
+		case: ui.announce(&app.announcer, .Good, i18n.tr("Image copied"))
 		}
-		if oldest == 0 { return }
-		held -= app.images[oldest].w * app.images[oldest].h * 4
-		e := app.images[oldest]
-		if e.tex != 0 { render.destroy_texture(&app.r, e.tex) }
-		delete(e.error)
-		delete_key(&app.images, oldest)
-	}
+	}, job, copy_job_free)
+}
+
+@(private = "file")
+copy_job_free :: proc(data: rawptr) {
+	j := (^Copy_Job)(data)
+	h := runtime.heap_allocator()
+	image.destroy(&j.img, h)
+	image_ref_delete(&j.ref, h)
+	free(j, h)
 }
 
 ////////////////////////////////
@@ -282,7 +149,7 @@ SHIMMER_RATE          :: 0.002   // radians per millisecond
 THUMB_PENDING_SCALE   :: 0.6     // of the room given, until its size is known
 
 @(private = "file")
-Image_Draw :: struct { tex: render.Texture, radius: f32, frame: bool, state: Image_State }
+Image_Draw :: struct { tex: render.Texture, radius: f32, frame: bool, state: pictures.Picture_State }
 
 @(private = "file")
 image_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
@@ -308,15 +175,15 @@ image_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 
 // A thumbnail of `ref` fitting `max_w` x `max_h` (frame pixels), clickable: a click opens the viewer.
 image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) -> ui.Signal {
-	e := image_get(app, ref, max(max_w, max_h))
+	p := picture(app, ref, max(max_w, max_h))
 	w, h := max_w * THUMB_PENDING_SCALE, max_h * THUMB_PENDING_SCALE
-	state := Image_State.Pending
+	state := pictures.Picture_State.Pending
 	tex: render.Texture
-	if e != nil {
-		state, tex = e.state, e.tex
-		if e.state == .Ready {
-			k := min(max_w / f32(e.w), max_h / f32(e.h), 1 * ui.scale())
-			w, h = math.round(f32(e.w) * k), math.round(f32(e.h) * k)
+	if p != nil {
+		state, tex = p.state, p.texture
+		if p.state == .Ready {
+			k := min(max_w / f32(p.size.x), max_h / f32(p.size.y), 1 * ui.scale())
+			w, h = math.round(f32(p.size.x) * k), math.round(f32(p.size.y) * k)
 		}
 	}
 	if state == .Pending { animate(app) }
@@ -335,7 +202,7 @@ image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) ->
 		if ui.parent(b) {
 			em := ui.font_size()
 			ui.next({width = ui.fill(), height = ui.fill(), fg = hex(HEX_IMAGE_FAILED_TEXT), font_size = math.round(em * FS_SMALL), text_align = .Center})
-			ui.build_box({.Draw_Text}, fmt.tprintf("%s###f", label_safe(image_failed_words(e))))
+			ui.build_box({.Draw_Text}, fmt.tprintf("%s###f", label_safe(picture_failed_words(p))))
 		}
 	}
 	return sig
@@ -354,12 +221,12 @@ image_strip :: proc(app: ^App, id: string, refs: []Image_Ref, max_w, max_h: f32)
 // A small square logo (a project's), drawn from its texture; nothing while it decodes.
 logo_of :: proc(app: ^App, id: string, ref: ^Image_Ref, size: f32) -> bool {
 	if ref == nil { return false }
-	e := image_get(app, ref^, size)
-	if e == nil || e.state != .Ready { return false }
+	p := picture(app, ref^, size)
+	if p == nil || p.state != .Ready { return false }
 	ui.next({width = ui.px(size), height = ui.px(size)})
 	b := ui.build_box({}, id)
 	d := ui.frame_new(Image_Draw)
-	d^ = {tex = e.tex, radius = 0.18 * size / ui.scale(), state = .Ready}
+	d^ = {tex = p.texture, radius = 0.18 * size / ui.scale(), state = .Ready}
 	b.custom = image_draw
 	b.custom_user = d
 	return true
@@ -379,7 +246,7 @@ image_view_start :: proc(app: ^App, path: string) {
 // ever come, and the wait would draw frames for good.)
 image_view_wait :: proc(app: ^App) {
 	if app.viewer.start.key == 0 { return }
-	s := image_get(app, app.viewer.start, 0)
+	s := picture(app, app.viewer.start, 0)
 	if s != nil && s.state == .Pending {
 		animate(app)
 		return
@@ -387,15 +254,14 @@ image_view_wait :: proc(app: ^App) {
 	if s != nil && s.state == .Ready {
 		image_view_open(app, app.viewer.start)
 	} else {
-		ui.announce(&app.announcer, .Bad, fmt.tprintf("%s: %s", app.viewer.start.name, s != nil ? image_failed_words(s) : i18n.tr("image unreadable: the file is empty")))
+		ui.announce(&app.announcer, .Bad, fmt.tprintf("%s: %s", app.viewer.start.name, s != nil ? picture_failed_words(s) : i18n.tr("image unreadable: the file is empty")))
 	}
 	app.viewer.start.key = 0
 }
 
 // The viewer, on the whole image (decoded now if the thumbnail's was all there was: it waits for it).
 image_view_open :: proc(app: ^App, ref: Image_Ref) {
-	_ = image_get(app, ref, 0)
-	app.viewer.key = (ref.key ~ u64(image_dim(app, 0)) * HASH_MIX_B) | 1
+	_ = picture(app, ref, 0)
 	image_ref_delete(&app.viewer.ref)
 	app.viewer.ref = image_ref_clone(ref)
 	ui.preview_reset(&app.viewer.view)
@@ -476,8 +342,7 @@ view_well_draw :: proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) {
 // The image viewer (IMAGE_VIEW): what it shows, and how it is zoomed, moved and sized. As a dialog it hugs its picture
 // (ui.view_size, at each build); docked, floating or in a window of its own, the picture fits the room it is given.
 Image_Viewer :: struct {
-	key:         u64,
-	ref:         Image_Ref,   // what is shown: what Copy decodes again whole (its data and name owned)
+	ref:         Image_Ref,   // what is shown: its picture in the cache, what Copy decodes again whole (its data and name owned)
 	view:        ui.Preview,  // the zoom (times what fits) and the pan of the picture
 	focus:       bool,        // just opened: the keyboard goes to the picture (its keys zoom and move it)
 	resize_from: [3]f32,      // a grip of the viewer held: the dialog's size (ems) and scale at its press ({}: none)
@@ -499,13 +364,12 @@ image_view :: proc(v: ^ui.View, app: ^App) {
 	em := ui.font_size()
 	sc := ui.scale()
 	// what is shown: its pixels, and its texture
-	e, ok := &app.images[app.viewer.key]
-	if !ok || e.state == .Failed { ui.view_end(v, ui.VIEW_CANCELLED); return }
-	e.used = app.frame_no
+	e := picture(app, app.viewer.ref, 0)
+	if e == nil || e.state == .Failed { ui.view_end(v, ui.VIEW_CANCELLED); return }
 	name := app.viewer.ref.name != "" ? app.viewer.ref.name : i18n.tr("image")
 	ui.view_title(v, ellipsize(name, IMAGE_NAME_CHARS))
 	if e.state == .Pending { image_viewer_wait(app, em); return }
-	source := [2]f32{f32(e.w), f32(e.h)}
+	source := [2]f32{f32(e.size.x), f32(e.size.y)}
 	pad, bar := math.round(em * VIEWER_PAD_EM), math.round(em * VIEWER_BAR_EM)
 	chrome := [2]f32{2 * pad, pad + bar}
 	min_w := math.round(em * VIEWER_MIN_W_EM)
@@ -547,7 +411,7 @@ image_view :: proc(v: ^ui.View, app: ^App) {
 				if ui.parent(well) {
 					ui.next({width = ui.fill(), height = ui.fill()})
 					ui.a11y({role = .Image, name = app.viewer.ref.name != "" ? app.viewer.ref.name : i18n.tr("Image")})
-					res := ui.preview_image("###view", pv, e.tex, source, pv_o)
+					res := ui.preview_image("###view", pv, e.texture, source, pv_o)
 					if app.viewer.focus { ui.set_focus(res.box.key); app.viewer.focus = false }
 					b := res.box
 					on := ui.pointer_on(b)

@@ -25,6 +25,7 @@ import "gt:font"
 import mermaid "gt:mermaid"
 import paint "gt:paint"
 import "gt:platform"
+import pictures "gt:pictures"
 import "gt:png"
 import "gt:render"
 import "gt:term"
@@ -251,6 +252,7 @@ bench_end :: proc(p: rawptr) {
 	app := (^App)(p)
 	context.allocator = runtime.heap_allocator()
 	palette_destroy(app)   // (before its window's state)
+	pictures.cache_destroy(&app.pictures)   // (before the renderer: its textures)
 	ui.destroy(&app.state)
 	ui.family_face_destroy(&app.term_family)
 	ui.font_picker_destroy(&app.term_picker)
@@ -323,7 +325,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		// a tool of no known kind, open: its input in one well, the long value under its key
 		app.prefs.expand_tools = true
 		session.frames(s, 6)
-		testing.expect(t, session.find(s, "iv0") != nil && session.find(s, "kv1") != nil, "the input's long value and its short one")
+		testing.expect(t, session.find(s, "iv0") != nil && session.find(s, "sr_kv1") != nil, "the input's long value and its short one")
 		app.prefs.expand_tools = false
 		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.frames(s, 6)
@@ -1021,20 +1023,15 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		W, H :: 400, 200
 		pixels := make([]u8, W * H * 4, context.temp_allocator)
 		for i in 0 ..< W * H { pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 2], pixels[i * 4 + 3] = u8(i % W), 120, u8(i / W), 255 }
-		tex := render.create_texture_rgba(&app.r, W, H)
-		render.update_texture_rgba(&app.r, tex, 0, 0, W, H, pixels)
-		open :: proc(app: ^App, tex: render.Texture) {
-			// (as image_view_open, its decode not asked: the picture is given)
-			image_ref_delete(&app.viewer.ref)
-			app.viewer.ref = image_ref_clone(image_ref("not decoded here", .Bytes, "image/png", "picture.png"))
-			app.viewer.key = 0x5eed
-			app.images[app.viewer.key] = {state = .Ready, tex = tex, w = W, h = H, used = app.frame_no}
-			app.viewer.focus, app.viewer.grown = true, false
-			ui.view_open(&app.program_views, IMAGE_VIEW, app)
-			ui.preview_reset(&app.viewer.view)
+		file := png.encode(pixels, W, H, .Fast, context.allocator)
+		ref := image_ref(string(file), .Bytes, "image/png", "picture.png")
+		// (as a thumbnail's click: the cache decodes the whole picture, the viewer waits for it)
+		open :: proc(s: ^session.Session, app: ^App, ref: Image_Ref) {
+			image_view_open(app, ref)
+			session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "view") != nil }, "the picture decoded")
+			session.frames(s, 3)
 		}
-		open(app, tex)
-		session.frames(s, 3)
+		open(s, app, ref)
 		view, panel := session.find(s, "view"), session.find(s, "modal_view_image")
 		testing.expect(t, view != nil && panel != nil, "the viewer")
 		if view == nil || panel == nil { return }
@@ -1055,8 +1052,7 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		session.click_at(s, view.rect.max - 5)
 		testing.expect(t, !ui.view_is_open(&app.program_views, IMAGE_VIEW), "a press beside the picture closes it")
 		// its corner, outward: the picture grows past its pixels, as far as the pointer goes, and the size is kept (a share of the room)
-		open(app, tex)
-		session.frames(s, 3)
+		open(s, app, ref)
 		view, panel = session.find(s, "view"), session.find(s, "modal_view_image")
 		before := view.rect.max - view.rect.min
 		testing.expect_value(t, before, [2]f32{W, H} * ui.scale())
@@ -1076,14 +1072,13 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		kept := config.float_of(&app.cfg_prefs, "conversation.image_viewer_size")
 		testing.expectf(t, abs(kept - f64(after.x / full.x)) < 0.01, "kept as a share of the room: %v", kept)
 		// opened again: a picture that fits opens at its pixels, whatever the share kept
-		open(app, tex)
-		session.frames(s, 3)
+		open(s, app, ref)
 		view = session.find(s, "view")
 		testing.expect_value(t, view.rect.max - view.rect.min, before)
 		// a copy: the file's pixels, whole, on the clipboard
 		small := []u8{255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 255, 9, 8, 7, 0, 1, 2, 3, 4, 200, 100, 50, 255}
-		file := png.encode(small, 3, 2, .Fast, context.temp_allocator)
-		image_copy(app, image_ref(string(file), .Bytes, "image/png", "small.png"))
+		small_file := png.encode(small, 3, 2, .Fast, context.temp_allocator)
+		image_copy(app, image_ref(string(small_file), .Bytes, "image/png", "small.png"))
 		session.wait_until(s, proc(s: ^session.Session) -> bool {
 			img, ok := platform.clipboard_get_image(s.win, context.temp_allocator)
 			return ok && img.size == {3, 2}
