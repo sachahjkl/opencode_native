@@ -129,7 +129,10 @@ build_native :: proc(force: bool) -> bool {
 	target_dir := "../" + NATIVE_OUT + "/target"
 	built := false
 	when ODIN_OS == .Windows {
-		built = toolbox.run({"cargo", "build", "--release", "--locked", "--target", NATIVE_TARGET, "--target-dir", target_dir}, {dir = NATIVE_DIR, echo = true})
+		// (the static C runtime, as Odin's programs link it: libwebp's C, compiled by the cc crate, otherwise asks for the
+		// DLL's __imp_malloc and the like, which no Odin program links; the toolkit's tk build_native does the same)
+		crt := "target." + NATIVE_TARGET + ".rustflags=['-C','target-feature=+crt-static']"
+		built = toolbox.run({"cargo", "build", "--release", "--locked", "--target", NATIVE_TARGET, "--target-dir", target_dir, "--config", crt}, {dir = NATIVE_DIR, echo = true})
 	} else {
 		built = toolbox.run({"cargo", "build", "--release", "--locked", "--target-dir", target_dir}, {dir = NATIVE_DIR, echo = true})
 	}
