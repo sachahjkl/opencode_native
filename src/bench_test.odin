@@ -2380,6 +2380,45 @@ a_session_opens_at_its_bottom_in_its_first_frame :: proc(t: ^testing.T) {
 	})
 }
 
+// One set of zoom keys (src/md/features/chat-panes.md, Zoom): with the keyboard in the conversation's composer, Ctrl+= and
+// Ctrl+Shift+= (AZERTY's Ctrl++) zoom the session's conversation and not the interface; with it in the sidebar's search,
+// the interface. The session's zoom comes back when it is shown again after another.
+@(test)
+the_zoom_keys_zoom_where_the_keyboard_is :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		if app.conn == nil { app.conn = bench_conn(app) }
+		pane := main_pane(app)
+		near :: proc(a, b: f32) -> bool { return abs(a - b) < 0.001 }
+		step := ui.feel(&app.state).zoom_step
+		window := ui.zoom(&app.state)
+		session.click(s, "composer")
+		session.key(s, .Equal, {.Ctrl})
+		testing.expectf(t, near(ui.zoom_zone_value(&pane.zone), step), "the conversation zoomed: %v", ui.zoom_zone_value(&pane.zone))
+		testing.expect_value(t, ui.zoom(&app.state), window)
+		session.key(s, .Equal, {.Ctrl, .Shift})
+		testing.expectf(t, near(ui.zoom_zone_value(&pane.zone), step * step), "Ctrl+Shift+= too: %v", ui.zoom_zone_value(&pane.zone))
+		testing.expect_value(t, ui.zoom(&app.state), window)
+		session.click(s, "search")
+		session.key(s, .Equal, {.Ctrl})
+		testing.expectf(t, ui.zoom(&app.state) > window, "the interface zoomed: %v", ui.zoom(&app.state))
+		testing.expect(t, near(ui.zoom_zone_value(&pane.zone), step * step), "the conversation kept its zoom")
+		// another session has its own (the preference's); the first one's comes back with it
+		open_session :: proc(t: ^testing.T, app: ^App, s: ^session.Session, id: string) {
+			open_chat(app, id)
+			session.frames(s, 2)
+			if bench_count(.Messages) > 0 { bench_answer(app, bench_take(t, .Messages), 200, bench_page()) }
+			session.frames(s, 2)
+		}
+		open_session(t, app, s, "ses_3")
+		testing.expect_value(t, pane.zone.key, "ses_3")
+		testing.expect(t, near(ui.zoom_zone_value(&pane.zone), 1), "another session: the preference's zoom")
+		open_session(t, app, s, BENCH_CHAT_ID)
+		testing.expectf(t, near(ui.zoom_zone_value(&pane.zone), step * step), "its own again: %v", ui.zoom_zone_value(&pane.zone))
+	})
+}
+
 // The palette over hundreds of sessions builds the rows in view only, and at rest neither asks a source nor ranks again
 // (the pointer moving over it). A session that comes is in the list: its source is asked again, once.
 @(test)

@@ -24,6 +24,20 @@ Everything that read `app.chat` or `app.composer` reads the pane it is given.
 - **The keyboard** is the focused pane's: its composer, its Escape, its Page Up and Down. Typing with nothing focused
   goes to the main pane's composer.
 
+## Zoom
+
+- **Each pane is a zoom zone** of the toolkit (`Chat_Pane.zone`, `ui.zoom_zone`), keyed by the session it shows. Its
+  memory is `App.session_zooms`, shared by every pane: the same session in two panes is one zoom; two sessions, two
+  zooms. The memory's default is the preference `appearance.content_zoom`; Ctrl+0 forgets the session's zoom, so it
+  follows the preference again.
+- **The zone is the pane's whole column** (`###main`), not the messages' scroll box: the zoom keys follow the keyboard
+  focus, which is mostly in the composer, under the messages. Focus elsewhere (the sidebar, a dialog): the keys zoom the
+  interface. There is one set of keys; Ctrl+Shift+= is Ctrl++ on AZERTY, not the interface's.
+- **The home page** is built in the same column, so it stays in the zone, with an empty key: its own zoom, not
+  remembered. Zooming the home page no longer changes the preference.
+- The palette's "Zoom in the conversation" acts on the main pane's zone. "Zoom in the interface" has no keys of its
+  own: the same keys zoom the interface where the focus is outside a zone.
+
 ## /btw
 
 - `/btw <text>` (a client command, in the `/` list and the palette): fork the shown session at its last message (a

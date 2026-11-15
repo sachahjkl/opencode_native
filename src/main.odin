@@ -4,7 +4,6 @@
 // Without arguments it finds this computer's opencode server (~/.local/state/opencode/service.json, else ~/.config/opencode/service.json).
 package ocn
 
-import store "gt:store"
 import "core:fmt"
 import tasks "gt:tasks"
 import "core:mem/virtual"
@@ -20,6 +19,7 @@ import "gt:font"
 import "gt:host"
 import "gt:platform"
 import "gt:render"
+import "gt:term"
 import setup "gt:setup"
 import crash_bar "gt:crash_bar"
 import process "gt:process"
@@ -58,8 +58,8 @@ App :: struct {
 	palette:        Palette,           // Ctrl+K: the toolkit's palette and ocn's sources (palette.odin)
 	changelog:      prefs_page.Changelog,   // What's new: CHANGELOG.md on a page of the settings, said once after an update
 	jump:           Jump,              // Ctrl+Alt+G: Jump to message, a chooser of the session's prompts (jump.odin)
-	term_zooms:     store.Kept,        // each shell's zoom, by its id (terminal.odin)
-	session_zooms:  store.Kept,        // each session's conversation zoom, by its id (commands.odin content_zoom)
+	term_zooms:     ui.Zoom_Memory,    // each shell's zoom, by its id: its grid's zone (terminal.odin)
+	session_zooms:  ui.Zoom_Memory,    // each session's conversation zoom, by its id: every pane's zone (conversation.odin)
 	stores:         Stores,            // what it remembers beside the preferences, written on workers (stores.odin)
 	throbber:       Throbber,          // what says a run goes on (throbber.odin)
 	preview:        Preview,           // the page beside the conversation (preview.odin)
@@ -288,7 +288,6 @@ main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
 			if e.button == .Forward { nav_step(app, 1) }
 		}
 	}
-	content_zoom_events(app, events)
 	return events
 }
 
@@ -583,11 +582,23 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	tasks.start(&app.cx.chores, {threads = CHORES_WORKERS})
 }
 
-// The kept zooms (store.Kept over their stores): each shell's and each session's. Their values are written through the
-// stores from then on (a test's stores are in memory).
+// The zooms remembered (the toolkit's zoom memories over their stores): each shell's and each session's. Their values are
+// written through the stores from then on (a test's stores are in memory). Every pane's zone shares the sessions' memory:
+// the same session in two panes is one zoom. The shells' are by their id on the server, which keeps a shell's title and
+// size only: a shell found again (the program started again, the server come back) has its own.
 zooms_load :: proc(app: ^App) {
-	term_zooms_load(app)
-	store.kept_load(&app.session_zooms, &app.stores.session_zooms, f64(CONTENT_ZOOM_MIN), f64(CONTENT_ZOOM_MAX))
+	app.session_zooms.min, app.session_zooms.max = CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX
+	app.session_zooms.default = app.prefs.content_zoom
+	ui.zoom_memory_load(&app.session_zooms, &app.stores.session_zooms)
+	app.term_zooms.min, app.term_zooms.max = term.ZOOM_MIN, term.ZOOM_MAX
+	ui.zoom_memory_load(&app.term_zooms, &app.stores.zooms)
+	for &pane in app.panes { pane.zone.memory = &app.session_zooms }
+}
+
+zooms_destroy :: proc(app: ^App) {
+	for &pane in app.panes { ui.zoom_zone_destroy(&pane.zone) }
+	ui.zoom_memory_destroy(&app.session_zooms)
+	ui.zoom_memory_destroy(&app.term_zooms)
 }
 
 // The fonts, before the renderer: they load while the graphics device is made (render.preload_device).
@@ -706,6 +717,7 @@ main :: proc() {
 	if app.cx.due[.Drafts].due_ms != 0 { drafts_save(app) }   // (what was typed in the last second)
 	config.user_writer_stop(&app.prefs_writer, &app.cfg_prefs)
 	stores_close(app)   // (waits for the disk: the window is gone, nothing waits on a frame)
+	zooms_destroy(app)
 	ui.post_close(&app.state)
 	prefs_page.install_end(&app.install)
 	crash_bar.destroy(&app.crash_bar)

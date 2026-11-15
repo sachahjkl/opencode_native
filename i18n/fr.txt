@@ -1713,8 +1713,8 @@ fr La police des shells. Par défaut : celle du client, Fira Mono, sans ligature
 en Content zoom
 fr Zoom du contenu
 
-en Zoom of the conversation alone, whatever the interface's: each session's until it has its own (Ctrl + = / - over it, Ctrl + wheel; Ctrl + 0 brings it back to this one).
-fr Zoom de la seule conversation, quel que soit celui de l'interface : celui de chaque session tant qu'elle n'a pas le sien (Ctrl + = / - au-dessus, Ctrl + molette ; Ctrl + 0 la ramène à celui-ci).
+en Zoom of the conversation alone, whatever the interface's: each session's until it has its own (Ctrl + = / - while the keyboard is in it, Ctrl + wheel over it; Ctrl + 0 brings it back to this one).
+fr Zoom de la seule conversation, quel que soit celui de l'interface : celui de chaque session tant qu'elle n'a pas le sien (Ctrl + = / - quand le clavier y est, Ctrl + molette au-dessus ; Ctrl + 0 la ramène à celui-ci).
 
 en Width
 fr Largeur

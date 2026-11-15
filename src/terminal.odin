@@ -16,7 +16,6 @@
 // about it goes by, and leaving that server leaves its shells running there (terminals_forget).
 package ocn
 
-import store "gt:store"
 import tk_json "gt:json"
 import "base:runtime"
 import "core:encoding/json"
@@ -523,7 +522,7 @@ term_add :: proc(app: ^App, it: json.Value, dir: string) -> ^Term {
 	id := tk_json.text(it, "id")
 	if id == "" || term_find(app, id) != nil { return nil }
 	t := term_new(id, tk_json.text(it, "title"), dir)
-	t.view.zoom = f32(store.kept_of(&app.term_zooms, id, 1))
+	t.view.zone.memory = &app.term_zooms   // (its grid's zoom is remembered by its id: term.build's zoom_key)
 	t.server = app.conn
 	t.app = app
 	append(&s.list, t)
@@ -627,7 +626,7 @@ term_close :: proc(app: ^App, t: ^Term) {
 	s := &app.cx.terms
 	had_keys := s.focused == t
 	if t.link != .Closed { request(app, .Action, "DELETE", term_path(t), conn = t.server) }
-	term_zoom_forget(app, t.id)
+	ui.zoom_memory_forget(&app.term_zooms, t.id)
 	term_forget_one(app, t)
 	if len(s.list) == 0 {
 		s.open = false
@@ -1097,7 +1096,6 @@ term_outcome :: proc(app: ^App, t: ^Term, out: term.Outcome, at: [2]f32) {
 	case .Copy:   clip_set(term.selection_text(&t.view))
 	case .Paste:  term_paste(app, t)
 	case .Menu:   s.menu_for, s.menu_at = t, at
-	case .Zoomed: term_zoom_keep(app, t)
 	}
 }
 
@@ -1204,7 +1202,9 @@ terminal_panel :: proc(app: ^App, em: f32, t: ^Term, shown := true, focus := fal
 	term_banner(app, t, em)
 	// (the picture read last holds the screen from before the shell's new size, until it has painted the new one)
 	t.view.hold = term_painting(ui.now_ms(), t.told_ms, t.fed_ms, t.asked_ms)
-	term.build(&t.view, term_style(app, em), focus || term_takes_focus(s, t, ui.focus_key()))
+	// (a shell of the server keeps its zoom by its id, found again at the next start; an output's grid has its own while open)
+	zoom_key := term_find(app, t.id) == t ? t.id : ""
+	term.build(&t.view, term_style(app, em), focus || term_takes_focus(s, t, ui.focus_key()), zoom_key = zoom_key)
 	if a, ok := ui.paste_answer(t.view.box, {.Text}); ok { term.paste(&t.view, a.text) }
 	if shown { term_settle(app, t) }
 	menu := fmt.tprintf("term_menu_%x", u64(t.view.box))
@@ -1222,10 +1222,12 @@ term_menu :: proc(app: ^App, t: ^Term) {
 	if !v.read_only && ui.menu_item(i18n.tr("Paste"), platform.key_text("Ctrl+Shift+V"), icon = lucide.CLIPBOARD_PASTE).clicked { term_paste(app, t) }
 	if ui.menu_item(i18n.tr("Select all"), icon = lucide.TEXT_CURSOR_INPUT, disabled = t.vt == nil).clicked { term.select_all(v) }
 	ui.menu_separator()
-	if ui.menu_item(i18n.tr("Zoom in"), "Ctrl+=", icon = lucide.PLUS).clicked { term_zoom_set(app, t, v.zoom * term.ZOOM_STEP) }
-	if ui.menu_item(i18n.tr("Zoom out"), "Ctrl+-", icon = lucide.CHEVRON_DOWN).clicked { term_zoom_set(app, t, v.zoom / term.ZOOM_STEP) }
-	reset := v.zoom != 1 ? fmt.tprintf(i18n.tr("Reset the zoom (%s)"), i18n.percent(math.round(f64(v.zoom) * 100) / 100)) : i18n.tr("Reset the zoom")
-	if ui.menu_item(reset, "Ctrl+0", icon = lucide.UNDO_2, disabled = v.zoom == 1).clicked { term_zoom_set(app, t, 1) }
+	step := ui.feel(&app.state).zoom_step
+	if ui.menu_item(i18n.tr("Zoom in"), "Ctrl+=", icon = lucide.PLUS).clicked { ui.zoom_zone_by(&v.zone, step) }
+	if ui.menu_item(i18n.tr("Zoom out"), "Ctrl+-", icon = lucide.CHEVRON_DOWN).clicked { ui.zoom_zone_by(&v.zone, 1 / step) }
+	zoom := ui.zoom_zone_value(&v.zone)
+	reset := zoom != 1 ? fmt.tprintf(i18n.tr("Reset the zoom (%s)"), i18n.percent(math.round(f64(zoom) * 100) / 100)) : i18n.tr("Reset the zoom")
+	if ui.menu_item(reset, "Ctrl+0", icon = lucide.UNDO_2, disabled = zoom == 1).clicked { ui.zoom_zone_reset(&v.zone) }
 	if o := output_view_of_term(app, t); o != nil {
 		ui.menu_separator()
 		if ui.menu_item(i18n.tr("Copy all the output"), icon = lucide.COPY, disabled = len(o.raw) == 0).clicked { clip_set(plain_output(string(o.raw[:]))) }
@@ -1309,32 +1311,6 @@ terms_size_due :: proc(app: ^App) {
 	}
 	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 }
-
-////////////////////////////////
-// Each shell's zoom
-
-// The shells' zooms, by their id on the server: a shell found again (the program started again, the server come back) has
-// its own. The server keeps a shell's title and size only: the zooms are the client's (store.Kept, terminal_zoom.txt). A
-// shell closed from here leaves the file.
-term_zooms_load :: proc(app: ^App) { store.kept_load(&app.term_zooms, &app.stores.zooms, f64(term.ZOOM_MIN), f64(term.ZOOM_MAX)) }
-
-// A shell's zoom (term.zoom_set: within its bounds), kept.
-term_zoom_set :: proc(app: ^App, t: ^Term, zoom: f32) {
-	term.zoom_set(&t.view, zoom)
-	term_zoom_keep(app, t)
-}
-
-// The zoom moved: a frame when it rests (the grid takes its new columns and rows then), and kept when the shell is one of
-// the server's (an output's grid has its own for the time it is open).
-@(private = "file")
-term_zoom_keep :: proc(app: ^App, t: ^Term) {
-	app.cx.due[.Term_Size] = {}
-	ui.deferred_ask(&app.cx.due[.Term_Size], term.ZOOM_REST_MS)
-	if term_find(app, t.id) != t { return }
-	store.kept_set(&app.term_zooms, t.id, f64(t.view.zoom), 1)
-}
-
-term_zoom_forget :: proc(app: ^App, id: string) { store.kept_forget(&app.term_zooms, id) }
 
 ////////////////////////////////
 // What the answers to its requests do (net.odin REQ_FACTS)

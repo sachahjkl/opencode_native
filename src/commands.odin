@@ -3,11 +3,9 @@
 // frame still read.
 package ocn
 
-import store "gt:store"
 import "core:fmt"
 import "core:math"
 import "core:strings"
-import "gt:draw"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
@@ -93,12 +91,13 @@ COMMANDS := [?]Command{
 	{id = "view.notices", title = i18n.later("What you missed"), tags = "notifications inbox missed events log bell unread", group = i18n.later("View"), icon = lucide.BELL, keys = "Ctrl+Shift+N", key = .N, mods = {.Ctrl, .Shift}, run = missed_toggle, over = proc(app: ^App) -> bool { return ui.view_is_open(&app.program_views, MISSED_VIEW) }},
 	{id = "notices.next", title = i18n.later("Next missed"), tags = "notifications queue next unread inbox", group = i18n.later("Go to"), icon = lucide.ARROW_RIGHT, run = missed_next},
 	{id = "view.sidebar_mode", title = i18n.later("Switch the sidebar's mode (inbox, projects)"), tags = "inbox projects folders group", group = i18n.later("View"), icon = lucide.LIST, run = sidebar_mode_next},
-	{id = "view.content_in", title = i18n.later("Zoom in the conversation"), tags = "bigger larger font size text", group = i18n.later("View"), icon = lucide.PLUS, keys = "Ctrl+=", run = proc(app: ^App) { content_zoom_by(app, ui.feel(&app.state).zoom_step) }},
-	{id = "view.content_out", title = i18n.later("Zoom out the conversation"), tags = "smaller font size text", group = i18n.later("View"), icon = lucide.CHEVRON_DOWN, keys = "Ctrl+-", run = proc(app: ^App) { content_zoom_by(app, 1 / ui.feel(&app.state).zoom_step) }},
-	{id = "view.content_reset", title = i18n.later("Reset the conversation's zoom"), tags = "default font size text", group = i18n.later("View"), icon = lucide.UNDO_2, keys = "Ctrl+0", run = proc(app: ^App) { content_zoom_reset(app) }},
-	{id = "view.chrome_in", title = i18n.later("Zoom in the interface"), tags = "bigger larger scale ui", group = i18n.later("View"), icon = lucide.PLUS, keys = "Ctrl+Shift+=", run = proc(app: ^App) { ui.set_zoom(&app.state, ui.zoom(&app.state) * ui.feel(&app.state).zoom_step) }},
-	{id = "view.chrome_out", title = i18n.later("Zoom out the interface"), tags = "smaller scale ui", group = i18n.later("View"), icon = lucide.CHEVRON_DOWN, keys = "Ctrl+Shift+-", run = proc(app: ^App) { ui.set_zoom(&app.state, ui.zoom(&app.state) / ui.feel(&app.state).zoom_step) }},
-	{id = "view.chrome_reset", title = i18n.later("Reset the interface's zoom"), tags = "default scale ui", group = i18n.later("View"), icon = lucide.UNDO_2, keys = "Ctrl+Shift+0", run = proc(app: ^App) { ui.set_zoom(&app.state, 1) }},
+	{id = "view.content_in", title = i18n.later("Zoom in the conversation"), tags = "bigger larger font size text", group = i18n.later("View"), icon = lucide.PLUS, keys = "Ctrl+=", run = proc(app: ^App) { ui.zoom_zone_by(&main_pane(app).zone, ui.feel(&app.state).zoom_step) }},
+	{id = "view.content_out", title = i18n.later("Zoom out the conversation"), tags = "smaller font size text", group = i18n.later("View"), icon = lucide.CHEVRON_DOWN, keys = "Ctrl+-", run = proc(app: ^App) { ui.zoom_zone_by(&main_pane(app).zone, 1 / ui.feel(&app.state).zoom_step) }},
+	{id = "view.content_reset", title = i18n.later("Reset the conversation's zoom"), tags = "default font size text", group = i18n.later("View"), icon = lucide.UNDO_2, keys = "Ctrl+0", run = proc(app: ^App) { ui.zoom_zone_reset(&main_pane(app).zone) }},
+	// (no keys shown: the same zoom keys zoom the interface wherever the keyboard is outside the conversation)
+	{id = "view.chrome_in", title = i18n.later("Zoom in the interface"), tags = "bigger larger scale ui", group = i18n.later("View"), icon = lucide.PLUS, run = proc(app: ^App) { ui.set_zoom(&app.state, ui.zoom(&app.state) * ui.feel(&app.state).zoom_step) }},
+	{id = "view.chrome_out", title = i18n.later("Zoom out the interface"), tags = "smaller scale ui", group = i18n.later("View"), icon = lucide.CHEVRON_DOWN, run = proc(app: ^App) { ui.set_zoom(&app.state, ui.zoom(&app.state) / ui.feel(&app.state).zoom_step) }},
+	{id = "view.chrome_reset", title = i18n.later("Reset the interface's zoom"), tags = "default scale ui", group = i18n.later("View"), icon = lucide.UNDO_2, run = proc(app: ^App) { ui.set_zoom(&app.state, 1) }},
 }
 
 command_enabled :: proc(app: ^App, c: ^Command) -> bool { return c.enabled == nil || c.enabled(app) }
@@ -134,54 +133,6 @@ commands_keys :: proc(app: ^App) {
 	for &c in COMMANDS {
 		if c.key == .None || !command_keyed(app, &c) { continue }
 		if ui.chord_pressed({c.key, c.mods}, c.scope) { command_run(app, &c) }
-	}
-}
-
-// The conversation's zoom: the session shown's own, or the preference (appearance.content_zoom), which is every session's that has
-// none of its own and the home page's.
-content_zoom :: proc(app: ^App, pane: ^Chat_Pane) -> f32 { return f32(store.kept_of(&app.session_zooms, pane.chat.id, f64(app.prefs.content_zoom))) }
-
-// The session shown's zoom (kept in session_zoom.txt); on the home page, the preference.
-content_zoom_set :: proc(app: ^App, z: f32) {
-	pane := main_pane(app)
-	zoom := clamp(z, CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX)
-	if pane.chat.id == "" {
-		pref_set_float(app, "appearance.content_zoom", zoom)
-		return
-	}
-	store.kept_set(&app.session_zooms, pane.chat.id, f64(zoom), f64(app.prefs.content_zoom))
-}
-
-content_zoom_by :: proc(app: ^App, factor: f32) { content_zoom_set(app, content_zoom(app, main_pane(app)) * factor) }
-
-// Back to the preference: the session follows it again.
-content_zoom_reset :: proc(app: ^App) {
-	pane := main_pane(app)
-	if pane.chat.id == "" { content_zoom_set(app, 1) } else { store.kept_forget(&app.session_zooms, pane.chat.id) }
-}
-
-// What the toolkit would make of the window's zoom, where it is the conversation's that is meant: Ctrl and the wheel over
-// the conversation, Ctrl and = - 0 without Shift (with it: the interface, which the toolkit does). Before the build.
-content_zoom_events :: proc(app: ^App, events: []platform.Event) {
-	pane := main_pane(app)
-	for &e in events {
-		#partial switch e.kind {
-		case .Scroll:
-			// (a dialog over the conversation has the wheel: the diagram viewer's zooms its diagram)
-			if .Ctrl not_in e.mods || overlay_open(app) || !draw.rect_contains(pane.conversation.rect, e.pos) { continue }
-			z := content_zoom(app, pane)
-			content_zoom_set(app, e.delta.y < 0 ? z * ui.feel(&app.state).zoom_step : z / ui.feel(&app.state).zoom_step)
-			e.kind = .None
-		case .Key_Press:
-			if e.mods != {.Ctrl} { continue }
-			#partial switch e.key {
-			case .Equal, .Num_Add:      content_zoom_by(app, ui.feel(&app.state).zoom_step)
-			case .Minus, .Num_Subtract: content_zoom_by(app, 1 / ui.feel(&app.state).zoom_step)
-			case .N0:                   content_zoom_reset(app)
-			case: continue
-			}
-			e.kind = .None
-		}
 	}
 }
 

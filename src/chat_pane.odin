@@ -23,6 +23,9 @@ Chat_Pane :: struct {
 	read:         remote.Remote,      // the newest page of its conversation
 	queue:        Queue,              // what waits in the inbox of its session (queue.odin)
 	artifacts:    Chat_Artifacts,     // what its session made: cards in its conversation (schedules.odin)
+	// its conversation's zoom, keyed by the session shown in App.session_zooms (zooms_load sets the memory): the zoom keys
+	// act on it while the keyboard is in the pane, Ctrl+wheel while the pointer is over it
+	zone:         ui.Zoom_Zone,
 	// (atomic) moves when it shows another conversation (pane_marked): what the requests' workers read of it. Not Chat.gen itself:
 	// chat_reset writes it as a whole struct, which a worker cannot read while it is written.
 	mark:         u64,

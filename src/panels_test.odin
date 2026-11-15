@@ -1178,8 +1178,8 @@ closing_stops_every_connection_and_shell :: proc(t: ^testing.T) {
 	testing.expect(t, sync.atomic_load(&l.stop), "the browser's")
 }
 
-// A shell's zoom is its own (Ctrl+= on the one with the keyboard, Ctrl and the wheel over one), nothing goes to the shell,
-// and it is kept by the shell's id: the program started again finds it on the same shell. Back to 1 or closed: forgotten.
+// A shell's zoom is its grid's zone (the interface routes the zoom keys and Ctrl+wheel to it): nothing goes to the shell,
+// and it is kept by the shell's id: the program started again finds it on the same shell. Reset or closed: forgotten.
 @(test)
 each_shell_has_its_own_zoom_kept_by_its_id :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
@@ -1193,26 +1193,28 @@ each_shell_has_its_own_zoom_kept_by_its_id :: proc(t: ^testing.T) {
 	a, b := app.cx.terms.list[0], app.cx.terms.list[1]
 	built(app, a, 11)
 	ev := []platform.Event{{kind = .Key_Press, key = .Equal, mods = {.Ctrl}}}
-	testing.expect_value(t, len(term_events(app, &app.state, ev)), 0)
+	testing.expect_value(t, len(term_events(app, &app.state, ev)), 1)   // (left to the interface, which zooms the zone of the focus)
 	testing.expect_value(t, outbox(a), "")
-	testing.expect(t, a.view.zoom > 1.05 && b.view.zoom == 1, "the one with the keyboard only")
-	b.shown, b.view.box, b.view.rect, b.built_in = true, 12, {{0, 500}, {800, 900}}, &app.state   // (built in the main window: its input is the main window's)
-	wheel := []platform.Event{{kind = .Scroll, pos = {10, 600}, delta = {0, 1}, mods = {.Ctrl}}}
-	testing.expect_value(t, len(term_events(app, &app.state, wheel)), 0)
-	testing.expect(t, b.view.zoom < 0.95, "the one under the wheel")
+	// (each build marks a grid's zone with its shell's id: a bench builds nothing)
+	ui.zoom_zone(&a.view.zone, a.id)
+	ui.zoom_zone(&b.view.zone, b.id)
+	ui.zoom_zone_by(&a.view.zone, 1.25)
+	ui.zoom_zone_by(&b.view.zone, 0.8)
+	testing.expect(t, ui.zoom_zone_value(&a.view.zone) > 1.05 && ui.zoom_zone_value(&b.view.zone) < 0.95, "each its own")
 	// the program again: the same shells, their zooms
 	store.flush(&app.stores.zooms)
 	app2 := bench_new()
 	store.open(&app2.stores.zooms, file)
-	term_zooms_load(app2)
+	zooms_load(app2)
 	store.close(&app2.stores.zooms)
 	open_shells(t, app2, "a", "b")
-	testing.expect_value(t, app2.cx.terms.list[0].view.zoom, a.view.zoom)
-	testing.expect_value(t, app2.cx.terms.list[1].view.zoom, b.view.zoom)
-	// back to 1: forgotten; closed: forgotten
-	term_zoom_set(app, a, 1)
+	a2, b2 := app2.cx.terms.list[0], app2.cx.terms.list[1]
+	testing.expect_value(t, ui.zoom_zone(&a2.view.zone, a2.id), ui.zoom_zone_value(&a.view.zone))
+	testing.expect_value(t, ui.zoom_zone(&b2.view.zone, b2.id), ui.zoom_zone_value(&b.view.zone))
+	// reset: forgotten; closed: forgotten
+	ui.zoom_zone_reset(&a.view.zone)
 	term_close(app, b)
-	testing.expect_value(t, len(app.term_zooms.values), 0)
+	testing.expect_value(t, len(app.term_zooms.kept.values), 0)
 	store.close(&app.stores.zooms)   // (what was set last, on the disk)
 	data, _ := os.read_entire_file(file, context.temp_allocator)
 	testing.expect_value(t, string(data), "")

@@ -60,7 +60,7 @@ TERMINAL_FONT_PREF :: "appearance.text.terminal_font"
 
 PREF_DEFS := [?]config.Def{
 	{name = TERMINAL_FONT_PREF, title = i18n.later("Terminal font"), description = i18n.later("The family of the shells. Default: the client's own, Fira Mono, with no ligatures."), kind = .String, default = {s = ""}},
-	{name = "appearance.content_zoom", title = i18n.later("Content zoom"), description = i18n.later("Zoom of the conversation alone, whatever the interface's: each session's until it has its own (Ctrl + = / - over it, Ctrl + wheel; Ctrl + 0 brings it back to this one)."), kind = .Float, default = {f = 1}, bounded = true, min = CONTENT_ZOOM_MIN, max = CONTENT_ZOOM_MAX},
+	{name = "appearance.content_zoom", title = i18n.later("Content zoom"), description = i18n.later("Zoom of the conversation alone, whatever the interface's: each session's until it has its own (Ctrl + = / - while the keyboard is in it, Ctrl + wheel over it; Ctrl + 0 brings it back to this one)."), kind = .Float, default = {f = 1}, bounded = true, min = CONTENT_ZOOM_MIN, max = CONTENT_ZOOM_MAX},
 	{name = "conversation.width", title = i18n.later("Width"), description = i18n.later("Widest the conversation column gets, in logical pixels."), kind = .Int, default = {i = 880}, bounded = true, min = COLUMN_W_MIN, max = COLUMN_W_MAX},
 	{name = "conversation.reasoning", title = i18n.later("Reasoning"), description = i18n.later("How the model's reasoning shows: folded under a line, unfolded, or not at all."), kind = .String, default = {s = "collapsed"}, choices = {"collapsed", "expanded", "hidden"}, choice_labels = {i18n.later("Collapsed"), i18n.later("Expanded"), i18n.later("Hidden")}},
 	{name = "conversation.expand_tools", title = i18n.later("Expand tools"), description = i18n.later("Tool calls open with their input and output shown."), kind = .Bool, default = {b = false}},
@@ -221,6 +221,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.notices_keep = int(config.int_of(p, "notices.keep"))
 	if app.missed.opened { app.missed.log.cap = s.notices_keep }   // (the history past it goes at the next entry)
 	s.content_zoom = f32(config.float_of(p, "appearance.content_zoom"))
+	app.session_zooms.default = s.content_zoom   // (every session not zoomed follows it at once)
 	s.viewer_scale = f32(config.float_of(p, "conversation.image_viewer_size"))
 	s.start = config.string_of(p, "general.start")
 	s.show_fps = config.bool_of(p, "advanced.fps")

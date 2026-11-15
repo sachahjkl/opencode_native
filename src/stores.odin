@@ -2,8 +2,8 @@
 //   settings.txt        "key=value" lines: the Setup dialog's answer, the last session, the last server
 //   palette_choices.txt what the palette ranks first, by "<source>:<id>" (the toolkit's palette's usage memory: main's
 //                       ui.palette_memory_open; written when the palette goes, stores_close)
-//   terminal_zoom.txt   "id<TAB>zoom" lines: each shell's zoom (terminal.odin)
-//   session_zoom.txt    "id<TAB>zoom" lines: each session's conversation zoom (commands.odin)
+//   terminal_zoom.txt   "id<TAB>zoom" lines: each shell's zoom (main.odin zooms_load)
+//   session_zoom.txt    "id<TAB>zoom" lines: each session's conversation zoom (main.odin zooms_load)
 //   servers.txt         "name<TAB>url<TAB>protected password" lines, readable by the user only (servers.odin)
 //   drafts.json         what was typed in each session (drafts.odin)
 //   notices.txt         what the person missed, and what they acknowledged (gt:notices: missed.odin)

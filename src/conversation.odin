@@ -24,7 +24,6 @@ Conversation :: struct {
 	scroll_box:       ^ui.Box,        // the conversation's scroll box, when built this frame
 	column_drag_from: f32,            // the conversation's width when a handle of it was pressed (column_handles)
 	height:           f32,            // of the conversation, at the last frame
-	rect:             Rect,           // the conversation's place (Ctrl and the wheel over it zoom it)
 	width:            f32,            // the conversation's room, frame pixels (this frame)
 	beside_px:        f32,            // what the views beside it took of the window's width at the last layout (views.odin main_area)
 	layout_win_w:     f32,            // ... the window's width then
@@ -43,6 +42,10 @@ PAGE_SCROLL       :: 0.9    // of the view: the end of the last page stays in si
 LINE_SCROLL_EM    :: 3
 
 conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	// The pane's whole column is its zoom zone, not the messages' scroll box alone: the zoom keys follow the keyboard
+	// focus, which is mostly in the composer (the dock, below the messages). Keyed by the session shown, so another
+	// session shows its own zoom in this build; the home page ("") has the zone's own, not remembered.
+	zoom := ui.zoom_zone(&pane.zone, pane.chat.id)
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = hex(HEX_BG0), radius = 0})
 	if ui.column(flags = {.Draw_Background}, id = "###main") {
 		sc := ui.scale()
@@ -52,7 +55,6 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		if avail <= 0 { avail = AVAIL_FALLBACK_PX * sc }
 		pane.conversation.width = avail
 		pane.conversation.column_w = 0
-		zoom := content_zoom(app, pane)
 		cem := math.round(em * zoom)   // the conversation's own size: its zoom is not the interface's
 		col := max(COLUMN_MIN_W_PX * sc, min(app.prefs.column_w * sc * zoom, avail - em * 3))
 		side := max(em * 1.5, (avail - col) * 0.5)
@@ -61,7 +63,6 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			chat_header(app, em)
 		}
 		main := ui.parent_box()
-		pane.conversation.rect = main.rect
 		sb: ^ui.Box
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 		if ui.row(id = "###chat_row") {
@@ -86,7 +87,7 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			pane.conversation.scroll_box = ui.prev_box("###chat")
 		}
 		chat_scroll_settle(app, pane, sb)
-		if sb != nil && pane.chat.id != "" { column_handles(app, pane, sb, main, side, col, avail, em) }
+		if sb != nil && pane.chat.id != "" { column_handles(app, pane, sb, main, side, col, avail, em, zoom) }
 		dock(app, pane, em, side, col)
 		// the find bar over the conversation's top-right corner, under the header
 		find_bar(app, pane, em, avail - em * 1.4, sb != nil ? sb.rect.min.y - main.rect.min.y + em * 0.6 : em * 4)
@@ -98,9 +99,9 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 // in the middle). What it is let go at is the widest wanted (conversation.width): a narrower window narrows it, a wider one gives it
 // back. Each shows as two short strokes, faint until the pointer comes.
 @(private = "file")
-column_handles :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, side, col, avail, em: f32) {
+column_handles :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, side, col, avail, em, zoom: f32) {
 	hw := math.round(em * COLUMN_HANDLE_EM)
-	unit := ui.scale() * content_zoom(app, pane)   // (the preference is in logical pixels of the conversation)
+	unit := ui.scale() * zoom   // (the preference is in logical pixels of the conversation)
 	// (no room beside it, or the window narrows it already: nothing to give it by hand)
 	if side < hw * 1.5 || col < app.prefs.column_w * unit - 1 { return }
 	top := sb.rect.min.y - main.rect.min.y
