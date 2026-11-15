@@ -292,8 +292,8 @@ form_dismiss :: proc(app: ^App, f: ^Form_Req) {
 // How tall a question would be, in em: too much of it and it scrolls, or what is around it would be crushed.
 @(private = "file")
 field_height :: proc(fd: ^Form_Field) -> f32 {
-	h: f32 = FORM_FIELD_GAP_EM + (fd.title != "" ? FORM_LINE_EM : 0) + (fd.description != "" ? FORM_LINE_EM : 0)
-	h += f32(len(fd.options)) * (BUTTON_H_EM + FORM_OPTION_GAP_EM)
+	h: f32 = 2 * ui.LINE_GAP + (fd.title != "" ? FORM_LINE_EM : 0) + (fd.description != "" ? FORM_LINE_EM : 0)   // (form_page's gaps)
+	h += f32(len(fd.options)) * (BUTTON_H_EM + ui.SPACE_1)   // (form_field's)
 	if len(fd.options) == 0 || fd.custom { h += FORM_LINE_EM }
 	return h
 }
@@ -324,18 +324,18 @@ form_card :: proc(app: ^App, pane: ^Chat_Pane, f: ^Form_Req, others: int, em: f3
 	send, dismiss, next := false, false, false
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if plate(fmt.tprintf("###form_%s", f.id), top = HEX_PERM_TOP, bottom = HEX_PERM_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.1, border = ui.with_alpha(accent(), 0.55)) {
-		ui.spacer(ui.px(em * 0.7))
+		ui.space(ui.CARD_PAD)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###head") {
-			ui.spacer(ui.px(em))
+			ui.space(ui.CARD_PAD)
 			glyph(lucide.LIGHTBULB, accent(), math.round(em * ICON_LARGE), em * 1.6)
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.ICON_GAP)
 			title := f.question ? (sub ? i18n.tr("A sub-agent asks") : i18n.tr("The agent asks")) : (f.title != "" ? f.title : i18n.tr("The agent asks"))
 			text("t", title, accent(), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
 			if others > 1 { text("n", fmt.tprintf(i18n.tr("1 of %d"), others), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
-			ui.spacer(ui.px(em))
+			ui.space(ui.CARD_PAD)
 		}
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.LINE_GAP)
 		if wizard {
 			form_tabs(f, pages[:], em)
 			reviewing = f.page == len(pages)   // (a tab just clicked: this frame shows it)
@@ -350,26 +350,26 @@ form_card :: proc(app: ^App, pane: ^Chat_Pane, f: ^Form_Req, others: int, em: f3
 		} else {
 			form_page(app, f, pages[:], reviewing, wizard, em, &send, &next)
 		}
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.LINE_GAP)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###foot") {
-			ui.spacer(ui.px(em))
+			ui.space(ui.CARD_PAD)
 			if ui.button("form_dismiss", i18n.tr("Dismiss"), o = {face = .Ghost, disabled = f.sending}).clicked { dismiss = true }
 			ui.spacer(ui.fill())
 			if wizard && f.page > 0 {
 				if ui.button("form_prev", i18n.tr("Back"), lucide.ARROW_LEFT).clicked { f.page -= 1 }
-				ui.spacer(ui.px(em * 0.4))
+				ui.space(ui.CONTROL_GAP)
 			}
 			if wizard && !reviewing {
 				if ui.button("form_next", ui.text_shown(f.page == len(pages) - 1 ? i18n.tr("Review") : i18n.tr("Next")), lucide.ARROW_RIGHT, {intent = .Primary}).clicked { next = true }
 			} else {
 				if ui.button("form_send", i18n.tr("Send"), lucide.CHECK, {intent = .Primary, disabled = f.sending}).clicked { send = true }
 			}
-			ui.spacer(ui.px(em))
+			ui.space(ui.CARD_PAD)
 		}
-		ui.spacer(ui.px(em * 0.7))
+		ui.space(ui.CARD_PAD)
 	}
-	ui.spacer(ui.px(em * 0.7))
+	ui.space(ui.ITEM_GAP)
 	if next { f.page += 1 }
 	if dismiss { form_dismiss(app, f) } else if send { form_send(app, f) }
 }
@@ -379,7 +379,7 @@ form_card :: proc(app: ^App, pane: ^Chat_Pane, f: ^Form_Req, others: int, em: f3
 form_tabs :: proc(f: ^Form_Req, pages: []int, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###tabs") {
-		ui.spacer(ui.px(em))
+		ui.space(ui.CARD_PAD)
 		h := math.round(em * BUTTON_COMPACT_H_EM)
 		// each tab as wide as its title, onto a next line when they do not fit (shared out equally, a long title ran over the
 		// next tab)
@@ -392,9 +392,9 @@ form_tabs :: proc(f: ^Form_Req, pages: []int, em: f32) {
 			}
 			if ui.button("form_tab_review", i18n.tr("Review"), o = {face = f.page == len(pages) ? .Toggled : .Ghost, height = h}).clicked { f.page = len(pages) }
 		}
-		ui.spacer(ui.px(em))
+		ui.space(ui.CARD_PAD)
 	}
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.LINE_GAP)
 }
 
 // What the field says now, for a person to read ("": nothing yet).
@@ -428,11 +428,11 @@ form_page :: proc(app: ^App, f: ^Form_Req, pages: []int, reviewing, wizard: bool
 			fd := &f.fields[p]
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###rv%d", k)) {
-				ui.spacer(ui.px(em))
+				ui.space(ui.CARD_PAD)
 				a := field_answer(fd)
 				name := fd.title != "" ? fd.title : fd.description != "" ? fd.description : fmt.tprintf(i18n.tr("Question %d"), k + 1)
 				if ui.button(fmt.tprintf("form_rv%d", k), ui.text_shown(label_safe(fmt.tprintf("%s:  %s", name, a != "" ? a : i18n.tr("no answer")))), o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true}).clicked { f.page = k }
-				ui.spacer(ui.px(em))
+				ui.space(ui.CARD_PAD)
 			}
 			ui.spacer(ui.px(em * 0.15))
 		}
@@ -442,21 +442,21 @@ form_page :: proc(app: ^App, f: ^Form_Req, pages: []int, reviewing, wizard: bool
 	fd := &f.fields[pages[f.page]]
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = fmt.tprintf("###f%d", pages[f.page])) {
-		ui.spacer(ui.px(em))
+		ui.space(ui.CARD_PAD)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column() {
 			if fd.title != "" && fd.title != fd.description {
 				text("t", fd.title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
 			}
 			if fd.description != "" { info_line(app, "###d", fd.description, em, hex(HEX_TEXT_SOFT)) }
-			ui.spacer(ui.px(em * 0.35))
+			ui.space(ui.LINE_GAP)
 			// (picked, or Enter: on to what comes next, the end of the form if there is nothing else)
 			done := false
 			form_field(app, fd, em, &done)
 			if done { if wizard { next^ = true } else { send^ = true } }
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.LINE_GAP)
 		}
-		ui.spacer(ui.px(em))
+		ui.space(ui.CARD_PAD)
 	}
 }
 
@@ -486,7 +486,7 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 				ui.line_edit_set(&fd.text, "")
 				done^ = true
 			}
-			ui.spacer(ui.px(em * 0.25))
+			ui.space(ui.SPACE_1)
 		}
 		if len(fd.options) == 0 || fd.custom {
 			form_line(fd, em, fd.placeholder != "" ? fd.placeholder : len(fd.options) > 0 ? i18n.tr("Something else") : i18n.tr("Your answer"), done)

@@ -174,7 +174,6 @@ BUTTON_RADIUS       :: 6
 GLYPH_BUTTON_RADIUS :: 5
 CARD_RADIUS         :: 9      // the plates of the conversation
 GROOVE_BOX_PX       :: 6      // the box a groove lies in, thicker than its line
-DIALOG_MARGIN_EM    :: 1.4
 LINE_HEIGHT_RATIO   :: 1.35   // of the font size
 SELECTION_ALPHA     :: 0.28
 FADE_VISIBLE        :: 0.01   // a hover or focus fade above this shows on screen

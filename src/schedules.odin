@@ -231,11 +231,11 @@ schedules_view :: proc(v: ^ui.View, app: ^App) {
 			// (the margins inside what scrolls: on its edge a field's rim and glow were cut)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row(id = "###sc_lane") {
-				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+				ui.space(ui.PAGE_MARGIN)
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column(id = "###sc_col") {
 					if read_shown(app, "###sc_read", &s.read, em, schedules_ask) {
-						schedule_form(app, w - 2 * em * DIALOG_MARGIN_EM, em)
+						schedule_form(app, w - 2 * math.round(em * ui.PAGE_MARGIN), em)
 						ui.spacer(ui.px(em * 0.8))
 						if len(s.list) == 0 {
 							info_line(app, "###sc_none", i18n.tr("Nothing is planned yet."), em)
@@ -246,7 +246,7 @@ schedules_view :: proc(v: ^ui.View, app: ^App) {
 						for &it, i in s.list { schedule_row(app, &it, i, now, w, em) }
 					}
 				}
-				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+				ui.space(ui.PAGE_MARGIN)
 			}
 		}
 		ui.spacer(ui.px(em * 0.9))
@@ -609,7 +609,7 @@ artifacts_view :: proc(v: ^ui.View, app: ^App) {
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 		if ui.row(id = "###ar_body") {
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+			ui.space(ui.PAGE_MARGIN)
 			// (a share of the room: at its full width in a small dialog, it left the right side less than its buttons take)
 			ui.next({width = ui.px(math.round(min(em * FILES_LIST_W_EM, ui.parent_box().size.x * ARTIFACTS_LIST_SHARE))), height = ui.fill()})
 			if ui.scroll_y("###ar_list") {
@@ -630,7 +630,7 @@ artifacts_view :: proc(v: ^ui.View, app: ^App) {
 			ui.spacer(ui.px(em))
 			ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 			if ui.column(id = "###ar_right") { artifact_right(app, em) }
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+			ui.space(ui.PAGE_MARGIN)
 		}
 		ui.spacer(ui.px(em * 0.9))
 	}

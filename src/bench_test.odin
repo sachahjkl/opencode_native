@@ -31,6 +31,7 @@ import "gt:term"
 import "gt:ui"
 import lucide "gt:lucide"
 import notices "gt:notices"
+import remote "gt:remote"
 import session "gt:testkit/session"
 import "gt:testkit/unwatched"
 
@@ -323,7 +324,16 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		// a tool of no known kind, open: its input in one well, the long value under its key
 		app.prefs.expand_tools = true
 		session.frames(s, 6)
-		testing.expect(t, session.find(s, "iv0") != nil && session.find(s, "kv1") != nil, "the input's long value and its short one")
+		testing.expect(t, session.find(s, "iv0") != nil && session.find(s, "sr_kv1") != nil, "the input's long value and its short one")
+		// (what the well holds sits the toolkit's inset from its edges: ui.INNER_PAD, not rows padded by hand)
+		if key := session.find(s, "ik0"); key != nil && key.parent != nil && key.parent.parent != nil && key.parent.parent.parent != nil {
+			w := key.parent.parent.parent   // (the well: its padded line, its body, then the key's row)
+			inset := math.round(w.font_size * ui.INNER_PAD)
+			testing.expectf(t, abs(key.rect.min.x - w.rect.min.x - inset) <= 1.5 && abs(key.rect.min.y - w.rect.min.y - inset) <= 1.5,
+				"the first key %v from the well's corner, its inset %v", key.rect.min - w.rect.min, inset)
+		} else {
+			testing.fail_now(t, "the input's well and its first key")
+		}
 		app.prefs.expand_tools = false
 		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.frames(s, 6)
@@ -3086,6 +3096,26 @@ escape_in_a_font_picker_closes_the_picker_alone :: proc(t: ^testing.T) {
 		session.wait_idle(s)
 		testing.expect(t, !app.term_picker.open, "Escape closes it")
 		testing.expect(t, ui.view_is_open(&app.program_views, SETTINGS_VIEW), "and the settings stay")
+	})
+}
+
+// The MCP servers are one list: a card of rows (the toolkit's list card), not a card per server with gaps between.
+@(test)
+the_mcp_servers_are_one_list_card :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		settings_open_on(app, "mcp")
+		// (the bench has no server: its reading fails, then the page is given two servers as read)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return remote.failed(&the_app.facts.reads[.Mcp]) }, "the reading, over")
+		f := &app.facts
+		append(&f.mcp, Mcp_Server{name = strings.clone("a"), status = .Connected}, Mcp_Server{name = strings.clone("b"), status = .Failed})
+		remote.settle(&f.reads[.Mcp], .Ready, "")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "mcp1") != nil }, "the second server's row")
+		list, a, b := session.find(s, "mcp"), session.find(s, "mcp0"), session.find(s, "mcp1")
+		if !testing.expect(t, list != nil && a != nil && b != nil, "the list and its rows") { return }
+		testing.expect(t, b.rect.min.y - a.rect.max.y < 4, "the rows touch: a hairline parts them, no gap")
+		testing.expect(t, a.rect.min.y > list.rect.min.y && b.rect.max.y < list.rect.max.y, "both inside the one card")
 	})
 }
 

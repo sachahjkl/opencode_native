@@ -473,12 +473,12 @@ changes_view :: proc(view: ^ui.View, app: ^App) {
 		// (under the header, as wide as the dialog: the corner is the close cross's only beside the header)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###ch_sub") {
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+			ui.space(ui.PAGE_MARGIN)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
 				if !viewing || read_shown(app, "###ch_read", &c.read, em, changes_read) { info_line(app, "###ch_say", changes_say(c), em) }
 			}
-			ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+			ui.space(ui.PAGE_MARGIN)
 		}
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.fill()})
@@ -486,7 +486,7 @@ changes_view :: proc(view: ^ui.View, app: ^App) {
 			for &f, i in c.files {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if ui.row(id = fmt.tprintf("###chf%d", i)) {
-					ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+					ui.space(ui.PAGE_MARGIN)
 					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 					if ui.column() {
 						ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center, cursor = .Hand})
@@ -516,7 +516,7 @@ changes_view :: proc(view: ^ui.View, app: ^App) {
 						}
 						ui.spacer(ui.px(em * 0.4))
 					}
-					ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+					ui.space(ui.PAGE_MARGIN)
 				}
 			}
 		}
@@ -528,7 +528,7 @@ changes_view :: proc(view: ^ui.View, app: ^App) {
 				if ui.button("ch_cancel", i18n.tr("Cancel")).clicked { ui.view_end(view, ui.VIEW_CANCELLED) }
 				ui.spacer(ui.px(em * 0.5))
 				if ui.button("ch_go", i18n.tr("Go back"), lucide.UNDO_2, {intent = .Danger, disabled = staging}).clicked { revert_commit(app) }
-				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+				ui.space(ui.PAGE_MARGIN)
 			}
 		}
 		ui.spacer(ui.px(em * 0.8))

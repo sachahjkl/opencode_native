@@ -33,3 +33,7 @@ purpose, the decisions, what was refused.
   command line to the window that runs; `--quit` ends it as Quit does; the starts that stay on their own.
 - [features/palette.md](features/palette.md): the toolkit's palette with ocn's sources; the shared prefixes; what was
   lost and why.
+- [features/spacing.md](features/spacing.md): the toolkit's spacing scale in the cards, lists and wells; what keeps
+  its own size and why.
+- [features/setup.md](features/setup.md): gt:setup's screen with ocn's content (identity, logo, vendor); no note,
+  no screen of its own.

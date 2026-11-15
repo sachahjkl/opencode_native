@@ -303,9 +303,9 @@ job_card :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, r: ^Job_Report, k: in
 		// (the header shows the command's start: its whole on hover)
 		if r.kind == .Shell && r.command != "" && ui.hovered_for(hs) { if ui.tooltip() { ui.tooltip_text(r.command) } }
 		if ui.parent(hb) {
-			ui.spacer(ui.px(em * CARD_PAD_EM))
+			ui.space(ui.CARD_PAD)
 			state_mark("###st", r.state, size = em * CARD_MARK_EM)
-			ui.spacer(ui.px(em * CARD_MARK_GAP_EM))
+			ui.space(ui.ICON_GAP)
 			text("w", job_title(r), sub_state_ink(r.state), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.6))
 			switch r.kind {

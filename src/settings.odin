@@ -50,8 +50,6 @@ HEX_SETTING_NAME   :: 0xeeeeeeff
 HEX_SWATCH_WELL    :: 0x0a0a0aff
 HEX_FACT_VALUE     :: 0xd0d0d0ff
 HEX_FACT_NAME      :: 0xd8d8d8ff
-HEX_MCP_TOP        :: 0x171717ff
-HEX_MCP_BOTTOM     :: 0x121212ff
 HEX_MCP_NAME       :: 0xf0f0f0ff
 HEX_WORKSPACE_NAME :: 0xe0e0e0ff
 HEX_CATALOG_NAME   :: 0xe8e8e8ff
@@ -801,7 +799,7 @@ info_line :: proc(app: ^App, id, s: string, em: f32, color := Color{}) {
 @(private = "file")
 fact :: proc(id, k, v: string, em: f32, col := Color{}) {
 	if ui.style({font_size = math.round(em * FS_SMALL)}) {
-		ui.stat_row(id, k, v, {height = em * 1.5, key_width = em * 8.5, value_color = col.a > 0 ? col : hex(HEX_FACT_VALUE), selectable = true, inset = [2]f32{0.8, 0.6} / FS_SMALL})
+		ui.stat_row(id, k, v, {height = em * 1.5, key_width = em * 8.5, value_color = col.a > 0 ? col : hex(HEX_FACT_VALUE), selectable = true, inset = [2]f32{0, 0}})   // (the well's pad is its inset)
 	}
 }
 
@@ -826,8 +824,7 @@ page_server :: proc(app: ^App, em: f32) {
 	f := &app.facts
 	section(app, i18n.tr("SERVER"), em)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if ui.well("###srv") {
-		ui.spacer(ui.px(em * 0.4))
+	if ui.well("###srv", pad = ui.INNER_PAD) {
 		// (labels with a capital, as every other label of the settings)
 		fact("###s1", i18n.tr("Address"), server_base(app), em)
 		fact("###s2", i18n.tr("Status"), online(app) ? i18n.tr("connected") : i18n.tr("not connected"), em, online(app) ? hex(HEX_GREEN) : hex(HEX_YELLOW))
@@ -837,7 +834,6 @@ page_server :: proc(app: ^App, em: f32) {
 		fact("###s4", i18n.tr("Authentication"), app.servers[app.server].password == "" ? i18n.tr("authentication", "none") : app.servers[app.server].local ? i18n.tr("Basic (password from service.json)") : "Basic", em)
 		fact("###s5", i18n.tr("Sessions"), fmt.tprintf(i18n.tr("%d loaded · %d running"), len(app.sessions), len(app.busy)), em)
 		fact("###s6", i18n.tr("Client"), fmt.tprintf("opencode native %s", APP_VERSION), em)
-		ui.spacer(ui.px(em * 0.4))
 	}
 	section(app, i18n.tr("SHELL"), em)
 	info_line(app, "###shh", i18n.tr("The shell of the terminal and of the agents' tools (written to the configuration's \"shell\"); also in the server's menu."), em)
@@ -885,26 +881,25 @@ page_server :: proc(app: ^App, em: f32) {
 page_mcp :: proc(app: ^App, em: f32) {
 	f := &app.facts
 	info_line(app, "###mh", i18n.tr("Model Context Protocol servers give the agents more tools. Connecting or disconnecting one applies to the server now."), em)
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.LINE_GAP)
 	if !read_shown(app, "###mcp_read", &f.reads[.Mcp], em, server_facts_load) { return }
 	if len(f.mcp) == 0 {
 		info_line(app, "###none", i18n.tr("No MCP server is configured."), em, hex(HEX_FAINT))
 		return
 	}
-	for &m, i in f.mcp {
+	// (one list: a card of rows, not a card per server)
+	if ui.list_card("###mcp") { for &m, i in f.mcp {
 		connected := m.status == .Connected
 		going := mcp_going(f, m.name)
 		col := connected ? hex(HEX_GREEN) : m.status == .Failed || m.error != "" ? hex(HEX_RED) : hex(HEX_FAINT)
 		word := going != nil ? (going.connecting ? i18n.tr("connecting…") : i18n.tr("disconnecting…")) : m.word != "" ? m.word : "?"
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-		if plate(fmt.tprintf("###mcp%d", i), top = HEX_MCP_TOP, bottom = HEX_MCP_BOTTOM, radius = 8, shadow = 4) {
-			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
+		if ui.card_row(fmt.tprintf("###mcp%d", i), .Y) {
+			ui.next({width = ui.fill(), height = ui.px(math.round(em * BUTTON_SMALL_H_EM)), axis = .X, cross = .Center})
 			if ui.row(.Center) {
-				ui.spacer(ui.px(em * 0.9))
 				lamp("###l", col, connected ? 1 : 0.4, size = em * 0.9)
-				ui.spacer(ui.px(em * 0.5))
+				ui.space(ui.ICON_GAP)
 				text("n", m.name, hex(HEX_MCP_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL)})
-				ui.spacer(ui.px(em * 0.6))
+				ui.space(ui.ICON_GAP)
 				text("s", word, col, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 				// (what goes on says itself: no button says the opposite meanwhile)
 				if going == nil {
@@ -914,20 +909,17 @@ page_mcp :: proc(app: ^App, em: f32) {
 						if ui.button("co", i18n.tr("Connect"), o = {intent = .Success, height = math.round(em * BUTTON_SMALL_H_EM)}).clicked { mcp_switch(app, m.name, true) }
 					}
 				}
-				ui.spacer(ui.px(em * 0.8))
 			}
 			if m.error != "" {
+				ui.space(ui.LINE_GAP)
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if ui.row() {
-					ui.spacer(ui.px(em * 2.2))
+					ui.spacer(ui.px(math.round(em * (0.9 + ui.ICON_GAP))))   // (under the name: the lamp and its gap)
 					info_line(app, "###err", m.error, em, hex(HEX_ERROR_TEXT))
-					ui.spacer(ui.px(em))
 				}
-				ui.spacer(ui.px(em * 0.5))
 			}
 		}
-		ui.spacer(ui.px(em * 0.5))
-	}
+	} }
 }
 
 page_usage :: proc(app: ^App, em: f32) {
