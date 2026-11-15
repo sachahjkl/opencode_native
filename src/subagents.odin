@@ -35,9 +35,8 @@ MENU_FINISHED_CHARS :: 48
 CHIP_TITLE_CHARS    :: 34
 CHIP_ACTIVITY_CHARS :: 30
 
-// Finishing: its call is over, its session still busy (it hands back what it found). Background: a call that launched it
-// and returned, nothing known yet of how it went.
-Sub_State :: enum u8 { Starting, Running, Finishing, Done, Failed, Cancelled, Background, Unknown }
+// Finishing: a foreground call (an older session's) is over, its session still busy (it hands back what it found).
+Sub_State :: enum u8 { Starting, Running, Finishing, Done, Failed, Cancelled, Unknown }
 
 // Everything known of one sub-agent, gathered from its call, its session, its result message and the live stream.
 Sub_View :: struct {
@@ -46,7 +45,7 @@ Sub_View :: struct {
 	desc:       string,
 	prompt:     string,
 	model:      string,
-	background: bool,
+	work_runs:  bool,            // its last report says its own background work still runs
 	state:      Sub_State,
 	result:     string,          // what it handed back
 	session:    ^Session_Info,   // its session, when known (children of the session shown)
@@ -63,7 +62,6 @@ sub_state_label :: proc(s: Sub_State) -> string {
 	case .Done:       return i18n.tr("done")
 	case .Failed:     return i18n.tr("failed")
 	case .Cancelled:  return i18n.tr("stopped")
-	case .Background: return i18n.tr("in background")
 	case .Unknown:    return i18n.tr("launched")
 	}
 	return ""
@@ -158,6 +156,7 @@ Sub_Index :: struct {
 	made:     bool,
 	at:       u64,                // Chat.subs_seq it was read at
 	results:  map[string]int,     // a sub-agent's session → the last message its result came back in (an index into messages)
+	calls:    map[string]int,     // ... → the last message with a call that launches it (sub_call_launches)
 	claimed:  map[string]bool,    // the sessions a call of the conversation names
 	computed: int,                // times it was read (tests)
 }
@@ -167,14 +166,40 @@ sub_index :: proc(c: ^Chat) -> ^Sub_Index {
 	if x.made && x.at == c.subs_seq { return x }
 	a := arena_renew(&c.subs_arena)
 	x.results = make(map[string]int, allocator = a)
+	x.calls = make(map[string]int, allocator = a)
 	x.claimed = make(map[string]bool, allocator = a)
 	for &m, i in c.messages {
 		if m.kind == .Synthetic && m.sub_child != "" { x.results[strings.clone(m.sub_child, a)] = i }   // (the last one wins)
-		for &p in m.parts { if p.sub_session != "" { x.claimed[strings.clone(p.sub_session, a)] = true } }
+		for &p in m.parts {
+			if p.sub_session == "" { continue }
+			key := strings.clone(p.sub_session, a)
+			x.claimed[key] = true
+			if sub_call_launches(&p) { x.calls[key] = i }
+		}
 	}
 	x.made, x.at = true, c.subs_seq
 	x.computed += 1
 	return x
+}
+
+// A call that sets its child to work: under way, or returned at once with the child running on (background-subagents.md). A
+// foreground call that returned handed back its result; a failed one launched nothing.
+sub_call_launches :: proc(p: ^Part) -> bool {
+	#partial switch p.status {
+	case .Pending, .Running: return true
+	case .Done:              return p.sub_launched
+	}
+	return false
+}
+
+// The child was set to work by a call after its last report: its report is still to come. Messages, not clocks, say what came
+// after what: a report is delivered after the step of its call, a follow-up call is in a step after the report it answers.
+sub_awaited :: proc(c: ^Chat, child: string) -> bool {
+	x := sub_index(c)
+	call, launched := x.calls[child]
+	if !launched { return false }
+	report, reported := x.results[child]
+	return !reported || call > report
 }
 
 // The result message of a sub-agent in the session shown (nil: none yet).
@@ -191,16 +216,17 @@ sub_view :: proc(app: ^App, child: string, p: ^Part = nil) -> (v: Sub_View) {
 	v.state = .Unknown
 	call_done := false   // (a foreground call that returned: its session may still be busy a moment, handing back)
 	if p != nil {
-		v.agent, v.desc, v.prompt, v.model, v.background = p.sub_agent, p.sub_desc, p.sub_prompt, p.sub_model, p.sub_background
+		v.agent, v.desc, v.prompt, v.model = p.sub_agent, p.sub_desc, p.sub_prompt, p.sub_model
 		v.started = p.started_ms
 		switch p.status {
 		case .Pending: v.state = .Starting
 		case .Running: v.state = .Running
 		case .Error:   v.state = .Failed; v.result = p.output; v.ended = p.ended_ms
 		case .Done:
-			// a foreground call ends with the sub-agent: its output is the result; a background one only launched it
-			if p.sub_background {
-				v.state = .Background
+			// A launch returns at once: its output is the server's word to the model, not a result, and the child runs on until
+			// its report (below). An older session's foreground call ends with its child: its output is the result.
+			if p.sub_launched {
+				v.state = .Running
 			} else {
 				v.state = .Done; v.result = p.output; v.ended = p.ended_ms
 				call_done = true
@@ -224,7 +250,17 @@ sub_view :: proc(app: ^App, child: string, p: ^Part = nil) -> (v: Sub_View) {
 		if m.text != "" { v.result = m.text }
 		if v.desc == "" { v.desc = m.sub_desc }
 		if v.agent == "" { v.agent = strings.to_lower(m.sub_agent, context.temp_allocator) }
-		if v.ended == 0 { v.ended = m.created }
+		if m.sub_running {
+			// (it went idle, its own background work goes on: its final report is still to come)
+			v.state, v.work_runs, v.ended = .Running, true, 0
+		} else if v.ended == 0 {
+			v.ended = m.created
+		}
+	}
+	if sub_awaited(c, child) {
+		// (a call set it to work after its last report: what its session or that report said is over)
+		v.state, v.work_runs, v.ended = .Running, false, 0
+		v.result = ""   // (that report answered an earlier call)
 	}
 	if l, ok := c.live[child]; ok { v.live, v.has_live = l, true }
 	if app.busy[child] or_else false {
@@ -574,7 +610,7 @@ card_body :: proc(app: ^App, v: ^Sub_View, p: ^Part, pid: string, running: bool,
 card_meta :: proc(v: ^Sub_View, running: bool) -> string {
 	parts := make([dynamic]string, context.temp_allocator)
 	if running && v.has_live && v.live.activity != "" { append(&parts, v.live.activity) }
-	if v.background { append(&parts, i18n.tr("background")) }
+	if v.work_runs { append(&parts, i18n.tr("its background work runs")) }
 	if v.model != "" { append(&parts, short_model(v.model)) }
 	if v.live.tools > 0 { append(&parts, fmt.tprintf(i18n.tr(v.live.tools, "%d tools", "%d tools"), v.live.tools)) }
 	tin, tout, cost := sub_totals(v)
@@ -631,6 +667,8 @@ sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 	v := sub_view(app, m.sub_child)
 	st, _ := state_of_word(m.sub_state)
+	// A report that says the child's own work still runs is a past event: a quiet mark, not a lamp. The card says the present.
+	if m.sub_running { st = .Unknown }
 	open := part_open(app, m.id)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.column(id = fmt.tprintf("###sr_%s", m.id)) {
@@ -647,7 +685,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 			ui.spacer(ui.px(em * CARD_MARK_GAP_EM))
 			text("ag", v.agent != "" ? v.agent : i18n.tr("sub-agent"), hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.4))
-			word := st == .Done ? i18n.tr("returned") : sub_state_label(st)
+			word := m.sub_running ? i18n.tr("reported, its work runs on") : st == .Done ? i18n.tr("returned") : sub_state_label(st)
 			text("w", word, sub_state_ink(st), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.6))
 			desc := m.sub_desc != "" ? m.sub_desc : v.desc
@@ -732,10 +770,43 @@ subagent_banner :: proc(app: ^App, em: f32) {
 ////////////////////////////////
 // The sub-agents of the session shown, as a button of its header and its menu
 
-// The sub-agents of the session shown that run now.
+// Which sub-agents of the session shown run now (their sub_view goes on: busy, awaited, or their work runs on), kept until what
+// decides it changes: the index (subs_seq), what runs (marks_ver), the list of children (children_ver). The header, the chips and
+// the tray read it at every build; each of them asked every child before.
+Sub_Running :: struct {
+	made:     bool,
+	at:       [3]u64,
+	listed:   [dynamic]int,      // indices into Chat.children, in its order (newest first)
+	ids:      map[string]bool,   // all of them (keys: the children's or the index's strings, kept as long as this is)
+	unlisted: int,               // a call names them, the list of children does not have them yet
+	computed: int,               // times it was made (tests)
+}
+
+sub_running :: proc(app: ^App) -> ^Sub_Running {
+	c := &app.chat
+	r := &c.running
+	now := [3]u64{c.subs_seq, app.cx.marks_ver, c.children_ver}
+	if r.made && r.at == now { return r }
+	a := arena_renew(&c.running_arena)
+	r.listed = make([dynamic]int, a)
+	r.ids = make(map[string]bool, allocator = a)
+	r.unlisted = 0
+	for &s, i in c.children {
+		if sub_live(sub_view(app, s.id).state) { append(&r.listed, i); r.ids[s.id] = true }
+	}
+	for id in sub_index(c).claimed {
+		if id in c.child_ids || id in r.ids { continue }
+		if sub_live(sub_view(app, id).state) { r.ids[id] = true; r.unlisted += 1 }
+	}
+	r.made, r.at = true, now
+	r.computed += 1
+	return r
+}
+
+// The sub-agents of the session shown that run now, of its list of children.
 active_children :: proc(app: ^App) -> [dynamic]^Session_Info {
 	list := make([dynamic]^Session_Info, context.temp_allocator)
-	for &s in app.chat.children { if app.busy[s.id] or_else false { append(&list, &s) } }
+	for i in sub_running(app).listed { append(&list, &app.chat.children[i]) }
 	return list
 }
 
@@ -770,8 +841,9 @@ subagents_button :: proc(app: ^App, em: f32) {
 		}
 		ui.menu_heading(fmt.tprintf(i18n.tr("Finished (%d)"), len(c.children) - len(active)))
 		shown := 0
+		running := sub_running(app)
 		for &s in c.children {
-			if app.busy[s.id] or_else false { continue }
+			if s.id in running.ids { continue }
 			if shown == FINISHED_SHOWN { ui.menu_item(fmt.tprintf(i18n.tr(len(c.children) - len(active) - shown, "… and %d more", "… and %d more"), len(c.children) - len(active) - shown), disabled = true); break }
 			v := sub_view(app, s.id)
 			mark := "·"

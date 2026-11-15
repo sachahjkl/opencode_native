@@ -2401,8 +2401,8 @@ fr RÉSULTAT
 en No result yet: it is still working.
 fr Pas encore de résultat : il travaille encore.
 
-en background
-fr arrière-plan
+en its background work runs
+fr son travail d'arrière-plan continue
 
 en %d tools
 en+ %d tools
@@ -2444,6 +2444,9 @@ fr %d étapes · %d appels d'outils
 
 en sub-agent
 fr sous-agent
+
+en reported, its work runs on
+fr a rendu compte, son travail continue
 
 en returned
 fr a rendu

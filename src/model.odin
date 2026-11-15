@@ -69,7 +69,7 @@ Part :: struct {
 	done:      bool,
 	// a sub-agent launched by this call (tool "subagent")
 	sub_session, sub_agent, sub_desc, sub_prompt, sub_model: string,
-	sub_background: bool,
+	sub_launched: bool,   // its metadata says status "running": the call returned at once, the child works on (background-subagents.md)
 	started_ms, ended_ms: f64,
 	images:    [dynamic]Image_Ref,   // what a tool handed back as images (screenshots, images read)
 	// what a call changed in files (tool_views.odin): the server's patch, else made from its input
@@ -116,6 +116,7 @@ Message :: struct {
 	streaming: bool,
 	// a sub-agent's result handed back to this session (a synthetic message whose metadata.source is "subagent")
 	sub_child, sub_state, sub_agent, sub_desc: string,
+	sub_running: bool,   // its tag's state is "running": the child went idle while its own background work runs on
 	// synthetic: the harness's reports of background jobs that ended, when its text is only those (job_reports.odin)
 	jobs:      []Job_Report,
 	images:    [dynamic]Image_Ref,   // attached to a user's prompt
@@ -153,6 +154,7 @@ Chat :: struct {
 	children:     [dynamic]Session_Info,   // sessions whose parent is this one (newest first; in children_arena: read often)
 	child_ids:    map[string]bool,         // ... their ids, for is_child: asked of every event of another session (in children_arena)
 	children_arena: virtual.Arena,
+	children_ver: u64,                     // a new list of children (children_load): what sub_running keeps is made again
 	live:         map[string]Sub_Live,     // keyed by child session id (keys and strings in the arena)
 	goal:         Goal,                    // its /goal (goal.odin; strings in the arena)
 	has_goal:     bool,
@@ -162,6 +164,8 @@ Chat :: struct {
 	subs_seq:     u64,                     // a change of what says which session is whose: a page read, a message gone, a call naming its session (subs_changed)
 	subs:         Sub_Index,               // what the conversation says of its sub-agents (subagents.odin sub_index; in subs_arena)
 	subs_arena:   virtual.Arena,
+	running:      Sub_Running,             // which sub-agents run now (subagents.odin sub_running; in running_arena)
+	running_arena: virtual.Arena,
 }
 
 // The messages or their parts changed: what is made from them is made again when next asked (Local_Kept).
@@ -197,6 +201,7 @@ Permission :: struct {
 chat_reset :: proc(c: ^Chat) {
 	if c.alloc.procedure != nil { virtual.arena_destroy(&c.arena); virtual.arena_destroy(&c.children_arena) }
 	virtual.arena_destroy(&c.subs_arena)   // (zero when nothing asked for the index: destroying it does nothing)
+	virtual.arena_destroy(&c.running_arena)
 	gen := c.gen
 	c^ = {}
 	c.gen = gen + 1
@@ -432,6 +437,7 @@ children_load :: proc(app: ^App, v: json.Value) {
 		append(&c.children, session_from_json(it, a))
 		c.child_ids[c.children[len(c.children) - 1].id] = true
 	}
+	c.children_ver += 1
 }
 
 find_child :: proc(c: ^Chat, id: string) -> ^Session_Info {
@@ -797,17 +803,7 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 		}
 		if n := len(m.parts); m.streaming && n > 0 && m.parts[n - 1].kind != .Tool { m.parts[n - 1].done = false }
 	case "synthetic":
-		m.kind = .Synthetic
-		m.text = strings.clone(jstr(it, "text"), a)
-		if jstr(it, "metadata", "source") == "subagent" {
-			m.sub_child = strings.clone(jstr(it, "metadata", "childID"), a)
-			m.sub_state = strings.clone(jstr(it, "metadata", "state"), a)
-			m.sub_agent = strings.clone(jstr(it, "metadata", "agent"), a)
-			m.sub_desc = strings.clone(jstr(it, "description"), a)
-			m.text = strings.clone(subagent_body(jstr(it, "text")), a)
-		} else if jobs, ok := jobs_parse(m.text, a); ok {
-			m.jobs = jobs
-		}
+		synthetic_set(&m, it, a)
 	case "shell":
 		m.kind = .Shell
 		m.text = strings.clone(jstr(it, "command"), a)
@@ -888,6 +884,37 @@ content_text :: proc(list: json.Array) -> string {
 	return strings.to_string(b)
 }
 
+// A synthetic message from `it`, a stored message or an inbox item's payload (the same fields: text, description, metadata).
+synthetic_set :: proc(m: ^Message, it: json.Value, a: mem.Allocator) {
+	m.kind = .Synthetic
+	m.text = strings.clone(jstr(it, "text"), a)
+	if jstr(it, "metadata", "source") == "subagent" {
+		m.sub_child = strings.clone(jstr(it, "metadata", "childID"), a)
+		m.sub_state = strings.clone(jstr(it, "metadata", "state"), a)
+		m.sub_agent = strings.clone(jstr(it, "metadata", "agent"), a)
+		m.sub_desc = strings.clone(jstr(it, "description"), a)
+		// (metadata.state keeps the period's real status: only the tag says the child's own work still runs)
+		m.sub_running = subagent_tag_state(jstr(it, "text")) == "running"
+		m.text = strings.clone(subagent_body(jstr(it, "text")), a)
+	} else if jobs, ok := jobs_parse(m.text, a); ok {
+		m.jobs = jobs
+	}
+}
+
+// The state attribute of a sub-agent report's opening tag ("": none).
+subagent_tag_state :: proc(s: string) -> string {
+	t := strings.trim_space(s)
+	if !strings.has_prefix(t, "<subagent") { return "" }
+	end := strings.index_byte(t, '>')
+	if end < 0 { return "" }
+	head := t[:end]
+	at := strings.index(head, ` state="`)
+	if at < 0 { return "" }
+	rest := head[at + len(` state="`):]
+	if q := strings.index_byte(rest, '"'); q >= 0 { return rest[:q] }
+	return ""
+}
+
 // The text of a sub-agent's result without its envelope: `<subagent sessionID=".." state=".." description="..">text</subagent>`.
 subagent_body :: proc(s: string) -> string {
 	t := strings.trim_space(s)
@@ -901,6 +928,8 @@ subagent_body :: proc(s: string) -> string {
 // What the server says of a tool call as it runs (a sub-agent's session).
 tool_set_meta :: proc(p: ^Part, meta: json.Value, a: mem.Allocator) {
 	if sid := jstr(meta, "sessionID"); sid != "" && p.sub_session == "" { p.sub_session = strings.clone(sid, a) }
+	// (a sub-agent's call returns at once with this status: the child it launched works on)
+	if (p.tool_name == "subagent" || p.sub_agent != "") && jstr(meta, "status") == "running" { p.sub_launched = true }
 	if id := jstr(meta, "shellID"); id != "" && p.shell_id == "" { p.shell_id = strings.clone(id, a) }
 	if files := jarr(meta, "files"); len(files) > 0 {
 		b := strings.builder_make(context.temp_allocator)
@@ -967,7 +996,6 @@ tool_set_input :: proc(p: ^Part, input: json.Value, a: mem.Allocator) {
 		p.sub_desc = strings.clone(jstr(input, "description"), a)
 		p.sub_prompt = strings.clone(jstr(input, "prompt"), a)
 		p.sub_model = strings.clone(jstr(input, "model"), a)
-		p.sub_background = jbool(input, "background")
 		if sid := jstr(input, "sessionID"); sid != "" { p.sub_session = strings.clone(sid, a) }   // (a sub-agent resumed)
 	}
 	for k in ([]string{"description", "command", "filePath", "path", "pattern", "query", "url", "prompt", "name"}) {
@@ -1073,6 +1101,16 @@ user_message_add :: proc(c: ^Chat, id, text: string, files: json.Array, created:
 	a := c.alloc
 	append(&c.messages, Message{id = strings.clone(id, a), kind = .User, text = strings.clone(text, a), created = created, parts = make([dynamic]Part, a), touched = c.seq})
 	message_images(&c.messages[len(c.messages) - 1], files, a)
+}
+
+// A synthetic item of the inbox, as the stored message will be (its id is the item's). A report changes what is known of a
+// sub-agent: the index is read again.
+@(private = "file")
+synthetic_add :: proc(c: ^Chat, id: string, payload: json.Value, created: f64) {
+	m := Message{id = strings.clone(id, c.alloc), created = created, parts = make([dynamic]Part, c.alloc), touched = c.seq}
+	synthetic_set(&m, payload, c.alloc)
+	append(&c.messages, m)
+	if m.sub_child != "" { subs_changed(c) }
 }
 
 // It is delivered: here it takes its place in the conversation, once, after what the model has said so far.
@@ -1233,6 +1271,9 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 			} else {
 				queue_add(app, id, item, c.seq)
 			}
+		} else if jstr(item, "type") == "synthetic" && find_message(c, id) == nil {
+			// (a report of a sub-agent or of a job: shown as it comes, not at its delivery, which waits for the run's next step)
+			synthetic_add(c, id, jget(item, "payload"), jnum(ev, "created"))
 		}
 	case "session.inbox.delivered":
 		queue_delivered(app, jstr(d, "inboxID"), jnum(ev, "created"))
@@ -1298,16 +1339,16 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		tool_set_output(p, content_text(jarr(d, "content")), a)
 		content_images(p, jarr(d, "content"), a)
 		p.ended_ms = jnum(ev, "created")
-		had := p.sub_session
 		tool_set_meta(p, jget(d, "metadata"), a)
-		if p.sub_session != had { subs_changed(c) }
-		if p.sub_session != "" { children_soon(app) }
+		// (a sub-agent's call that ends launched its child, or handed back its result: which calls launch is read again)
+		if p.sub_session != "" { subs_changed(c); children_soon(app) }
 		output_view_part_changed(app, p)
 	case "session.tool.failed":
 		p := tool_part(c, assistant(c, mid), jstr(d, "id"))
 		p.status = .Error
 		p.done = true
 		tool_set_output(p, error_text(jget(d, "error")), a)
+		if p.sub_session != "" { subs_changed(c) }   // (it launched nothing: its child is not awaited)
 		output_view_part_changed(app, p)
 	case "session.step.ended":
 		m := assistant(c, mid)

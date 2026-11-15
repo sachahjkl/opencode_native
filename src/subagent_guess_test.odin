@@ -2,6 +2,7 @@ package ocn
 
 import "base:runtime"
 import "core:encoding/json"
+import "core:fmt"
 import "core:strings"
 import "core:testing"
 import "gt:timefmt"
@@ -108,8 +109,8 @@ a_tool_call_says_when :: proc(t: ^testing.T) {
 	testing.expectf(t, strings.contains(when_, ", 01:01:01") && when_ != "Started 01:01:01, ended 01:01:13", "another day, its date: %s", when_)
 }
 
-// One place says how a sub-agent stands: a call that returned while its session is still busy is finishing (not running
-// again); a background call that returned, nothing known yet of its end, is in background (not "launched").
+// One place says how a sub-agent stands: a foreground call (an older session's) that returned while its session is still busy
+// is finishing (not running again); a launch that returned runs, whether its session is busy yet or not.
 @(test)
 a_returned_call_whose_session_is_busy_is_finishing :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
@@ -123,11 +124,162 @@ a_returned_call_whose_session_is_busy_is_finishing :: proc(t: ^testing.T) {
 	testing.expect_value(t, v.state, Sub_State.Finishing)
 	testing.expect(t, sub_live(v.state) && v.ended == 0, "finishing goes on: a lamp, its time still counted")
 	testing.expect_value(t, sub_state_label(v.state), "finishing")
-	bg := Part{kind = .Tool, tool_name = "subagent", status = .Done, sub_session = "child2", sub_background = true}
-	testing.expect_value(t, sub_view(app, "child2", &bg).state, Sub_State.Background)
-	testing.expect_value(t, sub_state_label(.Background), "in background")
+	bg := Part{kind = .Tool, tool_name = "subagent", status = .Done, sub_session = "child2", sub_launched = true, output = "The subagent is working in the background"}
+	v2 := sub_view(app, "child2", &bg)
+	testing.expect_value(t, v2.state, Sub_State.Running)
+	testing.expect_value(t, v2.result, "")   // (the server's word to the model is no result)
 	app.busy["child2"] = true
-	testing.expect_value(t, sub_view(app, "child2", &bg).state, Sub_State.Running)   // (a background one at work runs: it did not return)
+	testing.expect_value(t, sub_view(app, "child2", &bg).state, Sub_State.Running)
 	delete_key(&app.busy, "child1")
 	delete_key(&app.busy, "child2")
+}
+
+// Events of a sub-agent launched in the background (opencode 2.3.0): its call, which returns at once, and its session. `child`
+// names its session, `call` its call, `msg` the parent's message the call is in.
+@(private = "file")
+bg_launch :: proc(app: ^App, msg, call, child, desc: string, follow_up := false) {
+	resume := follow_up ? fmt.tprintf(`,"sessionID":"%s"`, child) : ""
+	bench_event(app, fmt.tprintf(`{{"type":"session.tool.called","created":10,"data":{{"sessionID":"s","assistantMessageID":"%s","id":"%s","input":{{"agent":"general","description":"%s","prompt":"go"%s}}}}}}`, msg, call, desc, resume))
+	bench_event(app, fmt.tprintf(`{{"type":"session.tool.progress","data":{{"sessionID":"s","assistantMessageID":"%s","id":"%s","metadata":{{"sessionID":"%s","status":"running"}}}}}}`, msg, call, child))
+	bench_event(app, fmt.tprintf(`{{"type":"session.tool.success","created":11,"data":{{"sessionID":"s","assistantMessageID":"%s","id":"%s","content":[{{"type":"text","text":"The subagent is working in the background (sessionID: %s)."}}],"metadata":{{"sessionID":"%s","status":"running"}}}}}}`, msg, call, child, child))
+}
+
+// A child's report, as the server admits it into the parent's inbox (SubagentCompletion.deliver): `state` is the tag's, the
+// metadata keeps the period's status.
+@(private = "file")
+bg_report :: proc(app: ^App, id, child, state, body: string) {
+	text := fmt.tprintf("<subagent sessionID=\"%s\" state=\"%s\" description=\"Look\">\n%s\n</subagent>", child, state, body)
+	bench_event(app, fmt.tprintf(`{{"type":"session.inbox.enqueued","created":20,"data":{{"sessionID":"s","inboxID":"%s","item":{{"type":"synthetic","delivery":"steer","payload":{{"text":%s,"description":"Look","metadata":{{"source":"subagent","childID":"%s","agent":"general","state":"completed"}}}}}}}}}}`, id, jquote(text), child))
+}
+
+@(private = "file")
+bg_card :: proc(app: ^App, call: string) -> ^Part {
+	for &m in app.chat.messages { for &p in m.parts { if p.tool_id == call { return &p } } }
+	return nil
+}
+
+// A call that returns at once does not end its child: the card and the tray's count say it runs, before its session is
+// busy, while it is, and after it went idle until its report came. Before, the call's end read as the child's: "done", with
+// the server's word to the model as its result.
+@(test)
+a_launch_that_returns_at_once_keeps_its_child_running :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	open_chat(app, "s")
+	bench_clear(app)
+	bg_launch(app, "a1", "t1", "child1", "Look")
+	p := bg_card(app, "t1")
+	if !testing.expect(t, p != nil && p.status == .Done && p.sub_launched, "the call returned, a launch") { return }
+	v := sub_view(app, p.sub_session, p)
+	testing.expect_value(t, v.state, Sub_State.Running)
+	testing.expect_value(t, v.result, "")
+	agents, _ := activity_counts(app)
+	testing.expect_value(t, agents, 1)
+	bench_event(app, `{"type":"session.execution.started","data":{"sessionID":"child1"}}`)
+	testing.expect_value(t, sub_view(app, "child1", bg_card(app, "t1")).state, Sub_State.Running)
+	agents, _ = activity_counts(app)
+	testing.expect_value(t, agents, 1)
+	// idle, its report not come yet: it is not over
+	bench_event(app, `{"type":"session.execution.succeeded","data":{"sessionID":"child1"}}`)
+	testing.expect_value(t, sub_view(app, "child1", bg_card(app, "t1")).state, Sub_State.Running)
+	agents, _ = activity_counts(app)
+	testing.expect_value(t, agents, 1)
+	// what runs is kept: asked again with nothing changed, it is not made again
+	made := app.chat.running.computed
+	for _ in 0 ..< 3 { _, _ = activity_counts(app); _ = active_children(app) }
+	testing.expect_value(t, app.chat.running.computed, made)
+}
+
+// The child's report comes into the conversation as it is admitted, and it is the child's end: its card shows what it said and
+// is done, the tray counts it no more. Its delivery adds nothing again.
+@(test)
+a_childs_report_shows_and_ends_it :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	open_chat(app, "s")
+	bench_clear(app)
+	c := &app.chat
+	bg_launch(app, "a1", "t1", "child1", "Look")
+	bg_report(app, "msg_r1", "child1", "completed", "Found three loaders.")
+	m := sub_result(c, "child1")
+	if !testing.expect(t, m != nil, "the report is in the conversation") { return }
+	testing.expect_value(t, m.text, "Found three loaders.")
+	testing.expect(t, !m.sub_running)
+	v := sub_view(app, "child1", bg_card(app, "t1"))
+	testing.expect_value(t, v.state, Sub_State.Done)
+	testing.expect_value(t, v.result, "Found three loaders.")
+	agents, _ := activity_counts(app)
+	testing.expect_value(t, agents, 0)
+	n := len(c.messages)
+	bench_event(app, `{"type":"session.inbox.delivered","created":21,"data":{"sessionID":"s","inboxID":"msg_r1"}}`)
+	testing.expect_value(t, len(c.messages), n)
+}
+
+// A report that says the child's own work still runs keeps it running; the final report ends it. A row of that first report
+// has no lamp: it is a past event.
+@(test)
+a_report_whose_work_still_runs_keeps_its_child_running :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	open_chat(app, "s")
+	bench_clear(app)
+	c := &app.chat
+	bg_launch(app, "a1", "t1", "child1", "Look")
+	bg_report(app, "msg_r1", "child1", "running", "Half of it.\n\nBackground work still running:\n- shell (sh_1): make test")
+	m := sub_result(c, "child1")
+	if !testing.expect(t, m != nil && m.sub_running, "a report that says its work runs on") { return }
+	testing.expect_value(t, m.sub_state, "completed")   // (the metadata keeps the period's status: only the tag says it runs)
+	v := sub_view(app, "child1", bg_card(app, "t1"))
+	testing.expect_value(t, v.state, Sub_State.Running)
+	testing.expect(t, v.work_runs && v.ended == 0)
+	testing.expect(t, strings.has_prefix(v.result, "Half of it."), "what it said so far is shown")
+	agents, _ := activity_counts(app)
+	testing.expect_value(t, agents, 1)
+	bg_report(app, "msg_r2", "child1", "completed", "All of it.")
+	v = sub_view(app, "child1", bg_card(app, "t1"))
+	testing.expect_value(t, v.state, Sub_State.Done)
+	testing.expect(t, !v.work_runs)
+	testing.expect_value(t, v.result, "All of it.")
+	agents, _ = activity_counts(app)
+	testing.expect_value(t, agents, 0)
+	reports := 0
+	for &x in c.messages { if x.kind == .Synthetic && x.sub_child == "child1" { reports += 1 } }
+	testing.expect_value(t, reports, 2)   // (each report is its own row)
+}
+
+// Two children at once, each followed on its own: one's report ends that one only. A follow-up call sets a child to work again
+// after its report: it runs until the next one.
+@(test)
+two_children_are_followed_each_on_its_own :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	open_chat(app, "s")
+	bench_clear(app)
+	bg_launch(app, "a1", "t1", "child1", "Look")
+	bg_launch(app, "a1", "t2", "child2", "Read")
+	bench_event(app, `{"type":"session.execution.started","data":{"sessionID":"child1"}}`)
+	bench_event(app, `{"type":"session.execution.started","data":{"sessionID":"child2"}}`)
+	agents, _ := activity_counts(app)
+	testing.expect_value(t, agents, 2)
+	bench_event(app, `{"type":"session.execution.succeeded","data":{"sessionID":"child2"}}`)
+	bg_report(app, "msg_r2", "child2", "completed", "Read it.")
+	testing.expect_value(t, sub_view(app, "child1", bg_card(app, "t1")).state, Sub_State.Running)
+	testing.expect_value(t, sub_view(app, "child2", bg_card(app, "t2")).state, Sub_State.Done)
+	agents, _ = activity_counts(app)
+	testing.expect_value(t, agents, 1)
+	bench_event(app, `{"type":"session.execution.succeeded","data":{"sessionID":"child1"}}`)
+	bg_report(app, "msg_r1", "child1", "completed", "Looked.")
+	testing.expect_value(t, sub_view(app, "child1", bg_card(app, "t1")).state, Sub_State.Done)
+	agents, _ = activity_counts(app)
+	testing.expect_value(t, agents, 0)
+	// a follow-up to child2, in a later step
+	bg_launch(app, "a2", "t3", "child2", "Read", follow_up = true)
+	testing.expect_value(t, sub_view(app, "child2", bg_card(app, "t3")).state, Sub_State.Running)
+	testing.expect_value(t, sub_view(app, "child1", bg_card(app, "t1")).state, Sub_State.Done)
+	agents, _ = activity_counts(app)
+	testing.expect_value(t, agents, 1)
+	bg_report(app, "msg_r3", "child2", "completed", "Read it again.")
+	v := sub_view(app, "child2", bg_card(app, "t3"))
+	testing.expect_value(t, v.state, Sub_State.Done)
+	testing.expect_value(t, v.result, "Read it again.")
 }

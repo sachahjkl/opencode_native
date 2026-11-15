@@ -12,6 +12,8 @@ purpose, the decisions, what was refused.
   is open; a shell's input in a window of its own; the Preview's page across windows.
 - [features/missed.md](features/missed.md): several entries of What you missed selected and acknowledged at once.
 - [features/job-reports.md](features/job-reports.md): the harness's reports of ended background jobs, read as cards.
+- [features/background-subagents.md](features/background-subagents.md): sub-agents run in the background (opencode
+  2.3.0): the child's state and its reports decide, never the call's quick return.
 - [features/jump.md](features/jump.md): Jump to message (Ctrl+Alt+G): a chooser over the session's prompts; why a
   palette of its own.
 - [features/queue-first.md](features/queue-first.md): Alt+Enter queues a prompt first while a run works; the inbox

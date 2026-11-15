@@ -2,12 +2,12 @@
 
 ## Now
 
-- **Sub-agents run in the background by default** (opencode 2.3.0, like every entry down to the MCP events). A sub-agent's call returns at once and the child reports when it goes
-  idle, several at a time, while the parent goes on; a report can say the child's own work still runs. Show the running
-  children and their reports as they come, and never treat a call's quick return as the child's end.
-- **A session's id in a message opens it.** A `ses_…` word in a message is a link to that session. It needs the
-  toolkit's link words (a word that starts with a prefix made a link), after the migration to gui_toolkit 0.266.
-- **A Mermaid diagram maximised.** The diagram's viewer fills the window, with zoom and pan.
+- **A remote server's local addresses in the browser panel.** A page at localhost or 127.0.0.1 of a remote server's
+  session is that server's machine: the panel opens it at the server's host, the port kept, and its address bar says so.
+- **A session's id in a message opens it** (opencode 2.3.0, as the entries below). A `ses_…` word in a message is a
+  link to that session: gui_toolkit 0.267's link words, after the migration to gui_toolkit 0.266.
+- **A Mermaid diagram maximised.** The diagram's viewer fills the window, with zoom and pan: gui_toolkit 0.267's
+  maximised dialog (`view_maximise`), after the migration to gui_toolkit 0.266.
 - **Tab numbers while the modifier is held.** Holding the key of the tab shortcuts shows each tab's number.
 - **The free-limit panel.** When the server says the free limit is reached, a panel takes the composer's place.
 - **MCP events and freeform tools (experimental).** Subscribe to `experimental.mcp.event` when the flag is on; the

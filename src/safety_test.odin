@@ -61,8 +61,8 @@ the_card_says_its_state_once :: proc(t: ^testing.T) {
 	testing.expect_value(t, state_when(v.state, v.started, 61000), "stopped · 1m 00s")
 	v.state = .Finishing
 	testing.expect_value(t, state_when(v.state, v.started, 61000), "finishing · 1m 00s")
-	v.state = .Background
-	testing.expect_value(t, state_when(v.state, v.started, 0), "in background")
+	v.state, v.work_runs = .Running, true
+	testing.expect_value(t, card_meta(&v, true), "its background work runs · m1")
 }
 
 // Each state that ended has its sign and its intent; what goes on has none (a lamp).
@@ -77,7 +77,7 @@ an_ended_state_has_its_sign :: proc(t: ^testing.T) {
 	for st in ([]Sub_State{.Starting, .Running, .Finishing}) {
 		testing.expectf(t, sub_live(st) && sub_state_sign(st) == "" && sub_state_intent(st) == .Neutral, "%v goes on: a lamp", st)
 	}
-	for st in ([]Sub_State{.Done, .Failed, .Cancelled, .Background, .Unknown}) { testing.expectf(t, !sub_live(st), "%v: no lamp", st) }
+	for st in ([]Sub_State{.Done, .Failed, .Cancelled, .Unknown}) { testing.expectf(t, !sub_live(st), "%v: no lamp", st) }
 }
 
 @(test)

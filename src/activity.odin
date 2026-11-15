@@ -633,7 +633,8 @@ activity_rows :: proc(app: ^App) -> []Act_Row {
 		name := v.agent != "" ? v.agent : "sub-agent"
 		append(rows, Act_Row{kind = .Agent, id = s.id, name = name, title = v.desc != "" ? v.desc : s.title, what = what, preview = preview, state = v.state, started = v.started, ended = v.ended})
 	}
-	for &s in app.chat.children { if app.busy[s.id] or_else false { agent(app, &rows, &s) } }
+	running := sub_running(app)
+	for i in running.listed { agent(app, &rows, &app.chat.children[i]) }
 	#reverse for &j in a.jobs {
 		if !job_ours(app, &j) { continue }
 		if j.status == .Running { append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = j.background ? fmt.tprintf(i18n.tr("in background · %s"), base_name(j.cwd)) : base_name(j.cwd), preview = string(j.tail[:]), state = .Running, started = j.started}) }
@@ -646,7 +647,7 @@ activity_rows :: proc(app: ^App) -> []Act_Row {
 	}
 	shown := 0
 	for &s in app.chat.children {
-		if app.busy[s.id] or_else false { continue }
+		if s.id in running.ids { continue }
 		if shown == ACT_FINISHED_SHOWN { break }
 		agent(app, &rows, &s)
 		shown += 1
@@ -654,9 +655,11 @@ activity_rows :: proc(app: ^App) -> []Act_Row {
 	return rows[:]
 }
 
-// How much runs: what the line over the composer says, and whether it has anything to say.
+// How much runs: what the line over the composer says, and whether it has anything to say. (A sub-agent runs while its child
+// does, not while its call does: the call returns at once.)
 activity_counts :: proc(app: ^App) -> (agents, shells: int) {
-	agents = len(active_children(app))
+	running := sub_running(app)
+	agents = len(running.listed) + running.unlisted
 	for &j in app.activity.jobs { if j.status == .Running && job_ours(app, &j) { shells += 1 } }
 	return
 }
