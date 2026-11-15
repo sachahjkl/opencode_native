@@ -138,10 +138,10 @@ views_answers :: proc(app: ^App) {
 	rename_answer(app)
 }
 
-// Whether something holds the window's keys: a dialog of the main window, one of its menus, a picker. What reads the
-// keyboard behind them asks here.
+// Whether something holds the window's keys: a dialog of the main window (the palettes are views), one of its menus, the
+// file dialog. What reads the keyboard behind them asks here.
 overlay_open :: proc(app: ^App) -> bool {
-	return ui.views_hold_keys(&app.program_views) || len(app.state.menus) > 0 || app.picker.open || ui.file_dialog_shown(&app.state)
+	return ui.views_hold_keys(&app.program_views) || len(app.state.menus) > 0 || ui.file_dialog_shown(&app.state)
 }
 
 // The keyboard is in a view that floats, is docked beside the conversation or is in a window of its own, the sidebar apart

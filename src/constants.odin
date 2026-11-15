@@ -169,8 +169,6 @@ THROBBER_LIGHT_MIN  :: 0.42   // a letter out of the wave
 HEX_PREVIEW_BG :: 0x0d0d0dff
 TAB_LINE_INSET_EM :: 0.6 // the line under the browser's tab shown, from its ends
 PREVIEW_TAB_H_EM  :: 2.1 // the strip of a session's browser tabs
-MODEL_TIP_LINE_EM  :: 1.45   // a line of a model's tooltip
-MODEL_TIP_LABEL_EM :: 5.0    // its labels' column
 HEADER_FIGURES_MIN_EM :: 40   // a conversation narrower than this keeps its title, not its figures
 PREVIEW_PLACE_MS :: 40   // the page follows a move at this pace at most
 PREVIEW_VIEWS_MOST :: 8  // web views alive at once, every session's tabs together (preview_views.odin preview_trim)

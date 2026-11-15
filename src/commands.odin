@@ -118,11 +118,12 @@ commands_apply :: proc(app: ^App) {
 }
 
 // Whether its key does something now: what is open over the window has the keyboard, unless the command is meant to work
-// there. A window command's works over a view shown as a dialog (the settings, the sheet, the palette itself); a menu,
-// the picker and the file dialog keep the keys while they are open (their Escape and their letters are their own).
+// there. A window command's works over a view shown as a dialog (the settings, the sheet, the palette and the
+// composer's chooser); a menu and the file dialog keep the keys while they are open (their Escape and their letters are
+// their own).
 command_keyed :: proc(app: ^App, c: ^Command) -> bool {
 	if !command_enabled(app, c) { return false }
-	if c.scope == .Window { return len(app.state.menus) == 0 && !app.picker.open && !ui.file_dialog_shown(&app.state) }
+	if c.scope == .Window { return len(app.state.menus) == 0 && !ui.file_dialog_shown(&app.state) }
 	return !overlay_open(app) || (c.over != nil && c.over(app))
 }
 

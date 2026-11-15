@@ -40,8 +40,8 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 | **The palette** (Ctrl+K): commands, sessions, agents, models, switches | **A diff** for what edits a file: line numbers, what changed in a line |
 | ![The tray under the composer, the todo list](docs/screenshots/activity.webp) | ![Settings: updates](docs/screenshots/updates.webp) |
 | **What runs in the background** (Down from the composer, Ctrl+J) | **Updates**: signed, stable or beta |
-| ![The conversation of a sub-agent: where it comes from, the way back](docs/screenshots/subagent-session.webp) | ![The model picker, searched as one types](docs/screenshots/picker.webp) |
-| **A sub-agent's own conversation**: the breadcrumb, Back | **The model picker**: subsequence search ("sonnet"), the matched letters lit |
+| ![The conversation of a sub-agent: where it comes from, the way back](docs/screenshots/subagent-session.webp) | ![The model chooser, searched as one types](docs/screenshots/picker.webp) |
+| **A sub-agent's own conversation**: the breadcrumb, Back | **The model chooser**: search by name or provider ("sonnet"), the matched letters lit |
 | ![Session statistics](docs/screenshots/statistics.webp) | ![Settings: the themes, each in its own colours](docs/screenshots/settings.webp) |
 | **Statistics** (click the token count): totals, context window, time, tools, models, the project | **Themes**: twenty-seven, dark and light or as the system, machined, edged or flat, and your own in themes.txt |
 | ![Gruvbox, light](docs/screenshots/theme-gruvbox-light.webp) | ![Nord, flat](docs/screenshots/theme-nord-flat.webp) |
@@ -75,8 +75,8 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 - **Sub-agents**: a card for each launch (its agent, state, live activity, duration, model, tokens, cost, prompt and
   result), the result line where it came back, a strip of the running ones above the composer, a header menu of all of
   them; drill down into one and back (breadcrumb, Alt+Left).
-- **The composer**: Enter or Ctrl+Enter to send (a setting), the agent and the model of the session in pickers searched
-  as one types (subsequence matching, the matched letters lit, the keyboard or the wheel), Stop while it runs. Files
+- **The composer**: Enter or Ctrl+Enter to send (a setting), the agent and the model of the session in choosers searched
+  as one types (the palette's matching, the matched letters lit, the keyboard or the wheel), Stop while it runs. Files
   go with a prompt by the paperclip, a paste or a drop on the window: images, PDF and text files are attached.
 - **Several servers**: this computer's (found by itself), others added with "+" (a name, an address, a password), `--url`.
   Each server is a tab at the top of the sidebar: a click on a tab connects to its server, and the tab of the server in use opens
@@ -210,7 +210,6 @@ every step is a command of `tools/ocntools` (`help` lists them; `AGENTS.md`). Th
 | `src/conversation.odin`, `src/message_parts.odin`, `src/text_wells.odin` | the conversation, its messages, the tool timeline and reasoning, text in wells |
 | `src/composer.odin` | the dock and the composer |
 | `src/markdown.odin` | Markdown, shown by the toolkit's `markdown` package: ocn's faces, colours, links and code blocks |
-| `src/picker.odin` | the agent and model pickers |
 | `src/subagents.odin` | sub-agent cards, results, navigation, the running strip, the sidebar tree |
 | `src/images.odin` | image decoding (worker threads), the texture cache, thumbnails, the viewer, logos |
 | `src/settings.odin` | preferences (`gt:config`) and the settings dialog, with the server's pages |

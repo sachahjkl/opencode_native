@@ -46,7 +46,8 @@ lists the composer's keys, which are no commands.
 
 The palette, the keys, the settings and quit are the window's (`scope = .Window` in `COMMANDS`). Their keys work over
 every view shown as a dialog: the settings are one, and the palette lists the settings. `command_keyed` lets them through
-`overlay_open`; a menu, the picker and the file dialog still keep the keys while they are open. A window command needs
+`overlay_open`; a menu and the file dialog still keep the keys while they are open (the composer's chooser is a
+palette: a view, as the palette). A window command needs
 no `over`: it works over a dialog already. The toolkit's `ui.chord_pressed` takes their keys from wherever the focus is.
 
 ## A shell's input

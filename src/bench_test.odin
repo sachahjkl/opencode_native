@@ -2192,13 +2192,15 @@ the_commands_are_read_again_when_the_list_opens :: proc(t: ^testing.T) {
 		session.type_text(s, "r")
 		session.frames(s, 2)
 		testing.expect_value(t, bench_count(.Slash), 0)   // (a word typed further is the same list: one reading per opening)
-		// (the agents' and the models' pickers, read once at the connection as the commands were)
-		picker_open(app, "agent", {})
+		// (the agents' and the models' choosers, read once at the connection as the commands were)
+		chooser_toggle(app, pane, .Agents)
 		testing.expect_value(t, bench_count(.Agents), 1)
-		app.picker.open = false
-		picker_open(app, "model", {})
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return chooser_shows((^App)(s.user), .Agents) }, "the agents' chooser")
+		chooser_toggle(app, pane, .Models)   // (open on the agents: the models' button opens it on the models)
 		testing.expect_value(t, bench_count(.Models), 1)
-		app.picker.open = false
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return chooser_shows((^App)(s.user), .Models) }, "the models' chooser")
+		chooser_toggle(app, pane, .Models)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.palette_is_open(&(^App)(s.user).palette.chooser) }, "closed by its button")
 	})
 }
 

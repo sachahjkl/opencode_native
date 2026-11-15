@@ -1001,10 +1001,11 @@ what_is_open_has_the_keys :: proc(t: ^testing.T) {
 	ui.view_open(vs, HELP_VIEW, app)
 	testing.expect(t, command_keyed(app, help))
 	ui.view_close(vs, HELP_VIEW)
-	// (the picker keeps its keys: its letters search, its Escape closes it)
-	app.picker.open = true
-	testing.expect(t, !command_keyed(app, help) && !command_keyed(app, settings), "the picker holds the window's keys")
-	app.picker.open = false
+	// (the composer's chooser is a palette: its letters search, a window command works over it)
+	ui.palette_open(&app.palette.chooser)
+	testing.expect(t, !command_keyed(app, new_one), "nor behind the chooser")
+	testing.expect(t, command_keyed(app, help), "a window command works over the chooser")
+	ui.palette_close(&app.palette.chooser)
 }
 
 @(test)

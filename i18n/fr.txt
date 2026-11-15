@@ -488,12 +488,6 @@ fr Panneau Aperçu  (Ctrl+Maj+B)
 en Terminal  (Ctrl+Shift+T)
 fr Terminal  (Ctrl+Maj+T)
 
-en Search agents
-fr Rechercher un agent
-
-en Search models
-fr Rechercher un modèle
-
 en Thinking
 fr Réflexion
 
@@ -1282,59 +1276,17 @@ fr Écrire
 en Sessions
 fr Sessions
 
-en Models
-fr Modèles
-
-en Agents
-fr Agents
-
 en Session · %s
 fr Session · %s
 
 en Server
 fr Serveur
 
-en Context
-fr Contexte
+en Models
+fr Modèles
 
-en Output
-fr Sortie
-
-en Price
-fr Prix
-
-en free
-fr gratuit
-
-en $%s in, $%s out per M
-fr %s $ en entrée, %s $ en sortie par M
-
-en Cached
-fr En cache
-
-en $%s per M
-fr %s $ par M
-
-en Reads
-fr Lit
-
-en Tools
-fr Outils
-
-en yes
-fr oui
-
-en no
-fr non
-
-en Released
-fr Sortie
-
-en Status
-fr État
-
-en Nothing matches
-fr Aucun résultat
+en Agents
+fr Agents
 
 en Preview
 fr Aperçu
@@ -1893,6 +1845,9 @@ fr Scanner
 en None
 fr Aucun
 
+en Tools
+fr Outils
+
 en Let the agents drive the Preview panel (open pages, read them, click, run scripts): the browser tools, while this window is open.
 fr Laisser les agents piloter le panneau Aperçu (ouvrir des pages, les lire, cliquer, lancer des scripts) : les outils de navigateur, tant que cette fenêtre est ouverte.
 
@@ -2012,6 +1967,9 @@ fr L'émulation du terminal est celle de Ghostty, via libghostty-vt.
 
 en SERVER
 fr SERVEUR
+
+en Status
+fr État
 
 en not connected
 fr non connecté
@@ -2251,6 +2209,9 @@ fr+ … et %d de plus
 
 en Instructions and tool definitions
 fr Instructions et définitions des outils
+
+en Context
+fr Contexte
 
 en %s  (the model's window is not listed)
 fr %s  (la fenêtre du modèle n'est pas indiquée)
@@ -2598,6 +2559,9 @@ fr À propos d'opencode native
 
 en Statistics
 fr Statistiques
+
+en Output
+fr Sortie
 
 en Mermaid diagram
 fr Diagramme Mermaid

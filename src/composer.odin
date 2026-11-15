@@ -92,9 +92,9 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	// Enter sends, Shift+Enter breaks the line (the editor itself breaks on Enter and commits on Ctrl+Enter). While a turn runs
 	// one way queues and the other sends now: Enter and Ctrl+Enter, or in Ctrl+Enter mode Ctrl+Enter and Ctrl+Shift+Enter.
 	submit, other, first := false, false, false
-	keys := pane.composer.focused && !app.picker.open
+	keys := pane.composer.focused
 	// (the tray's keys with the focus nowhere too: a click on one of its rows leaves it there)
-	if app.activity.open && !app.picker.open && (pane.composer.focused || ui.focus_key() == 0) { activity_keys(app) }
+	if app.activity.open && (pane.composer.focused || ui.focus_key() == 0) { activity_keys(app) }
 	if keys { mention_keys(app, pane) }
 	if keys { slash_keys(app, pane) }
 	if keys { history_track(app, pane) }
@@ -183,13 +183,13 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			if agent == "" { agent = "build" }
 			// (the narrowest toolbar: the agent and the variant by their glyphs, their names in the tips)
 			composer_tool_pad(em)
-			asig := ui.button("agent", ui.text_shown(fit >= 3 ? "" : agent), lucide.BOT, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "agent", tip = fit >= 3 ? agent : ""})
-			if asig.clicked { if app.picker.open && app.picker.id == "agent" { app.picker.open = false } else { picker_open(app, "agent", asig.box.rect) } }
+			asig := ui.button("agent", ui.text_shown(fit >= 3 ? "" : agent), lucide.BOT, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = chooser_shows(app, .Agents), tip = fit >= 3 ? agent : ""})
+			if asig.clicked { chooser_toggle(app, pane, .Agents) }
 			model, _ := shown_model(app, pane)
 			if model == "" { model = i18n.tr("default model") }
 			composer_tool_pad(em)
-			msig := ui.button("model", ui.text_shown(model), lucide.CPU, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "model"})
-			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(app, "model", msig.box.rect) } }
+			msig := ui.button("model", ui.text_shown(model), lucide.CPU, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = chooser_shows(app, .Models)})
+			if msig.clicked { chooser_toggle(app, pane, .Models) }
 			variant_button(app, pane, em, fit >= 3)
 			if pane.chat.id != "" { approval_button(app, pane, em) }   // (a session's: a new one has none yet)
 			ui.spacer(ui.fill())
@@ -234,8 +234,6 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			send_w: ui.Size = send_label == "" ? ui.px(math.round(em * COMPOSER_BUTTON_W_EM)) : {}
 			if ui.button("send", ui.text_shown(send_label), send_icon, {intent = send_intent, width = send_w, height = math.round(em * BUTTON_H_EM), disabled = empty || !online(app) || held}).clicked { submit = true }
 			ui.spacer(ui.px(em * 0.55))
-
-			composer_pickers(app, pane, agent, em)
 		}
 	}
 	if submit { submit_prompt(app, pane, other, first) }
@@ -279,34 +277,7 @@ composer_panels :: proc(app: ^App, em: f32) {
 	panel(app, "terminal_btn", lucide.SQUARE_TERMINAL, i18n.tr("Terminal"), i18n.tr("Terminal  (Ctrl+Shift+T)"), "view.terminal", app.cx.terms.open, size, em)
 }
 
-composer_pickers :: proc(app: ^App, pane: ^Chat_Pane, agent: string, em: f32) {
-	p := &app.picker
-	if !app.picker.open || (p.id != "agent" && p.id != "model") { return }
-	// the items of the one open, made when it opens or the server's list changed (catalog_version), not at each frame
-	if p.fresh || p.items_version != app.cx.catalog_version {
-		p.items_version = app.cx.catalog_version
-		for it in p.items { delete(it.detail) }   // (the only text of an item it owns: the others are the agents' and the models')
-		clear(&p.items)
-		clear(&p.item_ids)
-		if p.id == "agent" {
-			for a in app.agents {
-				if a.mode == "subagent" { continue }
-				append(&p.items, Pick_Item{label = a.name != "" ? a.name : a.id, detail = a.mode == "primary" ? "" : strings.clone(a.mode), current = a.id == agent, color = agent_color(a.id)})
-				append(&p.item_ids, a.id)
-			}
-		} else {
-			shown, shown_provider := shown_model(app, pane)
-			for m, i in app.models {
-				append(&p.items, Pick_Item{label = m.name != "" ? m.name : m.id, group = m.provider, detail = m.ctx_len > 0 ? strings.clone(kfmt(m.ctx_len)) : "", model = &app.models[i], current = m.id == shown && m.provider == shown_provider})
-			}
-		}
-	}
-	// (a version of each list of its own, never 0: 0 keeps nothing)
-	if k := picker(app, p, "agent", i18n.tr("Search agents"), p.items[:], em, version = app.cx.catalog_version * 2 + 1); k >= 0 { choose_agent(app, pane, p.item_ids[k]) }
-	if k := picker(app, p, "model", i18n.tr("Search models"), p.items[:], em, version = app.cx.catalog_version * 2 + 2); k >= 0 { choose_model(app, pane, app.models[k]) }
-}
-
-// The reader picks one, in the picker or the palette: the session shown takes it, and it stands until that session's end.
+// The reader picks one, in the chooser of the composer's button or under `#` in the palette: the session shown takes it, and it stands until that session's end.
 choose_agent :: proc(app: ^App, pane: ^Chat_Pane, agent: string) {
 	c := &pane.chat
 	if c.id != "" { switch_agent(app, c.id, agent) }

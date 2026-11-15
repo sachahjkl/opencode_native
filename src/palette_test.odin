@@ -170,9 +170,61 @@ the_agents_are_chosen_under_the_hash :: proc(t: ^testing.T) {
 		testing.expect(t, palette_row_of(app, src, "build") >= 0 && palette_row_of(app, src, "plan") >= 0, "the agents")
 		testing.expect(t, palette_row_of(app, src, "explore") < 0, "not a sub-agent")
 		in_use := shown_agent(app, pane)
+		if in_use == "" { in_use = "build" }   // (the server's default, as the composer's button says)
 		for id in ([]string{"build", "plan"}) { testing.expect_value(t, src.mark(src, id), id == in_use) }
 		palette_hide(app)
 		session.frames(s, 2)
+	})
+}
+
+// The composer's model button opens a chooser of the models alone: the one in use marked, a model found by its
+// provider, and Enter gives it to the composer's session. Its agent button lists the agents but the sub-agents, the one
+// in use marked; Escape closes it.
+@(test)
+the_composer_chooses_its_model_and_its_agent :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		pane := main_pane(app)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		settled :: proc(s: ^session.Session) -> bool {
+			c := &(^App)(s.user).palette.chooser
+			return ui.palette_is_open(c) && ui.palette_ranked_for(c, ui.line_edit_string(&c.field)) && !ui.palette_busy(c)
+		}
+		row_of :: proc(app: ^App, src: ^ui.Palette_Source, id: string) -> int {
+			c := &app.palette.chooser
+			for i in 0 ..< ui.palette_row_count(c) {
+				if rs, rid, ok := ui.palette_row(c, i); ok && rs == src && rid == id { return i }
+			}
+			return -1
+		}
+		append(&app.models, Model_Info{id = strings.clone("swift"), provider = strings.clone("zeta"), name = strings.clone("Swift")},
+			Model_Info{id = strings.clone("steady"), provider = strings.clone("omega"), name = strings.clone("Steady")})
+		append(&app.agents, Agent_Info{id = "build", name = "build"}, Agent_Info{id = "plan", name = "plan"}, Agent_Info{id = "explore", name = "explore", mode = "subagent"})
+		app.cx.catalog_version += 1
+		p := &app.palette
+		chooser_toggle(app, pane, .Models)
+		session.wait_until(s, settled, "the models' chooser")
+		testing.expect(t, ui.palette_has(&p.chooser, &p.chooser_models) && !ui.palette_has(&p.chooser, &p.chooser_agents), "the models alone")
+		testing.expect(t, row_of(app, &p.chooser_models, "zeta/swift") >= 0 && row_of(app, &p.chooser_models, "omega/steady") >= 0, "listed with nothing typed")
+		ui.line_edit_set(&p.chooser.field, "omega")
+		session.wait_until(s, settled, "ranked")
+		testing.expect_value(t, row_of(app, &p.chooser_models, "omega/steady"), 0)   // (found by its provider)
+		session.key(s, .Return)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.palette_is_open(&(^App)(s.user).palette.chooser) }, "closed by the choice")
+		model, provider := shown_model(app, pane)
+		testing.expect(t, model == "steady" && provider == "omega", "the composer's model")
+		testing.expect(t, p.chooser_models.mark(&p.chooser_models, "omega/steady") && !p.chooser_models.mark(&p.chooser_models, "zeta/swift"), "the one in use marked")
+		chooser_toggle(app, pane, .Agents)
+		session.wait_until(s, settled, "the agents' chooser")
+		testing.expect(t, row_of(app, &p.chooser_agents, "build") >= 0 && row_of(app, &p.chooser_agents, "plan") >= 0, "the agents")
+		testing.expect(t, row_of(app, &p.chooser_agents, "explore") < 0, "not a sub-agent")
+		in_use := shown_agent(app, pane)
+		if in_use == "" { in_use = "build" }
+		for id in ([]string{"build", "plan"}) { testing.expect_value(t, p.chooser_agents.mark(&p.chooser_agents, id), id == in_use) }
+		session.key(s, .Escape)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.palette_is_open(&(^App)(s.user).palette.chooser) }, "closed by Escape")
 	})
 }
 

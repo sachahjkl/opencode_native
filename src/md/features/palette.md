@@ -12,10 +12,28 @@ its prefixes, its keys and its look are the toolkit's: `ext/gui_toolkit/src/md/f
 | `>` | the toolkit's views' moves | the views of the window the palette is over | the toolkit runs it |
 | `>` | `server` ("Server commands") | the server's commands (`app.cx.slash`), group "Server" | `/name ` in the composer |
 | `@` | `sessions` | the root sessions | `open_root` |
-| `#` | `models`, `agents` | the models; the agents but the sub-agents | `choose_model`, `choose_agent` |
+| `#` | `models`, `agents` | the models under their provider, their context size beside them; the agents but the sub-agents | `choose_model`, `choose_agent` |
 | `:` | `prefs_page.palette_settings_add` on `cfg_prefs` | the settings the pages show | the toolkit: a switch flips and the palette stays; another opens the settings on it |
 
 `/` is empty: it is the Paths prefix of the shared table (the session's files, searched by the server), a later step.
+
+## The composer's chooser
+
+The composer's agent and model buttons open `Palette.chooser`, a second `ui.Command_Palette` with one source and no
+prefix: the toolkit's chooser (no Recent, no hint row), as Jump to message. Its sources, `chooser_models` and
+`chooser_agents`, are made by the same `models_source` and `agents_source` as `#`, with the prefix `.None`: one read,
+one mark, one choice (`choice_take`) for both places.
+
+- **One chooser, its source swapped.** A chooser is a palette with exactly one source. `chooser_build` removes the
+  other source and adds the one asked for, then opens the palette again from an empty field. Two palettes were refused:
+  two views, two states, for lists that never show together.
+- **The pane is the composer's.** `chooser_toggle` keeps the index of the pane whose button opened it
+  (`chooser_pane`). The chooser's marks and its choice are that pane's. The marks of `#` are the main view's.
+- **Opened at the next build.** `chooser_toggle` notes the wish, as `palette_show` does; `chooser_build` runs after the
+  main palette and Jump to message. A button lit while its list is shown closes it.
+- **Read again at each opening.** The opening asks the server for its agents or its models again (a server that has
+  just started lists its plugins' later). The answer bumps `catalog_version`, which the sources' `poll` follows.
+- **The agent marked without a choice is "build"**, the server's default, as the composer's button says.
 
 ## Decisions
 
@@ -24,8 +42,8 @@ its prefixes, its keys and its look are the toolkit's: `ext/gui_toolkit/src/md/f
   server's commands are commands (`>`, and the plain search). `/` means a path in every program.
 - **The palette's command is the toolkit's.** Ctrl+K and Ctrl+Shift+P are `ui.palette_command()`, read by
   `ui.palette_keys` alone. `COMMANDS` has no `app.palette` line; the help view lists the toolkit's command first.
-- **One reader of the keys, gated as the window commands are.** `palette_build` calls `palette_keys` unless the picker
-  or the file dialog holds the window's keys (`command_keyed`'s rule). An open menu holds them in the toolkit.
+- **One reader of the keys, gated as the window commands are.** `palette_build` calls `palette_keys` unless the file
+  dialog holds the window's keys (`command_keyed`'s rule). An open menu holds them in the toolkit.
 - **The commands' table is made once per language.** `palette_table_keep` makes it when `i18n.version()` changes.
   `disabled` is read only while the palette is open, from the commands that have an `enabled` (a few dozen calls per
   build), and a change bumps the version. The palette compares the version, never the table.
@@ -50,12 +68,21 @@ its prefixes, its keys and its look are the toolkit's: `ext/gui_toolkit/src/md/f
 ## What was lost, and why
 
 - **The six last sessions with nothing typed**: the toolkit lists Recent and the commands then; `@` lists the sessions.
+- **The composer's own picker** (`picker.odin`) went for the chooser. What it showed and the chooser does not:
+  - **A model's tooltip** (context, output, prices, inputs, tools, thinking, release, status). A palette's row has a
+    title and one detail, and no tooltip. The detail is the context size, as the picker's column was.
+  - **The provider headings that fold** (Left and Right). The chooser's provider headings do not fold.
+  - **The selection on the item in use at the opening.** The toolkit selects the first row; the mark shows the one in use.
+  - **The popover over the button.** The chooser opens where the palette opens, at the window's top centre.
+  - **The agent's colour rail and its mode** ("all"). The row says the agent's description, as under `#`.
 
 ## Subtle points
 
 - A choice of a command is found again by its id (`command_find(c.id)`), not by `c.index`: the table can be made again
   between the ranking and the choice (a change of language).
 - The sessions source's mark is the session shown; the models' is `shown_model` (the session's, or the one chosen for
-  it); the agents' is `shown_agent`.
+  it); the agents' is `shown_agent`. A source with the prefix `.None` is the chooser's: its marks read the pane
+  `chooser_pane` (`source_pane`).
+- The models' answer must keep a provider's models together: the toolkit makes one heading per run of a group.
 - The toolkit's palette is a view of the toolkit (`ui.PALETTE_VIEW`); `overlay_open` sees it through
   `views_hold_keys`, so the composer does not take what is typed while it is open.

@@ -379,7 +379,7 @@ server_view_forget :: proc(app: ^App) {
 @(private = "file")
 server_dialogs_forget :: proc(app: ^App) {
 	app.cx.due[.Refresh], app.cx.due[.Facts], app.cx.due[.Children], app.cx.due[.Context] = {}, {}, {}, {}
-	app.picker.open = false
+	ui.palette_close(&app.palette.chooser)
 	// (their ids were that server's: nothing acts on one with what came from the other)
 	ui.view_close(&app.program_views, DELETE_VIEW)
 	ui.view_close(&app.program_views, RENAME_VIEW)
