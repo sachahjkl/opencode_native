@@ -144,6 +144,41 @@ job_reports_show_folded_and_open_on_a_click :: proc(t: ^testing.T) {
 	})
 }
 
+// What the cards show is what Copy gives: a command and its output, a sub-agent's report; never their markup.
+@(test)
+the_text_of_job_reports_is_what_their_cards_show :: proc(t: ^testing.T) {
+	s := "<shell id=\"sh_1\" state=\"completed\" command=\"make all\">line one\nline two</shell>\n<subagent sessionID=\"ses_2\" state=\"completed\" description=\"Read the docs\">The **report**.</subagent>"
+	jobs, ok := jobs_parse(s, context.temp_allocator)
+	if !testing.expect(t, ok && len(jobs) == 2, "two reports") { return }
+	testing.expect_value(t, jobs_text(jobs), "$ make all\nline one\nline two\n\nThe **report**.")
+	only, _ := jobs_parse(`<shell id="a" state="completed" command="true"></shell>`, context.temp_allocator)
+	testing.expect_value(t, jobs_text(only), "$ true")
+}
+
+// The message's Copy, from its menu on a card: the cards' text in the clipboard, not the markup they came in.
+@(test)
+copy_on_a_job_report_copies_what_it_shows :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		text := "<shell id=\"sh_1\" state=\"completed\" command=\"make all\">line one\nline two</shell>"
+		page := fmt.tprintf(`{{"data":[{{"id":"msg_j","type":"synthetic","text":%s,"time":{{"created":1}}}}],"cursor":{{"next":""}}}}`, jquote(text))
+		v, err := json.parse_string(page, allocator = context.temp_allocator)
+		testing.expect(t, err == nil)
+		chat_load(app, v, false)
+		chat_scroll_event(app, Scroll_Signal.Snap)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "job_msg_j_0") != nil }, "the card")
+		session.wait_idle(s)
+		head := session.find(s, "head", within = session.find(s, "job_msg_j_0"))
+		if !testing.expect(t, head != nil, "its header") { return }
+		session.click_at(s, session.center(head), .Right)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find_text(s, "Copy") != nil }, "the message's menu")
+		session.click_text(s, "Copy")
+		session.frames(s, 2)
+		testing.expect_value(t, session.clipboard(s), "$ make all\nline one\nline two")
+	})
+}
+
 @(private = "file")
 selectable_within :: proc(b: ^ui.Box) -> bool {
 	if .Selectable in b.flags { return true }

@@ -148,7 +148,9 @@ message_menu :: proc(app: ^App, m: ^Message) {
 		ui.menu_separator()
 		fork_item(app, m)
 	case .Synthetic, .Shell:
-		if ui.menu_item(i18n.tr("Copy"), icon = lucide.COPY, disabled = m.text == "").clicked { copied(m.text, i18n.tr("Text copied")) }
+		// (reports of background jobs: what their cards show, not their markup)
+		t := len(m.jobs) > 0 ? jobs_text(m.jobs) : m.text
+		if ui.menu_item(i18n.tr("Copy"), icon = lucide.COPY, disabled = t == "").clicked { copied(t, i18n.tr("Text copied")) }
 		if m.shell_id != "" { if ui.menu_item(i18n.tr("Inspect the output"), icon = lucide.SQUARE_TERMINAL).clicked { output_view_open_shell(app, m.shell_id, m.text, chat_dir(app)) } }
 		ui.menu_separator()
 		fork_item(app, m)

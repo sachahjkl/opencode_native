@@ -16,6 +16,7 @@ import "core:sync"
 import "core:time"
 import "core:unicode/utf8"
 import "gt:ascii"
+import "gt:platform"
 import "gt:ui"
 import remote "gt:remote"
 import i18n "gt:i18n"
@@ -29,22 +30,22 @@ Server_Config :: struct {
 
 DEFAULT_PORT :: 4096
 
+// A file of the opencode server's own folder of `kind` (opencode_dir, os_*.odin); "" when the system gives no folder
+// (no home): nothing is read then, not a file of the working folder.
+opencode_file :: proc(kind: platform.User_Dir, name: string) -> string {
+	dir := opencode_dir(kind)
+	return dir != "" ? pjoin({dir, name}) : ""
+}
+
 // This computer's opencode server, unless `url` / `password` (--url=, --password=; "": not given) say otherwise. Where it
-// really runs first: the state the
-// background service writes while it runs (~/.local/state/opencode/service.json: its url and password, what
-// `opencode service status` prints); else what its configuration asks for (~/.config/opencode/service.json: a port
-// that may be stale or absent); else the default port.
+// really runs first: the state the background service writes while it runs (its state folder's service.json,
+// ~/.local/state/opencode/service.json: its url and password, what `opencode service status` prints); else what its
+// configuration asks for (~/.config/opencode/service.json: a port that may be stale or absent); else the default port.
 discover_server :: proc(url := "", password := "") -> Server_Config {
 	cfg := Server_Config{host = "127.0.0.1", port = DEFAULT_PORT}
-	home := os.get_env("USERPROFILE", context.temp_allocator)
-	if home == "" { home = os.get_env("HOME", context.temp_allocator) }
-	xdg :: proc(name, home, fallback: string) -> string {
-		when ODIN_OS != .Windows { if v := os.get_env(name, context.temp_allocator); v != "" { return v } }
-		return fmt.tprintf("%s/%s", home, fallback)
-	}
 	found := false
 	// the running service
-	if data, err := os.read_entire_file(fmt.tprintf("%s/opencode/service.json", xdg("XDG_STATE_HOME", home, ".local/state")), context.temp_allocator); err == nil {
+	if data, err := os.read_entire_file(opencode_file(.State, "service.json"), context.temp_allocator); err == nil {
 		if v, jerr := json.parse_string(string(data), parse_integers = true, allocator = context.temp_allocator); jerr == nil {
 			if host, port, ok := split_url(jstr(v, "url")); ok {
 				cfg.host, cfg.port, found = host, port, true
@@ -54,7 +55,7 @@ discover_server :: proc(url := "", password := "") -> Server_Config {
 		}
 	}
 	// its configuration
-	if data, err := os.read_entire_file(fmt.tprintf("%s/opencode/service.json", xdg("XDG_CONFIG_HOME", home, ".config")), context.temp_allocator); err == nil {
+	if data, err := os.read_entire_file(opencode_file(.Config, "service.json"), context.temp_allocator); err == nil {
 		if v, jerr := json.parse_string(string(data), parse_integers = true, allocator = context.temp_allocator); jerr == nil {
 			if !found {
 				if p := jnum(v, "port"); p > 0 { cfg.port = u16(p) }
