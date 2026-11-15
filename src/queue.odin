@@ -410,7 +410,7 @@ queue_row :: proc(app: ^App, it: ^Queue_Item, n: int, em: f32) {
 			text("b", it.act == .Sending ? i18n.tr("sending…") : it.act == .Removing ? i18n.tr("removing…") : i18n.tr("changing…"), hex(HEX_FAINT), note)
 		case:
 			if !it.skills && queue_action("###edit", i18n.tr("Edit"), lucide.PENCIL, wide, em) { queue_edit(app, id) }
-			if it.delivery == .Queue && queue_action("###steer", i18n.tr("Steer"), lucide.ARROW_RIGHT, wide, em) { queue_steer(app, id) }
+			if it.delivery == .Queue && queue_action("###steer", i18n.tr("Steer"), lucide.SHIP_WHEEL, wide, em) { queue_steer(app, id) }
 			if it.delivery == .Steer && queue_action("###now", i18n.tr("Send now"), lucide.SEND_HORIZONAL, wide, em) { queue_send_now(app, id) }
 			if queue_action("###rm", i18n.tr("Remove"), lucide.X, wide, em, .Danger) { queue_remove(app, id) }
 		}

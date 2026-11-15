@@ -629,8 +629,8 @@ fr Chargement des messages précédents…
 en Loading the conversation…
 fr Chargement de la conversation…
 
-en Esc to stop
-fr Échap pour arrêter
+en Esc twice to stop
+fr Échap deux fois pour arrêter
 
 en The conversation could not be read: %s
 fr Impossible de lire la conversation : %s
@@ -703,6 +703,12 @@ fr Empilé
 
 en Split
 fr Côte à côte
+
+en Press Esc again to stop the run
+fr Appuyez de nouveau sur Échap pour arrêter l'exécution
+
+en Stop now
+fr Arrêter maintenant
 
 en The server's experimental options are on
 fr Les options expérimentales du serveur sont activées

@@ -286,7 +286,7 @@ messages :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.4))
 			throbber(app, "###wl", accent(), math.round(em * 7), math.round(em * 0.9), em)
 			ui.spacer(ui.fill())
-			if hint_action("###stop_hint", i18n.tr("Esc to stop"), em, intent = .Danger) { interrupt_session(app, c.id) }
+			if hint_action("###stop_hint", i18n.tr("Esc twice to stop"), em, intent = .Danger) { interrupt_session(app, c.id) }
 		}
 		foot -= line
 	}

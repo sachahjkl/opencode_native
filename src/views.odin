@@ -43,7 +43,7 @@ build_ui :: proc(app: ^App) {
 	// (under the header: a message at the top does not cover it)
 	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.state.window_size})
 	// (last: what is open and a field that has it took Escape before it gets here)
-	if app.chat.busy && !overlay_open(app) && !focus_in_view(app) && !mention_takes_escape(app) && ui.key_press(.Escape) { interrupt_session(app, app.chat.id) }
+	if app.chat.busy && !overlay_open(app) && !focus_in_view(app) && !mention_takes_escape(app) && ui.key_press(.Escape) { escape_stop(app) }
 }
 
 app_menu :: proc(app: ^App, key: string, em: f32) {
