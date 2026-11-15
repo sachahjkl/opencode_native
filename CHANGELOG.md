@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.55.1] - 2026-11-15
+
+### Fixed
+- **Two copies open at once no longer hide each other's crash**: when two copies of opencode native ran at the same time, a crash or a forced end of one could go unreported, and its report could be hidden by the clean end of the other. Each copy now keeps its own trace, and the next start shows what it did not see.
+
 ## [0.55.0] - 2026-11-14
 
 ### Changed
@@ -1640,6 +1645,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.55.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.55.1
 [0.55.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.55.0
 [0.54.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.54.1
 [0.54.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.54.0
