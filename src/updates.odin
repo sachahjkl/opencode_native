@@ -106,21 +106,19 @@ update_phase :: proc(app: ^App) -> update.Phase {
 	return update.status(app.updater).phase
 }
 
-// The program starts again: another of it from the same file, then this one ends (the same one, or the one an update put there).
-// (A process started is a system call: a task's. Its answer ends this one, or says why not, at the next build.)
+// The program starts again: this one ends, then another of it starts from the same file (the same one, or the one an update
+// put there). The new one starts at main's very end, once the single instance is let go: started before, it would hand its
+// start to this window, which then ends (src/md/features/single-instance.md).
 app_restart :: proc(app: ^App) {
-	Restart :: struct { app: ^App, ok: bool }
-	r := new(Restart, runtime.heap_allocator())
-	r.app = app
-	ui.task(&app.state, proc(data: rawptr) {
-		r := (^Restart)(data)
-		// (setup.launch: on Windows the new copy may take the foreground, so it comes back in front, not behind)
-		r.ok = setup.launch(process.executable_path())
-	}, proc(data: rawptr, _: u64) {
-		r := (^Restart)(data)
-		if r.ok { r.app.quit = true } else { ui.announce(&r.app.announcer, .Bad, i18n.tr("Restart it by hand: it could not be started")) }
-		free(r, runtime.heap_allocator())
-	}, r, proc(data: rawptr) { free(data, runtime.heap_allocator()) })
+	app.launch_after = process.executable_path()
+	app.quit = true
+}
+
+// main's very end: the copy Restart asked for. (The window is gone: a failure is the log's.)
+app_launch_after :: proc(app: ^App) {
+	if app.launch_after == "" { return }
+	// (setup.launch: on Windows the new copy may take the foreground, so it comes back in front, not behind)
+	if !setup.launch(app.launch_after) { log.errorf("restart: %s could not be started", app.launch_after) }
 }
 
 // The status bar's part: what the Updater has to say now, as a button (the toolkit's, as in every program).

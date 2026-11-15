@@ -72,6 +72,7 @@ setup_options :: proc() -> setup.Setup_Options {
 	return setup.Setup_Options{
 		identity = identity(), version = APP_VERSION, install_folder = INSTALL_FOLDER, icons = desktop_icons(),
 		note = i18n.tr(APP_NOT_THEIRS), prepare = setup_prepare,
+		running = instance_running, quit = instance_quit,   // (--status, --quit: the single instance, single_instance.odin)
 		// (the dialog in opencode's look: its blurred backdrop, behind it as a dialog only)
 		backdrop = view_backdrop,
 	}
