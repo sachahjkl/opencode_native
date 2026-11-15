@@ -2201,6 +2201,24 @@ the_header_shows_the_session_id_and_copies_it :: proc(t: ^testing.T) {
 	})
 }
 
+// The composer's toolbar buttons sit close: each one's room beside its words is COMPOSER_TOOL_PAD_EM, and no spacer
+// separates them (the toolkit's lone-button padding read as four buttons far apart).
+@(test)
+the_composer_s_tools_sit_close :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		_, s := bench_app(t)
+		session.frames(s, 2)
+		agent, model := session.get(s, "agent"), session.get(s, "model")
+		em := agent.font_size   // (the button's row is at the style's size, its words a little smaller: quiet)
+		gap := model.rect.min.x - agent.rect.max.x
+		testing.expectf(t, gap <= 1, "no spacer between them: %v", gap)
+		words := session.get(s, "t", within = agent)
+		room := (agent.rect.max.x - agent.rect.min.x) - (words.rect.max.x - words.rect.min.x)
+		testing.expectf(t, room <= em * (2 * COMPOSER_TOOL_PAD_EM + 1.6), "its room beside its words and its glyph: %v (em %v)", room, em)
+	})
+}
+
 // Escape stops a run in two presses (src/md/features/escape-stop.md): the first one only arms the stop and the composer
 // says so, the second one stops. The arming ends by itself; an Escape after that arms again. From the composer and from
 // nothing focused alike.

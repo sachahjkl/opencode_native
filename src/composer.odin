@@ -180,19 +180,18 @@ composer :: proc(app: ^App, em: f32) {
 			att := ui.button("attach", icon = lucide.PAPERCLIP, o = {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true})
 			if att.clicked { attach_pick(app) }
 			if ui.hovered_for(att) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Attach files: images, PDF, text  (or paste, or drop them here)")) } }
-			ui.spacer(ui.px(em * 0.1))
 			agent := shown_agent(app)
 			if agent == "" { agent = "build" }
 			// (the narrowest toolbar: the agent and the variant by their glyphs, their names in the tips)
+			composer_tool_pad(em)
 			asig := ui.button("agent", ui.text_shown(fit >= 3 ? "" : agent), lucide.BOT, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "agent", tip = fit >= 3 ? agent : ""})
 			if asig.clicked { if app.picker.open && app.picker.id == "agent" { app.picker.open = false } else { picker_open(app, "agent", asig.box.rect) } }
-			ui.spacer(ui.px(em * 0.4))
 			model, _ := shown_model(app)
 			if model == "" { model = i18n.tr("default model") }
+			composer_tool_pad(em)
 			msig := ui.button("model", ui.text_shown(model), lucide.CPU, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = app.picker.open && app.picker.id == "model"})
 			if msig.clicked { if app.picker.open && app.picker.id == "model" { app.picker.open = false } else { picker_open(app, "model", msig.box.rect) } }
 			variant_button(app, em, fit >= 3)
-			ui.spacer(ui.px(em * 0.4))
 			if app.chat.id != "" { approval_button(app, em) }   // (a session's: a new one has none yet)
 			ui.spacer(ui.fill())
 			held := composer_held(app)
@@ -404,6 +403,13 @@ submit_prompt :: proc(app: ^App, other := false, first := false) {
 	if as == .Idle { chat_scroll_event(app, Scroll_Signal.Go_Bottom) }   // (what waits shows over the composer: the conversation stays where it is)
 }
 
+// The room beside the words of a toolbar button (agent, model, variant, approvals), in ems. The toolkit's own (0.95)
+// is a lone button's: four ghost buttons in a row read as far apart, their faces unseen until the pointer comes.
+COMPOSER_TOOL_PAD_EM :: 0.4
+
+// The next toolbar button's room beside its words.
+composer_tool_pad :: proc(em: f32) { ui.next({text_pad = math.round(em * COMPOSER_TOOL_PAD_EM)}) }
+
 // How hard the model thinks: a button beside the model's that opens the menu of its variants. None when the model has none.
 @(private = "file")
 // `glyph`: its glyph alone (a narrow toolbar).
@@ -412,9 +418,9 @@ variant_button :: proc(app: ^App, em: f32, glyph := false) {
 	variants := model_variants(app, model, provider)
 	if len(variants) == 0 { return }
 	current := shown_variant(app)
-	ui.spacer(ui.px(em * 0.2))
 	ui.a11y({role = .Button, name = i18n.tr("Thinking")})
 	name := current != "" ? current : i18n.tr("default")
+	composer_tool_pad(em)
 	sig := ui.button("variant", ui.text_shown(glyph ? "" : name), lucide.GAUGE, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true})
 	key := "variant_menu"
 	if sig.clicked { ui.menu_open(key, sig.box.rect, sig.box.key, search = false) }
