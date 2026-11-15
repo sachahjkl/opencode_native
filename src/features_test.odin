@@ -197,9 +197,10 @@ the_history_is_the_sessions_own :: proc(t: ^testing.T) {
 @(test)
 every_key_of_the_table_is_its_own :: proc(t: ^testing.T) {
 	for &a, i in COMMANDS {
-		if a.key == .None { continue }
 		for &b in COMMANDS[i + 1:] {
-			testing.expectf(t, !(a.key == b.key && a.mods == b.mods), "%s and %s share a key", a.id, b.id)
+			for ka in a.keys {
+				for kb in b.keys { testing.expectf(t, ka != kb, "%s and %s share %v", a.id, b.id, ka) }
+			}
 		}
 	}
 }

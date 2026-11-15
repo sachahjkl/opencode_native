@@ -1,5 +1,5 @@
 // Settings: the client's own preferences (the toolkit's typed registry, gt:config: named, bounded, documented, saved to
-// %APPDATA%\opencode-native\prefs.txt, applied at once) and what the opencode server lets one see and change (its shell,
+// config_dir()'s prefs.txt, applied at once) and what the opencode server lets one see and change (its shell,
 // its MCP servers, its saved permissions, its usage, its providers, agents, skills, commands, its configuration files).
 package ocn
 
@@ -146,11 +146,10 @@ prefs_path :: proc() -> string { return pjoin({filepath.dir(settings_path()), "p
 // this program's own.
 prefs_register :: proc(p: ^config.Prefs) {
 	d := prefs_page.STANDARD_DEFAULTS
-	d.theme, d.app_name = "OpenCode", APP_NAME
+	d.theme, d.app_name = "OpenCode", APP_TITLE
 	// (update.channel: a choice of the releases' channels, updates.odin)
 	d.update_channels, d.update_channel_labels = UPDATE_CHANNEL_NAMES[:], UPDATE_CHANNEL_LABELS[:]
-	// (not .Keys yet: opencode native's commands do not read the person's keys; the ROADMAP's "Personal keys" brings them)
-	prefs_page.standard_register(p, prefs_page.STANDARD_ALL - {.Keys}, d)
+	prefs_page.standard_register(p, prefs_page.STANDARD_ALL, d)
 	config.register(p, PREF_DEFS[:])
 	prefs_page.changelog_register(p)   // (the version last started: What's new after an update)
 	// (the titles the settings page made from the names, said here so that they are translated; order 0: their places stay)
@@ -182,9 +181,10 @@ prefs_init :: proc(app: ^App, file: string) {
 	// the toolkit's settings applied to it now, then each one as it changes (config.watch): its zoom, density, rounding,
 	// motion, scrolling, delays, text rendering, the families of the interface, the answers and code (live: the client's
 	// own faces are their Default; fonts_follow takes the faces in use)
-	targets := prefs_page.Standard_Targets{faces = own_text_faces(app)}
+	// (keys.custom and keys.aliases into the keymap, and the palette's changes of it written back)
+	targets := prefs_page.Standard_Targets{faces = own_text_faces(app), keymap = &app.keymap}
 	// (rendering.frame_rate is the toolkit's: it sets the main window's pacer)
-	if app.win != nil { targets = {renderer = &app.r, fonts = &app.fonts, partial_redraw = &app.window.partial_redraw, pacer = &app.window.pacer, faces = own_text_faces(app)} }
+	if app.win != nil { targets = {renderer = &app.r, fonts = &app.fonts, partial_redraw = &app.window.partial_redraw, pacer = &app.window.pacer, faces = own_text_faces(app), keymap = &app.keymap} }
 	prefs_page.standard_watch(&app.standard, &app.cfg_prefs, &app.state, targets)
 	prefs_refresh(app)
 }
@@ -695,6 +695,7 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "behaviour", title = i18n.later("Behaviour"), icon = lucide.BELL, names = {"composer.send", "sidebar.mode", "sidebar.subagents", "notify.finished", "permission.new_sessions", "notify.permission", "notices.view", "notices.badge", "notices.keep"}},
 	{category = "scrolling", title = i18n.later("Scrolling"), icon = lucide.SCROLL},
 	{category = "input", title = i18n.later("Input"), icon = lucide.KEYBOARD},
+	{category = "keys", title = i18n.later("Keys"), icon = lucide.KEYBOARD},
 	{category = "timing", title = i18n.later("Delays and menus"), icon = lucide.TIMER},
 	{category = "update", title = i18n.later("Updates"), icon = lucide.REFRESH_CW},
 	{category = "rendering", title = i18n.later("Rendering"), icon = lucide.MONITOR},
@@ -736,7 +737,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 		pages = SETTINGS_PAGES[:],   // (in English: the toolkit's page translates their titles and headings)
 		icon_font = app.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
 		file = app.prefs_file,
-		version = fmt.tprintf("%s %s", APP_NAME, APP_VERSION),
+		version = fmt.tprintf("%s %s", APP_TITLE, APP_VERSION),
 		themes = themes(app), themes_light = app.cx.theme.light,
 		themes_file = app.cx.theme.file.path != "" ? &app.cx.theme.file : nil,
 		// (the Updates page: the Updater's state and its buttons under update.auto, as in every program of the toolkit)
@@ -763,7 +764,7 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 	switch category {
 	case "advanced":
 		ui.spacer(ui.px(em * 0.6))
-		info_line(app, "###adv_about", fmt.tprintf(i18n.tr("%s %s, a client of the OpenCode server. %s"), APP_NAME, APP_VERSION, i18n.tr(APP_NOT_THEIRS)), em)
+		info_line(app, "###adv_about", fmt.tprintf(i18n.tr("%s %s, a client of the OpenCode server. %s"), APP_TITLE, APP_VERSION, i18n.tr(APP_NOT_THEIRS)), em)
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###adv_b") {
@@ -836,7 +837,7 @@ page_server :: proc(app: ^App, em: f32) {
 		// (its own context: "none" here is an authentication's, a feminine word in French)
 		fact("###s4", i18n.tr("Authentication"), app.servers[app.server].password == "" ? i18n.tr("authentication", "none") : app.servers[app.server].local ? i18n.tr("Basic (password from service.json)") : "Basic", em)
 		fact("###s5", i18n.tr("Sessions"), fmt.tprintf(i18n.tr("%d loaded · %d running"), len(app.sessions), len(app.busy)), em)
-		fact("###s6", i18n.tr("Client"), fmt.tprintf("opencode native %s", APP_VERSION), em)
+		fact("###s6", i18n.tr("Client"), fmt.tprintf("%s %s", APP_TITLE, APP_VERSION), em)
 		ui.spacer(ui.px(em * 0.4))
 	}
 	section(app, i18n.tr("SHELL"), em)

@@ -1022,7 +1022,7 @@ commands_asked_together_all_run :: proc(t: ^testing.T) {
 @(test)
 ctrl_p_is_the_files_alone :: proc(t: ^testing.T) {
 	for &c in COMMANDS {
-		if c.key == .P && c.mods == {.Ctrl} { testing.expect_value(t, c.id, "session.files") }
+		for k in c.keys { if k == (ui.Chord{.P, {.Ctrl}}) { testing.expect_value(t, c.id, "session.files") } }
 	}
 }
 

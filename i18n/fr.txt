@@ -260,8 +260,8 @@ fr Installer la mise à jour
 en Restart to update
 fr Redémarrer pour mettre à jour
 
-en Restart opencode native
-fr Redémarrer opencode native
+en Restart Opencode Native
+fr Redémarrer Opencode Native
 
 en Quit
 fr Quitter
@@ -1926,6 +1926,9 @@ fr Défilement
 en Input
 fr Clavier et souris
 
+en Keys
+fr Touches
+
 en Delays and menus
 fr Délais et menus
 
@@ -2563,8 +2566,8 @@ fr Panneau des statistiques
 en Sub-agent sessions in the list
 fr Sessions des sous-agents dans la liste
 
-en About opencode native
-fr À propos d'opencode native
+en About Opencode Native
+fr À propos d'Opencode Native
 
 en Statistics
 fr Statistiques

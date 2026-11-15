@@ -5,7 +5,6 @@
 package ocn
 
 import crash_bar "gt:crash_bar"
-import "gt:platform"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -27,7 +26,7 @@ build_ui :: proc(app: ^App) {
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	if ui.column(id = "###root") {
 		title_bar(app, em)
-		crash_bar.bar(&app.crash_bar, {name = APP_NAME, version = APP_VERSION, repository = "sachahjkl/opencode_native"})
+		crash_bar.bar(&app.crash_bar, {name = APP_TITLE, version = APP_VERSION, repository = "sachahjkl/opencode_native"})
 		ui.next({width = ui.fill(), height = ui.fill()})
 		// (the views docked and floating are built first: one that has the keyboard reads its keys first)
 		if ui.views_frame(&app.program_views) {
@@ -53,26 +52,26 @@ app_menu :: proc(app: ^App, key: string, em: f32) {
 		pc := ui.palette_command()
 		if ui.menu_item(i18n.tr("Command palette…"), ui.command_shortcut(pc), icon = pc.icon).clicked { palette_show(app) }
 		ui.menu_separator()
-		if ui.menu_item(i18n.tr("Home"), "Ctrl+H", icon = lucide.HOME).clicked { command_run(app, command_find("nav.home")) }
-		if ui.menu_item(i18n.tr("New session"), "Ctrl+N", icon = lucide.PLUS).clicked { command_run(app, command_find("session.new")) }
-		if ui.menu_item(i18n.tr("Refresh"), "F5", icon = lucide.REFRESH_CW).clicked {
+		if ui.menu_item(i18n.tr("Home"), command_shortcut(app, "nav.home"), icon = lucide.HOME).clicked { command_run(app, command_find("nav.home")) }
+		if ui.menu_item(i18n.tr("New session"), command_shortcut(app, "session.new"), icon = lucide.PLUS).clicked { command_run(app, command_find("session.new")) }
+		if ui.menu_item(i18n.tr("Refresh"), command_shortcut(app, "app.refresh"), icon = lucide.REFRESH_CW).clicked {
 			refresh_sessions(app)
 			if pane.chat.id != "" { load_messages(app, pane, pane.chat.id) }
 		}
-		if ui.menu_item(i18n.tr("Settings…"), "Ctrl+,", icon = lucide.SLIDERS_HORIZONTAL).clicked { settings_open(app) }
+		if ui.menu_item(i18n.tr("Settings…"), command_shortcut(app, "app.settings"), icon = lucide.SLIDERS_HORIZONTAL).clicked { settings_open(app) }
 		if ui.menu_item(i18n.tr("Add a server…"), icon = lucide.PLUG).clicked { server_edit_open(app, -1) }
-		if ui.menu_item(i18n.tr("Statistics panel"), "Ctrl+I", app.stats.open, icon = lucide.GAUGE, disabled = pane.chat.id == "").clicked { stats_toggle(app) }
+		if ui.menu_item(i18n.tr("Statistics panel"), command_shortcut(app, "session.stats"), app.stats.open, icon = lucide.GAUGE, disabled = pane.chat.id == "").clicked { stats_toggle(app) }
 		if preview_available() {
-			if ui.menu_item(i18n.tr("Preview panel"), platform.key_text("Ctrl+Shift+B"), app.preview.open, icon = lucide.GLOBE).clicked { command_run(app, command_find("view.preview")) }
+			if ui.menu_item(i18n.tr("Preview panel"), command_shortcut(app, "view.preview"), app.preview.open, icon = lucide.GLOBE).clicked { command_run(app, command_find("view.preview")) }
 		}
-		if ui.menu_item(i18n.tr("What you missed"), platform.key_text("Ctrl+Shift+N"), icon = lucide.BELL).clicked { command_run(app, command_find("view.notices")) }
-		if ui.menu_item(i18n.tr("Keyboard shortcuts"), "F1", icon = lucide.KEYBOARD).clicked { help_open(app) }
+		if ui.menu_item(i18n.tr("What you missed"), command_shortcut(app, "view.notices"), icon = lucide.BELL).clicked { command_run(app, command_find("view.notices")) }
+		if ui.menu_item(i18n.tr("Keyboard shortcuts"), command_shortcut(app, "app.help"), icon = lucide.KEYBOARD).clicked { help_open(app) }
 		if ui.menu_item(i18n.tr("Sub-agent sessions in the list"), "", app.prefs.subagents == "flat", icon = lucide.BOT).clicked { pref_set(app, "sidebar.subagents", app.prefs.subagents == "flat" ? "nested" : "flat") }
 		ui.menu_separator()
 		// (the settings' Installation page says the version, where the install is, and acts on it)
-		if ui.menu_item(i18n.tr("About opencode native"), icon = lucide.INFO).clicked { settings_open_on(app, prefs_page.INSTALL_PAGE) }
+		if ui.menu_item(i18n.tr("About Opencode Native"), icon = lucide.INFO).clicked { settings_open_on(app, prefs_page.INSTALL_PAGE) }
 		ui.menu_separator()
-		if ui.menu_item(i18n.tr("Quit"), "Alt+F4", icon = lucide.LOG_OUT).clicked { app.quit = true }
+		if ui.menu_item(i18n.tr("Quit"), command_shortcut(app, "app.quit"), icon = lucide.LOG_OUT).clicked { app.quit = true }
 	}
 }
 

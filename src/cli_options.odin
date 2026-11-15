@@ -53,7 +53,7 @@ cli_start :: proc() -> Cli_Options {
 			{"OPENCODE_NATIVE_NO_SETUP=1", "never offer Setup"},
 			{"TOOLKIT_DEVTOOLS=<port>", "let the Chrome DevTools Protocol drive the window on 127.0.0.1 (development)"},
 		},
-		footer = "Files: ~/.config/opencode-native/ (Windows: %APPDATA%\\opencode-native\\): prefs.txt, servers.txt, themes.txt."}
+		footer = "Files: ~/.config/FromentSoftware/OpencodeNative/ (Windows: %APPDATA%\\FromentSoftware\\OpencodeNative\\): prefs.txt, servers.txt, themes.txt."}
 	if out, code, stop := cli.check(program, all_options(), os.args[1:]); stop {
 		say("%s", out)
 		cli.exit(code)

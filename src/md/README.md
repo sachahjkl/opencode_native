@@ -33,3 +33,7 @@ purpose, the decisions, what was refused.
   command line to the window that runs; `--quit` ends it as Quit does; the starts that stay on their own.
 - [features/palette.md](features/palette.md): the toolkit's palette with ocn's sources; the shared prefixes; what was
   lost and why.
+- [features/keys.md](features/keys.md): the commands' keys through the toolkit's keymap: a person's key replaces a
+  command's own; the keys read elsewhere, shown here.
+- [features/folders.md](features/folders.md): the program's folders and its install in its vendor's
+  (FromentSoftware/OpencodeNative), the earlier folders moved once; the title a person reads.

@@ -18,7 +18,7 @@ OCN_PROJECT :: toolbox.Project{
 	program = OUT_DEFAULT,
 	features = {.Mermaid, .Devtools, .Lucide_Subset},
 	launcher = {others = "--help,--version,--status,--install,--uninstall,--frames"},
-	title = "opencode native", publisher = "Froment Software",
+	title = "Opencode Native", publisher = "Froment Software",
 	description = "A native desktop client for the opencode server. Not built by the OpenCode team, and not affiliated with them.",
 	copyright = "Copyright (c) 2026 Sacha Froment (Froment Software)",
 }
@@ -26,7 +26,7 @@ OCN_PROJECT :: toolbox.Project{
 // The licence's commands (licence, paddle): its development pair is the toolkit's, public on purpose.
 OCN_LICENCE_TOOL :: toolbox.Licence_Tool{
 	dev_seed = "Z3QtbGljZW5jZS1zYW1wbGUtZGV2LXNlZWQtMDAwMSE",
-	hint     = "Open this file with opencode native, or paste the key in Settings > Advanced.",
+	hint     = "Open this file with Opencode Native, or paste the key in Settings > Advanced.",
 	paddle   = {name = "Opencode Native User License", description = "A personal, perpetual licence that supports opencode native.", amounts = "supporter=1500", currency = "EUR"},
 }
 

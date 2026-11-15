@@ -26,7 +26,7 @@ LINUX_README :: `opencode native %s for Linux (x64): a native desktop client for
 An independent project: not built by the OpenCode team, and not affiliated with them.
 
   ./opencode-native              run it (it finds the opencode server of this computer by itself)
-  ./opencode-native --install    install it for your user: ~/.local/share/opencode-native, an entry in the applications
+  ./opencode-native --install    install it for your user: ~/.local/opt/FromentSoftware/OpencodeNative, an entry in the applications
                                  menu, its icon (or from its Setup: title bar menu > Setup...)
   ./opencode-native --url=https://host:port --password=...    another server
 

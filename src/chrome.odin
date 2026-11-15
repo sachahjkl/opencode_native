@@ -347,7 +347,7 @@ status_bar :: proc(app: ^App, em: f32) {
 			morph_text("v", fmt.tprintf("OpenCode %s", said.version), hex(HEX_FAINT), small)
 			ui.spacer(ui.px(em * 0.8))
 		}
-		text("ocn_v", "opencode native " + APP_VERSION, hex(HEX_FAINT), small)
+		text("ocn_v", APP_TITLE + " " + APP_VERSION, hex(HEX_FAINT), small)
 		ui.spacer(ui.fill())
 		update_pill(app, em)
 		pend := int(app.pending)

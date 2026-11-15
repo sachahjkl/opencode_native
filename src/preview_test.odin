@@ -867,7 +867,8 @@ ctrl_w_in_the_page_closes_its_tab :: proc(t: ^testing.T) {
 ctrl_t_and_ctrl_w_stay_free_outside_the_panel :: proc(t: ^testing.T) {
 	for &c in COMMANDS {
 		if c.id != "view.preview_tab" && c.id != "view.preview_tab_close" { continue }
-		testing.expect(t, c.key == .None, "no key of the table: a shell or the composer would lose it")
+		// (shown, read by the panel alone: a shell or the composer would lose them)
+		testing.expect(t, len(c.keys) == 1 && c.keys_elsewhere, "the panel's keys, not read by the table")
 	}
 	testing.expect(t, command_find("view.preview_tab") != nil, "in the palette")
 	testing.expect(t, command_find("view.preview_tab_close") != nil, "in the palette")
