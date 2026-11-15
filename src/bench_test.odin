@@ -812,16 +812,20 @@ the_todos_filter_by_state :: proc(t: ^testing.T) {
 			for k in 0 ..< 4 { if session.find(s, fmt.tprintf("td%d", k)) != nil { n += 1 } }
 			return
 		}
+		// (the sidebar's choice is a segmented control too: its segments have the same names)
+		filter :: proc(s: ^session.Session, k: int) {
+			session.click_at(s, session.center(session.get(s, fmt.tprintf("seg%d", k), session.get(s, "td_filter"))))
+		}
 		testing.expect_value(t, rows(s), 4)
 		testing.expect(t, session.find_text(s, "Active 2") != nil && session.find_text(s, "Done 2") != nil, "how many of each")
-		session.click(s, "seg1")
+		filter(s, 1)
 		session.wait_idle(s)   // (the tray glides to its new height: what is clicked next stands still)
 		testing.expect_value(t, a.todo_filter, Todo_Filter.Active)
 		testing.expect(t, rows(s) == 2 && session.find(s, "td1") != nil && session.find(s, "td2") != nil, "what remains")
-		session.click(s, "seg2")
+		filter(s, 2)
 		session.wait_idle(s)   // (the tray glides to its new height: what is clicked next stands still)
 		testing.expect(t, rows(s) == 2 && session.find(s, "td0") != nil && session.find(s, "td3") != nil, "what is over")
-		session.click(s, "seg0")
+		filter(s, 0)
 		session.wait_idle(s)   // (the tray glides to its new height: what is clicked next stands still)
 		testing.expect_value(t, rows(s), 4)
 		session.save_png(s, "todos_filter.png")

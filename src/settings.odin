@@ -82,7 +82,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "notices.view", title = i18n.later("View"), description = i18n.later("How \"What you missed\" shows what happened: one card at a time, with its request, the agent's last answer, the files it touched and its todo list; or a list whose items unfold in place."), kind = .String, default = {s = "cards"}, choices = {"cards", "list"}, choice_labels = {i18n.later("Cards"), i18n.later("List")}},
 	{name = "notices.badge", title = i18n.later("Badge"), description = i18n.later("The count of what you missed on the bell of the title bar: runs that ended, questions and permissions that wait, commands, scheduled runs and sub-agents that ended."), kind = .Bool, default = {b = true}},
 	{name = "notices.keep", title = i18n.later("Keep"), description = i18n.later("How many entries that you acknowledged \"What you missed\" keeps in its history. What is not acknowledged yet always stays."), kind = .Int, default = {i = notices.CAP}, bounded = true, min = NOTICES_KEEP_MIN, max = NOTICES_KEEP_MAX},
-	{name = "appearance.throbber", title = i18n.later("Throbber"), description = i18n.later("What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing."), kind = .String, default = {s = "board"}, choices = {"board", "orbit", "scanner", "none"}, choice_labels = {i18n.later("Board"), i18n.later("Orbit"), i18n.later("Scanner"), i18n.later("None")}},
+	{name = "appearance.throbber", title = i18n.later("Throbber"), description = i18n.later("What says that a run goes on: a board that spells what the agent does, a spinner, the scanner, or nothing."), kind = .String, default = {s = "board"}, choices = {"board", "spinner", "scanner", "none"}, choice_labels = {i18n.later("Board"), i18n.later("Spinner"), i18n.later("Scanner"), i18n.later("None")}},
 	{name = "session.agent", description = "The agent a new session starts with: the one chosen last.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "session.model", description = "The model a new session starts with: the one chosen last.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "session.provider", description = "The provider of that model.", kind = .String, default = {s = ""}, hidden = true},
@@ -1007,7 +1007,7 @@ page_permissions :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###sp%d", i)) {
 				col := s.effect == "deny" ? hex(HEX_RED) : s.effect == "allow" ? hex(HEX_GREEN) : hex(HEX_YELLOW)
-				pill("###e", s.effect != "" ? s.effect : "?", col)
+				ui.pill("e", s.effect != "" ? s.effect : "?", "", col, {mono = true})
 				ui.spacer(ui.px(em * 0.5))
 				text("a", s.action, hex(HEX_SETTING_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
 				ui.spacer(ui.px(em * 0.5))

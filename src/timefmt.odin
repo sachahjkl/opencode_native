@@ -42,13 +42,6 @@ same_local_day :: proc(a, b: f64) -> bool {
 	return timefmt.local_day(a, off) == timefmt.local_day(b, off)
 }
 
-// The time of `t` to the second, with its date when it is not on the day of `now`: "14:32:05", "Nov 10, 14:32:05".
-moment_text :: proc(t, now: f64, clock24: bool) -> string {
-	clock := clock_text(t, clock24, seconds = true)
-	if same_local_day(t, now) { return clock }
-	return fmt.tprintf("%s, %s", date_text(t), clock)
-}
-
 // "4m 12s", "1h 03m": the time from `a` to `b` (epoch ms). "": `a` not known, or `b` not after it.
 duration_text :: proc(a, b: f64) -> string {
 	if a <= 0 || b <= a { return "" }
@@ -91,13 +84,15 @@ tool_elapsed :: proc(p: ^Part, running: bool, now: f64) -> string {
 	return elapsed_text(p.started_ms, end)
 }
 
-// When a tool call ran, on the local clock to the second: "Started 14:32:05, ended 14:32:17", a day other than today's with
-// its date ("Started Nov 10, 14:32:05"); while it runs, "running".
+// When a tool call ran, on the local clock to the second (timefmt.moment): "Started today 14:32:05, ended today 14:32:17",
+// another day "Started yesterday 14:32:05", "Started Nov 10, 14:32:05"; while it runs, "running".
 tool_when :: proc(p: ^Part, running: bool, now: f64, clock24: bool) -> string {
-	start := moment_text(p.started_ms, now, clock24)
+	o := timefmt.Clock_Options{hours12 = !clock24, seconds = true}
+	off := timefmt.local_offset_minutes()
+	start := timefmt.moment(p.started_ms, now, off, o)
 	if running { return fmt.tprintf(i18n.tr("Started %s, running"), start) }
 	if p.ended_ms <= 0 { return fmt.tprintf(i18n.tr("Started %s"), start) }
-	return fmt.tprintf(i18n.tr("Started %s, ended %s"), start, moment_text(p.ended_ms, now, clock24))
+	return fmt.tprintf(i18n.tr("Started %s, ended %s"), start, timefmt.moment(p.ended_ms, now, off, o))
 }
 
 // What the line over a goal's reason says of the time its limit resets: "resets at 12:20 · in 42 min", another day with its

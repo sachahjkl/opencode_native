@@ -136,9 +136,8 @@ item_free :: proc(it: Queue_Item) { delete(it.id); delete(it.text); delete(it.pa
 @(private = "file")
 item_of :: proc(id: string, v: json.Value, born: Seq) -> Queue_Item {
 	payload := tk_json.get(v, "payload")
-	data, _ := json.marshal(payload, allocator = context.temp_allocator)
 	return {
-		id = strings.clone(id), text = strings.clone(tk_json.text(payload, "text")), payload = strings.clone(string(data)),
+		id = strings.clone(id), text = strings.clone(tk_json.text(payload, "text")), payload = strings.clone(tk_json.to_text(payload)),
 		delivery = delivery_of(tk_json.text(v, "delivery")), files = len(tk_json.array(payload, "files")), skills = len(tk_json.array(payload, "skills")) > 0, born = born,
 	}
 }
@@ -250,33 +249,29 @@ queue_forget :: proc(app: ^App) { for &pane, i in app.panes { if pane_is_shown(a
 prompt_of_payload :: proc(v: json.Value) -> string {
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintf(&b, `{{"text":%s`, tk_json.quote(tk_json.text(v, "text")))
-	marshalled :: proc(v: json.Value) -> string {
-		data, _ := json.marshal(v, allocator = context.temp_allocator)
-		return string(data)
-	}
 	if files := tk_json.array(v, "files"); len(files) > 0 {
 		strings.write_string(&b, `,"files":[`)
 		for f, i in files {
 			if i > 0 { strings.write_byte(&b, ',') }
 			fmt.sbprintf(&b, `{{"uri":%s`, tk_json.quote(payload_file_uri(f)))
 			if name := tk_json.text(f, "name"); name != "" { fmt.sbprintf(&b, `,"name":%s`, tk_json.quote(name)) }
-			if m := tk_json.get(f, "mention"); m != nil { fmt.sbprintf(&b, `,"mention":%s`, marshalled(m)) }
+			if m := tk_json.get(f, "mention"); m != nil { fmt.sbprintf(&b, `,"mention":%s`, tk_json.to_text(m)) }
 			strings.write_byte(&b, '}')
 		}
 		strings.write_byte(&b, ']')
 	}
-	if agents := tk_json.get(v, "agents"); len(tk_json.array(v, "agents")) > 0 { fmt.sbprintf(&b, `,"agents":%s`, marshalled(agents)) }
+	if agents := tk_json.get(v, "agents"); len(tk_json.array(v, "agents")) > 0 { fmt.sbprintf(&b, `,"agents":%s`, tk_json.to_text(agents)) }
 	if skills := tk_json.array(v, "skills"); len(skills) > 0 {
 		strings.write_string(&b, `,"skills":[`)
 		for s, i in skills {
 			if i > 0 { strings.write_byte(&b, ',') }
 			fmt.sbprintf(&b, `{{"id":%s`, tk_json.quote(tk_json.text(s, "id")))
-			if m := tk_json.get(s, "mention"); m != nil { fmt.sbprintf(&b, `,"mention":%s`, marshalled(m)) }
+			if m := tk_json.get(s, "mention"); m != nil { fmt.sbprintf(&b, `,"mention":%s`, tk_json.to_text(m)) }
 			strings.write_byte(&b, '}')
 		}
 		strings.write_byte(&b, ']')
 	}
-	if meta := tk_json.get(v, "metadata"); meta != nil { fmt.sbprintf(&b, `,"metadata":%s`, marshalled(meta)) }
+	if meta := tk_json.get(v, "metadata"); meta != nil { fmt.sbprintf(&b, `,"metadata":%s`, tk_json.to_text(meta)) }
 	strings.write_byte(&b, '}')
 	return strings.to_string(b)
 }

@@ -424,25 +424,6 @@ plate :: proc(id: string, top: u32 = HEX_PLATE_TOP, bottom: u32 = HEX_PLATE_BOTT
 	return true
 }
 
-// A small pill of text (model names, token counts): a tiny sunken capsule.
-pill :: proc(id: string, text: string, color := Color{}, icon := "") {
-	em := ui.font_size()
-	fs := math.round(em * FS_SMALL)
-	ui.next({width = ui.children_sum(), height = ui.px(math.round(em * PILL_H_EM)), axis = .X, cross = .Center})
-	if ui.well(id, .X) {
-		ui.spacer(ui.px(em * 0.5))
-		fg := color.a > 0 ? color : hex(HEX_WEAK)
-		if icon != "" {
-			ui.next({width = ui.px(em), height = ui.pct(1), font = the_app.icons, font_size = math.round(em * ICON_SMALL), fg = fg, text_pad = 0, text_align = .Center})
-			ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###i", icon))
-			ui.spacer(ui.px(em * 0.25))
-		}
-		ui.next({width = ui.text_size(0), height = ui.pct(1), font = the_app.mono, font_size = fs, fg = fg, text_pad = 0})
-		ui.build_box({.Draw_Text}, fmt.tprintf("%s###t", label_safe(text)))
-		ui.spacer(ui.px(em * 0.5))
-	}
-}
-
 // An icon glyph as a box.
 // (a fixed height, not the parent's: in a row sized by its children a percentage is of a distant ancestor, the whole view)
 glyph :: proc(icon: string, color: Color, size: f32 = 0, width: f32 = 0) {
@@ -537,53 +518,6 @@ rail_row :: proc(id: string, color: Color) -> bool {
 	return true
 }
 
-
-////////////////////////////////
-// A choice of a few: a sunken track, the one chosen on a small raised plate that slides to it, its word lit, the others quiet.
-
-@(private = "file")
-Choice_Draw :: struct { t: f32, n: int, pad: f32 }
-
-@(private = "file")
-choice_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	d := (^Choice_Draw)(user)
-	r := b.rect
-	radius := (r.max.y - r.min.y) * CHOICE_RADIUS_SHARE / ui.scale()
-	draw_well(dc, r, radius, hex(HEX_WELL))
-	if d.n <= 0 { return }
-	w := (r.max.x - r.min.x - 2 * d.pad) / f32(d.n)
-	x := r.min.x + d.pad + d.t * w
-	plate := Rect{{math.round(x), r.min.y + d.pad}, {math.round(x + w), r.max.y - d.pad}}
-	draw_bevel(dc, plate, max(0, radius - d.pad / ui.scale()), hex(HEX_BTN_FACE), 0, 0)
-}
-
-// `if choice(id, labels, &sel)`: true when another was chosen. Size it with `next` before it.
-choice :: proc(id: string, labels: []string, selected: ^int) -> (changed: bool) {
-	em := ui.font_size()
-	t := ui.anim(ui.key_from_string(ui.parent_box().key, fmt.tprintf("%s_t", id)), f32(selected^), CHOICE_RATE, f32(selected^))
-	pad := math.round(em * CHOICE_PAD_EM)
-	b := ui.build_box({}, id)   // (sized by the caller's next; its row inside)
-	d := ui.frame_new(Choice_Draw)
-	d^ = {t, len(labels), pad}
-	b.custom, b.custom_user = choice_draw, d
-	ui.a11y_default(b, {role = .Radio_Group, orientation = .X})
-	if ui.parent(b) {
-		ui.next({width = ui.pct(1), height = ui.pct(1), axis = .X})
-		if ui.row(id = "###r") {
-		ui.spacer(ui.px(pad))
-		for label, i in labels {
-			ui.next({width = ui.fill(), height = ui.pct(1), text_align = .Center, cursor = .Hand})   // (equal shares of what the pads leave)
-			item := ui.build_box({.Clickable, .Focusable, .Draw_Text}, fmt.tprintf("%s###ch%d", label, i))
-			sig := ui.signal(item)
-			item.text_color = i == selected^ ? hex(HEX_BRIGHT) : sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK)
-			if sig.clicked && i != selected^ { selected^ = i; changed = true }
-			ui.a11y_default(item, {role = .Radio_Button, toggled = i == selected^ ? .True : .False, position = i + 1, set_size = len(labels)})
-		}
-		ui.spacer(ui.px(pad))
-		}
-	}
-	return
-}
 
 ////////////////////////////////
 // What is chosen in a list (ui.contrast and ui.readable keep the words on it read)

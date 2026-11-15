@@ -1,4 +1,4 @@
-// What the client asks of Windows itself: the taskbar button flashing, a message box.
+// What the client asks of Windows itself: the taskbar button flashing, the passwords sealed for the account.
 package ocn
 
 import "core:encoding/base64"
@@ -52,12 +52,6 @@ FLASH_COUNT :: 3   // of the taskbar button
 flash_taskbar :: proc(app: ^App) {
 	fi := FLASHWINFO{cbSize = size_of(FLASHWINFO), hwnd = win.HWND(app.win.hwnd), dwFlags = 0x3 | 0xC, uCount = FLASH_COUNT}   // FLASHW_ALL | FLASHW_TIMERNOFG
 	FlashWindowEx(&fi)
-}
-
-// A system message box (before any window of ours): 6 = Yes.
-message_box :: proc(text: string, question: bool) -> int {
-	flags := u32(question ? 0x4 | 0x20 : 0x40)   // MB_YESNO | MB_ICONQUESTION, else MB_ICONINFORMATION
-	return int(win.MessageBoxW(nil, win.utf8_to_wstring(text, context.temp_allocator), win.L("opencode native"), flags))
 }
 
 // A password as the servers' file keeps it: encrypted for this Windows account (DPAPI), in text.

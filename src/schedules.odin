@@ -324,7 +324,7 @@ schedule_form :: proc(app: ^App, w, em: f32) {
 		for m in When_Mode { labels[m] = i18n.tr(WHEN_MODES[m].label) }
 		sel := int(s.mode)
 		ui.next({width = width, height = ui.px(math.round(em * FIELD_H_EM))})
-		if choice("###sc_mode", labels[:], &sel) { s.mode = When_Mode(sel) }
+		if ui.segmented("###sc_mode", labels[:], &sel) { s.mode = When_Mode(sel) }
 	}
 	if !one_row {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})

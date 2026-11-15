@@ -5,7 +5,6 @@ package ocn
 
 import "core:fmt"
 import "core:math"
-import "gt:draw"
 import "gt:ui"
 
 Throbber :: struct {
@@ -70,37 +69,14 @@ board_light :: proc(i: int, now: f64) -> f32 {
 	return THROBBER_LIGHT_MIN + (1 - THROBBER_LIGHT_MIN) * w * w * w
 }
 
-@(private = "file")
-Orbit_Draw :: struct { color: Color }
-
-// Dots that go round each other.
-@(private = "file")
-orbit_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	col := (^Orbit_Draw)(user).color
-	c := draw.rect_center(b.rect)
-	r := (b.rect.max.y - b.rect.min.y) * 0.32
-	t := f32(ui.now_ms()) * ORBIT_RATE
-	for k in 0 ..< ORBIT_DOTS {
-		a := t + f32(k) * math.TAU / ORBIT_DOTS
-		size := r * (0.34 + 0.16 * math.sin(a * 0.5 + f32(k)))
-		p := Vec2{c.x + math.cos(a) * r, c.y + math.sin(a) * r * 0.62}
-		draw.rect(dc, {p - size, p + size}, with_alpha(col, 0.55 + 0.45 * math.sin(a)), size)
-	}
-}
-
 // `width`, `height`: frame pixels. `id` tells two of them apart.
 throbber :: proc(app: ^App, pane: ^Chat_Pane, id: string, color: Color, width, height: f32, em: f32) {
 	animate(app)
 	switch app.prefs.throbber {
 	case "scanner":
 		scanner(id, color, width, height)
-	case "orbit":
-		ui.next({width = ui.px(height * 2), height = ui.px(height * 1.4)})
-		b := ui.build_box({}, id)
-		d := ui.frame_new(Orbit_Draw)
-		d.color = color
-		b.custom = orbit_draw
-		b.custom_user = d
+	case "spinner":
+		ui.spinner(id, math.round(height * 1.4))   // (in the accent: every caller gives it)
 	case "none":
 	case:
 		t := &app.throbber

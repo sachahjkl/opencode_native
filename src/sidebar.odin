@@ -356,7 +356,7 @@ sidebar_mode_switch :: proc(app: ^App, em: f32) {
 	if ui.style({font_size = math.round(em * FS_SMALL)}) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * SIDE_MODES_H_EM))})
 		ui.a11y({name = i18n.tr("What the sidebar shows")})
-		if choice("###side_mode", labels[:], &sel) { sidebar_mode_set(app, Sidebar_Mode(sel)) }
+		if ui.segmented("###side_mode", labels[:], &sel) { sidebar_mode_set(app, Sidebar_Mode(sel)) }
 	}
 }
 

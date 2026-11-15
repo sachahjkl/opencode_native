@@ -162,8 +162,6 @@ THROBBER_GLYPHS     :: "abcdefghijklmnopqrstuvwxyz-_/.:"
 THROBBER_WAVE_RATE  :: 0.0075 // the wave of light: radians per ms
 THROBBER_WAVE_PITCH :: 0.62   // ... from one letter to the next
 THROBBER_LIGHT_MIN  :: 0.42   // a letter out of the wave
-ORBIT_RATE          :: 0.0045
-ORBIT_DOTS          :: 3
 
 ////////////////////////////////
 // The Preview panel
@@ -284,9 +282,6 @@ COMPOSER_FIT_SLACK_EM :: 3   // the composer's toolbar gives back what it left o
 THEMES_FILE  :: "themes.txt"   // the user's themes, beside the preferences (theme.odin)
 ITEM_HOVER_TINT    :: 0.05   // a row under the pointer: the text's
 TODO_SCAN_PAGES :: 10   // older pages read at most for a session's last todo list (activity.odin todos_scan_load)
-CHOICE_RATE          :: 40     // a choice's plate sliding to the one chosen (style.odin choice)
-CHOICE_PAD_EM        :: 0.2    // between its track and its plate
-CHOICE_RADIUS_SHARE  :: 0.32   // its corners, of its height
 COLUMN_HANDLE_EM :: 0.9   // a handle beside the conversation's column, its width (conversation.odin column_handles)
 COLUMN_GRIP_PX   :: 18    // its strokes, their length
 READABLE_TEXT    :: 4.5    // words that are read: WCAG AA (ui.readable)

@@ -3,8 +3,8 @@
 // (desktop.odin setup_options) and its logo in the dialog.
 package ocn
 
-import "core:image/png"
 import "gt:draw"
+import "gt:png"
 import prefs_page "gt:prefs_page"
 import "gt:render"
 import setup "gt:setup"
@@ -39,13 +39,13 @@ logo_tint_pixels :: proc(pixels: []u8, accent: u32) {
 }
 
 logo_load :: proc(app: ^App) {
-	img, err := png.load_from_bytes(LOGO_PNG, {.alpha_add_if_missing}, context.temp_allocator)
-	if err != nil || img == nil || img.channels != 4 || img.depth != 8 { return }
-	if app.logo.tex == 0 { app.logo.tex = render.create_texture_rgba(&app.r, img.width, img.height) }
-	app.logo.size = {f32(img.width), f32(img.height)}
-	logo_tint_pixels(img.pixels[:], app.prefs.accent_hex)
+	pixels, w, h, ok := png.decode(LOGO_PNG, context.temp_allocator)
+	if !ok { return }
+	if app.logo.tex == 0 { app.logo.tex = render.create_texture_rgba(&app.r, w, h) }
+	app.logo.size = {f32(w), f32(h)}
+	logo_tint_pixels(pixels, app.prefs.accent_hex)
 	app.logo.tint = app.prefs.accent_hex
-	render.update_texture_rgba(&app.r, app.logo.tex, 0, 0, img.width, img.height, img.pixels[:])
+	render.update_texture_rgba(&app.r, app.logo.tex, 0, 0, w, h, pixels)
 }
 
 @(private = "file")

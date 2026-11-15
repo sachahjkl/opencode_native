@@ -105,10 +105,10 @@ a_tool_call_says_when :: proc(t: ^testing.T) {
 	day := f64(MS_PER_S * SECS_PER_DAY)
 	start := day * 20_000 + 3_600_000 + 61_000 - f64(timefmt.local_offset_minutes()) * 60 * MS_PER_S   // (01:01:01, local)
 	p := Part{started_ms = start, ended_ms = start + 12_000}
-	testing.expect_value(t, tool_when(&p, false, start + 60_000, true), "Started 01:01:01, ended 01:01:13")
-	testing.expect_value(t, tool_when(&p, true, start + 1_000, true), "Started 01:01:01, running")
+	testing.expect_value(t, tool_when(&p, false, start + 60_000, true), "Started today 01:01:01, ended today 01:01:13")
+	testing.expect_value(t, tool_when(&p, true, start + 1_000, true), "Started today 01:01:01, running")
 	when_ := tool_when(&p, false, start + 2 * day, true)
-	testing.expectf(t, strings.contains(when_, ", 01:01:01") && when_ != "Started 01:01:01, ended 01:01:13", "another day, its date: %s", when_)
+	testing.expectf(t, strings.contains(when_, ", 01:01:01") && !strings.contains(when_, "today"), "another day, its date: %s", when_)
 }
 
 // One place says how a sub-agent stands: a foreground call (an older session's) that returned while its session is still busy

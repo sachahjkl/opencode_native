@@ -1878,14 +1878,14 @@ fr Combien d'éléments acquittés « Ce que vous avez manqué » garde dans son
 en Throbber
 fr Indicateur d'activité
 
-en What says that a run goes on: a board that spells what the agent does, dots in orbit, the scanner, or nothing.
-fr Ce qui montre qu'une exécution est en cours : un panneau qui épelle ce que fait l'agent, des points en orbite, le scanner, ou rien.
+en What says that a run goes on: a board that spells what the agent does, a spinner, the scanner, or nothing.
+fr Ce qui montre qu'une exécution est en cours : un panneau qui épelle ce que fait l'agent, une roue qui tourne, le scanner, ou rien.
 
 en Board
 fr Afficheur
 
-en Orbit
-fr Orbite
+en Spinner
+fr Roue
 
 en Scanner
 fr Scanner

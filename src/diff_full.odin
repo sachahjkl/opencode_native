@@ -60,7 +60,7 @@ diff_full_view :: proc(v: ^ui.View, d: ^Diff_Full) {
 			sel := int(app.prefs.diff_layout)
 			labels := []string{i18n.tr("Stacked"), i18n.tr("Split")}
 			ui.next({width = ui.px(em * 12), height = ui.px(em * 2)})
-			if choice("###df_mode", labels, &sel) { pref_set(app, "conversation.diff_layout", diff_layout_name(diff.Layout(sel))) }
+			if ui.segmented("###df_mode", labels, &sel) { pref_set(app, "conversation.diff_layout", diff_layout_name(diff.Layout(sel))) }
 		}
 		ui.spacer(ui.px(em * 0.6))
 		diff.view("###df_list", &d.doc, app.prefs.diff_layout, diff_options(app, em, d.title))

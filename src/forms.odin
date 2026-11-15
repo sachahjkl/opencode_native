@@ -46,26 +46,6 @@ Form_Req :: struct {
 	page:     int,   // several questions: the one shown, among those shown; past the last, the review
 }
 
-@(private = "file")
-json_text :: proc(v: json.Value) -> string {
-	#partial switch x in v {
-	case json.String:  return string(x)
-	case json.Integer: return fmt.tprintf("%d", x)
-	case json.Float:   return fmt.tprintf("%v", x)
-	case json.Boolean: return x ? "true" : "false"
-	}
-	return ""
-}
-
-@(private = "file")
-json_number :: proc(v: json.Value, key: string) -> Maybe(f64) {
-	#partial switch x in tk_json.get(v, key) {
-	case json.Integer: return f64(x)
-	case json.Float:   return f64(x)
-	}
-	return nil
-}
-
 form_add :: proc(app: ^App, v: json.Value) {
 	id := tk_json.text(v, "id")
 	if id == "" || form_find(app, id) != nil || waits_were_answered(app, id) { return }
@@ -102,7 +82,8 @@ form_new :: proc(id, session, title: string, question: bool, list: json.Array) -
 		fd.key, fd.title, fd.description = strings.clone(tk_json.text(it, "key"), a), strings.clone(tk_json.text(it, "title"), a), strings.clone(tk_json.text(it, "description"), a)
 		fd.kind, fd.placeholder, fd.url = strings.clone(tk_json.text(it, "type"), a), strings.clone(tk_json.text(it, "placeholder"), a), strings.clone(tk_json.text(it, "url"), a)
 		fd.required, fd.custom, fd.hidden = tk_json.boolean(it, "required"), tk_json.boolean(it, "custom"), tk_json.boolean(it, "hidden")
-		fd.min, fd.max = json_number(it, "minimum"), json_number(it, "maximum")
+		if tk_json.has(it, "minimum") { fd.min = tk_json.number(it, "minimum") }
+		if tk_json.has(it, "maximum") { fd.max = tk_json.number(it, "maximum") }
 		fd.choice = -1
 		opts := tk_json.array(it, "options")
 		fd.options = make([]Form_Option, len(opts), a)
@@ -110,15 +91,20 @@ form_new :: proc(id, session, title: string, question: bool, list: json.Array) -
 		fd.picks = make([]bool, len(opts), a)
 		conds := tk_json.array(it, "when")
 		fd.shown_if = make([]Form_When, len(conds), a)
-		for c, k in conds { fd.shown_if[k] = {strings.clone(tk_json.text(c, "key"), a), strings.clone(tk_json.text(c, "op"), a), strings.clone(json_text(tk_json.get(c, "value")), a)} }
+		for c, k in conds {
+			// (a string as it is; a boolean or a number in the words field_value gives it: "true", "3")
+			w := tk_json.get(c, "value")
+			s := w == nil ? "" : tk_json.text(w, default = tk_json.to_text(w))
+			fd.shown_if[k] = {strings.clone(tk_json.text(c, "key"), a), strings.clone(tk_json.text(c, "op"), a), strings.clone(s, a)}
+		}
 		// what it starts with
 		def := tk_json.get(it, "default")
 		#partial switch x in def {
 		case json.Boolean: fd.on = x
 		case json.Array:
-			for d in x { for o, k in fd.options { if o.value == json_text(d) { fd.picks[k] = true } } }
-		case:
-			s := json_text(def)
+			for d in x { for o, k in fd.options { if o.value == tk_json.text(d, default = tk_json.to_text(d)) { fd.picks[k] = true } } }
+		case json.String, json.Integer, json.Float:
+			s := tk_json.text(def, default = tk_json.to_text(def))
 			if s == "" { break }
 			known := false
 			for o, k in fd.options { if o.value == s { fd.choice, known = k, true } }
