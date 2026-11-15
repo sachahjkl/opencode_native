@@ -13,7 +13,7 @@ LICENCE :: licence.Product{
 	version_tag    = "OCN1",
 	sign_context   = "opencode-native-licence-v1\n",
 	file_extension = ".ocnlicence",
-	public_key     = "",
+	public_key     = "25vsEYf6Z74G278j8KsQFBNCECwbTb1FvIyBzYbLdgY",
 	dev_public_key = "zHs7wxUEefqH37-vN5cKoTnZOCCFBnmcoQGrw6i3UAk",
 	editions       = {0 = {id = "supporter", title = "Supporter"}},
 }
