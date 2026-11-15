@@ -2,6 +2,24 @@
 
 ## Now
 
+What opencode 2.3.0 (https://opencode.ai/changelog/v2.3.0) brings that opencode native must follow:
+
+- **Sub-agents run in the background by default.** A sub-agent's call returns at once and the child reports when it goes
+  idle, several at a time, while the parent goes on; a report can say the child's own work still runs. Show the running
+  children and their reports as they come, and never treat a call's quick return as the child's end.
+- **Jump to an earlier prompt.** A command (Ctrl+Alt+G, and in the palette) searches the session's prompts and scrolls
+  the conversation to the one chosen.
+- **Order the queue from the composer.** Alt+Enter puts the follow-up first in the queue; Ctrl+Enter steers the next
+  queued prompt, as the desktop app does.
+- **A session's id is found and opened.** A session id in a message opens that session; the session's own id is easy to
+  copy from its header or menu.
+- **A Mermaid diagram maximised.** The diagram's viewer fills the window, with zoom and pan.
+- **Each server's shell chosen from its menu.** The terminal's shell is a choice of the server's menu.
+- **Tab numbers while the modifier is held.** Holding the key of the tab shortcuts shows each tab's number.
+- **The free-limit panel.** When the server says the free limit is reached, a panel takes the composer's place.
+- **MCP events and freeform tools (experimental).** Subscribe to `experimental.mcp.event` when the flag is on; the
+  model's capabilities now list freeform tool input; the session's throughput is measured from the first token.
+
 ## Next
 
 - **The sessions of every server in one list.** A setting shows the sessions of all servers in one list sorted by activity,
