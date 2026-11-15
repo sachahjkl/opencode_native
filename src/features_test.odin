@@ -591,6 +591,7 @@ a_slash_proposes_the_commands :: proc(t: ^testing.T) {
 	defer { slash_forget(app); delete(app.cx.slash) }
 	hits := slash_matches(app, pane, "rv")
 	testing.expect_value(t, len(hits), 1)
-	if len(hits) == 1 { testing.expect_value(t, app.cx.slash[hits[0]].name, "review") }
-	testing.expect_value(t, len(slash_matches(app, pane, "")), 3)
+	if len(hits) == 1 { testing.expect_value(t, slash_entries(app)[hits[0]].name, "review") }
+	testing.expect_value(t, len(slash_matches(app, pane, "")), 3 + len(CLIENT_COMMANDS))   // (this program's own first: /btw)
+	testing.expect_value(t, slash_entries(app)[0].name, "btw")
 }

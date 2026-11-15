@@ -8,8 +8,33 @@ import "core:encoding/json"
 import "core:strings"
 import "gt:ui"
 import lucide "gt:lucide"
+import i18n "gt:i18n"
 
-Slash :: struct { name, description: string }   // a command of the server (owned)
+Slash :: struct { name, description: string }   // a command of the server (owned), or of this program (CLIENT_COMMANDS)
+
+// The commands this program runs itself, listed before the server's and run before a server's of the same name is looked up
+// (client_command_run). Their descriptions are English, translated where they are shown.
+CLIENT_COMMANDS := [?]Slash{
+	{"btw", i18n.later("Ask something aside: a fork of this session, in a panel")},
+}
+
+// The client's commands, then the server's: what `/` and the palette's `>` list (temp memory, the descriptions translated).
+slash_entries :: proc(app: ^App) -> []Slash {
+	out := make([]Slash, len(CLIENT_COMMANDS) + len(app.cx.slash), context.temp_allocator)
+	for c, i in CLIENT_COMMANDS { out[i] = {c.name, i18n.tr(c.description)} }
+	copy(out[len(CLIENT_COMMANDS):], app.cx.slash[:])
+	return out
+}
+
+// `t` is a command of this program: it ran (true), or it stays in the composer, with nothing to act on (no text, no session).
+client_command_run :: proc(app: ^App, pane: ^Chat_Pane, t: string) -> bool {
+	name, rest, ok := slash_split(t)
+	if !ok || name != "btw" { return false }
+	if rest == "" || pane.chat.id == "" { return true }
+	btw_start(app, pane, rest)
+	ui.text_edit_set(&pane.composer.area, "")
+	return true
+}
 
 // The server's commands read (stream_up): the composer's `/` list and the palette's (its version moves).
 slash_load :: proc(app: ^App, list: []Slash) {
@@ -43,9 +68,9 @@ slash_word :: proc(text: string, cursor: int) -> (query: string, ok: bool) {
 	return q, true
 }
 
-// The commands that match `query`, best first (indices into app.cx.slash), at most MENTION_ROWS.
+// The commands that match `query`, best first (indices into slash_entries), at most MENTION_ROWS.
 slash_matches :: proc(app: ^App, pane: ^Chat_Pane, query: string) -> []int {
-	hits := ui.rank(query, app.cx.slash[:], proc(s: ^Slash, _: rawptr) -> ui.Rank_Entry { return {label = s.name} }, match = ui.rank_fuzzy, cache = &pane.composer.slash_pick.search)
+	hits := ui.rank(query, slash_entries(app), proc(s: ^Slash, _: rawptr) -> ui.Rank_Entry { return {label = s.name} }, match = ui.rank_fuzzy, cache = &pane.composer.slash_pick.search)
 	out := make([dynamic]int, context.temp_allocator)
 	for h in hits {
 		if len(out) == MENTION_ROWS { break }
@@ -88,7 +113,7 @@ slash_shown :: proc(app: ^App, pane: ^Chat_Pane) -> bool {
 slash_choose :: proc(app: ^App, pane: ^Chat_Pane, at: int) {
 	a := &pane.composer.area
 	a.mark = 0   // (what was typed goes: `/` and the word)
-	area_insert(a, strings.concatenate({"/", app.cx.slash[at].name, " "}, context.temp_allocator))
+	area_insert(a, strings.concatenate({"/", slash_entries(app)[at].name, " "}, context.temp_allocator))
 	pane.composer.slash_pick.open = false
 	pane.composer.focus_next = true
 }
@@ -105,7 +130,7 @@ slash_keys :: proc(app: ^App, pane: ^Chat_Pane) {
 	if ui.key_press(.Escape) { p.open, p.dismissed = false, true; return }
 	if ui.key_press(.Tab) { slash_choose(app, pane, hits[p.sel]); return }
 	// (Enter on a command typed in full sends it)
-	if app.cx.slash[hits[p.sel]].name == p.query { return }
+	if slash_entries(app)[hits[p.sel]].name == p.query { return }
 	if ui.key_press(.Return) { slash_choose(app, pane, hits[p.sel]) }
 }
 
@@ -115,7 +140,8 @@ slash_list :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	if !slash_shown(app, pane) { return }
 	hits := slash_matches(app, pane, p.query)
 	rows := make([]Completion_Row, len(hits), context.temp_allocator)
-	for at, k in hits { rows[k] = {lucide.SQUARE_TERMINAL, strings.concatenate({"/", app.cx.slash[at].name}, context.temp_allocator), app.cx.slash[at].description} }
+	all := slash_entries(app)
+	for at, k in hits { rows[k] = {lucide.SQUARE_TERMINAL, strings.concatenate({"/", all[at].name}, context.temp_allocator), all[at].description} }
 	clicked: int
 	clicked, p.list = completion_list(app, "###slash_list", rows, p.sel, em)
 	if clicked >= 0 { slash_choose(app, pane, hits[clicked]) }

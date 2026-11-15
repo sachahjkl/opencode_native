@@ -293,15 +293,18 @@ choice_take :: proc(app: ^App, pane: ^Chat_Pane, c: ui.Palette_Choice) {
 ////////////////////////////////
 // `>` The server's commands
 
-// The commands the server gave (read at the connection: stream_up), under their group "Server": a few dozen, at once.
+// This program's commands under its name, then those the server gave (read at the connection: stream_up) under "Server": a few
+// dozen, at once. Chosen, either is put in the composer, as `/` does.
 @(private = "file")
 server_read :: proc(p: ^ui.Command_Palette, src: ^ui.Palette_Source, q: ui.Palette_Question) {
 	app := (^App)(src.user)
 	a: ui.Palette_Answer
 	al := ui.palette_answer_allocator(&a)
-	a.items = make([]ui.Palette_Item, len(app.cx.slash), al)
-	group := i18n.tr("Server")
-	for s, i in app.cx.slash {
+	all := slash_entries(app)
+	a.items = make([]ui.Palette_Item, len(all), al)
+	server := i18n.tr("Server")
+	for s, i in all {
+		group := i < len(CLIENT_COMMANDS) ? APP_NAME : server
 		a.items[i] = ui.palette_item_clone({id = s.name, title = fmt.tprintf("/%s", s.name), detail = s.description, icon = lucide.SQUARE_TERMINAL, group = group}, al)
 	}
 	ui.palette_answer(q, &a)

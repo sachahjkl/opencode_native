@@ -169,9 +169,11 @@ chat_scroll_place :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) {
 	if pane.chat.id == "" { chat_scroll_event(pane, Scroll_Signal.Off_Bottom) }   // (the home page is read from its top)
 	if sb == nil { return }
 	// (the wheel's click scrolls it by steps of a pixel a frame or less: under any slack, each one counts)
-	auto := ui.autoscroll_running(&app.state)
+	// (the window it is built in: the panel may have one of its own)
+	st := built_state(app)
+	auto := ui.autoscroll_running(st)
 	slack := auto ? AUTOSCROLL_SLACK_PX : BOTTOM_SLACK_PX * ui.scale()
-	by_hand := chat_keys(app, sb, em) || app.state.scroll_delta != {} || ui.active_key() != 0 || auto
+	by_hand := chat_keys(app, pane, sb, em) || st.scroll_delta != {} || ui.active_key() != 0 || auto
 	if scrollbar_held(app, sb) { chat_scroll_event(pane, Scroll_Signal.Restore_End) }   // (as the wheel and the keys do: main_input)
 	limit := ui.view_limit(sb)
 	// the scrollbar's drag, the wheel, the keyboard moved it: up means let go of the bottom, or following it would put it back at
@@ -197,7 +199,7 @@ chat_scroll_place :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) {
 chat_scroll_settle :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box) {
 	if sb == nil { return }
 	limit := ui.view_limit(sb)
-	at_bottom := sb.view_target.y >= limit - (ui.autoscroll_running(&app.state) ? AUTOSCROLL_SLACK_PX : BOTTOM_SLACK_PX * ui.scale())
+	at_bottom := sb.view_target.y >= limit - (ui.autoscroll_running(built_state(app)) ? AUTOSCROLL_SLACK_PX : BOTTOM_SLACK_PX * ui.scale())
 	// (with following off, only the first moments of a conversation just opened follow its bottom)
 	follow := (app.prefs.follow || ui.now_ms() - pane.view.opened_ms < OPENED_FOLLOW_MS) && pane.chat.id != ""
 	chat_scroll_event(pane, at_bottom && follow ? Scroll_Signal.At_Bottom : Scroll_Signal.Off_Bottom)

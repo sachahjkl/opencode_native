@@ -299,11 +299,18 @@ open_chat :: proc(app: ^App, session_id: string) {
 	id := strings.clone(session_id, context.temp_allocator)   // (it may live in the arena chat_reset drops)
 	nav_visit(app, pane.chat.id, id)
 	draft_leave(app, pane)
+	pane_enter(app, pane, id)
+	last_session_keep(app)
+	missed_visit(app, id)
+	chat_shown_changed(app)
+}
+
+// A pane's conversation starts over with session `id`, its draft in its composer (draft_leave ran: the composer is empty).
+pane_enter :: proc(app: ^App, pane: ^Chat_Pane, id: string) {
 	chat_reset(&pane.chat)
 	pane.chat.id = strings.clone(id, pane.chat.alloc)
 	pane_marked(pane)
 	draft_enter(app, pane)
-	last_session_keep(app)
 	pane.chat.loading = true
 	chat_view_start(pane, ui.now_ms())
 	pane.chat.busy = app.busy[id] or_else false
@@ -316,16 +323,18 @@ open_chat :: proc(app: ^App, session_id: string) {
 		pane.chat.tokens_in, pane.chat.tokens_out, pane.chat.cache_read = s.tokens_in, s.tokens_out, s.cache_read
 		if !pane.chat.busy { session_seen(app, s) }
 	}
-	missed_visit(app, id)
 	pane.chat.live = make(map[string]Sub_Live, allocator = pane.chat.alloc)
-	chat_shown_changed(app)
 }
 
 // What follows the session shown, whichever way it changed: one door. (Read before outgoing_return: the queue's change gives the composer what it
 // held, and what failed goes on top of that.)
 chat_shown_changed :: proc(app: ^App) {
-	pane := main_pane(app)
 	activity_reset(app)
+	pane_follow(app, main_pane(app))
+}
+
+// What follows the session a pane shows: its reading, its find, what failed for it.
+pane_follow :: proc(app: ^App, pane: ^Chat_Pane) {
 	find_chat_changed(app, pane)
 	if pane.chat.id != "" { chat_read(app, pane); goal_read(app, pane) }
 	outgoing_return(app, pane)
@@ -890,6 +899,8 @@ content_text :: proc(list: json.Array) -> string {
 synthetic_set :: proc(m: ^Message, it: json.Value, a: mem.Allocator) {
 	m.kind = .Synthetic
 	m.text = strings.clone(tk_json.text(it, "text"), a)
+	// (the preamble /btw sent with the person's text: the model reads it, the conversation shows the person's text alone)
+	if tk_json.text(it, "metadata", "source") == BTW_SOURCE { m.kind = .Other; return }
 	if tk_json.text(it, "metadata", "source") == "subagent" {
 		m.sub_child = strings.clone(tk_json.text(it, "metadata", "childID"), a)
 		m.sub_state = strings.clone(tk_json.text(it, "metadata", "state"), a)
@@ -1203,8 +1214,9 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 			outgoing_session_gone(app, sid)
 			preview_session_gone(app, sid)
 			if shown { effect_toast(app, .Warn, i18n.tr("This session was deleted")) }   // (elsewhere: what is shown no longer is)
-			// (the main view goes home; a pane of its own that shows it is the pane's to close: not one in Layer 1)
+			// (the main view goes home; the panel that shows it closes)
 			if main_pane(app).chat.id == sid { append(&app.nav.steps, Nav_Step{kind = .Gone}) }
+			if p := btw_pane(app); p != nil && p.chat.id == sid { btw_close(app) }
 		}
 		if kind == "session.moved" { panes_self_read(app, sid) }
 		refresh_soon(app)

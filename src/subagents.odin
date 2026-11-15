@@ -599,7 +599,7 @@ card_body :: proc(app: ^App, pane: ^Chat_Pane, v: ^Sub_View, p: ^Part, pid: stri
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})   // (as the prompt: in the card, no box of its own)
 				if ui.column(id = "###result") {
 					id := fmt.tprintf("%s_res", pid)
-					markdown.view(md_doc(&pane.chat, id), id, v.result, md_config(app, hex(HEX_CARD_RESULT)), math.round(em * FS_LABEL))
+					markdown.view(md_doc(&pane.chat, id), id, v.result, md_config(app, hex(HEX_CARD_RESULT), pane), math.round(em * FS_LABEL))
 				}
 				ui.spacer(ui.px(em * 0.4))
 			} else if running {
@@ -713,7 +713,7 @@ subagent_result :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 				if ui.column() {
 					ui.spacer(ui.px(em * 0.3))
 					id := fmt.tprintf("%s_sr", m.id)
-					markdown.view(md_doc(&pane.chat, id), id, m.text, md_config(app, hex(HEX_RETURNED_TEXT)), math.round(em * FS_LABEL))
+					markdown.view(md_doc(&pane.chat, id), id, m.text, md_config(app, hex(HEX_RETURNED_TEXT), pane), math.round(em * FS_LABEL))
 					ui.spacer(ui.px(em * 0.3))
 				}
 			}

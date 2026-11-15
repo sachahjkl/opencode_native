@@ -61,7 +61,6 @@ App :: struct {
 	term_zooms:     ui.Zoom_Memory,    // each shell's zoom, by its id: its grid's zone (terminal.odin)
 	session_zooms:  ui.Zoom_Memory,    // each session's conversation zoom, by its id: every pane's zone (conversation.odin)
 	stores:         Stores,            // what it remembers beside the preferences, written on workers (stores.odin)
-	throbber:       Throbber,          // what says a run goes on (throbber.odin)
 	preview:        Preview,           // the page beside the conversation (preview.odin)
 	browser:        Browser,           // the agents' tools on that page (browser_mcp.odin)
 	updater:        ^update.Updater,   // a new version: checked, downloaded, in place (updates.odin; nil: none started)
@@ -77,6 +76,7 @@ App :: struct {
 
 	using known:     Server_Known,      // what we know, as long as that server is the one
 	panes:           [PANES_MAX]Chat_Pane,   // the conversations shown: MAIN_PANE is the main view (chat_pane.odin)
+	btw:             int,               // the slot of the pane the /btw panel shows (0: none; btw.odin)
 	drafts:          map[string]Draft,  // each session's composer while no pane shows it (drafts.odin; keys owned)
 	// the parts opened by the user, by the hash of their id: an id names one part of one session, so one set serves every pane, and the
 	// stats panel's sections too

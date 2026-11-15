@@ -128,9 +128,9 @@ diagrams_free :: proc(app: ^App) {
 	app.cx.diagrams = nil
 }
 
-// A ```mermaid block: its diagram, or its text (the header's button; still being written; not a diagram).
-mermaid_block :: proc(id, code: string, closed: bool, version: u64) {
-	app := the_app
+// A ```mermaid block: its diagram, or its text (the header's button; still being written; not a diagram). `pane`: the one it
+// is built in (its column's width).
+mermaid_block :: proc(app: ^App, pane: ^Chat_Pane, id, code: string, closed: bool, version: u64) {
 	em := ui.font_size()
 	k := hash.fnv64a(transmute([]u8)id)
 	as_text := app.expanded[k] or_else false
@@ -175,7 +175,7 @@ mermaid_block :: proc(id, code: string, closed: bool, version: u64) {
 		ui.next({width = ui.fill(), height = ui.px(2)})
 		ui.build_box({}, "")
 		if ok {
-			diagram_box(app, &d.doc, code, em)
+			diagram_box(app, pane, &d.doc, code, em)
 		} else {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row(id = "###body") {
@@ -196,8 +196,7 @@ Diagram_Draw :: struct { doc: ^svg.Document, scale: f32 }
 // The diagram at the conversation's size, centred, never wider than the column (its width is the last layout's). A click opens
 // it in the viewer; a right click, its menu.
 @(private = "file")
-diagram_box :: proc(app: ^App, doc: ^svg.Document, code: string, em: f32) {
-	pane := main_pane(app)
+diagram_box :: proc(app: ^App, pane: ^Chat_Pane, doc: ^svg.Document, code: string, em: f32) {
 	ui.spacer(ui.px(em * 0.6))
 	avail := max(pane.conversation.column_w - em * 1.8, em * 8)
 	scale := min(em / DIAGRAM_FONT_PX, avail / max(doc.view[2], 1))

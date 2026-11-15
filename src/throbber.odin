@@ -79,7 +79,7 @@ throbber :: proc(app: ^App, pane: ^Chat_Pane, id: string, color: Color, width, h
 		ui.spinner(id, math.round(height * 1.4))   // (in the accent: every caller gives it)
 	case "none":
 	case:
-		t := &app.throbber
+		t := &pane.throbber
 		word := run_word(app, pane)
 		now := ui.now_ms()
 		if word != t.word { t.word, t.since_ms = word, now }

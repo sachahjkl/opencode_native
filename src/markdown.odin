@@ -26,8 +26,15 @@ md_doc :: proc(c: ^Chat, id: string) -> ^markdown.Doc {
 	return d
 }
 
+// What a Markdown view's procedures are given: the app, and the pane it is built in (a diagram is as wide as its column).
+@(private = "file")
+Md_User :: struct { app: ^App, pane: ^Chat_Pane }
+
 // How Markdown is shown in the conversation, its text in `color`: the answers' face and size, tables in the interface's.
-md_config :: proc(app: ^App, color: Color) -> markdown.View_Options {
+// `pane`: the one it is built in (nil: none, the main view's width).
+md_config :: proc(app: ^App, color: Color, pane: ^Chat_Pane = nil) -> markdown.View_Options {
+	u := ui.frame_new(Md_User)
+	u^ = {app, pane != nil ? pane : main_pane(app)}
 	return {
 		prose = app.prose, face = app.font, mono = app.mono,
 		prose_scale = app.prose_scale, line_ratio = PROSE_LINE_RATIO, cell_scale = FS_LABEL,
@@ -36,7 +43,7 @@ md_config :: proc(app: ^App, color: Color) -> markdown.View_Options {
 			inline_code = hex(HEX_INLINE_CODE), code_text = hex(HEX_CODE_TEXT), table_header = hex(HEX_BRIGHT),
 			table_stripe = ui.with_alpha(hex(HEX_TEXT), markdown.TABLE_STRIPE_ALPHA), table_rule = ui.with_alpha(accent(), markdown.TABLE_RULE_ALPHA),
 		},
-		user = app,
+		user = u,
 		link = proc(user: rawptr, url: string) { link_open(url) },
 		code = md_code,
 		frame = proc(user: rawptr, b: ^ui.Box, kind: markdown.Frame_Kind) { well_paint(b, 6, kind == .Table ? HEX_TABLE_WELL : HEX_CODE_WELL) },
@@ -48,14 +55,15 @@ md_config :: proc(app: ^App, color: Color) -> markdown.View_Options {
 // A fenced block: a mermaid one is a diagram, the others code in ocn's well (highlighted by the package).
 @(private = "file")
 md_code :: proc(user: rawptr, id: string, c: markdown.Code) {
-	if c.lang == "mermaid" { mermaid_block(id, c.text, c.closed, c.version); return }
-	code_block(id, c.lang, c.text, (^App)(user).mono, version = c.version, runs = c.runs)
+	u := (^Md_User)(user)
+	if c.lang == "mermaid" { mermaid_block(u.app, u.pane, id, c.text, c.closed, c.version); return }
+	code_block(id, c.lang, c.text, u.app.mono, version = c.version, runs = c.runs)
 }
 
 // A table's copy button: the table as HTML (a plain grid, any program's own style) and as its Markdown text.
 @(private = "file")
 md_table_copy :: proc(user: rawptr, t: ^markdown.Table, source: []string, size: f32) {
-	app := (^App)(user)
+	app := (^Md_User)(user).app
 	ui.a11y({role = .Button, name = i18n.tr("Copy the table")})
 	ui.next({width = ui.px(size), height = ui.px(size)})
 	sig := ui.button("copy", icon = lucide.COPY, o = {face = .Raised})

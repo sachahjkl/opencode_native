@@ -3,7 +3,9 @@
 // home page), main_pane.
 package ocn
 
+import "core:strings"
 import "core:sync"
+import "gt:draw"
 import remote "gt:remote"
 import "gt:ui"
 
@@ -23,6 +25,7 @@ Chat_Pane :: struct {
 	read:         remote.Remote,      // the newest page of its conversation
 	queue:        Queue,              // what waits in the inbox of its session (queue.odin)
 	artifacts:    Chat_Artifacts,     // what its session made: cards in its conversation (schedules.odin)
+	throbber:     Throbber,           // the word of its run (throbber.odin): two runs shown would flip one board between theirs
 	// its conversation's zoom, keyed by the session shown in App.session_zooms (zooms_load sets the memory): the zoom keys
 	// act on it while the keyboard is in the pane, Ctrl+wheel while the pointer is over it
 	zone:         ui.Zoom_Zone,
@@ -62,4 +65,53 @@ pane_shows :: proc(app: ^App, sid: string) -> bool {
 	if sid == "" { return false }
 	for &pane, i in app.panes { if pane_is_shown(app, i) && pane.chat.id == sid { return true } }
 	return false
+}
+
+// A free slot, or nil: every pane is shown.
+pane_free :: proc(app: ^App) -> ^Chat_Pane {
+	for &pane, i in app.panes { if i != MAIN_PANE && !pane.shown { return &pane } }
+	return nil
+}
+
+// `pane`, other than the main view, shows session `sid`: what open_chat does, without what is the main view's (Back and
+// Forward, the last session kept, the activity, What you missed).
+pane_show :: proc(app: ^App, pane: ^Chat_Pane, sid: string) {
+	assert(pane != main_pane(app))
+	if pane.shown && pane.chat.id == sid { return }
+	id := strings.clone(sid, context.temp_allocator)   // (it may live in the arena chat_reset drops)
+	if pane.shown { draft_leave(app, pane) }
+	pane.shown = true
+	pane_enter(app, pane, id)
+	pane_follow(app, pane)
+}
+
+// It shows nothing any more: its composer's text waits in its session's draft, its slot is free, and what was asked for it
+// is dropped (its mark moved).
+pane_close :: proc(app: ^App, pane: ^Chat_Pane) {
+	assert(pane != main_pane(app))
+	if !pane.shown { return }
+	draft_leave(app, pane)
+	find_close(app, pane)
+	chat_reset(&pane.chat)
+	pane_marked(pane)
+	queue_switch(app, pane)
+	pane.composer.focused, pane.composer.focus_next = false, false
+	pane.composer.slash_pick.open = false
+	pane.shown = false
+}
+
+// The pane the keyboard is in: the panel's while the focus is in its view, else the main view's.
+keys_pane :: proc(app: ^App) -> ^Chat_Pane {
+	if p := btw_pane(app); p != nil && ui.view_has_focus(&app.program_views, BTW_VIEW) { return p }
+	return main_pane(app)
+}
+
+// The pane whose column is under `pos` in the main window (its last layout), else the main view.
+pane_at :: proc(app: ^App, pos: [2]f32) -> ^Chat_Pane {
+	for &pane, i in app.panes {
+		if i == MAIN_PANE || !pane.shown || pane.conversation.root == 0 { continue }
+		b := app.state.boxes[pane.conversation.root] or_else nil
+		if b != nil && ui.box_current(&app.state, b) && draw.rect_contains(b.rect, pos) { return &pane }
+	}
+	return main_pane(app)
 }

@@ -341,7 +341,7 @@ job_card :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, r: ^Job_Report, k: in
 							text("none", i18n.tr("(no report)"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.5)})
 						} else {
 							id := fmt.tprintf("%s_job%d", m.id, k)
-							markdown.view(md_doc(&pane.chat, id), id, r.body, md_config(app, hex(HEX_RETURNED_TEXT)), math.round(em * FS_LABEL))
+							markdown.view(md_doc(&pane.chat, id), id, r.body, md_config(app, hex(HEX_RETURNED_TEXT), pane), math.round(em * FS_LABEL))
 						}
 					}
 					ui.spacer(ui.px(em * 0.3))

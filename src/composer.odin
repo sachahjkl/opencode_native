@@ -41,8 +41,9 @@ dock :: proc(app: ^App, pane: ^Chat_Pane, em: f32, side, col: f32) {
 		ui.spacer(ui.px(side))
 		ui.next({width = ui.px(col), height = ui.children_sum(), axis = .Y})
 		if ui.column(id = "###dockcol") {
+			is_main := pane == main_pane(app)   // (the activity is the main view's: chat-panes.md, Layer 2)
 			goal_strip(app, pane, em)
-			activity_strip(app, em)
+			if is_main { activity_strip(app, em) }
 			for &p in app.permissions {
 				if p.session == pane.chat.id { permission_card(app, &p, em) }
 			}
@@ -50,7 +51,7 @@ dock :: proc(app: ^App, pane: ^Chat_Pane, em: f32, side, col: f32) {
 			queue_list(app, pane, em)
 			// (the free usage used up and nothing paid: nothing the composer sends could run)
 			if free_limit_active(app) { free_limit_panel(app, em) } else { composer(app, pane, em) }
-			activity_tray(app, em)
+			if is_main { activity_tray(app, em) }
 			ui.spacer(ui.px(em * 1.1))
 		}
 	}
@@ -93,8 +94,9 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	// one way queues and the other sends now: Enter and Ctrl+Enter, or in Ctrl+Enter mode Ctrl+Enter and Ctrl+Shift+Enter.
 	submit, other, first := false, false, false
 	keys := pane.composer.focused
+	is_main := pane == main_pane(app)   // (the activity, and the keys typed with nothing focused, are the main view's)
 	// (the tray's keys with the focus nowhere too: a click on one of its rows leaves it there)
-	if app.activity.open && (pane.composer.focused || ui.focus_key() == 0) { activity_keys(app) }
+	if is_main && app.activity.open && (pane.composer.focused || ui.focus_key() == 0) { activity_keys(app) }
 	if keys { mention_keys(app, pane) }
 	if keys { slash_keys(app, pane) }
 	if keys { history_track(app, pane) }
@@ -112,7 +114,7 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	if ui.well("###composer_well", .Y, flags = {.Focus_Within, .Draw_Focus_Ring}) {
 		// (its menu on all of it, the bar of its buttons and around the text too, after what is in it: an image keeps its own)
 		card := ui.parent_box()
-		defer ctx_check(app, card, .Composer)
+		defer ctx_check(app, card, .Composer, pane = pane)
 		ui.spacer(ui.px(em * 0.45))
 		escape_stop_banner(app, pane, em)
 		queue_edit_banner(app, pane, em)
@@ -128,7 +130,7 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 				// of the last line first: what tells is that it did not move.)
 				down := false
 				caret0 := pane.composer.area.cursor
-				if keys && !app.activity.open {
+				if keys && !(is_main && app.activity.open) {
 					browsing := history_browsing(app, pane)
 					if ui.key_pressed_peek(.Up) && (browsing || composer_on_first_line(app, pane)) {
 						_ = ui.key_press(.Up)
@@ -149,7 +151,7 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 				}
 				// typed with nothing focused (a click in the conversation took the keyboard away): the composer takes it. Not a
 				// space (a focused button's), nor while a dialog is over the window or a box (the terminal) has the keyboard.
-				if !overlay_open(app) && ui.focus_key() == 0 && typed_word(app) { ui.type_to_field(ui.key_from_string(ui.parent_box().key, "###composer")) }
+				if is_main && !overlay_open(app) && ui.focus_key() == 0 && typed_word(app) { ui.type_to_field(ui.key_from_string(ui.parent_box().key, "###composer")) }
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_BODY), text_pad = em * 0.5})
 				// (own_menu: the menu is the whole card's, ctx_check below; it is ui.edit_menu on this area)
 				// (a paste may give files or an image: the editor takes text, the composer attaches the rest, the toolkit's one
@@ -161,10 +163,10 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 				mention_track(app, pane)
 				slash_track(app, pane)
 				if pane.composer.focus_next { ui.set_focus(res.box.key); pane.composer.focus_next = false }
-				ctx_check(app, res.box, .Composer)
+				ctx_check(app, res.box, .Composer, pane = pane)
 				if res.committed { submit, other = true, !app.prefs.ctrl_enter }
-				if down && pane.composer.area.cursor == caret0 { activity_open(app) }
-				if res.changed { activity_close(app) }   // (typing: what is written is what matters now)
+				if is_main && down && pane.composer.area.cursor == caret0 { activity_open(app) }
+				if is_main && res.changed { activity_close(app) }   // (typing: what is written is what matters now)
 				drafts_track(app, pane)   // (kept on disk a moment after it changes, however: typed, sent, put back)
 			}
 			ui.spacer(ui.px(em * 0.35))
@@ -356,6 +358,8 @@ submit_prompt :: proc(app: ^App, pane: ^Chat_Pane, other := false, first := fals
 	if empty || !online(app) || composer_held(app, pane) { return }
 	history_leave(app, pane, false)
 	if queue_editing(app, pane) { queue_edit_commit(app, pane, t); return }
+	// (a command of this program, before the server's: slash.odin CLIENT_COMMANDS)
+	if client_command_run(app, pane, t) { return }
 	if first && composer_send_as(app, pane) != .Idle {
 		fields := send_as_fields(.Queue)
 		// (a command is not a prompt the inbox can admit again: it goes queued, where it falls)
