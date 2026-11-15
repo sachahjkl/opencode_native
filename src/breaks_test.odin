@@ -120,10 +120,11 @@ output_that_starts_with_a_zero_is_output :: proc(t: ^testing.T) {
 
 @(private = "file")
 go_to_session :: proc(app: ^App, id: string) {
-	chat_reset(&app.chat)
-	app.chat.id = strings.clone(id, app.chat.alloc)
-	app.chat.have_self = true
-	app.chat.self.parent = strings.clone("", app.chat.alloc)
+	pane := main_pane(app)
+	chat_reset(&pane.chat)
+	pane.chat.id = strings.clone(id, pane.chat.alloc)
+	pane.chat.have_self = true
+	pane.chat.self.parent = strings.clone("", pane.chat.alloc)
 	preview_follow(app)
 }
 
@@ -157,8 +158,9 @@ a_tab_the_limit_took_before_its_address_loads_what_was_asked :: proc(t: ^testing
 what_is_typed_in_the_panel_stays_through_a_redirect :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	app.win = new(platform.Window)
-	app.chat.id = "a"
+	pane.chat.id = "a"
 	preview_follow(app)
 	preview_show(app)
 	tab := preview_front(&app.preview)
@@ -212,11 +214,12 @@ FAKE_SOCKET :: Ws_Ops{
 	read = proc "c" (w: rawptr, out: ^Ocn_Buf) -> i32 {
 		context = fake.ctx
 		app, l := fake.app, fake.l
+		pane := main_pane(app)
 		fake.reads += 1
 		switch fake.reads {
 		case 1:
 			tool_call(app, {l, l.socket}, "7", "evaluate", nil, "")
-			if fake.move { app.chat.self.directory = strings.clone("B", app.chat.alloc) }
+			if fake.move { pane.chat.self.directory = strings.clone("B", pane.chat.alloc) }
 			browser_follow(app)
 		case 2:
 			v := preview_front(&app.preview).view
@@ -233,11 +236,12 @@ FAKE_SOCKET :: Ws_Ops{
 @(private = "file")
 answers_sent :: proc(move: bool) -> int {
 	app := bench_new()
+	pane := main_pane(app)
 	app.win = new(platform.Window)
 	app.prefs.browser_tools = true
-	app.chat.id = strings.clone("a", app.chat.alloc)
-	app.chat.have_self = true
-	app.chat.self.directory = strings.clone("A", app.chat.alloc)
+	pane.chat.id = strings.clone("a", pane.chat.alloc)
+	pane.chat.have_self = true
+	pane.chat.self.directory = strings.clone("A", pane.chat.alloc)
 	preview_follow(app)
 	preview_show(app)
 	tab := preview_front(&app.preview)

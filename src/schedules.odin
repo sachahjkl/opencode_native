@@ -380,10 +380,11 @@ artifacts_clear :: proc(a: ^Artifacts) {
 }
 
 artifacts_open :: proc(app: ^App) {
+	pane := main_pane(app)
 	a := &app.cx.artifacts
 	artifacts_clear(a)
 	d := chat_dir(app)
-	set_text(&a.dir, d != "" ? d : app.chat.new_dir)
+	set_text(&a.dir, d != "" ? d : pane.chat.new_dir)
 	ui.view_open(&app.program_views, ARTIFACTS_VIEW, app)
 	artifacts_ask(app)
 }
@@ -432,7 +433,7 @@ artifact_read :: proc(app: ^App) {
 
 artifacts_changed :: proc(app: ^App) {
 	if ui.view_is_open(&app.program_views, ARTIFACTS_VIEW) { artifacts_ask(app) }
-	chat_artifacts_ask(app)
+	for &pane, i in app.panes { if pane_is_shown(app, i) { chat_artifacts_ask(app, &pane) } }
 }
 
 // The artifacts of the session shown, as cards in its conversation after the message they were made in (an agent makes
@@ -445,16 +446,16 @@ Chat_Artifacts :: struct {
 	arena: virtual.Arena,
 }
 
-chat_artifacts_ask :: proc(app: ^App) {
-	if app.chat.id == "" || app.cx.no_artifacts { return }
-	q := location_query(chat_dir(app))
-	request(app, .Chat_Artifacts, "GET", fmt.tprintf("/api/experimental/artifacts%s%s", q != "" ? "?" : "", q), tag = app.chat.id)
+chat_artifacts_ask :: proc(app: ^App, pane: ^Chat_Pane) {
+	if pane.chat.id == "" || app.cx.no_artifacts { return }
+	q := location_query(pane_dir(app, pane))
+	request(app, .Chat_Artifacts, "GET", fmt.tprintf("/api/experimental/artifacts%s%s", q != "" ? "?" : "", q), tag = pane.chat.id, pane = pane)
 }
 
 // (`of`: the session asked about; another one shown since, the answer is not its)
-chat_artifacts_load :: proc(app: ^App, of: string, v: json.Value) {
-	if of != app.chat.id { return }
-	c := &app.cx.chat_arts
+chat_artifacts_load :: proc(app: ^App, pane: ^Chat_Pane, of: string, v: json.Value) {
+	if of != pane.chat.id { return }
+	c := &pane.artifacts
 	al := arena_renew(&c.arena)
 	clear(&c.list)
 	c.of = strings.clone(of, al)
@@ -465,9 +466,9 @@ chat_artifacts_load :: proc(app: ^App, of: string, v: json.Value) {
 }
 
 // The artifacts made from `from` (ms) up to `to` (excluded) of the session shown.
-chat_artifacts_between :: proc(app: ^App, from, to: f64) -> []Chat_Artifact {
-	c := &app.cx.chat_arts
-	if c.of != app.chat.id { return nil }
+chat_artifacts_between :: proc(app: ^App, pane: ^Chat_Pane, from, to: f64) -> []Chat_Artifact {
+	c := &pane.artifacts
+	if c.of != pane.chat.id { return nil }
 	out := make([dynamic]Chat_Artifact, context.temp_allocator)
 	for a in c.list { if a.created >= from && a.created < to { append(&out, a) } }
 	return out[:]
@@ -825,7 +826,7 @@ artifacts_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { artifacts_load(
 
 artifact_read_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { artifact_loaded(app, v) }
 
-chat_artifacts_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { chat_artifacts_load(app, r.tag, v) }
+chat_artifacts_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { chat_artifacts_load(app, req_pane(app, r), r.tag, v) }
 
 artifact_done_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { artifacts_changed(app) }
 

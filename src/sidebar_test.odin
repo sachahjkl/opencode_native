@@ -282,7 +282,8 @@ a_session_is_found_by_its_id_in_the_list_as_it_stands :: proc(t: ^testing.T) {
 
 @(private = "file")
 conversation :: proc(app: ^App) {
-	c := &app.chat
+	pane := main_pane(app)
+	c := &pane.chat
 	append(&c.messages, Message{id = "m1", kind = .User, text = "first"}, Message{id = "m2", kind = .Assistant}, Message{id = "m3", kind = .Assistant}, Message{id = "m4", kind = .Idle}, Message{id = "m5", kind = .User, text = "second"}, Message{id = "m6", kind = .Assistant, streaming = true})
 }
 
@@ -290,9 +291,10 @@ conversation :: proc(app: ^App) {
 a_fork_from_an_answer_keeps_it_and_from_a_prompt_leaves_it_out :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
 	conversation(app)
-	c := &app.chat
+	c := &pane.chat
 	testing.expect_value(t, fork_before(c, &c.messages[0]), "m1")
 	testing.expect_value(t, fork_before(c, &c.messages[1]), "m3")
 	testing.expect_value(t, fork_before(c, &c.messages[2]), "m4")
@@ -306,6 +308,7 @@ a_fork_from_an_answer_keeps_it_and_from_a_prompt_leaves_it_out :: proc(t: ^testi
 the_prompt_a_fork_leaves_out_comes_back_in_the_composer :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
 	fork_session(app, "s", "m1", "first")
 	r := bench_take(t, .Forked)
@@ -313,14 +316,14 @@ the_prompt_a_fork_leaves_out_comes_back_in_the_composer :: proc(t: ^testing.T) {
 	bench_answer(app, r, 200, `{"data":{"id":"forked"}}`)
 	testing.expect_value(t, len(app.nav.steps), 1)
 	testing.expect_value(t, app.nav.steps[0].id, "forked")
-	testing.expect_value(t, string(app.composer.area.buf[:]), "first")
+	testing.expect_value(t, string(pane.composer.area.buf[:]), "first")
 
 	// (a fork of all of it has no prompt to give back, whatever the last one left)
 	fork_session(app, "s", "")
 	r = bench_take(t, .Forked)
 	testing.expect_value(t, r.body, "{}")
 	bench_answer(app, r, 200, `{"data":{"id":"forked2"}}`)
-	testing.expect_value(t, string(app.composer.area.buf[:]), "first")
+	testing.expect_value(t, string(pane.composer.area.buf[:]), "first")
 }
 
 @(test)
@@ -337,6 +340,7 @@ what_a_schedule_row_says :: proc(t: ^testing.T) {
 a_toast_names_its_session_and_opens_it :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := inbox_app()
+	pane := main_pane(app)
 	the_app = app   // (a toast's action finds the app there, as in the program)
 	defer the_app = nil
 	show(app, "seen")
@@ -359,7 +363,7 @@ a_toast_names_its_session_and_opens_it :: proc(t: ^testing.T) {
 		if x.action != nil { x.action(x.user) }
 	}
 	nav_apply(app)   // (the next frame's)
-	testing.expect_value(t, app.chat.id, "ended")
+	testing.expect_value(t, pane.chat.id, "ended")
 	bench_clear(app)
 }
 

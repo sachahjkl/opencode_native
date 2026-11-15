@@ -20,10 +20,11 @@ a_local_servers_folders_are_this_computers :: proc(t: ^testing.T) {
 a_session_moves_to_the_folder_chosen :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	folder_chosen(app, .Move_Session, "ses_1", "D:/work")
 	m := bench_take(t, .Session_Moved)
 	testing.expect_value(t, m.path, "/api/session/ses_1/move")
 	testing.expect(t, strings.contains(m.body, `"directory":"D:/work"`), m.body)
 	folder_chosen(app, .New_Session, "", "/srv/a")
-	testing.expect_value(t, app.chat.new_dir, "/srv/a")
+	testing.expect_value(t, pane.chat.new_dir, "/srv/a")
 }

@@ -14,8 +14,8 @@ Throbber :: struct {
 }
 
 // What the agent does now, in one word, from the last thing it started.
-run_word :: proc(app: ^App) -> string {
-	c := &app.chat
+run_word :: proc(app: ^App, pane: ^Chat_Pane) -> string {
+	c := &pane.chat
 	#reverse for &m in c.messages {
 		if m.kind != .Assistant { continue }
 		#reverse for &p in m.parts {
@@ -89,7 +89,7 @@ orbit_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 }
 
 // `width`, `height`: frame pixels. `id` tells two of them apart.
-throbber :: proc(app: ^App, id: string, color: Color, width, height: f32, em: f32) {
+throbber :: proc(app: ^App, pane: ^Chat_Pane, id: string, color: Color, width, height: f32, em: f32) {
 	animate(app)
 	switch app.prefs.throbber {
 	case "scanner":
@@ -104,7 +104,7 @@ throbber :: proc(app: ^App, id: string, color: Color, width, height: f32, em: f3
 	case "none":
 	case:
 		t := &app.throbber
-		word := run_word(app)
+		word := run_word(app, pane)
 		now := ui.now_ms()
 		if word != t.word { t.word, t.since_ms = word, now }
 		st := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_NOTE)}

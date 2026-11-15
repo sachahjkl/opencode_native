@@ -78,7 +78,7 @@ frame :: proc(app: ^App) {
 	events := platform.poll_events(app.win, false)
 	build(app, size, events, dt)
 	ui.draw_tree(&app.state, &app.dc)
-	for m, i in app.chat.messages {
+	for m, i in pane.chat.messages {
 		if i % 2 == 0 { continue }
 		fmt.println(m.id, len(m.parts))
 	}
@@ -151,11 +151,12 @@ bench_sessions :: proc() -> string {
 bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	context.allocator = runtime.heap_allocator()
 	app = new(App)
+	pane := main_pane(app)
 	the_app = app
 	append(&app.servers, Server{name = "This computer", local = true})
-	app.chat_scroll = Scroll_Following{}
+	pane.view.chat_scroll = Scroll_Following{}
 	app.link = .Online
-	chat_reset(&app.chat)
+	chat_reset(&pane.chat)
 	app.win = platform.open_window_offscreen("opencode", BENCH_SIZE)
 	testing.expect(t, app.win != nil)
 	// (the bench on the GPU, as the program; the checks on WARP: no GPU needed)
@@ -165,14 +166,14 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	main_window_adopt(app)
 	app.last_tick = time.tick_now()
 	app.opened_first = true
-	app.chat.id = strings.clone(BENCH_CHAT_ID, app.chat.alloc)
+	pane.chat.id = strings.clone(BENCH_CHAT_ID, pane.chat.alloc)
 	v, err := json.parse_string(bench_sessions(), allocator = context.temp_allocator)
 	testing.expect(t, err == nil)
 	sessions_load(app, v)
 	v, err = json.parse_string(bench_page(), allocator = context.temp_allocator)
 	testing.expect(t, err == nil)
-	chat_load(app, v, false)
-	chat_scroll_event(app, Scroll_Signal.Snap)
+	chat_load(app, pane, v, false)
+	chat_scroll_event(pane, Scroll_Signal.Snap)
 	testing.cleanup(t, bench_end, app)
 	s = session.attach(t, {win = app.win, state = &app.state, renderer = &app.r, user = app, frame = proc(user: rawptr) { frame((^App)(user)) }, allocator = context.allocator})
 	// (the lazy column learns the heights of what it builds: the bottom settles in a few frames)
@@ -311,7 +312,8 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()   // (what the App's procedures free here was made on the heap)
 		app, s := bench_app(t)
-		c := &app.chat
+		pane := main_pane(app)
+		c := &pane.chat
 		testing.expect_value(t, len(c.messages), 3 * BENCH_TURNS)
 		sb := session.get(s, "chat")
 		limit := sb.view_bounds.y - sb.size.y
@@ -323,12 +325,12 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		session.frames(s, 6)
 		testing.expect(t, session.find(s, "iv0") != nil && session.find(s, "kv1") != nil, "the input's long value and its short one")
 		app.prefs.expand_tools = false
-		chat_scroll_event(app, Scroll_Signal.Snap)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.frames(s, 6)
 		// the composer's toolbar, a run going (Stop) and "Steer", as the column narrows: the send button stays within it
 		{
-			busy, steer, width := app.chat.busy, app.prefs.steer_first, app.prefs.column_w
-			app.chat.busy, app.prefs.steer_first = true, true
+			busy, steer, width := pane.chat.busy, app.prefs.steer_first, app.prefs.column_w
+			pane.chat.busy, app.prefs.steer_first = true, true
 			session.click(s, "composer")
 			session.type_text(s, "go on")
 			for w in ([]f32{900, 760, 640, 560, 500, 440}) {
@@ -337,8 +339,8 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 				tools, send := session.get(s, "tools"), session.get(s, "send")
 				testing.expectf(t, send.rect.max.x <= tools.rect.max.x + 0.5, "at %v, the send button within the toolbar: %v past %v (%q)", w, send.rect.max.x, tools.rect.max.x, send.text)
 			}
-			app.chat.busy, app.prefs.steer_first, app.prefs.column_w = busy, steer, width
-			ui.text_edit_set(&app.composer.area, "")
+			pane.chat.busy, app.prefs.steer_first, app.prefs.column_w = busy, steer, width
+			ui.text_edit_set(&pane.composer.area, "")
 			session.frames(s, 4)
 		}
 		// a double click on the title edits it in place: Enter keeps it, Escape leaves it, a click elsewhere keeps it
@@ -396,13 +398,13 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 			bench_frame(s, &typing)
 		}
 		bench_report(&typing)
-		testing.expect_value(t, len(ui.text_edit_string(&app.composer.area)), BENCH_FRAMES)
+		testing.expect_value(t, len(ui.text_edit_string(&pane.composer.area)), BENCH_FRAMES)
 
 		// a click of the wheel at the bottom, the pointer then a little above it: the view goes up, slowly, and lets go of the bottom.
 		// Its steps (a pixel a frame or less) were each put back at the bottom it was following, and the lazy column read the error
 		// of its rounded rects as a move: it stayed there, or broke free in a jump.
 		{
-			testing.expect(t, chat_following(app), "at its bottom, following it")
+			testing.expect(t, chat_following(pane), "at its bottom, following it")
 			mid := session.center(session.get(s, "chat"))
 			session.move(s, mid)
 			session.click_at(s, mid, .Middle)
@@ -417,7 +419,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 				append(&up, ui.view_limit(b) - b.view_target.y)
 			}
 			testing.expectf(t, up[len(up) - 1] > 4, "gone up: %v from the bottom", up[len(up) - 1])
-			testing.expect(t, !chat_following(app), "the bottom let go of")
+			testing.expect(t, !chat_following(pane), "the bottom let go of")
 			for i in 1 ..< len(up) {
 				testing.expectf(t, up[i] >= up[i - 1] - 0.1, "never back down: %v then %v from the bottom (frame %d)", up[i - 1], up[i], i)
 				testing.expectf(t, up[i] - up[i - 1] < 40, "no jump: %v then %v from the bottom (frame %d)", up[i - 1], up[i], i)
@@ -526,7 +528,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 
 		// find: every message built, the needle typed a character a frame
-		find_open(app)
+		find_open(app, pane)
 		session.frames(s, 2)
 		finding := Bench_Case{name = "find"}
 		for i in 0 ..< min(BENCH_FRAMES, len(BENCH_FIND)) {
@@ -540,7 +542,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 			for v in finding.total { sweep = max(sweep, v) }
 			fmt.printfln("find: its sweep %.1f ms", sweep)
 		}
-		testing.expect_value(t, ui.line_edit_string(&app.find.field), BENCH_FIND)
+		testing.expect_value(t, ui.line_edit_string(&pane.find.field), BENCH_FIND)
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() }, "the needle swept")
 		session.frames(s, 3)
 		found := ui.find_count()
@@ -550,24 +552,24 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		// lazy column's estimates of the messages above once moved under the reader)
 		{
 			chat := session.get(s, "chat")
-			testing.expectf(t, app.find.index > found / 2, "a match near the view: %d of %d", app.find.index, found)
+			testing.expectf(t, pane.find.index > found / 2, "a match near the view: %d of %d", pane.find.index, found)
 			shown := false
 			for m in ui.find_matches() {
-				if m.index == app.find.index { shown = m.rect.max.y > chat.rect.min.y && m.rect.min.y < chat.rect.max.y }   // (window coordinates)
+				if m.index == pane.find.index { shown = m.rect.max.y > chat.rect.min.y && m.rect.min.y < chat.rect.max.y }   // (window coordinates)
 			}
-			testing.expectf(t, shown, "the current match %d in view", app.find.index)
+			testing.expectf(t, shown, "the current match %d in view", pane.find.index)
 		}
 		testing.expect(t, session.find(s, "msg_msg_0_a") == nil, "after the sweep, only what is near the view is built")
 		// the first match, far from anything built: the view goes there, and it is lit with its index of the sweep
-		app.find.index = found - 1
-		find_step(app, 1)
-		testing.expect_value(t, app.find.index, 0)
+		pane.find.index = found - 1
+		find_step(app, pane, 1)
+		testing.expect_value(t, pane.find.index, 0)
 		session.wait_until(s, proc(s: ^session.Session) -> bool {
 			for m in ui.find_matches() { if m.index == 0 { return true } }
 			return false
 		}, "the first match built and lit")
 		testing.expect_value(t, ui.find_count(), found)
-		find_close(app)
+		find_close(app, pane)
 		session.frames(s, 2)
 
 		// the sidebar: the sessions it shows are built, the others when it scrolls to them
@@ -627,11 +629,12 @@ older_page :: proc(first, n: int, next: string) -> string {
 // offset 0 instead it would be at the top of the new page: the next one is asked for at once, and so on to the start of the history.
 @(private = "file")
 older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session) {
-	c := &app.chat
+	pane := main_pane(app)
+	c := &pane.chat
 	app.conn = bench_conn(app)   // (requests are kept: answers_test.odin)
 	clear(&bench_sent)
 	c.older = strings.clone("cursor", c.alloc)
-	app.chat_scroll = Scroll_Free{}
+	pane.view.chat_scroll = Scroll_Free{}
 	sb := session.get(s, "chat")
 	sb.view_off.y, sb.view_target.y = 0, 0
 	sb.view_anim[1] = {}
@@ -648,17 +651,17 @@ older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session)
 	testing.expect_value(t, bench_count(.Older), 0)
 
 	// a find open: the current match stays the same one when a page comes in front of it
-	find_open(app)
-	ui.line_edit_set(&app.find.field, "zebra")
+	find_open(app, pane)
+	ui.line_edit_set(&pane.find.field, "zebra")
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() && ui.find_count() == 60 }, "the needle swept")
 	session.frames(s, 2)
-	app.find.index = 10
+	pane.find.index = 10
 	request(app, .Older, "GET", "/older", tag = c.id)
 	post_answer(app, bench_take(t, .Older), older_page(2000, 8, ""))
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.find_count() == 68 }, "the page swept")
 	session.frames(s, 2)
-	testing.expect_value(t, app.find.index, 18)
-	find_close(app)
+	testing.expect_value(t, pane.find.index, 18)
+	find_close(app, pane)
 
 	// a wheel turned up past the top while the page is read stops at the top; the page that comes carries that stop along. (It
 	// glided over all of the page to its top: the view jumped, and the next page was asked for at once.)
@@ -746,13 +749,14 @@ an_artifact_of_the_session_is_a_card :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		last := app.chat.messages[len(app.chat.messages) - 1]
-		page := fmt.tprintf(`{{"data":[{{"id":"art_1","sessionID":"%s","title":"Essai d'outils","entry":"index.html","url":"/api/x/art_1/view/","time":{{"created":%f}}}},{{"id":"art_other","sessionID":"ses_2","title":"Not this one","time":{{"created":%f}}}}]}}`, app.chat.id, last.created + 1, last.created + 1)
+		pane := main_pane(app)
+		last := pane.chat.messages[len(pane.chat.messages) - 1]
+		page := fmt.tprintf(`{{"data":[{{"id":"art_1","sessionID":"%s","title":"Essai d'outils","entry":"index.html","url":"/api/x/art_1/view/","time":{{"created":%f}}}},{{"id":"art_other","sessionID":"ses_2","title":"Not this one","time":{{"created":%f}}}}]}}`, pane.chat.id, last.created + 1, last.created + 1)
 		v, err := json.parse_string(page, allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
-		chat_artifacts_load(app, app.chat.id, v)
-		chat_artifacts_load(app, "ses_2", v)   // (an answer for a session not shown: not its)
-		chat_scroll_event(app, Scroll_Signal.Snap)
+		chat_artifacts_load(app, pane, pane.chat.id, v)
+		chat_artifacts_load(app, pane, "ses_2", v)   // (an answer for a session not shown: not its)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		card := session.find(s, "art_art_1")
 		if !testing.expect(t, card != nil, "the card") { return }
@@ -1238,10 +1242,11 @@ a_long_part_opens_below_its_header :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		v, err := json.parse_string(long_parts_page(), allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
-		chat_load(app, v, false)
-		chat_scroll_event(app, Scroll_Signal.Snap)
+		chat_load(app, pane, v, false)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		for name in ([]string{"rh_lp_2_a_0", "head"}) {
 			h := session.find(s, name)
@@ -1288,12 +1293,13 @@ a_thought_opened_while_the_run_goes_on_stays :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		v, err := json.parse_string(seven_thoughts_page(), allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
-		chat_load(app, v, false)
-		app.chat.busy = true
-		set_busy(app, app.chat.id, true)
-		chat_scroll_event(app, Scroll_Signal.Snap)
+		chat_load(app, pane, v, false)
+		pane.chat.busy = true
+		set_busy(app, pane.chat.id, true)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		chat := session.find(s, "chat")
 		if !testing.expect(t, chat != nil, "the conversation") { return }
@@ -1311,7 +1317,7 @@ a_thought_opened_while_the_run_goes_on_stays :: proc(t: ^testing.T) {
 		session.click(s, name)
 		session.frames(s, 3)
 		for i in 0 ..< 20 {
-			bench_event(app, fmt.tprintf(`{{"type":"session.reasoning.delta","data":{{"sessionID":"%s","assistantMessageID":"sv_2_a","ordinal":14,"delta":"more of the thought, word after word, line %d.\n\n"}}}}`, app.chat.id, i))
+			bench_event(app, fmt.tprintf(`{{"type":"session.reasoning.delta","data":{{"sessionID":"%s","assistantMessageID":"sv_2_a","ordinal":14,"delta":"more of the thought, word after word, line %d.\n\n"}}}}`, pane.chat.id, i))
 			session.frames(s, 2)
 			h = session.find(s, name)
 			if !testing.expectf(t, h != nil, "delta %d: the thought opened still shown", i) { return }
@@ -1323,19 +1329,21 @@ a_thought_opened_while_the_run_goes_on_stays :: proc(t: ^testing.T) {
 // The answer that streams in, a delta at a time.
 @(private = "file")
 stream_delta :: proc(app: ^App, i: int) {
+	pane := main_pane(app)
 	text := i % BENCH_PARAGRAPH_DELTAS == 0 ? fmt.tprintf("\n\n%s", BENCH_DELTA) : BENCH_DELTA
-	bench_event(app, fmt.tprintf(`{{"type":"session.text.delta","data":{{"sessionID":"%s","assistantMessageID":"live_a","ordinal":0,"delta":%s}}}}`, app.chat.id, tk_json.quote(text)))
+	bench_event(app, fmt.tprintf(`{{"type":"session.text.delta","data":{{"sessionID":"%s","assistantMessageID":"live_a","ordinal":0,"delta":%s}}}}`, pane.chat.id, tk_json.quote(text)))
 }
 
 // What the reader reads, read up in the conversation: `name` exactly at `y` on the screen, and the view moved by no glide.
 @(private = "file")
 read_stays :: proc(t: ^testing.T, app: ^App, s: ^session.Session, name: string, y: f32, what: string, i: int) -> bool {
+	pane := main_pane(app)
 	sb := session.get(s, "chat")
 	b := session.find(s, name)
 	if !testing.expectf(t, b != nil, "%s %d: %s still shown", what, i, name) { return false }
 	if !testing.expectf(t, b.rect.min.y == y, "%s %d: %s stays at %v (now %v)", what, i, name, y, b.rect.min.y) { return false }
 	if !testing.expectf(t, !sb.view_anim[1].active && sb.view_off.y == sb.view_target.y, "%s %d: no glide (%v toward %v)", what, i, sb.view_off.y, sb.view_target.y) { return false }
-	return testing.expectf(t, !chat_following(app), "%s %d: the bottom still let go of", what, i)
+	return testing.expectf(t, !chat_following(pane), "%s %d: the bottom still let go of", what, i)
 }
 
 // The agent answers while the reader has gone up into the conversation: what they read does not move by a pixel, whatever grows
@@ -1347,14 +1355,15 @@ what_is_read_stays_while_the_answer_streams :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		c := &app.chat
+		pane := main_pane(app)
+		c := &pane.chat
 		c.busy = true
 		set_busy(app, c.id, true)
 		started := BENCH_EPOCH_MS + f64(BENCH_TURNS) * BENCH_STEP_MS
 		bench_event(app, fmt.tprintf(`{{"type":"session.step.started","data":{{"sessionID":"%s","assistantMessageID":"live_a","agent":"build","model":{{"id":"m","providerID":"p"}},"started":%f}}}}`, c.id, started))
 		bench_event(app, fmt.tprintf(`{{"type":"session.text.started","data":{{"sessionID":"%s","assistantMessageID":"live_a","ordinal":0}}}}`, c.id))
 		stream_delta(app, 0)
-		chat_scroll_event(app, Scroll_Signal.Snap)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.frames(s, 4)
 
 		// following: glued to the bottom
@@ -1365,18 +1374,18 @@ what_is_read_stays_while_the_answer_streams :: proc(t: ^testing.T) {
 			stream_delta(app, i)
 			session.frames(s, 1)
 			sb := session.get(s, "chat")
-			if !testing.expectf(t, chat_following(app) && sb.view_off.y >= ui.view_limit(sb) - 0.5, "following, delta %d: at the bottom (%v of %v)", i, sb.view_off.y, ui.view_limit(sb)) { return }
+			if !testing.expectf(t, chat_following(pane) && sb.view_off.y >= ui.view_limit(sb) - 0.5, "following, delta %d: at the bottom (%v of %v)", i, sb.view_off.y, ui.view_limit(sb)) { return }
 			live = session.find(s, "msg_live_a")
 			if !testing.expectf(t, live != nil && live.rect.max.y == bottom, "following, delta %d: its end stays at %v (now %v)", i, bottom, live != nil ? live.rect.max.y : -1) { return }
 		}
 
 		// gone up, to the middle of the conversation
 		sb := session.get(s, "chat")
-		chat_scroll_event(app, Scroll_Signal.Moved_Up)
+		chat_scroll_event(pane, Scroll_Signal.Moved_Up)
 		ui.view_jump(sb, math.round(ui.view_limit(sb) * 0.5))
 		session.frames(s, 6)
 		sb = session.get(s, "chat")
-		testing.expect(t, !chat_following(app), "up: the bottom let go of")
+		testing.expect(t, !chat_following(pane), "up: the bottom let go of")
 		// an answer that can grow (its last part a text), built: the view's top put just under its end, so that it is entirely above
 		// the view and still built (the band built reaches a screen above the view)
 		above := -1
@@ -1428,12 +1437,12 @@ what_is_read_stays_while_the_answer_streams :: proc(t: ^testing.T) {
 			if !read_stays(t, app, s, name, y, "above", i) { return }
 		}
 		// the composer grows a few lines
-		ui.text_edit_set(&app.composer.area, "one\ntwo\nthree\nfour\nfive")
+		ui.text_edit_set(&pane.composer.area, "one\ntwo\nthree\nfour\nfive")
 		for i in 0 ..< 3 {
 			session.frames(s, 1)
 			if !read_stays(t, app, s, name, y, "composer", i) { return }
 		}
-		ui.text_edit_set(&app.composer.area, "")
+		ui.text_edit_set(&pane.composer.area, "")
 		// and the answer goes on
 		for i in 100 ..< 140 {
 			stream_delta(app, i)
@@ -1450,11 +1459,12 @@ a_paused_goal_says_why :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		reason := "The session failed: You've hit your 5-hour limit, which resets at 11:00. Upgrade your plan or wait for the limit to reset before you resume the goal, which keeps its rounds."
 		v, err := json.parse_string(fmt.tprintf(`{{"objective":"Booted OS with a REPL","status":"paused","reason":%s,"rounds":3,"maxRounds":50}}`, tk_json.quote(reason)), allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
-		goal_set(app, app.chat.id, v)
-		chat_scroll_event(app, Scroll_Signal.Snap)
+		goal_set(app, pane.chat.id, v)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		strip, line, why := session.find(s, "goal_strip"), session.find(s, "goal_why"), session.find(s, "goal_reason")
 		if !testing.expect(t, strip != nil && line != nil && why != nil, "the strip, the line and the reason") { return }
@@ -1464,10 +1474,10 @@ a_paused_goal_says_why :: proc(t: ^testing.T) {
 		testing.expect(t, why.rect.max.y - why.rect.min.y > em * 1.5, "all of it, on more than one line")
 		testing.expect(t, strings.contains(why.text, "keeps its rounds"), "to its end")
 		active, _ := json.parse_string(fmt.tprintf(`{{"objective":"Booted OS with a REPL","status":"active","reason":%s}}`, tk_json.quote(reason)), allocator = context.temp_allocator)
-		goal_set(app, app.chat.id, active)
+		goal_set(app, pane.chat.id, active)
 		session.frames(s, 2)
 		testing.expect(t, session.find(s, "goal_reason") == nil, "it goes when the goal goes on")
-		goal_set(app, app.chat.id, nil)
+		goal_set(app, pane.chat.id, nil)
 	})
 }
 
@@ -1478,21 +1488,22 @@ a_session_s_changes_show_across :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		ts := BENCH_EPOCH_MS + 1e9
 		page := fmt.tprintf(`{{"data":[{{"id":"sw_l","type":"location-switched","location":{{"directory":"/home/sacha/Projects/kernel"}},"previous":{{"location":{{"directory":"/home/sacha/Projects/old"}}}},"time":{{"created":%f}}}},{{"id":"sw_a","type":"agent-switched","agent":"plan","previous":"build","time":{{"created":%f}}}},{{"id":"sw_m","type":"model-switched","model":{{"id":"claude-fable-5-2","providerID":"claude-agent","variant":"high"}},"previous":{{"id":"opus","providerID":"claude-agent","variant":"default"}},"time":{{"created":%f}}}}],"cursor":{{"next":""}}}}`, ts + 3, ts + 2, ts + 1)
 		v, err := json.parse_string(page, allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
-		chat_load(app, v, false)
-		chat_scroll_event(app, Scroll_Signal.Snap)
+		chat_load(app, pane, v, false)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		for id in ([]string{"sw_sw_m", "sw_sw_a", "sw_sw_l"}) { testing.expectf(t, session.find(s, id) != nil, "%s across the conversation", id) }
 		testing.expect(t, session.find_text(s, "claude-fable-5-2 · high") != nil, "the model now, with its variant")
 		testing.expect(t, session.find_text(s, "opus") != nil, "the model before")
 		testing.expect(t, session.find_text(s, "/home/sacha/Projects/kernel") != nil, "the folder now")
-		model, _ := shown_model(app)
+		model, _ := shown_model(app, pane)
 		testing.expect_value(t, model, "claude-fable-5-2")
-		testing.expect_value(t, shown_variant(app), "high")
-		testing.expect_value(t, shown_agent(app), "plan")
+		testing.expect_value(t, shown_variant(app, pane), "high")
+		testing.expect_value(t, shown_agent(app, pane), "plan")
 	})
 }
 
@@ -1503,23 +1514,24 @@ typing_with_nothing_focused_goes_to_the_composer :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		ui.set_focus(0)
 		session.frames(s, 2)
 		session.type_text(s, " ")
 		session.frames(s, 2)
-		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
+		testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "")
 		ui.set_focus(0)
 		session.type_text(s, "hi")
 		session.frames(s, 2)
-		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "hi")
-		testing.expect(t, app.composer.focused, "it has the keyboard")
-		ui.text_edit_set(&app.composer.area, "")
+		testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "hi")
+		testing.expect(t, pane.composer.focused, "it has the keyboard")
+		ui.text_edit_set(&pane.composer.area, "")
 		ui.set_focus(0)
 		palette_up(s, app)
 		ui.set_focus(0)
 		session.type_text(s, "x")
 		session.frames(s, 2)
-		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
+		testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "")
 		palette_hide(app)
 	})
 }
@@ -1680,12 +1692,14 @@ a_goal_paused_past_its_reset_offers_to_resume :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		paused :: proc(app: ^App, at: string) {
+			pane := main_pane(app)
 			v, _ := json.parse_string(fmt.tprintf(`{{"objective":"Booted OS","status":"paused","reason":"The session failed: limit. Resets at %s.","rounds":0,"maxRounds":50}}`, at), allocator = context.temp_allocator)
-			goal_set(app, app.chat.id, v)
+			goal_set(app, pane.chat.id, v)
 		}
 		paused(app, "2000-01-01T00:00:00.000Z")
-		chat_scroll_event(app, Scroll_Signal.Snap)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		testing.expect(t, session.find(s, "gw_resume") != nil, "past: resume offered")
 		when_ := session.find(s, "when")
@@ -1693,7 +1707,7 @@ a_goal_paused_past_its_reset_offers_to_resume :: proc(t: ^testing.T) {
 		paused(app, "2999-01-01T00:00:00.000Z")
 		session.frames(s, 2)
 		testing.expect(t, session.find(s, "gw_resume") == nil, "not yet: nothing offered")
-		goal_set(app, app.chat.id, nil)
+		goal_set(app, pane.chat.id, nil)
 	})
 }
 
@@ -1703,7 +1717,8 @@ escape_stops_the_run_and_the_composer_keeps_the_keyboard :: proc(t: ^testing.T) 
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		set_busy(app, app.chat.id, true)
+		pane := main_pane(app)
+		set_busy(app, pane.chat.id, true)
 		session.click(s, "composer")
 		session.type_text(s, "wait, ")
 		testing.expect_value(t, session.focused_name(s), "composer")
@@ -1711,13 +1726,13 @@ escape_stops_the_run_and_the_composer_keeps_the_keyboard :: proc(t: ^testing.T) 
 		session.frames(s, 2)
 		testing.expect_value(t, session.focused_name(s), "composer")   // (still writing)
 		session.type_text(s, "no")
-		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "wait, no")
-		app.chat.busy = false
-		delete_key(&app.busy, app.chat.id)
+		testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "wait, no")
+		pane.chat.busy = false
+		delete_key(&app.busy, pane.chat.id)
 		session.key(s, .Escape)
 		session.frames(s, 2)
 		testing.expect(t, session.focused_name(s) != "composer", "nothing runs: it lets go")
-		ui.text_edit_set(&app.composer.area, "")
+		ui.text_edit_set(&pane.composer.area, "")
 	})
 }
 
@@ -1768,10 +1783,11 @@ a_mermaid_block_is_a_diagram :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		v, err := json.parse_string(mermaid_page(), allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
-		chat_load(app, v, false)
-		chat_scroll_event(app, Scroll_Signal.Snap)
+		chat_load(app, pane, v, false)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		diagrams := 0
 		for i := 0; session.find(s, "diagram", i) != nil; i += 1 { diagrams += 1 }
@@ -1800,11 +1816,12 @@ a_diagram_is_zoomed_moved_and_laid_out_in_the_viewer :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		defer diagrams_free(app)
 		v, err := json.parse_string(mermaid_page(), allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
-		chat_load(app, v, false)
-		chat_scroll_event(app, Scroll_Signal.Snap)
+		chat_load(app, pane, v, false)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		if !testing.expect(t, session.find(s, "diagram") != nil, "drawn") { return }
 		small := session.find(s, "diagram").rect
@@ -2036,6 +2053,7 @@ other_folder_browses_the_servers_folders :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		app.conn = bench_conn(app)
 		defer { bench_clear(app); app.conn = nil }
 		chat_home(app)
@@ -2059,7 +2077,7 @@ other_folder_browses_the_servers_folders :: proc(t: ^testing.T) {
 		session.frames(s, 3)
 		session.click(s, "fb_act")
 		session.frames(s, 3)
-		testing.expect_value(t, app.chat.new_dir, "C:/code/project_0/assets")
+		testing.expect_value(t, pane.chat.new_dir, "C:/code/project_0/assets")
 	})
 }
 
@@ -2070,9 +2088,10 @@ the_files_of_the_session_are_found_and_mentioned :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		app.conn = bench_conn(app)
 		defer { bench_clear(app); app.conn = nil }
-		files_open(app)
+		files_open(app, pane)
 		session.frames(s, 3)
 		r := bench_take(t, .Server_Files_List)
 		testing.expect_value(t, r.path, "/api/fs/list?path=C%3A%2Fcode%2Fproject_0")
@@ -2088,7 +2107,7 @@ the_files_of_the_session_are_found_and_mentioned :: proc(t: ^testing.T) {
 		session.save_png(s, "files_found.png")
 		session.key(s, .Return)
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.file_dialog_shown(&(^App)(s.user).state) }, "chosen")
-		m := &app.composer.mentions
+		m := &pane.composer.mentions
 		testing.expect_value(t, len(m.chosen), 1)
 		if len(m.chosen) == 1 {
 			testing.expect_value(t, m.chosen[0].text, "@src/main.odin")
@@ -2104,6 +2123,7 @@ the_composers_prefixes_open_their_lists :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		app.conn = bench_conn(app)
 		defer { bench_clear(app); app.conn = nil }
 		append(&app.cx.slash, Slash{strings.clone("help"), strings.clone("Show the help")}, Slash{strings.clone("review"), strings.clone("Review the changes")})
@@ -2116,27 +2136,27 @@ the_composers_prefixes_open_their_lists :: proc(t: ^testing.T) {
 		session.click(s, "fb_cancel")
 		session.frames(s, 3)
 		testing.expect(t, !ui.file_dialog_shown(&app.state), "closed")
-		app.composer.focus_next = true
+		pane.composer.focus_next = true
 		session.frames(s, 3)
 		session.type_text(s, "/re")
 		session.frames(s, 3)
-		testing.expect(t, slash_shown(app), "the commands' list")
+		testing.expect(t, slash_shown(app, pane), "the commands' list")
 		testing.expect(t, session.find(s, "slash_list") != nil, "built over the text")
 		session.key(s, .Tab)
 		session.frames(s, 3)
-		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "/review ")
+		testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "/review ")
 
-		ui.text_edit_set(&app.composer.area, "")
-		app.composer.focus_next = true
+		ui.text_edit_set(&pane.composer.area, "")
+		pane.composer.focus_next = true
 		session.frames(s, 2)
 		session.type_text(s, "see @rea")
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return bench_count(.Mention_Files) > 0 }, "the files asked")
 		bench_answer(app, bench_take(t, .Mention_Files), 200, `{"location":{"directory":"C:/code/project_0"},"data":[{"path":"README.md","type":"file"}]}`)
 		session.frames(s, 3)
-		testing.expect(t, mention_shown(app), "the files' list")
+		testing.expect(t, mention_shown(app, pane), "the files' list")
 		session.key(s, .Tab)
 		session.frames(s, 3)
-		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "see @README.md ")
+		testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "see @README.md ")
 	})
 }
 
@@ -2147,15 +2167,16 @@ the_commands_are_read_again_when_the_list_opens :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		app.conn = bench_conn(app)
 		defer { bench_clear(app); app.conn = nil }
-		app.composer.focus_next = true
+		pane.composer.focus_next = true
 		session.frames(s, 3)
 		session.type_text(s, "/")
 		session.frames(s, 2)
 		bench_answer(app, bench_take(t, .Slash), 200, `{"data":[]}`)   // (the server, just started)
 		session.frames(s, 2)
-		testing.expect(t, !slash_shown(app), "nothing to list")
+		testing.expect(t, !slash_shown(app, pane), "nothing to list")
 		session.key(s, .Backspace)
 		session.frames(s, 2)
 		session.type_text(s, "/")
@@ -2163,7 +2184,7 @@ the_commands_are_read_again_when_the_list_opens :: proc(t: ^testing.T) {
 		testing.expect_value(t, bench_count(.Slash), 1)
 		bench_answer(app, bench_take(t, .Slash), 200, `{"data":[{"name":"review","description":"Review the changes"}]}`)
 		session.frames(s, 2)
-		testing.expect(t, slash_shown(app), "the commands that came since")
+		testing.expect(t, slash_shown(app, pane), "the commands that came since")
 		session.type_text(s, "r")
 		session.frames(s, 2)
 		testing.expect_value(t, bench_count(.Slash), 0)   // (a word typed further is the same list: one reading per opening)
@@ -2183,9 +2204,10 @@ escape_in_the_file_browser_does_not_interrupt :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		app.conn = bench_conn(app)
-		defer { bench_clear(app); app.conn = nil; app.chat.busy = false }
-		app.chat.busy = true
+		defer { bench_clear(app); app.conn = nil; pane.chat.busy = false }
+		pane.chat.busy = true
 		folder_choose(app, .New_Session)
 		session.frames(s, 3)
 		bench_answer(app, bench_take(t, .Server_Files_List), 200, `{"data":[]}`)
@@ -2285,14 +2307,15 @@ escape_stops_a_run_in_two_presses :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		app.conn = bench_conn(app)
-		defer { bench_clear(app); app.conn = nil; app.chat.busy = false }
-		app.chat.busy = true
+		defer { bench_clear(app); app.conn = nil; pane.chat.busy = false }
+		pane.chat.busy = true
 		session.frames(s, 2)
 		for focused in ([]bool{false, true}) {
 			if focused {
-				app.composer.focus_next = true
-				session.wait_until(s, proc(s: ^session.Session) -> bool { return (^App)(s.user).composer.focused }, "the composer focused")
+				pane.composer.focus_next = true
+				session.wait_until(s, proc(s: ^session.Session) -> bool { return main_pane((^App)(s.user)).composer.focused }, "the composer focused")
 			}
 			before := bench_count(.Action)
 			session.key(s, .Escape)
@@ -2309,7 +2332,7 @@ escape_stops_a_run_in_two_presses :: proc(t: ^testing.T) {
 			session.frames(s, 2)
 			testing.expect_value(t, bench_count(.Action), before + 1)
 			testing.expect(t, session.find(s, "stop_armed") == nil, "stopped: the banner went")
-			testing.expect(t, focused == app.composer.focused, "the composer keeps the keyboard")
+			testing.expect(t, focused == pane.composer.focused, "the composer keeps the keyboard")
 		}
 	})
 }
@@ -2511,19 +2534,20 @@ a_paste_in_the_composer_waits_for_no_clipboard :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		session.click(s, "composer")
-		ui.text_edit_set(&app.composer.area, "")
+		ui.text_edit_set(&pane.composer.area, "")
 		session.set_clipboard(s, "pasted words")
 		session.key(s, .Insert, {.Shift})
-		session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.text_edit_string(&(^App)(s.user).composer.area) != "" }, "the text came")
-		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "pasted words")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.text_edit_string(&main_pane((^App)(s.user)).composer.area) != "" }, "the text came")
+		testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "pasted words")
 		// an image alone: attached, read and encoded on a thread
 		px := []u8{255, 0, 0, 255, 0, 0, 255, 255}
 		testing.expect(t, platform.clipboard_set_image(app.win, {rgba = px, size = {2, 1}}))
 		session.key(s, .V, {.Ctrl})
-		session.wait_until(s, proc(s: ^session.Session) -> bool { return len((^App)(s.user).composer.attachments) == 1 }, "the image attached")
-		testing.expect(t, strings.has_prefix(app.composer.attachments[0].uri, "data:image/png;base64,"), "as a PNG")
-		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "pasted words")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return len(main_pane((^App)(s.user)).composer.attachments) == 1 }, "the image attached")
+		testing.expect(t, strings.has_prefix(pane.composer.attachments[0].uri, "data:image/png;base64,"), "as a PNG")
+		testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "pasted words")
 	})
 }
 
@@ -2534,7 +2558,8 @@ the_composer_has_its_menu_all_over_it :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		testing.expect(t, !app.composer.focused, "the focus elsewhere")
+		pane := main_pane(app)
+		testing.expect(t, !pane.composer.focused, "the focus elsewhere")
 		well := session.get(s, "composer_well")
 		for at in ([][2]f32{session.center(session.get(s, "composer")), {well.rect.max.x - 40, well.rect.max.y - 6}}) {
 			session.press(s, at, .Right)
@@ -2554,17 +2579,18 @@ a_running_command_is_inspected_from_its_row :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		// (the last call of the conversation, a command at work)
 		call: ^Part
-		#reverse for &m in app.chat.messages {
+		#reverse for &m in pane.chat.messages {
 			#reverse for &p in m.parts { if p.kind == .Tool { call = &p; break } }
 			if call != nil { break }
 		}
 		if !testing.expect(t, call != nil, "a call") { return }
-		call.tool_name = strings.clone("bash", app.chat.alloc)
+		call.tool_name = strings.clone("bash", pane.chat.alloc)
 		call.status = .Running
-		call.shell_id = strings.clone("sh_7", app.chat.alloc)
-		app.chat.seq += 1
+		call.shell_id = strings.clone("sh_7", pane.chat.alloc)
+		pane.chat.seq += 1
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "bginspect") != nil }, "its row says it can be inspected")
 		testing.expect(t, session.find(s, "bgpush") != nil, "and pushed to the background")
 		session.wait_idle(s)   // (the conversation follows its end, which the row made longer: what is clicked stands still)
@@ -2606,10 +2632,11 @@ a_finished_sub_agent_says_so_folded :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		v, err := json.parse_string(ended_subagents_page(), allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
-		chat_load(app, v, false)
-		chat_scroll_event(app, Scroll_Signal.Snap)
+		chat_load(app, pane, v, false)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.wait_idle(s)
 		Want :: struct { card, sign, word, line: string }
 		for w in ([]Want{
@@ -2638,6 +2665,7 @@ the_bell_counts_what_was_missed_and_its_view_answers_the_keys :: proc(t: ^testin
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		app.prefs.notices_badge = true
 		pref_set(app, "notices.view", "list")
 		for id in ([3]string{"ses_1", "ses_2", "ses_3"}) {
@@ -2659,7 +2687,7 @@ the_bell_counts_what_was_missed_and_its_view_answers_the_keys :: proc(t: ^testin
 		// Enter: the session of the first entry (the newest session first; the same time: by its id)
 		session.key(s, .Return)
 		session.frames(s, 3)
-		testing.expect_value(t, app.chat.id, "ses_1")
+		testing.expect_value(t, pane.chat.id, "ses_1")
 		testing.expect(t, !ui.view_is_open(&app.program_views, MISSED_VIEW), "the view closes")
 		testing.expect(t, log.live[key1] == nil, "opened: acknowledged")
 		// A: the entry chosen
@@ -2799,6 +2827,7 @@ a_wait_is_answered_from_its_card :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		bench_event(app, `{"type":"permission.asked","data":{"request":{"id":"p1","sessionID":"ses_2","action":"bash","resources":["git push"]}}}`)
 		session.frames(s, 2)
 		command_run(app, command_find("view.notices"))
@@ -2818,7 +2847,7 @@ a_wait_is_answered_from_its_card :: proc(t: ^testing.T) {
 		if testing.expect(t, settle != nil, "the card's act") { testing.expect(t, session.find_text(s, "Answer") != nil, "Answer") }
 		session.click(s, "card_settle")
 		session.frames(s, 3)
-		testing.expect_value(t, app.chat.id, "ses_2")
+		testing.expect_value(t, pane.chat.id, "ses_2")
 		testing.expect(t, !ui.view_is_open(&app.program_views, MISSED_VIEW), "the view closes")
 		testing.expect(t, missed_log(app).live[missed_key(app, .Permission, "p1", "ses_2")] != nil, "a wait waits for its answer")
 	})
@@ -2918,7 +2947,8 @@ the_prompt_rail_goes_to_a_prompt_at_once :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		rail := &app.conversation.prompt_rail.rail
+		pane := main_pane(app)
+		rail := &pane.conversation.prompt_rail.rail
 		sb := session.get(s, "chat")
 		testing.expect_value(t, len(ui.scroll_marks_shown(rail)), BENCH_TURNS)
 		last: f32 = -1
@@ -2965,11 +2995,12 @@ an_edits_inline_diff_is_selectable :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		page := `{"data":[{"id":"msg_e_a","type":"assistant","finish":"stop","time":{"created":1,"completed":2},"content":[{"type":"tool","id":"call_e","name":"edit","state":{"status":"completed","input":{"filePath":"src/a.odin","oldString":"the old line","newString":"the fresh line"}},"time":{"created":1,"completed":2}}]}],"cursor":{"next":""}}`
 		v, err := json.parse_string(page, allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
-		chat_load(app, v, false)
-		chat_scroll_event(app, Scroll_Signal.Snap)
+		chat_load(app, pane, v, false)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "lines") != nil }, "the diff, folded")
 		lines := session.find(s, "lines")
 		if lines == nil { return }

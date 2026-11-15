@@ -335,7 +335,8 @@ missed_act :: proc(app: ^App, act: Missed_Act, at: int) {
 
 @(private = "file")
 missed_open_row :: proc(app: ^App, r: ^Missed_Row) {
-	if r.root != "" && r.root != app.chat.id { open_root(app, r.root) }
+	pane := main_pane(app)
+	if r.root != "" && r.root != pane.chat.id { open_root(app, r.root) }
 	ui.view_close(&app.program_views, MISSED_VIEW)
 }
 
@@ -574,7 +575,7 @@ missed_answer_card :: proc(app: ^App, e: ^notices.Entry, em: f32) -> bool {
 	if Missed_Kind(e.kind) == .Permission {
 		for &p in app.permissions { if p.id == id { permission_card(app, &p, em); return true } }
 	} else {
-		for f in app.cx.forms { if f.id == id { form_card(app, f, 1, em); return true } }
+		for f in app.cx.forms { if f.id == id { form_card(app, main_pane(app), f, 1, em); return true } }
 	}
 	return false
 }

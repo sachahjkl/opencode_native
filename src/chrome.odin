@@ -109,6 +109,7 @@ side_line_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 }
 
 title_bar :: proc(app: ^App, em: f32) {
+	pane := main_pane(app)
 	h := max(math.round(em * 2.6), math.round(TITLE_BAR_MIN_H_PX * ui.scale()))
 	ui.next({width = ui.fill(), height = ui.px(h)})
 	if ui.title_bar("###titlebar") {
@@ -157,10 +158,10 @@ title_bar :: proc(app: ^App, em: f32) {
 			glyph(lucide.GLOBE, ink(hex(HEX_CYAN)), math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.3))
 			text("srv", i18n.tr(server_name(app)), ink(hex(HEX_CYAN)), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-			if app.chat.id != "" { text("srvsep", "  /  ", ink(hex(HEX_FAINT)), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}) }
+			if pane.chat.id != "" { text("srvsep", "  /  ", ink(hex(HEX_FAINT)), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}) }
 		}
-		s := find_session(app, app.chat.id)
-		if s == nil && app.chat.have_self { s = &app.chat.self }
+		s := find_session(app, pane.chat.id)
+		if s == nil && pane.chat.have_self { s = &pane.chat.self }
 		if s != nil {
 			// the project's logo before its folder
 			if logo_of(app, "###tproj", project_logo(app, s.project), math.round(h * 0.55)) { ui.spacer(ui.px(em * 0.45)) }
@@ -170,9 +171,9 @@ title_bar :: proc(app: ^App, em: f32) {
 		} else {
 			ui.spacer(ui.fill())
 		}
-		if app.chat.busy {
+		if pane.chat.busy {
 			ui.spacer(ui.px(em * 0.8))
-			throbber(app, "###tscan", accent(), math.round(em * 3), math.round(em * 0.75), em)
+			throbber(app, pane, "###tscan", accent(), math.round(em * 3), math.round(em * 0.75), em)
 			ui.spacer(ui.px(em))
 		}
 		missed_bell(app, math.round(h * 0.78), em)
@@ -211,7 +212,8 @@ session_id_copy :: proc(app: ^App, id: string) {
 }
 
 chat_header :: proc(app: ^App, em: f32) {
-	h := math.round(em * (app.chat.have_self && app.chat.self.parent != "" ? 4.3 : 3.3))   // (a sub-agent: a breadcrumb line above its title)
+	pane := main_pane(app)
+	h := math.round(em * (pane.chat.have_self && pane.chat.self.parent != "" ? 4.3 : 3.3))   // (a sub-agent: a breadcrumb line above its title)
 	ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###hdr") {
 		b := ui.parent_box()
@@ -220,8 +222,8 @@ chat_header :: proc(app: ^App, em: f32) {
 		b.custom = bar_draw
 		b.custom_user = d
 		ui.spacer(ui.px(em * 1.3))
-		s := find_session(app, app.chat.id)
-		if s == nil && app.chat.have_self { s = &app.chat.self }   // (a sub-agent, or an old session: not in the sidebar's list)
+		s := find_session(app, pane.chat.id)
+		if s == nil && pane.chat.have_self { s = &pane.chat.self }   // (a sub-agent, or an old session: not in the sidebar's list)
 		if back := back_target(app); back != "" {
 			// the way back up: to the session drilled down from, or the parent
 			if ui.button("back", icon = lucide.ARROW_LEFT, o = {face = .Raised, width = ui.px(math.round(em * BUTTON_H_EM)), height = math.round(em * BUTTON_H_EM)}).clicked { go_back(app) }
@@ -231,16 +233,16 @@ chat_header :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
 		if ui.column(id = "###titles") {
 			ui.spacer(ui.fill())
-			if app.chat.have_self && app.chat.self.parent != "" {
+			if pane.chat.have_self && pane.chat.self.parent != "" {
 				// breadcrumb: the parent, then this sub-agent
 				ui.next({width = ui.fill(), height = ui.px(em * 1.2), axis = .X, cross = .Center})
 				if ui.row(.Center, id = "###crumb") {
-					parent := app.chat.parent_title != "" ? app.chat.parent_title : i18n.tr("parent session")
+					parent := pane.chat.parent_title != "" ? pane.chat.parent_title : i18n.tr("parent session")
 					ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .X, cross = .Center, cursor = .Hand})
 					pb := ui.build_box({.Clickable}, "###crumb_parent")
 					ps := ui.signal(pb)
 					if ps.clicked {
-						if back_target(app) == app.chat.self.parent { go_back(app) } else { drill_down(app, app.chat.self.parent) }
+						if back_target(app) == pane.chat.self.parent { go_back(app) } else { drill_down(app, pane.chat.self.parent) }
 					}
 					if ui.parent(pb) {
 						text("p", ellipsize(parent, CRUMB_PARENT_CHARS), ps.hovering ? accent() : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
@@ -266,16 +268,16 @@ chat_header :: proc(app: ^App, em: f32) {
 					}
 				}
 			}
-			dir := s != nil ? s.directory : app.chat.new_dir
+			dir := s != nil ? s.directory : pane.chat.new_dir
 			text("dir", dir != "" ? dir : i18n.tr("default folder"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2), flags = dir != "" ? {.Selectable} : {}}, ui.fill())
 			ui.spacer(ui.fill())
 		}
-		c := &app.chat
+		c := &pane.chat
 		// (its title edited: the line is the title's, the figures and the sub-agents wait)
 		editing := s != nil && renaming_at(app, s.id, .Header)
-		thin := app.conversation.width > 0 && app.conversation.width < em * HEADER_FIGURES_MIN_EM
-		if !editing && len(c.children) > 0 && !(thin && len(active_children(app)) == 0) {
-			subagents_button(app, em)
+		thin := pane.conversation.width > 0 && pane.conversation.width < em * HEADER_FIGURES_MIN_EM
+		if !editing && len(c.children) > 0 && !(thin && len(active_children(app, pane)) == 0) {
+			subagents_button(app, pane, em)
 			ui.spacer(ui.px(em * 0.6))
 		}
 		// (narrow, between panels: the title first, the figures are in the statistics)

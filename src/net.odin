@@ -229,7 +229,8 @@ Request :: struct {
 	path:   string,
 	body:   string,
 	tag:    string,    // what it is about: a session, or what Req_Kind says
-	gen:    u64,       // the chat generation it was made for (answers for a chat since left are dropped)
+	pane:   int,       // the slot of the pane it was asked for (MAIN_PANE when asked from none: req_pane)
+	gen:    u64,       // that pane's chat generation then (answers for a chat since left are dropped)
 	conn:   ^Conn,     // the connection it goes by (answers from a server since left are dropped)
 	app:    ^App,      // (for its thread: the_app is the interface's)
 	reading: ^remote.Remote,   // the reading it is (nil: none), and which one: answer settles it
@@ -238,7 +239,7 @@ Request :: struct {
 	prompt: Maybe(Prompt_Parts),   // what its body is made of, built on its thread (outgoing_send: megabytes to quote; nil: `body`)
 	asked_at: Seq,     // App_Context.stream_seq when it left: what the stream said after that is newer than its answer
 	life:   Req_Life,  // (REQ_FACTS: read here, for its worker)
-	chat_mark: u64,    // App.chat_mark when it left: its worker sees that the conversation changed since
+	pane_mark: u64,    // its pane's mark when it left: its worker sees that the pane's conversation changed since
 	// the answer
 	status: int,
 	resp:   string,
@@ -274,16 +275,18 @@ flight_ends :: proc(app: ^App, r: ^Request) {
 
 // A request goes to its connection's workers (`delay` ms from now: it waits in their timed queue, no thread sleeps for it). It holds the
 // connection until its answer ran. The workers give no order: what must follow another is asked when the other's answer comes
-// (outgoing.odin, a shell's size).
-request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "", delay := 0, reading: ^remote.Remote = nil, out: u64 = 0, conn: ^Conn = nil, prompt: Maybe(Prompt_Parts) = nil) {
+// (outgoing.odin, a shell's size). `pane`: the pane it is asked for; nil is the main view's, whose acts (the sidebar, the commands,
+// the palette) name no pane.
+request :: proc(app: ^App, kind: Req_Kind, method, path: string, body := "", tag := "", delay := 0, reading: ^remote.Remote = nil, out: u64 = 0, conn: ^Conn = nil, prompt: Maybe(Prompt_Parts) = nil, pane: ^Chat_Pane = nil) {
 	to := conn != nil ? conn : app.conn
 	if to == nil {   // (no server yet: nothing to ask)
 		if reading != nil { remote.settle(reading, .Failed, i18n.tr("Not connected")) }
 		return
 	}
+	p := pane != nil ? pane : main_pane(app)
 	r := new(Request)
-	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), gen = app.chat.gen, conn = to, app = app, delay = delay, reading = reading, out = out, asked_at = app.cx.stream_seq, prompt = prompt}
-	r.life, r.chat_mark = REQ_FACTS[kind].life, sync.atomic_load(&app.chat_mark)
+	r^ = {kind = kind, method = strings.clone(method), path = strings.clone(path), body = strings.clone(body), tag = strings.clone(tag), pane = pane_index(app, p), gen = p.chat.gen, conn = to, app = app, delay = delay, reading = reading, out = out, asked_at = app.cx.stream_seq, prompt = prompt}
+	r.life, r.pane_mark = REQ_FACTS[kind].life, sync.atomic_load(&p.mark)
 	if reading != nil { r.ticket = reading.ticket }
 	sync.atomic_add(&app.pending, 1)
 	append(&app.cx.flights, Flight{kind, strings.clone(tag), to})
@@ -311,9 +314,9 @@ request_finish :: proc(r: ^Request) {
 }
 
 // Seen from a worker: the conversation it was asked for was left (what req_outlived says on the interface, from what a worker can read:
-// the chat changed since, by App.chat_mark).
+// its pane's chat changed since, by Chat_Pane.mark; the panes never move: chat_pane.odin).
 req_unwanted :: proc(r: ^Request) -> bool {
-	return r.life != .Server && sync.atomic_load(&r.app.chat_mark) != r.chat_mark
+	return r.life != .Server && sync.atomic_load(&r.app.panes[r.pane].mark) != r.pane_mark
 }
 
 // A prompt's body, on the request's worker. Its parts are no longer read after it: the answer may free them.
@@ -377,8 +380,8 @@ on_answer :: proc(data: rawptr, word: u64) {
 // How long a request's answer means anything, past the server it went to (Request.conn).
 Req_Life :: enum u8 {
 	Server,     // whatever is shown: what acts on what comes
-	Chat,       // the conversation and the session it was asked for
-	Chat_Gen,   // the conversation it was asked in (its tag is a folder or a command)
+	Chat,       // the conversation of its pane and the session it was asked for
+	Chat_Gen,   // the conversation its pane showed when it was asked (its tag is a folder or a command)
 }
 
 // What is known of a kind of request, in one place. `json`: an answer that cannot be read is a failure; of the others, only that they went
@@ -501,10 +504,11 @@ quiet_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (t
 // The conversation it was asked for is gone: what it says is about nothing shown, success or failure.
 @(private = "file")
 req_outlived :: proc(app: ^App, r: ^Request) -> bool {
+	pane := req_pane(app, r)
 	switch REQ_FACTS[r.kind].life {
 	case .Server:   return false
-	case .Chat:     return r.gen != app.chat.gen || r.tag != app.chat.id
-	case .Chat_Gen: return r.gen != app.chat.gen
+	case .Chat:     return r.gen != pane.chat.gen || r.tag != pane.chat.id
+	case .Chat_Gen: return r.gen != pane.chat.gen
 	}
 	return false
 }
@@ -598,23 +602,23 @@ refresh_sessions :: proc(app: ^App) {
 }
 
 // A new reading replaces the one on its way: what it brings is the newer one.
-load_messages :: proc(app: ^App, id: string) {
-	if !app.chat.loaded { app.chat.loading = true }
-	remote.begin(&app.cx.chat_read)
-	request(app, .Messages, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&order=desc", id, app.prefs.page_size), tag = id, reading = &app.cx.chat_read)
+load_messages :: proc(app: ^App, pane: ^Chat_Pane, id: string) {
+	if !pane.chat.loaded { pane.chat.loading = true }
+	remote.begin(&pane.read)
+	request(app, .Messages, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&order=desc", id, app.prefs.page_size), tag = id, reading = &pane.read, pane = pane)
 }
 
 // Everything the session shown needs from the server: when it opens, on Try again, when the stream comes back.
-chat_read :: proc(app: ^App) {
-	c := &app.chat
+chat_read :: proc(app: ^App, pane: ^Chat_Pane) {
+	c := &pane.chat
 	if c.id == "" { return }
 	id := strings.clone(c.id, context.temp_allocator)
-	load_messages(app, id)
-	if !c.have_self { request(app, .Self, "GET", strings.concatenate({"/api/session/", id}, context.temp_allocator), tag = id) }
-	load_children(app)
+	load_messages(app, pane, id)
+	if !c.have_self { request(app, .Self, "GET", strings.concatenate({"/api/session/", id}, context.temp_allocator), tag = id, pane = pane) }
+	load_children(app, pane)
 	session_waits_load(app, id)
-	queue_read(app)
-	chat_artifacts_ask(app)
+	queue_read(app, pane)
+	chat_artifacts_ask(app, pane)
 }
 
 // How near, in screens: the page is there before the reader, unless they scroll fast (then messages() shows it coming).
@@ -622,14 +626,14 @@ OLDER_MARGIN :: 1.5
 OLDER_RETRY_MS :: 3000   // a page that could not be read is not asked for again before this
 
 // The page before the first message, when the view comes near it: read in good time, the reader does not ask for it.
-load_older :: proc(app: ^App, b: ^ui.Box) {
-	c := &app.chat
+load_older :: proc(app: ^App, pane: ^Chat_Pane, b: ^ui.Box) {
+	c := &pane.chat
 	if c.older == "" || c.loading || c.loading_older || !c.loaded { return }
 	if c.older_failed > 0 && ui.now_ms() - c.older_failed < OLDER_RETRY_MS { return }
 	if min(b.view_off.y, b.view_target.y) > b.size.y * OLDER_MARGIN { return }
 	c.loading_older = true
 	c.older_failed = 0
-	request(app, .Older, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", app.chat.id, app.prefs.page_size, url_escape(app.chat.older)), tag = app.chat.id)
+	request(app, .Older, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", pane.chat.id, app.prefs.page_size, url_escape(pane.chat.older)), tag = pane.chat.id, pane = pane)
 }
 
 interrupt_session :: proc(app: ^App, id: string) {
@@ -745,8 +749,8 @@ stream_up :: proc(app: ^App) {
 		browser_renew(app)
 	}
 	refresh_sessions(app)
-	chat_read(app)
-	for id in waits_sessions(app) { if id != app.chat.id { session_waits_load(app, id) } }
+	for &pane, i in app.panes { if pane_is_shown(app, i) { chat_read(app, &pane) } }
+	for id in waits_sessions(app) { if !pane_shows(app, id) { session_waits_load(app, id) } }   // (chat_read read those of each pane's)
 	request(app, .Agents, "GET", "/api/agent")
 	request(app, .Models, "GET", "/api/model")
 	request(app, .Slash, "GET", "/api/command")

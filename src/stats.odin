@@ -118,8 +118,9 @@ stats_ask :: proc(app: ^App) {
 
 // The panel stays on the session shown: its project comes after it opened (.Self), or the conversation changed under it.
 stats_follow :: proc(app: ^App) {
+	pane := main_pane(app)
 	if chat_project(app) != app.stats.project.project { stats_ask(app) }
-	if app.stats.session_context.session != app.chat.id { context_ask(app) }
+	if app.stats.session_context.session != pane.chat.id { context_ask(app) }
 }
 
 stats_forget :: proc(app: ^App) {
@@ -143,8 +144,9 @@ context_clear :: proc(app: ^App) {
 // What the model has in front of it. (A step ended, the stream came back, Try again.) What is shown stays until the answer, unless it
 // is of another session.
 context_ask :: proc(app: ^App) {
+	pane := main_pane(app)
 	x := &app.stats.session_context
-	id := app.chat.id
+	id := pane.chat.id
 	if x.session != id {
 		context_clear(app)
 		x.session = strings.clone(id)
@@ -298,8 +300,9 @@ Local_Kept :: struct {
 }
 
 local_stats :: proc(app: ^App) -> ^Local_Stats {
+	pane := main_pane(app)
 	k := &app.stats.local
-	c := &app.chat
+	c := &pane.chat
 	if k.made && k.gen == c.gen && k.changes == c.changes { return &k.stats }
 	k.stats = local_stats_of(c, arena_renew(&k.arena))
 	k.made, k.gen, k.changes = true, c.gen, c.changes
@@ -477,8 +480,9 @@ heading :: proc(s: string, em: f32, color: u32 = HEX_BLUE, note := "") {
 
 // Its place in the dock. Nothing here is focusable: it does not take the keyboard from the composer.
 stats_panel :: proc(app: ^App, em: f32) {
+	pane := main_pane(app)
 	stats_follow(app)
-	c := &app.chat
+	c := &pane.chat
 	s := c.have_self ? &c.self : find_session(app, c.id)
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = hex(HEX_BG0), radius = 0})
 	if ui.column(flags = {.Draw_Background}, id = "###st") {
@@ -505,7 +509,8 @@ stats_panel :: proc(app: ^App, em: f32) {
 
 @(private = "file")
 stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
-	c := &app.chat
+	pane := main_pane(app)
+	c := &pane.chat
 	l := local_stats(app)
 	now := now_epoch_ms()
 	ui.spacer(ui.px(em * 1.1))
@@ -667,12 +672,12 @@ context_line :: proc(app: ^App, id, name, size, key: string, indent: f32, shade:
 }
 
 @(private = "file")
-context_open :: proc(app: ^App, key: string) -> bool { return app.conversation.expanded[hash.fnv64a(transmute([]u8)key)] or_else false }
+context_open :: proc(app: ^App, key: string) -> bool { return app.expanded[hash.fnv64a(transmute([]u8)key)] or_else false }
 
 @(private = "file")
 context_flip :: proc(app: ^App, key: string) {
 	k := hash.fnv64a(transmute([]u8)key)
-	app.conversation.expanded[k] = !(app.conversation.expanded[k] or_else false)
+	app.expanded[k] = !(app.expanded[k] or_else false)
 }
 
 // The parts, the largest first, each opened in place on what it holds, each of those on its text.

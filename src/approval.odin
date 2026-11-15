@@ -59,8 +59,8 @@ approval_of :: proc(rules: json.Value) -> Approval {
 }
 
 // The mode of the session shown.
-approval_shown :: proc(app: ^App) -> Approval {
-	c := &app.chat
+approval_shown :: proc(app: ^App, pane: ^Chat_Pane) -> Approval {
+	c := &pane.chat
 	if c.have_self { return c.self.approval }
 	if s := find_session(app, c.id); s != nil { return s.approval }
 	return .Configured
@@ -69,7 +69,7 @@ approval_shown :: proc(app: ^App) -> Approval {
 // What the server says a session's rules are now (session.permissions, or a session read again).
 approval_seen :: proc(app: ^App, sid: string, mode: Approval) {
 	if s := find_session(app, sid); s != nil { s.approval = mode }
-	if app.chat.have_self && app.chat.self.id == sid { app.chat.self.approval = mode }
+	for &pane in app.panes { if pane.chat.have_self && pane.chat.self.id == sid { pane.chat.self.approval = mode } }
 }
 
 // Puts a preset's rules on the session. Shown at once; the server's session.permissions confirms it to every client.
@@ -80,8 +80,8 @@ approval_set :: proc(app: ^App, sid: string, mode: Approval) {
 }
 
 // The shield in the composer's toolbar: the session's mode in its colour, a menu of the presets.
-approval_button :: proc(app: ^App, em: f32) {
-	mode := approval_shown(app)
+approval_button :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	mode := approval_shown(app, pane)
 	color: Color
 	switch mode {
 	case .Configured:  color = hex(HEX_WEAK)
@@ -102,7 +102,7 @@ approval_button :: proc(app: ^App, em: f32) {
 			if m == .Custom && mode != .Custom { continue }   // (shown only when the session has such rules)
 			// (what it does in the shortcut's column: faint, at the right)
 			if ui.menu_item(i18n.tr(APPROVAL_WORDS[m]), i18n.tr(APPROVAL_DETAIL[m]), m == mode, disabled = m == .Custom).clicked {
-				approval_set(app, app.chat.id, m)
+				approval_set(app, pane.chat.id, m)
 			}
 		}
 	}

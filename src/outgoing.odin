@@ -31,6 +31,7 @@ Out_Stage :: enum u8 {
 
 Outgoing :: struct {
 	id:       u64,                 // what its requests carry (Request.out)
+	pane:     int,                 // the slot of the pane it left from: its requests are that pane's (Request.pane)
 	stage:    Out_Stage,
 	session:  string,              // "": not made yet, or the home page's (owned)
 	text:     string,              // as it comes back to the composer (owned)
@@ -41,19 +42,19 @@ Outgoing :: struct {
 }
 
 // Starting a session from the composer shown, or reading a file for it: nothing more goes from it until that is done.
-composer_held :: proc(app: ^App) -> bool {
-	if attaching(app) { return true }
+composer_held :: proc(app: ^App, pane: ^Chat_Pane) -> bool {
+	if attaching(app, pane) { return true }
 	for o in app.cx.outgoing {
-		if o.stage <= .Model && o.session == app.chat.id { return true }
+		if o.stage <= .Model && o.session == pane.chat.id { return true }
 	}
 	return false
 }
 
 @(private = "file")
-outgoing_new :: proc(app: ^App, stage: Out_Stage, session, text: string) -> ^Outgoing {
+outgoing_new :: proc(app: ^App, pane: ^Chat_Pane, stage: Out_Stage, session, text: string) -> ^Outgoing {
 	o := new(Outgoing)
 	app.cx.outgoing_last += 1
-	o.id, o.stage = app.cx.outgoing_last, stage
+	o.id, o.stage, o.pane = app.cx.outgoing_last, stage, pane_index(app, pane)
 	o.session, o.text = strings.clone(session), strings.clone(text)
 	append(&app.cx.outgoing, o)
 	return o
@@ -78,11 +79,11 @@ outgoing_free :: proc(app: ^App, o: ^Outgoing) {
 
 // What is in the composer leaves it for good: from here on it is the prompt's.
 @(private = "file")
-outgoing_takes_composer :: proc(app: ^App, o: ^Outgoing) {
-	append(&o.files, ..app.composer.attachments[:])
-	clear(&app.composer.attachments)
-	append(&o.mentions, ..app.composer.mentions.chosen[:])
-	clear(&app.composer.mentions.chosen)
+outgoing_takes_composer :: proc(app: ^App, pane: ^Chat_Pane, o: ^Outgoing) {
+	append(&o.files, ..pane.composer.attachments[:])
+	clear(&pane.composer.attachments)
+	append(&o.mentions, ..pane.composer.mentions.chosen[:])
+	clear(&pane.composer.mentions.chosen)
 }
 
 // A prompt of the composer has its body built on its request's thread (Prompt_Parts): its files' data URLs are megabytes to
@@ -91,8 +92,8 @@ outgoing_takes_composer :: proc(app: ^App, o: ^Outgoing) {
 outgoing_send :: proc(app: ^App, o: ^Outgoing) {
 	o.stage = .Sending
 	path := o.path != "" ? o.path : fmt.tprintf("/api/session/%s/prompt", o.session)
-	if o.body != "" { request(app, .Prompt, "POST", path, o.body, o.session, out = o.id); return }
-	request(app, .Prompt, "POST", path, tag = o.session, out = o.id, prompt = Prompt_Parts{o.text, o.files[:], o.mentions[:], o.fields})
+	if o.body != "" { request(app, .Prompt, "POST", path, o.body, o.session, out = o.id, pane = &app.panes[o.pane]); return }
+	request(app, .Prompt, "POST", path, tag = o.session, out = o.id, prompt = Prompt_Parts{o.text, o.files[:], o.mentions[:], o.fields}, pane = &app.panes[o.pane])
 }
 
 // What a prompt's body is made of (the Outgoing's, not copied: outgoing_send).
@@ -148,25 +149,25 @@ message_id_at :: proc(ms: i64, allocator := context.temp_allocator) -> string {
 }
 
 // The composer's prompt, to the session shown, or to a new one in `directory` from the home page. (`fields`: send_as_fields)
-outgoing_composer :: proc(app: ^App, text, directory: string, fields := "") {
-	if app.chat.id == "" {
-		o := outgoing_new(app, .Creating, "", text)
-		outgoing_takes_composer(app, o)
-		request(app, .Created, "POST", "/api/session", new_session_body(app, directory), out = o.id)
+outgoing_composer :: proc(app: ^App, pane: ^Chat_Pane, text, directory: string, fields := "") {
+	if pane.chat.id == "" {
+		o := outgoing_new(app, pane, .Creating, "", text)
+		outgoing_takes_composer(app, pane, o)
+		request(app, .Created, "POST", "/api/session", new_session_body(app, directory), out = o.id, pane = pane)
 		return
 	}
-	o := outgoing_new(app, .Sending, app.chat.id, text)
+	o := outgoing_new(app, pane, .Sending, pane.chat.id, text)
 	o.fields = fields
-	outgoing_takes_composer(app, o)
+	outgoing_takes_composer(app, pane, o)
 	outgoing_send(app, o)
 }
 
 // The composer's prompt in the place of pending message `item`: that one leaves the inbox first (queue_replaced).
-outgoing_replace :: proc(app: ^App, text, item, fields: string) {
-	o := outgoing_new(app, .Taking, app.chat.id, text)
+outgoing_replace :: proc(app: ^App, pane: ^Chat_Pane, text, item, fields: string) {
+	o := outgoing_new(app, pane, .Taking, pane.chat.id, text)
 	o.fields = fields
-	outgoing_takes_composer(app, o)
-	request(app, .Queue_Replace, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", o.session, item), tag = item, out = o.id)
+	outgoing_takes_composer(app, pane, o)
+	request(app, .Queue_Replace, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", o.session, item), tag = item, out = o.id, pane = &app.panes[o.pane])
 }
 
 // The DELETE said yes, which it also says of what was delivered, and the stream may be late or down: only a message stored says that it left
@@ -174,7 +175,7 @@ outgoing_replace :: proc(app: ^App, text, item, fields: string) {
 outgoing_check :: proc(app: ^App, out: u64, item: string) {
 	o := outgoing_find(app, out)
 	if o == nil { return }
-	request(app, .Queue_Check, "GET", fmt.tprintf("/api/session/%s/message/%s", o.session, item), tag = item, out = out)
+	request(app, .Queue_Check, "GET", fmt.tprintf("/api/session/%s/message/%s", o.session, item), tag = item, out = out, pane = &app.panes[o.pane])
 }
 
 // `go`: it is out, the prompt goes. Otherwise it had just been delivered: what was written comes back.
@@ -183,7 +184,7 @@ outgoing_replaced :: proc(app: ^App, out: u64, go: bool) {
 	if o == nil { return }
 	if go { outgoing_send(app, o); return }
 	o.stage = .Returned
-	outgoing_return(app)
+	outgoing_return_shown(app)
 	ui.announce(&app.announcer, .Warn, i18n.tr("That message was delivered meanwhile: what you wrote is in the composer"))
 }
 
@@ -202,14 +203,15 @@ created_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> 
 }
 
 prompt_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	pane := req_pane(app, r)
 	// (the stream may say a prompt without its files: what was attached shows as soon as it is stored)
-	if strings.contains(r.body, `"files":`) && r.gen == app.chat.gen && r.tag == app.chat.id { load_messages(app, r.tag) }
-	queue_prompt_answered(app, r, v)
+	if strings.contains(r.body, `"files":`) && r.gen == pane.chat.gen && r.tag == pane.chat.id { load_messages(app, pane, r.tag) }
+	queue_prompt_answered(app, pane, r, v)
 	outgoing_answered(app, r, true)
 }
 
 prompt_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
-	queue_first_dropped(app, r.out)
+	queue_first_dropped(app, req_pane(app, r), r.out)
 	outgoing_answered(app, r, false)
 	return false
 }
@@ -246,8 +248,8 @@ queue_check_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string)
 queue_check_on_left :: proc(app: ^App, r: ^Request) { outgoing_answered(app, r, false) }
 
 // "/name what follows": its text comes back if it fails, what is attached stays in the composer (a command does not take it).
-outgoing_command :: proc(app: ^App, text, name, rest: string, fields := "") {
-	o := outgoing_new(app, .Sending, app.chat.id, text)
+outgoing_command :: proc(app: ^App, pane: ^Chat_Pane, text, name, rest: string, fields := "") {
+	o := outgoing_new(app, pane, .Sending, pane.chat.id, text)
 	command_set(o, name, rest, fields)
 	outgoing_send(app, o)
 }
@@ -261,10 +263,10 @@ command_set :: proc(o: ^Outgoing, name, rest, fields: string) {
 
 // "/name what follows" before the server's commands are read (they are read again when the stream comes back, dropped when a
 // server leaves): it waits for them, they are asked for. What is attached goes with it, as with a prompt.
-outgoing_slash_wait :: proc(app: ^App, text, fields: string) {
-	o := outgoing_new(app, .Catalog, app.chat.id, text)
+outgoing_slash_wait :: proc(app: ^App, pane: ^Chat_Pane, text, fields: string) {
+	o := outgoing_new(app, pane, .Catalog, pane.chat.id, text)
 	o.fields = fields
-	outgoing_takes_composer(app, o)
+	outgoing_takes_composer(app, pane, o)
 	if !flying(app, .Slash, "") { request(app, .Slash, "GET", "/api/command") }
 }
 
@@ -278,7 +280,7 @@ outgoing_catalog :: proc(app: ^App) {
 		if !ok || !slash_known(app, name) { outgoing_send(app, o); continue }
 		command_set(o, name, rest, o.fields)
 		if len(o.files) > 0 || len(o.mentions) > 0 {
-			back := outgoing_new(app, .Returned, o.session, "")
+			back := outgoing_new(app, &app.panes[o.pane], .Returned, o.session, "")
 			append(&back.files, ..o.files[:])
 			append(&back.mentions, ..o.mentions[:])
 			clear(&o.files)
@@ -286,13 +288,13 @@ outgoing_catalog :: proc(app: ^App) {
 		}
 		outgoing_send(app, o)
 	}
-	outgoing_return(app)
+	outgoing_return_shown(app)
 }
 
 // A prompt out of the inbox (queue.odin inbox_take_on_ok): `body` goes as it is, what it says is what would come back.
-outgoing_inbox :: proc(app: ^App, session, body: string) {
+outgoing_inbox :: proc(app: ^App, pane: ^Chat_Pane, session, body: string) {
 	v := json_of_own(app, "inbox prompt", body)
-	o := outgoing_new(app, .Sending, session, tk_json.text(v, "text"))
+	o := outgoing_new(app, pane, .Sending, session, tk_json.text(v, "text"))
 	o.body = strings.clone(body)
 	prompt_parts(v, &o.files, &o.mentions)
 	outgoing_send(app, o)
@@ -313,8 +315,10 @@ prompt_parts :: proc(v: json.Value, files: ^[dynamic]Attachment, mentions: ^[dyn
 
 // The session is made. Whoever went elsewhere meanwhile stays there: the prompt goes on without them.
 outgoing_created :: proc(app: ^App, r: ^Request, id: string) {
+	pane := req_pane(app, r)
 	refresh_sessions(app)
-	if r.gen == app.chat.gen {
+	// (the pane it left from still shows the home page it was typed in. Only the main view has one: open_chat is its)
+	if r.gen == pane.chat.gen {
 		open_chat(app, id)
 		preview_adopt(app, id)
 	}
@@ -330,13 +334,14 @@ outgoing_setup :: proc(app: ^App, out: u64, next: Out_Stage) {
 	o := outgoing_find(app, out)
 	if o == nil || o.stage >= .Sending { return }
 	p := &app.cfg_prefs
-	c := &app.chat
-	shown := o.session == c.id
 	if next == .Agent {
 		if agent := config.string_of(p, "session.agent"); agent != "" {
 			o.stage = .Agent
 			request(app, .Session_Agent, "POST", fmt.tprintf("/api/session/%s/agent", o.session), fmt.tprintf(`{{"agent":%s}}`, tk_json.quote(agent)), o.session, out = o.id)
-			if shown { c.chose_agent = strings.clone(agent, c.alloc) }
+			for &pane, i in app.panes {
+				c := &pane.chat
+				if pane_is_shown(app, i) && o.session == c.id { c.chose_agent = strings.clone(agent, c.alloc) }
+			}
 			return
 		}
 	}
@@ -345,7 +350,10 @@ outgoing_setup :: proc(app: ^App, out: u64, next: Out_Stage) {
 			provider, variant := config.string_of(p, "session.provider"), config.string_of(p, "session.variant")
 			o.stage = .Model
 			request(app, .Session_Model, "POST", fmt.tprintf("/api/session/%s/model", o.session), model_body(model, provider, variant), o.session, out = o.id)
-			if shown { c.chose_model, c.chose_provider, c.chose_variant = strings.clone(model, c.alloc), strings.clone(provider, c.alloc), strings.clone(variant, c.alloc) }
+			for &pane, i in app.panes {
+				c := &pane.chat
+				if pane_is_shown(app, i) && o.session == c.id { c.chose_model, c.chose_provider, c.chose_variant = strings.clone(model, c.alloc), strings.clone(provider, c.alloc), strings.clone(variant, c.alloc) }
+			}
 			return
 		}
 	}
@@ -358,20 +366,25 @@ outgoing_answered :: proc(app: ^App, r: ^Request, delivered: bool) {
 	if o == nil { return }
 	if delivered { outgoing_free(app, o); return }
 	o.stage = .Returned
-	outgoing_return(app)
+	outgoing_return_shown(app)
 	if outgoing_find(app, r.out) != nil { ui.announce(&app.announcer, .Warn, i18n.tr("A prompt was not sent: it waits in the composer of its session")) }
 }
 
-// What failed for the session now shown comes back to its composer, the oldest first. (A session opened, the home page reached.)
-outgoing_return :: proc(app: ^App) {
+// What failed, for each session a pane shows, back to that pane's composer (the first pane of a session shown twice).
+outgoing_return_shown :: proc(app: ^App) {
+	for &pane, i in app.panes { if pane_is_shown(app, i) { outgoing_return(app, &pane) } }
+}
+
+// What failed for the session the pane now shows comes back to its composer, the oldest first. (A session opened, the home page reached.)
+outgoing_return :: proc(app: ^App, pane: ^Chat_Pane) {
 	list := &app.cx.outgoing
 	for i := len(list) - 1; i >= 0; i -= 1 {
 		o := list[i]
-		if o.stage != .Returned || o.session != app.chat.id { continue }
-		prompt_restore(app, o.text)
-		append(&app.composer.attachments, ..o.files[:])
+		if o.stage != .Returned || o.session != pane.chat.id { continue }
+		prompt_restore(app, pane, o.text)
+		append(&pane.composer.attachments, ..o.files[:])
 		clear(&o.files)
-		append(&app.composer.mentions.chosen, ..o.mentions[:])
+		append(&pane.composer.mentions.chosen, ..o.mentions[:])
 		clear(&o.mentions)
 		outgoing_free(app, o)
 	}
@@ -385,7 +398,7 @@ outgoing_session_gone :: proc(app: ^App, id: string) {
 		o.session = ""
 		if o.stage < .Sending { o.stage = .Returned }
 	}
-	outgoing_return(app)
+	outgoing_return_shown(app)
 }
 
 // The server left. What had not gone yet is the home page's again: its session, if made, is of the server left. What is in the
@@ -397,5 +410,5 @@ outgoing_forget :: proc(app: ^App) {
 		o.session = ""
 		o.stage = .Returned
 	}
-	outgoing_return(app)
+	outgoing_return_shown(app)
 }

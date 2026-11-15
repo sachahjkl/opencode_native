@@ -68,6 +68,7 @@ bench_drain :: proc(app: ^App) { ui.drain_posts(&app.state, max(int)) }
 bench_new :: proc() -> ^App {
 	context.allocator = runtime.heap_allocator()
 	app := new(App)
+	pane := main_pane(app)
 	ui.use(&app.state)
 	ui.set_clock(&app.state, &bench_clock)
 	ui.post_configure(&app.state, on_drop = on_drop)
@@ -77,7 +78,7 @@ bench_new :: proc() -> ^App {
 	app.conn = bench_conn(app)
 	app.previews.host = bench_web_host()
 	app.link = .Online
-	app.chat_scroll = Scroll_Following{}
+	pane.view.chat_scroll = Scroll_Following{}
 	app.prefs.page_size = 50
 	app.prefs.notify = "off"
 	app.cfg_prefs = config.prefs_make()
@@ -147,7 +148,8 @@ bench_event :: proc(app: ^App, text: string) {
 
 @(private = "file")
 attach :: proc(app: ^App, name: string) {
-	append(&app.composer.attachments, Attachment{name = strings.clone(name), uri = strings.clone("data:image/png;base64,AAAA")})
+	pane := main_pane(app)
+	append(&pane.composer.attachments, Attachment{name = strings.clone(name), uri = strings.clone("data:image/png;base64,AAAA")})
 }
 
 @(private = "file")
@@ -231,9 +233,10 @@ a_reading_of_a_server_left_does_not_stay_loading :: proc(t: ^testing.T) {
 a_bad_answer_does_not_leave_the_list_of_commands_stuck :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
-	app.chat.have_self = true
-	app.chat.self.directory = "D:/w"
+	pane.chat.have_self = true
+	pane.chat.self.directory = "D:/w"
 	activity_tick(app)
 	testing.expect(t, flying(app, .Shell_List, "D:/w"), "asked")
 	bench_answer(app, bench_take(t, .Shell_List), 200, "<html>")
@@ -247,12 +250,13 @@ a_bad_answer_does_not_leave_the_list_of_commands_stuck :: proc(t: ^testing.T) {
 a_server_left_leaves_nothing_behind :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	slash_load(app, []Slash{{strings.clone("old"), strings.clone("")}})
 	show(app, "s")
 	append(&app.activity.jobs, Shell_Job{id = strings.clone("j"), status = .Running})
 	app.activity.open = true
-	app.find.open = true
-	app.find.index = 3
+	pane.find.open = true
+	pane.find.index = 3
 	bench_event(app, `{"type":"permission.asked","data":{"request":{"id":"p","sessionID":"s"}}}`)
 	waits_gone(app, "gone")
 	refresh_soon(app)
@@ -262,11 +266,11 @@ a_server_left_leaves_nothing_behind :: proc(t: ^testing.T) {
 	testing.expect(t, !app.cx.have_slash)
 	testing.expect_value(t, len(app.activity.jobs), 0)
 	testing.expect(t, !app.activity.open)
-	testing.expect(t, !app.find.open)
+	testing.expect(t, !pane.find.open)
 	testing.expect_value(t, len(app.permissions), 0)
 	testing.expect_value(t, len(app.cx.waits_gone.items), 0)
 	testing.expect_value(t, app.cx.due[.Refresh].due_ms, 0)
-	testing.expect_value(t, chat_view(app), Chat_View.Home)
+	testing.expect_value(t, chat_view(app, pane), Chat_View.Home)
 }
 
 ////////////////////////////////
@@ -276,20 +280,21 @@ a_server_left_leaves_nothing_behind :: proc(t: ^testing.T) {
 a_second_enter_keeps_the_first_prompt_whole :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	ui.text_edit_set(&app.composer.area, "first")
+	pane := main_pane(app)
+	ui.text_edit_set(&pane.composer.area, "first")
 	attach(app, "one.png")
-	submit_prompt(app)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
-	testing.expect_value(t, len(app.composer.attachments), 0)
-	testing.expect(t, composer_held(app), "a session is starting from this composer")
+	submit_prompt(app, pane)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "")
+	testing.expect_value(t, len(pane.composer.attachments), 0)
+	testing.expect(t, composer_held(app, pane), "a session is starting from this composer")
 
 	// the second Enter, and what is typed then: nothing leaves, nothing is made
-	ui.text_edit_set(&app.composer.area, "second")
+	ui.text_edit_set(&pane.composer.area, "second")
 	attach(app, "two.png")
-	submit_prompt(app)
+	submit_prompt(app, pane)
 	testing.expect_value(t, bench_count(.Created), 1)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "second")
-	testing.expect_value(t, len(app.composer.attachments), 1)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "second")
+	testing.expect_value(t, len(pane.composer.attachments), 1)
 
 	// the first goes, with its own image, to its session
 	bench_answer(app, bench_take(t, .Created), 200, `{"data":{"id":"new"}}`)
@@ -318,27 +323,28 @@ bench_clear_but :: proc(app: ^App, kind: Req_Kind) {
 the_steps_of_a_new_session_keep_their_order_and_the_composer_waits :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	config.set_from_string(&app.cfg_prefs, "session.agent", "plan", .User)
 	config.set_from_string(&app.cfg_prefs, "session.model", "m1", .User)
-	ui.text_edit_set(&app.composer.area, "go")
+	ui.text_edit_set(&pane.composer.area, "go")
 	attach(app, "a.png")
-	submit_prompt(app)
+	submit_prompt(app, pane)
 	bench_answer(app, bench_take(t, .Created), 200, `{"data":{"id":"new"}}`)
-	testing.expect_value(t, app.chat.id, "new")
-	testing.expect_value(t, shown_agent(app), "plan")
+	testing.expect_value(t, pane.chat.id, "new")
+	testing.expect_value(t, shown_agent(app, pane), "plan")
 	testing.expect_value(t, bench_count(.Prompt), 0)
 
 	// a prompt in the middle of the steps stays where it is: it would overtake the first and take its image
-	ui.text_edit_set(&app.composer.area, "overtaker")
-	submit_prompt(app)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "overtaker")
+	ui.text_edit_set(&pane.composer.area, "overtaker")
+	submit_prompt(app, pane)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "overtaker")
 	testing.expect_value(t, bench_count(.Prompt), 0)
 
 	bench_answer(app, bench_take(t, .Session_Agent), 200, "")
 	bench_answer(app, bench_take(t, .Session_Model), 500, `{"message":"no such model"}`)   // (it goes all the same)
 	r := bench_take(t, .Prompt)
 	testing.expect(t, strings.contains(r.body, "a.png"))
-	testing.expect(t, !composer_held(app))
+	testing.expect(t, !composer_held(app, pane))
 	bench_answer(app, r, 200, "")
 }
 
@@ -346,15 +352,16 @@ the_steps_of_a_new_session_keep_their_order_and_the_composer_waits :: proc(t: ^t
 what_failed_comes_back_whole :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
 	attach(app, "alone.png")
-	append(&app.composer.mentions.chosen, Mention{.File, strings.clone("@f"), strings.clone("file:///f"), strings.clone("f")})
-	submit_prompt(app)
-	testing.expect_value(t, len(app.composer.attachments), 0)
+	append(&pane.composer.mentions.chosen, Mention{.File, strings.clone("@f"), strings.clone("file:///f"), strings.clone("f")})
+	submit_prompt(app, pane)
+	testing.expect_value(t, len(pane.composer.attachments), 0)
 	bench_lost(app, bench_take(t, .Prompt))
-	testing.expect_value(t, len(app.composer.attachments), 1)
-	testing.expect_value(t, app.composer.attachments[0].name, "alone.png")
-	testing.expect_value(t, len(app.composer.mentions.chosen), 1)
+	testing.expect_value(t, len(pane.composer.attachments), 1)
+	testing.expect_value(t, pane.composer.attachments[0].name, "alone.png")
+	testing.expect_value(t, len(pane.composer.mentions.chosen), 1)
 	testing.expect_value(t, len(app.cx.outgoing), 0)
 }
 
@@ -364,15 +371,16 @@ what_failed_comes_back_whole :: proc(t: ^testing.T) {
 a_prompt_body_made_on_its_thread_is_the_same :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
 	text := "look at \"this\" \\ café \U0001F600 @f.txt and @explore\nthen a line"
-	ui.text_edit_set(&app.composer.area, text)
+	ui.text_edit_set(&pane.composer.area, text)
 	uri := strings.concatenate({"data:image/png;base64,", strings.repeat("iVBORw0KGgo+/=", 200_000, context.temp_allocator)}, context.temp_allocator)
-	append(&app.composer.attachments, Attachment{name = strings.clone("shôt \"1\".png"), uri = strings.clone(uri)})
+	append(&pane.composer.attachments, Attachment{name = strings.clone("shôt \"1\".png"), uri = strings.clone(uri)})
 	attach(app, "two.png")
-	append(&app.composer.mentions.chosen, Mention{.File, strings.clone("@f.txt"), strings.clone("file:///d/f.txt"), strings.clone("f.txt")})
-	append(&app.composer.mentions.chosen, Mention{.Agent, strings.clone("@explore"), strings.clone("explore"), strings.clone("")})
-	submit_prompt(app)
+	append(&pane.composer.mentions.chosen, Mention{.File, strings.clone("@f.txt"), strings.clone("file:///d/f.txt"), strings.clone("f.txt")})
+	append(&pane.composer.mentions.chosen, Mention{.Agent, strings.clone("@explore"), strings.clone("explore"), strings.clone("")})
+	submit_prompt(app, pane)
 	if !testing.expect_value(t, len(app.cx.outgoing), 1) { return }
 	o := app.cx.outgoing[0]
 	testing.expect_value(t, o.text, text)
@@ -388,18 +396,19 @@ a_prompt_body_made_on_its_thread_is_the_same :: proc(t: ^testing.T) {
 what_failed_waits_for_its_session :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "a")
-	ui.text_edit_set(&app.composer.area, "for a")
+	ui.text_edit_set(&pane.composer.area, "for a")
 	attach(app, "a.png")
-	submit_prompt(app)
+	submit_prompt(app, pane)
 	r := bench_take(t, .Prompt)
 	show(app, "b")
 	bench_answer(app, r, 500, `{"message":"no"}`)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
-	testing.expect_value(t, len(app.composer.attachments), 0)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "")
+	testing.expect_value(t, len(pane.composer.attachments), 0)
 	show(app, "a")
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "for a")
-	testing.expect_value(t, len(app.composer.attachments), 1)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "for a")
+	testing.expect_value(t, len(pane.composer.attachments), 1)
 }
 
 // What was taken out of the inbox goes as a prompt: it comes back as whole as one of the composer.
@@ -407,49 +416,52 @@ what_failed_waits_for_its_session :: proc(t: ^testing.T) {
 a_prompt_out_of_the_inbox_comes_back_whole :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
 	request(app, .Inbox_Take, "DELETE", "/api/session/s/inbox/i", `{"text":"","files":[{"uri":"data:image/png;base64,AAAA","name":"only.png"},{"uri":"file:///f","name":"f","mention":{"start":0,"end":2,"text":"@f"}}]}`, "s")
 	bench_answer(app, bench_take(t, .Inbox_Take), 200, "")
 	r := bench_take(t, .Prompt)
 	testing.expect(t, strings.contains(r.body, "only.png"), "it goes as it was")
 	bench_lost(app, r)
-	testing.expect_value(t, len(app.composer.attachments), 1)
-	testing.expect_value(t, app.composer.attachments[0].name, "only.png")
-	testing.expect(t, app.composer.attachments[0].ref.key != 0, "its thumbnail too")
-	testing.expect_value(t, len(app.composer.mentions.chosen), 1)
+	testing.expect_value(t, len(pane.composer.attachments), 1)
+	testing.expect_value(t, pane.composer.attachments[0].name, "only.png")
+	testing.expect(t, pane.composer.attachments[0].ref.key != 0, "its thumbnail too")
+	testing.expect_value(t, len(pane.composer.mentions.chosen), 1)
 }
 
 @(test)
 a_command_that_failed_comes_back :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	slash_load(app, []Slash{{strings.clone("review"), strings.clone("")}})
 	show(app, "s")
-	ui.text_edit_set(&app.composer.area, "/review the rest")
+	ui.text_edit_set(&pane.composer.area, "/review the rest")
 	attach(app, "stays.png")
-	submit_prompt(app)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
-	testing.expect_value(t, len(app.composer.attachments), 1)
+	submit_prompt(app, pane)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "")
+	testing.expect_value(t, len(pane.composer.attachments), 1)
 	r := bench_take(t, .Prompt)
 	testing.expect(t, strings.has_suffix(r.path, "/command"))
 	bench_lost(app, r)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "/review the rest")
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "/review the rest")
 }
 
 @(test)
 a_server_switch_gives_back_what_had_not_gone :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	ui.text_edit_set(&app.composer.area, "mine")
+	pane := main_pane(app)
+	ui.text_edit_set(&pane.composer.area, "mine")
 	attach(app, "mine.png")
-	submit_prompt(app)
+	submit_prompt(app, pane)
 	r := bench_take(t, .Created)
 	app.conn = bench_conn(app)
 	server_forget(app)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "mine")
-	testing.expect_value(t, len(app.composer.attachments), 1)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "mine")
+	testing.expect_value(t, len(pane.composer.attachments), 1)
 	bench_answer(app, r, 200, `{"data":{"id":"theirs"}}`)
-	testing.expect_value(t, app.chat.id, "")
+	testing.expect_value(t, pane.chat.id, "")
 	testing.expect_value(t, len(app.cx.outgoing), 0)
 }
 
@@ -457,15 +469,16 @@ a_server_switch_gives_back_what_had_not_gone :: proc(t: ^testing.T) {
 a_session_made_late_does_not_move_the_reader :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	ui.text_edit_set(&app.composer.area, "start")
-	submit_prompt(app)
+	pane := main_pane(app)
+	ui.text_edit_set(&pane.composer.area, "start")
+	submit_prompt(app, pane)
 	r := bench_take(t, .Created)
 	show(app, "elsewhere")
 	bench_answer(app, r, 200, `{"data":{"id":"new"}}`)
-	testing.expect_value(t, app.chat.id, "elsewhere")
+	testing.expect_value(t, pane.chat.id, "elsewhere")
 	p := bench_take(t, .Prompt)
 	testing.expect(t, strings.contains(p.path, "/api/session/new/prompt"), "it goes on without them")
-	testing.expect_value(t, app.chat.chose_agent, "")
+	testing.expect_value(t, pane.chat.chose_agent, "")
 }
 
 @(test)
@@ -626,18 +639,19 @@ an_answer_replaces_agents_and_models :: proc(t: ^testing.T) {
 a_moved_server_gives_the_place_back_when_it_has_the_session :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	app.cx.reopen = {id = strings.clone("s"), msg = strings.clone("m"), dy = 12}
 	request(app, .Sessions, "GET", "/s")
 	bench_answer(app, bench_take(t, .Sessions), 200, `{"data":[{"id":"t"}]}`)
-	testing.expect_value(t, app.chat.id, "")
+	testing.expect_value(t, pane.chat.id, "")
 	testing.expect_value(t, app.cx.reopen.id, "")
 
 	app.cx.reopen = {id = strings.clone("s"), msg = strings.clone("m"), dy = 12}
 	request(app, .Sessions, "GET", "/s")
 	bench_answer(app, bench_take(t, .Sessions), 200, `{"data":[{"id":"s"}]}`)
-	testing.expect_value(t, app.chat.id, "s")
+	testing.expect_value(t, pane.chat.id, "s")
 	testing.expect_value(t, restoring_msg(app), "m")
-	testing.expect(t, !chat_following(app))
+	testing.expect(t, !chat_following(pane))
 }
 
 ////////////////////////////////
@@ -684,8 +698,9 @@ at_rest_nothing_wakes_the_window :: proc(t: ^testing.T) {
 what_runs_wakes_its_next_reading :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
-	app.chat.have_self = true
+	pane.chat.have_self = true
 	append(&app.activity.jobs, Shell_Job{id = strings.clone("j"), status = .Running})
 	activity_tick(app)
 	bench_clear(app)
@@ -704,83 +719,87 @@ MSG_RUNNING :: `{"id":"a1","type":"assistant","time":{"created":1},"content":[{"
 a_page_does_not_undo_what_was_streamed_since_it_was_asked :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
-	load_messages(app, "s")
+	load_messages(app, pane, "s")
 	first := bench_take(t, .Messages)
 	bench_answer(app, first, 200, page(MSG_RUNNING))
 
-	load_messages(app, "s")
+	load_messages(app, pane, "s")
 	r := bench_take(t, .Messages)
 	bench_event(app, `{"type":"session.text.delta","data":{"sessionID":"s","assistantMessageID":"a1","ordinal":0,"delta":" world"}}`)
 	bench_event(app, `{"type":"session.text.started","data":{"sessionID":"s","assistantMessageID":"a2","ordinal":0}}`)
 	bench_answer(app, r, 200, page(MSG_RUNNING))
-	testing.expect_value(t, len(app.chat.messages), 2)
-	testing.expect_value(t, string(app.chat.messages[0].parts[0].text[:]), "Hello world")
-	testing.expect_value(t, app.chat.messages[1].id, "a2")
+	testing.expect_value(t, len(pane.chat.messages), 2)
+	testing.expect_value(t, string(pane.chat.messages[0].parts[0].text[:]), "Hello world")
+	testing.expect_value(t, pane.chat.messages[1].id, "a2")
 
 	// a page asked after them says what it says
-	load_messages(app, "s")
+	load_messages(app, pane, "s")
 	bench_answer(app, bench_take(t, .Messages), 200, page(MSG_RUNNING))
-	testing.expect_value(t, len(app.chat.messages), 1)
-	testing.expect_value(t, string(app.chat.messages[0].parts[0].text[:]), "Hello")
+	testing.expect_value(t, len(pane.chat.messages), 1)
+	testing.expect_value(t, string(pane.chat.messages[0].parts[0].text[:]), "Hello")
 }
 
 @(test)
 a_conversation_that_could_not_be_read_says_so_and_a_retry_reads_it :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	testing.expect_value(t, chat_view(app), Chat_View.Home)
+	pane := main_pane(app)
+	testing.expect_value(t, chat_view(app, pane), Chat_View.Home)
 	open_chat(app, "s")
-	testing.expect_value(t, chat_view(app), Chat_View.Loading)
+	testing.expect_value(t, chat_view(app, pane), Chat_View.Loading)
 	bench_answer(app, bench_take(t, .Messages), 404, `{"message":"no such session"}`)
-	testing.expect_value(t, chat_view(app), Chat_View.Failed)
-	testing.expect_value(t, app.cx.chat_read.state, remote.State.Refused)
-	testing.expect_value(t, app.cx.chat_read.message, "no such session")
+	testing.expect_value(t, chat_view(app, pane), Chat_View.Failed)
+	testing.expect_value(t, pane.read.state, remote.State.Refused)
+	testing.expect_value(t, pane.read.message, "no such session")
 	bench_clear(app)
-	chat_read(app)
-	testing.expect_value(t, chat_view(app), Chat_View.Loading)
+	chat_read(app, pane)
+	testing.expect_value(t, chat_view(app, pane), Chat_View.Loading)
 	bench_answer(app, bench_take(t, .Messages), 200, page())
-	testing.expect_value(t, chat_view(app), Chat_View.Shown)
+	testing.expect_value(t, chat_view(app, pane), Chat_View.Shown)
 }
 
 @(test)
 the_home_page_is_one_state :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	testing.expect(t, app.chat.loaded, "at start")
+	pane := main_pane(app)
+	testing.expect(t, pane.chat.loaded, "at start")
 	show(app, "s")
 	new_session(app)
-	testing.expect(t, app.chat.loaded)
+	testing.expect(t, pane.chat.loaded)
 	show(app, "s")
 	server_forget(app)
-	testing.expect(t, app.chat.loaded, "after a server")
+	testing.expect(t, pane.chat.loaded, "after a server")
 }
 
 @(test)
 what_the_reader_chose_stands_over_what_was_used :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	// the remembered one, at start
 	config.set_from_string(&app.cfg_prefs, "session.agent", "plan", .User)
 	config.set_from_string(&app.cfg_prefs, "session.model", "remembered", .User)
-	testing.expect_value(t, shown_agent(app), "plan")
-	model, _ := shown_model(app)
+	testing.expect_value(t, shown_agent(app, pane), "plan")
+	model, _ := shown_model(app, pane)
 	testing.expect_value(t, model, "remembered")
 
 	show(app, "s")
-	choose_model(app, Model_Info{id = "m9", provider = "p9"})
+	choose_model(app, pane, Model_Info{id = "m9", provider = "p9"})
 	testing.expect_value(t, config.string_of(&app.cfg_prefs, "session.model"), "m9")
 	used := `{"id":"a1","type":"assistant","agent":"build","model":{"id":"m1","providerID":"p1"},"time":{"created":1,"completed":2},"content":[]}`
-	load_messages(app, "s")
+	load_messages(app, pane, "s")
 	bench_answer(app, bench_take(t, .Messages), 200, page(used))
-	model, _ = shown_model(app)
+	model, _ = shown_model(app, pane)
 	testing.expect_value(t, model, "m9")
-	testing.expect_value(t, app.chat.model, "m1")
-	testing.expect_value(t, shown_agent(app), "build")
+	testing.expect_value(t, pane.chat.model, "m1")
+	testing.expect_value(t, shown_agent(app, pane), "build")
 
 	// the session did not take it: what it uses is shown again
 	bench_lost(app, bench_take(t, .Session_Choice))
-	model, _ = shown_model(app)
+	model, _ = shown_model(app, pane)
 	testing.expect_value(t, model, "m1")
 }
 
@@ -804,38 +823,40 @@ back_goes_nowhere_that_is_gone :: proc(t: ^testing.T) {
 a_session_deleted_elsewhere_goes_and_what_was_for_it_comes_home :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
-	ui.text_edit_set(&app.composer.area, "for s")
-	submit_prompt(app)
+	ui.text_edit_set(&pane.composer.area, "for s")
+	submit_prompt(app, pane)
 	r := bench_take(t, .Prompt)
 	bench_event(app, `{"type":"session.deleted","data":{"sessionID":"s"}}`)
 	bench_lost(app, r)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "")
 	nav_apply(app)
-	testing.expect_value(t, app.chat.id, "")
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "for s")
+	testing.expect_value(t, pane.chat.id, "")
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "for s")
 }
 
 @(test)
 a_late_list_of_runs_does_not_undo_the_stream :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
 	request(app, .Active, "GET", "/a")
 	r := bench_take(t, .Active)
 	bench_event(app, `{"type":"session.execution.started","data":{"sessionID":"s"}}`)
 	bench_answer(app, r, 200, `{"data":{}}`)
-	testing.expect(t, app.chat.busy, "it started after that list was asked for")
+	testing.expect(t, pane.chat.busy, "it started after that list was asked for")
 
 	request(app, .Active, "GET", "/a")
 	r = bench_take(t, .Active)
 	bench_event(app, `{"type":"session.idle","data":{"sessionID":"s"}}`)
 	bench_answer(app, r, 200, `{"data":{"s":{}}}`)
-	testing.expect(t, !app.chat.busy, "it ended after that list was asked for")
+	testing.expect(t, !pane.chat.busy, "it ended after that list was asked for")
 
 	request(app, .Active, "GET", "/a")
 	bench_answer(app, bench_take(t, .Active), 200, `{"data":{"s":{}}}`)
-	testing.expect(t, app.chat.busy, "a list asked after that is the newer one")
+	testing.expect(t, pane.chat.busy, "a list asked after that is the newer one")
 }
 
 @(test)
@@ -887,7 +908,8 @@ a_job_ends_only_when_the_server_says_it_does_not_know_it :: proc(t: ^testing.T) 
 // The message the view goes back to ("": none).
 @(private = "file")
 restoring_msg :: proc(app: ^App) -> string {
-	r, _ := app.chat_scroll.(Scroll_Restoring)
+	pane := main_pane(app)
+	r, _ := pane.view.chat_scroll.(Scroll_Restoring)
 	return r.msg
 }
 
@@ -895,34 +917,36 @@ restoring_msg :: proc(app: ^App) -> string {
 what_the_reader_asks_wins_over_a_view_going_back :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
-	chat_scroll_event(app, Scroll_Restore{"m", 0})
-	ui.text_edit_set(&app.composer.area, "go")
-	submit_prompt(app)
+	chat_scroll_event(pane, Scroll_Restore{"m", 0})
+	ui.text_edit_set(&pane.composer.area, "go")
+	submit_prompt(app, pane)
 	testing.expect_value(t, restoring_msg(app), "")
-	testing.expect(t, chat_following(app))
+	testing.expect(t, chat_following(pane))
 }
 
 @(test)
 a_view_going_back_gives_up :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
 	// the page it needs failed
-	app.chat.loading_older = true
-	chat_scroll_event(app, Scroll_Restore{"m", 0})
+	pane.chat.loading_older = true
+	chat_scroll_event(pane, Scroll_Restore{"m", 0})
 	request(app, .Older, "GET", "/o", tag = "s")
 	bench_lost(app, bench_take(t, .Older))
 	testing.expect_value(t, restoring_msg(app), "")
 	// the message is never built: the clock ends it
-	chat_scroll_event(app, Scroll_Restore{"m", 0})
+	chat_scroll_event(pane, Scroll_Restore{"m", 0})
 	bench_clock += NAV_RESTORE_WAIT_MS + 1
 	deferred_tick(app)
 	testing.expect_value(t, restoring_msg(app), "")
 	// a page that comes gives it a whole wait again: a long way up a history is not a view that gets nowhere
-	chat_scroll_event(app, Scroll_Restore{"m", 0})
+	chat_scroll_event(pane, Scroll_Restore{"m", 0})
 	bench_clock += NAV_RESTORE_WAIT_MS - 1
-	chat_scroll_event(app, Scroll_Older_Page{})   // (a page read on the way)
+	chat_scroll_event(pane, Scroll_Older_Page{})   // (a page read on the way)
 	bench_clock += 2
 	deferred_tick(app)
 	testing.expect_value(t, restoring_msg(app), "m")
@@ -948,11 +972,12 @@ the_scroll_bar_held_is_the_reader_moving :: proc(t: ^testing.T) {
 an_inbox_item_does_not_fetch_a_reader_who_went_up :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
-	app.chat_scroll = Scroll_Free{}   // (gone up)
+	pane.view.chat_scroll = Scroll_Free{}   // (gone up)
 	bench_event(app, `{"type":"session.inbox.enqueued","data":{"sessionID":"s","inboxID":"i","item":{"type":"user","payload":{"text":"later"}}}}`)
-	testing.expect_value(t, len(app.chat.messages), 1)
-	testing.expect(t, !chat_following(app))
+	testing.expect_value(t, len(pane.chat.messages), 1)
+	testing.expect(t, !chat_following(pane))
 }
 
 @(test)
@@ -1004,15 +1029,16 @@ ctrl_p_is_the_files_alone :: proc(t: ^testing.T) {
 find_follows_the_conversation :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "a")
-	app.find.open = true
-	app.find.index = 4
-	app.find.reveal = true
+	pane.find.open = true
+	pane.find.index = 4
+	pane.find.reveal = true
 	show(app, "b")
-	testing.expect_value(t, app.find.index, -1)
-	testing.expect(t, app.find.open && !app.find.reveal)
+	testing.expect_value(t, pane.find.index, -1)
+	testing.expect(t, pane.find.open && !pane.find.reveal)
 	new_session(app)
-	testing.expect(t, !app.find.open, "the home page has no conversation to search")
+	testing.expect(t, !pane.find.open, "the home page has no conversation to search")
 }
 
 // A link that died in silence: only the stream has a limit on it, so its return is what opens the shells' sockets again. Not a first
@@ -1040,17 +1066,18 @@ the_stream_coming_back_renews_the_shells_sockets :: proc(t: ^testing.T) {
 @(test)
 what_was_shown_stays_while_a_first_page_comes :: proc(t: ^testing.T) {
 	app := bench_new()
+	pane := main_pane(app)
 	size := draw.Vec2{800, 600}
-	app.chat.id, app.chat.loading, app.chat.loaded = "s", true, false
-	app.opened_ms = ui.now_ms()
+	pane.chat.id, pane.chat.loading, pane.chat.loaded = "s", true, false
+	pane.view.opened_ms = ui.now_ms()
 	testing.expect_value(t, frame_held_ms(app, size), 0)   // (nothing shown yet)
 	app.shown = {int(size.x), int(size.y)}
 	testing.expect(t, frame_held_ms(app, size) > 0, "held")
 	testing.expect_value(t, frame_held_ms(app, {801, 600}), 0)   // (resized: the picture would not fit)
-	app.opened_ms = ui.now_ms() - OPEN_HOLD_MS - 1
+	pane.view.opened_ms = ui.now_ms() - OPEN_HOLD_MS - 1
 	testing.expect_value(t, frame_held_ms(app, size), 0)   // (a slow server: Loading says so)
-	app.opened_ms = ui.now_ms()
-	app.chat.loading, app.chat.loaded = false, true
+	pane.view.opened_ms = ui.now_ms()
+	pane.chat.loading, pane.chat.loaded = false, true
 	testing.expect_value(t, frame_held_ms(app, size), 0)   // (it came: shown at once)
 }
 
@@ -1078,24 +1105,25 @@ a_sessions_rules_read_as_a_preset :: proc(t: ^testing.T) {
 the_approval_mode_is_the_servers :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
 	// the session shown, as the server describes it (no rules of its own)
 	self, _ := json.parse_string(`{"data":{"id":"s","title":"t"}}`, allocator = context.temp_allocator)
-	self_load(app, self, 0)
-	testing.expect_value(t, approval_shown(app), Approval.Configured)
+	self_load(app, pane, self, 0)
+	testing.expect_value(t, approval_shown(app, pane), Approval.Configured)
 	approval_set(app, "s", .Allow_All)
 	r := bench_take(t, .Action)
 	testing.expect_value(t, r.method, "PATCH")
 	testing.expect_value(t, r.path, "/api/session/s")
 	testing.expect_value(t, r.body, `{"permissions":[{"action":"*","resource":"*","effect":"allow"}]}`)
-	testing.expect_value(t, approval_shown(app), Approval.Allow_All)
+	testing.expect_value(t, approval_shown(app, pane), Approval.Allow_All)
 	approval_set(app, "s", .Configured)
 	testing.expect_value(t, bench_take(t, .Action).body, `{"permissions":null}`)
 	// another client's choice
 	bench_event(app, `{"type":"session.permissions","data":{"sessionID":"s","permissions":[{"action":"edit","resource":"*","effect":"allow"}]}}`)
-	testing.expect_value(t, approval_shown(app), Approval.Allow_Edits)
+	testing.expect_value(t, approval_shown(app, pane), Approval.Allow_Edits)
 	bench_event(app, `{"type":"session.permissions","data":{"sessionID":"other","permissions":[]}}`)
-	testing.expect_value(t, approval_shown(app), Approval.Allow_Edits)   // (another session's)
+	testing.expect_value(t, approval_shown(app, pane), Approval.Allow_Edits)   // (another session's)
 	// what the server asks waits for an answer from someone: none from here by itself
 	bench_event(app, `{"type":"permission.asked","data":{"request":` + PERM_P + `}}`)
 	testing.expect_value(t, bench_count(.Permission_Reply), 0)
@@ -1106,12 +1134,13 @@ the_approval_mode_is_the_servers :: proc(t: ^testing.T) {
 a_new_session_starts_with_the_default_approvals :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	testing.expect_value(t, new_session_body(app, ""), "{}")
 	testing.expect_value(t, new_session_body(app, "/w"), `{"location":{"directory":"/w"}}`)
 	pref_set(app, "permission.new_sessions", "allow_all")
 	defer pref_set(app, "permission.new_sessions", "configured")
 	testing.expect_value(t, new_session_body(app, "/w"), `{"location":{"directory":"/w"},"permissions":[{"action":"*","resource":"*","effect":"allow"}]}`)
-	outgoing_composer(app, "hello", "/w")
+	outgoing_composer(app, pane, "hello", "/w")
 	r := bench_take(t, .Created)
 	testing.expect(t, strings.contains(r.body, `"permissions":[{"action":"*","resource":"*","effect":"allow"}]`), r.body)
 }
@@ -1194,21 +1223,22 @@ the_tray_shows_the_sessions_commands_only :: proc(t: ^testing.T) {
 the_composer_is_each_sessions :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	defer drafts_destroy(app)
 	show(app, "a")
-	ui.text_edit_set(&app.composer.area, "for a")
+	ui.text_edit_set(&pane.composer.area, "for a")
 	show(app, "b")
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
-	ui.text_edit_set(&app.composer.area, "for b")
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "")
+	ui.text_edit_set(&pane.composer.area, "for b")
 	show(app, "a")
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "for a")
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "for a")
 	show(app, "b")
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "for b")
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "for b")
 	chat_home(app)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "")
 	show(app, "a")
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "for a")
-	testing.expect_value(t, len(app.composer.drafts), 1)   // (b's; a's is in the composer, the home page's was empty)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "for a")
+	testing.expect_value(t, len(app.drafts), 1)   // (b's; a's is in the composer, the home page's was empty)
 }
 
 // The session's goal: read when shown, followed by the stream, gone when cleared; another session's says nothing here.
@@ -1216,20 +1246,21 @@ the_composer_is_each_sessions :: proc(t: ^testing.T) {
 the_goal_shows_over_the_composer :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	defer drafts_destroy(app)
 	open_chat(app, "s")
 	r := bench_take(t, .Goal)
 	testing.expect(t, strings.contains(r.body, `"sessionID":"s"`))
 	bench_answer(app, r, 200, `{"output":{"id":"g","objective":"ship it","status":"active","rounds":2,"maxRounds":10,"boot":"b","updatedAt":1}}`)
-	testing.expect(t, app.chat.has_goal)
-	testing.expect_value(t, app.chat.goal.objective, "ship it")
-	testing.expect_value(t, app.chat.goal.rounds, 2)
+	testing.expect(t, pane.chat.has_goal)
+	testing.expect_value(t, pane.chat.goal.objective, "ship it")
+	testing.expect_value(t, pane.chat.goal.rounds, 2)
 	bench_event(app, `{"type":"rpc.opencode.goal.changed","data":{"sessionID":"other","goal":null}}`)
-	testing.expect(t, app.chat.has_goal, "another session's goal")
+	testing.expect(t, pane.chat.has_goal, "another session's goal")
 	bench_event(app, `{"type":"rpc.opencode.goal.changed","data":{"sessionID":"s","goal":{"id":"g","objective":"ship it","status":"paused","rounds":3,"maxRounds":10,"boot":"b","updatedAt":2}}}`)
-	testing.expect_value(t, app.chat.goal.status, Goal_Status.Paused)
+	testing.expect_value(t, pane.chat.goal.status, Goal_Status.Paused)
 	bench_event(app, `{"type":"rpc.opencode.goal.changed","data":{"sessionID":"s","goal":null}}`)
-	testing.expect(t, !app.chat.has_goal, "cleared")
+	testing.expect(t, !pane.chat.has_goal, "cleared")
 }
 
 // A session at rest whose commands still run in the background says so; a sub-agent's command lights its parent too.
@@ -1280,11 +1311,12 @@ a_shell_call_in_the_background :: proc(t: ^testing.T) {
 the_drafts_survive_a_restart :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	defer drafts_destroy(app)
 	show(app, "a")
-	ui.text_edit_set(&app.composer.area, "for a")
+	ui.text_edit_set(&pane.composer.area, "for a")
 	show(app, "b")
-	ui.text_edit_set(&app.composer.area, "   ")
+	ui.text_edit_set(&pane.composer.area, "   ")
 	saved := strings.clone(drafts_json(app), context.temp_allocator)
 	testing.expect(t, strings.contains(saved, `"a":"for a"`), saved)
 	testing.expect(t, !strings.contains(saved, `"b"`), "an empty text is not kept")
@@ -1293,7 +1325,7 @@ the_drafts_survive_a_restart :: proc(t: ^testing.T) {
 	defer drafts_destroy(again)
 	drafts_load_json(again, saved)
 	show(again, "a")
-	testing.expect_value(t, ui.text_edit_string(&again.composer.area), "for a")
+	testing.expect_value(t, ui.text_edit_string(&main_pane(again).composer.area), "for a")
 }
 
 // A prompt sent empties the composer without a key: the disk hears of it too, and the text does not come back at the next start.
@@ -1301,13 +1333,14 @@ the_drafts_survive_a_restart :: proc(t: ^testing.T) {
 a_sent_prompt_leaves_no_draft :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	defer drafts_destroy(app)
 	show(app, "a")
-	ui.text_edit_set(&app.composer.area, "hello")
-	drafts_track(app)
+	ui.text_edit_set(&pane.composer.area, "hello")
+	drafts_track(app, pane)
 	app.cx.due[.Drafts] = {}
-	ui.text_edit_set(&app.composer.area, "")   // (as submit_prompt does)
-	drafts_track(app)
+	ui.text_edit_set(&pane.composer.area, "")   // (as submit_prompt does)
+	drafts_track(app, pane)
 	testing.expect(t, app.cx.due[.Drafts].due_ms != 0, "a save is due")
 	testing.expect(t, !strings.contains(drafts_json(app), "hello"), drafts_json(app))
 }
@@ -1339,34 +1372,35 @@ the_tray_is_each_sessions :: proc(t: ^testing.T) {
 the_thinking_level_goes_with_the_model :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	append(&app.models, Model_Info{id = strings.clone("opus"), provider = strings.clone("p"), efforts = strings.clone("low, high")},
 		Model_Info{id = strings.clone("m2"), provider = strings.clone("p"), efforts = strings.clone("high")})
 	show(app, "s")
-	load_messages(app, "s")
+	load_messages(app, pane, "s")
 	bench_answer(app, bench_take(t, .Messages), 200, page(`{"id":"a1","type":"assistant","agent":"build","model":{"id":"opus","providerID":"p","variant":"high"},"time":{"created":1,"completed":2},"content":[]}`))
-	testing.expect_value(t, shown_variant(app), "high")
-	load_messages(app, "s")
+	testing.expect_value(t, shown_variant(app, pane), "high")
+	load_messages(app, pane, "s")
 	bench_answer(app, bench_take(t, .Messages), 200, page(`{"id":"a2","type":"assistant","agent":"build","model":{"id":"opus","providerID":"p","variant":"default"},"time":{"created":1,"completed":2},"content":[]}`))
-	testing.expect_value(t, shown_variant(app), "")   // ("default": none)
+	testing.expect_value(t, shown_variant(app, pane), "")   // ("default": none)
 
-	choose_variant(app, "low")
+	choose_variant(app, pane, "low")
 	r := bench_take(t, .Session_Choice)
 	testing.expect_value(t, r.body, `{"model":{"id":"opus","providerID":"p","variant":"low"}}`)
-	testing.expect_value(t, shown_variant(app), "low")
+	testing.expect_value(t, shown_variant(app, pane), "low")
 	testing.expect_value(t, config.string_of(&app.cfg_prefs, "session.variant"), "low")
 
-	choose_model(app, app.models[1])   // (m2 has no "low": its default)
+	choose_model(app, pane, app.models[1])   // (m2 has no "low": its default)
 	testing.expect_value(t, bench_take(t, .Session_Choice).body, `{"model":{"id":"m2","providerID":"p"}}`)
-	testing.expect_value(t, shown_variant(app), "")
-	choose_variant(app, "high")
+	testing.expect_value(t, shown_variant(app, pane), "")
+	choose_variant(app, pane, "high")
 	_ = bench_take(t, .Session_Choice)
-	choose_model(app, app.models[0])   // (opus has "high": it stays)
+	choose_model(app, pane, app.models[0])   // (opus has "high": it stays)
 	testing.expect_value(t, bench_take(t, .Session_Choice).body, `{"model":{"id":"opus","providerID":"p","variant":"high"}}`)
 
 	// a new session starts with it
 	show(app, "")
-	ui.text_edit_set(&app.composer.area, "go")
-	submit_prompt(app)
+	ui.text_edit_set(&pane.composer.area, "go")
+	submit_prompt(app, pane)
 	bench_answer(app, bench_take(t, .Created), 200, `{"data":{"id":"new"}}`)
 	if bench_count(.Session_Agent) > 0 { bench_answer(app, bench_take(t, .Session_Agent), 200, "") }
 	testing.expect_value(t, bench_take(t, .Session_Model).body, `{"model":{"id":"opus","providerID":"p","variant":"high"}}`)
@@ -1378,26 +1412,27 @@ the_thinking_level_goes_with_the_model :: proc(t: ^testing.T) {
 a_slash_command_waits_for_the_commands :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
 	testing.expect(t, !app.cx.have_slash, "no commands read")
 	COMMANDS :: `{"data":[{"name":"goal","description":"Work on an objective until it is met"}]}`
 
-	ui.text_edit_set(&app.composer.area, "/goal ship the kernel")
+	ui.text_edit_set(&pane.composer.area, "/goal ship the kernel")
 	attach(app, "a.png")
-	submit_prompt(app)
+	submit_prompt(app, pane)
 	testing.expect_value(t, bench_count(.Prompt), 0)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "")
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "")
 	bench_answer(app, bench_take(t, .Slash), 200, COMMANDS)
 	r := bench_take(t, .Prompt)
 	testing.expect_value(t, r.path, "/api/session/s/command")
 	testing.expect_value(t, r.body, `{"name":"goal","text":"ship the kernel"}`)
-	testing.expect_value(t, len(app.composer.attachments), 1)   // (a command does not take it: back in the composer)
+	testing.expect_value(t, len(pane.composer.attachments), 1)   // (a command does not take it: back in the composer)
 	bench_answer(app, r, 200, "")
 
 	// a name the server has not: a prompt
 	slash_forget(app)
-	ui.text_edit_set(&app.composer.area, "/nothing here")
-	submit_prompt(app)
+	ui.text_edit_set(&pane.composer.area, "/nothing here")
+	submit_prompt(app, pane)
 	bench_answer(app, bench_take(t, .Slash), 200, COMMANDS)
 	r = bench_take(t, .Prompt)
 	testing.expect_value(t, r.path, "/api/session/s/prompt")
@@ -1406,8 +1441,8 @@ a_slash_command_waits_for_the_commands :: proc(t: ^testing.T) {
 
 	// the commands could not be read: a prompt all the same, nothing lost
 	slash_forget(app)
-	ui.text_edit_set(&app.composer.area, "/goal pause")
-	submit_prompt(app)
+	ui.text_edit_set(&pane.composer.area, "/goal pause")
+	submit_prompt(app, pane)
 	bench_lost(app, bench_take(t, .Slash))
 	r = bench_take(t, .Prompt)
 	testing.expect_value(t, r.path, "/api/session/s/prompt")
@@ -1415,12 +1450,12 @@ a_slash_command_waits_for_the_commands :: proc(t: ^testing.T) {
 	bench_answer(app, r, 200, "")
 
 	// not read then: asked again, and once read the next one goes at once
-	ui.text_edit_set(&app.composer.area, "/goal resume")
-	submit_prompt(app)
+	ui.text_edit_set(&pane.composer.area, "/goal resume")
+	submit_prompt(app, pane)
 	bench_answer(app, bench_take(t, .Slash), 200, COMMANDS)
 	bench_answer(app, bench_take(t, .Prompt), 200, "")
-	ui.text_edit_set(&app.composer.area, "/goal clear")
-	submit_prompt(app)
+	ui.text_edit_set(&pane.composer.area, "/goal clear")
+	submit_prompt(app, pane)
 	testing.expect_value(t, bench_count(.Slash), 0)
 	testing.expect_value(t, bench_take(t, .Prompt).body, `{"name":"goal","text":"clear"}`)
 }
@@ -1431,16 +1466,17 @@ a_slash_command_waits_for_the_commands :: proc(t: ^testing.T) {
 a_choice_made_elsewhere_shows_at_once :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "s")
 	app.cx.due[.Refresh] = {}
 	bench_event(app, `{"type":"session.model.selected","data":{"sessionID":"other","model":{"id":"x","providerID":"p"}}}`)
 	testing.expect_value(t, app.cx.due[.Refresh].due_ms, 0)
 	bench_event(app, `{"type":"session.model.selected","data":{"sessionID":"s","model":{"id":"claude-fable-5-2","providerID":"claude-agent","variant":"high"}}}`)
 	bench_event(app, `{"type":"session.agent.selected","data":{"sessionID":"s","agent":"plan"}}`)
-	model, _ := shown_model(app)
+	model, _ := shown_model(app, pane)
 	testing.expect_value(t, model, "claude-fable-5-2")
-	testing.expect_value(t, shown_variant(app), "high")
-	testing.expect_value(t, shown_agent(app), "plan")
+	testing.expect_value(t, shown_variant(app, pane), "high")
+	testing.expect_value(t, shown_agent(app, pane), "plan")
 	testing.expect(t, app.cx.due[.Refresh].due_ms > 0, "the page read again")
 }
 
@@ -1597,8 +1633,9 @@ a_connection_let_go_is_freed_when_its_requests_ended :: proc(t: ^testing.T) {
 an_answer_for_a_conversation_left_is_not_read :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	show(app, "a")
-	load_messages(app, "a")
+	load_messages(app, pane, "a")
 	r := bench_take(t, .Messages)
 	show(app, "b")
 	r.status, r.ok, r.resp = 200, true, strings.clone(page(`{"id":"m","type":"user","text":"from a","time":{"created":1}}`))
@@ -1606,7 +1643,7 @@ an_answer_for_a_conversation_left_is_not_read :: proc(t: ^testing.T) {
 	testing.expect(t, r.dropped, "dropped by its worker")
 	testing.expect(t, r.read_in == nil && r.value == nil, "its answer was not parsed")
 	bench_drain(app)
-	testing.expect_value(t, len(app.chat.messages), 0)
+	testing.expect_value(t, len(pane.chat.messages), 0)
 	testing.expect(t, !flying(app, .Messages, "a"), "its flight ended")
 }
 
@@ -1642,8 +1679,9 @@ an_event_records_its_toast_without_an_interface :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	ui.use(nil)
 	app := new(App)
-	chat_reset(&app.chat)
-	app.chat.id = strings.clone("s", app.chat.alloc)
+	pane := main_pane(app)
+	chat_reset(&pane.chat)
+	pane.chat.id = strings.clone("s", pane.chat.alloc)
 	bench_event(app, `{"type":"session.execution.failed","data":{"sessionID":"s"}}`)
 	if testing.expect_value(t, len(app.cx.effects), 1) {
 		e, is := app.cx.effects[0].(Effect_Toast)
@@ -1661,22 +1699,23 @@ an_event_records_its_toast_without_an_interface :: proc(t: ^testing.T) {
 each_session_has_its_own_zoom :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	defer store.close(&app.stores.session_zooms)
 	app.prefs.content_zoom = 1.25   // (what the preference says: a bench has none)
 	rest := app.prefs.content_zoom
 	show(app, "a")
 	content_zoom_by(app, 2)
-	testing.expect_value(t, content_zoom(app), 2 * rest)
+	testing.expect_value(t, content_zoom(app, pane), 2 * rest)
 	show(app, "b")
-	testing.expect_value(t, content_zoom(app), rest)
+	testing.expect_value(t, content_zoom(app, pane), rest)
 	show(app, "a")
-	testing.expect_value(t, content_zoom(app), 2 * rest)
+	testing.expect_value(t, content_zoom(app, pane), 2 * rest)
 	value, kept := store.get(&app.stores.session_zooms, "a")
 	testing.expect(t, kept && value != "", "kept in session_zoom.txt")
 	content_zoom_reset(app)
-	testing.expect_value(t, content_zoom(app), rest)
+	testing.expect_value(t, content_zoom(app, pane), rest)
 	_, kept = store.get(&app.stores.session_zooms, "a")
 	testing.expect(t, !kept, "the preference again: nothing kept")
 	app.prefs.content_zoom = 1.5 * rest
-	testing.expect_value(t, content_zoom(app), 1.5 * rest)
+	testing.expect_value(t, content_zoom(app, pane), 1.5 * rest)
 }

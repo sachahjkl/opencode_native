@@ -17,7 +17,7 @@ an_event_no_window_shows_leaves_the_windows_at_rest :: proc(t: ^testing.T) {
 	open_chat(app, "s")
 	bench_clear(app)
 	kids, _ := json.parse_string(`{"data":[{"id":"kid","parentID":"s"}]}`, parse_integers = true, allocator = context.temp_allocator)
-	children_load(app, kids)
+	children_load(app, main_pane(app), kids)
 
 	app.cx.shared_moved = false
 	bench_event(app, `{"type":"session.text.delta","data":{"sessionID":"other","assistantMessageID":"a","ordinal":0,"delta":"x"}}`)
@@ -66,6 +66,7 @@ what_does_not_read_is_counted :: proc(t: ^testing.T) {
 an_events_memory_goes_once_applied :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	open_chat(app, "s")
 	bench_clear(app)
 	track: mem.Tracking_Allocator
@@ -87,6 +88,6 @@ an_events_memory_goes_once_applied :: proc(t: ^testing.T) {
 		testing.expectf(t, len(track.allocation_map) == 0, "case %d: %d allocations left", i, len(track.allocation_map))
 	}
 	testing.expect_value(t, len(track.bad_free_array), 0)
-	m := find_message(&app.chat, "a")
+	m := find_message(&pane.chat, "a")
 	testing.expect(t, m != nil && len(m.parts) == 1 && len(m.parts[0].text) == 1 + len(big), "what the model keeps is its own copy")
 }

@@ -20,7 +20,6 @@ HEX_ANSWER_TEXT       :: 0xdcdcdcff
 // Where the conversation is on the window and how wide, and what the reader opened in it. (Where it is read and scrolled is
 // Chat_View_State: that starts over with each session.)
 Conversation :: struct {
-	expanded:         map[u64]bool,   // tool and reasoning parts opened by the user (hash of their id)
 	column_w:         f32,            // the conversation column, frame pixels (this frame)
 	scroll_box:       ^ui.Box,        // the conversation's scroll box, when built this frame
 	column_drag_from: f32,            // the conversation's width when a handle of it was pressed (column_handles)
@@ -43,34 +42,34 @@ OPENED_FOLLOW_MS  :: 2000   // a conversation just opened follows its bottom tha
 PAGE_SCROLL       :: 0.9    // of the view: the end of the last page stays in sight
 LINE_SCROLL_EM    :: 3
 
-conversation :: proc(app: ^App, em: f32) {
+conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = hex(HEX_BG0), radius = 0})
 	if ui.column(flags = {.Draw_Background}, id = "###main") {
 		sc := ui.scale()
 		// this frame's width, from the window (the box's own size is the last frame's: a resize would lag a frame behind):
 		// the window less the views beside it
-		avail := f32(app.win.size.x) - app.conversation.beside_px
+		avail := f32(app.win.size.x) - pane.conversation.beside_px
 		if avail <= 0 { avail = AVAIL_FALLBACK_PX * sc }
-		app.conversation.width = avail
-		app.conversation.column_w = 0
-		zoom := content_zoom(app)
+		pane.conversation.width = avail
+		pane.conversation.column_w = 0
+		zoom := content_zoom(app, pane)
 		cem := math.round(em * zoom)   // the conversation's own size: its zoom is not the interface's
 		col := max(COLUMN_MIN_W_PX * sc, min(app.prefs.column_w * sc * zoom, avail - em * 3))
 		side := max(em * 1.5, (avail - col) * 0.5)
-		app.conversation.column_w = col
-		if app.chat.id != "" {
+		pane.conversation.column_w = col
+		if pane.chat.id != "" {
 			chat_header(app, em)
 		}
 		main := ui.parent_box()
-		app.conversation.rect = main.rect
+		pane.conversation.rect = main.rect
 		sb: ^ui.Box
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 		if ui.row(id = "###chat_row") {
 			sb = ui.prev_box("###chat")
 			// (before the keys of the conversation: Up and Down are the marks' while they have the keyboard)
-			if prompt_rail_on(app) && sb != nil { prompt_rail(app, sb, em) }
-			find_update(app, sb, em)
-			chat_scroll_place(app, sb, em)
+			if prompt_rail_on(app, pane) && sb != nil { prompt_rail(app, pane, sb, em) }
+			find_update(app, pane, sb, em)
+			chat_scroll_place(app, pane, sb, em)
 			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.scroll_y("###chat") {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -79,19 +78,19 @@ conversation :: proc(app: ^App, em: f32) {
 					ui.next({width = ui.px(col), height = ui.children_sum(), axis = .Y})
 					if ui.column(id = "###col") {
 						if ui.style({font_size = cem}) {
-							if app.chat.id == "" { home(app, cem) } else { messages(app, cem) }
+							if pane.chat.id == "" { home(app, pane, cem) } else { messages(app, pane, cem) }
 						}
 					}
 				}
 			}
-			app.conversation.scroll_box = ui.prev_box("###chat")
+			pane.conversation.scroll_box = ui.prev_box("###chat")
 		}
-		chat_scroll_settle(app, sb)
-		if sb != nil && app.chat.id != "" { column_handles(app, sb, main, side, col, avail, em) }
-		dock(app, em, side, col)
+		chat_scroll_settle(app, pane, sb)
+		if sb != nil && pane.chat.id != "" { column_handles(app, pane, sb, main, side, col, avail, em) }
+		dock(app, pane, em, side, col)
 		// the find bar over the conversation's top-right corner, under the header
-		find_bar(app, em, avail - em * 1.4, sb != nil ? sb.rect.min.y - main.rect.min.y + em * 0.6 : em * 4)
-		go_bottom_pill(app, sb, main, avail, em)
+		find_bar(app, pane, em, avail - em * 1.4, sb != nil ? sb.rect.min.y - main.rect.min.y + em * 0.6 : em * 4)
+		go_bottom_pill(app, pane, sb, main, avail, em)
 	}
 }
 
@@ -99,9 +98,9 @@ conversation :: proc(app: ^App, em: f32) {
 // in the middle). What it is let go at is the widest wanted (conversation.width): a narrower window narrows it, a wider one gives it
 // back. Each shows as two short strokes, faint until the pointer comes.
 @(private = "file")
-column_handles :: proc(app: ^App, sb, main: ^ui.Box, side, col, avail, em: f32) {
+column_handles :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, side, col, avail, em: f32) {
 	hw := math.round(em * COLUMN_HANDLE_EM)
-	unit := ui.scale() * content_zoom(app)   // (the preference is in logical pixels of the conversation)
+	unit := ui.scale() * content_zoom(app, pane)   // (the preference is in logical pixels of the conversation)
 	// (no room beside it, or the window narrows it already: nothing to give it by hand)
 	if side < hw * 1.5 || col < app.prefs.column_w * unit - 1 { return }
 	top := sb.rect.min.y - main.rect.min.y
@@ -112,11 +111,11 @@ column_handles :: proc(app: ^App, sb, main: ^ui.Box, side, col, avail, em: f32) 
 		ui.a11y({role = .Slider, name = i18n.tr("Conversation width")})
 		b := ui.build_box({.Clickable}, right ? "###col_r" : "###col_l")
 		sig := ui.signal(b)
-		if sig.pressed { app.conversation.column_drag_from = col / unit }
+		if sig.pressed { pane.conversation.column_drag_from = col / unit }
 		if sig.dragging {
 			d := (right ? sig.drag_delta.x : -sig.drag_delta.x) * 2 / unit
 			most := min(f32(COLUMN_W_MAX), (avail - em * 3) / unit)
-			app.prefs.column_w = clamp(math.round(app.conversation.column_drag_from + d), f32(COLUMN_W_MIN), max(f32(COLUMN_W_MIN), app.conversation.column_drag_from, most))   // (never under where it began for want of room)
+			app.prefs.column_w = clamp(math.round(pane.conversation.column_drag_from + d), f32(COLUMN_W_MIN), max(f32(COLUMN_W_MIN), pane.conversation.column_drag_from, most))   // (never under where it began for want of room)
 		}
 		if sig.released { pref_set(app, "conversation.width", fmt.tprintf("%d", int(app.prefs.column_w))) }
 		g := ui.frame_new(f32)
@@ -139,8 +138,8 @@ column_handles :: proc(app: ^App, sb, main: ^ui.Box, side, col, avail, em: f32) 
 
 // Far from the end of the conversation: the way back to it, over its bottom. It comes after a screen and a bit: a small scroll
 // up to read something again needs no button.
-go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
-	if sb == nil || app.chat.id == "" { return }
+go_bottom_pill :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, avail, em: f32) {
+	if sb == nil || pane.chat.id == "" { return }
 	far := ui.view_limit(sb) - sb.view_off.y > sb.size.y * GO_BOTTOM_SCREENS
 	t := ui.anim(ui.key_from_string(0, "go_bottom"), far ? 1 : 0, GO_BOTTOM_RATE)
 	if t < 0.02 { return }
@@ -162,7 +161,7 @@ go_bottom_pill :: proc(app: ^App, sb, main: ^ui.Box, avail, em: f32) {
 	}
 	sig := ui.signal(b)
 	if sig.clicked {
-		chat_scroll_event(app, Scroll_Signal.Go_Bottom)
+		chat_scroll_event(pane, Scroll_Signal.Go_Bottom)
 		sb.view_target.y = ui.view_limit(sb)
 	}
 	if ui.parent(b) {
@@ -200,11 +199,11 @@ chat_keys :: proc(app: ^App, sb: ^ui.Box, em: f32) -> (moved: bool) {
 	return
 }
 
-messages :: proc(app: ^App, em: f32) {
-	app.chat.view_box = nil
-	c := &app.chat
+messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	pane.chat.view_box = nil
+	c := &pane.chat
 	ui.spacer(ui.px(em * 1.2))
-	subagent_banner(app, em)
+	subagent_banner(app, pane, em)
 	// Scrolling up reads the pages before this one by itself (load_older): this row is what is seen when it gets here first.
 	if c.older != "" {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
@@ -219,12 +218,12 @@ messages :: proc(app: ^App, em: f32) {
 		}
 		ui.spacer(ui.px(em * 0.6))
 	}
-	view := chat_view(app)
+	view := chat_view(app, pane)
 	if view == .Loading && len(c.messages) == 0 {
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
 		if ui.tags("weak") { ui.label(fmt.tprintf("%s###loading", i18n.tr("Loading the conversation…"))) }
 	}
-	if view == .Failed { chat_failed(app, em) }
+	if view == .Failed { chat_failed(app, pane, em) }
 	// Only the messages near the view are built (the toolkit's lazy column): the others stand as a space of the height they
 	// had when last built. A long conversation, Markdown and all, made every frame slow. A find reads them all once for a needle,
 	// a slice at each frame (its sweep: the window never freezes on a long conversation); everything is built while the
@@ -232,59 +231,59 @@ messages :: proc(app: ^App, em: f32) {
 	// (The item is the if's block, like a row's; the column ends with this block: the space of the last messages skipped
 	// goes before what follows.)
 	{
-		lz := ui.lazy_begin(all = app.chat.loading, sweep = ui.find_sweep())
+		lz := ui.lazy_begin(all = pane.chat.loading, sweep = ui.find_sweep())
 		// (a view going back to where it was: the column keeps it on its message, however the heights around it settle. A page read
 		// above: the message the view holds is built whatever, frame moves the view by as much as the page pushed it down. Copied:
 		// a click in this build changes the state that owns them)
 		back, keep := "", ""
 		back_dy: f32
-		#partial switch s in app.chat_scroll {
+		#partial switch s in pane.view.chat_scroll {
 		case Scroll_Restoring: back, back_dy = strings.clone(s.msg, context.temp_allocator), s.dy
 		case Scroll_Anchored:  keep = strings.clone(s.keep, context.temp_allocator)
 		}
 		restore := back != "" && !c.loading
 		if restore { ui.lazy_pin(lz, fmt.tprintf("###msg_%s", back), back_dy) }
 		top_seen := false   // the first message under the top of the view, for Back and Forward (subagents.odin nav_mark)
-		prompt_rail_begin(app)
+		prompt_rail_begin(app, pane)
 		for &m, i in c.messages {
 			// (by its id: a page read before it does not change what it is, its height is still known)
 			if m.id != "" && m.lazy_id == "" { m.lazy_id = fmt.aprintf("###msg_%s", m.id, allocator = c.alloc) }   // (once: this is every message, at every build)
 			id := m.id != "" ? m.lazy_id : fmt.tprintf("###msg_end%d", len(c.messages) - i)
 			held := m.id != "" && (m.id == back || m.id == keep)
-			if m.kind == .User { prompt_rail_place(app, lz.y) }   // (where it starts: built or not)
+			if m.kind == .User { prompt_rail_place(app, pane, lz.y) }   // (where it starts: built or not)
 			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || held) {
 				item := ui.parent_box()
 				if sb := lz.scroll; sb != nil {
 					if !top_seen && m.id != "" && item.rect.max.y > sb.rect.min.y {
 						top_seen = true
-						app.chat.view_msg, app.chat.view_dy, app.chat.view_box = m.id, sb.rect.min.y - item.rect.min.y, item
+						pane.chat.view_msg, pane.chat.view_dy, pane.chat.view_box = m.id, sb.rect.min.y - item.rect.min.y, item
 					}
 				}
-				message(app, c, &m, i, em)
+				message(app, pane, &m, i, em)
 				ctx_check(app, ui.parent_box(), .Message, m.id)
 				// (what was made while this message was the last: up to the next one; before the first message, at the first)
 				from := i == 0 ? 0 : m.created
 				to := i + 1 < len(c.messages) ? c.messages[i + 1].created : max(f64)
-				for a in chat_artifacts_between(app, from, to) { artifact_card(app, a, em) }
+				for a in chat_artifacts_between(app, pane, from, to) { artifact_card(app, a, em) }
 			}
 		}
 		if restore {
 			// (what the first layouts say of the heights around it is not what the next ones find: it stays a few builds)
 			found, moved := ui.lazy_pinned(lz)
-			chat_scroll_event(app, Scroll_Restore_Held{found, moved})
+			chat_scroll_event(pane, Scroll_Restore_Held{found, moved})
 			app.settle = max(app.settle, FRAMES_AFTER_INPUT)
 		}
 	}
 	// The line of a run stands in the room the end of the conversation keeps anyway: the height is the same with it and without it, so
 	// the bottom does not move when a run starts or ends. (It came on top of that room, and took four lines for one word.)
-	goal_reason_line(app, em)
+	goal_reason_line(app, pane, em)
 	foot := math.round(em * CHAT_FOOT_EM)
 	if c.busy {
 		line := math.round(em * WORKING_LINE_EM)
 		ui.next({width = ui.fill(), height = ui.px(line), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###working") {
 			ui.spacer(ui.px(em * 0.4))
-			throbber(app, "###wl", accent(), math.round(em * 7), math.round(em * 0.9), em)
+			throbber(app, pane, "###wl", accent(), math.round(em * 7), math.round(em * 0.9), em)
 			ui.spacer(ui.fill())
 			if hint_action("###stop_hint", i18n.tr("Esc twice to stop"), em, intent = .Danger) { interrupt_session(app, c.id) }
 		}
@@ -295,29 +294,30 @@ messages :: proc(app: ^App, em: f32) {
 
 // The first page was not read: why, and the way to try again.
 @(private = "file")
-chat_failed :: proc(app: ^App, em: f32) {
-	r := &app.cx.chat_read
+chat_failed :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	r := &pane.read
 	ui.next({width = ui.fill(), flags = {.Text_Wrap}, text_align = .Center})
 	if ui.tags("weak") { ui.paragraph(fmt.tprintf("%s###read_failed", label_safe(fmt.tprintf(i18n.tr("The conversation could not be read: %s"), r.message != "" ? r.message : i18n.tr("no answer"))))) }
 	ui.spacer(ui.px(em * 0.7))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###read_retry") {
 		ui.spacer(ui.fill())
-		if ui.button("retry", i18n.tr("Try again"), lucide.REFRESH_CW, {disabled = !online(app)}).clicked { chat_read(app) }
+		if ui.button("retry", i18n.tr("Try again"), lucide.REFRESH_CW, {disabled = !online(app)}).clicked { chat_read(app, pane) }
 		ui.spacer(ui.fill())
 	}
 }
 
 // One message of the conversation, in its lazy item.
-message :: proc(app: ^App, c: ^Chat, m: ^Message, i: int, em: f32) {
+message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, i: int, em: f32) {
+	c := &pane.chat
 	switch m.kind {
-	case .User:        user_message(app, m, em)
+	case .User:        user_message(app, pane, m, em)
 	case .Assistant:
 		prev := i > 0 ? &c.messages[i - 1] : nil
 		next := i + 1 < len(c.messages) ? &c.messages[i + 1] : nil
-		assistant_message(app, m, em, continues(prev, m), next != nil && continues(m, next) ? next : nil, prev)
+		assistant_message(app, pane, m, em, continues(prev, m), next != nil && continues(m, next) ? next : nil, prev)
 	case .Synthetic:
-		if m.sub_child != "" { subagent_result(app, m, em) } else if len(m.jobs) > 0 { job_reports(app, m, em) } else { note_line(app, m, em, lucide.ZAP, m.text != "" ? first_line(m.text) : i18n.tr("synthetic message")) }
+		if m.sub_child != "" { subagent_result(app, pane, m, em) } else if len(m.jobs) > 0 { job_reports(app, pane, m, em) } else { note_line(app, m, em, lucide.ZAP, m.text != "" ? first_line(m.text) : i18n.tr("synthetic message")) }
 	case .Shell:       note_line(app, m, em, lucide.SQUARE_TERMINAL, fmt.tprintf("$ %s", m.text))
 	case .Compaction:  note_line(app, m, em, lucide.LIST, i18n.tr("Conversation compacted"))
 	case .Idle:        if i < len(c.messages) - 1 { turn_end(app, m, em) }
@@ -403,11 +403,11 @@ turn_end :: proc(app: ^App, m: ^Message, em: f32) {
 USER_IMAGE_W_PX :: 320
 USER_IMAGE_H_PX :: 220
 
-user_message :: proc(app: ^App, m: ^Message, em: f32) {
+user_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 	ui.spacer(ui.px(em * 0.4))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if plate(fmt.tprintf("###u_%s", m.id), top = HEX_USER_PLATE_TOP, bottom = HEX_USER_PLATE_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.09) {
-		prompt_rail_focus(app, m, ui.parent_box())
+		prompt_rail_focus(app, pane, m, ui.parent_box())
 		ui.spacer(ui.px(em * 0.75))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###in") {
@@ -423,7 +423,7 @@ user_message :: proc(app: ^App, m: ^Message, em: f32) {
 					text("at", clock_text(m.created, app.prefs.clock24), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}
 				ui.spacer(ui.px(em * 0.35))
-				runs := link_runs(&m.text_runs, m.text, {color = hex(HEX_USER_TEXT)}, app.chat.alloc)
+				runs := link_runs(&m.text_runs, m.text, {color = hex(HEX_USER_TEXT)}, pane.chat.alloc)
 				ui.next({width = ui.fill(), flags = {.Selectable}})
 				link_clicked(ui.rich_paragraph("###text", runs))
 				if len(m.images) > 0 {
@@ -462,7 +462,7 @@ plain_tool :: proc(p: ^Part) -> bool { return p.kind == .Tool && p.tool_name != 
 Who_Draw :: struct { col: Color, live, glow: bool }   // (glow: the preference, read at the build)
 
 // `cont`: it goes on from the step before (no header); `next`: the step after when it goes on from this one.
-assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: ^Message = nil, prev: ^Message = nil) {
+assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, cont := false, next: ^Message = nil, prev: ^Message = nil) {
 	if len(m.parts) == 0 && !m.streaming { return }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.column(id = fmt.tprintf("###a_%s", m.id)) {
@@ -505,16 +505,16 @@ assistant_message :: proc(app: ^App, m: ^Message, em: f32, cont := false, next: 
 			switch p.kind {
 			case .Text:
 				if len(p.text) > 0 {
-					markdown.view(md_doc(&app.chat, pid), pid, string(p.text[:]), md_config(app, hex(HEX_ANSWER_TEXT)))
+					markdown.view(md_doc(&pane.chat, pid), pid, string(p.text[:]), md_config(app, hex(HEX_ANSWER_TEXT)))
 					ui.spacer(ui.px(em * 0.6))
 				}
-			case .Reasoning: reasoning_part(app, &p, pid, em)
+			case .Reasoning: reasoning_part(app, pane, &p, pid, em)
 			case .Tool:
-				if !plain_tool(&p) { subagent_card(app, &p, pid, em); break }
+				if !plain_tool(&p) { subagent_card(app, pane, &p, pid, em); break }
 				// consecutive calls share the timeline's rail, across the steps that go on from each other
 				above := i > 0 ? plain_tool(&m.parts[i - 1]) : cont && prev != nil && len(prev.parts) > 0 && plain_tool(&prev.parts[len(prev.parts) - 1])
 				below := i + 1 < len(m.parts) ? plain_tool(&m.parts[i + 1]) : next != nil && len(next.parts) > 0 && plain_tool(&next.parts[0])
-				tool_part(app, &p, pid, em, above, below)
+				tool_part(app, pane, &p, pid, em, above, below)
 				ctx_check(app, ui.prev_box(fmt.tprintf("###tp_%s", pid)), .Tool, m.id, i)
 			}
 		}

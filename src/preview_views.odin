@@ -323,7 +323,8 @@ preview_dues :: proc(app: ^App) {
 // The parent of a session, as far as the client knows it. (`known` false: it has not heard of this one yet.)
 @(private = "file")
 session_parent :: proc(app: ^App, id: string) -> (parent: string, known: bool) {
-	c := &app.chat
+	pane := main_pane(app)
+	c := &pane.chat
 	if id == c.id && c.have_self { return c.self.parent, true }
 	if s := find_session(app, id); s != nil { return s.parent, true }
 	if s := find_child(c, id); s != nil { return s.parent, true }
@@ -345,8 +346,9 @@ preview_root :: proc(app: ^App, id: string) -> (root: string, known: bool) {
 // The browser of what is shown. (A sub-agent opened by its address is not known at once: until it is, the browser stays.)
 @(private = "file")
 preview_key :: proc(app: ^App) -> (key: string, known: bool) {
-	if app.chat.id == "" { return "", true }
-	return preview_root(app, len(app.nav.drilled) > 0 ? app.nav.drilled[0] : app.chat.id)
+	pane := main_pane(app)
+	if pane.chat.id == "" { return "", true }
+	return preview_root(app, len(app.nav.drilled) > 0 ? app.nav.drilled[0] : pane.chat.id)
 }
 
 // The Preview of `key`, shown or parked, made if it has none.

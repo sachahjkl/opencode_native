@@ -84,7 +84,7 @@ home_lists :: proc(app: ^App) -> ^Home_Lists {
 // The folders of the latest sessions, the latest first.
 home_folders :: proc(app: ^App) -> []string { return home_lists(app).folders[:] }
 
-home :: proc(app: ^App, em: f32) {
+home :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	now := now_epoch_ms()
 	ui.spacer(ui.px(em * HOME_TOP_EM))
 	ui.next({width = ui.fill(), height = ui.px(em * 3.2), axis = .X, cross = .Center})
@@ -107,14 +107,14 @@ home :: proc(app: ^App, em: f32) {
 	// where a new session starts
 	section_label("h_start", i18n.tr("START IN"), em)
 	folders := home_folders(app)
-	if app.chat.new_dir == "" && len(folders) > 0 { app.chat.new_dir = strings.clone(folders[0], app.chat.alloc) }
+	if pane.chat.new_dir == "" && len(folders) > 0 { pane.chat.new_dir = strings.clone(folders[0], pane.chat.alloc) }
 	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.45, em * 0.45}})
 	if ui.flow({em * 0.45, em * 0.45}, "###h_folders") {
 		for d, i in folders {
-			sig := ui.button(fmt.tprintf("hf%d", i), ui.text_shown(base_name(d)), lucide.FOLDER, {face = d == app.chat.new_dir ? .Toggled : .Raised, height = math.round(em * BUTTON_COMPACT_H_EM)})
+			sig := ui.button(fmt.tprintf("hf%d", i), ui.text_shown(base_name(d)), lucide.FOLDER, {face = d == pane.chat.new_dir ? .Toggled : .Raised, height = math.round(em * BUTTON_COMPACT_H_EM)})
 			if sig.clicked {
-				app.chat.new_dir = strings.clone(d, app.chat.alloc)
-				app.composer.focus_next = true
+				pane.chat.new_dir = strings.clone(d, pane.chat.alloc)
+				pane.composer.focus_next = true
 			}
 			// (the button shows the folder's name alone: two folders of one name differ only by their paths)
 			if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(d) } }

@@ -141,6 +141,7 @@ a_server_command_goes_in_the_composer :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		slash_load(app, []Slash{{strings.clone("review"), strings.clone("Review the changes")}})
 		palette_up(s, app)
 		palette_type(s, app, ">review")
@@ -150,7 +151,7 @@ a_server_command_goes_in_the_composer :: proc(t: ^testing.T) {
 		session.key(s, .Return)
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return !palette_shown((^App)(s.user)) }, "the palette closed")
 		session.frames(s, 2)
-		testing.expect_value(t, ui.text_edit_string(&app.composer.area), "/review ")
+		testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "/review ")
 	})
 }
 
@@ -160,6 +161,7 @@ the_agents_are_chosen_under_the_hash :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
+		pane := main_pane(app)
 		append(&app.agents, Agent_Info{id = "build", name = "build"}, Agent_Info{id = "plan", name = "plan"}, Agent_Info{id = "explore", name = "explore", mode = "subagent"})
 		app.cx.catalog_version += 1
 		palette_up(s, app)
@@ -167,7 +169,7 @@ the_agents_are_chosen_under_the_hash :: proc(t: ^testing.T) {
 		src := &app.palette.agents
 		testing.expect(t, palette_row_of(app, src, "build") >= 0 && palette_row_of(app, src, "plan") >= 0, "the agents")
 		testing.expect(t, palette_row_of(app, src, "explore") < 0, "not a sub-agent")
-		in_use := shown_agent(app)
+		in_use := shown_agent(app, pane)
 		for id in ([]string{"build", "plan"}) { testing.expect_value(t, src.mark(src, id), id == in_use) }
 		palette_hide(app)
 		session.frames(s, 2)
@@ -207,7 +209,8 @@ a_session_command_shows_its_session :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		shown := find_session(app, app.chat.id)
+		pane := main_pane(app)
+		shown := find_session(app, pane.chat.id)
 		if !testing.expect(t, shown != nil && shown.title != "", "a session shown, with a title") { return }
 		palette_up(s, app)
 		palette_type(s, app, "fork the session")

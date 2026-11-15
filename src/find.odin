@@ -19,44 +19,47 @@ Find :: struct {
 	from_end: int,          // a page came in front of the current match: how far it is from the last one (0: not counted so)
 }
 
-find_open :: proc(app: ^App) {
-	f := &app.find
+find_open :: proc(app: ^App, pane: ^Chat_Pane) {
+	f := &pane.find
 	f.open, f.fresh = true, true
 	ui.line_edit_select_all(&f.field)
 }
 
-find_close :: proc(app: ^App) {
-	app.find.open = false
-	app.find.from_end = 0
+find_close :: proc(app: ^App, pane: ^Chat_Pane) {
+	pane.find.open = false
+	pane.find.from_end = 0
 	ui.find("", 0)
 	ui.find_set_current(-1)
 }
 
 // Another conversation: its matches are not this one's. The home page has none, the bar goes.
-find_chat_changed :: proc(app: ^App) {
-	f := &app.find
+find_chat_changed :: proc(app: ^App, pane: ^Chat_Pane) {
+	f := &pane.find
 	if !f.open { return }
-	if app.chat.id == "" { find_close(app); return }
+	if pane.chat.id == "" { find_close(app, pane); return }
 	f.index, f.reveal, f.from_end = -1, false, 0
 	ui.find_set_current(-1)
 	ui.find_refresh()
 }
 
-find_forget :: proc(app: ^App) {
-	if app.find.open { find_close(app) }
-	app.find.index = -1
+find_forget :: proc(app: ^App) { for &pane in app.panes { pane_find_forget(app, &pane) } }
+
+@(private = "file")
+pane_find_forget :: proc(app: ^App, pane: ^Chat_Pane) {
+	if pane.find.open { find_close(app, pane) }
+	pane.find.index = -1
 }
 
 // An older page came, in front of everything: the current match stays the one it is, so its number grows by what the page has.
-find_page_added :: proc(app: ^App) {
-	f := &app.find
+find_page_added :: proc(app: ^App, pane: ^Chat_Pane) {
+	f := &pane.find
 	if f.open && f.index >= 0 && f.from_end == 0 { f.from_end = ui.find_count() - f.index }
 	ui.find_refresh()
 }
 
 // The step to another match (+1 next, -1 previous), wrapping around.
-find_step :: proc(app: ^App, d: int) {
-	f := &app.find
+find_step :: proc(app: ^App, pane: ^Chat_Pane, d: int) {
+	f := &pane.find
 	n := ui.find_count()
 	if n == 0 { return }
 	f.index = f.index < 0 ? (d > 0 ? 0 : n - 1) : (f.index + d + n) % n
@@ -70,8 +73,8 @@ FIND_REVEAL_AT        :: 0.35   // where it lands, from the top of the view
 
 // Called by conversation() before the scroll box is built: the needle for this build's layout, a new needle's first
 // match, and the scroll that brings the current match into view (from the rects of the last layout).
-find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
-	f := &app.find
+find_update :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) {
+	f := &pane.find
 	needle := f.open ? ui.line_edit_string(&f.field) : ""
 	ui.find(needle, sb != nil ? sb.key : 0)
 	if !f.open { return }
@@ -89,7 +92,7 @@ find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	if n == 0 { f.index = -1; ui.find_set_current(-1); return }
 	if f.from_end > 0 { f.index = max(n - f.from_end, 0) }
 	// a conversation just opened is still loading and jumping to its bottom: its matches move under the reader
-	if f.index < 0 && (app.chat.loading || ui.now_ms() - app.opened_ms < FIND_SETTLE_MS) { return }
+	if f.index < 0 && (pane.chat.loading || ui.now_ms() - pane.view.opened_ms < FIND_SETTLE_MS) { return }
 	if f.index < 0 && sb != nil {
 		// (the first match from the top of the view down; when none is under it, the view is past the last one (at the bottom of
 		// a conversation): the nearest above it, not the conversation's first, a whole conversation away)
@@ -113,7 +116,7 @@ find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 			if y0 < sb.view_off.y + em || y1 > sb.view_off.y + h - em * FIND_BOTTOM_MARGIN_EM {
 				limit := max(0, sb.view_bounds.y - h)
 				sb.view_target.y = clamp(y0 - h * FIND_REVEAL_AT, 0, limit)
-				chat_scroll_event(app, Scroll_Signal.Moved_Up)
+				chat_scroll_event(pane, Scroll_Signal.Moved_Up)
 				app.settle = max(app.settle, FRAMES_AFTER_INPUT)   // (the sweep's answer comes with no input: the glide needs its frames)
 			}
 			break
@@ -122,8 +125,8 @@ find_update :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 }
 
 // The bar, over the conversation's top-right corner (built after the conversation: on top of it, taking its clicks).
-find_bar :: proc(app: ^App, em: f32, right, top: f32) {
-	f := &app.find
+find_bar :: proc(app: ^App, pane: ^Chat_Pane, em: f32, right, top: f32) {
+	f := &pane.find
 	if !f.open { return }
 	n := ui.find_count()
 	w := math.round(em * 24)
@@ -139,8 +142,8 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 				res := ui.line_edit("###ff", &f.field, {placeholder = i18n.tr("Find in the conversation")})
 				if f.fresh { ui.set_focus(res.box.key); f.fresh = false }
-				if ui.key_press(.Return, {.Shift}) { find_step(app, -1) } else if res.committed { find_step(app, 1) }
-				if res.cancelled { find_close(app) }
+				if ui.key_press(.Return, {.Shift}) { find_step(app, pane, -1) } else if res.committed { find_step(app, pane, 1) }
+				if res.cancelled { find_close(app, pane) }
 			}
 			needle := ui.line_edit_string(&f.field)
 			pending := ui.find_pending()   // (read so far, and how far: "no match" would be a lie before the end; nothing while the needle rests)
@@ -148,11 +151,11 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 			text("fc", count, n == 0 && !pending ? hex(HEX_RED) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)})
 			ui.spacer(ui.px(em * 0.4))
 			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
-			if ui.button("fprev", icon = lucide.CHEVRON_UP).clicked { find_step(app, -1) }
+			if ui.button("fprev", icon = lucide.CHEVRON_UP).clicked { find_step(app, pane, -1) }
 			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
-			if ui.button("fnext", icon = lucide.CHEVRON_DOWN).clicked { find_step(app, 1) }
+			if ui.button("fnext", icon = lucide.CHEVRON_DOWN).clicked { find_step(app, pane, 1) }
 			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
-			if ui.button("fclose", icon = lucide.X).clicked { find_close(app) }
+			if ui.button("fclose", icon = lucide.X).clicked { find_close(app, pane) }
 			ui.spacer(ui.px(em * 0.3))
 		}
 	}
@@ -161,11 +164,11 @@ find_bar :: proc(app: ^App, em: f32, right, top: f32) {
 FIND_RADIUS :: 7
 
 // The keys that work anywhere in the window.
-find_keys :: proc(app: ^App) {
-	if app.chat.id == "" || overlay_open(app) { return }
-	if ui.key_press(.F, {.Ctrl}) { find_open(app) }
-	if app.find.open {
-		if ui.key_press(.F3) { find_step(app, 1) }
-		if ui.key_press(.F3, {.Shift}) { find_step(app, -1) }
+find_keys :: proc(app: ^App, pane: ^Chat_Pane) {
+	if pane.chat.id == "" || overlay_open(app) { return }
+	if ui.key_press(.F, {.Ctrl}) { find_open(app, pane) }
+	if pane.find.open {
+		if ui.key_press(.F3) { find_step(app, pane, 1) }
+		if ui.key_press(.F3, {.Shift}) { find_step(app, pane, -1) }
 	}
 }

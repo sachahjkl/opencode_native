@@ -249,9 +249,9 @@ jobs_text :: proc(jobs: []Job_Report) -> string {
 }
 
 // The reports of message `m`, one card each: one line while folded, so that several in a row stay compact.
-job_reports :: proc(app: ^App, m: ^Message, em: f32) {
+job_reports :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 	for &r, k in m.jobs {
-		job_card(app, m, &r, k, em)
+		job_card(app, pane, m, &r, k, em)
 		ui.spacer(ui.px(em * 0.15))
 	}
 	ui.spacer(ui.px(em * 0.35))
@@ -290,7 +290,7 @@ job_head_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 // One report: a header that opens it (its state, what ended, the command's start or the sub-agent's task), then, open, the
 // command and its output in the code font or the sub-agent's report as Markdown, all selectable.
 @(private = "file")
-job_card :: proc(app: ^App, m: ^Message, r: ^Job_Report, k: int, em: f32) {
+job_card :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, r: ^Job_Report, k: int, em: f32) {
 	key := fmt.tprintf("%s_job%d", m.id, k)
 	open := part_open(app, key)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
@@ -299,7 +299,7 @@ job_card :: proc(app: ^App, m: ^Message, r: ^Job_Report, k: int, em: f32) {
 		hb := ui.build_box({.Clickable, .Focusable, .Hot_Within}, "###head")
 		hb.custom = job_head_draw
 		hs := ui.signal(hb)
-		if hs.clicked { part_toggle(app, key, hb) }
+		if hs.clicked { part_toggle(app, pane, key, hb) }
 		// (the header shows the command's start: its whole on hover)
 		if r.kind == .Shell && r.command != "" && ui.hovered_for(hs) { if ui.tooltip() { ui.tooltip_text(r.command) } }
 		if ui.parent(hb) {
@@ -331,17 +331,17 @@ job_card :: proc(app: ^App, m: ^Message, r: ^Job_Report, k: int, em: f32) {
 					switch r.kind {
 					case .Shell:
 						if r.command != "" {
-							mono_well("###command", fmt.tprintf("$ %s", r.command), em, JOB_OUTPUT_LINES, hex(HEX_TEXT_SOFT), &r.command_well, app.chat.alloc)
+							mono_well("###command", fmt.tprintf("$ %s", r.command), em, JOB_OUTPUT_LINES, hex(HEX_TEXT_SOFT), &r.command_well, pane.chat.alloc)
 							ui.spacer(ui.px(em * 0.3))
 						}
 						out := r.body != "" ? r.body : i18n.tr("(no output)")
-						mono_well("###output", out, em, JOB_OUTPUT_LINES, hex(HEX_TOOL_OUTPUT), &r.body_well, app.chat.alloc)
+						mono_well("###output", out, em, JOB_OUTPUT_LINES, hex(HEX_TOOL_OUTPUT), &r.body_well, pane.chat.alloc)
 					case .Subagent:
 						if r.body == "" {
 							text("none", i18n.tr("(no report)"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.5)})
 						} else {
 							id := fmt.tprintf("%s_job%d", m.id, k)
-							markdown.view(md_doc(&app.chat, id), id, r.body, md_config(app, hex(HEX_RETURNED_TEXT)), math.round(em * FS_LABEL))
+							markdown.view(md_doc(&pane.chat, id), id, r.body, md_config(app, hex(HEX_RETURNED_TEXT)), math.round(em * FS_LABEL))
 						}
 					}
 					ui.spacer(ui.px(em * 0.3))

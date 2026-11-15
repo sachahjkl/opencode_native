@@ -25,7 +25,6 @@ import crash_bar "gt:crash_bar"
 import process "gt:process"
 import "gt:ui"
 import lucide "gt:lucide"
-import remote "gt:remote"
 import i18n "gt:i18n"
 import update "gt:update"
 
@@ -69,26 +68,25 @@ App :: struct {
 	update_serial:  int,               // the updater's state last said (updates_follow)
 	program_views:  ui.Views,          // the dialogs, the sidebar, the panels, the windows of their own, and how each was last shown (window_views.odin; `views` is host.Shared's: their windows)
 	rename:         Rename,            // a session's title (context_menus.odin)
-	find:           Find,              // find in the conversation (find.odin)
 	scale:          f32,               // --scale=<factor>: the interface's scale whatever the screen says (0: the screen's)
 	servers_in_clear: bool,            // read passwords in clear from an older version's file: saved protected at start
 	rediscover_ms:  f64,               // when this computer's server was last looked for (servers_rediscover)
 	connect_seq:     u64,              // the connection last asked for (server_connect): one read for an earlier one is not connected
 	rediscover_busy: bool,             // ... a look is under way, on a chore
 	pending:        i32,       // (atomic) requests in flight
-	chat_mark:      u64,       // (atomic) moves when another conversation is shown (chat_marked): what the requests' workers read of it
 
 	using known:     Server_Known,      // what we know, as long as that server is the one
-	chat:            Chat,
-	using view:      Chat_View_State,   // where the conversation shown is read (one per session shown: open_chat starts it over)
+	panes:           [PANES_MAX]Chat_Pane,   // the conversations shown: MAIN_PANE is the main view (chat_pane.odin)
+	drafts:          map[string]Draft,  // each session's composer while no pane shows it (drafts.odin; keys owned)
+	// the parts opened by the user, by the hash of their id: an id names one part of one session, so one set serves every pane, and the
+	// stats panel's sections too
+	expanded:        map[u64]bool,
 
 	// the interface's own state, by feature (each struct is in the file of its feature)
-	composer:         Composer,       // composer.odin
 	escape_stop:      Escape_Stop,    // escape_stop.odin
 	free_limit:       Free_Limit,     // free_limit.odin
 	sidebar:          Sidebar,        // sidebar.odin
 	chrome:           Chrome,         // chrome.odin
-	conversation:     Conversation,   // conversation.odin
 	nav:              Nav,            // subagents.odin
 	settings:         Settings_View,  // settings.odin
 	stats:            Stats_View,     // stats.odin
@@ -120,14 +118,6 @@ App :: struct {
 	quit:             bool,
 	last_tick:        time.Tick,
 	frame_times:      Frame_Times,   // the last frame's steps
-}
-
-// Where the conversation shown is read, and how it moves: it starts over with another session.
-Chat_View_State :: struct {
-	opened_ms:    f64,           // when it was opened (it follows its bottom at first)
-	chat_scroll:  Chat_Scroll,   // what the view does (scroll.odin: changed by chat_scroll_event alone)
-	// its scroll target at the end of the last build, a measure and no state: a hand that moved it up since lets go of the bottom
-	chat_target:  f32,
 }
 
 // What a server told, and nothing else: it starts from zero with the next one (server_known_end). A field added here does too. (What has a
@@ -168,8 +158,6 @@ App_Context :: struct {
 	stream_seq:     Seq,               // events applied so far: the clock of what is newer than an answer (Request.asked_at)
 	busy_seq:       map[string]Seq,    // when the stream last said a session started or ended (keys owned)
 	waits_gone:     Gone_List,         // permissions and forms answered, the last WAITS_GONE_MAX
-	chat_read:      remote.Remote,            // the newest page of the conversation shown
-	queue:          Queue,             // what waits in the inbox of the session shown (queue.odin)
 	due:            [Due]ui.Deferred,     // what was put off (remote.odin)
 	reopen:         Nav_Place,         // what was shown when this computer's server moved (servers_rediscover), owned, id "": none
 	gliding:        bool,              // a panel's height moves in this build
@@ -179,7 +167,6 @@ App_Context :: struct {
 	outputs:        Output_Views,         // commands' output, read as a terminal shows it (output_view.odin)
 	schedules:      Schedules,            // schedules.odin
 	artifacts:      Artifacts,
-	chat_arts:      Chat_Artifacts,   // the artifacts the session shown made: cards in its conversation (schedules.odin)
 	diff_full:      Diff_Full,            // diff_full.odin
 	plugins:        Plugins,
 	integrations:   Integrations,         // the Connections page (integrations.odin)
@@ -290,7 +277,9 @@ main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
 	events = term_events(app, &app.state, events)
 	for e in events {
 		if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() }
-		if e.kind == .Scroll || e.kind == .Key_Press { chat_scroll_event(app, Scroll_Signal.Restore_End) }   // (the reader goes elsewhere: the view is theirs)
+		if e.kind == .Scroll || e.kind == .Key_Press {   // (the reader goes elsewhere: the view is theirs)
+			for &pane in app.panes { chat_scroll_event(&pane, Scroll_Signal.Restore_End) }
+		}
 		attach_drop_event(app, e)
 		notify_event(app, e)
 		// the side buttons of the mouse, as in a browser
@@ -311,35 +300,55 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 	dt := film_slow_dt(app, clamp(f32(time.duration_seconds(time.tick_diff(app.last_tick, now))), DT_MIN_S, DT_MAX_S))
 	app.last_tick = now
 	if dt < FPS_RESTED_S { app.chrome.frame_ms += (dt * 1000 - app.chrome.frame_ms) * FPS_SMOOTH }   // (a rest is no frame rate)
-	// `again`: another build of this frame. It runs no answer: a page read there would come after what the first build placed,
-	// and its anchor would be dropped with the frame's. It waits for the next frame, which needs_frame asks for.
-	build :: proc(app: ^App, size: draw.Vec2, events: []platform.Event, dt: f32, again := false) {
-		app.cx.was_gliding = app.cx.gliding
-		app.cx.gliding = false
-		app.state.post_budget = again ? 0 : POSTS_PER_BUILD
-		ui.begin_build(&app.state, build_params(app, app.win, size, events, dt))
-		missed_sync(app)     // (after the events, before their effects: a notification finds its entry)
-		if !again { themes_poll(app) }   // (the user's themes.txt changed: shown at once)
-		effects_apply(app)   // (what the events begin_build ran asked for: shown in this very build)
-		app.conversation.scroll_box = nil   // (only now: the answers begin_build ran read the last build's, a page placed by chat_load above all)
-		build_ui(app)
-		ui.end_build()
-		terminals_end(app)   // (after the views built at the end of the build)
-		app.frame_times.builds += 1
-	}
 	app.frame_times = {}
 	t_build := time.tick_now()
-	build(app, size, events, dt)
+	main_build(app, size, events, dt)
 	prefs_track_zoom(app)
 	// A part opened or closed in this build: the build drew it in its old state (the click comes after its body). Build
 	// again in its new state, then scroll by what its header moved so that it stays under the pointer, and build once
 	// more at that offset: the frame shows the result, never the steps. (A page read above is held the same way: Keeping became
-	// Anchored in this build. Anchored through these builds, the bottom stays let go of; Frame_Done ends it.)
-	if a, anchored := app.chat_scroll.(Scroll_Anchored); anchored {
+	// Anchored in this build. Anchored through these builds, the bottom stays let go of; Frame_Done ends it.) Each pane is held in
+	// turn: a build is the whole window's.
+	for &pane, i in app.panes {
+		if pane_is_shown(app, i) { main_builds_held(app, &pane, size) }
+	}
+	for &pane, i in app.panes {
+		if !pane_is_shown(app, i) { continue }
+		if b := pane.conversation.scroll_box; b != nil { pane.conversation.height = b.view_bounds.y }
+		chat_scroll_event(&pane, Scroll_Signal.Frame_Done)
+		if b := pane.conversation.scroll_box; b != nil { load_older(app, &pane, b) }
+	}
+	app.frame_times.build = time.tick_since(t_build)
+}
+
+// One build of the main window. `again`: another build of this frame. It runs no answer: a page read there would come after what
+// the first build placed, and its anchor would be dropped with the frame's. It waits for the next frame, which needs_frame asks for.
+@(private = "file")
+main_build :: proc(app: ^App, size: draw.Vec2, events: []platform.Event, dt: f32, again := false) {
+	app.cx.was_gliding = app.cx.gliding
+	app.cx.gliding = false
+	app.state.post_budget = again ? 0 : POSTS_PER_BUILD
+	ui.begin_build(&app.state, build_params(app, app.win, size, events, dt))
+	missed_sync(app)     // (after the events, before their effects: a notification finds its entry)
+	if !again { themes_poll(app) }   // (the user's themes.txt changed: shown at once)
+	effects_apply(app)   // (what the events begin_build ran asked for: shown in this very build)
+	// (only now: the answers begin_build ran read the last build's, a page placed by chat_load above all)
+	for &pane in app.panes { pane.conversation.scroll_box = nil }
+	build_ui(app)
+	ui.end_build()
+	terminals_end(app)   // (after the views built at the end of the build)
+	app.frame_times.builds += 1
+}
+
+// The builds again of a frame that a pane's place asks for (main_builds).
+@(private = "file")
+main_builds_held :: proc(app: ^App, pane: ^Chat_Pane, size: draw.Vec2) {
+	build :: main_build
+	if a, anchored := pane.view.chat_scroll.(Scroll_Anchored); anchored {
 		build(app, size, nil, 0, again = true)
 		// (again while it moves: what this offset builds around it is measured only then, a page read before it above all)
 		for _ in 0 ..< ANCHOR_BUILDS_MAX {
-			b := app.conversation.scroll_box
+			b := pane.conversation.scroll_box
 			if b == nil { break }
 			delta := a.box.rect.min.y - a.y
 			if abs(delta) <= 0.5 { break }
@@ -353,31 +362,27 @@ main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _:
 	// all at once, and a glide to catch it up would push the bottom out of place and bring it back. The bottom stays, what is above moves.
 	// A conversation's first page just arrived (a session opened): this build placed it from the empty one's bounds, at
 	// its top. Build it again at its bottom, at once: no frame at the top, no glide down.
-	if f, following := app.chat_scroll.(Scroll_Following); following && app.conversation.scroll_box != nil {
-		b := app.conversation.scroll_box
+	if f, following := pane.view.chat_scroll.(Scroll_Following); following && pane.conversation.scroll_box != nil {
+		b := pane.conversation.scroll_box
 		limit := ui.view_limit(b)
-		grew := b.view_bounds.y > app.conversation.height + 0.5 && b.view_off.y < limit - 0.5
+		grew := b.view_bounds.y > pane.conversation.height + 0.5 && b.view_off.y < limit - 0.5
 		if b.view_off.y > limit + 1 || f.jump || grew {
 			b.view_anim[1].active = false   // (the glide stops where it is: the second build reaches the bottom at once)
 			bounds := b.view_bounds.y
-			chat_scroll_event(app, Scroll_Signal.Snap)
+			chat_scroll_event(pane, Scroll_Signal.Snap)
 			build(app, size, nil, 0, again = true)
 			// (the bottom it reached was reckoned with the guessed heights of the messages the lazy column had not built: those
 			// it built there were measured, and the bottom moved. Again while it moves, so that the frame shows the bottom)
 			for _ in 0 ..< SNAP_BUILDS_MAX {
-				nb := app.conversation.scroll_box
+				nb := pane.conversation.scroll_box
 				if nb == nil || abs(nb.view_bounds.y - bounds) <= 0.5 { break }
 				bounds = nb.view_bounds.y
 				nb.view_anim[1].active = false
-				chat_scroll_event(app, Scroll_Signal.Snap)
+				chat_scroll_event(pane, Scroll_Signal.Snap)
 				build(app, size, nil, 0, again = true)
 			}
 		}
 	}
-	if b := app.conversation.scroll_box; b != nil { app.conversation.height = b.view_bounds.y }
-	chat_scroll_event(app, Scroll_Signal.Frame_Done)
-	if b := app.conversation.scroll_box; b != nil { load_older(app, b) }
-	app.frame_times.build = time.tick_since(t_build)
 }
 
 // Between two frames: what the frame set off, what the page said, what is due. (The windows of the views come after it: host_frame.)
@@ -419,17 +424,17 @@ posts_moved :: proc(app: ^App, run: u64) {
 // nothing. Only what is shown is held: input is read and built as ever. How long more, in ms (0: show the frame). A server that takes
 // longer gets its "Loading"; a window with nothing on it yet, or of another size, has no picture to keep.
 frame_held_ms :: proc(app: ^App, size: draw.Vec2) -> int {
-	if chat_view(app) != .Loading || app.shown != {int(size.x), int(size.y)} { return 0 }   // (shown: the size of the last picture)
-	return max(int(OPEN_HOLD_MS - (ui.now_ms() - app.opened_ms)), 0)
+	pane := main_pane(app)
+	if chat_view(app, pane) != .Loading || app.shown != {int(size.x), int(size.y)} { return 0 }   // (shown: the size of the last picture)
+	return max(int(OPEN_HOLD_MS - (ui.now_ms() - pane.view.opened_ms)), 0)
 }
 
 due_run :: proc(app: ^App, k: Due) {
 	switch k {
 	case .Refresh:   refresh_sessions(app)
 	case .Facts:     if ui.view_is_open(&app.program_views, SETTINGS_VIEW) { server_facts_load(app) }   // (an action of the settings: connect an MCP server, revoke a permission)
-	case .Children:  load_children(app)
+	case .Children:  for &pane, i in app.panes { if pane_is_shown(app, i) { load_children(app, &pane) } }
 	case .Context:   if app.stats.open { context_ask(app) }
-	case .Restore:   chat_scroll_event(app, Scroll_Signal.Restore_End)   // (the way back got nowhere: the view is the reader's)
 	case .Term_Size: terms_size_due(app)
 	case .Side_Wake: app.settle = max(app.settle, FRAMES_AFTER_INPUT)   // (the build sees the pointer has rested)
 	case .Drafts:    drafts_save(app)
@@ -447,8 +452,10 @@ due_tick :: proc(app: ^App, k: Due) {
 deferred_tick :: proc(app: ^App) {
 	cx := &app.cx
 	for k in Due { due_tick(app, k) }
+	if chat_scroll_due(app) { app.cx.shared_moved = true }
 	soonest := 0
 	for &d in cx.due { if ms := ui.deferred_in_ms(&d); ms > 0 { soonest = soonest == 0 ? ms : min(soonest, ms) } }
+	for &pane in app.panes { if ms := ui.deferred_in_ms(&pane.view.restore_due); ms > 0 { soonest = soonest == 0 ? ms : min(soonest, ms) } }
 	for ms in ([?]int{activity_in_ms(app), rediscover_in_ms(app), browser_in_ms(app)}) {
 		if ms > 0 { soonest = soonest == 0 ? ms : min(soonest, ms) }
 	}
@@ -656,7 +663,7 @@ main :: proc() {
 			if i == 0 { first = time.tick_since(started) }
 			time.sleep(CHECK_FRAME_SLEEP_MS * time.Millisecond)
 		}
-		fmt.printfln("opencode-native: %d frames, %d boxes, online=%v, %d sessions, %d messages, first frame %.1f ms", frames, app.state.boxes_built, online(app), len(app.sessions), len(app.chat.messages), time.duration_milliseconds(first))
+		fmt.printfln("opencode-native: %d frames, %d boxes, online=%v, %d sessions, %d messages, first frame %.1f ms", frames, app.state.boxes_built, online(app), len(app.sessions), len(main_pane(app).chat.messages), time.duration_milliseconds(first))
 		stores_close(app)
 		log_stop(logger)
 		os.exit(0)
@@ -673,9 +680,9 @@ main :: proc() {
 	if opts.search != "" { ui.line_edit_set(&app.sidebar.search, opts.search) }
 	if opts.command == .Setup { prefs_page.install_open(&app.install) }
 	if opts.add_server { server_edit_open(app, -1) }
-	if opts.find != "" { find_open(app); ui.line_edit_set(&app.find.field, opts.find) }
+	if opts.find != "" { find_open(app, main_pane(app)); ui.line_edit_set(&main_pane(app).find.field, opts.find) }
 	if opts.image != "" { image_view_start(app, opts.image) }
-	for file in opts.attach { attach_path(app, file) }   // (what a paste gives, without the clipboard)
+	for file in opts.attach { attach_path(app, main_pane(app), file) }   // (what a paste gives, without the clipboard)
 	if opts.diff != "" { diff_full_open_file(app, opts.diff) }   // (a patch in the full view)
 	if opts.slow_motion != 0 { film_slow_start(app, opts.slow_motion) }
 	if opts.settings {   // --settings[=page number]

@@ -116,10 +116,11 @@ rediscover_in_ms :: proc(app: ^App) -> int {
 // is noted here, and sessions_load opens it again if the server's list has it.
 @(private = "file")
 reopen_keep :: proc(app: ^App) {
+	pane := main_pane(app)
 	cx := &app.cx
 	reopen_clear(app)
-	if app.chat.id == "" { return }
-	cx.reopen = {id = strings.clone(app.chat.id), msg = strings.clone(app.chat.view_msg), dy = app.chat.view_dy, bottom = chat_following(app)}
+	if pane.chat.id == "" { return }
+	cx.reopen = {id = strings.clone(pane.chat.id), msg = strings.clone(pane.chat.view_msg), dy = pane.chat.view_dy, bottom = chat_following(pane)}
 }
 
 reopen_clear :: proc(app: ^App) {
@@ -365,8 +366,9 @@ server_forget :: proc(app: ^App) {
 
 @(private = "file")
 server_view_forget :: proc(app: ^App) {
+	pane := main_pane(app)   // (the main view goes home; Layer 1 has no other pane to close)
 	chat_home(app)
-	remote.reset(&app.cx.chat_read)
+	remote.reset(&pane.read)
 	for id in app.nav.drilled { delete(id) }
 	clear(&app.nav.drilled)
 	for st in app.nav.steps { delete(st.id) }
@@ -383,8 +385,10 @@ server_dialogs_forget :: proc(app: ^App) {
 	ui.view_close(&app.program_views, RENAME_VIEW)
 	app.rename.at = .None
 	sidebar_hold_end(app)
-	delete(app.composer.fork_prompt)
-	app.composer.fork_prompt = ""
+	for &pane in app.panes {
+		delete(pane.composer.fork_prompt)
+		pane.composer.fork_prompt = ""
+	}
 	app.opened_first = false
 	app.start_session = ""
 }

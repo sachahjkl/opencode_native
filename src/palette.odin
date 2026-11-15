@@ -145,6 +145,7 @@ palette_build :: proc(app: ^App) {
 // gated command can act or no longer. Either bumps the version the palette compares.
 @(private = "file")
 palette_table_keep :: proc(app: ^App) {
+	pane := main_pane(app)
 	p := &app.palette
 	changed := false
 	if language := i18n.version(); !p.made || language != p.language {
@@ -175,11 +176,11 @@ palette_table_keep :: proc(app: ^App) {
 	}
 	// the session a session's command acts on: the one shown, by its title (one lookup; the details made on a change)
 	title := ""
-	if s := find_session(app, app.chat.id); s != nil { title = s.title != "" ? s.title : i18n.tr("Untitled") }
-	if changed || p.details == nil || app.chat.id != p.detail_id || title != p.detail_title {
+	if s := find_session(app, pane.chat.id); s != nil { title = s.title != "" ? s.title : i18n.tr("Untitled") }
+	if changed || p.details == nil || pane.chat.id != p.detail_id || title != p.detail_title {
 		delete(p.detail_id)
 		delete(p.detail_title)
-		p.detail_id, p.detail_title = strings.clone(app.chat.id), strings.clone(title)
+		p.detail_id, p.detail_title = strings.clone(pane.chat.id), strings.clone(title)
 		virtual.arena_free_all(&p.details_arena)
 		a := virtual.arena_allocator(&p.details_arena)
 		p.details = make([]string, len(COMMANDS), a)
@@ -217,6 +218,7 @@ slice_of_one :: proc(c: ui.Chord, a: runtime.Allocator) -> []ui.Chord {
 // A choice of one of ocn's sources (the toolkit's acted already).
 @(private = "file")
 palette_run :: proc(app: ^App, c: ui.Palette_Choice) {
+	pane := main_pane(app)
 	p := &app.palette
 	if _, is := ui.palette_chosen_command(&p.pal, c); is {
 		// (by its id: the table may have been made again since it was ranked)
@@ -224,16 +226,16 @@ palette_run :: proc(app: ^App, c: ui.Palette_Choice) {
 		return
 	}
 	if c.source == &p.server {
-		ui.text_edit_set(&app.composer.area, fmt.tprintf("/%s ", c.id))
-		app.composer.focus_next = true
+		ui.text_edit_set(&pane.composer.area, fmt.tprintf("/%s ", c.id))
+		pane.composer.focus_next = true
 	} else if c.source == &p.sessions {
 		open_root(app, c.id)
 	} else if c.source == &p.models {
 		for m in app.models {
-			if model_key(m.provider, m.id) == c.id { choose_model(app, m); break }
+			if model_key(m.provider, m.id) == c.id { choose_model(app, pane, m); break }
 		}
 	} else if c.source == &p.agents {
-		choose_agent(app, c.id)
+		choose_agent(app, pane, c.id)
 	}
 }
 
@@ -318,7 +320,7 @@ sessions_lost :: proc(data: rawptr) {
 
 // The session shown.
 @(private = "file")
-sessions_mark :: proc(src: ^ui.Palette_Source, id: string) -> bool { return id == (^App)(src.user).chat.id }
+sessions_mark :: proc(src: ^ui.Palette_Source, id: string) -> bool { return id == main_pane((^App)(src.user)).chat.id }
 
 ////////////////////////////////
 // `#` The models and the agents
@@ -342,7 +344,7 @@ models_read :: proc(p: ^ui.Command_Palette, src: ^ui.Palette_Source, q: ui.Palet
 // The model in use: the session shown's, or the one chosen for it.
 @(private = "file")
 models_mark :: proc(src: ^ui.Palette_Source, id: string) -> bool {
-	model, provider := shown_model((^App)(src.user))
+	model, provider := shown_model((^App)(src.user), main_pane((^App)(src.user)))
 	return model != "" && model_key(provider, model) == id
 }
 
@@ -363,4 +365,4 @@ agents_read :: proc(p: ^ui.Command_Palette, src: ^ui.Palette_Source, q: ui.Palet
 }
 
 @(private = "file")
-agents_mark :: proc(src: ^ui.Palette_Source, id: string) -> bool { return id == shown_agent((^App)(src.user)) }
+agents_mark :: proc(src: ^ui.Palette_Source, id: string) -> bool { return id == shown_agent((^App)(src.user), main_pane((^App)(src.user))) }

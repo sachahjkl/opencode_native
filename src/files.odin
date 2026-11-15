@@ -20,9 +20,9 @@ import i18n "gt:i18n"
 
 // What a request says of the folder: the session's, or the one about to get a session; "": the server's own.
 @(private = "file")
-files_dir :: proc(app: ^App) -> string {
-	d := chat_dir(app)
-	return d != "" ? d : app.chat.new_dir
+files_dir :: proc(app: ^App, pane: ^Chat_Pane) -> string {
+	d := pane_dir(app, pane)
+	return d != "" ? d : pane.chat.new_dir
 }
 
 // The server writes paths with the separators of its system; a prompt reads better with one kind.
@@ -96,9 +96,9 @@ mention_word :: proc(text: string, cursor: int) -> (start: int, query: string, o
 }
 
 @(private = "file")
-mention_ask :: proc(app: ^App) {
-	m := &app.composer.mentions
-	folder := files_dir(app)
+mention_ask :: proc(app: ^App, pane: ^Chat_Pane) {
+	m := &pane.composer.mentions
+	folder := files_dir(app, pane)
 	if folder != m.folder {
 		mention_hits_clear(m)
 		delete(m.folder)
@@ -108,9 +108,9 @@ mention_ask :: proc(app: ^App) {
 	amp := q != "" ? "&" : ""
 	remote.begin(&m.read)
 	if m.query == "" {
-		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/list?%s", q), reading = &m.read)   // (the search wants a word)
+		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/list?%s", q), reading = &m.read, pane = pane)   // (the search wants a word)
 	} else {
-		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&type=file&limit=%d", q, amp, url_escape(m.query), MENTION_ROWS), reading = &m.read)
+		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&type=file&limit=%d", q, amp, url_escape(m.query), MENTION_ROWS), reading = &m.read, pane = pane)
 	}
 }
 
@@ -124,34 +124,34 @@ mention_hits_clear :: proc(m: ^Mentions) {
 }
 
 // What was asked was not answered: what was proposed for the word before is not for this one.
-mention_failed :: proc(app: ^App) { mention_hits_clear(&app.composer.mentions) }
+mention_failed :: proc(app: ^App, pane: ^Chat_Pane) { mention_hits_clear(&pane.composer.mentions) }
 
 // After the editor: what the caret stands on now.
-mention_track :: proc(app: ^App) {
-	m := &app.composer.mentions
-	a := &app.composer.area
+mention_track :: proc(app: ^App, pane: ^Chat_Pane) {
+	m := &pane.composer.mentions
+	a := &pane.composer.area
 	start, query, ok := mention_word(ui.text_edit_string(a), a.cursor)
 	if !ok || a.cursor != a.mark {
 		m.open, m.dismissed = false, nil
 		return
 	}
-	if !app.composer.focused {
+	if !pane.composer.focused {
 		if !ui.hot_within(m.list) { m.open = false }   // (a press on a row of the list leaves the editor: it is the click that chooses)
 		return
 	}
 	if at, dismissed := m.dismissed.?; dismissed && at == start { return }
 	// (the session changed under it: the same word asks about another folder)
-	if m.open && m.start == start && m.query == query && m.folder == files_dir(app) { return }
+	if m.open && m.start == start && m.query == query && m.folder == files_dir(app, pane) { return }
 	m.open, m.start = true, start
 	delete(m.query)
 	m.query = strings.clone(query)
 	m.sel = 0
-	mention_ask(app)
+	mention_ask(app, pane)
 }
 
 // The answer of the list or the search, if it is still what is looked for; sub-agents that match come first, the best first.
-mention_load :: proc(app: ^App, v: json.Value) {
-	m := &app.composer.mentions
+mention_load :: proc(app: ^App, pane: ^Chat_Pane, v: json.Value) {
+	m := &pane.composer.mentions
 	if !m.open { return }
 	sel := m.sel
 	mention_hits_clear(m)
@@ -173,48 +173,48 @@ mention_load :: proc(app: ^App, v: json.Value) {
 }
 
 // (Of another folder than the one the session shown is in, nothing can be chosen, whatever the next frame finds.)
-mention_shown :: proc(app: ^App) -> bool {
-	m := &app.composer.mentions
-	return m.open && len(m.hits) > 0 && m.folder == files_dir(app)
+mention_shown :: proc(app: ^App, pane: ^Chat_Pane) -> bool {
+	m := &pane.composer.mentions
+	return m.open && len(m.hits) > 0 && m.folder == files_dir(app, pane)
 }
 
 // In place of what was typed, or at the caret: `@name `, remembered for the prompt.
 @(private = "file")
-mention_put :: proc(app: ^App, kind: Mention_Kind, label, target, name: string) {
-	m := &app.composer.mentions
+mention_put :: proc(app: ^App, pane: ^Chat_Pane, kind: Mention_Kind, label, target, name: string) {
+	m := &pane.composer.mentions
 	t := fmt.tprintf("@%s", label)
-	area_insert(&app.composer.area, fmt.tprintf("%s ", t))
+	area_insert(&pane.composer.area, fmt.tprintf("%s ", t))
 	append(&m.chosen, Mention{kind, strings.clone(t), strings.clone(target), strings.clone(name)})
 	m.open = false
-	app.composer.focus_next = true
+	pane.composer.focus_next = true
 }
 
 @(private = "file")
-mention_choose :: proc(app: ^App, k: int) {
-	m := &app.composer.mentions
+mention_choose :: proc(app: ^App, pane: ^Chat_Pane, k: int) {
+	m := &pane.composer.mentions
 	h := m.hits[k]
-	a := &app.composer.area
+	a := &pane.composer.area
 	a.mark, a.cursor = m.start, a.cursor   // (what was typed goes)
 	if h.kind == .File {
-		mention_put(app, .File, h.label, file_uri(m.dir, h.label), filepath.base(h.label))
+		mention_put(app, pane, .File, h.label, file_uri(m.dir, h.label), filepath.base(h.label))
 	} else {
-		mention_put(app, .Agent, h.label, h.label, "")
+		mention_put(app, pane, .Agent, h.label, h.label, "")
 	}
 }
 
 // Before the editor and before Enter sends: the list has the keys it needs.
-mention_keys :: proc(app: ^App) {
-	m := &app.composer.mentions
-	if !mention_shown(app) { return }
+mention_keys :: proc(app: ^App, pane: ^Chat_Pane) {
+	m := &pane.composer.mentions
+	if !mention_shown(app, pane) { return }
 	n := len(m.hits)
 	if ui.key_press(.Down) { m.sel = (m.sel + 1) % n }
 	if ui.key_press(.Up) { m.sel = (m.sel + n - 1) % n }
 	if ui.key_press(.Escape) { m.open, m.dismissed = false, m.start; return }
-	if ui.key_press(.Tab) || ui.key_press(.Return) { mention_choose(app, m.sel) }
+	if ui.key_press(.Tab) || ui.key_press(.Return) { mention_choose(app, pane, m.sel) }
 }
 
 // Escape belongs to a list over the composer (the `@` mentions, the `/` commands) while it is there, not to the run.
-mention_takes_escape :: proc(app: ^App) -> bool { return (mention_shown(app) || slash_shown(app)) && app.composer.focused }
+mention_takes_escape :: proc(app: ^App, pane: ^Chat_Pane) -> bool { return (mention_shown(app, pane) || slash_shown(app, pane)) && pane.composer.focused }
 
 // A row of a list over the composer (the `@` mentions, the `/` commands).
 Completion_Row :: struct { icon, label, detail: string }
@@ -257,14 +257,14 @@ completion_list :: proc(app: ^App, id: string, rows: []Completion_Row, sel: int,
 }
 
 // Over the text of the composer, in its well.
-mention_list :: proc(app: ^App, em: f32) {
-	m := &app.composer.mentions
-	if !mention_shown(app) { return }
+mention_list :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	m := &pane.composer.mentions
+	if !mention_shown(app, pane) { return }
 	rows := make([]Completion_Row, len(m.hits), context.temp_allocator)
 	for h, k in m.hits { rows[k] = {h.kind == .File ? lucide.FILE : lucide.BOT, h.label, h.detail} }
 	clicked: int
 	clicked, m.list = completion_list(app, "###mention_list", rows, m.sel, em)
-	if clicked >= 0 { mention_choose(app, clicked) }
+	if clicked >= 0 { mention_choose(app, pane, clicked) }
 }
 
 // Where a mention stands, as the server counts: in UTF-16 units, as JavaScript does.
@@ -282,28 +282,34 @@ mention_json :: proc(m: ^Mention, text: string) -> (mention: string, ok: bool) {
 	return fmt.tprintf(`{{"start":%d,"end":%d,"text":%s}}`, start, start + utf16_len(m.text), tk_json.quote(m.text)), true
 }
 
-mentions_clear :: proc(app: ^App) {
-	m := &app.composer.mentions
+mentions_clear :: proc(app: ^App, pane: ^Chat_Pane) {
+	m := &pane.composer.mentions
 	for c in m.chosen { delete(c.text); delete(c.target); delete(c.name) }
 	clear(&m.chosen)
 }
 
-mentions_destroy :: proc(app: ^App) {
-	m := &app.composer.mentions
-	mentions_clear(app)
+mentions_destroy :: proc(app: ^App) { for &pane in app.panes { pane_mentions_destroy(app, &pane) } }
+
+@(private = "file")
+pane_mentions_destroy :: proc(app: ^App, pane: ^Chat_Pane) {
+	m := &pane.composer.mentions
+	mentions_clear(app, pane)
 	delete(m.chosen); delete(m.hits); delete(m.query); delete(m.dir); delete(m.folder); delete(m.read.message)
 	virtual.arena_destroy(&m.arena)
 	m^ = {}
-	delete(app.composer.slash_pick.query)   // (the other list over the composer: slash.odin)
-	ui.fuzzy_cache_destroy(&app.composer.slash_pick.search)
-	app.composer.slash_pick = {}
+	delete(pane.composer.slash_pick.query)   // (the other list over the composer: slash.odin)
+	ui.fuzzy_cache_destroy(&pane.composer.slash_pick.search)
+	pane.composer.slash_pick = {}
 }
 
 // What the server proposed, and what was chosen of it: a file's uri on the server left says nothing on the next one, and must not go with a
 // prompt there. The words stay in the composer, which is the reader's and goes through server_forget whole: they go as plain text.
-mentions_forget :: proc(app: ^App) {
-	m := &app.composer.mentions
-	mentions_clear(app)
+mentions_forget :: proc(app: ^App) { for &pane in app.panes { pane_mentions_forget(app, &pane) } }
+
+@(private = "file")
+pane_mentions_forget :: proc(app: ^App, pane: ^Chat_Pane) {
+	m := &pane.composer.mentions
+	mentions_clear(app, pane)
 	mention_hits_clear(m)
 	m.open, m.dismissed = false, nil
 	delete(m.folder); delete(m.query)
@@ -318,37 +324,38 @@ mentions_forget :: proc(app: ^App) {
 // the prompt. The folder is the server's: this computer's files when the server is here, else its own (folders.odin).
 @(private = "file")
 Files_Job :: struct {
-	app: ^App,
-	dir: string,   // the session's folder (owned)
+	app:  ^App,
+	pane: ^Chat_Pane,   // whose composer the files go to (the panes never move: chat_pane.odin)
+	dir:  string,       // the session's folder (owned)
 }
 
-files_open :: proc(app: ^App) {
-	dir := files_dir(app)
+files_open :: proc(app: ^App, pane: ^Chat_Pane) {
+	dir := files_dir(app, pane)
 	j := new(Files_Job)
-	j^ = {app, strings.clone(dir)}
+	j^ = {app, pane, strings.clone(dir)}
 	places: []platform.File_Place
 	if dir != "" { places = {{name = base_name(dir), path = dir}} }
 	ui.file_dialog(&app.state, .Open, {owner = app.win, title = i18n.tr("Files of the session"), start_dir = dir, places = places, multiple = true, all_files = true, find_deep = true, act = i18n.tr("Mention"), remember_id = "session_files"}, proc(r: platform.Dialog_Result, user: rawptr) {
 		j := (^Files_Job)(user)
 		defer { delete(j.dir); free(j) }
 		if r.status != .Chosen { return }
-		a := &j.app.composer.area
+		a := &j.pane.composer.area
 		a.mark = a.cursor
-		for p in r.paths { file_mention(j.app, j.dir, p) }
+		for p in r.paths { file_mention(j.app, j.pane, j.dir, p) }
 	}, j, source = folders_are_here(app) ? nil : server_files(app, dir))
 }
 
 // `path` (absolute, the server's) mentioned in the prompt: by its path from the session's folder when it is in it, else whole.
 @(private = "file")
-file_mention :: proc(app: ^App, dir, path: string) {
+file_mention :: proc(app: ^App, pane: ^Chat_Pane, dir, path: string) {
 	p := path_clean(path)
 	d := path_clean(dir)
 	if d != "" && strings.has_prefix(p, d) && len(p) > len(d) && p[len(d)] == '/' {
 		rel := p[len(d) + 1:]
-		mention_put(app, .File, rel, file_uri(dir, rel), filepath.base(rel))
+		mention_put(app, pane, .File, rel, file_uri(dir, rel), filepath.base(rel))
 		return
 	}
-	mention_put(app, .File, p, file_uri(filepath.dir(p), filepath.base(p)), filepath.base(p))
+	mention_put(app, pane, .File, p, file_uri(filepath.dir(p), filepath.base(p)), filepath.base(p))
 }
 
 // What is shown of `raw`: its beginning when it is long, nothing when it is no text.
@@ -363,10 +370,10 @@ file_text :: proc(raw: string) -> (shown: string, is_text: bool) {
 ////////////////////////////////
 // What the answers to its requests do (net.odin REQ_FACTS)
 
-mention_files_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { mention_load(app, v) }
+mention_files_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { mention_load(app, req_pane(app, r), v) }
 
 mention_files_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
-	mention_failed(app)    // (what was proposed is not what is typed any more)
+	mention_failed(app, req_pane(app, r))    // (what was proposed is not what is typed any more)
 	return f == .Refused   // (a server without one, a folder gone: nothing to say)
 }
 

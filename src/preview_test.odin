@@ -76,10 +76,11 @@ words :: proc(s: string) -> []u8 { return transmute([]u8)s }
 // The window goes to this session, as nav_apply would leave it, and the frame's point follows.
 @(private = "file")
 go_to :: proc(app: ^App, id: string, parent := "") {
-	chat_reset(&app.chat)
-	app.chat.id = strings.clone(id, app.chat.alloc)
-	app.chat.have_self = true
-	app.chat.self.parent = strings.clone(parent, app.chat.alloc)
+	pane := main_pane(app)
+	chat_reset(&pane.chat)
+	pane.chat.id = strings.clone(id, pane.chat.alloc)
+	pane.chat.have_self = true
+	pane.chat.self.parent = strings.clone(parent, pane.chat.alloc)
 	preview_follow(app)
 }
 
@@ -279,6 +280,7 @@ the_home_page_has_a_browser_of_its_own :: proc(t: ^testing.T) {
 a_session_id_in_a_message_opens_it :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	the_app = app   // (link_open acts on the window's app)
 	runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
 	ui.rich_links("the child was ses_01HZabc, see https://a.b.", {}, &runs)
@@ -293,7 +295,7 @@ a_session_id_in_a_message_opens_it :: proc(t: ^testing.T) {
 	link_open("ses_01HZabc")
 	testing.expect(t, len(app.nav.steps) == 1 && app.nav.steps[0].kind == .Drill && app.nav.steps[0].id == "ses_01HZabc", "that session asked for")
 	nav_apply(app)
-	testing.expect_value(t, app.chat.id, "ses_01HZabc")
+	testing.expect_value(t, pane.chat.id, "ses_01HZabc")
 }
 
 // A remote server's loopback address is its machine (src/md/features/remote-localhost.md): the panel loads it at the
@@ -361,13 +363,14 @@ a_sub_agent_uses_its_sessions_browser :: proc(t: ^testing.T) {
 a_session_not_read_yet_moves_nothing :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	with_page(app, "root", "http://r.local/", "R")
-	chat_reset(&app.chat)
-	app.chat.id = strings.clone("child", app.chat.alloc)
+	chat_reset(&pane.chat)
+	pane.chat.id = strings.clone("child", pane.chat.alloc)
 	preview_follow(app)
 	testing.expect_value(t, app.preview.key, "root")
-	app.chat.have_self = true
-	app.chat.self.parent = strings.clone("root", app.chat.alloc)
+	pane.chat.have_self = true
+	pane.chat.self.parent = strings.clone("root", pane.chat.alloc)
 	preview_follow(app)
 	testing.expect_value(t, app.preview.key, "root")
 	testing.expect(t, app.preview.open, "and it never closed")
@@ -377,10 +380,11 @@ a_session_not_read_yet_moves_nothing :: proc(t: ^testing.T) {
 the_way_down_says_the_root_at_once :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	with_page(app, "root", "http://r.local/", "R")
 	append(&app.nav.drilled, strings.clone("root"))
-	chat_reset(&app.chat)
-	app.chat.id = strings.clone("child", app.chat.alloc)
+	chat_reset(&pane.chat)
+	pane.chat.id = strings.clone("child", pane.chat.alloc)
 	preview_follow(app)
 	testing.expect_value(t, app.preview.key, "root")
 }
@@ -694,17 +698,18 @@ a_view_that_fails_ends_its_own_calls_alone :: proc(t: ^testing.T) {
 the_socket_moves_after_the_calls_that_wait :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	l := link(app)
 	app.prefs.browser_tools = true
 	with_page(app, "a", "http://a.local/", "A")
-	app.chat.self.directory = strings.clone("C:/a", app.chat.alloc)
+	pane.chat.self.directory = strings.clone("C:/a", pane.chat.alloc)
 	browser_tick(app)
 	_, moved := browser_link_target(l)
 	agent_call(app, l, 1, "navigate", "a")
-	chat_reset(&app.chat)
-	app.chat.id = strings.clone("b", app.chat.alloc)
-	app.chat.have_self = true
-	app.chat.self.directory = strings.clone("C:/b", app.chat.alloc)
+	chat_reset(&pane.chat)
+	pane.chat.id = strings.clone("b", pane.chat.alloc)
+	pane.chat.have_self = true
+	pane.chat.self.directory = strings.clone("C:/b", pane.chat.alloc)
 	preview_follow(app)
 	browser_tick(app)
 	testing.expect(t, !browser_link_moved(l, moved), "the call waits")
@@ -1186,6 +1191,7 @@ an_agent_reaches_a_tab_the_limit_took :: proc(t: ^testing.T) {
 a_folder_at_work_keeps_its_link :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	l := link(app)
 	app.prefs.browser_tools = true
 	app.link = .Online
@@ -1193,15 +1199,15 @@ a_folder_at_work_keeps_its_link :: proc(t: ^testing.T) {
 	append(&app.sessions, Session_Info{id = "a", directory = "C:/a"})
 	sessions_changed(app)
 	with_page(app, "a", "http://a.local/", "A")
-	app.chat.self.directory = strings.clone("C:/a", app.chat.alloc)
+	pane.chat.self.directory = strings.clone("C:/a", pane.chat.alloc)
 	browser_tick(app)
 	_, moved := browser_link_target(l)
 	app.busy["a"] = true
 
-	chat_reset(&app.chat)
-	app.chat.id = strings.clone("b", app.chat.alloc)
-	app.chat.have_self = true
-	app.chat.self.directory = strings.clone("C:/b", app.chat.alloc)
+	chat_reset(&pane.chat)
+	pane.chat.id = strings.clone("b", pane.chat.alloc)
+	pane.chat.have_self = true
+	pane.chat.self.directory = strings.clone("C:/b", pane.chat.alloc)
 	preview_follow(app)
 	browser_tick(app)
 	testing.expect(t, !browser_link_moved(l, moved), "it stays with the agent")

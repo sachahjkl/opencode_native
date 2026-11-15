@@ -220,9 +220,9 @@ search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut:
 
 // A command, as one would have typed it.
 @(private = "file")
-command_view :: proc(app: ^App, id: string, p: ^Part, em: f32) {
+command_view :: proc(app: ^App, pane: ^Chat_Pane, id: string, p: ^Part, em: f32) {
 	if p.command_line == "" { return }
-	mono_well(id, p.command_line, em, TOOL_INPUT_LINES_MAX, hex(HEX_TEXT_SOFT), &p.command_well, app.chat.alloc)
+	mono_well(id, p.command_line, em, TOOL_INPUT_LINES_MAX, hex(HEX_TEXT_SOFT), &p.command_well, pane.chat.alloc)
 	ui.spacer(ui.px(em * 0.35))
 }
 
@@ -248,7 +248,7 @@ value_text :: proc(v: json.Value) -> string {
 
 // The input as keys and values, in one well: a long value under its key, at the place of the short ones' values' start. (No well in
 // the well: one edge beside another reads as unfinished.)
-input_view :: proc(app: ^App, p: ^Part, em: f32) {
+input_view :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 	if !p.input_object { mono_well("###input", p.input, em, TOOL_INPUT_LINES_MAX); return }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.well("###input") {
@@ -265,7 +265,7 @@ input_view :: proc(app: ^App, p: ^Part, em: f32) {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column(id = fmt.tprintf("###iv%d", i)) {
 					body, extra := mono_cut_kept(&f.well.cut, s, TOOL_INPUT_LINES_MAX)
-					mono_text(body, extra, em, INPUT_PAD_EM, flush = true, kept = &f.well.runs, kept_in = app.chat.alloc)
+					mono_text(body, extra, em, INPUT_PAD_EM, flush = true, kept = &f.well.runs, kept_in = pane.chat.alloc)
 				}
 				if i + 1 < len(p.fields) { ui.spacer(ui.px(em * 0.3)) }
 			} else {
@@ -284,18 +284,18 @@ tool_diff_title :: proc(p: ^Part) -> string {
 }
 
 // The body of a call that is open, by what it does.
-tool_body :: proc(app: ^App, p: ^Part, em: f32) {
+tool_body :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 	failed := p.status == .Error
 	lines := app.prefs.tool_lines
-	output :: proc(app: ^App, p: ^Part, em: f32, lines: int) {
+	output :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32, lines: int) {
 		if p.output == "" { return }
-		mono_well("###output", p.output, em, lines, p.status == .Error ? hex(HEX_ERROR_TEXT) : hex(HEX_TOOL_OUTPUT), &p.output_well, app.chat.alloc)
+		mono_well("###output", p.output, em, lines, p.status == .Error ? hex(HEX_ERROR_TEXT) : hex(HEX_TOOL_OUTPUT), &p.output_well, pane.chat.alloc)
 	}
 	switch tool_kind(p.tool_name) {
 	case .Edit:
-		if patch := part_patch(p, app.chat.alloc); patch != "" {
+		if patch := part_patch(p, pane.chat.alloc); patch != "" {
 			diff_view(app, "###diff", p.diff, patch, em, lines, tool_diff_title(p))
-			if failed { ui.spacer(ui.px(em * 0.4)); output(app, p, em, lines) }
+			if failed { ui.spacer(ui.px(em * 0.4)); output(app, pane, p, em, lines) }
 			return
 		}
 	case .Read:
@@ -303,8 +303,8 @@ tool_body :: proc(app: ^App, p: ^Part, em: f32) {
 	case .Search:
 		if !failed && p.output != "" { search_view(app, "###search", p.output, em, lines, &p.output_well.cut); return }
 	case .Shell:
-		command_view(app, "###cmd", p, em)
-		output(app, p, em, lines)
+		command_view(app, pane, "###cmd", p, em)
+		output(app, pane, p, em, lines)
 		if output_view_can(p) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###cmd_more") {
@@ -317,6 +317,6 @@ tool_body :: proc(app: ^App, p: ^Part, em: f32) {
 		if todo_view(app, p, em) { return }
 	case .Other:
 	}
-	if p.input != "" { input_view(app, p, em) }
-	output(app, p, em, lines)
+	if p.input != "" { input_view(app, pane, p, em) }
+	output(app, pane, p, em, lines)
 }

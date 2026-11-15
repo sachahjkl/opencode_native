@@ -504,6 +504,7 @@ terminals_show :: proc(app: ^App) {
 
 // Every view closed: the shells stay, their threads read on, and the keyboard goes back to the conversation.
 terminals_hide :: proc(app: ^App) {
+	pane := main_pane(app)
 	s := &app.cx.terms
 	had_keys := s.focused != nil
 	term_press_end(s)
@@ -512,7 +513,7 @@ terminals_hide :: proc(app: ^App) {
 	s.ask = {}
 	s.make_after = false
 	terminals_views(app)
-	if had_keys { app.composer.focus_next = true }
+	if had_keys { pane.composer.focus_next = true }
 }
 
 // (a shell the list and this client both know is left as it is: the reading only adds)
@@ -622,6 +623,7 @@ term_forget_one :: proc(app: ^App, t: ^Term) {
 
 // A tab closed: the shell is closed on its server (unless it is over already). The last one closes the area.
 term_close :: proc(app: ^App, t: ^Term) {
+	pane := main_pane(app)
 	s := &app.cx.terms
 	had_keys := s.focused == t
 	if t.link != .Closed { request(app, .Action, "DELETE", term_path(t), conn = t.server) }
@@ -630,7 +632,7 @@ term_close :: proc(app: ^App, t: ^Term) {
 	if len(s.list) == 0 {
 		s.open = false
 		s.ask = {}
-		if had_keys { app.composer.focus_next = true }
+		if had_keys { pane.composer.focus_next = true }
 	} else if had_keys {
 		for o in s.list { if view_seen(app, TERMINAL_VIEW, o.shown, o.id) { term_focus_ask(app, o); break } }
 	}

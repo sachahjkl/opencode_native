@@ -56,7 +56,7 @@ Missed :: struct {
 	due:          bool,                          // a list of waits came back: a wait that is gone may be acknowledged now
 	sessions_ver: u64,
 	marks_ver:    u64,
-	shown:        string,                        // app.chat.id (owned)
+	shown:        string,                        // the main view's chat id (owned)
 	server:       int,
 	front:        bool,                          // the window was in front
 	scheduled:    map[string]Missed_Scheduled,   // by session (keys owned)
@@ -168,17 +168,18 @@ missed_is_wait :: proc(e: ^notices.Entry) -> bool {
 
 // The session at the top of `id`'s tree, as far as it is known (`id` itself: a root, or one whose parent is not known).
 session_root :: proc(app: ^App, id: string) -> string {
+	pane := main_pane(app)
 	cur := id
 	for _ in 0 ..< MISSED_ROOT_DEPTH {
 		parent := ""
 		if s := find_session(app, cur); s != nil {
 			parent = s.parent
-		} else if cur == app.chat.id && app.chat.have_self {
-			parent = app.chat.self.parent
-		} else if c := find_child(&app.chat, cur); c != nil {
-			parent = c.parent != "" ? c.parent : app.chat.id
-		} else if is_child(&app.chat, cur) {
-			parent = app.chat.id
+		} else if cur == pane.chat.id && pane.chat.have_self {
+			parent = pane.chat.self.parent
+		} else if c := find_child(&pane.chat, cur); c != nil {
+			parent = c.parent != "" ? c.parent : pane.chat.id
+		} else if is_child(&pane.chat, cur) {
+			parent = pane.chat.id
 		}
 		if parent == "" || parent == cur { return cur }
 		cur = parent
@@ -189,7 +190,8 @@ session_root :: proc(app: ^App, id: string) -> string {
 // The run of a root session ended and nobody has seen that end: the server's mark, without what runs now (a run that goes on
 // keeps the entry of the last end until its own end puts it again). session_unseen is this, at rest.
 session_end_unseen :: proc(app: ^App, s: ^Session_Info) -> bool {
-	return s.parent == "" && s.idle > s.viewed && s.id != app.chat.id
+	pane := main_pane(app)
+	return s.parent == "" && s.idle > s.viewed && s.id != pane.chat.id
 }
 
 // One line of `s`, at most MISSED_EXCERPT bytes and whole characters (temp memory).
@@ -207,7 +209,8 @@ missed_front :: proc(app: ^App) -> bool { return app.win != nil && app.win.activ
 // What happens under `root` is on the person's screen now: no entry for it.
 @(private = "file")
 missed_on_screen :: proc(app: ^App, root: string) -> bool {
-	return app.chat.id != "" && missed_front(app) && session_root(app, app.chat.id) == root
+	pane := main_pane(app)
+	return pane.chat.id != "" && missed_front(app) && session_root(app, pane.chat.id) == root
 }
 
 @(private = "file")
@@ -227,6 +230,7 @@ missed_is_open :: proc(log: ^notices.Log, key: string) -> bool { return log.live
 // A run ended (the stream: it ran here). Its entry, or a sub-agent's; the run a schedule started has one more. Returns the key
 // that a notification of it goes with ("": none).
 missed_run_ended :: proc(app: ^App, sid, word: string) -> (key: string) {
+	pane := main_pane(app)
 	if sid == "" { return "" }
 	st: Sub_State = word == "failed" ? .Failed : word == "interrupted" ? .Cancelled : .Done
 	root := session_root(app, sid)
@@ -234,7 +238,7 @@ missed_run_ended :: proc(app: ^App, sid, word: string) -> (key: string) {
 	now := now_epoch_ms()
 	if root == sid {
 		// (a root the list does not know: the server's mark cannot be read, the entry would never go)
-		if s := find_session(app, sid); s != nil && sid != app.chat.id {
+		if s := find_session(app, sid); s != nil && sid != pane.chat.id {
 			key = missed_key(app, .End, sid)
 			missed_put(app, .End, key, root, missed_end_title(st), "", st, now)
 		}
@@ -263,8 +267,9 @@ missed_end_title :: proc(st: Sub_State) -> string {
 // What a sub-agent handed back, when the conversation shown has it (its card's result, the end of its work read for the tray).
 @(private = "file")
 missed_sub_text :: proc(app: ^App, sid: string) -> string {
+	pane := main_pane(app)
 	if p, ok := app.activity.peeks[sid]; ok && p.text != "" { return p.text }
-	if is_child(&app.chat, sid) { return sub_view(app, sid).result }
+	if is_child(&pane.chat, sid) { return sub_view(app, pane, sid).result }
 	return ""
 }
 
@@ -286,7 +291,8 @@ missed_inbox :: proc(app: ^App, sid: string, d: json.Value) {
 
 // A command of the background ended (the tray's reading of the session shown). `session`: whose ("": the session shown).
 missed_shell_ended :: proc(app: ^App, id, session, command: string, st: Sub_State) {
-	sid := session != "" ? session : app.chat.id
+	pane := main_pane(app)
+	sid := session != "" ? session : pane.chat.id
 	if sid == "" { return }
 	root := session_root(app, sid)
 	if missed_on_screen(app, root) { return }
@@ -324,15 +330,16 @@ missed_due :: proc(app: ^App) { app.missed.due = true }
 // The log as what is known says it. At each build, after the events and before their effects (a notification finds its entry);
 // it does its work only when the sessions, their marks, the session shown or the server moved: O(sessions + waits + entries) then.
 missed_sync :: proc(app: ^App) {
+	pane := main_pane(app)
 	m := &app.missed
 	front := missed_front(app)
-	if front && !m.front && app.chat.id != "" { missed_visit(app, app.chat.id) }
+	if front && !m.front && pane.chat.id != "" { missed_visit(app, pane.chat.id) }
 	m.front = front
 	cx := &app.cx
-	if m.synced && !m.due && m.sessions_ver == cx.sessions_ver && m.marks_ver == cx.marks_ver && m.shown == app.chat.id && m.server == app.server { return }
+	if m.synced && !m.due && m.sessions_ver == cx.sessions_ver && m.marks_ver == cx.marks_ver && m.shown == pane.chat.id && m.server == app.server { return }
 	m.synced, m.due = true, false
 	m.sessions_ver, m.marks_ver, m.server = cx.sessions_ver, cx.marks_ver, app.server
-	if m.shown != app.chat.id { delete(m.shown); m.shown = strings.clone(app.chat.id) }
+	if m.shown != pane.chat.id { delete(m.shown); m.shown = strings.clone(pane.chat.id) }
 	log := missed_log(app)
 
 	// the ends: the server's mark, session by session
@@ -452,11 +459,12 @@ missed_view_open :: proc(app: ^App) {
 
 // The oldest open entry of this server whose session is not the one shown: its session opens (the queue of what was missed).
 missed_next :: proc(app: ^App) {
+	pane := main_pane(app)
 	log := missed_log(app)
 	for e in log.entries {
 		if e.state == .Acknowledged { continue }
 		root, mine := missed_unscoped(app, e.group)
-		if !mine || root == "" || root == app.chat.id { continue }
+		if !mine || root == "" || root == pane.chat.id { continue }
 		open_root(app, root)
 		return
 	}
@@ -465,11 +473,12 @@ missed_next :: proc(app: ^App) {
 
 // A notification of the system came back: a click opens the session of its entry (the visit acknowledges what it can), in front.
 missed_notification_click :: proc(app: ^App, id: platform.Notification_Id) {
+	pane := main_pane(app)
 	if app.win != nil { platform.raise_window(app.win) }
 	if !app.missed.opened || id == 0 { return }
 	for e in app.missed.log.entries {
 		if e.system != id { continue }
-		if root, mine := missed_unscoped(app, e.group); mine && root != "" && root != app.chat.id { open_root(app, root) }
+		if root, mine := missed_unscoped(app, e.group); mine && root != "" && root != pane.chat.id { open_root(app, root) }
 		return
 	}
 }

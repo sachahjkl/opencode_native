@@ -24,6 +24,7 @@ jump_shown :: proc(app: ^App) -> bool { return ui.palette_is_open(&app.jump.pal)
 
 // At each build of the main window, beside the main palette: opened when asked, a choice taken.
 jump_build :: proc(app: ^App) {
+	pane := main_pane(app)
 	j := &app.jump
 	if !ui.palette_has(&j.pal, &j.prompts) {
 		j.prompts = {
@@ -31,7 +32,7 @@ jump_build :: proc(app: ^App) {
 			read = jump_read, user = app,
 			// (read again when a prompt comes or the session changes: never at a frame)
 			poll = proc(_: ^ui.Command_Palette, src: ^ui.Palette_Source) {
-				c := &(^App)(src.user).chat
+				c := &main_pane((^App)(src.user)).chat
 				src.version = c.gen << 32 | u64(len(c.messages)) + 1
 			},
 		}
@@ -39,9 +40,9 @@ jump_build :: proc(app: ^App) {
 	}
 	if j.due {
 		j.due = false
-		if app.chat.id != "" { ui.palette_open(&j.pal) }
+		if pane.chat.id != "" { ui.palette_open(&j.pal) }
 	}
-	if c, ok := ui.palette_chosen(&j.pal); ok && c.source == &j.prompts { prompt_go(app, c.id, ui.font_size()) }
+	if c, ok := ui.palette_chosen(&j.pal); ok && c.source == &j.prompts { prompt_go(app, pane, c.id, ui.font_size()) }
 }
 
 jump_destroy :: proc(app: ^App) {
@@ -53,13 +54,14 @@ jump_destroy :: proc(app: ^App) {
 @(private = "file")
 jump_read :: proc(p: ^ui.Command_Palette, src: ^ui.Palette_Source, q: ui.Palette_Question) {
 	app := (^App)(src.user)
+	pane := main_pane(app)   // (the jump list is the main view's)
 	a: ui.Palette_Answer
 	al := ui.palette_answer_allocator(&a)
 	n := 0
-	for &m in app.chat.messages { if m.kind == .User { n += 1 } }
+	for &m in pane.chat.messages { if m.kind == .User { n += 1 } }
 	a.items = make([]ui.Palette_Item, n, al)
 	i := n
-	for &m in app.chat.messages {
+	for &m in pane.chat.messages {
 		if m.kind != .User { continue }
 		i -= 1
 		title := strings.trim_space(first_line(m.text))

@@ -72,8 +72,9 @@ session_seen :: proc(app: ^App, s: ^Session_Info) {
 // A run ended: until the list says when, the row must not go through Recent to get to Finished. (No clock here: only that it is later
 // than what was seen.)
 session_ended :: proc(app: ^App, id, outcome: string) {
+	pane := main_pane(app)
 	s := find_session(app, id)
-	if s == nil || id == app.chat.id { return }
+	if s == nil || id == pane.chat.id { return }
 	s.idle = max(s.idle, s.viewed + 1)
 	s.outcome = outcome   // (a literal, or the word of the next list)
 	marks_changed(app)
@@ -86,8 +87,9 @@ session_viewed :: proc(app: ^App, id: string, idle: f64) {
 
 // The list says what ended: the one shown was in front of the person.
 sessions_seen_shown :: proc(app: ^App) {
-	if app.busy[app.chat.id] or_else false { return }
-	if s := find_session(app, app.chat.id); s != nil { session_seen(app, s) }
+	pane := main_pane(app)
+	if app.busy[pane.chat.id] or_else false { return }
+	if s := find_session(app, pane.chat.id); s != nil { session_seen(app, s) }
 }
 
 // The rows of the list before they are dealt, in the mode's order: sub-agents as the preference says, what the search leaves.
@@ -227,7 +229,7 @@ Side_Kept :: struct {
 	sections_arena: virtual.Arena,
 	sections_made:  bool,
 	sections_rows, sections_marks, sections_hold: u64,   // rows_ver, marks_ver and Side_Hold.ver they were made at
-	shown:          string,          // app.chat.id they were made with (sections_arena)
+	shown:          string,          // the main view's chat id they were made with (sections_arena)
 	sections:       []Side_Section,
 
 	rows_computed, sections_computed: int,   // times each was made (tests)
@@ -289,13 +291,14 @@ side_rows_refresh :: proc(app: ^App, query: string) {
 
 @(private = "file")
 side_sections_refresh :: proc(app: ^App) {
+	pane := main_pane(app)
 	k := &app.sidebar.kept
 	h := &app.sidebar.hold
-	if k.sections_made && k.sections_rows == k.rows_ver && k.sections_marks == app.cx.marks_ver && k.sections_hold == h.ver && k.shown == app.chat.id { return }
+	if k.sections_made && k.sections_rows == k.rows_ver && k.sections_marks == app.cx.marks_ver && k.sections_hold == h.ver && k.shown == pane.chat.id { return }
 	a := arena_renew(&k.sections_arena)
 	k.sections = h.on ? held_sections(app, k.rows, a) : sidebar_sections(app, k.rows, k.mode, a)
 	k.sections_made, k.sections_rows, k.sections_marks, k.sections_hold = true, k.rows_ver, app.cx.marks_ver, h.ver
-	k.shown = strings.clone(app.chat.id, a)
+	k.shown = strings.clone(pane.chat.id, a)
 	k.sections_computed += 1
 }
 

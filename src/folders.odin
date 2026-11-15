@@ -47,7 +47,8 @@ Folder_Job :: struct {
 
 // Asks for a folder of the server, for `purpose` (`session`: the one moved), and does what it is for once chosen.
 folder_choose :: proc(app: ^App, purpose: Folder_Purpose, session := "") {
-	start := app.chat.new_dir
+	pane := main_pane(app)
+	start := pane.chat.new_dir
 	if s := find_session(app, session); s != nil { start = s.directory }
 	// (the folders of the latest sessions: where one most often starts again)
 	folders := home_folders(app)
@@ -67,11 +68,12 @@ folders_are_here :: proc(app: ^App) -> bool { return app.conn != nil && url_is_h
 
 // What a folder chosen is for, done.
 folder_chosen :: proc(app: ^App, purpose: Folder_Purpose, session, path: string) {
+	pane := main_pane(app)
 	switch purpose {
 	case .New_Session:
-		delete(app.chat.new_dir, app.chat.alloc)
-		app.chat.new_dir = strings.clone(path, app.chat.alloc)
-		app.composer.focus_next = true
+		delete(pane.chat.new_dir, pane.chat.alloc)
+		pane.chat.new_dir = strings.clone(path, pane.chat.alloc)
+		pane.composer.focus_next = true
 	case .Move_Session:
 		request(app, .Session_Moved, "POST", fmt.tprintf("/api/session/%s/move", session), fmt.tprintf(`{{"directory":%s}}`, tk_json.quote(path)), session)
 	}

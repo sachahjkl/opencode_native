@@ -133,7 +133,7 @@ mermaid_block :: proc(id, code: string, closed: bool, version: u64) {
 	app := the_app
 	em := ui.font_size()
 	k := hash.fnv64a(transmute([]u8)id)
-	as_text := app.conversation.expanded[k] or_else false
+	as_text := app.expanded[k] or_else false
 	d: ^Diagram
 	if closed && !as_text { d = diagram_of(app, code, !app.cx.theme.light) }
 	ok := d != nil && d.why == ""
@@ -155,7 +155,7 @@ mermaid_block :: proc(id, code: string, closed: bool, version: u64) {
 				ui.a11y({role = .Button, name = as_text ? i18n.tr("Show the diagram") : i18n.tr("Show its text")})
 				ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
 				sig := ui.button("as_text", icon = as_text ? lucide.GIT_FORK : lucide.CODE)
-				if sig.clicked { app.conversation.expanded[k] = !as_text }
+				if sig.clicked { app.expanded[k] = !as_text }
 				if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(as_text ? i18n.tr("Show the diagram") : i18n.tr("Show its text")) } }
 			}
 			if ok {
@@ -197,8 +197,9 @@ Diagram_Draw :: struct { doc: ^svg.Document, scale: f32 }
 // it in the viewer; a right click, its menu.
 @(private = "file")
 diagram_box :: proc(app: ^App, doc: ^svg.Document, code: string, em: f32) {
+	pane := main_pane(app)
 	ui.spacer(ui.px(em * 0.6))
-	avail := max(app.conversation.column_w - em * 1.8, em * 8)
+	avail := max(pane.conversation.column_w - em * 1.8, em * 8)
 	scale := min(em / DIAGRAM_FONT_PX, avail / max(doc.view[2], 1))
 	sz := svg.size(doc, scale)
 	ui.next({width = ui.fill(), height = ui.px(math.ceil(sz.y)), axis = .X})

@@ -29,8 +29,8 @@ Command :: struct {
 	scope:   ui.Command_Scope,
 }
 
-@(private = "file") has_session :: proc(app: ^App) -> bool { return app.chat.id != "" }
-@(private = "file") is_busy :: proc(app: ^App) -> bool { return app.chat.busy }
+@(private = "file") has_session :: proc(app: ^App) -> bool { return main_pane(app).chat.id != "" }
+@(private = "file") is_busy :: proc(app: ^App) -> bool { return main_pane(app).chat.busy }
 @(private = "file") can_go_back :: proc(app: ^App) -> bool { return nav_can(app, -1) || back_target(app) != "" }
 
 COMMANDS := [?]Command{
@@ -38,7 +38,7 @@ COMMANDS := [?]Command{
 	{id = "app.settings", title = i18n.later("Settings"), tags = "preferences options configuration prefs", group = i18n.later("General"), icon = lucide.SLIDERS_HORIZONTAL, keys = "Ctrl+,", key = .Comma, mods = {.Ctrl}, run = settings_open, scope = .Window},
 	{id = "app.refresh", title = i18n.later("Refresh"), tags = "reload sync update fetch", group = i18n.later("General"), icon = lucide.REFRESH_CW, keys = "F5", key = .F5, run = proc(app: ^App) {
 		refresh_sessions(app)
-		if app.chat.id != "" { load_messages(app, app.chat.id) }
+		for &pane, i in app.panes { if pane_is_shown(app, i) && pane.chat.id != "" { load_messages(app, &pane, pane.chat.id) } }
 	}},
 	{id = "app.add_server", title = i18n.later("Add a server…"), tags = "connect host remote url", group = i18n.later("General"), icon = lucide.PLUG, run = proc(app: ^App) { server_edit_open(app, -1) }},
 	{id = "app.pair", title = i18n.later("Pair a device…"), tags = "phone mobile qr link", group = i18n.later("General"), icon = lucide.GLOBE, run = pair_open, enabled = online},
@@ -53,36 +53,36 @@ COMMANDS := [?]Command{
 	{id = "nav.home", title = i18n.later("Home"), tags = "start welcome new", group = i18n.later("Go to"), icon = lucide.MESSAGE_SQUARE, keys = "Ctrl+H", key = .H, mods = {.Ctrl}, run = new_session},
 	{id = "nav.back", title = i18n.later("Back"), tags = "previous return history", group = i18n.later("Go to"), icon = lucide.ARROW_LEFT, keys = "Alt+Left", key = .Left, mods = {.Alt}, enabled = can_go_back, run = proc(app: ^App) { if nav_can(app, -1) { nav_step(app, -1) } else { go_back(app) } }},
 	{id = "nav.forward", title = i18n.later("Forward"), tags = "next history", group = i18n.later("Go to"), icon = lucide.ARROW_RIGHT, keys = "Alt+Right", key = .Right, mods = {.Alt}, enabled = proc(app: ^App) -> bool { return nav_can(app, 1) }, run = proc(app: ^App) { nav_step(app, 1) }},
-	{id = "nav.composer", title = i18n.later("Focus the composer"), tags = "input prompt type message write", group = i18n.later("Go to"), icon = lucide.PENCIL, keys = "Ctrl+L", key = .L, mods = {.Ctrl}, run = proc(app: ^App) { app.composer.focus_next = true }},
+	{id = "nav.composer", title = i18n.later("Focus the composer"), tags = "input prompt type message write", group = i18n.later("Go to"), icon = lucide.PENCIL, keys = "Ctrl+L", key = .L, mods = {.Ctrl}, run = proc(app: ^App) { main_pane(app).composer.focus_next = true }},
 
 	{id = "session.new", title = i18n.later("New session"), tags = "chat conversation create start", group = i18n.later("Session"), icon = lucide.PLUS, keys = "Ctrl+N", key = .N, mods = {.Ctrl}, run = new_session},
-	{id = "session.background", title = i18n.later("Push the running command to the background"), tags = "detach background shell job", group = i18n.later("Session"), icon = lucide.SEND_TO_BACK, run = proc(app: ^App) { background_session(app, app.chat.id) }, enabled = foreground_command},
-	{id = "session.stop", title = i18n.later("Stop the run"), tags = "cancel abort interrupt halt kill", group = i18n.later("Session"), icon = lucide.SQUARE, keys = "Ctrl+Esc", key = .Escape, mods = {.Ctrl}, run = proc(app: ^App) { interrupt_session(app, app.chat.id) }, enabled = is_busy},
+	{id = "session.background", title = i18n.later("Push the running command to the background"), tags = "detach background shell job", group = i18n.later("Session"), icon = lucide.SEND_TO_BACK, run = proc(app: ^App) { background_session(app, main_pane(app).chat.id) }, enabled = foreground_command},
+	{id = "session.stop", title = i18n.later("Stop the run"), tags = "cancel abort interrupt halt kill", group = i18n.later("Session"), icon = lucide.SQUARE, keys = "Ctrl+Esc", key = .Escape, mods = {.Ctrl}, run = proc(app: ^App) { interrupt_session(app, main_pane(app).chat.id) }, enabled = is_busy},
 	{id = "session.activity", title = i18n.later("What runs in the background"), tags = "jobs tasks processes activity running", group = i18n.later("Session"), icon = lucide.SQUARE_TERMINAL, keys = "Ctrl+J", key = .J, mods = {.Ctrl}, run = activity_toggle, enabled = has_session},
 	{id = "session.quote", title = i18n.later("Quote what is selected"), tags = "reply cite selection", group = i18n.later("Session"), icon = lucide.PENCIL, keys = "Ctrl+Q", key = .Q, mods = {.Ctrl}, run = quote_selection, enabled = proc(app: ^App) -> bool { return ui.has_selection(&app.state) }},
-	{id = "session.find", title = i18n.later("Find in the conversation"), tags = "search look locate", group = i18n.later("Session"), icon = lucide.SEARCH, keys = "Ctrl+F", run = find_open, enabled = has_session},
+	{id = "session.find", title = i18n.later("Find in the conversation"), tags = "search look locate", group = i18n.later("Session"), icon = lucide.SEARCH, keys = "Ctrl+F", run = proc(app: ^App) { find_open(app, main_pane(app)) }, enabled = has_session},
 	{id = "session.stats", title = i18n.later("Show or hide the Statistics panel"), tags = "stats tokens cost usage numbers", group = i18n.later("Session"), icon = lucide.GAUGE, keys = "Ctrl+I", key = .I, mods = {.Ctrl}, run = stats_toggle, enabled = has_session, checked = proc(app: ^App) -> bool { return app.stats.open }},
-	{id = "session.rename", title = i18n.later("Rename the session…"), tags = "title name", group = i18n.later("Session"), icon = lucide.PENCIL, keys = "F2", key = .F2, run = proc(app: ^App) { rename_open(app, app.chat.id) }, enabled = has_session},
+	{id = "session.rename", title = i18n.later("Rename the session…"), tags = "title name", group = i18n.later("Session"), icon = lucide.PENCIL, keys = "F2", key = .F2, run = proc(app: ^App) { rename_open(app, main_pane(app).chat.id) }, enabled = has_session},
 	{id = "session.jump", title = i18n.later("Jump to message…"), tags = "prompt find go earlier history search", group = i18n.later("Session"), icon = lucide.MESSAGE_SQUARE_TEXT, keys = "Ctrl+Alt+G", key = .G, mods = {.Ctrl, .Alt}, run = jump_show, enabled = has_session},
-	{id = "session.copy_id", title = i18n.later("Copy the session ID"), tags = "identifier ses clipboard", group = i18n.later("Session"), icon = lucide.HASH, run = proc(app: ^App) { session_id_copy(app, app.chat.id) }, enabled = has_session},
-	{id = "session.fork", title = i18n.later("Fork the session"), tags = "branch copy duplicate split", group = i18n.later("Session"), icon = lucide.COPY, run = proc(app: ^App) { fork_session(app, app.chat.id, "") }, enabled = has_session},
-	{id = "session.compact", title = i18n.later("Compact the conversation"), tags = "summarize shrink compress context", group = i18n.later("Session"), icon = lucide.LIST, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/compact", app.chat.id), "{}", app.chat.id) }, enabled = has_session},
-	{id = "session.background", title = i18n.later("Send running tools to the background"), tags = "detach background jobs", group = i18n.later("Session"), icon = lucide.SQUARE_TERMINAL, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/background", app.chat.id), "", app.chat.id) }, enabled = is_busy},
+	{id = "session.copy_id", title = i18n.later("Copy the session ID"), tags = "identifier ses clipboard", group = i18n.later("Session"), icon = lucide.HASH, run = proc(app: ^App) { session_id_copy(app, main_pane(app).chat.id) }, enabled = has_session},
+	{id = "session.fork", title = i18n.later("Fork the session"), tags = "branch copy duplicate split", group = i18n.later("Session"), icon = lucide.COPY, run = proc(app: ^App) { fork_session(app, main_pane(app).chat.id, "") }, enabled = has_session},
+	{id = "session.compact", title = i18n.later("Compact the conversation"), tags = "summarize shrink compress context", group = i18n.later("Session"), icon = lucide.LIST, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/compact", main_pane(app).chat.id), "{}", main_pane(app).chat.id) }, enabled = has_session},
+	{id = "session.background", title = i18n.later("Send running tools to the background"), tags = "detach background jobs", group = i18n.later("Session"), icon = lucide.SQUARE_TERMINAL, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/background", main_pane(app).chat.id), "", main_pane(app).chat.id) }, enabled = is_busy},
 	{id = "app.connections", title = i18n.later("Connect an account"), tags = "login provider oauth sign auth", group = i18n.later("General"), icon = lucide.USER, run = proc(app: ^App) { settings_open_on(app, "connections") }},
 	{id = "view.terminal", title = i18n.later("Terminal"), tags = "shell console bash pty", group = i18n.later("View"), icon = lucide.SQUARE_TERMINAL, keys = "Ctrl+Shift+T", key = .T, mods = {.Ctrl, .Shift}, run = terminal_toggle},
 	{id = "view.terminal_new", title = i18n.later("New terminal"), tags = "shell console bash pty open", group = i18n.later("View"), icon = lucide.SQUARE_TERMINAL, run = terminal_new},
-	{id = "session.schedules", title = i18n.later("Schedules of this session"), tags = "cron timer planned recurring", group = i18n.later("Session"), icon = lucide.HISTORY, run = proc(app: ^App) { schedules_open(app, app.chat.id) }, enabled = proc(app: ^App) -> bool { return app.chat.id != "" && !app.cx.no_schedules }},
+	{id = "session.schedules", title = i18n.later("Schedules of this session"), tags = "cron timer planned recurring", group = i18n.later("Session"), icon = lucide.HISTORY, run = proc(app: ^App) { schedules_open(app, main_pane(app).chat.id) }, enabled = proc(app: ^App) -> bool { return main_pane(app).chat.id != "" && !app.cx.no_schedules }},
 	{id = "session.artifacts", title = i18n.later("Artifacts of this folder"), tags = "outputs files html pages", group = i18n.later("Session"), icon = lucide.FILE, run = artifacts_open, enabled = proc(app: ^App) -> bool { return !app.cx.no_artifacts }},
-	{id = "session.files", title = i18n.later("Browse the files"), tags = "explorer tree folder open", group = i18n.later("Session"), icon = lucide.FOLDER, keys = "Ctrl+P", key = .P, mods = {.Ctrl}, run = files_open},
-	{id = "session.changes", title = i18n.later("What this session changed"), tags = "diff changes edits modified", group = i18n.later("Session"), icon = lucide.FILE, run = proc(app: ^App) { changes_open(app, app.chat.id) }, enabled = has_session},
-	{id = "session.archive", title = i18n.later("Archive the session, or bring it back"), tags = "hide restore unarchive", group = i18n.later("Session"), icon = lucide.FILE_ARCHIVE, run = proc(app: ^App) { session_archive(app, app.chat.id, !session_is_archived(app, app.chat.id)) }, enabled = has_session},
+	{id = "session.files", title = i18n.later("Browse the files"), tags = "explorer tree folder open", group = i18n.later("Session"), icon = lucide.FOLDER, keys = "Ctrl+P", key = .P, mods = {.Ctrl}, run = proc(app: ^App) { files_open(app, main_pane(app)) }},
+	{id = "session.changes", title = i18n.later("What this session changed"), tags = "diff changes edits modified", group = i18n.later("Session"), icon = lucide.FILE, run = proc(app: ^App) { changes_open(app, main_pane(app).chat.id) }, enabled = has_session},
+	{id = "session.archive", title = i18n.later("Archive the session, or bring it back"), tags = "hide restore unarchive", group = i18n.later("Session"), icon = lucide.FILE_ARCHIVE, run = proc(app: ^App) { session_archive(app, main_pane(app).chat.id, !session_is_archived(app, main_pane(app).chat.id)) }, enabled = has_session},
 	{id = "session.terminal", title = i18n.later("Open a terminal in the session's folder"), tags = "shell console bash cwd", group = i18n.later("Session"), icon = lucide.SQUARE_TERMINAL, run = proc(app: ^App) { terminal_open(chat_dir(app)) }, enabled = has_session},
-	{id = "session.move", title = i18n.later("Move the session to a folder"), tags = "directory relocate path", group = i18n.later("Session"), icon = lucide.FOLDER, run = proc(app: ^App) { session_move_pick(app, app.chat.id) }, enabled = has_session},
-	{id = "session.export", title = i18n.later("Export the session"), tags = "save download markdown json share", group = i18n.later("Session"), icon = lucide.FILE, run = proc(app: ^App) { session_export(app, app.chat.id) }, enabled = has_session},
-	{id = "session.export_redacted", title = i18n.later("Export the session without its text"), tags = "redact anonymize share save", group = i18n.later("Session"), icon = lucide.FILE, run = proc(app: ^App) { session_export(app, app.chat.id, redacted = true) }, enabled = has_session},
-	{id = "composer.attach", title = i18n.later("Attach files"), tags = "upload image file add", group = i18n.later("Session"), icon = lucide.PAPERCLIP, run = attach_pick},
+	{id = "session.move", title = i18n.later("Move the session to a folder"), tags = "directory relocate path", group = i18n.later("Session"), icon = lucide.FOLDER, run = proc(app: ^App) { session_move_pick(app, main_pane(app).chat.id) }, enabled = has_session},
+	{id = "session.export", title = i18n.later("Export the session"), tags = "save download markdown json share", group = i18n.later("Session"), icon = lucide.FILE, run = proc(app: ^App) { session_export(app, main_pane(app).chat.id) }, enabled = has_session},
+	{id = "session.export_redacted", title = i18n.later("Export the session without its text"), tags = "redact anonymize share save", group = i18n.later("Session"), icon = lucide.FILE, run = proc(app: ^App) { session_export(app, main_pane(app).chat.id, redacted = true) }, enabled = has_session},
+	{id = "composer.attach", title = i18n.later("Attach files"), tags = "upload image file add", group = i18n.later("Session"), icon = lucide.PAPERCLIP, run = proc(app: ^App) { attach_pick(app, main_pane(app)) }},
 	{id = "session.import", title = i18n.later("Import a session"), tags = "load open json", group = i18n.later("Session"), icon = lucide.FILE, run = session_import_pick},
-	{id = "session.copy_id", title = i18n.later("Copy the session ID"), tags = "clipboard identifier", group = i18n.later("Session"), icon = lucide.COPY, run = proc(app: ^App) { clip_set(app.chat.id) }, enabled = has_session},
+	{id = "session.copy_id", title = i18n.later("Copy the session ID"), tags = "clipboard identifier", group = i18n.later("Session"), icon = lucide.COPY, run = proc(app: ^App) { clip_set(main_pane(app).chat.id) }, enabled = has_session},
 
 	{id = "view.preview", title = i18n.later("Show or hide the Preview panel"), tags = "browser web page", group = i18n.later("View"), icon = lucide.GLOBE, keys = "Ctrl+Shift+B", key = .B, mods = {.Ctrl, .Shift}, run = preview_toggle, checked = proc(app: ^App) -> bool { return app.preview.open }},
 	// (Their keys are the panel's, read while it has the keyboard: elsewhere Ctrl+W is a shell's, and a composer's to ignore.)
@@ -139,34 +139,37 @@ commands_keys :: proc(app: ^App) {
 
 // The conversation's zoom: the session shown's own, or the preference (appearance.content_zoom), which is every session's that has
 // none of its own and the home page's.
-content_zoom :: proc(app: ^App) -> f32 { return f32(store.kept_of(&app.session_zooms, app.chat.id, f64(app.prefs.content_zoom))) }
+content_zoom :: proc(app: ^App, pane: ^Chat_Pane) -> f32 { return f32(store.kept_of(&app.session_zooms, pane.chat.id, f64(app.prefs.content_zoom))) }
 
 // The session shown's zoom (kept in session_zoom.txt); on the home page, the preference.
 content_zoom_set :: proc(app: ^App, z: f32) {
+	pane := main_pane(app)
 	zoom := clamp(z, CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX)
-	if app.chat.id == "" {
+	if pane.chat.id == "" {
 		pref_set_float(app, "appearance.content_zoom", zoom)
 		return
 	}
-	store.kept_set(&app.session_zooms, app.chat.id, f64(zoom), f64(app.prefs.content_zoom))
+	store.kept_set(&app.session_zooms, pane.chat.id, f64(zoom), f64(app.prefs.content_zoom))
 }
 
-content_zoom_by :: proc(app: ^App, factor: f32) { content_zoom_set(app, content_zoom(app) * factor) }
+content_zoom_by :: proc(app: ^App, factor: f32) { content_zoom_set(app, content_zoom(app, main_pane(app)) * factor) }
 
 // Back to the preference: the session follows it again.
 content_zoom_reset :: proc(app: ^App) {
-	if app.chat.id == "" { content_zoom_set(app, 1) } else { store.kept_forget(&app.session_zooms, app.chat.id) }
+	pane := main_pane(app)
+	if pane.chat.id == "" { content_zoom_set(app, 1) } else { store.kept_forget(&app.session_zooms, pane.chat.id) }
 }
 
 // What the toolkit would make of the window's zoom, where it is the conversation's that is meant: Ctrl and the wheel over
 // the conversation, Ctrl and = - 0 without Shift (with it: the interface, which the toolkit does). Before the build.
 content_zoom_events :: proc(app: ^App, events: []platform.Event) {
+	pane := main_pane(app)
 	for &e in events {
 		#partial switch e.kind {
 		case .Scroll:
 			// (a dialog over the conversation has the wheel: the diagram viewer's zooms its diagram)
-			if .Ctrl not_in e.mods || overlay_open(app) || !draw.rect_contains(app.conversation.rect, e.pos) { continue }
-			z := content_zoom(app)
+			if .Ctrl not_in e.mods || overlay_open(app) || !draw.rect_contains(pane.conversation.rect, e.pos) { continue }
+			z := content_zoom(app, pane)
 			content_zoom_set(app, e.delta.y < 0 ? z * ui.feel(&app.state).zoom_step : z / ui.feel(&app.state).zoom_step)
 			e.kind = .None
 		case .Key_Press:

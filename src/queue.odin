@@ -93,8 +93,8 @@ Queue_First :: struct {
 Send_As :: enum u8 { Idle, Queue, Steer }
 
 // `alt`: the other key (Ctrl+Enter). conversation.while_running says which one is Enter.
-composer_send_as :: proc(app: ^App, alt := false) -> Send_As {
-	if app.chat.id == "" || !app.chat.busy { return .Idle }
+composer_send_as :: proc(app: ^App, pane: ^Chat_Pane, alt := false) -> Send_As {
+	if pane.chat.id == "" || !pane.chat.busy { return .Idle }
 	return app.prefs.steer_first != alt ? .Steer : .Queue
 }
 
@@ -110,17 +110,17 @@ send_as_fields :: proc(as: Send_As) -> string {
 
 delivery_of :: proc(s: string) -> Delivery { return s == "queue" ? .Queue : .Steer }
 
-queue_find :: proc(app: ^App, id: string) -> ^Queue_Item {
-	for &it in app.cx.queue.items { if it.id == id { return &it } }
+queue_find :: proc(app: ^App, pane: ^Chat_Pane, id: string) -> ^Queue_Item {
+	for &it in pane.queue.items { if it.id == id { return &it } }
 	return nil
 }
 
 // A message of the session shown that still waits: a page that has it does not say it was sent.
-queue_holds :: proc(app: ^App, id: string) -> bool {
-	return app.cx.queue.session == app.chat.id && queue_find(app, id) != nil
+queue_holds :: proc(app: ^App, pane: ^Chat_Pane, id: string) -> bool {
+	return pane.queue.session == pane.chat.id && queue_find(app, pane, id) != nil
 }
 
-queue_editing :: proc(app: ^App) -> bool { return app.cx.queue.edit.id != "" }
+queue_editing :: proc(app: ^App, pane: ^Chat_Pane) -> bool { return pane.queue.edit.id != "" }
 
 // What changes here without an event still counts on the stream's clock: a list asked before it is older.
 @(private = "file")
@@ -144,71 +144,71 @@ item_of :: proc(id: string, v: json.Value, born: Seq) -> Queue_Item {
 }
 
 // (once: an event and the answer to the prompt both say it)
-queue_add :: proc(app: ^App, id: string, v: json.Value, born: Seq) {
-	q := &app.cx.queue
-	if id == "" || q.session != app.chat.id || queue_find(app, id) != nil { return }
+queue_add :: proc(app: ^App, pane: ^Chat_Pane, id: string, v: json.Value, born: Seq) {
+	q := &pane.queue
+	if id == "" || q.session != pane.chat.id || queue_find(app, pane, id) != nil { return }
 	if gone_find(&q.gone, id) != nil { return }
 	append(&q.items, item_of(id, v, born))
 }
 
 // The answer to a prompt: the server has it. Should the stream be late or down, the list is right all the same.
-queue_prompt_answered :: proc(app: ^App, r: ^Request, v: json.Value) {
+queue_prompt_answered :: proc(app: ^App, pane: ^Chat_Pane, r: ^Request, v: json.Value) {
 	session := r.tag
 	item := tk_json.get(v, "data")
-	defer queue_first_admitted(app, r.out, tk_json.text(item, "id"))   // (whatever the list does with it: the reorder reads it again)
-	if session != app.chat.id || tk_json.text(item, "type") != "user" { return }
-	if !app.chat.busy && delivery_of(tk_json.text(item, "delivery")) == .Steer { return }   // (it goes at once)
-	if queue_shown_as_sent(app, tk_json.text(item, "id")) { return }
-	queue_add(app, tk_json.text(item, "id"), item, queue_tick(app))
+	defer queue_first_admitted(app, pane, r.out, tk_json.text(item, "id"))   // (whatever the list does with it: the reorder reads it again)
+	if session != pane.chat.id || tk_json.text(item, "type") != "user" { return }
+	if !pane.chat.busy && delivery_of(tk_json.text(item, "delivery")) == .Steer { return }   // (it goes at once)
+	if queue_shown_as_sent(app, pane, tk_json.text(item, "id")) { return }
+	queue_add(app, pane, tk_json.text(item, "id"), item, queue_tick(app))
 }
 
 // It left the list: delivered, cancelled, here or elsewhere.
-queue_gone :: proc(app: ^App, id: string, delivered: bool, at: Seq) {
-	q := &app.cx.queue
+queue_gone :: proc(app: ^App, pane: ^Chat_Pane, id: string, delivered: bool, at: Seq) {
+	q := &pane.queue
 	if id == "" { return }
 	if q.edit.id == id {
-		queue_edit_end(app, .Lost)
+		queue_edit_end(app, pane, .Lost)
 		ui.announce(&app.announcer, .Warn, delivered ? i18n.tr("That message was delivered meanwhile: what you wrote stays in the composer") : i18n.tr("That message is no longer waiting: what you wrote stays in the composer"))
 	}
 	for it, i in q.items {
 		if it.id == id { item_free(it); ordered_remove(&q.items, i); break }
 	}
 	gone_add(&q.gone, id, at, QUEUE_GONE_MAX, delivered)
-	queue_first_gone(app, id, delivered)
+	queue_first_gone(app, pane, id, delivered)
 }
 
-queue_delivery_changed :: proc(app: ^App, id: string, to: Delivery, at: Seq) {
-	it := queue_find(app, id)
+queue_delivery_changed :: proc(app: ^App, pane: ^Chat_Pane, id: string, to: Delivery, at: Seq) {
+	it := queue_find(app, pane, id)
 	if it == nil { return }
 	it.delivery, it.changed = to, at
 }
 
 // Everything that waits for the session shown, as the server says it now. (On opening, on Try again, on a reconnection.)
-queue_read :: proc(app: ^App) {
-	q := &app.cx.queue
-	if q.session != app.chat.id { queue_switch(app) }
-	if app.chat.id == "" { return }
+queue_read :: proc(app: ^App, pane: ^Chat_Pane) {
+	q := &pane.queue
+	if q.session != pane.chat.id { queue_switch(app, pane) }
+	if pane.chat.id == "" { return }
 	remote.begin(&q.read)
-	request(app, .Queue_List, "GET", fmt.tprintf("/api/session/%s/inbox", app.chat.id), tag = app.chat.id, reading = &q.read)
+	request(app, .Queue_List, "GET", fmt.tprintf("/api/session/%s/inbox", pane.chat.id), tag = pane.chat.id, reading = &q.read, pane = pane)
 }
 
 // The answer replaces the list. Not what the stream said since it was asked for: what came since stays, what went does not return.
-queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: Seq) {
-	q := &app.cx.queue
+queue_load :: proc(app: ^App, pane: ^Chat_Pane, session: string, v: json.Value, asked_at: Seq) {
+	q := &pane.queue
 	if session != q.session { return }
 	next := make([dynamic]Queue_Item, 0, max(len(q.items), 4))
 	for it in tk_json.array(v, "data") {
 		id := tk_json.text(it, "id")
 		if id == "" || tk_json.text(it, "type") != "user" { continue }
 		if g := gone_find(&q.gone, id); g != nil && newer(g.at, asked_at) { continue }
-		if old := queue_find(app, id); old != nil {
+		if old := queue_find(app, pane, id); old != nil {
 			if !newer(old.changed, asked_at) { old.delivery = delivery_of(tk_json.text(it, "delivery")) }
 			append(&next, old^)
 			old.id = ""   // (it moved)
 			continue
 		}
 		// (sent while nothing ran, on its way to the run that takes it: it shows already)
-		if delivery_of(tk_json.text(it, "delivery")) == .Steer && queue_shown_as_sent(app, id) { continue }
+		if delivery_of(tk_json.text(it, "delivery")) == .Steer && queue_shown_as_sent(app, pane, id) { continue }
 		append(&next, item_of(id, it, 0))
 	}
 	dropped := make([dynamic]string, context.temp_allocator)
@@ -216,7 +216,7 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: Seq) {
 		if old.id == "" { continue }
 		if newer(old.born, asked_at) { append(&next, old); continue }
 		if q.edit.id == old.id {
-			queue_edit_end(app, .Lost)
+			queue_edit_end(app, pane, .Lost)
 			ui.announce(&app.announcer, .Warn, i18n.tr("That message is no longer waiting: what you wrote stays in the composer"))
 		}
 		append(&dropped, strings.clone(old.id, context.temp_allocator))
@@ -225,25 +225,25 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: Seq) {
 	delete(q.items)
 	q.items = next
 	// (how they left is not said: a reorder takes them as gone, as their events would have said)
-	for id in dropped { queue_first_gone(app, id, false) }
+	for id in dropped { queue_first_gone(app, pane, id, false) }
 	gone_settled(&q.gone, asked_at)
-	for it in q.items { chat_drop(&app.chat, it.id) }   // (a page read before this list)
+	for it in q.items { chat_drop(&pane.chat, it.id) }   // (a page read before this list)
 }
 
 // Nothing of the session left stays: it is on the server, and the next session has its own. What was being edited did not change.
-queue_switch :: proc(app: ^App) {
-	q := &app.cx.queue
-	if queue_editing(app) { queue_edit_end(app, .Cancel) }
-	queue_first_abort(app)
+queue_switch :: proc(app: ^App, pane: ^Chat_Pane) {
+	q := &pane.queue
+	if queue_editing(app, pane) { queue_edit_end(app, pane, .Cancel) }
+	queue_first_abort(app, pane)
 	for it in q.items { item_free(it) }
 	clear(&q.items)
 	gone_clear(&q.gone)
 	remote.reset(&q.read)
 	delete(q.session)
-	q.session = strings.clone(app.chat.id)
+	q.session = strings.clone(pane.chat.id)
 }
 
-queue_forget :: proc(app: ^App) { queue_switch(app) }
+queue_forget :: proc(app: ^App) { for &pane, i in app.panes { if pane_is_shown(app, i) { queue_switch(app, &pane) } } }
 
 // The server's copy of a prompt is not what a prompt is sent as: stored, a file is its data, its type and where it came from; sent, a
 // uri. A skill goes by its id. Out of the inbox it has to be said again.
@@ -292,21 +292,21 @@ payload_file_uri :: proc(f: json.Value) -> string {
 ////////////////////////////////
 // What can be done to an item
 
-queue_steer :: proc(app: ^App, id: string) {
-	it := queue_find(app, id)
+queue_steer :: proc(app: ^App, pane: ^Chat_Pane, id: string) {
+	it := queue_find(app, pane, id)
 	if it == nil || it.act != .None || it.delivery != .Queue || !online(app) { return }
 	it.act = .Sending
-	request(app, .Queue_Steer, "PATCH", fmt.tprintf("/api/session/%s/inbox/%s", app.cx.queue.session, id), `{"delivery":"steer"}`, id)
+	request(app, .Queue_Steer, "PATCH", fmt.tprintf("/api/session/%s/inbox/%s", pane.queue.session, id), `{"delivery":"steer"}`, id, pane = pane)
 }
 
 // The first prompt that waits for the run's end, steered into the run (the composer's other way with nothing written).
-queue_steer_first :: proc(app: ^App) {
-	q := &app.cx.queue
-	if q.session != app.chat.id { return }
+queue_steer_first :: proc(app: ^App, pane: ^Chat_Pane) {
+	q := &pane.queue
+	if q.session != pane.chat.id { return }
 	// (the first one only: one already on its way is not skipped for the next, as the desktop does)
 	for &it in q.items {
 		if it.delivery != .Queue { continue }
-		if it.act == .None { queue_steer(app, it.id) }
+		if it.act == .None { queue_steer(app, pane, it.id) }
 		return
 	}
 }
@@ -314,31 +314,33 @@ queue_steer_first :: proc(app: ^App) {
 // A steered message waits for the next step of the run; a long step (a long thought, a command that takes its time) keeps it
 // waiting. This stops the step: the run interrupted, what was steered goes as a prompt at once, in its order (inbox_resume, on
 // session.execution.interrupted). What the step was doing is lost, which is what the reader chose. Nothing runs: it goes now.
-queue_send_now :: proc(app: ^App, id: string) {
-	it := queue_find(app, id)
+queue_send_now :: proc(app: ^App, pane: ^Chat_Pane, id: string) {
+	it := queue_find(app, pane, id)
 	if it == nil || it.act != .None || it.delivery != .Steer || !online(app) { return }
 	it.act = .Sending
-	if app.chat.busy && app.chat.id == app.cx.queue.session { interrupt_session(app, app.cx.queue.session) } else { inbox_resume(app, app.cx.queue.session) }
+	if pane.chat.busy && pane.chat.id == pane.queue.session { interrupt_session(app, pane.queue.session) } else { inbox_resume(app, pane.queue.session) }
 }
 
-queue_remove :: proc(app: ^App, id: string) {
-	it := queue_find(app, id)
+queue_remove :: proc(app: ^App, pane: ^Chat_Pane, id: string) {
+	it := queue_find(app, pane, id)
 	if it == nil || it.act != .None || !online(app) { return }
 	it.act = .Removing
-	request(app, .Queue_Cancel, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", app.cx.queue.session, id), "", id)
+	request(app, .Queue_Cancel, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", pane.queue.session, id), "", id, pane = pane)
 }
 
 // The server said yes: what it will also say on the stream is done now, a stream that is late or down changes nothing.
 queue_answered :: proc(app: ^App, r: ^Request) {
-	if r.kind == .Queue_Cancel { queue_gone(app, r.tag, false, queue_tick(app)); return }
-	if it := queue_find(app, r.tag); it != nil { it.act = .None }
-	queue_delivery_changed(app, r.tag, .Steer, queue_tick(app))
+	pane := req_pane(app, r)
+	if r.kind == .Queue_Cancel { queue_gone(app, pane, r.tag, false, queue_tick(app)); return }
+	if it := queue_find(app, pane, r.tag); it != nil { it.act = .None }
+	queue_delivery_changed(app, pane, r.tag, .Steer, queue_tick(app))
 }
 
 // It did not change. (`told`: the server no longer has it to change, the list is read again and says so.)
 queue_failed :: proc(app: ^App, r: ^Request) -> (told: bool) {
-	if it := queue_find(app, r.tag); it != nil { it.act = .None }
-	if r.status == 409 { queue_read(app); return true }
+	pane := req_pane(app, r)
+	if it := queue_find(app, pane, r.tag); it != nil { it.act = .None }
+	if r.status == 409 { queue_read(app, pane); return true }
 	return false
 }
 
@@ -349,41 +351,41 @@ Edit_End :: enum u8 {
 }
 
 // Its text and its files go to the composer. It stays in the list meanwhile, and what the composer held waits for the end.
-queue_edit :: proc(app: ^App, id: string) {
-	q := &app.cx.queue
-	it := queue_find(app, id)
+queue_edit :: proc(app: ^App, pane: ^Chat_Pane, id: string) {
+	q := &pane.queue
+	it := queue_find(app, pane, id)
 	if it == nil || it.act != .None || it.skills { return }
-	if queue_editing(app) { queue_edit_end(app, .Cancel) }
-	history_leave(app, true)
-	it = queue_find(app, id)
+	if queue_editing(app, pane) { queue_edit_end(app, pane, .Cancel) }
+	history_leave(app, pane, true)
+	it = queue_find(app, pane, id)
 	e := &q.edit
 	e.id = strings.clone(id)
-	e.draft = strings.clone(ui.text_edit_string(&app.composer.area))
-	append(&e.files, ..app.composer.attachments[:])
-	clear(&app.composer.attachments)
-	append(&e.mentions, ..app.composer.mentions.chosen[:])
-	clear(&app.composer.mentions.chosen)
+	e.draft = strings.clone(ui.text_edit_string(&pane.composer.area))
+	append(&e.files, ..pane.composer.attachments[:])
+	clear(&pane.composer.attachments)
+	append(&e.mentions, ..pane.composer.mentions.chosen[:])
+	clear(&pane.composer.mentions.chosen)
 	v := json_of_own(app, "queued payload", it.payload)
 	body := json_of_own(app, "queued prompt", prompt_of_payload(v))
-	prompt_parts(body, &app.composer.attachments, &app.composer.mentions.chosen)
-	ui.text_edit_set(&app.composer.area, it.text)
-	app.composer.focus_next = true
+	prompt_parts(body, &pane.composer.attachments, &pane.composer.mentions.chosen)
+	ui.text_edit_set(&pane.composer.area, it.text)
+	pane.composer.focus_next = true
 	activity_close(app)
 }
 
-queue_edit_end :: proc(app: ^App, how: Edit_End) {
-	e := &app.cx.queue.edit
+queue_edit_end :: proc(app: ^App, pane: ^Chat_Pane, how: Edit_End) {
+	e := &pane.queue.edit
 	if e.id == "" { return }
 	if how == .Cancel {
-		for a in app.composer.attachments { delete(a.name); delete(a.uri) }
-		clear(&app.composer.attachments)
-		mentions_clear(app)
-		ui.text_edit_set(&app.composer.area, "")
+		for a in pane.composer.attachments { delete(a.name); delete(a.uri) }
+		clear(&pane.composer.attachments)
+		mentions_clear(app, pane)
+		ui.text_edit_set(&pane.composer.area, "")
 	}
-	prompt_restore(app, e.draft)
-	append(&app.composer.attachments, ..e.files[:])
+	prompt_restore(app, pane, e.draft)
+	append(&pane.composer.attachments, ..e.files[:])
 	clear(&e.files)
-	append(&app.composer.mentions.chosen, ..e.mentions[:])
+	append(&pane.composer.mentions.chosen, ..e.mentions[:])
 	clear(&e.mentions)
 	delete(e.id); delete(e.draft)
 	e.id, e.draft = "", ""
@@ -391,27 +393,28 @@ queue_edit_end :: proc(app: ^App, how: Edit_End) {
 
 // Enter: the item gives way to what the composer says. Out first, so that it cannot go twice; the prompt goes when it is out, with the
 // same delivery. If it cannot be taken out it stays as it was, and the text comes back. (Queued while nothing runs, it does not start one.)
-queue_edit_commit :: proc(app: ^App, text: string) {
-	e := &app.cx.queue.edit
-	it := queue_find(app, e.id)
-	if it == nil { queue_edit_end(app, .Lost); return }
+queue_edit_commit :: proc(app: ^App, pane: ^Chat_Pane, text: string) {
+	e := &pane.queue.edit
+	it := queue_find(app, pane, e.id)
+	if it == nil { queue_edit_end(app, pane, .Lost); return }
 	it.act = .Replacing
-	outgoing_replace(app, text, it.id, it.delivery == .Queue ? `,"delivery":"queue","resume":false` : `,"delivery":"steer"`)
-	ui.text_edit_set(&app.composer.area, "")
-	queue_edit_end(app, .Done)
+	outgoing_replace(app, pane, text, it.id, it.delivery == .Queue ? `,"delivery":"queue","resume":false` : `,"delivery":"steer"`)
+	ui.text_edit_set(&pane.composer.area, "")
+	queue_edit_end(app, pane, .Done)
 }
 
 // The item is out: unless it was delivered first, its replacement goes. (Whether it was is read back unless the stream said it: outgoing_check.)
-queue_replaced :: proc(app: ^App, r: ^Request) {
-	q := &app.cx.queue
+queue_replaced :: proc(app: ^App, pane: ^Chat_Pane, r: ^Request) {
+	q := &pane.queue
 	g := gone_find(&q.gone, r.tag)
 	delivered := g != nil && g.delivered
-	queue_gone(app, r.tag, false, queue_tick(app))
+	queue_gone(app, pane, r.tag, false, queue_tick(app))
 	if delivered { outgoing_replaced(app, r.out, false) } else { outgoing_check(app, r.out, r.tag) }
 }
 
 queue_replace_failed :: proc(app: ^App, r: ^Request) {
-	if it := queue_find(app, r.tag); it != nil { it.act = .None }
+	pane := req_pane(app, r)
+	if it := queue_find(app, pane, r.tag); it != nil { it.act = .None }
 	outgoing_answered(app, r, false)
 }
 
@@ -422,37 +425,37 @@ queue_replace_failed :: proc(app: ^App, r: ^Request) {
 // Admitted before cancelled, so that a failure only has to take the copies back: nothing queued is ever lost.
 
 // Alt+Enter's prompt left (outgoing_composer): its reorder starts when its answer gives its id.
-queue_first_await :: proc(app: ^App, out: u64) {
-	if out != 0 { append(&app.cx.queue.first.outs, out) }
+queue_first_await :: proc(app: ^App, pane: ^Chat_Pane, out: u64) {
+	if out != 0 { append(&pane.queue.first.outs, out) }
 }
 
 // A prompt's answer. (Not one of Alt+Enter's: nothing.)
-queue_first_admitted :: proc(app: ^App, out: u64, id: string) {
-	f := &app.cx.queue.first
+queue_first_admitted :: proc(app: ^App, pane: ^Chat_Pane, out: u64, id: string) {
+	f := &pane.queue.first
 	for o, i in f.outs {
 		if o != out { continue }
 		unordered_remove(&f.outs, i)
 		if id != "" { append(&f.waiting, strings.clone(id)) }
-		queue_first_next(app)
+		queue_first_next(app, pane)
 		return
 	}
 }
 
 // It failed: it comes back to the composer (outgoing_answered), there is nothing to move.
-queue_first_dropped :: proc(app: ^App, out: u64) {
-	f := &app.cx.queue.first
+queue_first_dropped :: proc(app: ^App, pane: ^Chat_Pane, out: u64) {
+	f := &pane.queue.first
 	for o, i in f.outs { if o == out { unordered_remove(&f.outs, i); return } }
 }
 
 // A second Alt+Enter while a reorder runs waits for it: its prompt went at once, its reorder starts on the list as it is
 // then. The newest ends first, as the key says; queued at the end instead, it would do the opposite of what it says.
 @(private = "file")
-queue_first_next :: proc(app: ^App) {
-	f := &app.cx.queue.first
+queue_first_next :: proc(app: ^App, pane: ^Chat_Pane) {
+	f := &pane.queue.first
 	for f.phase == .Idle && len(f.waiting) > 0 {
 		id := f.waiting[0]
 		ordered_remove(&f.waiting, 0)
-		queue_first_start(app, id)
+		queue_first_start(app, pane, id)
 		delete(id)
 	}
 }
@@ -460,11 +463,11 @@ queue_first_next :: proc(app: ^App) {
 // Every other queued prompt moves behind `id`, in its order: those before it and those after it (another client's), so that it
 // is first of all. A busy one (being steered, removed, edited) leaves the queue as it is: the prompt stays where it went.
 @(private = "file")
-queue_first_start :: proc(app: ^App, id: string) {
-	q := &app.cx.queue
+queue_first_start :: proc(app: ^App, pane: ^Chat_Pane, id: string) {
+	q := &pane.queue
 	f := &q.first
-	it := queue_find(app, id)
-	if it == nil || it.delivery != .Queue || q.session != app.chat.id || !online(app) { return }
+	it := queue_find(app, pane, id)
+	if it == nil || it.delivery != .Queue || q.session != pane.chat.id || !online(app) { return }
 	ahead := false
 	for x in q.items {
 		if x.delivery != .Queue { continue }
@@ -483,7 +486,7 @@ queue_first_start :: proc(app: ^App, id: string) {
 	f.run += 1
 	f.lead = strings.clone(id)
 	f.phase, f.at = .Copying, 0
-	first_copy(app)
+	first_copy(app, pane)
 }
 
 // "run:id": which reorder a request is of.
@@ -499,70 +502,70 @@ first_tag_read :: proc(tag: string) -> (run: u64, id: string) {
 }
 
 @(private = "file")
-first_path :: proc(app: ^App, id: string) -> string {
-	return fmt.tprintf("/api/session/%s/inbox/%s", app.cx.queue.session, id)
+first_path :: proc(app: ^App, pane: ^Chat_Pane, id: string) -> string {
+	return fmt.tprintf("/api/session/%s/inbox/%s", pane.queue.session, id)
 }
 
 // The copy of moves[at]: its payload said again as a prompt, queued, not starting a run of its own. Its id is minted here,
 // before it goes, as the desktop does: the copy is known by it whatever comes first, its event or its answer, and one whose
 // answer never came (the server may have taken it) can still be taken back.
 @(private = "file")
-first_copy :: proc(app: ^App) {
-	f := &app.cx.queue.first
+first_copy :: proc(app: ^App, pane: ^Chat_Pane) {
+	f := &pane.queue.first
 	m := &f.moves[f.at]
 	m.copy = message_id_new(context.allocator)
 	body := prompt_of_payload(json_of_own(app, "queued payload", m.payload))
 	body = fmt.tprintf(`{{"id":%s,%s,"delivery":"queue","resume":false}}`, tk_json.quote(m.copy), body[1:len(body) - 1])
 	f.copying = true
-	request(app, .Queue_First_Copy, "POST", fmt.tprintf("/api/session/%s/prompt", app.cx.queue.session), body, first_tag(f.run, m.copy))
+	request(app, .Queue_First_Copy, "POST", fmt.tprintf("/api/session/%s/prompt", pane.queue.session), body, first_tag(f.run, m.copy), pane = pane)
 }
 
 // The original of moves[at] goes; one that left by itself is passed. None left: done.
 @(private = "file")
-first_cancel :: proc(app: ^App) {
-	f := &app.cx.queue.first
+first_cancel :: proc(app: ^App, pane: ^Chat_Pane) {
+	f := &pane.queue.first
 	for f.at < len(f.moves) && f.moves[f.at].left { f.at += 1 }
 	if f.at == len(f.moves) {
 		f.phase = .Withdrawing   // (the duplicates' DELETEs may still be on their way)
-		first_settle(app)
+		first_settle(app, pane)
 		return
 	}
 	m := &f.moves[f.at]
-	request(app, .Queue_First_Cancel, "DELETE", first_path(app, m.original), tag = first_tag(f.run, m.original))
+	request(app, .Queue_First_Cancel, "DELETE", first_path(app, pane, m.original), tag = first_tag(f.run, m.original), pane = pane)
 }
 
 @(private = "file")
-first_withdraw :: proc(app: ^App, m: ^Queue_Move) {
-	f := &app.cx.queue.first
+first_withdraw :: proc(app: ^App, pane: ^Chat_Pane, m: ^Queue_Move) {
+	f := &pane.queue.first
 	m.withdrawn = true
 	f.pending += 1
-	request(app, .Queue_First_Withdraw, "DELETE", first_path(app, m.copy), tag = first_tag(f.run, m.copy))
+	request(app, .Queue_First_Withdraw, "DELETE", first_path(app, pane, m.copy), tag = first_tag(f.run, m.copy), pane = pane)
 }
 
 // The queue changed under the copies, or one failed: the copies admitted go back, the queue is as it was.
 @(private = "file")
-first_stop :: proc(app: ^App) {
-	f := &app.cx.queue.first
+first_stop :: proc(app: ^App, pane: ^Chat_Pane) {
+	f := &pane.queue.first
 	f.phase = .Withdrawing
 	// (not the copy at `at`, on its way: a DELETE could reach the server before its POST. Its answer withdraws it)
 	for &m, k in f.moves {
 		if k >= f.at { break }
-		if m.copy != "" && !m.withdrawn { first_withdraw(app, &m) }
+		if m.copy != "" && !m.withdrawn { first_withdraw(app, pane, &m) }
 	}
-	first_settle(app)
+	first_settle(app, pane)
 }
 
 // Nothing more on its way: the machine is free for the next Alt+Enter.
 @(private = "file")
-first_settle :: proc(app: ^App) {
-	q := &app.cx.queue
+first_settle :: proc(app: ^App, pane: ^Chat_Pane) {
+	q := &pane.queue
 	f := &q.first
 	if f.phase != .Withdrawing || f.pending > 0 || f.copying { return }
 	for m in f.moves {
-		if it := queue_find(app, m.original); it != nil && it.act == .Moving { it.act = .None }
+		if it := queue_find(app, pane, m.original); it != nil && it.act == .Moving { it.act = .None }
 	}
 	first_clear(f)
-	queue_first_next(app)
+	queue_first_next(app, pane)
 }
 
 @(private = "file")
@@ -575,24 +578,24 @@ first_clear :: proc(f: ^Queue_First) {
 }
 
 // The copy shows once its original is gone: until then the original holds its place, and each prompt shows once.
-queue_hidden :: proc(app: ^App, id: string) -> bool {
-	for m in app.cx.queue.first.moves {
-		if m.copy == id { return m.withdrawn || queue_find(app, m.original) != nil }
+queue_hidden :: proc(app: ^App, pane: ^Chat_Pane, id: string) -> bool {
+	for m in pane.queue.first.moves {
+		if m.copy == id { return m.withdrawn || queue_find(app, pane, m.original) != nil }
 	}
 	return false
 }
 
 // Something left the list during a reorder (queue_gone).
 @(private = "file")
-queue_first_gone :: proc(app: ^App, id: string, delivered: bool) {
-	f := &app.cx.queue.first
+queue_first_gone :: proc(app: ^App, pane: ^Chat_Pane, id: string, delivered: bool) {
+	f := &pane.queue.first
 	switch f.phase {
 	case .Idle, .Withdrawing:
 	case .Copying:
 		// (the desktop's "Queued prompts changed before reordering": the prompt put first stays where it is)
-		if id == f.lead { first_stop(app); return }
+		if id == f.lead { first_stop(app, pane); return }
 		for m in f.moves {
-			if m.original == id || m.copy == id { first_stop(app); return }
+			if m.original == id || m.copy == id { first_stop(app, pane); return }
 		}
 	case .Cancelling:
 		for &m, k in f.moves {
@@ -601,7 +604,7 @@ queue_first_gone :: proc(app: ^App, id: string, delivered: bool) {
 			// A cancel answers 204 for what was delivered too: only the event says it was)
 			if delivered || k > f.at {
 				if k > f.at { m.left = true }
-				if m.copy != "" && !m.withdrawn { first_withdraw(app, &m) }
+				if m.copy != "" && !m.withdrawn { first_withdraw(app, pane, &m) }
 			}
 			return
 		}
@@ -610,16 +613,16 @@ queue_first_gone :: proc(app: ^App, id: string, delivered: bool) {
 
 // The session or the server left. What is admitted is not left half done: copies go back, or, all being in, the originals go.
 @(private = "file")
-queue_first_abort :: proc(app: ^App) {
-	f := &app.cx.queue.first
+queue_first_abort :: proc(app: ^App, pane: ^Chat_Pane) {
+	f := &pane.queue.first
 	switch f.phase {
 	case .Idle, .Withdrawing:
 	case .Copying:
 		// (the one on its way: an orphan, its answer withdraws it)
-		for &m, k in f.moves { if k < f.at && !m.withdrawn { first_withdraw(app, &m) } }
+		for &m, k in f.moves { if k < f.at && !m.withdrawn { first_withdraw(app, pane, &m) } }
 	case .Cancelling:
 		for m, k in f.moves {
-			if k > f.at && !m.left { request(app, .Queue_First_Cancel, "DELETE", first_path(app, m.original), tag = first_tag(0, m.original)) }
+			if k > f.at && !m.left { request(app, .Queue_First_Cancel, "DELETE", first_path(app, pane, m.original), tag = first_tag(0, m.original), pane = pane) }
 		}
 	}
 	first_clear(f)
@@ -634,32 +637,34 @@ queue_first_abort :: proc(app: ^App) {
 first_orphan :: proc(app: ^App, r: ^Request, id: string) {
 	session := strings.trim_prefix(r.path, "/api/session/")
 	if i := strings.index_byte(session, '/'); i >= 0 { session = session[:i] }
-	request(app, .Queue_First_Withdraw, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", session, id), tag = first_tag(0, id), conn = r.conn)
+	request(app, .Queue_First_Withdraw, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", session, id), tag = first_tag(0, id), conn = r.conn, pane = req_pane(app, r))
 }
 
 // (the tag names the copy: its minted id, which is its id in the inbox)
 queue_first_copy_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	f := &app.cx.queue.first
+	pane := req_pane(app, r)
+	f := &pane.queue.first
 	run, id := first_tag_read(r.tag)
 	if run != f.run || !f.copying { first_orphan(app, r, id); return }
 	f.copying = false
 	m := &f.moves[f.at]
 	if f.phase == .Withdrawing {
-		first_withdraw(app, m)
-		first_settle(app)
+		first_withdraw(app, pane, m)
+		first_settle(app, pane)
 		return
 	}
-	queue_add(app, m.copy, tk_json.get(v, "data"), queue_tick(app))
+	queue_add(app, pane, m.copy, tk_json.get(v, "data"), queue_tick(app))
 	f.at += 1
-	if f.at < len(f.moves) { first_copy(app); return }
+	if f.at < len(f.moves) { first_copy(app, pane); return }
 	f.phase, f.at = .Cancelling, 0
-	first_cancel(app)
+	first_cancel(app, pane)
 }
 
 // Refused, it is not in the inbox. Without an answer, or with one that cannot be read, the server may have it: it is
 // withdrawn by its id (a 404 says it never got there). Either way the queue is as it was; the toast says what failed.
 queue_first_copy_on_fail :: proc(app: ^App, r: ^Request, failure: Failure, message: string) -> (told: bool) {
-	f := &app.cx.queue.first
+	pane := req_pane(app, r)
+	f := &pane.queue.first
 	run, id := first_tag_read(r.tag)
 	taken := failure != .Refused && failure != .Auth
 	if run != f.run || !f.copying {
@@ -667,8 +672,8 @@ queue_first_copy_on_fail :: proc(app: ^App, r: ^Request, failure: Failure, messa
 		return false
 	}
 	f.copying = false
-	if taken { first_withdraw(app, &f.moves[f.at]) }
-	if f.phase == .Copying { first_stop(app) } else { first_settle(app) }
+	if taken { first_withdraw(app, pane, &f.moves[f.at]) }
+	if f.phase == .Copying { first_stop(app, pane) } else { first_settle(app, pane) }
 	return false
 }
 
@@ -680,47 +685,51 @@ queue_first_copy_on_left :: proc(app: ^App, r: ^Request) {
 }
 
 queue_first_cancel_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	f := &app.cx.queue.first
+	pane := req_pane(app, r)
+	f := &pane.queue.first
 	run, id := first_tag_read(r.tag)
 	if run != f.run || f.phase != .Cancelling || f.moves[f.at].original != id { return }
-	queue_gone(app, id, false, queue_tick(app))   // (said by the stream first, delivered: that stays, gone_add)
+	queue_gone(app, pane, id, false, queue_tick(app))   // (said by the stream first, delivered: that stays, gone_add)
 	f.at += 1
-	first_cancel(app)
+	first_cancel(app, pane)
 }
 
 // An original that cannot be cancelled stays, and so do those after it: their copies go back. The content is intact, the order
 // partly moved.
 queue_first_cancel_on_fail :: proc(app: ^App, r: ^Request, failure: Failure, message: string) -> (told: bool) {
-	f := &app.cx.queue.first
+	pane := req_pane(app, r)
+	f := &pane.queue.first
 	run, id := first_tag_read(r.tag)
 	if run != f.run || f.phase != .Cancelling || f.moves[f.at].original != id { return false }
 	for &m, k in f.moves {
-		if k >= f.at && m.copy != "" && !m.withdrawn { first_withdraw(app, &m) }
+		if k >= f.at && m.copy != "" && !m.withdrawn { first_withdraw(app, pane, &m) }
 	}
 	f.phase = .Withdrawing
-	first_settle(app)
+	first_settle(app, pane)
 	return false
 }
 
 queue_first_withdraw_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	f := &app.cx.queue.first
+	pane := req_pane(app, r)
+	f := &pane.queue.first
 	run, id := first_tag_read(r.tag)
 	if run == 0 || run != f.run { return }
-	queue_gone(app, id, false, queue_tick(app))
+	queue_gone(app, pane, id, false, queue_tick(app))
 	f.pending -= 1
-	first_settle(app)
+	first_settle(app, pane)
 }
 
 // The copy stays: a duplicate the reader sees (it is no longer hidden) and can remove. A 404 is no failure: the server never
 // took that copy (its POST failed on the way), or it left already.
 queue_first_withdraw_on_fail :: proc(app: ^App, r: ^Request, failure: Failure, message: string) -> (told: bool) {
+	pane := req_pane(app, r)
 	if r.status == 404 { queue_first_withdraw_on_ok(app, r, nil); return true }
-	f := &app.cx.queue.first
+	f := &pane.queue.first
 	run, id := first_tag_read(r.tag)
 	if run == 0 || run != f.run { return false }
 	for &m in f.moves { if m.copy == id { m.withdrawn = false } }
 	f.pending -= 1
-	first_settle(app)
+	first_settle(app, pane)
 	return false
 }
 
@@ -743,8 +752,8 @@ queue_action :: proc(id, label, icon: string, wide: bool, em: f32, intent := ui.
 }
 
 @(private = "file")
-queue_row :: proc(app: ^App, it: ^Queue_Item, n: int, em: f32) {
-	q := &app.cx.queue
+queue_row :: proc(app: ^App, pane: ^Chat_Pane, it: ^Queue_Item, n: int, em: f32) {
+	q := &pane.queue
 	id := strings.clone(it.id, context.temp_allocator)   // (an action may free it)
 	editing := q.edit.id == it.id
 	busy := it.act != .None
@@ -761,7 +770,7 @@ queue_row :: proc(app: ^App, it: ^Queue_Item, n: int, em: f32) {
 			ui.spacer(ui.px(em * 0.5))
 			text("f", fmt.tprintf(i18n.tr(it.files, "%d file", "%d files"), it.files), hex(HEX_FAINT), note)
 		}
-		wide := app.conversation.column_w > em * QUEUE_WORDS_MIN_EM
+		wide := pane.conversation.column_w > em * QUEUE_WORDS_MIN_EM
 		switch {
 		case editing:
 			ui.spacer(ui.px(em * 0.7))
@@ -770,27 +779,27 @@ queue_row :: proc(app: ^App, it: ^Queue_Item, n: int, em: f32) {
 			ui.spacer(ui.px(em * 0.7))
 			text("b", it.act == .Sending ? i18n.tr("sending…") : it.act == .Removing ? i18n.tr("removing…") : i18n.tr("changing…"), hex(HEX_FAINT), note)
 		case:
-			if !it.skills && queue_action("###edit", i18n.tr("Edit"), lucide.PENCIL, wide, em) { queue_edit(app, id) }
-			if it.delivery == .Queue && queue_action("###steer", i18n.tr("Steer"), lucide.SHIP_WHEEL, wide, em) { queue_steer(app, id) }
-			if it.delivery == .Steer && queue_action("###now", i18n.tr("Send now"), lucide.SEND_HORIZONAL, wide, em) { queue_send_now(app, id) }
-			if queue_action("###rm", i18n.tr("Remove"), lucide.X, wide, em, .Danger) { queue_remove(app, id) }
+			if !it.skills && queue_action("###edit", i18n.tr("Edit"), lucide.PENCIL, wide, em) { queue_edit(app, pane, id) }
+			if it.delivery == .Queue && queue_action("###steer", i18n.tr("Steer"), lucide.SHIP_WHEEL, wide, em) { queue_steer(app, pane, id) }
+			if it.delivery == .Steer && queue_action("###now", i18n.tr("Send now"), lucide.SEND_HORIZONAL, wide, em) { queue_send_now(app, pane, id) }
+			if queue_action("###rm", i18n.tr("Remove"), lucide.X, wide, em, .Danger) { queue_remove(app, pane, id) }
 		}
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
 	}
 }
 
 // Its height is bounded, and it scrolls: a long list does not push the composer away.
-queue_list :: proc(app: ^App, em: f32) {
-	q := &app.cx.queue
-	if q.session != app.chat.id { return }
+queue_list :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	q := &pane.queue
+	if q.session != pane.chat.id { return }
 	n := 0
-	for it in q.items { if !queue_hidden(app, it.id) { n += 1 } }
+	for it in q.items { if !queue_hidden(app, pane, it.id) { n += 1 } }
 	if n == 0 {
 		if q.read.state == .Failed {   // (a server without an inbox refuses: that has nothing to say)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###q_failed") {
 				ui.spacer(ui.px(em * 0.5))
-				if hint_action("###q_again", i18n.tr("What waits for this session could not be read  ·  Try again"), em, app.mono) { queue_read(app) }
+				if hint_action("###q_again", i18n.tr("What waits for this session could not be read  ·  Try again"), em, app.mono) { queue_read(app, pane) }
 			}
 			ui.spacer(ui.px(em * 0.25))
 		}
@@ -810,7 +819,7 @@ queue_list :: proc(app: ^App, em: f32) {
 			text("h", fmt.tprintf(i18n.tr("PENDING  %d"), n), hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.9))
 			// (the row cuts what has no room: what matters comes first)
-			text("w", app.chat.busy ? i18n.tr("not sent yet  ·  queued ones go when the turn ends") : i18n.tr("not sent  ·  the run stopped, these wait"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+			text("w", pane.chat.busy ? i18n.tr("not sent yet  ·  queued ones go when the turn ends") : i18n.tr("not sent  ·  the run stopped, these wait"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			ui.spacer(ui.px(em * TRAY_PAD_EM))
 		}
 		ui.next({width = ui.fill(), height = ui.px(list_h)})
@@ -822,10 +831,10 @@ queue_list :: proc(app: ^App, em: f32) {
 				ids := make([]string, len(q.items), context.temp_allocator)
 				for it, i in q.items { ids[i] = strings.clone(it.id, context.temp_allocator) }
 				for id in ids {
-					it := queue_find(app, id)
-					if it == nil || queue_hidden(app, id) { continue }
+					it := queue_find(app, pane, id)
+					if it == nil || queue_hidden(app, pane, id) { continue }
 					if it.delivery == .Queue { shown += 1 }
-					queue_row(app, it, shown, em)
+					queue_row(app, pane, it, shown, em)
 				}
 			}
 		}
@@ -834,9 +843,9 @@ queue_list :: proc(app: ^App, em: f32) {
 }
 
 // In the composer, over what is written: what Enter will do is not what it usually does.
-queue_edit_banner :: proc(app: ^App, em: f32) {
-	if !queue_editing(app) { return }
-	q := &app.cx.queue
+queue_edit_banner :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	if !queue_editing(app, pane) { return }
+	q := &pane.queue
 	note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * QUEUE_ROW_H_EM)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###q_banner") {
@@ -844,12 +853,12 @@ queue_edit_banner :: proc(app: ^App, em: f32) {
 		glyph(lucide.PENCIL, accent(), math.round(em * ICON_SMALL), em * 1.1)
 		ui.spacer(ui.px(em * 0.25))
 		text("t", i18n.tr("Editing a pending message"), accent(), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
-		if len(q.items) > 1 && q.items[len(q.items) - 1].id != q.edit.id && app.conversation.column_w > em * QUEUE_WORDS_MIN_EM {
+		if len(q.items) > 1 && q.items[len(q.items) - 1].id != q.edit.id && pane.conversation.column_w > em * QUEUE_WORDS_MIN_EM {
 			ui.spacer(ui.px(em * 0.6))
 			text("o", i18n.tr("it goes back last"), hex(HEX_FAINT), note)
 		}
 		ui.spacer(ui.fill())
-		if hint_action("###q_cancel", i18n.tr("Esc  cancel"), em, app.mono) { queue_edit_end(app, .Cancel) }
+		if hint_action("###q_cancel", i18n.tr("Esc  cancel"), em, app.mono) { queue_edit_end(app, pane, .Cancel) }
 		ui.spacer(ui.px(em * 0.85))
 	}
 }
@@ -881,26 +890,30 @@ inbox_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 inbox_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) { return f == .Refused }
 
 inbox_take_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	// (what shows of it goes: the prompt comes back under its own id)
-	if r.tag == app.chat.id {
-		taken := r.path[strings.last_index_byte(r.path, '/') + 1:]
-		if queue_shown_as_sent(app, taken) { chat_drop(&app.chat, taken) }
-		queue_gone(app, taken, false, app.cx.stream_seq)
+	// (what shows of it goes, in each pane that shows its session: the prompt comes back under its own id. The prompt is the first
+	// such pane's, else the main view's)
+	taken := r.path[strings.last_index_byte(r.path, '/') + 1:]
+	from: ^Chat_Pane
+	for &pane, i in app.panes {
+		if !pane_is_shown(app, i) || r.tag != pane.chat.id { continue }
+		if queue_shown_as_sent(app, &pane, taken) { chat_drop(&pane.chat, taken) }
+		queue_gone(app, &pane, taken, false, app.cx.stream_seq)
+		if from == nil { from = &pane }
 	}
-	outgoing_inbox(app, r.tag, r.body)
+	outgoing_inbox(app, from != nil ? from : main_pane(app), r.tag, r.body)
 }
 
 ////////////////////////////////
 // What the answers to the queue's requests do (net.odin REQ_FACTS)
 
-queue_list_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { queue_load(app, r.tag, v, r.asked_at) }
+queue_list_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { queue_load(app, req_pane(app, r), r.tag, v, r.asked_at) }
 
 // A Steer or a Cancel.
 queue_item_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { queue_answered(app, r) }
 
 queue_item_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) { return queue_failed(app, r) }
 
-queue_replace_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { queue_replaced(app, r) }
+queue_replace_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { queue_replaced(app, req_pane(app, r), r) }
 
 queue_replace_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
 	queue_replace_failed(app, r)

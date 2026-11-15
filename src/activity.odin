@@ -75,16 +75,17 @@ Act_Row :: struct {
 }
 
 activity_reset :: proc(app: ^App) {
+	pane := main_pane(app)
 	a := &app.activity
 	for &j in a.jobs { job_free(&j) }
 	clear(&a.jobs)
 	for k, p in a.peeks { delete(k); delete(p.text) }
 	clear(&a.peeks)
 	a.sel, a.reveal = 0, false
-	a.open = a.open_in[app.chat.id] or_else false   // (the tray is each session's: open where it was left open)
+	a.open = a.open_in[pane.chat.id] or_else false   // (the tray is each session's: open where it was left open)
 	a.poll_ms = 0
 	todos_clear(a)
-	todos_from_known(a, app.chat.id)
+	todos_from_known(a, pane.chat.id)
 	a.todos_sig = 0
 	todo_scan_reset(&a.scan)
 }
@@ -150,8 +151,9 @@ activity_close :: proc(app: ^App) {
 // The session shown's tray, open or not, for when it is shown again.
 @(private = "file")
 activity_keep_open :: proc(app: ^App) {
+	pane := main_pane(app)
 	m := &app.activity.open_in
-	id := app.chat.id
+	id := pane.chat.id
 	if !app.activity.open {
 		if key, ok := map_key_of(m, id); ok { delete_key(m, id); delete(key) }
 		return
@@ -170,10 +172,13 @@ activity_toggle :: proc(app: ^App) { if app.activity.open { activity_close(app) 
 ////////////////////////////////
 // Reading
 
-// The folder of the session shown: commands are the server's by folder.
-chat_dir :: proc(app: ^App) -> string {
-	if app.chat.have_self { return app.chat.self.directory }
-	if s := find_session(app, app.chat.id); s != nil { return s.directory }
+// The folder of the session the main view shows: commands are the server's by folder.
+chat_dir :: proc(app: ^App) -> string { return pane_dir(app, main_pane(app)) }
+
+// The folder of the session a pane shows ("": none yet).
+pane_dir :: proc(app: ^App, pane: ^Chat_Pane) -> string {
+	if pane.chat.have_self { return pane.chat.self.directory }
+	if s := find_session(app, pane.chat.id); s != nil { return s.directory }
 	return ""
 }
 
@@ -185,9 +190,10 @@ location_query :: proc(dir: string) -> string {
 // would be of the server's default folder.)
 @(private = "file")
 activity_polls :: proc(app: ^App) -> bool {
+	pane := main_pane(app)
 	a := &app.activity
-	if app.chat.id == "" || !online(app) || app.conn == nil { return false }
-	if chat_dir(app) == "" && !app.chat.have_self { return false }
+	if pane.chat.id == "" || !online(app) || app.conn == nil { return false }
+	if chat_dir(app) == "" && !pane.chat.have_self { return false }
 	for &j in a.jobs { if j.status == .Running { return true } }
 	return a.poll_ms == 0 || a.open
 }
@@ -213,6 +219,7 @@ activity_poke :: proc(app: ^App) { app.activity.poll_ms = 0 }
 
 @(private = "file")
 activity_read :: proc(app: ^App) {
+	pane := main_pane(app)
 	a := &app.activity
 	dir := chat_dir(app)
 	if dir != a.dir { delete(a.dir); a.dir = strings.clone(dir) }
@@ -220,12 +227,12 @@ activity_read :: proc(app: ^App) {
 	if !flying(app, .Shell_List, dir) {
 		request(app, .Shell_List, "GET", q != "" ? fmt.tprintf("/api/shell?%s", q) : "/api/shell", tag = dir)
 	}
-	if app.chat.id != "" && !flying(app, .Job_List, app.chat.id) {
-		request(app, .Job_List, "GET", fmt.tprintf("/api/experimental/job?sessionID=%s&kind=shell&status=running&descendants=true", app.chat.id), tag = app.chat.id)
+	if pane.chat.id != "" && !flying(app, .Job_List, pane.chat.id) {
+		request(app, .Job_List, "GET", fmt.tprintf("/api/experimental/job?sessionID=%s&kind=shell&status=running&descendants=true", pane.chat.id), tag = pane.chat.id)
 	}
 	for &j in a.jobs { if j.status == .Running { job_read(app, &j) } }
 	if !a.open { return }
-	for &s in app.chat.children {
+	for &s in pane.chat.children {
 		busy := app.busy[s.id] or_else false
 		_, known := a.peeks[s.id]
 		if flying(app, .Peek, s.id) || (known && !busy) { continue }   // (one that is over does not change)
@@ -272,14 +279,16 @@ job_fill :: proc(j: ^Shell_Job, it: json.Value) {
 
 // Whether a command of this session belongs in its tray: the session's own, its sub-agents', or one no session claims.
 job_ours :: proc(app: ^App, j: ^Shell_Job) -> bool {
-	if j.session == "" || j.session == app.chat.id { return true }
-	for &s in app.chat.children { if s.id == j.session { return true } }
+	pane := main_pane(app)
+	if j.session == "" || j.session == pane.chat.id { return true }
+	for &s in pane.chat.children { if s.id == j.session { return true } }
 	return false
 }
 
 // The answer to GET /api/experimental/job: the session's commands that run in the background (the others hold a turn).
 activity_jobs_load :: proc(app: ^App, v: json.Value, session: string) {
-	if session != app.chat.id { return }
+	pane := main_pane(app)
+	if session != pane.chat.id { return }
 	for &j in app.activity.jobs { j.background = false }
 	for it in tk_json.array(v, "data") {
 		if j := job_find(&app.activity, tk_json.text(it, "shellID")); j != nil { j.background = true }
@@ -480,8 +489,9 @@ todos_scan_load :: proc(app: ^App, r: ^Request, v: json.Value) {
 
 // The todo list: the last call of the tool that writes it, in the pages read. Read again when the last messages change.
 todos_update :: proc(app: ^App) {
+	pane := main_pane(app)
 	a := &app.activity
-	c := &app.chat
+	c := &pane.chat
 	sig := c.gen * 1_000_003 + u64(len(c.messages)) * 1009
 	if n := len(c.messages); n > 0 {
 		for &p in c.messages[n - 1].parts { sig = sig * 31 + u64(p.status) + 1 + u64(len(p.input)) }
@@ -592,8 +602,9 @@ shell_call_running :: proc(p: ^Part) -> bool {
 // Whether a shell call of the session shown runs in the foreground, holding its turn: what the composer's Background
 // button and session.background act on.
 foreground_command :: proc(app: ^App) -> bool {
-	if !app.chat.busy { return false }
-	c := &app.chat
+	pane := main_pane(app)
+	if !pane.chat.busy { return false }
+	c := &pane.chat
 	for &m in c.messages[max(0, len(c.messages) - ACT_PEEK_LINES):] {
 		for &p in m.parts {
 			if !shell_call_running(&p) { continue }
@@ -608,7 +619,8 @@ foreground_command :: proc(app: ^App) -> bool {
 
 @(private = "file")
 tool_rows :: proc(app: ^App, rows: ^[dynamic]Act_Row) {
-	c := &app.chat
+	pane := main_pane(app)
+	c := &pane.chat
 	first := max(0, len(c.messages) - ACT_PEEK_LINES)
 	for &m in c.messages[first:] {
 		for &p in m.parts {
@@ -624,18 +636,19 @@ tool_rows :: proc(app: ^App, rows: ^[dynamic]Act_Row) {
 
 @(private = "file")
 activity_rows :: proc(app: ^App) -> []Act_Row {
+	pane := main_pane(app)
 	a := &app.activity
 	rows := make([dynamic]Act_Row, context.temp_allocator)
-	agent :: proc(app: ^App, rows: ^[dynamic]Act_Row, s: ^Session_Info) {
-		v := sub_view(app, s.id)
+	agent :: proc(app: ^App, pane: ^Chat_Pane, rows: ^[dynamic]Act_Row, s: ^Session_Info) {
+		v := sub_view(app, pane, s.id)
 		preview := v.result
 		if p, ok := app.activity.peeks[s.id]; ok && p.text != "" { preview = p.text }
 		what := v.has_live ? v.live.activity : ""
 		name := v.agent != "" ? v.agent : "sub-agent"
 		append(rows, Act_Row{kind = .Agent, id = s.id, name = name, title = v.desc != "" ? v.desc : s.title, what = what, preview = preview, state = v.state, started = v.started, ended = v.ended})
 	}
-	running := sub_running(app)
-	for i in running.listed { agent(app, &rows, &app.chat.children[i]) }
+	running := sub_running(app, pane)
+	for i in running.listed { agent(app, pane, &rows, &pane.chat.children[i]) }
 	#reverse for &j in a.jobs {
 		if !job_ours(app, &j) { continue }
 		if j.status == .Running { append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = j.background ? fmt.tprintf(i18n.tr("in background · %s"), base_name(j.cwd)) : base_name(j.cwd), preview = string(j.tail[:]), state = .Running, started = j.started}) }
@@ -647,10 +660,10 @@ activity_rows :: proc(app: ^App) -> []Act_Row {
 		append(&rows, Act_Row{kind = .Shell, id = j.id, name = "$", title = first_line(j.command), what = what, preview = string(j.tail[:]), state = job_state(&j), started = j.started, ended = j.ended})
 	}
 	shown := 0
-	for &s in app.chat.children {
+	for &s in pane.chat.children {
 		if s.id in running.ids { continue }
 		if shown == ACT_FINISHED_SHOWN { break }
-		agent(app, &rows, &s)
+		agent(app, pane, &rows, &s)
 		shown += 1
 	}
 	return rows[:]
@@ -659,7 +672,8 @@ activity_rows :: proc(app: ^App) -> []Act_Row {
 // How much runs: what the line over the composer says, and whether it has anything to say. (A sub-agent runs while its child
 // does, not while its call does: the call returns at once.)
 activity_counts :: proc(app: ^App) -> (agents, shells: int) {
-	running := sub_running(app)
+	pane := main_pane(app)   // (the activity is the main view's)
+	running := sub_running(app, pane)
 	agents = len(running.listed) + running.unlisted
 	for &j in app.activity.jobs { if j.status == .Running && job_ours(app, &j) { shells += 1 } }
 	return
@@ -686,6 +700,7 @@ row_act :: proc(app: ^App, r: Act_Row) {
 
 @(private = "file")
 row_stop :: proc(app: ^App, r: Act_Row) {
+	pane := main_pane(app)
 	if !sub_live(r.state) { return }
 	switch r.kind {
 	case .Agent: interrupt_session(app, r.id)
@@ -693,19 +708,20 @@ row_stop :: proc(app: ^App, r: Act_Row) {
 		q := location_query(app.activity.dir)
 		request(app, .Action, "DELETE", fmt.tprintf("/api/shell/%s%s%s", r.id, q != "" ? "?" : "", q), tag = r.id)
 		activity_poke(app)
-	case .Tool: interrupt_session(app, app.chat.id)
+	case .Tool: interrupt_session(app, pane.chat.id)
 	}
 }
 
 // Its output as a terminal shows it. (A call whose command the list does not have: the call's own view of it.)
 @(private = "file")
 row_inspect :: proc(app: ^App, r: Act_Row) {
+	pane := main_pane(app)
 	switch r.kind {
 	case .Agent:
 	case .Shell:
 		if j := job_find(&app.activity, r.id); j != nil { output_view_open_shell(app, j.id, j.command, app.activity.dir) }
 	case .Tool:
-		for &m in app.chat.messages {
+		for &m in pane.chat.messages {
 			for &p in m.parts { if p.kind == .Tool && p.tool_id == r.id { output_view_open_part(app, &p); return } }
 		}
 	}
@@ -713,6 +729,7 @@ row_inspect :: proc(app: ^App, r: Act_Row) {
 
 // Before the composer's own keys, while the tray is open. Up past the first row is the way back to the composer.
 activity_keys :: proc(app: ^App) {
+	pane := main_pane(app)
 	a := &app.activity
 	rows := activity_rows(app)
 	n := len(rows)
@@ -726,7 +743,7 @@ activity_keys :: proc(app: ^App) {
 	a.sel = clamp(a.sel, 0, max(n - 1, 0))
 	if n == 0 { return }
 	// (a prompt written in the composer goes first: Enter sends it, Delete edits it)
-	if strings.trim_space(ui.text_edit_string(&app.composer.area)) != "" { return }
+	if strings.trim_space(ui.text_edit_string(&pane.composer.area)) != "" { return }
 	if ui.key_press(.Return) { row_act(app, rows[a.sel]) }
 	if ui.key_press(.Delete) { row_stop(app, rows[a.sel]) }
 }
@@ -735,6 +752,7 @@ activity_keys :: proc(app: ^App) {
 // The line over the composer
 
 activity_strip :: proc(app: ^App, em: f32) {
+	pane := main_pane(app)
 	a := &app.activity
 	todos_update(app)
 	agents, shells := activity_counts(app)
@@ -754,7 +772,7 @@ activity_strip :: proc(app: ^App, em: f32) {
 		note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
 		ui.spacer(ui.px(em * 0.5))
 		if running {   // (the sidebar's lamps: green while it works, orange when only commands run on)
-			working := app.chat.busy || agents > 0
+			working := pane.chat.busy || agents > 0
 			session_lamp("###l", working ? LAMP_WORKING : LAMP_BACKGROUND, em)
 			ui.spacer(ui.px(em * 0.35))
 		}
@@ -778,7 +796,7 @@ activity_strip :: proc(app: ^App, em: f32) {
 		if !open_todos || doing == "" { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(em * 0.8)) }
 		// (a command that holds the turn: it can go on in the background while the session does)
 		if foreground_command(app) {
-			if hint_action("###bg", i18n.tr("push to background"), em, app.mono, lucide.SEND_TO_BACK) { background_session(app, app.chat.id) }
+			if hint_action("###bg", i18n.tr("push to background"), em, app.mono, lucide.SEND_TO_BACK) { background_session(app, pane.chat.id) }
 			ui.spacer(ui.px(em * 1.2))
 		}
 		text("k", a.open ? i18n.tr("Esc  close") : i18n.tr("↓  details"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
@@ -807,6 +825,7 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 
 @(private = "file")
 activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
+	pane := main_pane(app)
 	a := &app.activity
 	selected := a.open && i == a.sel
 	opened := r.kind == .Shell && a.opened == r.id
@@ -844,7 +863,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 			}
 			if selected || sig.hovering {
 				if running && (r.kind == .Shell || r.kind == .Tool) {
-					session := app.chat.id
+					session := pane.chat.id
 					if r.kind == .Shell { j := job_find(a, r.id); session = j != nil && !j.background ? j.session : "" }
 					if session != "" {
 						if ui.button("bg", i18n.tr("Background"), o = {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true}).clicked { background_session(app, session) }
@@ -950,6 +969,7 @@ activity_todos :: proc(app: ^App, em: f32) {
 // What runs, a row each.
 @(private = "file")
 activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
+	pane := main_pane(app)
 	a := &app.activity
 	rows := activity_rows(app)
 	running := 0
@@ -959,7 +979,7 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
 		caption_title("h", i18n.tr("ACTIVITY"), fmt.tprintf(i18n.tr("%d running"), running), em, hex(HEX_CYAN))
 		ui.spacer(ui.fill())
-		if app.conversation.column_w > em * ACT_KEYS_MIN_EM { text("k", i18n.tr("↑↓ move   Enter open   Del stop   "), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
+		if pane.conversation.column_w > em * ACT_KEYS_MIN_EM { text("k", i18n.tr("↑↓ move   Enter open   Del stop   "), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
 		if hint_action("###act_close", i18n.tr("Esc close"), em, app.mono) { activity_close(app) }
 		ui.spacer(ui.px(em * TRAY_PAD_EM))
 	}
@@ -993,6 +1013,7 @@ tray_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 
 // Under the composer: it opens downward, as the key says. Its height glides to what it holds, up to a part of the window.
 activity_tray :: proc(app: ^App, em: f32) {
+	pane := main_pane(app)
 	a := &app.activity
 	// One value moves, the height shown. What is inside keeps its full size whatever that is: the clip uncovers it, nothing in
 	// it is laid out differently from one frame to the next. (Its height is the last one measured: known before it opens.)
@@ -1021,7 +1042,7 @@ activity_tray :: proc(app: ^App, em: f32) {
 					if body.size.y > 0 { a.height = body.size.y + 2 * px1() }
 					ui.spacer(ui.px(em * 0.4))
 					has_todos := len(a.todos) > 0
-					if has_todos && app.conversation.column_w > em * ACT_COLUMNS_MIN_EM {
+					if has_todos && pane.conversation.column_w > em * ACT_COLUMNS_MIN_EM {
 						// side by side: what runs, and the list beside it, whole
 						ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 						if ui.row(id = "###act_cols") {

@@ -87,4 +87,4 @@ gone_clear :: proc(l: ^Gone_List) {
 
 // What the program puts off (app.cx.due: ui.Deferred each). Each is run (due_run: a new one does not compile until it says what it
 // does) and wakes a window at rest, from one list.
-Due :: enum u8 { Refresh, Facts, Children, Context, Restore, Term_Size, Side_Wake, Drafts }
+Due :: enum u8 { Refresh, Facts, Children, Context, Term_Size, Side_Wake, Drafts }

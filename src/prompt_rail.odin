@@ -21,36 +21,36 @@ Prompt_Rail :: struct {
 }
 
 // The marks are shown: the setting, and a session.
-prompt_rail_on :: proc(app: ^App) -> bool { return app.prefs.prompt_rail && app.chat.id != "" }
+prompt_rail_on :: proc(app: ^App, pane: ^Chat_Pane) -> bool { return app.prefs.prompt_rail && pane.chat.id != "" }
 
 // The marks on the bar of the conversation's scroll box `sb` (the last build's), given before it is built: a jump is in place
 // when the messages are built.
-prompt_rail :: proc(app: ^App, sb: ^ui.Box, em: f32) {
-	p := &app.conversation.prompt_rail
-	prompt_rail_sync(app)
+prompt_rail :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) {
+	p := &pane.conversation.prompt_rail
+	prompt_rail_sync(app, pane)
 	margin := math.round(em * PROMPT_RAIL_MARGIN_EM)
 	// (the cards say when each prompt was sent, on the reader's clock)
 	o := ui.Scroll_Marks_Options{name = i18n.tr("Prompts"), margin = margin, now_ms = now_epoch_ms(), hours12 = !app.prefs.clock24}
 	i := ui.scroll_marks("###prompt_rail", &p.rail, sb, o)
 	if i < 0 { return }
-	prompt_go(app, ui.scroll_marks_id(&p.rail, i), em)
+	prompt_go(app, pane, ui.scroll_marks_id(&p.rail, i), em)
 }
 
 // The conversation goes to prompt `id`, and the prompt's plate takes the keyboard: a mark of the rail, a choice of Jump
 // to message (jump.odin).
-prompt_go :: proc(app: ^App, id: string, em: f32) {
-	p := &app.conversation.prompt_rail
+prompt_go :: proc(app: ^App, pane: ^Chat_Pane, id: string, em: f32) {
+	p := &pane.conversation.prompt_rail
 	// (the view goes there now; the column keeps it on the prompt while the heights around it settle)
-	chat_scroll_event(app, Scroll_Restore{id, -math.round(em * PROMPT_RAIL_MARGIN_EM)})
+	chat_scroll_event(pane, Scroll_Restore{id, -math.round(em * PROMPT_RAIL_MARGIN_EM)})
 	delete(p.focus)
 	p.focus = strings.clone(id)
 }
 
 // The marks are those of the prompts as they are: made again when the messages come or go, not when one grows.
 @(private = "file")
-prompt_rail_sync :: proc(app: ^App) {
-	p := &app.conversation.prompt_rail
-	c := &app.chat
+prompt_rail_sync :: proc(app: ^App, pane: ^Chat_Pane) {
+	p := &pane.conversation.prompt_rail
+	c := &pane.chat
 	now := [3]u64{c.gen, c.subs_seq, u64(len(c.messages))}
 	if p.version > 0 && now == p.made && !ui.scroll_marks_stale(&p.rail, p.version) { return }
 	p.made = now
@@ -65,18 +65,18 @@ prompt_rail_sync :: proc(app: ^App) {
 }
 
 // Before the messages are built: the first prompt is placed next.
-prompt_rail_begin :: proc(app: ^App) { app.conversation.prompt_rail.at = 0 }
+prompt_rail_begin :: proc(app: ^App, pane: ^Chat_Pane) { pane.conversation.prompt_rail.at = 0 }
 
 // A prompt of the conversation starts at `top` in its content (the lazy column's `y` before its item).
-prompt_rail_place :: proc(app: ^App, top: f32) {
-	p := &app.conversation.prompt_rail
+prompt_rail_place :: proc(app: ^App, pane: ^Chat_Pane, top: f32) {
+	p := &pane.conversation.prompt_rail
 	ui.scroll_marks_place(&p.rail, p.at, top)
 	p.at += 1
 }
 
 // The plate of prompt `m` (its box): a Tab stop while it has the keyboard, which the marks give it when they went there.
-prompt_rail_focus :: proc(app: ^App, m: ^Message, plate: ^ui.Box) {
-	p := &app.conversation.prompt_rail
+prompt_rail_focus :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, plate: ^ui.Box) {
+	p := &pane.conversation.prompt_rail
 	if p.focus != "" && p.focus == m.id {
 		ui.set_focus(plate.key)
 		delete(p.focus)

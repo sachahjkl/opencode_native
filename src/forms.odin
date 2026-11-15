@@ -314,27 +314,27 @@ field_height :: proc(fd: ^Form_Field) -> f32 {
 
 // The forms of the conversation shown, one at a time: the oldest, what comes next counted. (Several at once would not fit, and a
 // run goes on question by question.)
-forms_dock :: proc(app: ^App, em: f32) {
+forms_dock :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	first: ^Form_Req
 	n := 0
 	for f in app.cx.forms {
 		// (a form of no session is the conversation shown's: none else would show it)
-		if f.session != "" && f.session != app.chat.id && !is_child(&app.chat, f.session) { continue }
+		if f.session != "" && f.session != pane.chat.id && !is_child(&pane.chat, f.session) { continue }
 		if first == nil { first = f }
 		n += 1
 	}
-	if first != nil { form_card(app, first, n, em) }
+	if first != nil { form_card(app, pane, first, n, em) }
 }
 
 // One question at a time: several make tabs, then a review, and only that sends. (A single one sends itself once picked.) What is
 // shown can change as it is answered: `when`, so the pages are counted again at each frame.
-form_card :: proc(app: ^App, f: ^Form_Req, others: int, em: f32) {
+form_card :: proc(app: ^App, pane: ^Chat_Pane, f: ^Form_Req, others: int, em: f32) {
 	pages := make([dynamic]int, 0, len(f.fields), context.temp_allocator)   // the fields shown
 	for &fd, i in f.fields { if field_shown(f, &fd) { append(&pages, i) } }
 	wizard := len(pages) > 1
 	f.page = clamp(f.page, 0, wizard ? len(pages) : max(len(pages) - 1, 0))
 	reviewing := wizard && f.page == len(pages)
-	sub := f.session != app.chat.id
+	sub := f.session != pane.chat.id
 	send, dismiss, next := false, false, false
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if plate(fmt.tprintf("###form_%s", f.id), top = HEX_PERM_TOP, bottom = HEX_PERM_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.1, border = with_alpha(accent(), 0.55)) {

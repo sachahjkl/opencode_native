@@ -210,8 +210,8 @@ sub_result :: proc(c: ^Chat, child: string) -> ^Message {
 }
 
 // What is known of the sub-agent `child` (a session id), from a call `p` when there is one.
-sub_view :: proc(app: ^App, child: string, p: ^Part = nil) -> (v: Sub_View) {
-	c := &app.chat
+sub_view :: proc(app: ^App, pane: ^Chat_Pane, child: string, p: ^Part = nil) -> (v: Sub_View) {
+	c := &pane.chat
 	v.id = child
 	v.state = .Unknown
 	call_done := false   // (a foreground call that returned: its session may still be busy a moment, handing back)
@@ -300,6 +300,7 @@ go_back :: proc(app: ^App) { append(&app.nav.steps, Nav_Step{kind = .Back}) }
 
 // What was asked for during the frame, in order.
 nav_apply :: proc(app: ^App) {
+	pane := main_pane(app)
 	if len(app.nav.steps) == 0 { return }
 	for st in app.nav.steps {
 		switch st.kind {
@@ -308,8 +309,8 @@ nav_apply :: proc(app: ^App) {
 			clear(&app.nav.drilled)
 			open_chat(app, st.id)
 		case .Drill:
-			if st.id != app.chat.id {
-				if app.chat.id != "" { append(&app.nav.drilled, strings.clone(app.chat.id)) }
+			if st.id != pane.chat.id {
+				if pane.chat.id != "" { append(&app.nav.drilled, strings.clone(pane.chat.id)) }
 				open_chat(app, st.id)
 			}
 		case .Back:
@@ -347,12 +348,13 @@ nav_place_free :: proc(p: Nav_Place) { delete(p.id); delete(p.msg) }
 // Where the reader is, kept in the place they leave.
 @(private = "file")
 nav_mark :: proc(app: ^App) {
+	pane := main_pane(app)
 	nav := &app.nav
 	if nav.at >= len(nav.visited) { return }
 	p := &nav.visited[nav.at]
-	if p.id != app.chat.id || p.id == "" { return }
+	if p.id != pane.chat.id || p.id == "" { return }
 	delete(p.msg)
-	p.msg, p.dy, p.bottom = strings.clone(app.chat.view_msg), app.chat.view_dy, chat_following(app)
+	p.msg, p.dy, p.bottom = strings.clone(pane.chat.view_msg), pane.chat.view_dy, chat_following(pane)
 }
 
 // Where one has been, as in a browser: every session opened and the home page ("") go here, whichever way they were reached (the
@@ -391,15 +393,16 @@ nav_step :: proc(app: ^App, d: int) {
 // session: open_chat did not start the view over, and a way back under way ends here.)
 @(private = "file")
 nav_restore :: proc(app: ^App, id: string) {
+	pane := main_pane(app)   // (the history is the main view's)
 	nav := &app.nav
 	if nav.at < len(nav.visited) {
 		p := nav.visited[nav.at]
 		if p.id == id && id != "" && !p.bottom && p.msg != "" {
-			chat_scroll_event(app, Scroll_Restore{p.msg, p.dy})
+			chat_scroll_event(pane, Scroll_Restore{p.msg, p.dy})
 			return
 		}
 	}
-	chat_scroll_event(app, Scroll_Signal.Restore_End)
+	chat_scroll_event(pane, Scroll_Signal.Restore_End)
 }
 
 // The conversation's scroll bar is held.
@@ -425,26 +428,29 @@ nav_forget :: proc(app: ^App, id: string) {
 }
 
 nav_clear :: proc(app: ^App) {
+	pane := main_pane(app)
 	for p in app.nav.visited { nav_place_free(p) }
 	clear(&app.nav.visited)
 	app.nav.at = 0
-	app.chat.view_msg = ""
-	chat_scroll_event(app, Scroll_Signal.Restore_End)
+	pane.chat.view_msg = ""
+	chat_scroll_event(pane, Scroll_Signal.Restore_End)
 }
 
 // The session to go back to: the one drilled down from, else the parent.
 back_target :: proc(app: ^App) -> string {
+	pane := main_pane(app)
 	if len(app.nav.drilled) > 0 { return app.nav.drilled[len(app.nav.drilled) - 1] }
-	return app.chat.self.parent
+	return pane.chat.self.parent
 }
 
 @(private = "file")
 nav_back :: proc(app: ^App) {
+	pane := main_pane(app)
 	if len(app.nav.drilled) > 0 {
 		id := pop(&app.nav.drilled)
 		defer delete(id)
 		open_chat(app, id)
-	} else if p := app.chat.self.parent; p != "" {
+	} else if p := pane.chat.self.parent; p != "" {
 		open_chat(app, strings.clone(p, context.temp_allocator))
 	}
 }
@@ -461,16 +467,16 @@ card_head_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 // A sub-agent's call: a calm plate of the neutral steps, the same whatever its state; only its mark (state_mark) and the
 // word of its state say how it stands: a pulsing lamp while it runs; a check, a cross or a square once it ended, with
 // "done", "failed" or "stopped", and the first line of what it handed back even folded.
-subagent_card :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
-	v := sub_view(app, p.sub_session != "" ? p.sub_session : sub_session_guess(&app.chat, p), p)
+subagent_card :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string, em: f32) {
+	v := sub_view(app, pane, p.sub_session != "" ? p.sub_session : sub_session_guess(&pane.chat, p), p)
 	part_id := p.tool_id != "" ? p.tool_id : pid
 	open := part_open(app, part_id)
 	running := sub_live(v.state)
 	if running { animate(app) }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if plate(fmt.tprintf("###sa_%s", pid), radius = CARD_RADIUS, shadow = 3) {
-		card_head(app, &v, part_id, open, running, em)
-		if open { card_body(app, &v, p, pid, running, em) }
+		card_head(app, pane, &v, part_id, open, running, em)
+		if open { card_body(app, pane, &v, p, pid, running, em) }
 	}
 	ui.spacer(ui.px(em * 0.6))
 }
@@ -494,7 +500,7 @@ SUB_GUESS_SLACK_MS :: 5000   // a child made this much before the call's start i
 
 // The clickable header of a card: its first line and, unless it is folded and over, the quiet line and a preview.
 @(private = "file")
-card_head :: proc(app: ^App, v: ^Sub_View, part_id: string, open, running: bool, em: f32) {
+card_head :: proc(app: ^App, pane: ^Chat_Pane, v: ^Sub_View, part_id: string, open, running: bool, em: f32) {
 	end := v.ended > 0 ? v.ended : (running ? now_epoch_ms() : 0)
 	name := v.agent != "" ? v.agent : "sub-agent"
 	desc := v.desc != "" ? v.desc : i18n.tr("(no description)")
@@ -503,11 +509,11 @@ card_head :: proc(app: ^App, v: ^Sub_View, part_id: string, open, running: bool,
 	head := ui.build_box({.Clickable, .Focusable, .Hot_Within}, "###head")
 	head.custom = card_head_draw
 	hs := ui.signal(head)
-	if hs.clicked { part_toggle(app, part_id, head) }
-	if app.seek_subagent && !chat_anchored(app) && head.rect.max.y != head.rect.min.y && app.chat.loaded {
+	if hs.clicked { part_toggle(app, pane, part_id, head) }
+	if app.seek_subagent && !chat_anchored(pane) && head.rect.max.y != head.rect.min.y && pane.chat.loaded {
 		// --seek-subagent (tests): bring the first card near the top, as an anchor does
 		app.seek_subagent = false
-		chat_scroll_event(app, Scroll_Anchor{head, math.round(em * SEEK_ANCHOR_EM)})
+		chat_scroll_event(pane, Scroll_Anchor{head, math.round(em * SEEK_ANCHOR_EM)})
 	}
 	if hs.double_clicked && v.id != "" { drill_down(app, v.id) }
 	if ui.parent(head) { card_lines(app, v, name, desc, open, running, end, em) }
@@ -572,7 +578,7 @@ state_when :: proc(st: Sub_State, started, end: f64) -> string {
 }
 
 // A card opened: what its session says, its prompt (`p`'s), its result.
-card_body :: proc(app: ^App, v: ^Sub_View, p: ^Part, pid: string, running: bool, em: f32) {
+card_body :: proc(app: ^App, pane: ^Chat_Pane, v: ^Sub_View, p: ^Part, pid: string, running: bool, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###body") {
 		ui.spacer(ui.px(em * CARD_PAD_EM))
@@ -585,7 +591,7 @@ card_body :: proc(app: ^App, v: ^Sub_View, p: ^Part, pid: string, running: bool,
 			if v.prompt != "" {
 				section_label("pr", i18n.tr("PROMPT"), em)
 				body, extra := mono_cut_kept(&p.prompt_well.cut, v.prompt, PROMPT_LINES_MAX)   // (the card is its frame: no box of its own inside it)
-				mono_text(body, extra, em, 0, hex(HEX_TEXT_SOFT), flush = true, kept = &p.prompt_well.runs, kept_in = app.chat.alloc)
+				mono_text(body, extra, em, 0, hex(HEX_TEXT_SOFT), flush = true, kept = &p.prompt_well.runs, kept_in = pane.chat.alloc)
 				ui.spacer(ui.px(em * 0.6))
 			}
 			if v.result != "" {
@@ -593,7 +599,7 @@ card_body :: proc(app: ^App, v: ^Sub_View, p: ^Part, pid: string, running: bool,
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})   // (as the prompt: in the card, no box of its own)
 				if ui.column(id = "###result") {
 					id := fmt.tprintf("%s_res", pid)
-					markdown.view(md_doc(&app.chat, id), id, v.result, md_config(app, hex(HEX_CARD_RESULT)), math.round(em * FS_LABEL))
+					markdown.view(md_doc(&pane.chat, id), id, v.result, md_config(app, hex(HEX_CARD_RESULT)), math.round(em * FS_LABEL))
 				}
 				ui.spacer(ui.px(em * 0.4))
 			} else if running {
@@ -664,8 +670,8 @@ sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 ////////////////////////////////
 // The result of a sub-agent, where it came back in the parent's conversation
 
-subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
-	v := sub_view(app, m.sub_child)
+subagent_result :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
+	v := sub_view(app, pane, m.sub_child)
 	st, _ := state_of_word(m.sub_state)
 	// A report that says the child's own work still runs is a past event: a quiet mark, not a lamp. The card says the present.
 	if m.sub_running { st = .Unknown }
@@ -678,7 +684,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 			if b.hot_t > FADE_VISIBLE { draw.rect(dc, b.rect, {1, 1, 1, 0.035 * b.hot_t}) }   // (square: a row)
 		}
 		hs := ui.signal(hb)
-		if hs.clicked { part_toggle(app, m.id, hb) }
+		if hs.clicked { part_toggle(app, pane, m.id, hb) }
 		if ui.parent(hb) {
 			ui.spacer(ui.px(em * CARD_PAD_EM))
 			state_mark("###st", st, size = em * CARD_MARK_EM)
@@ -707,7 +713,7 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 				if ui.column() {
 					ui.spacer(ui.px(em * 0.3))
 					id := fmt.tprintf("%s_sr", m.id)
-					markdown.view(md_doc(&app.chat, id), id, m.text, md_config(app, hex(HEX_RETURNED_TEXT)), math.round(em * FS_LABEL))
+					markdown.view(md_doc(&pane.chat, id), id, m.text, md_config(app, hex(HEX_RETURNED_TEXT)), math.round(em * FS_LABEL))
 					ui.spacer(ui.px(em * 0.3))
 				}
 			}
@@ -719,17 +725,17 @@ subagent_result :: proc(app: ^App, m: ^Message, em: f32) {
 ////////////////////////////////
 // A sub-agent's own conversation: where it comes from, and the way back
 
-subagent_banner :: proc(app: ^App, em: f32) {
-	c := &app.chat
+subagent_banner :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	c := &pane.chat
 	if !c.have_self || c.self.parent == "" { return }
 	s := &c.self
-	st := sub_view(app, s.id).state
+	st := sub_view(app, pane, s.id).state
 	ui.spacer(ui.px(em * 0.4))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if plate("###sub_banner", radius = CARD_RADIUS, shadow = 3) {
-		if bx := ui.parent_box(); app.seek_subagent && !chat_anchored(app) && bx.rect.max.y > 0 && c.loaded {
+		if bx := ui.parent_box(); app.seek_subagent && !chat_anchored(pane) && bx.rect.max.y > 0 && c.loaded {
 			app.seek_subagent = false   // --seek-subagent (tests): bring the banner into view
-			chat_scroll_event(app, Scroll_Anchor{bx, math.round(em * SEEK_ANCHOR_EM)})
+			chat_scroll_event(pane, Scroll_Anchor{bx, math.round(em * SEEK_ANCHOR_EM)})
 		}
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
@@ -782,8 +788,8 @@ Sub_Running :: struct {
 	computed: int,               // times it was made (tests)
 }
 
-sub_running :: proc(app: ^App) -> ^Sub_Running {
-	c := &app.chat
+sub_running :: proc(app: ^App, pane: ^Chat_Pane) -> ^Sub_Running {
+	c := &pane.chat
 	r := &c.running
 	now := [3]u64{c.subs_seq, app.cx.marks_ver, c.children_ver}
 	if r.made && r.at == now { return r }
@@ -792,11 +798,11 @@ sub_running :: proc(app: ^App) -> ^Sub_Running {
 	r.ids = make(map[string]bool, allocator = a)
 	r.unlisted = 0
 	for &s, i in c.children {
-		if sub_live(sub_view(app, s.id).state) { append(&r.listed, i); r.ids[s.id] = true }
+		if sub_live(sub_view(app, pane, s.id).state) { append(&r.listed, i); r.ids[s.id] = true }
 	}
 	for id in sub_index(c).claimed {
 		if id in c.child_ids || id in r.ids { continue }
-		if sub_live(sub_view(app, id).state) { r.ids[id] = true; r.unlisted += 1 }
+		if sub_live(sub_view(app, pane, id).state) { r.ids[id] = true; r.unlisted += 1 }
 	}
 	r.made, r.at = true, now
 	r.computed += 1
@@ -804,18 +810,18 @@ sub_running :: proc(app: ^App) -> ^Sub_Running {
 }
 
 // The sub-agents of the session shown that run now, of its list of children.
-active_children :: proc(app: ^App) -> [dynamic]^Session_Info {
+active_children :: proc(app: ^App, pane: ^Chat_Pane) -> [dynamic]^Session_Info {
 	list := make([dynamic]^Session_Info, context.temp_allocator)
-	for i in sub_running(app).listed { append(&list, &app.chat.children[i]) }
+	for i in sub_running(app, pane).listed { append(&list, &pane.chat.children[i]) }
 	return list
 }
 
 // The header's button: the running ones first and loud (a lit button, a pulsing lamp, their count); when none runs, a
 // quiet count of the past ones. Its menu lists the running ones, then the finished ones.
-subagents_button :: proc(app: ^App, em: f32) {
-	c := &app.chat
+subagents_button :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	c := &pane.chat
 	if len(c.children) == 0 { return }
-	active := active_children(app)
+	active := active_children(app, pane)
 	key := "subagents_menu"
 	sig: ui.Signal
 	if len(active) > 0 {
@@ -833,7 +839,7 @@ subagents_button :: proc(app: ^App, em: f32) {
 		if len(active) > 0 {
 			ui.menu_heading(fmt.tprintf(i18n.tr("Active now (%d)"), len(active)))
 			for s in active {
-				v := sub_view(app, s.id)
+				v := sub_view(app, pane, s.id)
 				what := v.has_live && v.live.activity != "" ? v.live.activity : s.agent
 				if ui.menu_item(fmt.tprintf("▶  %s  —  %s", label_safe(ellipsize(s.title, MENU_TITLE_CHARS)), label_safe(ellipsize(what, MENU_ACTIVITY_CHARS))), duration_text(s.created, now_epoch_ms())).clicked { drill_down(app, s.id) }
 			}
@@ -841,11 +847,11 @@ subagents_button :: proc(app: ^App, em: f32) {
 		}
 		ui.menu_heading(fmt.tprintf(i18n.tr("Finished (%d)"), len(c.children) - len(active)))
 		shown := 0
-		running := sub_running(app)
+		running := sub_running(app, pane)
 		for &s in c.children {
 			if s.id in running.ids { continue }
 			if shown == FINISHED_SHOWN { ui.menu_item(fmt.tprintf(i18n.tr(len(c.children) - len(active) - shown, "… and %d more", "… and %d more"), len(c.children) - len(active) - shown), disabled = true); break }
-			v := sub_view(app, s.id)
+			v := sub_view(app, pane, s.id)
 			mark := "·"
 			#partial switch v.state {
 			case .Done:      mark = "✓"
@@ -879,15 +885,15 @@ glyph_label_button :: proc(app: ^App, id, label: string, em: f32) -> ui.Signal {
 
 // Above the composer, while sub-agents of the session shown run: one chip each, in the language of their cards: a neutral
 // plate, the lamp the only colour, what it does now and for how long quietly after its name. A click opens it.
-active_strip :: proc(app: ^App, em: f32) {
-	active := active_children(app)
+active_strip :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	active := active_children(app, pane)
 	if len(active) == 0 { return }
 	animate(app)
 	now := now_epoch_ms()
 	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.5, em * 0.5}})
 	if ui.flow({em * 0.5, em * 0.5}, "###active_strip") {
 		for s in active {
-			v := sub_view(app, s.id)
+			v := sub_view(app, pane, s.id)
 			ui.next({width = ui.children_sum(), height = ui.px(math.round(em * BUTTON_COMPACT_H_EM)), axis = .X, cross = .Center})
 			b := ui.build_box({.Clickable, .Focusable}, fmt.tprintf("###act_%s", s.id))
 			b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {

@@ -20,22 +20,22 @@ Escape_Stop :: struct {
 }
 
 // An Escape that nothing else took, while a run works.
-escape_stop :: proc(app: ^App) {
-	if escape_stop_armed(app) {
+escape_stop :: proc(app: ^App, pane: ^Chat_Pane) {
+	if escape_stop_armed(app, pane) {
 		escape_stop_clear(app)
-		interrupt_session(app, app.chat.id)
+		interrupt_session(app, pane.chat.id)
 		return
 	}
 	e := &app.escape_stop
 	delete(e.session)
-	e.session = strings.clone(app.chat.id)
+	e.session = strings.clone(pane.chat.id)
 	e.until = ui.now_ms() + ESCAPE_STOP_MS
 }
 
 // Armed for the session shown, its run still working, the time not over.
-escape_stop_armed :: proc(app: ^App) -> bool {
+escape_stop_armed :: proc(app: ^App, pane: ^Chat_Pane) -> bool {
 	e := &app.escape_stop
-	return e.session != "" && e.session == app.chat.id && app.chat.busy && ui.now_ms() < e.until
+	return e.session != "" && e.session == pane.chat.id && pane.chat.busy && ui.now_ms() < e.until
 }
 
 escape_stop_clear :: proc(app: ^App) {
@@ -45,8 +45,8 @@ escape_stop_clear :: proc(app: ^App) {
 
 // The banner at the top of the composer while the stop is armed. It asks for a wake at the end of the arming: it goes
 // without other input.
-escape_stop_banner :: proc(app: ^App, em: f32) {
-	if !escape_stop_armed(app) {
+escape_stop_banner :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	if !escape_stop_armed(app, pane) {
 		if app.escape_stop.session != "" { escape_stop_clear(app) }
 		return
 	}
@@ -66,7 +66,7 @@ escape_stop_banner :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.fill())
 			if hint_action("###stop_now", i18n.tr("Stop now"), em, app.mono, intent = .Danger) {
 				escape_stop_clear(app)
-				interrupt_session(app, app.chat.id)
+				interrupt_session(app, pane.chat.id)
 			}
 			ui.spacer(ui.px(em * 0.4))
 		}

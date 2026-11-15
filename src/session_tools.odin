@@ -358,7 +358,8 @@ changes_close :: proc(app: ^App) {
 // What the session's description says from here until the server has told is the past, unless this fails: revert_failed.
 @(private = "file")
 revert_leaving :: proc(app: ^App, id: string) {
-	if id == app.chat.id { app.cx.changes.gone_seq = app.cx.stream_seq + 1 }
+	pane := main_pane(app)
+	if id == pane.chat.id { app.cx.changes.gone_seq = app.cx.stream_seq + 1 }
 }
 
 revert_commit :: proc(app: ^App) {
@@ -391,11 +392,14 @@ revert_done :: proc(app: ^App) {
 	c := &app.cx.changes
 	s, committing := c.state.(Changes_Committing)
 	if !committing { return }
-	if s.session == app.chat.id {
-		load_messages(app, s.session)
-		if s.prompt != "" && strings.trim_space(ui.text_edit_string(&app.composer.area)) == "" {
-			ui.text_edit_set(&app.composer.area, s.prompt)
-			app.composer.focus_next = true
+	given := false   // (the prompt goes back once: to the first pane that shows the session)
+	for &pane, i in app.panes {
+		if !pane_is_shown(app, i) || s.session != pane.chat.id { continue }
+		load_messages(app, &pane, s.session)
+		if !given && s.prompt != "" && strings.trim_space(ui.text_edit_string(&pane.composer.area)) == "" {
+			ui.text_edit_set(&pane.composer.area, s.prompt)
+			pane.composer.focus_next = true
+			given = true
 		}
 	}
 	changes_reset(c)
@@ -411,13 +415,14 @@ revert_failed :: proc(app: ^App, id: string) {
 	c := &app.cx.changes
 	changes_reset(c)
 	c.gone_seq = 0
-	if id == app.chat.id { request(app, .Self, "GET", strings.concatenate({"/api/session/", id}, context.temp_allocator), tag = id) }
+	panes_self_read(app, id)
 }
 
 // Elsewhere (another client, or this one's own, whose answer then ends the state).
 revert_gone :: proc(app: ^App, id: string) {
+	pane := main_pane(app)
 	c := &app.cx.changes
-	if id == app.chat.id { c.gone_seq = app.cx.stream_seq }
+	if id == pane.chat.id { c.gone_seq = app.cx.stream_seq }
 	if s, staged := c.state.(Changes_Staged); staged && s.session == id { changes_reset(c) }
 }
 
@@ -541,9 +546,10 @@ session_moved_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 session_export_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { session_export_save(app, r.tag, r.resp) }
 
 session_import_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	pane := req_pane(app, r)
 	refresh_soon(app)
 	// (the reader who went elsewhere meanwhile stays there: it is in the sidebar)
-	if id := tk_json.text(v, "data", "id"); id != "" && r.gen == app.chat.gen { open_root(app, id) }
+	if id := tk_json.text(v, "data", "id"); id != "" && r.gen == pane.chat.gen { open_root(app, id) }
 	ui.announce(&app.announcer, .Good, i18n.tr("Session imported"))
 }
 

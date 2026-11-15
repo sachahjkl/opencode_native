@@ -15,15 +15,15 @@ HEX_TOOL_DONE_PIP     :: 0x4f8a5eff
 HEX_REASONING_TEXT    :: 0x9a9a9aff
 
 part_open :: proc(app: ^App, id: string, default := false) -> bool {
-	return app.conversation.expanded[hash.fnv64a(transmute([]u8)id)] or_else default
+	return app.expanded[hash.fnv64a(transmute([]u8)id)] or_else default
 }
 
 // Opens or closes a part from its header `head`: the header is the anchor of the scroll (frame keeps it where it was on
 // screen, under the pointer, whatever grows or shrinks around it), and the conversation stops following its bottom.
-part_toggle :: proc(app: ^App, id: string, head: ^ui.Box, default := false) {
+part_toggle :: proc(app: ^App, pane: ^Chat_Pane, id: string, head: ^ui.Box, default := false) {
 	k := hash.fnv64a(transmute([]u8)id)
-	app.conversation.expanded[k] = !(app.conversation.expanded[k] or_else default)
-	chat_scroll_event(app, Scroll_Anchor{head, head.rect.min.y})
+	app.expanded[k] = !(app.expanded[k] or_else default)
+	chat_scroll_event(pane, Scroll_Anchor{head, head.rect.min.y})
 }
 
 @(private = "file")
@@ -91,7 +91,7 @@ TOOL_IMAGE_H_PX         :: 150
 
 // A tool call on the timeline: a flat row (its header lights under the pointer), its input and output in wells when
 // open. `above`, `below`: calls right before and after it, joined by the rail.
-tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, below := false) {
+tool_part :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string, em: f32, above := false, below := false) {
 	open := part_open(app, p.tool_id != "" ? p.tool_id : pid, app.prefs.expand_tools)
 	head_h := math.round(em * 2.0)
 	running := p.status == .Running || p.status == .Pending
@@ -111,9 +111,9 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 		hb := ui.build_box({.Clickable, .Focusable}, "###head")
 		hb.custom = head_draw
 		hs := ui.signal(hb)
-		if hs.clicked { part_toggle(app, p.tool_id != "" ? p.tool_id : pid, hb) }
+		if hs.clicked { part_toggle(app, pane, p.tool_id != "" ? p.tool_id : pid, hb) }
 		edits := tool_kind(p.tool_name) == .Edit
-		if edits { _ = part_patch(p, app.chat.alloc) }
+		if edits { _ = part_patch(p, pane.chat.alloc) }
 		if ui.parent(hb) {
 			ui.spacer(ui.px(em * 0.5))
 			failed := p.status == .Error
@@ -134,7 +134,7 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 			if took := tool_elapsed(p, running, now_epoch_ms()); took != "" {
 				ui.next({width = ui.text_size(0), height = ui.pct(1), fg = running ? hex(HEX_TEXT_SOFT) : hex(HEX_FAINT), font = app.mono, font_size = math.round(em * FS_CAPTION), text_pad = 0})
 				tk := ui.signal(ui.build_box({.Draw_Text, .Clickable}, fmt.tprintf("%s###tk", took)))
-				if tk.clicked { part_toggle(app, p.tool_id != "" ? p.tool_id : pid, hb) }
+				if tk.clicked { part_toggle(app, pane, p.tool_id != "" ? p.tool_id : pid, hb) }
 				if ui.hovered_for(tk) { if ui.tooltip() { ui.tooltip_text(tool_when(p, running, now_epoch_ms(), app.prefs.clock24)) } }
 				ui.spacer(ui.px(em * 0.5))
 			}
@@ -150,7 +150,7 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 					if bg_running { session_lamp("###bgl", LAMP_BACKGROUND, em); ui.spacer(ui.px(em * 0.35)) }
 					text("bgt", bg_running ? i18n.tr("in background") : i18n.tr("finished in background"), hex(bg_running ? HEX_TEXT_SOFT : HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				} else if hint_action("###bgpush", i18n.tr("push to background"), em, app.mono, lucide.SEND_TO_BACK) {
-					background_session(app, app.chat.id)
+					background_session(app, pane.chat.id)
 				}
 				// (what it prints, as it prints it: the command at work, whether it holds the turn or runs in the background)
 				if output_view_can(p) {
@@ -169,11 +169,11 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column() {
 					if open {
-						tool_body(app, p, em)
+						tool_body(app, pane, p, em)
 					} else if show_diff {
 						diff_view(app, "###diff", p.diff, p.patch, em, DIFF_FOLDED_LINES, tool_diff_title(p))
 					} else if show_error {
-						mono_well("###output", p.output, em, TOOL_ERROR_LINES_FOLDED, hex(HEX_ERROR_TEXT), &p.output_well, app.chat.alloc)
+						mono_well("###output", p.output, em, TOOL_ERROR_LINES_FOLDED, hex(HEX_ERROR_TEXT), &p.output_well, pane.chat.alloc)
 					}
 					if len(p.images) > 0 {
 						ui.spacer(ui.px(em * 0.5))
@@ -190,20 +190,20 @@ tool_part :: proc(app: ^App, p: ^Part, pid: string, em: f32, above := false, bel
 	if !below { ui.spacer(ui.px(em * 0.5)) }
 }
 
-reasoning_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
+reasoning_part :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string, em: f32) {
 	if app.prefs.reasoning == "hidden" { return }
 	open := part_open(app, pid, app.prefs.reasoning == "expanded")
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 	hb := ui.build_box({.Clickable, .Focusable}, fmt.tprintf("###rh_%s", pid))
 	hb.custom = head_draw
 	hs := ui.signal(hb)
-	if hs.clicked { part_toggle(app, pid, hb) }
+	if hs.clicked { part_toggle(app, pane, pid, hb) }
 	if ui.parent(hb) {
 		ui.spacer(ui.px(em * 0.2))
 		glyph(lucide.LIGHTBULB, hex(HEX_FAINT), math.round(em * ICON_REGULAR))
 		ui.spacer(ui.px(em * 0.3))
 		// (a run over says no more about this part: it thought)
-		text("t", p.done || !app.chat.busy ? i18n.tr("Thought") : i18n.tr("Thinking…"), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+		text("t", p.done || !pane.chat.busy ? i18n.tr("Thought") : i18n.tr("Thinking…"), hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		ui.spacer(ui.px(em * 0.5))
 		if !open {
 			text("pv", preview_text(string(p.text[:])), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
@@ -215,7 +215,7 @@ reasoning_part :: proc(app: ^App, p: ^Part, pid: string, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if rail_row(fmt.tprintf("###rb_%s", pid), with_alpha(hex(HEX_WEAK), 0.4)) {
 			ui.spacer(ui.px(em * 0.9))
-			runs := link_runs(&p.text_runs, string(p.text[:]), {italic = true, color = hex(HEX_REASONING_TEXT)}, app.chat.alloc)
+			runs := link_runs(&p.text_runs, string(p.text[:]), {italic = true, color = hex(HEX_REASONING_TEXT)}, pane.chat.alloc)
 			ui.next({width = ui.fill(), font_size = math.round(em * FS_LABEL), flags = {.Selectable}})
 			link_clicked(ui.rich_paragraph("###t", runs))
 		}

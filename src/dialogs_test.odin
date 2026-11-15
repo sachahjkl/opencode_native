@@ -262,6 +262,7 @@ a_stage_on_screen_across_a_server_switch_is_cancelled_where_it_is :: proc(t: ^te
 looking_while_it_goes_back_keeps_the_prompt_for_the_composer :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	c := &app.cx.changes
 	show(app, "s")
 	staged_with(app, t, "s")
@@ -269,7 +270,7 @@ looking_while_it_goes_back_keeps_the_prompt_for_the_composer :: proc(t: ^testing
 	testing.expect(t, !changes_shown(c), "closed at once")
 	changes_open(app, "s")
 	bench_answer(app, bench_take(t, .Revert_Done), 200, "")
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "the prompt")
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "the prompt")
 	testing.expect(t, state_is(c, Changes_Closed))
 }
 
@@ -947,9 +948,10 @@ an_older_listing_does_not_answer_the_newer :: proc(t: ^testing.T) {
 
 @(private = "file")
 typed :: proc(app: ^App, text: string) {
-	ui.text_edit_set(&app.composer.area, text)
-	app.composer.area.cursor, app.composer.area.mark = len(text), len(text)
-	app.composer.focused = true
+	pane := main_pane(app)
+	ui.text_edit_set(&pane.composer.area, text)
+	pane.composer.area.cursor, pane.composer.area.mark = len(text), len(text)
+	pane.composer.focused = true
 }
 
 @(private = "file")
@@ -960,9 +962,10 @@ HITS :: `{"location":{"directory":"D:/a"},"data":[{"path":"a.txt","type":"file"}
 an_at_at_the_start_opens_at_once :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	typed(app, "@")
-	mention_track(app)
-	testing.expect(t, app.composer.mentions.open)
+	mention_track(app, pane)
+	testing.expect(t, pane.composer.mentions.open)
 	testing.expect_value(t, bench_count(.Mention_Files), 1)
 }
 
@@ -970,44 +973,46 @@ an_at_at_the_start_opens_at_once :: proc(t: ^testing.T) {
 what_is_proposed_is_of_the_folder_shown :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	m := &app.composer.mentions
+	pane := main_pane(app)
+	m := &pane.composer.mentions
 	show(app, "a")
 	described(app, t, "a", "D:/a", "p")
 	typed(app, "@a")
-	mention_track(app)
+	mention_track(app, pane)
 	bench_answer(app, bench_take(t, .Mention_Files), 200, HITS)
-	testing.expect(t, mention_shown(app))
+	testing.expect(t, mention_shown(app, pane))
 
 	show(app, "b")
 	defer drafts_destroy(app)
 	described(app, t, "b", "D:/b", "p")
-	testing.expect(t, !mention_shown(app), "nothing of the other folder can be chosen")
+	testing.expect(t, !mention_shown(app, pane), "nothing of the other folder can be chosen")
 	typed(app, "@a")   // (the composer is the session's: the word is typed again here)
-	mention_track(app)
+	mention_track(app, pane)
 	testing.expect_value(t, len(m.hits), 0)
 	testing.expect_value(t, m.dir, "")
 	r := bench_take(t, .Mention_Files)
 	testing.expect(t, strings.contains(r.path, "D%3A%2Fb"), "the same word asks about this folder")
 	bench_answer(app, r, 200, HITS)
-	testing.expect(t, mention_shown(app))
+	testing.expect(t, mention_shown(app, pane))
 }
 
 @(test)
 a_word_given_up_or_refused_proposes_nothing_old :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	m := &app.composer.mentions
+	pane := main_pane(app)
+	m := &pane.composer.mentions
 	typed(app, "@a")
-	mention_track(app)
+	mention_track(app, pane)
 	old := bench_take(t, .Mention_Files)
 	typed(app, "@ab")
-	mention_track(app)
+	mention_track(app, pane)
 	bench_answer(app, old, 200, HITS)
 	testing.expect_value(t, len(m.hits), 0)
 	bench_answer(app, bench_take(t, .Mention_Files), 200, HITS)
 	testing.expect_value(t, len(m.hits), 1)
 	typed(app, "@abc")
-	mention_track(app)
+	mention_track(app, pane)
 	bench_answer(app, bench_take(t, .Mention_Files), 404, `{"message":"no such folder"}`)
 	testing.expect_value(t, len(m.hits), 0)
 }
@@ -1252,6 +1257,7 @@ the_chip_comes_back_where_it_was :: proc(t: ^testing.T) {
 a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	cx := &app.cx
 	show(app, "s")
 	described(app, t, "s", "D:/w", "p1")
@@ -1274,7 +1280,7 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	files_source.list(files_source, "D:/w", {kind = .List})
 	files_source.read(files_source, "D:/w/a.txt", 100, {kind = .Read})
 	typed(app, "@a")
-	mention_track(app)
+	mention_track(app, pane)
 	bench_answer(app, bench_take(t, .Mention_Files), 200, HITS)
 	stats_open(app)
 	bench_answer(app, bench_take(t, .Stats), 200, STATS)
@@ -1329,7 +1335,7 @@ a_server_left_leaves_nothing_in_the_dialogs :: proc(t: ^testing.T) {
 	testing.expect(t, !f.list.waiting && !f.read.waiting && !f.find.waiting, "nothing waits for the server that left")
 	testing.expect_value(t, f.location, "")
 
-	m := &app.composer.mentions
+	m := &pane.composer.mentions
 	testing.expect(t, !m.open)
 	testing.expect_value(t, len(m.hits), 0)
 	testing.expect_value(t, m.dir, "")

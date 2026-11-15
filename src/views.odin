@@ -17,6 +17,7 @@ import "core:strings"
 TOAST_TOP_EM          :: 5.5
 
 build_ui :: proc(app: ^App) {
+	pane := main_pane(app)
 	fonts_follow(app)   // (a family the toolkit loaded since the last build: this build draws in it)
 	em := ui.font_size()
 	views_answers(app)
@@ -43,10 +44,11 @@ build_ui :: proc(app: ^App) {
 	// (under the header: a message at the top does not cover it)
 	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.state.window_size})
 	// (last: what is open and a field that has it took Escape before it gets here)
-	if app.chat.busy && !overlay_open(app) && !focus_in_view(app) && !mention_takes_escape(app) && ui.key_press(.Escape) { escape_stop(app) }
+	if pane.chat.busy && !overlay_open(app) && !focus_in_view(app) && !mention_takes_escape(app, pane) && ui.key_press(.Escape) { escape_stop(app, pane) }
 }
 
 app_menu :: proc(app: ^App, key: string, em: f32) {
+	pane := main_pane(app)
 	if ui.menu(key) {   // (as wide as its longest item)
 		pc := ui.palette_command()
 		if ui.menu_item(i18n.tr("Command palette…"), ui.command_shortcut(pc), icon = pc.icon).clicked { palette_show(app) }
@@ -55,11 +57,11 @@ app_menu :: proc(app: ^App, key: string, em: f32) {
 		if ui.menu_item(i18n.tr("New session"), "Ctrl+N", icon = lucide.PLUS).clicked { command_run(app, command_find("session.new")) }
 		if ui.menu_item(i18n.tr("Refresh"), "F5", icon = lucide.REFRESH_CW).clicked {
 			refresh_sessions(app)
-			if app.chat.id != "" { load_messages(app, app.chat.id) }
+			if pane.chat.id != "" { load_messages(app, pane, pane.chat.id) }
 		}
 		if ui.menu_item(i18n.tr("Settings…"), "Ctrl+,", icon = lucide.SLIDERS_HORIZONTAL).clicked { settings_open(app) }
 		if ui.menu_item(i18n.tr("Add a server…"), icon = lucide.PLUG).clicked { server_edit_open(app, -1) }
-		if ui.menu_item(i18n.tr("Statistics panel"), "Ctrl+I", app.stats.open, icon = lucide.GAUGE, disabled = app.chat.id == "").clicked { stats_toggle(app) }
+		if ui.menu_item(i18n.tr("Statistics panel"), "Ctrl+I", app.stats.open, icon = lucide.GAUGE, disabled = pane.chat.id == "").clicked { stats_toggle(app) }
 		if preview_available() {
 			if ui.menu_item(i18n.tr("Preview panel"), platform.key_text("Ctrl+Shift+B"), app.preview.open, icon = lucide.GLOBE).clicked { command_run(app, command_find("view.preview")) }
 		}
@@ -75,30 +77,32 @@ app_menu :: proc(app: ^App, key: string, em: f32) {
 }
 
 global_keys :: proc(app: ^App) {
-	find_keys(app)
+	find_keys(app, main_pane(app))   // (the keyboard's pane: the main view)
 	commands_keys(app)
 }
 
 new_session :: proc(app: ^App) {
-	nav_visit(app, app.chat.id, "")
+	pane := main_pane(app)
+	nav_visit(app, pane.chat.id, "")
 	for s in app.nav.drilled { delete(s) }   // (the way back up is the session's: none from here)
 	clear(&app.nav.drilled)
 	dir := ""
-	if s := find_session(app, app.chat.id); s != nil { dir = s.directory } else if len(app.sessions) > 0 { dir = app.sessions[0].directory }
+	if s := find_session(app, pane.chat.id); s != nil { dir = s.directory } else if len(app.sessions) > 0 { dir = app.sessions[0].directory }
 	chat_home(app)
-	remote.reset(&app.cx.chat_read)
-	chat_view_start(app, 0)   // (a way back under way ends: its place is in the conversation left)
-	app.chat.new_dir = strings.clone(dir, app.chat.alloc)
+	remote.reset(&pane.read)
+	chat_view_start(pane, 0)   // (a way back under way ends: its place is in the conversation left)
+	pane.chat.new_dir = strings.clone(dir, pane.chat.alloc)
 	chat_shown_changed(app)
-	app.composer.focus_next = true
+	pane.composer.focus_next = true
 }
 
 // The conversation: the window's content, what the views go around. Its width is the window's less what is beside it,
 // as the last layout had it (the box's own size is the last frame's: a window being resized would lag a frame behind).
 main_area :: proc(app: ^App, em: f32) {
-	c := &app.conversation
+	pane := main_pane(app)
+	c := &pane.conversation
 	b := ui.parent_box()
 	if w := b.rect.max.x - b.rect.min.x; w > 0 && c.layout_win_w > 0 { c.beside_px = max(c.layout_win_w - w, 0) }
 	c.layout_win_w = f32(app.win.size.x)
-	conversation(app, em)
+	conversation(app, pane, em)
 }

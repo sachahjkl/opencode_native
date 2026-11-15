@@ -32,6 +32,7 @@ Attachment :: struct {
 // A file of megabytes takes longer to read and encode than a frame lasts. Its memory is the heap's on both sides.
 Attach_Job :: struct {
 	app:   ^App,
+	pane:  int,                        // the slot of the pane whose composer it was asked from (the panes never move: chat_pane.odin)
 	chat:  string,                     // the session whose composer it goes to ("": the home page's) (owned)
 	path:  string,                     // the file to read ("": `data` or `image` is given) (owned)
 	name:  string,                     // (owned)
@@ -56,28 +57,29 @@ Attach_Outcome :: enum u8 {
 
 // Whether a file for the composer shown is still being read: it does not send yet (composer_held), what it sends would
 // leave the file behind.
-attaching :: proc(app: ^App) -> bool {
-	for job in app.composer.attaching { if job.chat == app.chat.id { return true } }
+attaching :: proc(app: ^App, pane: ^Chat_Pane) -> bool {
+	for job in pane.composer.attaching { if job.chat == pane.chat.id { return true } }
 	return false
 }
 
 // `job` goes to the chores, for the composer shown.
 @(private = "file")
-attach_start :: proc(app: ^App, job: ^Attach_Job) {
+attach_start :: proc(app: ^App, pane: ^Chat_Pane, job: ^Attach_Job) {
 	job.app = app
-	job.chat = strings.clone(app.chat.id, runtime.heap_allocator())
-	append(&app.composer.attaching, job)
+	job.pane = pane_index(app, pane)
+	job.chat = strings.clone(pane.chat.id, runtime.heap_allocator())
+	append(&pane.composer.attaching, job)
 	sync.atomic_add(&app.pending, 1)
 	tasks.add(ui.chores(), attach_run, job)
 }
 
 // The bytes `data` (copied: the caller keeps them) as a file `name` of type `mime`.
 @(private = "file")
-attach_bytes :: proc(app: ^App, data: []u8, mime, name: string) {
+attach_bytes :: proc(app: ^App, pane: ^Chat_Pane, data: []u8, mime, name: string) {
 	h := runtime.heap_allocator()
 	job := new(Attach_Job, h)
 	job^ = {name = strings.clone(name, h), mime = mime, data = slice_clone(data, h)}
-	attach_start(app, job)
+	attach_start(app, pane, job)
 }
 
 @(private = "file")
@@ -150,20 +152,21 @@ attach_done :: proc(data: rawptr, word: u64) {
 	job := (^Attach_Job)(data)
 	defer attach_job_free(job)
 	sync.atomic_sub(&app.pending, 1)
-	for j, i in app.composer.attaching { if j == job { ordered_remove(&app.composer.attaching, i); break } }
+	pane := &app.panes[job.pane]
+	for j, i in pane.composer.attaching { if j == job { ordered_remove(&pane.composer.attaching, i); break } }
 	switch job.outcome {
 	case .Attached:
 		a := Attachment{name = strings.clone(job.name), uri = job.uri, size = job.size}
 		job.uri = ""   // (the attachment's now)
 		if strings.has_prefix(job.mime, "image/") { a.ref = image_ref(a.uri, .Data_Url, job.mime, a.name) }
-		composer_take(app, job.chat, a, "")
+		composer_take(app, pane, job.chat, a, "")
 	case .Too_Large:
 		ui.announce(&app.announcer, .Warn, fmt.tprintf(i18n.tr("%s is too large to attach"), job.name))
 	case .Not_Attachable:
 		ui.announce(&app.announcer, .Warn, fmt.tprintf(i18n.tr("%s is not an image, a PDF or text: its path goes in the prompt"), job.name))
-		composer_take(app, job.chat, nil, fmt.tprintf("%s ", job.path))
+		composer_take(app, pane, job.chat, nil, fmt.tprintf("%s ", job.path))
 	case .Unread:
-		composer_take(app, job.chat, nil, fmt.tprintf("%s ", job.path))
+		composer_take(app, pane, job.chat, nil, fmt.tprintf("%s ", job.path))
 	case .Bad_Image:
 		ui.announce(&app.announcer, .Bad, i18n.tr("The image could not be read"))
 	case .Failed:
@@ -193,25 +196,28 @@ attach_mime :: proc(path: string, data: []u8) -> string {
 
 // A file given to the composer (pasted, dropped, picked): attached when it can go as a data URL (attach_mime), else its
 // path goes in the text. It is read on a thread of its own (attach_run).
-attach_path :: proc(app: ^App, path: string) {
+attach_path :: proc(app: ^App, pane: ^Chat_Pane, path: string) {
 	h := runtime.heap_allocator()
 	job := new(Attach_Job, h)
 	job^ = {path = strings.clone(path, h), name = strings.clone(base_name(path), h)}
-	attach_start(app, job)
+	attach_start(app, pane, job)
 }
 
 // The paperclip: the system's dialog, several files at once.
-attach_pick :: proc(app: ^App) {
+attach_pick :: proc(app: ^App, pane: ^Chat_Pane) {
+	// (the answer comes on the interface's thread, at a next build: the_app; the pane never moves: chat_pane.odin)
 	ui.file_dialog(&app.state, .Open, {owner = app.win, title = i18n.tr("Attach files"), all_files = true, multiple = true, remember_id = "attach"}, proc(r: platform.Dialog_Result, user: rawptr) {
-		if r.status == .Unsupported { ui.announce(&(^App)(user).announcer, .Bad, i18n.tr("This system has no file dialog")); return }
+		app := the_app
+		if r.status == .Unsupported { ui.announce(&app.announcer, .Bad, i18n.tr("This system has no file dialog")); return }
 		if r.status != .Chosen { return }
-		for p in r.paths { attach_path((^App)(user), p) }
-	}, app)
+		for p in r.paths { attach_path(app, (^Chat_Pane)(user), p) }
+	}, pane)
 }
 
 // A drag over the window from another program: files, an image or text it carries go to the composer at the drop, where
 // the composer is (a dialog open over it refuses the drop).
 attach_drop_event :: proc(app: ^App, e: platform.Event) {
+	pane := main_pane(app)
 	#partial switch e.kind {
 	case .Drop_Enter, .Drop_Over:
 		platform.drop_set_effect(app.win, overlay_open(app) ? nil : platform.Drop_Effect.Copy)
@@ -222,9 +228,9 @@ attach_drop_event :: proc(app: ^App, e: platform.Event) {
 		d := platform.drop_data(app.win)
 		if d == nil || overlay_open(app) { return }
 		switch {
-		case len(d.files) > 0: for p in d.files { attach_path(app, p) }
-		case len(d.image) > 0: attach_bytes(app, d.image, "image/png", fmt.tprintf("dropped-%d.png", attach_number(app)))
-		case d.text != "":     area_insert(&app.composer.area, d.text)
+		case len(d.files) > 0: for p in d.files { attach_path(app, pane, p) }
+		case len(d.image) > 0: attach_bytes(app, pane, d.image, "image/png", fmt.tprintf("dropped-%d.png", attach_number(app, pane)))
+		case d.text != "":     area_insert(&pane.composer.area, d.text)
 		}
 	}
 }
@@ -234,29 +240,29 @@ attach_drop_event :: proc(app: ^App, e: platform.Event) {
 // or JPEG, else (a Windows DIB) decoded and encoded as PNG on the job's thread.
 COMPOSER_PASTE :: ui.Paste_Kinds{.Text, .Files, .Image}
 
-composer_paste_take :: proc(app: ^App, a: ui.Paste_Answer) {
+composer_paste_take :: proc(app: ^App, pane: ^Chat_Pane, a: ui.Paste_Answer) {
 	#partial switch a.kind {
 	case .Files:
-		for x in a.files { attach_path(app, x) }
+		for x in a.files { attach_path(app, pane, x) }
 	case .Image:
 		img := a.image
 		if len(img.data) == 0 { return }
-		n := attach_number(app)
+		n := attach_number(app, pane)
 		switch {
-		case ascii.equal_fold(img.mime, "image/png"):  attach_bytes(app, img.data, "image/png", fmt.tprintf("pasted-%d.png", n))
-		case ascii.equal_fold(img.mime, "image/jpeg"): attach_bytes(app, img.data, "image/jpeg", fmt.tprintf("pasted-%d.jpg", n))
+		case ascii.equal_fold(img.mime, "image/png"):  attach_bytes(app, pane, img.data, "image/png", fmt.tprintf("pasted-%d.png", n))
+		case ascii.equal_fold(img.mime, "image/jpeg"): attach_bytes(app, pane, img.data, "image/jpeg", fmt.tprintf("pasted-%d.jpg", n))
 		case:
 			h := runtime.heap_allocator()
 			job := new(Attach_Job, h)
 			job^ = {name = fmt.aprintf("pasted-%d.png", n, allocator = h), mime = "image/png", data = slice_clone(img.data, h), decode = strings.clone(img.mime, h)}
-			attach_start(app, job)
+			attach_start(app, pane, job)
 		}
 	}
 }
 
 // The number in the name of an image pasted or dropped: past those attached and those on their way.
 @(private = "file")
-attach_number :: proc(app: ^App) -> int { return len(app.composer.attachments) + len(app.composer.attaching) + 1 }
+attach_number :: proc(app: ^App, pane: ^Chat_Pane) -> int { return len(pane.composer.attachments) + len(pane.composer.attaching) + 1 }
 
 // An attachment read back from a prompt's JSON (outgoing.odin).
 attachment_of :: proc(uri, name: string) -> Attachment {
@@ -312,11 +318,11 @@ prompt_fields_into :: proc(b: ^strings.Builder, attachments: []Attachment, menti
 
 
 // Over the text of the composer, in its well.
-attachments_row :: proc(app: ^App, em: f32) {
-	if len(app.composer.attachments) == 0 { return }
+attachments_row :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	if len(pane.composer.attachments) == 0 { return }
 	sc := ui.scale()
 	refs := make([dynamic]Image_Ref, context.temp_allocator)
-	for a in app.composer.attachments { if a.ref.key != 0 { append(&refs, a.ref) } }
+	for a in pane.composer.attachments { if a.ref.key != 0 { append(&refs, a.ref) } }
 	if len(refs) > 0 {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###att_imgs") {
@@ -329,7 +335,7 @@ attachments_row :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.4, em * 0.3}})
 	gone := -1
 	if ui.flow({em * 0.4, em * 0.3}, "###att_names") {
-		for a, i in app.composer.attachments {
+		for a, i in pane.composer.attachments {
 			ui.next({width = ui.children_sum(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###att%d", i)) {
 				ui.spacer(ui.px(em * 0.8))
@@ -341,8 +347,8 @@ attachments_row :: proc(app: ^App, em: f32) {
 		}
 	}
 	if gone >= 0 {
-		delete(app.composer.attachments[gone].name)
-		delete(app.composer.attachments[gone].uri)
-		ordered_remove(&app.composer.attachments, gone)
+		delete(pane.composer.attachments[gone].name)
+		delete(pane.composer.attachments[gone].uri)
+		ordered_remove(&pane.composer.attachments, gone)
 	}
 }

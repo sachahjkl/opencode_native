@@ -12,13 +12,14 @@ a_session_s_todo_list_comes_back_at_once :: proc(t: ^testing.T) {
 	defer free(app)
 	LIST :: `{"todos":[{"content":"build","status":"completed"},{"content":"ship","status":"in_progress"}]}`
 	show :: proc(app: ^App, id: string, list: string, loaded: bool) {
-		chat_reset(&app.chat)
-		app.chat.id, app.chat.loaded = id, loaded
+		pane := main_pane(app)
+		chat_reset(&pane.chat)
+		pane.chat.id, pane.chat.loaded = id, loaded
 		activity_reset(app)
 		if list != "" {
 			parts := make([dynamic]Part)
 			append(&parts, test_tool("todowrite", list))
-			append(&app.chat.messages, Message{id = "m1", kind = .Assistant, parts = parts})
+			append(&pane.chat.messages, Message{id = "m1", kind = .Assistant, parts = parts})
 		}
 		todos_update(app)
 	}

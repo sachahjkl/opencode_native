@@ -26,18 +26,23 @@ Goal :: struct {
 GOAL_EVENT :: "rpc.opencode.goal.changed"
 
 // The session shown's goal, asked again.
-goal_read :: proc(app: ^App) {
-	id := app.chat.id
+goal_read :: proc(app: ^App, pane: ^Chat_Pane) {
+	id := pane.chat.id
 	if id == "" || flying(app, .Goal, id) { return }
-	q := location_query(chat_dir(app))
+	q := location_query(pane_dir(app, pane))
 	path := q != "" ? fmt.tprintf("/api/rpc/opencode.goal/get?%s", q) : "/api/rpc/opencode.goal/get"
-	request(app, .Goal, "POST", path, fmt.tprintf(`{{"input":{{"sessionID":%s}}}}`, tk_json.quote(id)), tag = id)
+	request(app, .Goal, "POST", path, fmt.tprintf(`{{"input":{{"sessionID":%s}}}}`, tk_json.quote(id)), tag = id, pane = pane)
 }
 
-// What the server said of a session's goal (null: none). Another session's is not this one's.
+// What the server said of a session's goal (null: none), in each pane that shows that session.
 goal_set :: proc(app: ^App, session: string, v: json.Value) {
-	c := &app.chat
-	if session != c.id { return }
+	for &pane, i in app.panes {
+		if pane_is_shown(app, i) && pane.chat.id == session { chat_goal_set(&pane.chat, v) }
+	}
+}
+
+@(private = "file")
+chat_goal_set :: proc(c: ^Chat, v: json.Value) {
 	if _, none := v.(json.Null); none || v == nil {
 		c.goal, c.has_goal = {}, false
 		return
@@ -54,14 +59,14 @@ goal_set :: proc(app: ^App, session: string, v: json.Value) {
 
 // `/goal <what>` for the session shown.
 @(private = "file")
-goal_command :: proc(app: ^App, what: string) {
-	outgoing_command(app, fmt.tprintf("/goal %s", what), "goal", what)
-	goal_read(app)
+goal_command :: proc(app: ^App, pane: ^Chat_Pane, what: string) {
+	outgoing_command(app, pane, fmt.tprintf("/goal %s", what), "goal", what)
+	goal_read(app, pane)
 }
 
 // Over the composer: the goal and what can be done to it.
-goal_strip :: proc(app: ^App, em: f32) {
-	c := &app.chat
+goal_strip :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	c := &pane.chat
 	if !c.has_goal || c.id == "" { return }
 	g := &c.goal
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * BUTTON_COMPACT_H_EM)), axis = .X, cross = .Center})
@@ -85,25 +90,25 @@ goal_strip :: proc(app: ^App, em: f32) {
 		}
 		ui.spacer(ui.px(em * 1.0))
 		switch g.status {
-		case .Active:   if hint_action("###g_pause", "pause", em, app.mono, lucide.SQUARE) { goal_command(app, "pause") }
-		case .Paused:   if hint_action("###g_resume", "resume", em, app.mono, lucide.SEND_HORIZONAL) { goal_command(app, "resume") }
+		case .Active:   if hint_action("###g_pause", "pause", em, app.mono, lucide.SQUARE) { goal_command(app, pane, "pause") }
+		case .Paused:   if hint_action("###g_resume", "resume", em, app.mono, lucide.SEND_HORIZONAL) { goal_command(app, pane, "resume") }
 		case .Complete:
 		}
 		ui.spacer(ui.px(em * 0.9))
 		if hint_action("###g_change", "change", em, app.mono, lucide.PENCIL) {
-			ui.text_edit_set(&app.composer.area, fmt.tprintf("/goal %s", g.objective))
-			app.composer.focus_next = true
+			ui.text_edit_set(&pane.composer.area, fmt.tprintf("/goal %s", g.objective))
+			pane.composer.focus_next = true
 		}
 		ui.spacer(ui.px(em * 0.9))
-		if hint_action("###g_clear", "clear", em, app.mono, lucide.X, .Danger) { goal_command(app, "clear") }
+		if hint_action("###g_clear", "clear", em, app.mono, lucide.X, .Danger) { goal_command(app, pane, "clear") }
 		ui.spacer(ui.px(em * 0.5))
 	}
 }
 
 // Why the goal is paused (the server's reason: "The session failed: You've hit your 5-hour limit…"), at the end of the conversation,
 // across it as a change of the session is: all of it, on as many lines as it takes. It goes when the goal goes on.
-goal_reason_line :: proc(app: ^App, em: f32) {
-	c := &app.chat
+goal_reason_line :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	c := &pane.chat
 	if !c.has_goal || c.goal.status != .Paused || c.goal.reason == "" { return }
 	small := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
 	why, resets := reason_and_reset(c.goal.reason, app.prefs.clock24)
@@ -122,7 +127,7 @@ goal_reason_line :: proc(app: ^App, em: f32) {
 		}
 		if over {
 			ui.spacer(ui.px(em * 0.8))
-			if hint_action("###gw_resume", "resume", em, app.mono, lucide.SEND_HORIZONAL) { goal_command(app, "resume") }
+			if hint_action("###gw_resume", "resume", em, app.mono, lucide.SEND_HORIZONAL) { goal_command(app, pane, "resume") }
 		}
 		ui.spacer(ui.px(em * 0.6))
 		groove(across = true)

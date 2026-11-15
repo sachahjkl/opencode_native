@@ -9,7 +9,6 @@ import "core:mem"
 import "core:mem/virtual"
 import "core:slice"
 import "core:strings"
-import "core:sync"
 import "gt:config"
 import "gt:markdown"
 import "gt:ui"
@@ -216,27 +215,29 @@ LAST_SESSION_KEY  :: "last_session"
 LAST_SESSION_HOME :: "home"
 
 last_session_keep :: proc(app: ^App) {
+	pane := main_pane(app)
 	if app.prefs_file == "" || !app.opened_first { return }
-	id := app.chat.id != "" ? app.chat.id : LAST_SESSION_HOME
+	id := pane.chat.id != "" ? pane.chat.id : LAST_SESSION_HOME
 	settings_set(app, LAST_SESSION_KEY, id)   // (the same id changes nothing: no write)
 }
 
 // The home page, whichever way one gets there: nothing to load.
 chat_home :: proc(app: ^App) {
-	draft_leave(app)
-	chat_reset(&app.chat)
-	chat_marked(app)
-	app.chat.loaded = true
-	draft_enter(app)
+	pane := main_pane(app)
+	draft_leave(app, pane)
+	chat_reset(&pane.chat)
+	pane_marked(pane)
+	pane.chat.loaded = true
+	draft_enter(app, pane)
 	last_session_keep(app)
-	queue_switch(app)
+	queue_switch(app, pane)
 }
 
 // What the conversation's place shows. (Failed: the first page was not read, and only a retry brings it.)
 Chat_View :: enum u8 { Home, Loading, Failed, Shown }
 
-chat_view :: proc(app: ^App) -> Chat_View {
-	c := &app.chat
+chat_view :: proc(app: ^App, pane: ^Chat_Pane) -> Chat_View {
+	c := &pane.chat
 	if c.id == "" { return .Home }
 	if c.loaded { return .Shown }
 	return c.loading ? .Loading : .Failed
@@ -244,23 +245,23 @@ chat_view :: proc(app: ^App) -> Chat_View {
 
 // What the composer shows and what a new session takes: the reader's choice, what the session used, on the home page what was
 // chosen last.
-shown_agent :: proc(app: ^App) -> string {
-	c := &app.chat
+shown_agent :: proc(app: ^App, pane: ^Chat_Pane) -> string {
+	c := &pane.chat
 	if c.chose_agent != "" { return c.chose_agent }
 	if c.id == "" { return config.string_of(&app.cfg_prefs, "session.agent") }
 	return c.agent
 }
 
-shown_model :: proc(app: ^App) -> (model, provider: string) {
-	c := &app.chat
+shown_model :: proc(app: ^App, pane: ^Chat_Pane) -> (model, provider: string) {
+	c := &pane.chat
 	if c.chose_model != "" { return c.chose_model, c.chose_provider }
 	if c.id == "" { return config.string_of(&app.cfg_prefs, "session.model"), config.string_of(&app.cfg_prefs, "session.provider") }
 	return c.model, c.provider
 }
 
 // How hard the model shown thinks: what the reader picked with the model, else what the session uses ("": the model's default).
-shown_variant :: proc(app: ^App) -> string {
-	c := &app.chat
+shown_variant :: proc(app: ^App, pane: ^Chat_Pane) -> string {
+	c := &pane.chat
 	if c.chose_model != "" { return c.chose_variant }
 	if c.id == "" { return config.string_of(&app.cfg_prefs, "session.variant") }
 	return c.variant
@@ -292,44 +293,42 @@ model_body :: proc(model, provider, variant: string) -> string {
 	return fmt.tprintf(`{{"model":{{"id":%s,"providerID":%s,"variant":%s}}}}`, tk_json.quote(model), tk_json.quote(provider), tk_json.quote(variant))
 }
 
-// Another conversation is shown: what a request's worker reads of it (req_unwanted). Not Chat.gen itself: chat_reset writes it as a
-// whole struct, which a worker cannot read while it is written.
-chat_marked :: proc(app: ^App) { sync.atomic_add(&app.chat_mark, 1) }
-
 open_chat :: proc(app: ^App, session_id: string) {
-	if session_id == app.chat.id { return }
+	pane := main_pane(app)
+	if session_id == pane.chat.id { return }
 	id := strings.clone(session_id, context.temp_allocator)   // (it may live in the arena chat_reset drops)
-	nav_visit(app, app.chat.id, id)
-	draft_leave(app)
-	chat_reset(&app.chat)
-	app.chat.id = strings.clone(id, app.chat.alloc)
-	chat_marked(app)
-	draft_enter(app)
+	nav_visit(app, pane.chat.id, id)
+	draft_leave(app, pane)
+	chat_reset(&pane.chat)
+	pane.chat.id = strings.clone(id, pane.chat.alloc)
+	pane_marked(pane)
+	draft_enter(app, pane)
 	last_session_keep(app)
-	app.chat.loading = true
-	chat_view_start(app, ui.now_ms())
-	app.chat.busy = app.busy[id] or_else false
+	pane.chat.loading = true
+	chat_view_start(pane, ui.now_ms())
+	pane.chat.busy = app.busy[id] or_else false
 	if s := find_session(app, id); s != nil {
-		app.chat.model = strings.clone(s.model, app.chat.alloc)
-		app.chat.provider = strings.clone(s.provider, app.chat.alloc)
-		app.chat.variant = strings.clone(s.variant, app.chat.alloc)
-		app.chat.agent = strings.clone(s.agent, app.chat.alloc)
-		app.chat.cost = s.cost
-		app.chat.tokens_in, app.chat.tokens_out, app.chat.cache_read = s.tokens_in, s.tokens_out, s.cache_read
-		if !app.chat.busy { session_seen(app, s) }
+		pane.chat.model = strings.clone(s.model, pane.chat.alloc)
+		pane.chat.provider = strings.clone(s.provider, pane.chat.alloc)
+		pane.chat.variant = strings.clone(s.variant, pane.chat.alloc)
+		pane.chat.agent = strings.clone(s.agent, pane.chat.alloc)
+		pane.chat.cost = s.cost
+		pane.chat.tokens_in, pane.chat.tokens_out, pane.chat.cache_read = s.tokens_in, s.tokens_out, s.cache_read
+		if !pane.chat.busy { session_seen(app, s) }
 	}
 	missed_visit(app, id)
-	app.chat.live = make(map[string]Sub_Live, allocator = app.chat.alloc)
+	pane.chat.live = make(map[string]Sub_Live, allocator = pane.chat.alloc)
 	chat_shown_changed(app)
 }
 
 // What follows the session shown, whichever way it changed: one door. (Read before outgoing_return: the queue's change gives the composer what it
 // held, and what failed goes on top of that.)
 chat_shown_changed :: proc(app: ^App) {
+	pane := main_pane(app)
 	activity_reset(app)
-	find_chat_changed(app)
-	if app.chat.id != "" { chat_read(app); goal_read(app) }
-	outgoing_return(app)
+	find_chat_changed(app, pane)
+	if pane.chat.id != "" { chat_read(app, pane); goal_read(app, pane) }
+	outgoing_return(app, pane)
 }
 
 // (by the index sessions_changed keeps: some thirty places ask it, some at every build)
@@ -403,14 +402,15 @@ project_logo :: proc(app: ^App, project: string) -> ^Image_Ref {
 
 // The project of the session shown.
 chat_project :: proc(app: ^App) -> string {
-	if app.chat.have_self { return app.chat.self.project }
-	if s := find_session(app, app.chat.id); s != nil { return s.project }
+	pane := main_pane(app)
+	if pane.chat.have_self { return pane.chat.self.project }
+	if s := find_session(app, pane.chat.id); s != nil { return s.project }
 	return ""
 }
 
 // The session shown, as the server describes it (its parent, its outcome, its totals).
-self_load :: proc(app: ^App, v: json.Value, asked_at: Seq) {
-	c := &app.chat
+self_load :: proc(app: ^App, pane: ^Chat_Pane, v: json.Value, asked_at: Seq) {
+	c := &pane.chat
 	c.self = session_from_json(tk_json.get(v, "data"), c.alloc)
 	c.have_self = true
 	if revert := tk_json.get(v, "data", "revert"); revert != nil { revert_found(app, c.id, revert, asked_at) }
@@ -418,18 +418,18 @@ self_load :: proc(app: ^App, v: json.Value, asked_at: Seq) {
 		if p := find_session(app, c.self.parent); p != nil {
 			c.parent_title = strings.clone(p.title, c.alloc)
 		} else {
-			request(app, .Parent, "GET", strings.concatenate({"/api/session/", c.self.parent}, context.temp_allocator), tag = c.id)
+			request(app, .Parent, "GET", strings.concatenate({"/api/session/", c.self.parent}, context.temp_allocator), tag = c.id, pane = pane)
 		}
 	}
 }
 
-parent_load :: proc(app: ^App, v: json.Value) {
-	app.chat.parent_title = strings.clone(tk_json.text(v, "data", "title"), app.chat.alloc)
+parent_load :: proc(app: ^App, pane: ^Chat_Pane, v: json.Value) {
+	pane.chat.parent_title = strings.clone(tk_json.text(v, "data", "title"), pane.chat.alloc)
 }
 
 // The sub-agents of the session shown (its children), newest first.
-children_load :: proc(app: ^App, v: json.Value) {
-	c := &app.chat
+children_load :: proc(app: ^App, pane: ^Chat_Pane, v: json.Value) {
+	c := &pane.chat
 	a := arena_renew(&c.children_arena)
 	list := tk_json.array(v, "data")
 	c.children = make([dynamic]Session_Info, 0, len(list), a)
@@ -446,12 +446,13 @@ find_child :: proc(c: ^Chat, id: string) -> ^Session_Info {
 	return nil
 }
 
-load_children :: proc(app: ^App) {
-	if app.chat.id == "" { return }
-	request(app, .Children, "GET", strings.concatenate({"/api/session?limit=" + SESSIONS_LIMIT + "&parentID=", app.chat.id}, context.temp_allocator), tag = app.chat.id)
+load_children :: proc(app: ^App, pane: ^Chat_Pane) {
+	if pane.chat.id == "" { return }
+	request(app, .Children, "GET", strings.concatenate({"/api/session?limit=" + SESSIONS_LIMIT + "&parentID=", pane.chat.id}, context.temp_allocator), tag = pane.chat.id, pane = pane)
 }
 
 sessions_load :: proc(app: ^App, v: json.Value) {
+	pane := main_pane(app)
 	a := arena_renew(&app.sess_arena)
 	app.sessions = make([dynamic]Session_Info, a)
 	for it in tk_json.array(v, "data") { append(&app.sessions, session_from_json(it, a)) }
@@ -462,14 +463,14 @@ sessions_load :: proc(app: ^App, v: json.Value) {
 	if app.cx.reopen.id != "" {
 		// this computer's server came back elsewhere: its list says whether it is the same one
 		p := app.cx.reopen
-		if app.chat.id == "" && find_session(app, p.id) != nil {
+		if pane.chat.id == "" && find_session(app, p.id) != nil {
 			app.opened_first = true
 			open_chat(app, p.id)
-			if !p.bottom { chat_scroll_event(app, Scroll_Restore{p.msg, p.dy}) }   // (no message: nothing to go back to)
+			if !p.bottom { chat_scroll_event(pane, Scroll_Restore{p.msg, p.dy}) }   // (no message: nothing to go back to)
 		}
 		reopen_clear(app)
 	}
-	if app.chat.id == "" && len(app.sessions) > 0 && !app.opened_first {
+	if pane.chat.id == "" && len(app.sessions) > 0 && !app.opened_first {
 		app.opened_first = true
 		last := settings_get(app, LAST_SESSION_KEY)
 		switch {
@@ -650,8 +651,8 @@ permission_remove :: proc(app: ^App, id: string) {
 // A page of messages (newest first in the answer). `older`: it goes before the ones already shown; without it, it replaces
 // the newest ones (and what the stream had added to them), and the pages read before them stay.
 // `asked_at`: when the page was asked for (Request.asked_at). What the stream said since is newer than it and stays.
-chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(Seq)) {
-	c := &app.chat
+chat_load :: proc(app: ^App, pane: ^Chat_Pane, v: json.Value, older: bool, asked_at := max(Seq)) {
+	c := &pane.chat
 	a := c.alloc
 	c.loading = false
 	c.loaded = true
@@ -659,7 +660,7 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(Seq)) {
 	items := tk_json.array(v, "data")
 	#reverse for it in items {
 		id := tk_json.text(it, "id")
-		if queue_holds(app, id) { continue }   // (it waits: it has not been sent)
+		if queue_holds(app, pane, id) { continue }   // (it waits: it has not been sent)
 		old := id != "" ? find_message(c, id) : nil
 		if older && old != nil { continue }
 		// (what is final stays as it is: cloned at each reading, images and all, it would pile up in the arena)
@@ -675,10 +676,10 @@ chat_load :: proc(app: ^App, v: json.Value, older: bool, asked_at := max(Seq)) {
 		// the view stays on the message it shows at its top (scroll.odin). The lazy column does not: what it builds is reckoned
 		// where the view now stands, in the new page, and the message it was on is not among it; a wheel turned up past the top
 		// went on to the top of the new page.
-		chat_scroll_event(app, Scroll_Older_Page{c.view_msg})
+		chat_scroll_event(pane, Scroll_Older_Page{c.view_msg})
 		inject_at(&page, len(page), ..c.messages[:])
 		c.messages = page
-		find_page_added(app)   // (text a find has not read)
+		find_page_added(app, pane)   // (text a find has not read)
 	} else {
 		// (what the stream began after this page was asked for is not in it)
 		for m in c.messages {
@@ -1015,29 +1016,33 @@ tool_set_input :: proc(p: ^Part, input: json.Value, a: mem.Allocator) {
 sessions_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { sessions_load(app, v) }
 
 messages_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	first := !app.chat.loaded
-	chat_load(app, v, false, r.asked_at)
-	if first { chat_scroll_event(app, Scroll_Signal.Snap) }   // (followed: shown at its bottom in the very frame it arrives)
-	chat_scroll_restore_check(app)
+	pane := req_pane(app, r)
+	first := !pane.chat.loaded
+	chat_load(app, pane, v, false, r.asked_at)
+	if first { chat_scroll_event(pane, Scroll_Signal.Snap) }   // (followed: shown at its bottom in the very frame it arrives)
+	chat_scroll_restore_check(app, pane)
 }
 
 messages_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
-	app.chat.loading = false
-	chat_scroll_event(app, Scroll_Signal.Restore_End)   // (what it would go back to will not come)
+	pane := req_pane(app, r)
+	pane.chat.loading = false
+	chat_scroll_event(pane, Scroll_Signal.Restore_End)   // (what it would go back to will not come)
 	return false
 }
 
 older_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	chat_load(app, v, true)   // (Scroll_Older_Page: a way back under way gets a whole wait again)
-	chat_scroll_restore_check(app)
+	pane := req_pane(app, r)
+	chat_load(app, pane, v, true)   // (Scroll_Older_Page: a way back under way gets a whole wait again)
+	chat_scroll_restore_check(app, pane)
 }
 
 // The page before the first message was not read: said where it would have been.
 older_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
-	if r.gen != app.chat.gen || r.tag != app.chat.id { return false }
-	app.chat.loading_older = false
-	app.chat.older_failed = ui.now_ms()
-	chat_scroll_event(app, Scroll_Signal.Restore_End)   // (the place it would go back to is on that page: the view is the reader's again)
+	pane := req_pane(app, r)
+	if r.gen != pane.chat.gen || r.tag != pane.chat.id { return false }
+	pane.chat.loading_older = false
+	pane.chat.older_failed = ui.now_ms()
+	chat_scroll_event(pane, Scroll_Signal.Restore_End)   // (the place it would go back to is on that page: the view is the reader's again)
 	return false
 }
 
@@ -1059,18 +1064,19 @@ permission_reply_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: st
 
 active_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { active_load(app, v, r.asked_at) }
 
-self_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { self_load(app, v, r.asked_at) }
+self_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { self_load(app, req_pane(app, r), v, r.asked_at) }
 
-parent_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { parent_load(app, v) }
+parent_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { parent_load(app, req_pane(app, r), v) }
 
-children_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { children_load(app, v) }
+children_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { children_load(app, req_pane(app, r), v) }
 
 projects_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { projects_load(app, v) }
 
 // The session did not take the agent or the model picked: what is shown goes back to what it uses.
 session_choice_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
-	if r.gen == app.chat.gen && r.tag == app.chat.id {
-		if strings.has_suffix(r.path, "/agent") { app.chat.chose_agent = "" } else { app.chat.chose_model, app.chat.chose_provider, app.chat.chose_variant = "", "", "" }
+	pane := req_pane(app, r)
+	if r.gen == pane.chat.gen && r.tag == pane.chat.id {
+		if strings.has_suffix(r.path, "/agent") { pane.chat.chose_agent = "" } else { pane.chat.chose_model, pane.chat.chose_provider, pane.chat.chose_variant = "", "", "" }
 	}
 	return false
 }
@@ -1091,8 +1097,8 @@ chat_drop :: proc(c: ^Chat, id: string) {
 }
 
 // The conversation shows it as sent already, from the stream: it left the composer while nothing ran.
-queue_shown_as_sent :: proc(app: ^App, id: string) -> bool {
-	m := find_message(&app.chat, id)
+queue_shown_as_sent :: proc(app: ^App, pane: ^Chat_Pane, id: string) -> bool {
+	m := find_message(&pane.chat, id)
 	return m != nil && !m.from_page
 }
 
@@ -1116,13 +1122,13 @@ synthetic_add :: proc(c: ^Chat, id: string, payload: json.Value, created: f64) {
 
 // It is delivered: here it takes its place in the conversation, once, after what the model has said so far.
 @(private = "file")
-queue_delivered :: proc(app: ^App, id: string, created: f64) {
-	c := &app.chat
-	if it := queue_find(app, id); it != nil && find_message(c, id) == nil {
+queue_delivered :: proc(app: ^App, pane: ^Chat_Pane, id: string, created: f64) {
+	c := &pane.chat
+	if it := queue_find(app, pane, id); it != nil && find_message(c, id) == nil {
 		v := json_of_own(app, "queued payload", it.payload)
 		user_message_add(c, id, it.text, tk_json.array(v, "files"), created)
 	}
-	queue_gone(app, id, true, c.seq)
+	queue_gone(app, pane, id, true, c.seq)
 }
 
 // The message an event of the stream is about: every part of it that the stream changes goes through here.
@@ -1152,15 +1158,14 @@ tool_part :: proc(c: ^Chat, m: ^Message, id: string) -> ^Part {
 // What an event of the stream changes. `visible`: something any window may show changed, the session shown, the sidebar, the activity,
 // a dialog, a toast; false for what no window shows, a delta of a session nobody looks at above all, the bulk of a busy stream. (Each
 // kind of the first switch is rare and shows somewhere: it counts as seen without a finer rule.)
+// What concerns the session itself is applied once; what concerns its conversation, in every pane that shows it (pane_event).
 apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 	kind := tk_json.text(ev, "type")
 	d := tk_json.get(ev, "data")
 	sid := tk_json.text(d, "sessionID")
-	c := &app.chat
-	mine := sid != "" && sid == c.id
-	a := c.alloc
 	app.cx.stream_seq += 1
-	c.seq = app.cx.stream_seq
+	for &pane in app.panes { pane.chat.seq = app.cx.stream_seq }
+	shown := pane_shows(app, sid)   // (some pane shows the session: its conversation changes)
 
 	visible = true
 	if kind == "session.inbox.enqueued" { missed_inbox(app, sid, d) }   // (a schedule's prompt, in any session: its run is the schedule's)
@@ -1176,8 +1181,9 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		}
 		busy_event(app, sid, false)
 		if kind == "session.execution.interrupted" { inbox_resume(app, sid) }
-		if mine {
-			load_messages(app, sid)   // the stored page: the stream only gave the pieces
+		if shown {
+			// the stored page: the stream only gave the pieces
+			for &pane, i in app.panes { if pane_is_shown(app, i) && pane.chat.id == sid { load_messages(app, &pane, sid) } }
 			stats_context_soon(app)
 			if kind == "session.execution.failed" { effect_toast(app, .Bad, i18n.tr("The run failed")) }
 		}
@@ -1196,24 +1202,27 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 			missed_session_gone(app, sid)
 			outgoing_session_gone(app, sid)
 			preview_session_gone(app, sid)
-			if mine {   // (elsewhere: what is shown no longer is)
-				effect_toast(app, .Warn, i18n.tr("This session was deleted"))
-				append(&app.nav.steps, Nav_Step{kind = .Gone})
-			}
+			if shown { effect_toast(app, .Warn, i18n.tr("This session was deleted")) }   // (elsewhere: what is shown no longer is)
+			// (the main view goes home; a pane of its own that shows it is the pane's to close: not one in Layer 1)
+			if main_pane(app).chat.id == sid { append(&app.nav.steps, Nav_Step{kind = .Gone}) }
 		}
-		if kind == "session.moved" && mine { request(app, .Self, "GET", strings.concatenate({"/api/session/", sid}, context.temp_allocator), tag = sid) }
+		if kind == "session.moved" { panes_self_read(app, sid) }
 		refresh_soon(app)
 		children_soon(app)
 	case GOAL_EVENT:
 		goal_set(app, sid, tk_json.get(d, "goal"))
 	case "session.agent.selected", "session.model.selected":
 		// (from here or elsewhere: the composer says it now, the page read again brings its line into the conversation)
-		if !mine { return false }
-		if kind == "session.agent.selected" {
-			c.agent = strings.clone(tk_json.text(d, "agent"), a)
-		} else {
-			c.model, c.provider = strings.clone(tk_json.text(d, "model", "id"), a), strings.clone(tk_json.text(d, "model", "providerID"), a)
-			c.variant = strings.clone(variant_of(d), a)
+		if !shown { return false }
+		for &pane, i in app.panes {
+			if !pane_is_shown(app, i) || pane.chat.id != sid { continue }
+			c := &pane.chat
+			if kind == "session.agent.selected" {
+				c.agent = strings.clone(tk_json.text(d, "agent"), c.alloc)
+			} else {
+				c.model, c.provider = strings.clone(tk_json.text(d, "model", "id"), c.alloc), strings.clone(tk_json.text(d, "model", "providerID"), c.alloc)
+				c.variant = strings.clone(variant_of(d), c.alloc)
+			}
 		}
 		refresh_soon(app)
 	case "artifact.updated":
@@ -1223,10 +1232,12 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 	case "integration.updated", "credential.updated", "credential.switched":
 		integrations_changed(app)
 	case "session.revert.staged":
-		if mine { request(app, .Self, "GET", strings.concatenate({"/api/session/", sid}, context.temp_allocator), tag = sid) }
+		panes_self_read(app, sid)
 	case "session.revert.committed", "session.revert.cleared":
 		revert_gone(app, sid)
-		if mine && kind == "session.revert.committed" { load_messages(app, sid) }
+		if kind == "session.revert.committed" {
+			for &pane, i in app.panes { if pane_is_shown(app, i) && pane.chat.id == sid { load_messages(app, &pane, sid) } }
+		}
 		refresh_soon(app)
 	case "permission.asked":
 		req := tk_json.get(d, "request")
@@ -1234,7 +1245,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		permission_add(app, req)
 		asker := tk_json.text(req, "sessionID")
 		detail := permission_words(req)
-		if asker != c.id { effect_session_toast(app, .Warn, asker, i18n.tr("Permission"), detail) }
+		if !pane_shows(app, asker) { effect_session_toast(app, .Warn, asker, i18n.tr("Permission"), detail) }
 		effect_waiting(app, missed_key(app, .Permission, tk_json.text(req, "id"), asker), asker, "Permission", detail)
 	case "session.permissions":   // (a session's approval mode, set here or by another client)
 		approval_seen(app, sid, approval_of(tk_json.get(d, "permissions")))
@@ -1248,7 +1259,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		form_add(app, form)
 		asker := tk_json.text(form, "sessionID")
 		detail := form_words(form)
-		if asker != "" && asker != c.id && !is_child(c, asker) { effect_session_toast(app, .Warn, asker, i18n.tr("Question"), detail) }   // (no session: shown in the conversation, no toast)
+		if asker != "" && !pane_shows_or_child(app, asker) { effect_session_toast(app, .Warn, asker, i18n.tr("Question"), detail) }   // (no session: shown in the conversation, no toast)
 		effect_waiting(app, asker != "" ? missed_key(app, .Question, tk_json.text(form, "id"), asker) : "", asker, "Question", detail)
 	case "form.replied", "form.cancelled":
 		waits_gone(app, tk_json.text(d, "id"))
@@ -1256,10 +1267,34 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 	case:
 		visible = false
 	}
-	if sid != "" && !mine && is_child(c, sid) { return child_event(app, kind, sid, d, ev) || visible }
-	if !mine { return }
+	for &pane, i in app.panes {
+		if pane_is_shown(app, i) && pane_event(app, &pane, kind, sid, d, ev) { visible = true }
+	}
+	return
+}
+
+// The session's own data again, in each pane that shows it (its directory moved, a revert was staged or failed).
+panes_self_read :: proc(app: ^App, sid: string) {
+	for &pane, i in app.panes {
+		if pane_is_shown(app, i) && pane.chat.id == sid { request(app, .Self, "GET", strings.concatenate({"/api/session/", sid}, context.temp_allocator), tag = sid, pane = &pane) }
+	}
+}
+
+// Some pane shows that session, or one it launched (its card says it).
+@(private = "file")
+pane_shows_or_child :: proc(app: ^App, sid: string) -> bool {
+	for &pane, i in app.panes { if pane_is_shown(app, i) && (pane.chat.id == sid || is_child(&pane.chat, sid)) { return true } }
+	return false
+}
+
+// What an event of the stream changes in the conversation of one pane: its session's, or a sub-agent's of it. (false: nothing it shows)
+@(private = "file")
+pane_event :: proc(app: ^App, pane: ^Chat_Pane, kind, sid: string, d, ev: json.Value) -> bool {
+	c := &pane.chat
+	if sid == "" { return false }
+	if sid != c.id { return is_child(c, sid) && child_event(app, pane, kind, sid, d, ev) }
+	a := c.alloc
 	chat_changed(c)   // (what follows changes the messages, or their parts)
-	visible = true
 
 	mid := tk_json.text(d, "assistantMessageID")
 	switch kind {
@@ -1271,20 +1306,20 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 				// (nothing runs: it does not wait, it goes. The bottom is followed if it was: this does not fetch a reader who went up. Sending it did, submit_prompt)
 				if find_message(c, id) == nil { user_message_add(c, id, tk_json.text(item, "payload", "text"), tk_json.array(item, "payload", "files"), tk_json.number(ev, "created")) }
 			} else {
-				queue_add(app, id, item, c.seq)
+				queue_add(app, pane, id, item, c.seq)
 			}
 		} else if tk_json.text(item, "type") == "synthetic" && find_message(c, id) == nil {
 			// (a report of a sub-agent or of a job: shown as it comes, not at its delivery, which waits for the run's next step)
 			synthetic_add(c, id, tk_json.get(item, "payload"), tk_json.number(ev, "created"))
 		}
 	case "session.inbox.delivered":
-		queue_delivered(app, tk_json.text(d, "inboxID"), tk_json.number(ev, "created"))
+		queue_delivered(app, pane, tk_json.text(d, "inboxID"), tk_json.number(ev, "created"))
 	case "session.inbox.cancelled":
 		id := tk_json.text(d, "inboxID")
-		if queue_shown_as_sent(app, id) { chat_drop(c, id) }
-		queue_gone(app, id, false, c.seq)
+		if queue_shown_as_sent(app, pane, id) { chat_drop(c, id) }
+		queue_gone(app, pane, id, false, c.seq)
 	case "session.inbox.delivery.changed":
-		queue_delivery_changed(app, tk_json.text(d, "inboxID"), delivery_of(tk_json.text(d, "delivery")), c.seq)
+		queue_delivery_changed(app, pane, tk_json.text(d, "inboxID"), delivery_of(tk_json.text(d, "delivery")), c.seq)
 	case "session.step.started":
 		m := assistant(c, mid)
 		m.agent = strings.clone(tk_json.text(d, "agent"), a)
@@ -1306,7 +1341,7 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 		if k == .Reasoning && t == "" {
 			// nothing to show (a hidden chain of thought): drop the empty part
 			for p, i in m.parts { if p.kind == k && p.ordinal == int(tk_json.number(d, "ordinal")) && len(p.text) == 0 { ordered_remove(&m.parts, i); break } }
-			return
+			return true
 		}
 		p := text_part(c, m, k, int(tk_json.number(d, "ordinal")))
 		// (another text than the deltas made: another buffer. What was read from a text is kept by its place and its length, and a
@@ -1381,8 +1416,8 @@ is_child :: proc(c: ^Chat, sid: string) -> bool {
 }
 
 // An event of a sub-agent of the session shown: what it is doing now, what it has cost. (false: not one it shows)
-child_event :: proc(app: ^App, kind, sid: string, d, ev: json.Value) -> bool {
-	c := &app.chat
+child_event :: proc(app: ^App, pane: ^Chat_Pane, kind, sid: string, d, ev: json.Value) -> bool {
+	c := &pane.chat
 	a := c.alloc
 	key := sid
 	live, has := c.live[sid]
@@ -1429,5 +1464,5 @@ set_busy :: proc(app: ^App, id: string, busy: bool) {
 		delete(key)
 		marks_changed(app)
 	}
-	if id == app.chat.id { app.chat.busy = busy }
+	for &pane in app.panes { if pane.chat.id == id { pane.chat.busy = busy } }
 }

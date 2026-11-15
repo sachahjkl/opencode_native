@@ -53,7 +53,8 @@ ctx_open :: proc(app: ^App, kind: Ctx_Kind, msg := "", part := 0, image := Image
 
 @(private = "file")
 find_msg :: proc(app: ^App, id: string) -> ^Message {
-	for &m in app.chat.messages { if m.id == id { return &m } }
+	pane := main_pane(app)
+	for &m in pane.chat.messages { if m.id == id { return &m } }
 	return nil
 }
 
@@ -71,8 +72,9 @@ answer_text :: proc(m: ^Message) -> string {
 
 // A new session with the history of `id` before the message `before` ("": all of it). `prompt`: what the composer takes back in it.
 fork_session :: proc(app: ^App, id, before: string, prompt := "") {
-	delete(app.composer.fork_prompt)
-	app.composer.fork_prompt = strings.clone(prompt)
+	pane := main_pane(app)
+	delete(pane.composer.fork_prompt)
+	pane.composer.fork_prompt = strings.clone(prompt)
 	body := before != "" ? fmt.tprintf(`{{"before":%s}}`, tk_json.quote(before)) : "{}"
 	request(app, .Forked, "POST", fmt.tprintf("/api/session/%s/fork", id), body, id)
 }
@@ -93,7 +95,8 @@ fork_before :: proc(c: ^Chat, m: ^Message) -> string {
 // "Fork from here", on the session shown, a sub-agent's as any other: the server makes a session of its own of it, parent of nothing.
 @(private = "file")
 fork_from :: proc(app: ^App, m: ^Message) {
-	fork_session(app, app.chat.id, fork_before(&app.chat, m), m.kind == .User ? m.text : "")
+	pane := main_pane(app)
+	fork_session(app, pane.chat.id, fork_before(&pane.chat, m), m.kind == .User ? m.text : "")
 }
 
 @(private = "file")
@@ -119,6 +122,7 @@ first_url :: proc(s: string) -> string {
 
 @(private = "file")
 message_menu :: proc(app: ^App, m: ^Message) {
+	pane := main_pane(app)
 	if ui.has_selection(&app.state) {
 		sel := ui.selected_text(&app.state, context.temp_allocator)
 		if ui.menu_item(i18n.tr("Quote"), "", icon = lucide.QUOTE).clicked { quote_text(app, sel, false) }
@@ -130,13 +134,13 @@ message_menu :: proc(app: ^App, m: ^Message) {
 	case .User:
 		if ui.menu_item(i18n.tr("Copy"), "", icon = lucide.COPY).clicked { copied(m.text, i18n.tr("Prompt copied")) }
 		if ui.menu_item(i18n.tr("Edit in the composer"), icon = lucide.PENCIL).clicked {
-			ui.text_edit_set(&app.composer.area, m.text)
-			app.composer.focus_next = true
+			ui.text_edit_set(&pane.composer.area, m.text)
+			pane.composer.focus_next = true
 		}
 		ui.menu_separator()
 		fork_item(app, m)
-		if ui.menu_item(i18n.tr("What this prompt changed"), icon = lucide.FILE).clicked { changes_open(app, app.chat.id, m.id) }
-		if ui.menu_item(i18n.tr("Go back to here…"), icon = lucide.UNDO_2, disabled = app.chat.busy).clicked { revert_stage(app, app.chat.id, m.id, m.text) }
+		if ui.menu_item(i18n.tr("What this prompt changed"), icon = lucide.FILE).clicked { changes_open(app, pane.chat.id, m.id) }
+		if ui.menu_item(i18n.tr("Go back to here…"), icon = lucide.UNDO_2, disabled = pane.chat.busy).clicked { revert_stage(app, pane.chat.id, m.id, m.text) }
 	case .Assistant:
 		t := answer_text(m)
 		if ui.menu_item(i18n.tr("Copy the answer"), icon = lucide.COPY, disabled = t == "").clicked { copied(t, i18n.tr("Answer copied")) }
@@ -183,11 +187,12 @@ tool_menu :: proc(app: ^App, m: ^Message, p: ^Part) {
 
 // At the end of the build, for what a right press noted.
 context_menu :: proc(app: ^App, em: f32) {
+	pane := main_pane(app)
 	quote_chip(app, em)
 	key := CTX_MENU_KEY
 	// (the composer's is a text field's: the toolkit's, on its area)
 	if app.ctx_menu.target.kind == .Composer {
-		ui.edit_menu(key, &app.composer.area, app.composer.edit_key, .Plain, COMPOSER_PASTE)
+		ui.edit_menu(key, &pane.composer.area, pane.composer.edit_key, .Plain, COMPOSER_PASTE)
 		return
 	}
 	if ui.menu(key) {
@@ -223,16 +228,17 @@ context_menu :: proc(app: ^App, em: f32) {
 // `text` as a quote at the end of the composer, a line left under it for what one has to say about it. `comment`: the
 // keyboard goes there.
 quote_text :: proc(app: ^App, text: string, comment: bool) {
+	pane := main_pane(app)
 	t := strings.trim_space(text)
 	if t == "" { return }
 	b := strings.builder_make(context.temp_allocator)
-	had := strings.trim_space(ui.text_edit_string(&app.composer.area))
+	had := strings.trim_space(ui.text_edit_string(&pane.composer.area))
 	if had != "" { fmt.sbprintf(&b, "%s\n\n", had) }
 	rest := t
 	for line in strings.split_lines_iterator(&rest) { fmt.sbprintf(&b, "> %s\n", strings.trim_right_space(line)) }
 	strings.write_byte(&b, '\n')
-	ui.text_edit_set(&app.composer.area, strings.to_string(b))
-	if comment { app.composer.focus_next = true } else { ui.announce(&app.announcer, .Good, i18n.tr("Quoted in the composer")) }
+	ui.text_edit_set(&pane.composer.area, strings.to_string(b))
+	if comment { pane.composer.focus_next = true } else { ui.announce(&app.announcer, .Good, i18n.tr("Quoted in the composer")) }
 }
 
 quote_selection :: proc(app: ^App) {
@@ -299,12 +305,13 @@ Rename_At :: enum u8 { None, Header, Side }
 // The field holds session `id`'s title, selected.
 @(private = "file")
 rename_prepare :: proc(app: ^App, id: string) {
+	pane := main_pane(app)
 	r := &app.rename
 	delete(r.id)
 	r.id = strings.clone(id)
 	r.fresh, r.at = true, .None
 	s := find_session(app, id)
-	if s == nil && app.chat.have_self && app.chat.self.id == id { s = &app.chat.self }
+	if s == nil && pane.chat.have_self && pane.chat.self.id == id { s = &pane.chat.self }
 	ui.line_edit_set(&r.field, s != nil ? s.title : "")
 	ui.line_edit_select_all(&r.field)
 }
@@ -380,13 +387,14 @@ rename_commit :: proc(app: ^App) {
 // What the answers to its requests do (net.odin REQ_FACTS)
 
 forked_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
+	pane := req_pane(app, r)
 	id := tk_json.text(v, "data", "id")
 	if id == "" { return }
 	refresh_sessions(app)
-	if r.gen == app.chat.gen {
+	if r.gen == pane.chat.gen {
 		open_root(app, id)
-		prompt_restore(app, app.composer.fork_prompt)
-		if app.composer.fork_prompt != "" { app.composer.focus_next = true }
+		prompt_restore(app, pane, pane.composer.fork_prompt)
+		if pane.composer.fork_prompt != "" { pane.composer.focus_next = true }
 	}
 	ui.announce(&app.announcer, .Good, i18n.tr("Forked"))
 }

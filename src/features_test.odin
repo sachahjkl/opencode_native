@@ -159,38 +159,39 @@ the_first_link_of_a_text_ends_where_it_ends :: proc(t: ^testing.T) {
 the_history_is_the_sessions_own :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()   // (the App keeps what it made, as the program does, till it ends)
 	app := new(App)
+	pane := main_pane(app)
 	defer free(app)
-	chat_reset(&app.chat)
-	app.chat.id = "ses_a"
-	append(&app.chat.messages, Message{id = "m1", kind = .User, text = "first"}, Message{id = "m2", kind = .Assistant},
+	chat_reset(&pane.chat)
+	pane.chat.id = "ses_a"
+	append(&pane.chat.messages, Message{id = "m1", kind = .User, text = "first"}, Message{id = "m2", kind = .Assistant},
 		Message{id = "m3", kind = .User, text = " second "}, Message{id = "m4", kind = .User, text = "second"})
-	ui.text_edit_set(&app.composer.area, "a draft")
-	history_step(app, -1)   // (nothing newer than what is typed)
-	testing.expect(t, !history_browsing(app))
-	history_step(app, 1)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "second")
-	history_step(app, 1)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "first")
-	history_step(app, 1)   // (the oldest one stays)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "first")
-	history_step(app, -1)
-	history_step(app, -1)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "a draft")
-	testing.expect(t, !history_browsing(app))
+	ui.text_edit_set(&pane.composer.area, "a draft")
+	history_step(app, pane, -1)   // (nothing newer than what is typed)
+	testing.expect(t, !history_browsing(app, pane))
+	history_step(app, pane, 1)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "second")
+	history_step(app, pane, 1)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "first")
+	history_step(app, pane, 1)   // (the oldest one stays)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "first")
+	history_step(app, pane, -1)
+	history_step(app, pane, -1)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "a draft")
+	testing.expect(t, !history_browsing(app, pane))
 
 	// another session: only its own prompts, and none at all for a new one
-	chat_reset(&app.chat)
-	app.chat.id = "ses_b"
-	append(&app.chat.messages, Message{id = "m9", kind = .User, text = "other"})
-	history_step(app, 1)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "other")
-	history_step(app, 1)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "other")
-	history_leave(app, true)
-	chat_reset(&app.chat)
-	history_step(app, 1)
-	testing.expect(t, !history_browsing(app))
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "a draft")
+	chat_reset(&pane.chat)
+	pane.chat.id = "ses_b"
+	append(&pane.chat.messages, Message{id = "m9", kind = .User, text = "other"})
+	history_step(app, pane, 1)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "other")
+	history_step(app, pane, 1)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "other")
+	history_leave(app, pane, true)
+	chat_reset(&pane.chat)
+	history_step(app, pane, 1)
+	testing.expect(t, !history_browsing(app, pane))
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "a draft")
 }
 
 @(test)
@@ -375,10 +376,11 @@ what_is_shown_of_a_file :: proc(t: ^testing.T) {
 @(test)
 a_prompt_says_what_it_mentions :: proc(t: ^testing.T) {
 	app := new(App)
+	pane := main_pane(app)
 	defer free(app)
 	defer mentions_destroy(app)
-	defer delete(app.composer.attachments)
-	m := &app.composer.mentions
+	defer delete(pane.composer.attachments)
+	m := &pane.composer.mentions
 	append(&m.chosen, Mention{.File, strings.clone("@a.txt"), strings.clone("file:///d/a.txt"), strings.clone("a.txt")})
 	append(&m.chosen, Mention{.File, strings.clone("@gone.txt"), strings.clone("file:///d/gone.txt"), strings.clone("gone.txt")})
 	append(&m.chosen, Mention{.Agent, strings.clone("@explore"), strings.clone("explore"), strings.clone("")})
@@ -627,11 +629,12 @@ a_slash_proposes_the_commands :: proc(t: ^testing.T) {
 
 	context.allocator = runtime.heap_allocator()
 	app := new(App)
+	pane := main_pane(app)
 	defer free(app)
 	slash_load(app, []Slash{{strings.clone("init"), strings.clone("")}, {strings.clone("review"), strings.clone("")}, {strings.clone("compact"), strings.clone("")}})
 	defer { slash_forget(app); delete(app.cx.slash) }
-	hits := slash_matches(app, "rv")
+	hits := slash_matches(app, pane, "rv")
 	testing.expect_value(t, len(hits), 1)
 	if len(hits) == 1 { testing.expect_value(t, app.cx.slash[hits[0]].name, "review") }
-	testing.expect_value(t, len(slash_matches(app, "")), 3)
+	testing.expect_value(t, len(slash_matches(app, pane, "")), 3)
 }

@@ -95,6 +95,7 @@ what_stands_for_the_shells_gives_them_its_place :: proc(t: ^testing.T) {
 hiding_keeps_the_shells_showing_brings_them_back :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	open_shells(t, app, "a", "b")
 	s := &app.cx.terms
 	built(app, s.list[0], 11)
@@ -103,7 +104,7 @@ hiding_keeps_the_shells_showing_brings_them_back :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(s.list), 2)
 	testing.expect_value(t, bench_count(.Action), 0)   // (no DELETE)
 	testing.expect(t, !term_view_open(app, "a") && !term_view_open(app, "b"), "no view left")
-	testing.expect(t, app.composer.focus_next, "the keyboard goes back to the conversation")
+	testing.expect(t, pane.composer.focus_next, "the keyboard goes back to the conversation")
 	terminal_toggle(app)
 	testing.expect(t, s.open, "shown")
 	testing.expect(t, term_view_open(app, "a") && term_view_open(app, "b"), "both are back")
@@ -1138,11 +1139,12 @@ a_picture_that_failed_says_why :: proc(t: ^testing.T) {
 what_was_chosen_does_not_cross_to_the_next_server :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
-	ui.text_edit_set(&app.composer.area, "look at @a.txt")
-	append(&app.composer.mentions.chosen, Mention{.File, strings.clone("@a.txt"), strings.clone("file:///old/a.txt"), strings.clone("a.txt")})
+	pane := main_pane(app)
+	ui.text_edit_set(&pane.composer.area, "look at @a.txt")
+	append(&pane.composer.mentions.chosen, Mention{.File, strings.clone("@a.txt"), strings.clone("file:///old/a.txt"), strings.clone("a.txt")})
 	server_forget(app)
-	testing.expect_value(t, len(app.composer.mentions.chosen), 0)
-	testing.expect_value(t, ui.text_edit_string(&app.composer.area), "look at @a.txt")
+	testing.expect_value(t, len(pane.composer.mentions.chosen), 0)
+	testing.expect_value(t, ui.text_edit_string(&pane.composer.area), "look at @a.txt")
 }
 
 @(test)

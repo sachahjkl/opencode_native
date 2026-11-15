@@ -86,6 +86,7 @@ sidebar :: proc(app: ^App, em: f32) {
 }
 
 sessions_list :: proc(app: ^App, em: f32) {
+	pane := main_pane(app)
 	if !app.sessions_loaded {
 		ui.spacer(ui.px(em))
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
@@ -113,7 +114,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 			if folded { continue }
 			for i in sec.items {
 				s := &app.sessions[i]
-				if ui.lazy_item(lz, s.lazy_id, always = s.id == app.chat.id) {
+				if ui.lazy_item(lz, s.lazy_id, always = s.id == pane.chat.id) {
 					session_item(app, s, em, now, 0, app.prefs.subagents == "nested" ? children_of(app, s.id, kids) : nil, project = mode == .Inbox)
 				}
 			}
@@ -133,6 +134,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 // A group's header: folder, name, count, "+".
 @(private = "file")
 group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
+	pane := main_pane(app)
 	gkey := gr.key
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
 	hdr := ui.build_box({.Clickable, .Hot_Within}, fmt.tprintf("###g%d", gkey))
@@ -163,8 +165,8 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 		ui.next({width = ui.px(math.round(em * 1.5)), height = ui.px(math.round(em * 1.5)), fg = plus_col})
 		if ui.button("gadd", icon = lucide.PLUS).clicked {
 			new_session(app)
-			delete(app.chat.new_dir, app.chat.alloc)
-			app.chat.new_dir = strings.clone(gr.dir, app.chat.alloc)
+			delete(pane.chat.new_dir, pane.chat.alloc)
+			pane.chat.new_dir = strings.clone(gr.dir, pane.chat.alloc)
 		}
 		ui.spacer(ui.px(em * 0.5))
 	}
@@ -194,7 +196,8 @@ session_badge_index :: proc(id: string) -> int {
 }
 
 session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0, kids: []int = nil, project := false) {
-	selected := s.id == app.chat.id
+	pane := main_pane(app)
+	selected := s.id == pane.chat.id
 	sub_list := false
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * (project ? SIDE_INBOX_ROW_EM : depth > 0 ? 2.0 : 2.3))), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###r_%s", s.id)) {
@@ -341,9 +344,10 @@ delete_ask :: proc(app: ^App, id: string) {
 
 // Its answer, in a build of the main window.
 delete_answer :: proc(app: ^App) {
+	pane := main_pane(app)
 	if ui.confirm_answer(DELETE_VIEW) != .Confirmed || app.sidebar.delete_id == "" { return }
 	delete_session(app, app.sidebar.delete_id)
-	if app.sidebar.delete_id == app.chat.id { new_session(app) }
+	if app.sidebar.delete_id == pane.chat.id { new_session(app) }
 	nav_forget(app, app.sidebar.delete_id)
 	refresh_soon(app)
 }

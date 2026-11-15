@@ -58,6 +58,7 @@ open_entry :: proc(app: ^App, kind: Missed_Kind, id: string, asker := "") -> ^no
 what_was_missed_is_what_the_program_knows :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
+	pane := main_pane(app)
 	state := rand.create(u64(20261112))
 	context.random_generator = rand.default_random_generator(&state)
 	listed(app, `{"data":[
@@ -111,7 +112,7 @@ what_was_missed_is_what_the_program_knows :: proc(t: ^testing.T) {
 				if gone == "" { break }
 				bench_event(app, fmt.tprintf(`{{"type":"form.cancelled","data":{{"id":"%s"}}}}`, gone))
 			}
-			if id == app.chat.id { chat_home(app) }
+			if id == pane.chat.id { chat_home(app) }
 			gid := strings.clone(id, context.temp_allocator)
 			bench_event(app, fmt.tprintf(`{{"type":"session.deleted","data":{{"sessionID":"%s"}}}}`, gid))
 			relisted(app, gid)

@@ -300,11 +300,12 @@ window_in_front :: proc(app: ^App) -> bool { return app.win.active }
 // A run ended in the session `sid`: told when it is not the one in front of the user. `key`: its entry of what was missed
 // (missed.odin; "": none), which keeps the notification of the system and closes it once acknowledged.
 notify_finished :: proc(app: ^App, key, sid, outcome: string) {
+	pane := main_pane(app)
 	mode := app.prefs.notify
 	if mode == "off" { return }
 	front := window_in_front(app)
-	if sid == app.chat.id && front { return }
-	if find_child(&app.chat, sid) != nil && front { return }   // (its card and the strip say it)
+	if sid == pane.chat.id && front { return }
+	if find_child(&pane.chat, sid) != nil && front { return }   // (its card and the strip say it)
 	word := outcome == "failed" ? i18n.tr("Failed") : outcome == "interrupted" ? i18n.tr("Stopped") : i18n.tr("Done")
 	// (in front, the toast says it: a notification of the system is for a window you are not looking at)
 	if mode == "system" && !front && notify_system(app, key, sid, word, "") { return }
@@ -324,8 +325,9 @@ notify_waiting :: proc(app: ^App, key, sid, what, detail: string) {
 
 // A session's title, as a notification names it ("" a session not listed: the start of its id).
 session_title_of :: proc(app: ^App, sid: string) -> string {
+	pane := main_pane(app)
 	if s := find_session(app, sid); s != nil && s.title != "" { return s.title }
-	if sid == app.chat.id && app.chat.have_self && app.chat.self.title != "" { return app.chat.self.title }
+	if sid == pane.chat.id && pane.chat.have_self && pane.chat.self.title != "" { return pane.chat.self.title }
 	return sid
 }
 
@@ -365,7 +367,7 @@ toast_session :: proc(app: ^App, kind: ui.Toast_Kind, sid, what, detail: string)
 	ui.announce(&app.announcer, kind, title, body, action = proc(user: rawptr) {
 		app := the_app
 		sid := app.notices.toast_targets[int(uintptr(user))]
-		if sid != "" && sid != app.chat.id { open_root(app, sid) }
+		if sid != "" && sid != main_pane(app).chat.id { open_root(app, sid) }   // (opened in the main view)
 	}, user = rawptr(uintptr(k)))
 }
 
