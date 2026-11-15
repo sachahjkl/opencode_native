@@ -1,114 +1,96 @@
-// HTTP and the server's event stream, over the client's Rust library (native/ocn_native: ureq, rustls with the
-// system's trust store; ocntools build -> build\native\ocn_native.lib). Blocking calls, made from worker
-// threads; one client for the whole program, shared by every thread.
+// A server's requests, its event stream and its sockets, over the toolkit's gt:http (WinHTTP, libcurl). Every call
+// blocks: workers and the stream's and sockets' threads make them, never the interface's. src/md/infrastructure/transport.md
+// says why the limits are these.
 package ocn
 
+import "core:encoding/base64"
 import "core:fmt"
 import "core:strings"
+import "core:time"
+import tk_http "gt:http"
 
-when ODIN_OS == .Windows {
-	foreign import ocn_native {
-		"../build/native/ocn_native.lib",
-		"system:ws2_32.lib",
-		"system:advapi32.lib",
-		"system:userenv.lib",
-		"system:ntdll.lib",
-		"system:kernel32.lib",
-		"system:bcrypt.lib",
-		"system:crypt32.lib",
-		"system:secur32.lib",
-		"system:ole32.lib",
-		"system:oleaut32.lib",
-		"system:ncrypt.lib",
-	}
-} else {
-	foreign import ocn_native { "../build/native/libocn_native.a", "system:dl", "system:pthread", "system:m" }
-}
+// A whole request, a large answer's body included (a session's export): past it, the server is taken for unreachable.
+REQUEST_TIMEOUT :: 3 * time.Minute
+// The largest answer read (a long session's messages).
+REQUEST_MAX_BYTES :: 256 << 20
+// An event stream silent this long is taken for dead: a machine that slept, a network that went away without a word leave
+// the socket open, and only the server's heartbeats tell it from a quiet server. Several of them may be missed.
+STREAM_SILENCE :: 95 * time.Second
+// A socket's handshake.
+SOCKET_TIMEOUT :: 30 * time.Second
 
-Ocn_Buf :: struct {
-	ptr: [^]u8,
-	len: uint,
-	cap: uint,
-}
+USER_AGENT :: "opencode-native/" + APP_VERSION
 
-@(default_calling_convention = "c")
-foreign ocn_native {
-	ocn_client_new :: proc(base: [^]u8, base_len: uint, user: [^]u8, user_len: uint, pass: [^]u8, pass_len: uint) -> rawptr ---
-	ocn_client_free :: proc(c: rawptr) ---
-	ocn_buf_free :: proc(b: Ocn_Buf) ---
-	ocn_request :: proc(c: rawptr, method: [^]u8, method_len: uint, path: [^]u8, path_len: uint, body: [^]u8, body_len: uint, out_status: ^i32, out_body: ^Ocn_Buf) -> i32 ---
-	ocn_sse_open :: proc(c: rawptr, path: [^]u8, path_len: uint, out_status: ^i32) -> rawptr ---
-	ocn_sse_next :: proc(s: rawptr, out: ^Ocn_Buf) -> i32 ---
-	ocn_sse_free :: proc(s: rawptr) ---
-	ocn_ws_open :: proc(c: rawptr, path: [^]u8, path_len: uint) -> rawptr ---   // (browser_mcp.odin)
-	ocn_ws_read :: proc(w: rawptr, out: ^Ocn_Buf) -> i32 ---
-	ocn_ws_send :: proc(w: rawptr, data: [^]u8, n: uint) -> i32 ---
-	ocn_ws_read_timeout :: proc(w: rawptr, ms: u32) ---   // (terminal.odin)
-	ocn_ws_free :: proc(w: rawptr) ---
-}
-
-when ODIN_OS == .Windows {
-	Web_Callback :: proc "c" (user: rawptr, kind: i32, id: u64, data: [^]u8, n: uint)
-
-	@(default_calling_convention = "c")
-	foreign ocn_native {   // (webview_windows.odin)
-		ocn_webview_new :: proc(parent: int, data: [^]u8, data_len: uint, cb: Web_Callback, user: rawptr) -> rawptr ---
-		ocn_webview_parent :: proc(w: rawptr, hwnd: int) ---
-	ocn_webview_place :: proc(w: rawptr, x, y, width, height, visible: i32) ---
-		ocn_webview_navigate :: proc(w: rawptr, url: [^]u8, n: uint) ---
-		ocn_webview_act :: proc(w: rawptr, what: i32) ---
-		ocn_webview_script :: proc(w: rawptr, code: [^]u8, n: uint, id: u64) ---
-		ocn_webview_capture :: proc(w: rawptr, id: u64) ---
-		ocn_webview_can :: proc(w: rawptr, what: i32) -> i32 ---
-		ocn_webview_free :: proc(w: rawptr) ---
-	}
-}
-
+// A server: its address and its credentials. (Owned by the Conn; read by its threads, never changed.)
 Http :: struct {
-	base:   string,    // "http://host:port"
-	client: rawptr,
+	base: string,   // "http://host:port", no slash at its end
+	auth: string,   // "Basic ..." ("": no password)
 }
 
-http_init :: proc(h: ^Http, base: string, user, password: string) -> bool {
-	h.base = strings.clone(base)
-	h.client = ocn_client_new(raw_data(base), len(base), raw_data(user), len(user), raw_data(password), len(password))
-	return h.client != nil
+http_init :: proc(base: string, user, password: string) -> Http {
+	h := Http{base = strings.clone(strings.trim_right(base, "/"))}
+	if password != "" {
+		creds := fmt.tprintf("%s:%s", user, password)
+		h.auth = fmt.aprintf("Basic %s", base64.encode(transmute([]u8)creds, allocator = context.temp_allocator))
+	}
+	return h
 }
 
+http_destroy :: proc(h: ^Http) {
+	delete(h.base)
+	delete(h.auth)
+	h^ = {}
+}
+
+// The headers of every call to the server, and `extra`. (Allocated in the temp allocator.)
 @(private = "file")
-take :: proc(b: Ocn_Buf, allocator := context.allocator) -> string {
-	if b.ptr == nil { return "" }
-	s := strings.clone(string(b.ptr[:b.len]), allocator)
-	ocn_buf_free(b)
-	return s
+http_headers :: proc(h: ^Http, extra: ..tk_http.Header) -> []tk_http.Header {
+	out := make([dynamic]tk_http.Header, 0, len(extra) + 1, context.temp_allocator)
+	if h.auth != "" { append(&out, tk_http.Header{"Authorization", h.auth}) }
+	append(&out, ..extra)
+	return out[:]
+}
+
+// What a request to the server takes: its headers (`json`: a JSON body goes with it), its limits.
+http_request_of :: proc(h: ^Http, method, body: string) -> tk_http.Request {
+	json := body != "" || method == "POST" || method == "PUT" || method == "PATCH"
+	headers := json ? http_headers(h, {"Accept", "application/json"}, {"Content-Type", "application/json"}) : http_headers(h, {"Accept", "application/json"})
+	return {max_bytes = REQUEST_MAX_BYTES, user_agent = USER_AGENT, timeout = REQUEST_TIMEOUT, headers = headers, body = body == "" ? nil : transmute([]u8)body}
 }
 
 // A whole request: the response body is allocated with `allocator`. `ok` = false: the server was not reached (`resp`
 // says why).
 http_request :: proc(h: ^Http, method, path: string, body := "", allocator := context.allocator) -> (status: int, resp: string, ok: bool) {
-	st: i32
-	out: Ocn_Buf
-	r := ocn_request(h.client, raw_data(method), len(method), raw_data(path), len(path), raw_data(body), len(body), &st, &out)
-	return int(st), take(out, allocator), r == 0
+	res, err := tk_http.request(method, strings.concatenate({h.base, path}, context.temp_allocator), http_request_of(h, method, body), allocator)
+	if err != .None { return 0, strings.clone(tk_http.error_text(err), allocator), false }
+	status, resp = res.status, string(res.body)
+	res.body = nil
+	tk_http.response_destroy(&res, allocator)
+	return status, resp, true
 }
 
-// Server-sent events: calls `on_data` with the text of every event's data lines, until the stream ends, `stop` turns
-// true or `on_data` returns false. Returns the status of the stream's response (0: the server was not reached).
-http_sse :: proc(h: ^Http, path: string, stop: ^bool, on_data: proc(data: string, user: rawptr) -> bool, user: rawptr, connected: proc(user: rawptr) = nil) -> (status: int) {
-	st: i32
-	s := ocn_sse_open(h.client, raw_data(path), len(path), &st)
-	if s == nil { return int(st) }
-	defer ocn_sse_free(s)
-	if connected != nil { connected(user) }
-	for !stop^ {
-		out: Ocn_Buf
-		if ocn_sse_next(s, &out) != 1 { break }
-		data := string(out.ptr[:out.len])
-		keep := on_data(data, user)
-		ocn_buf_free(out)
-		if !keep { break }
+// What the event stream takes: no limit of its own but its silence.
+http_stream_of :: proc(h: ^Http) -> tk_http.Request {
+	return {user_agent = USER_AGENT, timeout = STREAM_SILENCE, headers = http_headers(h)}
+}
+
+// Reads the event stream at `path` until it ends, `on_event` says .Stop or `stop` is asked. Returns the status of its
+// response (0: the server was not reached).
+http_events :: proc(h: ^Http, path: string, stop: ^tk_http.Stop, on_event: tk_http.Event_Proc, user: rawptr) -> (status: int) {
+	st, _ := tk_http.events(strings.concatenate({h.base, path}, context.temp_allocator), http_stream_of(h), on_event, user, stop)
+	return st
+}
+
+// A socket at `path` on the server (ws:// or wss://, as the server's scheme); nil: none.
+http_ws_open :: proc(h: ^Http, path: string) -> ^tk_http.Socket {
+	scheme, rest := "ws", h.base
+	switch {
+	case strings.has_prefix(rest, "https://"): scheme, rest = "wss", rest[len("https://"):]
+	case strings.has_prefix(rest, "http://"):  rest = rest[len("http://"):]
 	}
-	return int(st)
+	url := fmt.tprintf("%s://%s%s", scheme, rest, path)
+	s, err := tk_http.ws_connect(url, {user_agent = USER_AGENT, timeout = SOCKET_TIMEOUT, headers = http_headers(h)})
+	return err == .None ? s : nil
 }
 
 // The address of a server ("http://127.0.0.1:4096").

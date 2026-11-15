@@ -1127,7 +1127,7 @@ closing_stops_every_connection_and_shell :: proc(t: ^testing.T) {
 	first, second := bench_conn(app), bench_conn(app)
 	l := bench_link(app)
 	threads_stop(app)
-	testing.expect(t, sync.atomic_load(&first.stop) && sync.atomic_load(&second.stop), "every connection")
+	testing.expect(t, conn_stopped(first) && conn_stopped(second), "every connection")
 	testing.expect(t, sync.atomic_load(&app.cx.terms.list[0].conn.stop), "the shells' threads")
 	testing.expect(t, sync.atomic_load(&l.stop), "the browser's")
 }

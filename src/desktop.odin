@@ -48,7 +48,7 @@ MANIFEST_NAME  :: "opencode-native-install.txt"
 NIXOS_LIBRARIES := [?]string{
 	"glibc", "stdenv.cc.cc",
 	"vulkan-loader", "libxkbcommon", "wayland", "libx11", "libxcb", "libxcursor", "libxrandr", "libxi", "libxext", "libxcb-cursor",
-	"fontconfig", "freetype", "dbus",
+	"fontconfig", "freetype", "dbus", "curl",
 }
 
 // The names and marks of opencode native on the desktop. They are what an install already carries on users' machines:

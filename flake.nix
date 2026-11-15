@@ -91,7 +91,8 @@
       '';
     };
 
-    # What the client opens at run time (dlopen): nothing is in a standard path on NixOS.
+    # What the client opens at run time (dlopen): nothing is in a standard path on NixOS. (curl: libcurl.so.4, gt:http's
+    # client for every call to the server.)
     runtime = with pkgs; [
       vulkan-loader
       libxkbcommon
@@ -106,6 +107,7 @@
       fontconfig
       freetype
       dbus
+      curl
     ];
 
     # APP_VERSION of src/setup.odin

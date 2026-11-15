@@ -234,13 +234,13 @@ term_send :: proc(t: ^Term, s: string) {
 
 // (on the shell's thread)
 @(private = "file")
-term_flush :: proc(ws: rawptr, c: ^Term_Conn) {
+term_flush :: proc(ws: ^tk_http.Socket, c: ^Term_Conn) {
 	sync.lock(&c.lock)
 	data := make([]u8, len(c.out), context.temp_allocator)
 	copy(data, c.out[:])
 	clear(&c.out)
 	sync.unlock(&c.lock)
-	if len(data) > 0 { _ = ocn_ws_send(ws, raw_data(data), len(data)) }
+	if len(data) > 0 { _ = WS_OPS.send(ws, data) }
 	free_all(context.temp_allocator)
 }
 
@@ -293,10 +293,10 @@ term_post :: proc(job: ^Term_Thread, news: Term_News) {
 
 // Reads until the socket goes.
 @(private = "file")
-term_read :: proc(job: ^Term_Thread, ws: rawptr) {
-	ws_pump(WS_OPS, ws, job,
+term_read :: proc(job: ^Term_Thread, ws: ^tk_http.Socket) {
+	ws_pump(WS_OPS, ws, TERM_READ_MS * time.Millisecond, job,
 		proc(job: ^Term_Thread) -> bool { return !sync.atomic_load(&job.conn.stop) && !sync.atomic_load(&job.conn.renew) },
-		proc(job: ^Term_Thread, ws: rawptr) { term_flush(ws, job.conn) },
+		proc(job: ^Term_Thread, ws: ^tk_http.Socket) { term_flush(ws, job.conn) },
 		proc(job: ^Term_Thread, text: string) { if term_frame(job.conn, text) { term_post(job, {text = strings.clone(text)}) } })
 }
 
@@ -308,14 +308,14 @@ term_thread :: proc(job: ^Term_Thread) {
 	tries := 0
 	for !sync.atomic_load(&c.stop) {
 		path := fmt.aprintf("%s%scursor=%d", job.path, strings.contains(job.path, "?") ? "&" : "?", c.cursor)
-		ws := job.server.transport.ws_open(job.server.http.client, raw_data(path), len(path))
+		ws := job.server.transport.ws_open(&job.server.http, path)
 		delete(path)
+		free_all(context.temp_allocator)
 		if ws != nil {
 			began := time.tick_now()
-			ocn_ws_read_timeout(ws, TERM_READ_MS)
 			term_post(job, {is_link = true, link = .Attached})
 			term_read(job, ws)
-			ocn_ws_free(ws)
+			WS_OPS.close(ws)
 			if time.duration_milliseconds(time.tick_since(began)) >= TERM_STABLE_MS { tries = 0 }
 		}
 		if sync.atomic_load(&c.stop) { break }

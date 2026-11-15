@@ -7,6 +7,7 @@ package ocn
 import "core:mem"
 import tasks "gt:tasks"
 import "core:sync"
+import tk_http "gt:http"
 import "gt:ui"
 
 Conn :: struct {
@@ -14,7 +15,7 @@ Conn :: struct {
 	http:      Http,
 	transport: Transport,
 	pool:      tasks.Pool,   // its requests' workers
-	stop:      bool,      // (atomic) its threads stop: the event thread at its next event or retry, a shell's at its next read
+	stop:      tk_http.Stop,   // its threads stop: the event stream within a second, a shell's at its next read
 	// What uses it, on the interface's thread only: the App while it is the one connected, each request until its answer ran, each
 	// thread that reads it until its last post ran. A thread lets go by a post: what it posted before, with this pointer in it, has run
 	// by then, and no newer Conn at the same address can be taken for it.
@@ -36,11 +37,11 @@ Transport :: struct {
 	// A call that is no request (the schema, a shell's list): what came back.
 	fetch:   proc(c: ^Conn, method, path, body: string, allocator: mem.Allocator) -> (status: int, resp: string, ok: bool),
 	// A shell's socket (nil: this transport has none, no shell's thread starts).
-	ws_open: proc "c" (client: rawptr, path: [^]u8, path_len: uint) -> rawptr,
+	ws_open: proc(h: ^Http, path: string) -> ^tk_http.Socket,
 	close:   proc(c: ^Conn),   // the connection is freed: what the transport holds goes
 }
 
-HTTP_TRANSPORT :: Transport{call = http_call, fetch = http_fetch, ws_open = ocn_ws_open, close = http_close}
+HTTP_TRANSPORT :: Transport{call = http_call, fetch = http_fetch, ws_open = http_ws_open, close = http_close}
 
 @(private = "file")
 http_call :: proc(c: ^Conn, r: ^Request) -> bool {
@@ -55,8 +56,7 @@ http_fetch :: proc(c: ^Conn, method, path, body: string, allocator: mem.Allocato
 
 @(private = "file")
 http_close :: proc(c: ^Conn) {
-	if c.http.client != nil { ocn_client_free(c.http.client) }
-	delete(c.http.base)
+	http_destroy(&c.http)
 }
 
 // A connection held once, by whoever made it; its workers are started.
@@ -88,7 +88,9 @@ conn_release_post :: proc(c: ^Conn) {
 }
 
 // Its threads are told to stop: a server left, the window closed.
-conn_stop :: proc(c: ^Conn) { sync.atomic_store(&c.stop, true) }
+conn_stop :: proc(c: ^Conn) { tk_http.stop_ask(&c.stop) }
+
+conn_stopped :: proc(c: ^Conn) -> bool { return sync.atomic_load(&c.stop.asked) }
 
 // On a chore: nothing holds it, its workers rest and are joined.
 @(private = "file")

@@ -1534,8 +1534,6 @@ fr Mettre à jour
 en Command line
 fr Ligne de commande
 
-en No HTTP client for %s
-fr Pas de client HTTP pour %s
 
 en connecting
 fr connexion

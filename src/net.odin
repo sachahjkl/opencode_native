@@ -662,18 +662,34 @@ delete_session :: proc(app: ^App, session: string) {
 
 STREAM_RETRY_S :: 2   // between two connections of the event stream
 
+// One connection of the event stream. The server opens each with an event (server.connected): the first one says the
+// stream is up, before it is applied.
+@(private = "file")
+Stream_Run :: struct { conn: ^Conn, up: bool }
+
+// Reads the stream until it ends; its status (0: the server was not reached).
+stream_run :: proc(c: ^Conn) -> (status: int) {
+	run := Stream_Run{conn = c}
+	status = http_events(&c.http, "/api/event", &c.stop, proc(user: rawptr, ev: tk_http.Event) -> tk_http.Keep_Going {
+		run := (^Stream_Run)(user)
+		c := run.conn
+		if !run.up {
+			run.up = true
+			ui.post(&c.app.state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_up(the_app) } }, c)
+		}
+		e := event_read(c, ev.data)
+		if !ui.post(&c.app.state, on_event, e, EVENT_WORD) { event_free(e); return .Stop }
+		return .Continue
+	}, &run)
+	free_all(context.temp_allocator)
+	return
+}
+
 events_thread :: proc(data: rawptr) {
 	c := (^Conn)(data)
-	for !sync.atomic_load(&c.stop) {
-		st := http_sse(&c.http, "/api/event", &c.stop, proc(data: string, user: rawptr) -> bool {
-			c := (^Conn)(user)
-			e := event_read(c, data)
-			if !ui.post(&c.app.state, on_event, e, EVENT_WORD) { event_free(e); return false }
-			return true
-		}, c, proc(user: rawptr) {
-			ui.post(&(^Conn)(user).app.state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_up(the_app) } }, user)
-		})
-		if sync.atomic_load(&c.stop) { break }
+	for !conn_stopped(c) {
+		st := stream_run(c)
+		if conn_stopped(c) { break }
 		ui.post(&c.app.state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_down(the_app, int(word)) } }, c, u64(st))
 		time.sleep(STREAM_RETRY_S * time.Second)
 	}
@@ -773,7 +789,7 @@ dialogs_reread :: proc(app: ^App) {
 }
 
 // The stream ended, or could not start: `status` is what its response said (0: no response; 200: it was up, and it dropped or
-// stayed silent past the limit of native/ocn_native).
+// stayed silent past STREAM_SILENCE).
 stream_down :: proc(app: ^App, status: int) {
 	app.link = status == 401 ? .Auth_Refused : .Retrying
 }

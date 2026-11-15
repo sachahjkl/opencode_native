@@ -14,7 +14,7 @@
 ![A conversation: the tool calls on their timeline, sub-agents at work, the agent's reasoning](docs/screenshots/subagents.webp)
 
 One program, no runtime to install, written in [Odin](https://odin-lang.org) on [gui_toolkit](https://github.com/sachahjkl/gui_toolkit),
-with a small Rust library for HTTP. It draws with Direct3D 11 on Windows and Vulkan on Linux. It talks to the opencode
+with a small Rust library for diagrams, WebP and the Preview on Windows. It draws with Direct3D 11 on Windows and Vulkan on Linux. It talks to the opencode
 server running on this computer (or any other), in opencode's dark palette with machined surfaces: bevelled and ridged buttons, sunken
 wells, carved grooves, and lamps only where something is live.
 
@@ -144,7 +144,7 @@ asks for; with its password (Basic authentication as `opencode`). Until it answe
 
     opencode-native --url=https://host[:port] --password=...
 
-TLS is rustls, checked against the system's trust store.
+HTTP, its TLS and its proxy are the system's: WinHTTP on Windows, libcurl on Linux (the toolkit's `gt:http`).
 
 ## Command line
 
@@ -186,7 +186,7 @@ since a program on this computer can then type into a session.
 **Linux with Nix**: `nix develop -c ./build.sh` (`flake.nix`: the Odin, wgpu-native and libraries the CI uses).
 
 **Linux**: the same Odin, wgpu-native's static library in its vendor folder (`odin run ext/gui_toolkit/tools/tk -- fetch_wgpu`),
-clang, fontconfig's headers and Rust (stable), then `./build.sh`. At run time: Vulkan, libxkbcommon, fontconfig, and
+clang, fontconfig's headers and Rust (stable), then `./build.sh`. At run time: Vulkan, libxkbcommon, fontconfig, libcurl, and
 Wayland or X11; libxcb-cursor for the theme's cursors on X11, an emoji font for color emoji.
 
 Both are shortcuts of `odin run tools/ocntools -collection:gt=ext/gui_toolkit/src -out:build/ocntools -keep-executable -- build`:
@@ -215,7 +215,8 @@ every step is a command of `tools/ocntools` (`help` lists them; `AGENTS.md`). Th
 | `src/stats.odin` | the statistics of a session and of its project |
 | `src/style.odin` | the palette, the icons, the machined surfaces |
 | `src/setup.odin`, `src/desktop*.odin`, `src/os_*.odin` | version, Setup (gui_toolkit's `setup`: its Config, the user's answer); what each system is asked |
-| `native/ocn_native` | the Rust library (C functions): ureq + rustls, image decoding (and the text backend on Linux) |
+| `src/http.odin`, `src/ws_pump.odin` | the server's requests, event stream and sockets, over the toolkit's `gt:http` |
+| `native/ocn_native` | the Rust library: the toolkit's Mermaid and WebP crates, the text backend on Linux, the Preview's WebView2 on Windows (`src/native.odin` links it) |
 | `src/bench_test.odin` | the heavy cases in the test's process (a long conversation, hundreds of sessions); timed with `-define:OCN_BENCH=true` ([docs/performance.md](docs/performance.md)) |
 | `site/` | the GitHub Pages site |
 | `tools/` | `ocntools`, the project's machinery (`ocntools help`): the build, the packages, the signed manifests, the pictures of the README and the site (`ocntools shots`, over the DevTools protocol; `--linux-build` builds the Linux one in WSL with `flake.nix`), and what makes the site's pages (`ocntools site build site _site`: its changelog, its classic pages, what a page says when it is shared, on the toolkit's `site` package; `ocntools site check` in a real browser), the logo and the icon of `assets/` (`ocntools logo`, the toolkit's paint package); the DevTools client is the toolkit's `cdp` package, and `doc_check` the toolkit's `tk doc_check --root . --extra ext/gui_toolkit` |

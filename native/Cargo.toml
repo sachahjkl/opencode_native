@@ -11,5 +11,5 @@ opt-level = 3
 codegen-units = 1
 lto = "fat"
 debug = false
-panic = "unwind"   # every entry point catches panics: a bug in a request is a failed request, not a dead client
+panic = "unwind"   # every entry point catches panics: a bug in a web view or a diagram fails that call, not the client
 incremental = false
