@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.57.1] - 2026-11-15
+
+### Changed
+- **The composer's buttons sit closer**: the agent, the model, how hard it thinks and the approvals no longer stand far apart under the prompt.
+
 ## [0.57.0] - 2026-11-15
 
 ### Added
@@ -1681,6 +1686,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.57.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.57.1
 [0.57.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.57.0
 [0.56.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.56.1
 [0.56.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.56.0
