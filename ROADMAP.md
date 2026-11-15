@@ -2,6 +2,8 @@
 
 ## Now
 
+- **/btw: an aside in a panel.** `/btw <question>` forks the session into a panel on the right, with the same composer,
+  while the conversation stays shown: [src/md/features/chat-panes.md](src/md/features/chat-panes.md).
 - **Tab numbers while the modifier is held** (opencode 2.3.0). Holding Ctrl shows the number of each tab that Ctrl+1 to Ctrl+9 opens, as
   the desktop does after 400 ms. opencode native has no such shortcuts yet: decide first which list gets them (the
   sidebar's sessions, the server tabs).
