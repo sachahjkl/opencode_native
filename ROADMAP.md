@@ -2,6 +2,9 @@
 
 ## Now
 
+- **Personal keys and aliases.** The commands read their keys through the toolkit's keymap (`ui.Keymap`, its
+  `src/md/features/keymap.md`): a key set from the palette (Ctrl+Enter) replaces a command's own, and the settings show
+  the Keys page. Until then the Keys settings are not registered.
 - **/btw: an aside in a panel.** `/btw <question>` forks the session into a panel on the right, with the same composer,
   while the conversation stays shown: [src/md/features/chat-panes.md](src/md/features/chat-panes.md).
 - **Tab numbers while the modifier is held** (opencode 2.3.0). Holding Ctrl shows the number of each tab that Ctrl+1 to Ctrl+9 opens, as

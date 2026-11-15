@@ -51,7 +51,7 @@ jobs:
         run: build/ocntools.exe launcher
 
       - name: Tests
-        run: odin test src -collection:gt=ext/gui_toolkit/src -out:build/test.exe -define:ODIN_TEST_THREADS=1 -define:MERMAID_NATIVE_LINK=false   # (one test with a window at a time)
+        run: odin test src -collection:gt=ext/gui_toolkit/src -out:build/test.exe -define:ODIN_TEST_THREADS=1 -define:MERMAID_NATIVE_LINK=false -define:IMAGE_WEBP=true -define:IMAGE_WEBP_NATIVE_LINK=false   # (one test with a window at a time)
 
       - uses: actions/upload-artifact@v7
         with:

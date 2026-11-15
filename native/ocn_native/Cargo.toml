@@ -16,8 +16,6 @@ path = "src/lib.rs"
 [dependencies]
 ureq = { version = "=3.5.0", default-features = false, features = ["rustls", "platform-verifier", "gzip"] }
 base64 = "=0.22.1"
-# images in messages and project logos: decoded and scaled down here, on the client's worker threads
-image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp"] }
 
 # the agents' browser tools: a WebSocket to the server (client-mcp), by the same TLS as the rest
 tungstenite = { version = "=0.28.0", default-features = false, features = ["handshake", "rustls-tls-native-roots"] }
@@ -32,6 +30,11 @@ windows-core = "=0.62.2"
 # library on every system (its gt_mermaid_* functions stay exported; the build passes -define:MERMAID_NATIVE_LINK=false).
 [dependencies.gt_mermaid]
 path = "../../ext/gui_toolkit/native/mermaid"
+
+# The toolkit's WebP (libwebp from its C sources, no system libwebp), built into this library on every system: gt:image
+# decodes every picture, and its gt_webp_* functions come from here (-define:IMAGE_WEBP=true IMAGE_WEBP_NATIVE_LINK=false).
+[dependencies.gt_webp]
+path = "../../ext/gui_toolkit/native/webp"
 
 # Linux: the toolkit's native text backend (Fontations, HarfRust, ICU4X; there is no DirectWrite) built into this library,
 # the program's only Rust one (its gt_* functions stay exported; build.sh builds with -define:FONT_BACKEND=native

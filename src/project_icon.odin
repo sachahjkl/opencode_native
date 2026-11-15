@@ -11,6 +11,7 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import "gt:image"
 import "gt:platform"
 import "gt:png"
 import "gt:ui"
@@ -29,7 +30,7 @@ project_icon_body :: proc(override: string) -> string {
 // The system's dialog, then the image on the project.
 project_icon_pick :: proc(app: ^App, project: string) {
 	if project == "" { return }
-	filters := []platform.File_Filter{{name = i18n.tr("Images"), patterns = {"*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp", "*.ico", "*.tif", "*.tiff"}}}
+	filters := []platform.File_Filter{{name = i18n.tr("Images"), patterns = {"*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp"}}}
 	ui.file_dialog(&app.state, .Open, {owner = app.win, title = i18n.tr("The project's icon"), filters = filters, remember_id = "project_icon"}, proc(r: platform.Dialog_Result, user: rawptr) {
 		j := (^Icon_Job)(user)
 		if r.status == .Unsupported { ui.announce(&j.app.announcer, .Bad, i18n.tr("This system has no file dialog")) }
@@ -84,11 +85,10 @@ project_icon_set_file :: proc(app: ^App, project, path: string) {
 // An image's bytes as the icon: decoded, made PROJECT_ICON_SIDE at most (its proportions kept), a PNG (temp allocator).
 project_icon_png :: proc(data: []u8) -> (out: []u8, ok: bool) {
 	if len(data) == 0 { return }
-	w, h: u32
-	buf: Ocn_Buf
-	if ocn_image_decode(raw_data(data), len(data), i32(Image_Encoding.Bytes), PROJECT_ICON_SIDE, &w, &h, &buf) != 0 { ocn_buf_free(buf); return }
-	defer ocn_buf_free(buf)
-	out = png.encode(buf.ptr[:buf.len], int(w), int(h), allocator = context.temp_allocator)
+	img, why := image_decode_data(string(data), .Bytes, PROJECT_ICON_SIDE)
+	if why != "" { return }
+	defer image.destroy(&img, runtime.heap_allocator())
+	out = png.encode(img.pixels, img.width, img.height, allocator = context.temp_allocator)
 	return out, len(out) > 0
 }
 

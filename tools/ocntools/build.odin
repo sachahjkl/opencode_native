@@ -20,8 +20,9 @@ LINUX_FLAGS :: [?]string{"-define:FONT_NATIVE_LINK=false", "-extra-linker-flags:
 // A release on Linux is stripped: its symbol table is a quarter of the file, and nothing reads it (a panic says its place
 // from #caller_location, not from symbols). Windows' has none without -debug.
 LINUX_RELEASE_FLAGS :: [?]string{"-define:FONT_NATIVE_LINK=false", "-extra-linker-flags:" + LINUX_LINK + " -s"}
-// On every system: the toolkit's Mermaid diagrams are built into native/ocn_native (gt_mermaid), not linked on their own.
-NATIVE_FLAGS :: [?]string{"-define:MERMAID_NATIVE_LINK=false"}
+// On every system: the toolkit's Mermaid diagrams and its WebP are built into native/ocn_native (gt_mermaid, gt_webp),
+// not linked on their own; gt:image decodes every picture, WebP included.
+NATIVE_FLAGS :: [?]string{"-define:MERMAID_NATIVE_LINK=false", "-define:IMAGE_WEBP=true", "-define:IMAGE_WEBP_NATIVE_LINK=false"}
 
 GT_DEFAULT  :: "ext/gui_toolkit"
 GT_BESIDE   :: "../gui_toolkit"
@@ -120,7 +121,6 @@ write_text :: proc(path, text: string) -> bool {
 	return false
 }
 
-@(private = "file")
 build_native :: proc(force: bool) -> bool {
 	stamp_file := NATIVE_OUT + "/STAMP"
 	stamp := native_stamp()

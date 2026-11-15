@@ -14,7 +14,7 @@
 ![A conversation: the tool calls on their timeline, sub-agents at work, the agent's reasoning](docs/screenshots/subagents.webp)
 
 One program, no runtime to install, written in [Odin](https://odin-lang.org) on [gui_toolkit](https://github.com/sachahjkl/gui_toolkit),
-with a small Rust library for HTTP and images. It draws with Direct3D 11 on Windows and Vulkan on Linux. It talks to the opencode
+with a small Rust library for HTTP. It draws with Direct3D 11 on Windows and Vulkan on Linux. It talks to the opencode
 server running on this computer (or any other), in opencode's dark palette with machined surfaces: bevelled and ridged buttons, sunken
 wells, carved grooves, and lamps only where something is live.
 

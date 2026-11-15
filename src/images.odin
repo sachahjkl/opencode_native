@@ -1,5 +1,5 @@
 // Images: those attached to prompts, those tools hand back (screenshots, images read), and projects' logos. Each is
-// decoded by the Rust library (PNG, JPEG, WebP, GIF, BMP) on a worker thread, scaled down to the size it is shown at (a
+// decoded by the toolkit's gt:image (PNG, JPEG, WebP, GIF, BMP) on a worker thread, scaled down to the size it is shown at (a
 // thumbnail's, the viewer's: the whole of it), then kept as a texture keyed by a hash of its data and that size. The
 // textures together hold no more than IMAGE_BUDGET_BYTES, the ones shown longest ago going first; a few decoders work at a
 // time, and an image no longer shown when its turn comes is not decoded. (A 2048-pixel texture for every thumbnail of a
@@ -7,9 +7,12 @@
 // a dialog exactly around the image fitted to the window, at the size the person chose; both copy the image (image_copy).
 package ocn
 
+import "base:runtime"
+import "core:encoding/base64"
 import "core:fmt"
 import "core:hash"
 import "core:math"
+import "gt:image"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
@@ -86,9 +89,42 @@ Decode_Job :: struct {
 	mips:     bool,   // the whole image (the viewer: shown much smaller than it is); a thumbnail is decoded at its size, sharper without
 	copy:     bool,   // for the clipboard (image_copy): its pixels at full size, no texture
 	// the answer
-	w, h:     u32,
-	out:      Ocn_Buf,
+	img:      image.Image,   // straight RGBA8, at most max_dim on its longest side (heap)
+	error:    string,        // why it could not be read (a literal, or the heap)
 	ok:       bool,
+}
+
+// The picture of `data` (its bytes, base64 text, or a data URL whose text after the first comma is base64), fitted inside
+// `max_dim` x `max_dim` when larger (0: as it is), in the heap. The toolkit's decoder: PNG, JPEG, WebP, GIF (its first
+// frame), BMP. `why` says what went wrong.
+image_decode_data :: proc(data: string, encoding: Image_Encoding, max_dim: u32) -> (img: image.Image, why: string) {
+	h := runtime.heap_allocator()
+	raw := transmute([]u8)data
+	if encoding != .Bytes {
+		text := data
+		if encoding == .Data_Url {
+			comma := strings.index_byte(text, ',')
+			if comma < 0 { return {}, "not a data URL" }
+			text = text[comma + 1:]
+		}
+		// (base64 split over lines, as a mail or a pasted block holds it)
+		clean := strings.builder_make(0, len(text), context.temp_allocator)
+		for c in transmute([]u8)text { if c != ' ' && c != '\n' && c != '\r' && c != '\t' { strings.write_byte(&clean, c) } }
+		decoded, err := base64.decode(strings.to_string(clean), allocator = h)
+		if err != nil { delete(decoded, h); return {}, "not base64" }
+		raw = decoded
+	}
+	defer if encoding != .Bytes { delete(raw, h) }
+	whole, format, ok := image.decode(raw, h)
+	if !ok { return {}, format == .Unknown ? "a format it does not read" : "damaged" }
+	if max_dim == 0 || (whole.width <= int(max_dim) && whole.height <= int(max_dim)) { return whole, "" }
+	defer image.destroy(&whole, h)
+	// (fitted, its proportions kept, each side at least a pixel)
+	k := f64(max_dim) / f64(max(whole.width, whole.height))
+	w, hh := max(1, int(math.round(f64(whole.width) * k))), max(1, int(math.round(f64(whole.height) * k)))
+	fitted := image.resize(whole, w, hh, .Bilinear, h)
+	if len(fitted.pixels) == 0 { return {}, "no memory for it" }
+	return fitted, ""
 }
 
 // The longest side an image is decoded at for a place whose longest side is `need` frame pixels (0: the whole image, up to
@@ -151,9 +187,16 @@ images_pump :: proc(app: ^App) {
 @(private = "file")
 image_decode_run :: proc(data: rawptr) {
 	job := (^Decode_Job)(data)
-	r := ocn_image_decode(raw_data(job.data), len(job.data), i32(job.encoding), job.max_dim, &job.w, &job.h, &job.out)
-	job.ok = r == 0
-	if !ui.post(&job.app.state, image_decoded, job) { ocn_buf_free(job.out); delete(job.data); free(job) }
+	job.img, job.error = image_decode_data(job.data, job.encoding, job.max_dim)
+	job.ok = job.error == ""
+	if !ui.post(&job.app.state, image_decoded, job) { decode_job_free(job) }
+}
+
+@(private = "file")
+decode_job_free :: proc(job: ^Decode_Job) {
+	image.destroy(&job.img, runtime.heap_allocator())
+	delete(job.data)
+	free(job)
 }
 
 // The image's pixels on the system's clipboard, at the size of its file. (The textures are scaled down, and the GPU's are not read
@@ -171,12 +214,13 @@ image_copy :: proc(app: ^App, ref: Image_Ref) {
 image_decoded :: proc(data: rawptr, word: u64) {
 	app := the_app
 	job := (^Decode_Job)(data)
-	defer { ocn_buf_free(job.out); delete(job.data); free(job) }
+	defer decode_job_free(job)
 	sync.atomic_sub(&app.pending, 1)
+	w, h := job.img.width, job.img.height
 	if job.copy {
-		pixels := platform.Clipboard_Image{rgba = job.out.ptr[:job.out.len], size = {int(job.w), int(job.h)}}
+		pixels := platform.Clipboard_Image{rgba = job.img.pixels, size = {w, h}}
 		switch {
-		case !job.ok || job.w == 0 || job.h == 0: ui.announce(&app.announcer, .Bad, i18n.tr("The image could not be copied: it is unreadable"))
+		case !job.ok || w == 0 || h == 0: ui.announce(&app.announcer, .Bad, i18n.tr("The image could not be copied: it is unreadable"))
 		case !platform.clipboard_set_image(app.win, pixels): ui.announce(&app.announcer, .Bad, i18n.tr("The image could not be copied"))
 		case: ui.announce(&app.announcer, .Good, i18n.tr("Image copied"))
 		}
@@ -186,14 +230,14 @@ image_decoded :: proc(data: rawptr, word: u64) {
 	app.cx.image_decoding -= 1
 	e, ok := &app.images[job.key]
 	if !ok { return }
-	if !job.ok || job.w == 0 || job.h == 0 {
-		image_failed(e, string(job.out.ptr[:job.out.len]))
+	if !job.ok || w == 0 || h == 0 {
+		image_failed(e, job.error)
 		return
 	}
-	e.tex = render.create_texture_rgba(&app.r, int(job.w), int(job.h), mips = job.mips)
+	e.tex = render.create_texture_rgba(&app.r, w, h, mips = job.mips)
 	if e.tex == 0 { image_failed(e, i18n.tr("no room for its texture")); return }
-	render.update_texture_rgba(&app.r, e.tex, 0, 0, int(job.w), int(job.h), job.out.ptr[:job.out.len])
-	e.w, e.h = int(job.w), int(job.h)
+	render.update_texture_rgba(&app.r, e.tex, 0, 0, w, h, job.img.pixels)
+	e.w, e.h = w, h
 	e.state = .Ready
 	images_trim(app)
 }

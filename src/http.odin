@@ -40,7 +40,6 @@ foreign ocn_native {
 	ocn_sse_open :: proc(c: rawptr, path: [^]u8, path_len: uint, out_status: ^i32) -> rawptr ---
 	ocn_sse_next :: proc(s: rawptr, out: ^Ocn_Buf) -> i32 ---
 	ocn_sse_free :: proc(s: rawptr) ---
-	ocn_image_decode :: proc(data: [^]u8, len: uint, base64: i32, max_dim: u32, out_w, out_h: ^u32, out: ^Ocn_Buf) -> i32 ---   // (images.odin)
 	ocn_ws_open :: proc(c: rawptr, path: [^]u8, path_len: uint) -> rawptr ---   // (browser_mcp.odin)
 	ocn_ws_read :: proc(w: rawptr, out: ^Ocn_Buf) -> i32 ---
 	ocn_ws_send :: proc(w: rawptr, data: [^]u8, n: uint) -> i32 ---

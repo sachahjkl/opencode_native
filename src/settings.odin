@@ -148,7 +148,8 @@ prefs_register :: proc(p: ^config.Prefs) {
 	d.theme, d.app_name = "OpenCode", APP_NAME
 	// (update.channel: a choice of the releases' channels, updates.odin)
 	d.update_channels, d.update_channel_labels = UPDATE_CHANNEL_NAMES[:], UPDATE_CHANNEL_LABELS[:]
-	prefs_page.standard_register(p, prefs_page.STANDARD_ALL, d)
+	// (not .Keys yet: opencode native's commands do not read the person's keys; the ROADMAP's "Personal keys" brings them)
+	prefs_page.standard_register(p, prefs_page.STANDARD_ALL - {.Keys}, d)
 	config.register(p, PREF_DEFS[:])
 	prefs_page.changelog_register(p)   // (the version last started: What's new after an update)
 	// (the titles the settings page made from the names, said here so that they are translated; order 0: their places stay)

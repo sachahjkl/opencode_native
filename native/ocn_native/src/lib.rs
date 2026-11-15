@@ -17,6 +17,9 @@ use ureq::Agent;
 // The toolkit's Mermaid diagrams live in this library (gt_mermaid_render is what the mermaid package calls)
 pub extern crate gt_mermaid;
 
+// The toolkit's WebP lives in this library too (gt_webp_* is what gt:image calls for a WebP picture)
+pub extern crate gt_webp;
+
 // Linux: the toolkit's text backend lives in this library (its exported gt_* functions are what font/backend_native.odin calls)
 #[cfg(target_os = "linux")]
 pub extern crate gt_text;
@@ -245,57 +248,6 @@ pub unsafe extern "C" fn ocn_sse_next(s: *mut Sse, out: *mut OcnBuf) -> i32 {
         }
         Ok(Ok(None)) => 0,
         _ => -1,
-    }
-}
-
-/// Decodes an image (PNG, JPEG, WebP, GIF, BMP), given as its bytes, as base64 text (`base64` = 1), or as a data URL
-/// ("data:image/png;base64,..."; `base64` = 2), scaled down to fit `max_dim` x `max_dim` when larger. Returns 0 with
-/// straight-alpha RGBA8 pixels in `out` (w x h, tight rows), or -1 (`out` then holds the reason).
-#[no_mangle]
-pub unsafe extern "C" fn ocn_image_decode(data: *const u8, len: usize, base64: i32, max_dim: u32, out_w: *mut u32, out_h: *mut u32, out: *mut OcnBuf) -> i32 {
-    *out_w = 0;
-    *out_h = 0;
-    *out = OcnBuf::empty();
-    let r = catch_unwind(AssertUnwindSafe(|| -> Result<(u32, u32, Vec<u8>), String> {
-        let input = bytes(data, len);
-        let owned;
-        let raw: &[u8] = match base64 {
-            0 => input,
-            _ => {
-                let mut text = input;
-                if base64 == 2 {
-                    let comma = text.iter().position(|&c| c == b',').ok_or("not a data URL")?;
-                    text = &text[comma + 1..];
-                }
-                let clean: Vec<u8> = text.iter().copied().filter(|c| !c.is_ascii_whitespace()).collect();
-                owned = base64::engine::general_purpose::STANDARD.decode(&clean).map_err(|e| e.to_string())?;
-                &owned
-            }
-        };
-        let img = image::load_from_memory(raw).map_err(|e| e.to_string())?;
-        let img = if max_dim > 0 && (img.width() > max_dim || img.height() > max_dim) {
-            img.resize(max_dim, max_dim, image::imageops::FilterType::Triangle)
-        } else {
-            img
-        };
-        let rgba = img.into_rgba8();
-        Ok((rgba.width(), rgba.height(), rgba.into_raw()))
-    }));
-    match r {
-        Ok(Ok((w, h, px))) => {
-            *out_w = w;
-            *out_h = h;
-            *out = OcnBuf::from_vec(px);
-            0
-        }
-        Ok(Err(e)) => {
-            *out = OcnBuf::from_vec(e.into_bytes());
-            -1
-        }
-        Err(_) => {
-            *out = OcnBuf::from_vec(b"internal error (panic)".to_vec());
-            -1
-        }
     }
 }
 
