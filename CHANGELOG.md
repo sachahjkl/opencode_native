@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.59.1] - 2026-11-15 15:10
+
+### Changed
+- **The session's id beside its title**: muted, right after the session's title, and only while the pointer is on the header; a click still copies it. It no longer stands alone at the end of the folder's line.
+
 ## [0.59.0] - 2026-11-15 14:44
 
 ### Added
@@ -1702,6 +1707,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.59.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.59.1
 [0.59.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.59.0
 [0.58.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.58.0
 [0.57.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.57.1
