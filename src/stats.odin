@@ -8,6 +8,7 @@ package ocn
 import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
+import tk_http "gt:http"
 import "core:hash"
 import "core:math"
 import "core:mem"
@@ -113,7 +114,7 @@ stats_ask :: proc(app: ^App) {
 	if p == "" { return }
 	ps.project = strings.clone(p, virtual.arena_allocator(&ps.arena))
 	remote.begin(&app.stats.read)
-	request(app, .Stats, "GET", fmt.tprintf("/api/experimental/session/stats?project=%s&tools=detail", url_escape(p)), reading = &app.stats.read)
+	request(app, .Stats, "GET", fmt.tprintf("/api/experimental/session/stats?project=%s&tools=detail", tk_http.component_encode(p, context.temp_allocator)), reading = &app.stats.read)
 }
 
 // The panel stays on the session shown: its project comes after it opened (.Self), or the conversation changed under it.

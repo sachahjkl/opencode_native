@@ -6,6 +6,7 @@ package ocn
 import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
+import tk_http "gt:http"
 import "core:path/filepath"
 import "core:strings"
 import "gt:platform"
@@ -99,7 +100,7 @@ server_files :: proc(app: ^App, location := "") -> ^ui.File_Source {
 server_files_list :: proc(src: ^ui.File_Source, path: string, reply: ui.File_Reply) {
 	app := (^App)(src.user)
 	tag := server_files_wait(&app.server_files.list, reply)
-	request(app, .Server_Files_List, "GET", path != "" ? fmt.tprintf("/api/fs/list?path=%s", url_escape(path)) : "/api/fs/list", tag = tag)
+	request(app, .Server_Files_List, "GET", path != "" ? fmt.tprintf("/api/fs/list?path=%s", tk_http.component_encode(path, context.temp_allocator)) : "/api/fs/list", tag = tag)
 }
 
 // `path` from the location ("": the location itself), false when it is not in it.
@@ -137,7 +138,7 @@ server_files_find :: proc(src: ^ui.File_Source, folder, query: string, limit: in
 	delete(f.found_in)
 	f.found_in = rel != "" ? strings.concatenate({rel, "/"}) : ""
 	tag := server_files_wait(&f.find, reply)
-	request(app, .Server_Files_Find, "GET", fmt.tprintf("/api/fs/find?%s&query=%s&limit=%d", location_query(f.location), url_escape(query), limit), tag = tag)
+	request(app, .Server_Files_Find, "GET", fmt.tprintf("/api/fs/find?%s&query=%s&limit=%d", location_query(f.location), tk_http.component_encode(query, context.temp_allocator), limit), tag = tag)
 }
 
 // A path in the address of a request: each part escaped, the slashes kept.
@@ -149,7 +150,7 @@ path_escape :: proc(p: string) -> string {
 	for part in strings.split_iterator(&rest, "/") {
 		if !first { strings.write_byte(&b, '/') }
 		first = false
-		strings.write_string(&b, url_escape(part))
+		strings.write_string(&b, tk_http.component_encode(part, context.temp_allocator))
 	}
 	return strings.to_string(b)
 }

@@ -9,6 +9,7 @@ import "base:runtime"
 
 import "core:encoding/json"
 import "core:fmt"
+import tk_http "gt:http"
 import "core:math"
 import "core:mem/virtual"
 import "core:os"
@@ -105,7 +106,7 @@ schedules_open :: proc(app: ^App, id: string) {
 schedules_ask :: proc(app: ^App) {
 	s := &app.cx.schedules
 	remote.begin(&s.read)
-	request(app, .Schedules, "GET", fmt.tprintf("/api/experimental/schedule?sessionID=%s", url_escape(s.session)), reading = &s.read)
+	request(app, .Schedules, "GET", fmt.tprintf("/api/experimental/schedule?sessionID=%s", tk_http.component_encode(s.session, context.temp_allocator)), reading = &s.read)
 }
 
 schedules_forget :: proc(app: ^App) {
@@ -289,7 +290,7 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, w, em: f32) {
 		ui.spacer(ui.px(em * 0.6))
 		if it.id == s.removing {
 			if ui.button("sc_yes", i18n.tr("Delete"), lucide.TRASH_2, {intent = .Danger, height = small}).clicked {
-				request(app, .Schedule_Done, "DELETE", fmt.tprintf("/api/experimental/schedule/%s", url_escape(it.id)))
+				request(app, .Schedule_Done, "DELETE", fmt.tprintf("/api/experimental/schedule/%s", tk_http.component_encode(it.id, context.temp_allocator)))
 				set_text(&s.removing, "")
 			}
 			ui.spacer(ui.px(em * 0.3))
@@ -298,7 +299,7 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, w, em: f32) {
 			if it.status == .Active || it.status == .Paused {
 				pause := it.status == .Active
 				if ui.button("sc_pause", ui.text_shown(pause ? i18n.tr("Pause") : i18n.tr("Resume")), o = {height = small}).clicked {
-					request(app, .Schedule_Done, "POST", fmt.tprintf("/api/experimental/schedule/%s/%s", url_escape(it.id), pause ? "pause" : "resume"), "{}")
+					request(app, .Schedule_Done, "POST", fmt.tprintf("/api/experimental/schedule/%s/%s", tk_http.component_encode(it.id, context.temp_allocator), pause ? "pause" : "resume"), "{}")
 				}
 				ui.spacer(ui.px(em * 0.3))
 			}
@@ -428,7 +429,7 @@ artifact_read :: proc(app: ^App) {
 	a := &app.cx.artifacts
 	q := location_query(a.dir)
 	remote.begin(&a.file_read)
-	request(app, .Artifact_Read, "GET", fmt.tprintf("/api/experimental/artifacts/%s%s%s", url_escape(a.shown), q != "" ? "?" : "", q), reading = &a.file_read)
+	request(app, .Artifact_Read, "GET", fmt.tprintf("/api/experimental/artifacts/%s%s%s", tk_http.component_encode(a.shown, context.temp_allocator), q != "" ? "?" : "", q), reading = &a.file_read)
 }
 
 artifacts_changed :: proc(app: ^App) {
@@ -649,7 +650,7 @@ artifact_right :: proc(app: ^App, em: f32) {
 		if it.id == a.removing {
 			if ui.button("ar_yes", i18n.tr("Delete"), lucide.TRASH_2, {intent = .Danger, height = small}).clicked {
 				q := location_query(a.dir)
-				request(app, .Artifact_Done, "DELETE", fmt.tprintf("/api/experimental/artifacts/%s%s%s", url_escape(it.id), q != "" ? "?" : "", q))
+				request(app, .Artifact_Done, "DELETE", fmt.tprintf("/api/experimental/artifacts/%s%s%s", tk_http.component_encode(it.id, context.temp_allocator), q != "" ? "?" : "", q))
 				set_text(&a.removing, ""); set_text(&a.shown, "")
 				artifact_files_clear(a)
 				remote.reset(&a.file_read)

@@ -974,7 +974,7 @@ tool_set_input :: proc(p: ^Part, input: json.Value, a: mem.Allocator) {
 		p.fields = make([]Input_Field, len(obj), a)
 		i := 0
 		for k, v in obj {
-			s := value_text(v)
+			s := tk_json.display(v)
 			p.fields[i] = {key = strings.clone(k, a), value = strings.clone(s, a), long = strings.index_byte(s, '\n') >= 0 || len(s) > TOOL_LINE_CHARS}
 			i += 1
 		}

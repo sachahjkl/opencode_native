@@ -8,6 +8,7 @@ package ocn
 import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
+import tk_http "gt:http"
 import "core:math"
 import "core:mem/virtual"
 import "core:strings"
@@ -251,7 +252,7 @@ connect_send :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int) {
 	key := strings.trim_space(ui.line_edit_string(&n.key))
 	if m.kind == .Key && key == "" { set_text(&n.failed, i18n.tr("The key is empty")); return }
 	set_text(&n.failed, "")
-	base := fmt.tprintf("/api/integration/%s/connect", url_escape(it.id))
+	base := fmt.tprintf("/api/integration/%s/connect", tk_http.component_encode(it.id, context.temp_allocator))
 	kind := ""
 	remote.begin(&n.sending)
 	switch m.kind {
@@ -277,7 +278,7 @@ connect_send :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int) {
 
 @(private = "file")
 attempt_path :: proc(n: ^Integrations, w: Connect_Waiting) -> string {
-	return fmt.tprintf("/api/integration/%s/connect/%s/%s", url_escape(n.shown), w.kind, url_escape(w.attempt))
+	return fmt.tprintf("/api/integration/%s/connect/%s/%s", tk_http.component_encode(n.shown, context.temp_allocator), w.kind, tk_http.component_encode(w.attempt, context.temp_allocator))
 }
 
 // Its status in a while, by a thread that sleeps: nothing is drawn meanwhile.
@@ -509,7 +510,7 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 			res := line("###int_rename", &n.rename, i18n.tr("A name"), em)
 			ui.set_focus(res.box.key)
 			if res.committed {
-				request(app, .Credential_Done, "PATCH", fmt.tprintf("/api/credential/%s", url_escape(c.id)), fmt.tprintf(`{{"label":%s}}`, tk_json.quote(strings.trim_space(ui.line_edit_string(&n.rename)))))
+				request(app, .Credential_Done, "PATCH", fmt.tprintf("/api/credential/%s", tk_http.component_encode(c.id, context.temp_allocator)), fmt.tprintf(`{{"label":%s}}`, tk_json.quote(strings.trim_space(ui.line_edit_string(&n.rename)))))
 				set_text(&n.renaming, "")
 			}
 			if res.cancelled { set_text(&n.renaming, "") }
@@ -522,14 +523,14 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 				text("q", i18n.tr("Remove it?"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)})
 				ui.spacer(ui.px(em * 0.4))
 				if ui.button("int_yes", i18n.tr("Remove"), lucide.TRASH_2, {intent = .Danger, height = small}).clicked {
-					request(app, .Credential_Done, "DELETE", fmt.tprintf("/api/credential/%s", url_escape(c.id)))
+					request(app, .Credential_Done, "DELETE", fmt.tprintf("/api/credential/%s", tk_http.component_encode(c.id, context.temp_allocator)))
 					set_text(&n.removing, "")
 				}
 				ui.spacer(ui.px(em * 0.3))
 				if ui.button("int_no", i18n.tr("Keep"), o = {height = small}).clicked { set_text(&n.removing, "") }
 			} else {
 				if !c.active && ui.button("int_use", i18n.tr("Use"), o = {intent = .Success, height = small}).clicked {
-					request(app, .Credential_Done, "POST", fmt.tprintf("/api/credential/%s/activate", url_escape(c.id)))
+					request(app, .Credential_Done, "POST", fmt.tprintf("/api/credential/%s/activate", tk_http.component_encode(c.id, context.temp_allocator)))
 				}
 				ui.spacer(ui.px(em * 0.3))
 				if ui.button("int_ren", i18n.tr("Rename"), lucide.PENCIL, {face = .Ghost, height = small}).clicked {
@@ -659,7 +660,7 @@ connect_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> 
 connect_begin_on_left :: proc(app: ^App, r: ^Request) {
 	if !r.ok || r.status >= 400 { return }
 	v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if id := tk_json.text(v, "data", "attemptID"); id != "" { request(app, .Action, "DELETE", fmt.tprintf("%s/%s", r.path, url_escape(id)), conn = r.conn) }
+	if id := tk_json.text(v, "data", "attemptID"); id != "" { request(app, .Action, "DELETE", fmt.tprintf("%s/%s", r.path, tk_http.component_encode(id, context.temp_allocator)), conn = r.conn) }
 }
 
 connect_status_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { connect_status(app, v) }

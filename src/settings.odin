@@ -8,6 +8,7 @@ import "base:runtime"
 
 import "core:encoding/json"
 import "core:fmt"
+import tk_http "gt:http"
 import "core:math"
 import "core:mem"
 import "core:mem/virtual"
@@ -583,7 +584,7 @@ mcp_switch :: proc(app: ^App, name: string, connect: bool) {
 	f := &app.facts
 	if mcp_going(f, name) != nil { return }
 	append(&f.going, Mcp_Going{strings.clone(name), connect})
-	request(app, .Mcp_Done, "POST", fmt.tprintf("/api/experimental/mcp/%s/%s", url_escape(name), connect ? "connect" : "disconnect"), tag = name)
+	request(app, .Mcp_Done, "POST", fmt.tprintf("/api/experimental/mcp/%s/%s", tk_http.component_encode(name, context.temp_allocator), connect ? "connect" : "disconnect"), tag = name)
 }
 
 // However it ended: what the server says now is what shows.
@@ -799,7 +800,9 @@ info_line :: proc(app: ^App, id, s: string, em: f32, color := Color{}) {
 // A key / value line in a well.
 @(private = "file")
 fact :: proc(id, k, v: string, em: f32, col := Color{}) {
-	kv_row(id, k, v, em, {h = 1.5, key_w = 8.5, key_fs = FS_SMALL, val_fs = FS_SMALL, pad_l = 0.8, pad_r = 0.6, val = HEX_FACT_VALUE}, col)
+	if ui.style({font_size = math.round(em * FS_SMALL)}) {
+		ui.stat_row(id, k, v, {height = em * 1.5, key_width = em * 8.5, value_color = col.a > 0 ? col : hex(HEX_FACT_VALUE), selectable = true, inset = [2]f32{0.8, 0.6} / FS_SMALL})
+	}
 }
 
 section :: proc(app: ^App, s: string, em: f32) {

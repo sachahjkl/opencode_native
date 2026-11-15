@@ -19,6 +19,7 @@ import tk_json "gt:json"
 import "core:encoding/base64"
 import "core:encoding/json"
 import "core:fmt"
+import tk_http "gt:http"
 import "core:log"
 import "core:strings"
 import "core:sync"
@@ -119,7 +120,7 @@ browser_link_follow :: proc(l: ^Browser_Link, dir: string) {
 browser_link_target :: proc(l: ^Browser_Link) -> (path: string, moved: u32) {
 	sync.lock(&l.lock)
 	defer sync.unlock(&l.lock)
-	return fmt.aprintf("/api/experimental/client-mcp?name=%s%s", BROWSER_NAME, l.dir != "" ? fmt.tprintf("&location%%5Bdirectory%%5D=%s", url_escape(l.dir)) : ""), l.moved
+	return fmt.aprintf("/api/experimental/client-mcp?name=%s%s", BROWSER_NAME, l.dir != "" ? fmt.tprintf("&location%%5Bdirectory%%5D=%s", tk_http.component_encode(l.dir, context.temp_allocator)) : ""), l.moved
 }
 
 browser_link_moved :: proc(l: ^Browser_Link, since: u32) -> bool {

@@ -3,8 +3,6 @@
 // a command and what it printed, a checklist. The rest shows its input as keys and values, never as raw JSON.
 package ocn
 
-import tk_json "gt:json"
-import "core:encoding/json"
 import "core:fmt"
 import "core:math"
 import "core:strconv"
@@ -234,18 +232,6 @@ todo_view :: proc(app: ^App, p: ^Part, em: f32) -> bool {
 	return true
 }
 
-// A value of the input on one line, as it reads (temp memory).
-value_text :: proc(v: json.Value) -> string {
-	#partial switch x in v {
-	case json.String:  return string(x)
-	case json.Integer: return fmt.tprintf("%d", x)
-	case json.Float:   return fmt.tprintf("%v", x)
-	case json.Boolean: return x ? "yes" : "no"
-	case json.Null:    return "—"
-	}
-	return tk_json.to_text(v, "  ")
-}
-
 // The input as keys and values, in one well: a long value under its key, at the place of the short ones' values' start. (No well in
 // the well: one edge beside another reads as unfinished.)
 input_view :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
@@ -269,7 +255,9 @@ input_view :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 				}
 				if i + 1 < len(p.fields) { ui.spacer(ui.px(em * 0.3)) }
 			} else {
-				kv_row(fmt.tprintf("###kv%d", i), k, s, em, {h = 1.4, key_w = 7, key_fs = FS_CAPTION, val_fs = FS_SMALL, pad_l = INPUT_PAD_EM, val = HEX_TEXT_SOFT})
+				if ui.style({font_size = math.round(em * FS_SMALL)}) {
+					ui.stat_row(fmt.tprintf("kv%d", i), k, s, {height = em * 1.4, key_width = em * 7, label_size = math.round(em * FS_CAPTION), value_color = hex(HEX_TEXT_SOFT), selectable = true, inset = [2]f32{INPUT_PAD_EM / FS_SMALL, 0}})
+				}
 			}
 		}
 		ui.spacer(ui.px(em * 0.4))

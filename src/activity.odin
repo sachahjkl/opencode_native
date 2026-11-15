@@ -8,6 +8,7 @@ package ocn
 import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
+import tk_http "gt:http"
 import "core:math"
 import "core:strings"
 import "gt:draw"
@@ -183,7 +184,7 @@ pane_dir :: proc(app: ^App, pane: ^Chat_Pane) -> string {
 }
 
 location_query :: proc(dir: string) -> string {
-	return dir != "" ? fmt.tprintf("location[directory]=%s", url_escape(dir)) : ""
+	return dir != "" ? fmt.tprintf("location[directory]=%s", tk_http.component_encode(dir, context.temp_allocator)) : ""
 }
 
 // Whether what runs is to be read again at its pace. (A session whose folder is not known yet waits: read without one, the list
@@ -484,7 +485,7 @@ todos_scan_load :: proc(app: ^App, r: ^Request, v: json.Value) {
 		return
 	}
 	sc.busy = true
-	request(app, .Todo_Scan, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", sc.session, app.prefs.page_size, url_escape(next)), tag = sc.session)
+	request(app, .Todo_Scan, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", sc.session, app.prefs.page_size, tk_http.component_encode(next, context.temp_allocator)), tag = sc.session)
 }
 
 // The todo list: the last call of the tool that writes it, in the pages read. Read again when the last messages change.
@@ -525,7 +526,7 @@ todos_update :: proc(app: ^App) {
 		if sc.busy || c.id == "" { return }
 		if c.older == "" { sc.over = true; todos_clear(a); todos_remember(a, c.id); return }
 		sc.busy = true
-		request(app, .Todo_Scan, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", c.id, app.prefs.page_size, url_escape(c.older)), tag = c.id)
+		request(app, .Todo_Scan, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", c.id, app.prefs.page_size, tk_http.component_encode(c.older, context.temp_allocator)), tag = c.id)
 	}
 }
 

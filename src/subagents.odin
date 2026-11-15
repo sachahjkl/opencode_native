@@ -651,7 +651,9 @@ sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 	if ui.well("###facts") {
 		ui.spacer(ui.px(em * 0.45))
 		row :: proc(id, k, val: string, em: f32, col := Color{}) {
-			kv_row(id, k, val, em, {h = 1.4, key_w = 7, key_fs = FS_CAPTION, val_fs = FS_CAPTION, pad_l = 0.8, val = HEX_TEXT_SOFT}, col)
+			if ui.style({font_size = math.round(em * FS_CAPTION)}) {
+				ui.stat_row(id, k, val, {height = em * 1.4, key_width = em * 7, value_color = col.a > 0 ? col : hex(HEX_TEXT_SOFT), selectable = true, inset = [2]f32{0.8 / FS_CAPTION, 0}})
+			}
 		}
 		row("###f1", i18n.tr("session"), s.id, em)
 		row("###f2", i18n.tr("title"), s.title, em)

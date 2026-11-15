@@ -6,6 +6,7 @@ package ocn
 import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
+import tk_http "gt:http"
 import "core:math"
 import "core:mem/virtual"
 import "core:path/filepath"
@@ -110,7 +111,7 @@ mention_ask :: proc(app: ^App, pane: ^Chat_Pane) {
 	if m.query == "" {
 		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/list?%s", q), reading = &m.read, pane = pane)   // (the search wants a word)
 	} else {
-		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&type=file&limit=%d", q, amp, url_escape(m.query), MENTION_ROWS), reading = &m.read, pane = pane)
+		request(app, .Mention_Files, "GET", fmt.tprintf("/api/fs/find?%s%squery=%s&type=file&limit=%d", q, amp, tk_http.component_encode(m.query, context.temp_allocator), MENTION_ROWS), reading = &m.read, pane = pane)
 	}
 }
 

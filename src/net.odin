@@ -7,6 +7,7 @@ import tk_json "gt:json"
 import "core:encoding/json"
 import tasks "gt:tasks"
 import "core:fmt"
+import tk_http "gt:http"
 import "core:log"
 import "core:os"
 import "core:strconv"
@@ -118,17 +119,6 @@ url_is_here :: proc(url: string) -> bool {
 	return ok && host_is_here(url[lo:hi])
 }
 
-// A query string value.
-url_escape :: proc(s: string) -> string {
-	b := strings.builder_make(context.temp_allocator)
-	for c in transmute([]u8)s {
-		switch c {
-		case 'A' ..= 'Z', 'a' ..= 'z', '0' ..= '9', '-', '_', '.', '~': strings.write_byte(&b, c)
-		case: fmt.sbprintf(&b, "%%%02X", c)
-		}
-	}
-	return strings.to_string(b)
-}
 
 ////////////////////////////////
 // Requests
@@ -637,7 +627,7 @@ load_older :: proc(app: ^App, pane: ^Chat_Pane, b: ^ui.Box) {
 	if min(b.view_off.y, b.view_target.y) > b.size.y * OLDER_MARGIN { return }
 	c.loading_older = true
 	c.older_failed = 0
-	request(app, .Older, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", pane.chat.id, app.prefs.page_size, url_escape(pane.chat.older)), tag = pane.chat.id, pane = pane)
+	request(app, .Older, "GET", fmt.tprintf("/api/session/%s/message?limit=%d&cursor=%s", pane.chat.id, app.prefs.page_size, tk_http.component_encode(pane.chat.older, context.temp_allocator)), tag = pane.chat.id, pane = pane)
 }
 
 interrupt_session :: proc(app: ^App, id: string) {

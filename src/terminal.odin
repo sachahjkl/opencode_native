@@ -20,6 +20,7 @@ import tk_json "gt:json"
 import "base:runtime"
 import "core:encoding/json"
 import "core:fmt"
+import tk_http "gt:http"
 import "core:math"
 import "core:strings"
 import "core:sync"
@@ -113,7 +114,7 @@ Terminals :: struct {
 @(private = "file")
 term_path :: proc(t: ^Term, tail := "") -> string {
 	q := location_query(t.dir)
-	return fmt.tprintf("/api/pty/%s%s%s%s", url_escape(t.id), tail, q != "" ? "?" : "", q)
+	return fmt.tprintf("/api/pty/%s%s%s%s", tk_http.component_encode(t.id, context.temp_allocator), tail, q != "" ? "?" : "", q)
 }
 
 // The emulation of a shell, connected to nothing yet.
@@ -602,7 +603,7 @@ pty_made_on_left :: proc(app: ^App, r: ^Request) {
 	id := tk_json.text(v, "data", "id")
 	if id == "" { return }
 	q := location_query(r.tag)
-	request(app, .Action, "DELETE", fmt.tprintf("/api/pty/%s%s%s", url_escape(id), q != "" ? "?" : "", q), conn = r.conn)
+	request(app, .Action, "DELETE", fmt.tprintf("/api/pty/%s%s%s", tk_http.component_encode(id, context.temp_allocator), q != "" ? "?" : "", q), conn = r.conn)
 }
 
 // Out of the client, and its view closed. It is freed after the frame (terminals_reap): this build's box may still draw it.

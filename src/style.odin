@@ -479,20 +479,6 @@ text_found :: proc(id: string, s: string, query: string, color: Color, f: Maybe(
 	ui.label_fuzzy(fmt.tprintf("%s###%s", label_safe(s), id), ranges[:])
 }
 
-// A key / value line in a mono face; each panel has its own sizes (in font sizes).
-Kv_Row :: struct { h, key_w, key_fs, val_fs, pad_l, pad_r: f32, val: u32 }
-
-kv_row :: proc(id, k, v: string, em: f32, st: Kv_Row, col := Color{}) {
-	ui.next({width = ui.fill(), height = ui.px(em * st.h), axis = .X, cross = .Center})
-	if ui.row(.Center, id = id) {
-		if st.pad_l > 0 { ui.spacer(ui.px(em * st.pad_l)) }
-		// (what it says is read and copied: selectable, as every text of a tool's call)
-		text("k", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * st.key_fs), flags = {.Selectable}}, ui.px(em * st.key_w))
-		text("v", v, col.a > 0 ? col : hex(st.val), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * st.val_fs), flags = {.Selectable}}, ui.fill())
-		if st.pad_r > 0 { ui.spacer(ui.px(em * st.pad_r)) }
-	}
-}
-
 @(private = "file")
 rail_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	c := (^Color)(user)^
