@@ -1591,6 +1591,9 @@ fr Serveurs
 en Edit this server…
 fr Modifier ce serveur…
 
+en Terminal shell
+fr Shell du terminal
+
 en Edit the server
 fr Modifier le serveur
 
@@ -1926,6 +1929,15 @@ fr Navigateur
 en Advanced
 fr Avancé
 
+en terminal only
+fr terminal seulement
+
+en Auto (Default)
+fr Automatique (par défaut)
+
+en The shells could not be read
+fr Impossible de lire les shells
+
 en Shell set
 fr Shell défini
 
@@ -2020,11 +2032,11 @@ fr Client
 en SHELL
 fr SHELL
 
-en The shell the agents run their commands in (written to the configuration's "shell").
-fr Le shell dans lequel les agents lancent leurs commandes (écrit dans le champ « shell » de la configuration).
+en The shell of the terminal and of the agents' tools (written to the configuration's "shell"); also in the server's menu.
+fr Le shell du terminal et des outils des agents (écrit dans le champ « shell » de la configuration) ; aussi dans le menu du serveur.
 
-en None set: the server picks one.
-fr Aucun défini : le serveur en choisit un.
+en the server picks one
+fr le serveur en choisit un
 
 en CONFIGURATION FILES
 fr FICHIERS DE CONFIGURATION

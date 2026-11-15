@@ -451,6 +451,7 @@ Server_Facts :: struct {
 	arenas:    [Fact]virtual.Arena,
 	shells:    [dynamic]Shell_Info,
 	shell:     string,              // the one set in the configuration ("" : the server's choice)
+	shell_menu_read: bool,          // the server's menu read the shells at this opening (servers.odin server_menu)
 	mcp:       [dynamic]Mcp_Server,
 	going:     [dynamic]Mcp_Going,  // connecting or disconnecting, from the click to the server's answer, whatever is read meanwhile
 	saved:     [dynamic]Saved_Perm,
@@ -499,11 +500,14 @@ server_facts_forget :: proc(app: ^App) {
 
 // Every page, again. What each shows stays until its answer: a read after an action does not blank what is looked at.
 server_facts_load :: proc(app: ^App) {
+	for k in Fact { fact_read(app, k) }
+}
+
+// One of them read again.
+fact_read :: proc(app: ^App, k: Fact) {
 	f := &app.facts
-	for k in Fact {
-		remote.begin(&f.reads[k])
-		request(app, FACT_READS[k].kind, "GET", FACT_READS[k].path, reading = &f.reads[k])
-	}
+	remote.begin(&f.reads[k])
+	request(app, FACT_READS[k].kind, "GET", FACT_READS[k].path, reading = &f.reads[k])
 }
 
 // An answer of one of those requests (net.odin on_answer).
@@ -519,8 +523,12 @@ server_facts_answer :: proc(app: ^App, kind: Req_Kind, v: json.Value) {
 	case .Cfg:
 		arr, _ := v.(json.Array)
 		if arr == nil { arr = list }
+		// (the shell is the global documents' that come before the first folder's: what PATCH /api/experimental/config
+		// writes, and what the menu shows checked; a project's own does not say what a choice here changes)
+		global := true
 		for doc in arr {
-			if sh := jstr(doc, "info", "shell"); sh != "" { f.shell = strings.clone(sh, a) }
+			if jstr(doc, "type") == "directory" { global = false }
+			if sh := jstr(doc, "info", "shell"); sh != "" && global { f.shell = strings.clone(sh, a) }
 			path := jstr(doc, "path")
 			if path == "" { continue }
 			keys := make([dynamic]string, a)
@@ -591,11 +599,46 @@ mcp_done :: proc(app: ^App, name: string) {
 	facts_soon(app)
 }
 
-// Shown as set at once; `was` comes back if the server says no, and what it says then is read.
+// Shown as set at once; `was` comes back if the server says no, and what it says then is read. A path "": Auto, the
+// server's choice (the configuration's "shell" removed).
 shell_set :: proc(app: ^App, s: Shell_Info) {
 	f := &app.facts
-	request(app, .Shell_Set, "PATCH", "/api/experimental/config", fmt.tprintf(`{{"shell":%s}}`, jquote(s.path)), tag = f.shell)
+	value := s.path != "" ? jquote(s.path) : "null"
+	request(app, .Shell_Set, "PATCH", "/api/experimental/config", fmt.tprintf(`{{"shell":%s}}`, value), tag = f.shell)
 	f.shell = strings.clone(s.path, virtual.arena_allocator(&f.arenas[.Cfg]))
+}
+
+// The shell chosen in the configuration, among the server's ("": Auto, or none of them).
+shell_chosen :: proc(f: ^Server_Facts, s: Shell_Info) -> bool { return f.shell != "" && desktop.same_path(s.path, f.shell) }
+
+// A shell's words in a list: its name, and "terminal only" when the agents' tools cannot run in it (the server's
+// `acceptable`): it can still be the terminal's, as opencode 2.3.0 lets one choose.
+shell_label :: proc(s: Shell_Info) -> string {
+	return s.ok ? s.name : fmt.tprintf("%s  ·  %s", s.name, i18n.tr("terminal only"))
+}
+
+// The "Terminal shell" submenu of the server's menu (servers.odin): Auto, then the server's shells, the chosen one
+// checked. Its facts are read when the server's menu opens (shell_menu_read).
+shell_menu_items :: proc(app: ^App) {
+	f := &app.facts
+	if ui.menu_item(i18n.tr("Auto (Default)"), "", f.shell == "", icon = lucide.SPARKLES).clicked && f.shell != "" { shell_set(app, {}) }
+	switch {
+	case remote.shows(&f.reads[.Shells]):
+		for s, i in f.shells {
+			on := shell_chosen(f, s)
+			if ui.menu_item(fmt.tprintf("%s###sh%d", label_safe(shell_label(s)), i), "", on, icon = lucide.SQUARE_TERMINAL).clicked && !on { shell_set(app, s) }
+		}
+	case remote.failed(&f.reads[.Shells]):
+		_ = ui.menu_item(i18n.tr("The shells could not be read"), disabled = true)
+	case:
+		_ = ui.menu_item(i18n.tr("Reading…"), disabled = true)
+	}
+}
+
+// The server's menu opened: what its shell submenu shows is read again (another client may have changed it).
+shell_menu_read :: proc(app: ^App) {
+	fact_read(app, .Cfg)
+	fact_read(app, .Shells)
 }
 
 shell_failed :: proc(app: ^App, was: string) {
@@ -794,21 +837,25 @@ page_server :: proc(app: ^App, em: f32) {
 		ui.spacer(ui.px(em * 0.4))
 	}
 	section(app, i18n.tr("SHELL"), em)
-	info_line(app, "###shh", i18n.tr("The shell the agents run their commands in (written to the configuration's \"shell\")."), em)
+	info_line(app, "###shh", i18n.tr("The shell of the terminal and of the agents' tools (written to the configuration's \"shell\"); also in the server's menu."), em)
 	ui.spacer(ui.px(em * 0.4))
 	if read_shown(app, "###sh_read", &f.reads[.Shells], em, server_facts_load) {
-		sel := -1
-		for s, i in f.shells { if f.shell != "" && desktop.same_path(s.path, f.shell) { sel = i } }
-		for s, i in f.shells {
+		row :: proc(app: ^App, id: string, label, path: string, on: bool, em: f32) -> bool {
+			clicked := false
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
-			if ui.row(.Center, id = fmt.tprintf("###sh%d", i)) {
-				if ui.button(fmt.tprintf("shb%d", i), ui.text_shown(s.name), lucide.SQUARE_TERMINAL, {face = sel == i ? .Toggled : .Raised, width = ui.px(em * 9), height = math.round(em * BUTTON_COMPACT_H_EM), disabled = !s.ok}).clicked { shell_set(app, s) }
+			if ui.row(.Center, id = fmt.tprintf("###%s", id)) {
+				clicked = ui.button(fmt.tprintf("%sb", id), ui.text_shown(label), lucide.SQUARE_TERMINAL, {face = on ? .Toggled : .Raised, height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked
 				ui.spacer(ui.px(em * 0.7))
-				text("p", s.path, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+				text("p", path, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.25))
+			return clicked
 		}
-		if sel < 0 { info_line(app, "###shd", i18n.tr("None set: the server picks one."), em, hex(HEX_FAINT)) }
+		if row(app, "sh_auto", i18n.tr("Auto (Default)"), i18n.tr("the server picks one"), f.shell == "", em) && f.shell != "" { shell_set(app, {}) }
+		for s, i in f.shells {
+			on := shell_chosen(f, s)
+			if row(app, fmt.tprintf("sh%d", i), shell_label(s), s.path, on, em) && !on { shell_set(app, s) }
+		}
 	}
 	section(app, i18n.tr("CONFIGURATION FILES"), em)
 	if !read_shown(app, "###cf_read", &f.reads[.Cfg], em, server_facts_load) { return }

@@ -544,7 +544,13 @@ server_edit_open :: proc(app: ^App, i: int) {
 }
 
 server_menu :: proc(app: ^App, key: string, em: f32) {
+	if !ui.menu_is_open(key) { app.facts.shell_menu_read = false }
 	if ui.menu(key, em * 26) {
+		// (once per opening: what its shell submenu shows, read again)
+		if !app.facts.shell_menu_read && app.conn != nil {
+			app.facts.shell_menu_read = true
+			shell_menu_read(app)
+		}
 		for s, i in app.servers {
 			label := fmt.tprintf("%s   %s###srv%d", label_safe(i18n.tr(s.name)), label_safe(s.url), i)
 			if ui.menu_item(label, "", i == app.server, icon = lucide.SERVER).clicked && i != app.server { server_connect(app, i) }
@@ -553,6 +559,8 @@ server_menu :: proc(app: ^App, key: string, em: f32) {
 		if ui.menu_item(i18n.tr("Add a server…"), icon = lucide.PLUG).clicked { server_edit_open(app, -1) }
 		cur := app.server >= 0 && app.server < len(app.servers) ? app.servers[app.server] : Server{local = true}
 		if ui.menu_item(i18n.tr("Edit this server…"), icon = lucide.PENCIL, disabled = cur.local || cur.argv).clicked { server_edit_open(app, app.server) }
+		// (this server's terminal shell, as opencode 2.3.0's server menu)
+		if ui.menu_submenu(i18n.tr("Terminal shell"), lucide.SQUARE_TERMINAL, disabled = app.conn == nil) { shell_menu_items(app) }
 	}
 }
 

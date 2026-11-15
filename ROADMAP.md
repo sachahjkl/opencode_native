@@ -8,7 +8,6 @@
 - **A session's id in a message opens it.** A `ses_…` word in a message is a link to that session. It needs the
   toolkit's link words (a word that starts with a prefix made a link), after the migration to gui_toolkit 0.266.
 - **A Mermaid diagram maximised.** The diagram's viewer fills the window, with zoom and pan.
-- **Each server's shell chosen from its menu.** The terminal's shell is a choice of the server's menu.
 - **Tab numbers while the modifier is held.** Holding the key of the tab shortcuts shows each tab's number.
 - **The free-limit panel.** When the server says the free limit is reached, a panel takes the composer's place.
 - **MCP events and freeform tools (experimental).** Subscribe to `experimental.mcp.event` when the flag is on; the
