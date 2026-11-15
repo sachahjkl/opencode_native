@@ -236,9 +236,12 @@ palette_table_keep :: proc(app: ^App) {
 		changed = true
 	}
 	if changed { p.version += 1 }
-	// (the sheet holds the table it was opened with, and that one is freed: it takes the new one, and the keys' words in
-	// the new language)
-	if remade && ui.shortcuts_sheet_is_open(&p.sheet) { help_open(app) }
+	// (the sheet holds the table it was given, and that one is freed: it takes the new one, and the lines' words in the
+	// new language, open or not)
+	if remade {
+		help_lines(p)
+		ui.shortcuts_sheet_set(&p.sheet, p.table, p.version, p.sheet_lines[:])
+	}
 }
 
 // The commands source given its table (compared by the version), the switches' marks and the details.

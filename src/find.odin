@@ -137,7 +137,7 @@ find_bar :: proc(app: ^App, pane: ^Chat_Pane, em: f32, right, top: f32) {
 	bar := ui.build_box({.Plate}, "###findbar")
 	bar.plate = ui.frame_new(ui.Plate_Look)
 	face := ui.theme_color("card background")
-	bar.plate^ = {top = face, bottom = face, border = ui.with_alpha(ui.theme_color("border"), 0), rim = 0, shadow = 8}
+	bar.plate^ = {top = face, bottom = face, border = Color{}, rim = 0, shadow = 8}
 	if ui.parent(bar) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), cross = .Center, radius = FIND_RADIUS * ui.scale()})
 		if ui.well("###fw", .X, flags = {.Focus_Within, .Draw_Focus_Ring}) {

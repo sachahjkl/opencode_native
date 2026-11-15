@@ -15,7 +15,7 @@ import toolbox "gt:toolbox"
 
 DEMO_DIR        :: "S:\\demo-clock"
 DEMO_SESSION    :: "ses_e5584daa0ffe0rZ9lqsYByWGPw"
-LIVE_DIR        :: "build/ocntools"
+LIVE_DIR        :: "build/live"   // (not build/ocntools: the tool's own executable, as AGENTS.md builds it)
 SNAPSHOT        :: LIVE_DIR + "/before.txt"
 START_LIMIT     :: 20 * time.Second
 STEP_LIMIT      :: 20 * time.Second

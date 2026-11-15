@@ -408,8 +408,7 @@ user_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 	ui.spacer(ui.px(em * 0.4))
 	look := ui.Plate_Look{top = between("button background", "border", 0.33), bottom = between("card background", "button background", 0.5), rim = 0.09, shadow = 8}
 	if ui.card("", id = fmt.tprintf("###u_%s", m.id), o = {radius = CARD_RADIUS, look = look}) {
-		// (the card's own box, around its padding: the body is ui.card's, two levels in)
-		prompt_rail_focus(app, pane, m, ui.parent_box().parent.parent)
+		prompt_rail_focus(app, pane, m, ui.card_box())
 		ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###who") {
 			glyph(lucide.USER, ui.hue(.Accent), math.round(em * ICON_SMALL), em * 1.1)

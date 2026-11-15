@@ -401,14 +401,8 @@ fr Rétablir le zoom de l'interface
 en Composer
 fr Zone de saisie
 
-en Up / Down
-fr Haut / Bas
-
 en Go through what you sent in this session
 fr Parcourir ce que vous avez envoyé dans cette session
-
-en Down
-fr Bas
 
 en On the last line: what runs in the background
 fr Sur la dernière ligne : ce qui tourne en arrière-plan
@@ -421,9 +415,6 @@ fr Clic du milieu
 
 en Scroll by the pointer
 fr Défiler avec le pointeur
-
-en Esc, Esc
-fr Échap, Échap
 
 en Stop the run, what was sent during it goes next
 fr Arrêter l'exécution ; ce qui a été envoyé pendant part ensuite

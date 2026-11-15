@@ -153,15 +153,20 @@ command_shortcut :: proc(app: ^App, id: string) -> string {
 help_open :: proc(app: ^App) {
 	p := &app.palette
 	if !p.made { palette_table_keep(app) }
-	// (the keys' words in the language in use, each time it opens: the sheet shows `keys` as written)
+	help_lines(p)
+	ui.shortcuts_sheet_open(&p.sheet, p.table, version = p.version, extra = p.sheet_lines[:])
+}
+
+// The sheet's lines that no command holds. Keys in English, as a command's: the sheet names them in the language in
+// use; "Middle click" names no key, so it is this program's word to translate (again at each language).
+help_lines :: proc(p: ^Palette) {
 	p.sheet_lines = {
-		{group = i18n.later("Composer"), keys = i18n.tr("Up / Down"), label = i18n.later("Go through what you sent in this session")},
-		{group = i18n.later("Composer"), keys = i18n.tr("Down"), label = i18n.later("On the last line: what runs in the background")},
+		{group = i18n.later("Composer"), keys = "Up / Down", label = i18n.later("Go through what you sent in this session")},
+		{group = i18n.later("Composer"), keys = "Down", label = i18n.later("On the last line: what runs in the background")},
 		{group = i18n.later("Composer"), keys = "Ctrl+V", label = i18n.later("Paste text, an image or files")},
 		{group = i18n.later("Composer"), keys = i18n.tr("Middle click"), label = i18n.later("Scroll by the pointer")},
-		{group = i18n.later("Composer"), keys = i18n.tr("Esc, Esc"), label = i18n.later("Stop the run, what was sent during it goes next")},
+		{group = i18n.later("Composer"), keys = "Esc, Esc", label = i18n.later("Stop the run, what was sent during it goes next")},
 	}
-	ui.shortcuts_sheet_open(&p.sheet, p.table, version = p.version, extra = p.sheet_lines[:])
 }
 
 help_toggle :: proc(app: ^App) {
