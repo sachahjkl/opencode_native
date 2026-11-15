@@ -17,6 +17,7 @@ import "gt:devtools"
 import "gt:draw"
 import "gt:font"
 import "gt:host"
+import instance "gt:instance"
 import "gt:platform"
 import "gt:render"
 import "gt:term"
@@ -116,6 +117,7 @@ App :: struct {
 	install:          prefs_page.Install,   // the install: its offer, its dialog, the settings' Installation page (setup.odin)
 	crash_bar:        crash_bar.Bar,        // the last session's crash, said in a bar under the title bar
 	quit:             bool,
+	launch_after:     string,   // Restart: the file started at main's very end, once the single instance is let go ("": none)
 	last_tick:        time.Tick,
 	frame_times:      Frame_Times,   // the last frame's steps
 }
@@ -616,6 +618,9 @@ main :: proc() {
 	started := time.tick_now()
 	// --install / --uninstall / --status: the install, without a window
 	if setup.command_alone(opts.command) { cli.exit(setup.command_run(opts.command, setup_options(), process.console_write)) }
+	// one window per person: a second start hands what it asks to the first and ends, before it writes or shows anything
+	forwarded, owner, owns := instance_acquire(opts)
+	if forwarded { os.exit(0) }
 	logger, crashed := log_start()
 	context.logger = logger
 	// the graphics device on a thread of its own while the rest starts (the driver's load is the longest step: 160 ms here)
@@ -687,18 +692,11 @@ main :: proc() {
 	}, app)
 	// (the install read on a task: the installed copy cleans what an update left; OPENCODE_NATIVE_NO_SETUP: never offered)
 	prefs_page.install_offer(&app.install, &app.state, offer = opts.command != .Setup && os.get_env("OPENCODE_NATIVE_NO_SETUP", context.temp_allocator) == "")
-	// what the line asks to see at start
-	if opts.search != "" { ui.line_edit_set(&app.sidebar.search, opts.search) }
-	if opts.command == .Setup { prefs_page.install_open(&app.install) }
-	if opts.add_server { server_edit_open(app, -1) }
-	if opts.find != "" { find_open(app, main_pane(app)); ui.line_edit_set(&main_pane(app).find.field, opts.find) }
-	if opts.image != "" { image_view_start(app, opts.image) }
-	for file in opts.attach { attach_path(app, main_pane(app), file) }   // (what a paste gives, without the clipboard)
-	if opts.diff != "" { diff_full_open_file(app, opts.diff) }   // (a patch in the full view)
+	cli_show(app, opts)   // what the line asks to see at start
 	if opts.slow_motion != 0 { film_slow_start(app, opts.slow_motion) }
-	if opts.settings {   // --settings[=page number]
-		if opts.settings_page != "" { settings_open_on(app, opts.settings_page) } else { settings_open(app) }
-	}
+	// (the posts' queue exists: a second start's message reaches the window from here on)
+	server: ^instance.Server
+	if owns { server = instance_serve(app, owner) }
 	platform.show_window(app.win)
 	// (the windows of the views are the main window's: host_frame makes their frames after its own, hosts_wait counts them)
 	hosts := [1]^host.Host{&app.window}
@@ -710,6 +708,8 @@ main :: proc() {
 		frame(app)   // (what it still owes goes down there: host_frame)
 		placement_track(app)
 	}
+	// (the name let go before the long end: a start from now on owns it; Restart's copy starts last, below)
+	instance.serve_stop(server)
 	// (after the last build: which views were open is written, their windows close)
 	ui.views_destroy(&app.program_views)
 	threads_stop(app)
@@ -722,6 +722,7 @@ main :: proc() {
 	prefs_page.install_end(&app.install)
 	crash_bar.destroy(&app.crash_bar)
 	prefs_page.install_launch(&app.install)   // (the window is gone: the installed copy the install's dialog opened starts)
+	app_launch_after(app)
 	log_stop(logger)
 	os.exit(0)
 }

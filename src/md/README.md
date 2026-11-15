@@ -29,5 +29,7 @@ purpose, the decisions, what was refused.
 - [features/queue-first.md](features/queue-first.md): Alt+Enter queues a prompt first while a run works; the inbox
   re-admitted in order, admit before cancel, the reorder's state machine.
 - [features/escape-stop.md](features/escape-stop.md): Escape stops a run in two presses; the banner in the composer.
+- [features/single-instance.md](features/single-instance.md): one window per person: a second start hands its
+  command line to the window that runs; `--quit` ends it as Quit does; the starts that stay on their own.
 - [features/palette.md](features/palette.md): the toolkit's palette with ocn's sources; the shared prefixes; what was
   lost and why.
