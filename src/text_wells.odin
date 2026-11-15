@@ -8,9 +8,6 @@ import "core:strings"
 import "gt:ui"
 import i18n "gt:i18n"
 
-
-HEX_TOOL_OUTPUT       :: 0xbdbdbdff
-
 section_label :: proc(id, s: string, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###sl_%s", id)) { caption_title("l", s, "", em) }
@@ -21,12 +18,12 @@ section_label :: proc(id, s: string, em: f32) {
 caption_title :: proc(id, title, note: string, em: f32, color := Color{}) {
 	if ui.edged() {
 		if ui.style({font = the_app.mono, font_size = math.round(em * FS_CAPTION / 0.85)}) {   // (section_header draws its title at 0.85)
-			ui.section_header(fmt.tprintf("###ct_%s", id), title, color.a > 0 ? color : accent(), note, inline = true)
+			ui.section_header(fmt.tprintf("###ct_%s", id), title, color.a > 0 ? color : ui.hue(.Accent), note, inline = true)
 		}
 		return
 	}
 	words := note != "" ? fmt.tprintf("%s  %s", title, note) : title
-	text(id, words, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+	text(id, words, themed("faint text"), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 }
 
 MONO_WELL_MAX_BYTES :: 20000   // of a tool's text, whatever the lines allow
@@ -117,7 +114,7 @@ mono_well :: proc(id: string, s: string, em: f32, max_lines: int, color := Color
 mono_text :: proc(body: string, extra: int, em: f32, color := Color{}, kept: ^Link_Runs = nil, kept_in := mem.Allocator{}) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###r") {
-		style := ui.Rich_Style{font = the_app.mono, color = color.a > 0 ? color : hex(HEX_TOOL_OUTPUT)}
+		style := ui.Rich_Style{font = the_app.mono, color = color.a > 0 ? color : themed("soft text")}
 		runs: []ui.Rich_Run
 		if kept != nil {
 			runs = link_runs(kept, body, style, kept_in)
@@ -132,7 +129,7 @@ mono_text :: proc(body: string, extra: int, em: f32, color := Color{}, kept: ^Li
 	if extra > 0 {
 		ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###more") {
-			text("m", fmt.tprintf(i18n.tr(extra, "… %d more lines", "… %d more lines"), extra), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
+			text("m", fmt.tprintf(i18n.tr(extra, "… %d more lines", "… %d more lines"), extra), themed("faint text"), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
 		}
 	}
 }

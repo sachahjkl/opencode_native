@@ -1890,7 +1890,7 @@ a_diagram_is_zoomed_moved_and_laid_out_in_the_viewer :: proc(t: ^testing.T) {
 		if !testing.expect(t, ok, "its picture") { return }
 		want := tall.doc.view[2] * DIAGRAM_COPY_SCALE * diagram_scale(ui.font_size())
 		testing.expectf(t, abs(f32(pic.width) - math.ceil(want)) < 1, "the layout shown, twice its size: %d for %v", pic.width, want)
-		well := themed(HEX_CODE_WELL)
+		well := theme_colors().steps[0]
 		testing.expectf(t, abs(pic.pixels[0].r - f32(well >> 24) / 255) < 0.01, "on the colour of code: %v", pic.pixels[0])
 		inked := 0
 		for p in pic.pixels { if abs(p.r - pic.pixels[0].r) + abs(p.g - pic.pixels[0].g) > 0.1 { inked += 1 } }

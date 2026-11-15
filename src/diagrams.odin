@@ -142,12 +142,12 @@ mermaid_block :: proc(app: ^App, pane: ^Chat_Pane, id, code: string, closed: boo
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###hdr") {
 			ui.spacer(ui.px(em * 0.7))
-			glyph(lucide.GIT_FORK, hex(HEX_FAINT), math.round(em * ICON_SMALL), em)
+			glyph(lucide.GIT_FORK, themed("faint text"), math.round(em * ICON_SMALL), em)
 			ui.spacer(ui.px(em * 0.3))
-			text("lang", "mermaid", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+			text("lang", "mermaid", themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			if d != nil && d.why != "" {
 				ui.spacer(ui.px(em * 0.6))
-				text("why", fmt.tprintf(i18n.tr("not a diagram: %s"), first_line(d.why)), hex(HEX_YELLOW), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
+				text("why", fmt.tprintf(i18n.tr("not a diagram: %s"), first_line(d.why)), ui.hue(.Yellow), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
 			} else {
 				ui.spacer(ui.fill())
 			}
@@ -180,7 +180,7 @@ mermaid_block :: proc(app: ^App, pane: ^Chat_Pane, id, code: string, closed: boo
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row(id = "###body") {
 				ui.spacer(ui.px(em * 0.9))
-				runs := [1]ui.Rich_Run{{text = code, style = {font = app.mono, color = hex(HEX_CODE_TEXT)}}}
+				runs := [1]ui.Rich_Run{{text = code, style = {font = app.mono, color = themed("soft text")}}}
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}})
 				ui.rich_paragraph("###code", runs[:], version = version)
 				ui.spacer(ui.px(em * 0.9))
@@ -274,7 +274,7 @@ diagram_view :: proc(view: ^ui.View, app: ^App) {
 	{
 		if ui.view_header_tools(view) {
 			if waiting {
-				text("dv_wait", i18n.tr("Laying out…"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+				text("dv_wait", i18n.tr("Laying out…"), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.6))
 			}
 			if v.own != .Text {
@@ -297,7 +297,7 @@ diagram_view :: proc(view: ^ui.View, app: ^App) {
 			if ui.column(id = "###dv_col") {
 				ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 				well := ui.build_box({}, "###dv_well")
-				well.custom = proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) { draw_well(dc, b.rect, 0, hex(HEX_CODE_WELL)) }
+				well.custom = proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) { draw_well(dc, b.rect, 0, themed("well")) }
 				if ui.parent(well) {
 					content := [2]f32{d.doc.view[2], d.doc.view[3]} * diagram_scale(em)
 					dd := ui.frame_new(Diagram_Draw)
@@ -343,7 +343,7 @@ diagram_picture :: proc(app: ^App, code: string, direction := mermaid.Direction.
 	}
 	scale := DIAGRAM_COPY_SCALE * diagram_scale(ui.font_size())
 	scale = min(scale, DIAGRAM_COPY_MOST / max(d.doc.view[2], d.doc.view[3], 1))
-	well := themed(HEX_CODE_WELL)
+	well := theme_colors().steps[0]
 	bg := svg.Color{f32(well >> 24) / 255, f32((well >> 16) & 0xFF) / 255, f32((well >> 8) & 0xFF) / 255, 1}
 	bold := ui.styled_face(app.font, true, false)
 	return svg.raster(&d.doc, scale, &app.fonts, {regular = app.font, bold = bold}, bg), true

@@ -323,16 +323,16 @@ form_card :: proc(app: ^App, pane: ^Chat_Pane, f: ^Form_Req, others: int, em: f3
 	sub := f.session != pane.chat.id
 	send, dismiss, next := false, false, false
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if plate(fmt.tprintf("###form_%s", f.id), top = HEX_PERM_TOP, bottom = HEX_PERM_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.1, border = ui.with_alpha(accent(), 0.55)) {
+	if plate(fmt.tprintf("###form_%s", f.id), top = between("card background", "hue_accent", 0.08), bottom = between("bar background", "hue_accent", 0.06), radius = CARD_RADIUS, shadow = 8, rim = 0.1, border = ui.with_alpha(ui.hue(.Accent), 0.55)) {
 		ui.space(ui.CARD_PAD)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###head") {
 			ui.space(ui.CARD_PAD)
-			glyph(lucide.LIGHTBULB, accent(), math.round(em * ICON_LARGE), em * 1.6)
+			glyph(lucide.LIGHTBULB, ui.hue(.Accent), math.round(em * ICON_LARGE), em * 1.6)
 			ui.space(ui.ICON_GAP)
 			title := f.question ? (sub ? i18n.tr("A sub-agent asks") : i18n.tr("The agent asks")) : (f.title != "" ? f.title : i18n.tr("The agent asks"))
-			text("t", title, accent(), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
-			if others > 1 { text("n", fmt.tprintf(i18n.tr("1 of %d"), others), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
+			text("t", title, ui.hue(.Accent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
+			if others > 1 { text("n", fmt.tprintf(i18n.tr("1 of %d"), others), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
 			ui.space(ui.CARD_PAD)
 		}
 		ui.space(ui.LINE_GAP)
@@ -446,9 +446,9 @@ form_page :: proc(app: ^App, f: ^Form_Req, pages: []int, reviewing, wizard: bool
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column() {
 			if fd.title != "" && fd.title != fd.description {
-				text("t", fd.title, hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
+				text("t", fd.title, themed("bright text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
 			}
-			if fd.description != "" { info_line(app, "###d", fd.description, em, hex(HEX_TEXT_SOFT)) }
+			if fd.description != "" { info_line(app, "###d", fd.description, em, themed("soft text")) }
 			ui.space(ui.LINE_GAP)
 			// (picked, or Enter: on to what comes next, the end of the form if there is nothing else)
 			done := false

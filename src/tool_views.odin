@@ -60,7 +60,7 @@ line_shown :: proc(s: string) -> string {
 
 gutter :: proc(id: string, n: int, em: f32) {
 	s := n > 0 ? fmt.tprintf("%d", n) : ""
-	text(id, s, hex(HEX_DIFF_LINE_NO), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION), text_align = .Right}, ui.px(em * GUTTER_EM))
+	text(id, s, themed("diff line_number"), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION), text_align = .Right}, ui.px(em * GUTTER_EM))
 }
 
 // A diff's rows at our sizes, the code in its colours when `file` names a language.
@@ -97,7 +97,7 @@ more_lines :: proc(n: int, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###more") {
 		ui.spacer(ui.px(em * 0.75))
-		text("m", fmt.tprintf(i18n.tr(n, "… %d more lines", "… %d more lines"), n), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
+		text("m", fmt.tprintf(i18n.tr(n, "… %d more lines", "… %d more lines"), n), themed("faint text"), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
 	}
 }
 
@@ -109,7 +109,7 @@ diff_more :: proc(n: int, em: f32) -> (clicked: bool) {
 	sig := ui.signal(b)
 	if ui.parent(b) {
 		ui.spacer(ui.px(em * 0.75))
-		col := sig.hovering ? hex(HEX_TEXT) : hex(HEX_FAINT)
+		col := sig.hovering ? themed("text") : themed("faint text")
 		fs := math.round(em * FS_SMALL)
 		if n > 0 { text("m", fmt.tprintf(i18n.tr(n, "… %d more lines", "… %d more lines"), n), col, ui.Style_Mod{font = the_app.mono, font_size = fs}); ui.spacer(ui.px(em * 0.8)) }
 		text("f", i18n.tr("Full view"), col, ui.Style_Mod{font_size = fs})
@@ -126,7 +126,7 @@ code_row :: proc(app: ^App, no: int, s: string, k: int, em: f32) {
 	if ui.row(.Center, id = fmt.tprintf("###cl%d", k)) {
 		gutter("n", no, em)
 		ui.spacer(ui.px(em * 0.7))
-		text("t", line_shown(s), hex(HEX_TOOL_OUTPUT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), flags = {.Selectable}}, ui.fill())
+		text("t", line_shown(s), themed("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), flags = {.Selectable}}, ui.fill())
 	}
 }
 
@@ -203,7 +203,7 @@ search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut:
 			if ui.row(.Center, id = fmt.tprintf("###sf%d", k)) {
 				ui.spacer(ui.px(em * 0.75))
 				is_file := strings.has_suffix(t, ":") || strings.contains_any(t, "\\/")
-				text("f", strings.trim_suffix(t, ":"), is_file ? hex(HEX_TEXT_SOFT) : hex(HEX_FAINT), ui.Style_Mod{font = is_file ? app.mono_bold : app.mono, font_size = math.round(em * FS_SMALL), flags = {.Selectable}}, ui.fill())
+				text("f", strings.trim_suffix(t, ":"), is_file ? themed("soft text") : themed("faint text"), ui.Style_Mod{font = is_file ? app.mono_bold : app.mono, font_size = math.round(em * FS_SMALL), flags = {.Selectable}}, ui.fill())
 			}
 			k += 1
 		}
@@ -220,7 +220,7 @@ search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut:
 @(private = "file")
 command_view :: proc(app: ^App, pane: ^Chat_Pane, id: string, p: ^Part, em: f32) {
 	if p.command_line == "" { return }
-	mono_well(id, p.command_line, em, TOOL_INPUT_LINES_MAX, hex(HEX_TEXT_SOFT), &p.command_well, pane.chat.alloc)
+	mono_well(id, p.command_line, em, TOOL_INPUT_LINES_MAX, themed("soft text"), &p.command_well, pane.chat.alloc)
 	ui.spacer(ui.px(em * 0.35))
 }
 
@@ -244,7 +244,7 @@ input_view :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 				if i > 0 { ui.space(ui.SPACE_1) }
 				ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 				if ui.row(.Center, id = fmt.tprintf("###ik%d", i)) {
-					text("l", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+					text("l", k, themed("faint text"), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 				}
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column(id = fmt.tprintf("###iv%d", i)) {
@@ -254,7 +254,7 @@ input_view :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 				if i + 1 < len(p.fields) { ui.space(ui.SPACE_1) }
 			} else {
 				if ui.style({font_size = math.round(em * FS_SMALL)}) {
-					ui.stat_row(fmt.tprintf("kv%d", i), k, s, {height = em * 1.4, key_width = em * 7, label_size = math.round(em * FS_CAPTION), value_color = hex(HEX_TEXT_SOFT), selectable = true, inset = [2]f32{0, 0}})
+					ui.stat_row(fmt.tprintf("kv%d", i), k, s, {height = em * 1.4, key_width = em * 7, label_size = math.round(em * FS_CAPTION), value_color = themed("soft text"), selectable = true, inset = [2]f32{0, 0}})
 				}
 			}
 		}
@@ -274,7 +274,7 @@ tool_body :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 	lines := app.prefs.tool_lines
 	output :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32, lines: int) {
 		if p.output == "" { return }
-		mono_well("###output", p.output, em, lines, p.status == .Error ? hex(HEX_ERROR_TEXT) : hex(HEX_TOOL_OUTPUT), &p.output_well, pane.chat.alloc)
+		mono_well("###output", p.output, em, lines, p.status == .Error ? themed("bad text") : themed("soft text"), &p.output_well, pane.chat.alloc)
 	}
 	switch tool_kind(p.tool_name) {
 	case .Edit:

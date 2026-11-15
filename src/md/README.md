@@ -45,5 +45,7 @@ purpose, the decisions, what was refused.
   command's own; the keys read elsewhere, shown here.
 - [features/folders.md](features/folders.md): the program's folders and its install in its vendor's
   (FromentSoftware/OpencodeNative), the earlier folders moved once; the title a person reads.
+- [features/colours.md](features/colours.md): the views draw with the theme chosen, by role and hue; OpenCode is one
+  theme definition; the entries the toolkit's palette lacks.
 - [infrastructure/transport.md](infrastructure/transport.md): requests, the event stream and the sockets over the
   toolkit's gt:http; the limits, the stream up at its first event, why sockets send from their own thread.

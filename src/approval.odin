@@ -84,11 +84,11 @@ approval_button :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	mode := approval_shown(app, pane)
 	color: Color
 	switch mode {
-	case .Configured:  color = hex(HEX_WEAK)
-	case .Allow_Edits: color = hex(HEX_BLUE)
-	case .Allow_All:   color = hex(HEX_YELLOW)   // (nothing is asked: it says so)
-	case .Ask_All:     color = hex(HEX_GREEN)
-	case .Custom:      color = hex(HEX_PURPLE)
+	case .Configured:  color = themed("weak text")
+	case .Allow_Edits: color = ui.hue(.Blue)
+	case .Allow_All:   color = ui.hue(.Yellow)   // (nothing is asked: it says so)
+	case .Ask_All:     color = ui.hue(.Green)
+	case .Custom:      color = ui.hue(.Purple)
 	}
 	ui.a11y({role = .Button, name = fmt.tprintf(i18n.tr("Approvals: %s"), i18n.tr(APPROVAL_WORDS[mode]))})
 	key := "approval_menu"

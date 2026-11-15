@@ -11,11 +11,6 @@ import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
 
-
-HEX_PERM_TOP          :: 0x2a2116ff
-HEX_PERM_BOTTOM       :: 0x1d170fff
-HEX_PERM_DETAIL       :: 0xd8c8b0ff
-
 // The composer: its text and focus, what goes with the prompt, and what each session's composer keeps while another is shown.
 Composer :: struct {
 	area:        ui.Text_Edit,
@@ -59,18 +54,18 @@ dock :: proc(app: ^App, pane: ^Chat_Pane, em: f32, side, col: f32) {
 
 permission_card :: proc(app: ^App, p: ^Permission, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if plate(fmt.tprintf("###perm_%s", p.id), top = HEX_PERM_TOP, bottom = HEX_PERM_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.1, border = ui.with_alpha(hex(HEX_YELLOW), 0.55)) {
+	if plate(fmt.tprintf("###perm_%s", p.id), top = between("card background", "hue_accent", 0.08), bottom = between("bar background", "hue_accent", 0.06), radius = CARD_RADIUS, shadow = 8, rim = 0.1, border = ui.with_alpha(ui.hue(.Yellow), 0.55)) {
 		ui.space(ui.CARD_PAD)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###r") {
 			ui.space(ui.CARD_PAD)
-			glyph(lucide.SHIELD, hex(HEX_YELLOW), math.round(em * ICON_LARGE), em * 1.6)
+			glyph(lucide.SHIELD, ui.hue(.Yellow), math.round(em * ICON_LARGE), em * 1.6)
 			ui.space(ui.ICON_GAP)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
-				text("a", fmt.tprintf(i18n.tr("Permission requested: %s"), p.action), hex(HEX_YELLOW), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
+				text("a", fmt.tprintf(i18n.tr("Permission requested: %s"), p.action), ui.hue(.Yellow), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
 				detail := p.message != "" ? p.message : strings.join(p.resources, ", ", context.temp_allocator)
-				text("d", detail, hex(HEX_PERM_DETAIL), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.4)}, ui.fill())
+				text("d", detail, between("soft text", "hue_accent", 0.3), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.4)}, ui.fill())
 			}
 			ui.space(ui.CONTROL_GAP)
 			if ui.button("once", i18n.tr("Allow once"), lucide.CHECK, {intent = .Success, disabled = p.replying}).clicked { reply_permission(app, p, "once") }
@@ -198,9 +193,9 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			held := composer_held(app, pane)
 			if pane.conversation.column_w > em * COMPOSER_HINT_MIN_EM && fit < 1 {   // (room for it beside the agent and model buttons)
 				if held {
-					text("hint", attaching(app, pane) ? i18n.tr("reading the attachment…") : i18n.tr("starting the session…"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					text("hint", attaching(app, pane) ? i18n.tr("reading the attachment…") : i18n.tr("starting the session…"), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				} else if history_browsing(app, pane) {
-					text("hint", fmt.tprintf(i18n.tr("history %d/%d   ·   "), pane.composer.history.at, len(pane.composer.history.view)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					text("hint", fmt.tprintf(i18n.tr("history %d/%d   ·   "), pane.composer.history.at, len(pane.composer.history.view)), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 					if hint_action("###hist_back", i18n.tr("Esc  back to your text"), em, app.mono) { history_leave(app, pane, true) }
 				} else if queue_editing(app, pane) {
 					if hint_action("###h_save", app.prefs.ctrl_enter ? i18n.tr("Ctrl+Enter  save") : i18n.tr("Enter  save"), em, app.mono, intent = .Success) { submit = true }
@@ -208,10 +203,10 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 					// (each says what it does, and does it)
 					first, second := as == .Queue ? i18n.tr("queue") : i18n.tr("steer"), as == .Queue ? i18n.tr("steer") : i18n.tr("queue")
 					if hint_action("###h_first", fmt.tprintf("%s  %s", platform.key_text(app.prefs.ctrl_enter ? "Ctrl+Enter" : "Enter"), first), em, app.mono) { submit = true }
-					text("h_dot", "   ·   ", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					text("h_dot", "   ·   ", themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 					if hint_action("###h_second", fmt.tprintf("%s  %s", platform.key_text(app.prefs.ctrl_enter ? "Ctrl+Shift+Enter" : "Ctrl+Enter"), second), em, app.mono) { submit, other = true, true }
 				} else {
-					text("hint", app.prefs.ctrl_enter ? i18n.tr("Ctrl+Enter  send   ·   Enter  new line") : i18n.tr("Enter  send   ·   Shift+Enter  new line"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					text("hint", app.prefs.ctrl_enter ? i18n.tr("Ctrl+Enter  send   ·   Enter  new line") : i18n.tr("Enter  send   ·   Shift+Enter  new line"), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}
 			}
 			ui.spacer(ui.px(em * 0.8))
@@ -269,7 +264,7 @@ composer_panels :: proc(app: ^App, em: f32) {
 	panel :: proc(app: ^App, id, icon, name, tip, command: string, lit: bool, size, em: f32) {
 		ui.a11y({role = .Button, name = name})
 		ui.next({width = ui.px(size), height = ui.px(size)})
-		if lit { ui.next({width = ui.px(size), height = ui.px(size), fg = accent()}) }
+		if lit { ui.next({width = ui.px(size), height = ui.px(size), fg = ui.hue(.Accent)}) }
 		sig := ui.button(id, icon = icon)
 		if sig.clicked { command_run(app, command_find(command)) }
 		if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(tip) } }

@@ -116,13 +116,13 @@ pair_body :: proc(app: ^App, v: ^ui.View, em: f32) {
 	soft := ui.Style_Mod{font_size = math.round(em * FS_LABEL)}
 	note := ui.Style_Mod{font_size = math.round(em * FS_NOTE)}
 	if p.failed != "" {
-		pair_note("###f", p.failed, hex(HEX_RED), soft)
+		pair_note("###f", p.failed, ui.hue(.Red), soft)
 		ui.spacer(ui.px(em * 0.8))
 		if ui.button("pair_retry", i18n.tr("Try again"), lucide.REFRESH_CW).clicked { pair_new_code(app) }
 		return
 	}
 	if p.code == "" {
-		pair_note("###w", i18n.tr("Asking the server for a code…"), hex(HEX_WEAK), soft)
+		pair_note("###w", i18n.tr("Asking the server for a code…"), themed("weak text"), soft)
 		animate(app)
 		return
 	}
@@ -138,9 +138,9 @@ pair_body :: proc(app: ^App, v: ^ui.View, em: f32) {
 			ui.spacer(ui.fill())
 		}
 		ui.spacer(ui.px(em * 0.8))
-		pair_note("###s", i18n.tr("Scan it with the device's camera, or open one of these links on it. A link works once."), hex(HEX_TEXT_SOFT), note)
+		pair_note("###s", i18n.tr("Scan it with the device's camera, or open one of these links on it. A link works once."), themed("soft text"), note)
 	} else if left > 0 {
-		pair_note("###s", i18n.tr("Open one of these links on the device. A link works once."), hex(HEX_TEXT_SOFT), note)
+		pair_note("###s", i18n.tr("Open one of these links on the device. A link works once."), themed("soft text"), note)
 	}
 	ui.spacer(ui.px(em * 0.6))
 	if left > 0 {
@@ -149,14 +149,14 @@ pair_body :: proc(app: ^App, v: ^ui.View, em: f32) {
 		}
 		ui.spacer(ui.px(em * 0.4))
 		mins, secs := int(left) / 60, int(left) % 60
-		pair_note("###x", fmt.tprintf(i18n.tr("The code expires in %d:%02d."), mins, secs), hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+		pair_note("###x", fmt.tprintf(i18n.tr("The code expires in %d:%02d."), mins, secs), themed("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.wake_within(built_state(app), PAIR_TICK_MS)
 	} else {
-		pair_note("###x", i18n.tr("This code expired."), hex(HEX_WEAK), soft)
+		pair_note("###x", i18n.tr("This code expired."), themed("weak text"), soft)
 	}
 	if reach == "" {
 		ui.spacer(ui.px(em * 0.6))
-		pair_note("###h", fmt.tprintf(i18n.tr("The server can be reached from this computer only. To pair another device, run `%s`."), PAIR_HOSTNAME_HINT), hex(HEX_WEAK), note)
+		pair_note("###h", fmt.tprintf(i18n.tr("The server can be reached from this computer only. To pair another device, run `%s`."), PAIR_HOSTNAME_HINT), themed("weak text"), note)
 	}
 	ui.spacer(ui.px(em * 0.8))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -183,7 +183,7 @@ pair_note :: proc(id, s: string, color: Color, m: ui.Style_Mod) {
 pair_link_row :: proc(app: ^App, id, what, link: string, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = id) {
-		text("w", what, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_SMALL), width = ui.px(em * 7)})
+		text("w", what, themed("weak text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), width = ui.px(em * 7)})
 		runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
 		ui.rich_links(link, {font = app.mono}, &runs)
 		ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Selectable}})

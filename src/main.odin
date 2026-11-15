@@ -218,7 +218,7 @@ main_window_adopt :: proc(app: ^App) {
 	host.host_adopt(&app.window, &app.gfx, app.win, nil, app)
 	h := &app.window
 	h.after_input = FRAMES_AFTER_INPUT
-	h.background = hex(HEX_BG0)
+	h.background = draw.hex(theme_colors().steps[1])   // (before any build: the theme's own page)
 	h.dragging = main_dragging
 	h.before_input = proc(h: ^host.Host) {
 		app := (^App)(h.user)

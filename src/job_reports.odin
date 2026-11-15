@@ -312,18 +312,18 @@ job_card :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, r: ^Job_Report, k: in
 			case .Shell:
 				line := first_line(r.command)
 				if line != strings.trim_space(r.command) { line = fmt.tprintf("%s …", line) }
-				text("c", line, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
+				text("c", line, themed("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 			case .Subagent:
-				text("d", r.description, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+				text("d", r.description, themed("weak text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			}
-			text("at", clock_text(m.created, app.prefs.clock24), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("at", clock_text(m.created, app.prefs.clock24), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.5))
-			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 1.1)
+			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, themed("faint text"), math.round(em * ICON_TINY), em * 1.1)
 			ui.spacer(ui.px(em * 0.5))
 		}
 		if open {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-			if rail_row(fmt.tprintf("###jobb_%s_%d", m.id, k), ui.with_alpha(hex(HEX_WEAK), 0.4)) {
+			if rail_row(fmt.tprintf("###jobb_%s_%d", m.id, k), ui.with_alpha(themed("weak text"), 0.4)) {
 				ui.spacer(ui.px(em * 1.0))
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column() {
@@ -331,17 +331,17 @@ job_card :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, r: ^Job_Report, k: in
 					switch r.kind {
 					case .Shell:
 						if r.command != "" {
-							mono_well("###command", fmt.tprintf("$ %s", r.command), em, JOB_OUTPUT_LINES, hex(HEX_TEXT_SOFT), &r.command_well, pane.chat.alloc)
+							mono_well("###command", fmt.tprintf("$ %s", r.command), em, JOB_OUTPUT_LINES, themed("soft text"), &r.command_well, pane.chat.alloc)
 							ui.spacer(ui.px(em * 0.3))
 						}
 						out := r.body != "" ? r.body : i18n.tr("(no output)")
-						mono_well("###output", out, em, JOB_OUTPUT_LINES, hex(HEX_TOOL_OUTPUT), &r.body_well, pane.chat.alloc)
+						mono_well("###output", out, em, JOB_OUTPUT_LINES, themed("soft text"), &r.body_well, pane.chat.alloc)
 					case .Subagent:
 						if r.body == "" {
-							text("none", i18n.tr("(no report)"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.5)})
+							text("none", i18n.tr("(no report)"), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.5)})
 						} else {
 							id := fmt.tprintf("%s_job%d", m.id, k)
-							markdown.view(md_doc(&pane.chat, id), id, r.body, md_config(app, hex(HEX_RETURNED_TEXT), pane), math.round(em * FS_LABEL))
+							markdown.view(md_doc(&pane.chat, id), id, r.body, md_config(app, themed("soft text"), pane), math.round(em * FS_LABEL))
 						}
 					}
 					ui.spacer(ui.px(em * 0.3))

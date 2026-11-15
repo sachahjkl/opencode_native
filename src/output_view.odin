@@ -302,13 +302,13 @@ output_view_word :: proc(v: ^Output_View) -> (word: string) {
 // The colour of that word: an end's, the ink of its state (read from the page: in a build).
 output_view_word_color :: proc(v: ^Output_View) -> Color {
 	st := output_view_state(v)
-	return st == .Running ? hex(HEX_YELLOW) : st == .Unknown ? hex(HEX_WEAK) : sub_state_ink(st)
+	return st == .Running ? ui.hue(.Yellow) : st == .Unknown ? themed("weak text") : sub_state_ink(st)
 }
 
 // A line along its top: the grid above is the view, this is only what goes with it.
 @(private = "file")
 output_bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	draw.rect(dc, {b.rect.min, {b.rect.max.x, b.rect.min.y + px1()}}, hex(HEX_LINE))
+	draw.rect(dc, {b.rect.min, {b.rect.max.x, b.rect.min.y + px1()}}, themed("border"))
 }
 
 // How it stands, and what can be done with it, under the grid. It stays where it is whatever the size of the window; what gives way is the
@@ -328,13 +328,13 @@ output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32) {
 		text("s", word, color, note)
 		if dur := duration_text(v.started, v.ended > 0 ? v.ended : (running ? now_epoch_ms() : 0)); dur != "" {
 			ui.spacer(ui.px(em * 0.6))
-			text("e", dur, hex(HEX_FAINT), note)
+			text("e", dur, themed("faint text"), note)
 		}
 		ui.spacer(ui.px(em * 1.1))
 		switch {
-		case v.lost:     text("m", i18n.tr("The server no longer has this command."), hex(HEX_WEAK), note, ui.fill())
-		case v.seen_end: text("m", i18n.tr("Finished: nothing more will come."), hex(HEX_TEXT_SOFT), note, ui.fill())
-		case v.dropped:  text("m", i18n.tr("The server kept the end of it."), hex(HEX_FAINT), note, ui.fill())
+		case v.lost:     text("m", i18n.tr("The server no longer has this command."), themed("weak text"), note, ui.fill())
+		case v.seen_end: text("m", i18n.tr("Finished: nothing more will come."), themed("soft text"), note, ui.fill())
+		case v.dropped:  text("m", i18n.tr("The server kept the end of it."), themed("faint text"), note, ui.fill())
 		case:            ui.spacer(ui.fill())   // (the command is at the head of the grid)
 		}
 		ui.spacer(ui.px(em * 0.8))

@@ -104,10 +104,8 @@ the_colours_and_the_options_reach_the_terminal :: proc(t: ^testing.T) {
 	colors := Vt_Colors{size = size_of(Vt_Colors)}
 	testing.expect_value(t, ghostty_render_state_get(sh.state, VT_STATE_COLORS, &colors), VT_OK)
 	// (set by term_new: a number off by one would have set something else, and the defaults would show)
-	want_bg := Vt_Rgb{u8((HEX_TERM_BG >> 24) & 0xff), u8((HEX_TERM_BG >> 16) & 0xff), u8((HEX_TERM_BG >> 8) & 0xff)}
-	want_fg := Vt_Rgb{u8((HEX_TEXT >> 24) & 0xff), u8((HEX_TEXT >> 16) & 0xff), u8((HEX_TEXT >> 8) & 0xff)}
-	testing.expect_value(t, colors.background, want_bg)
-	testing.expect_value(t, colors.foreground, want_fg)
+	testing.expect_value(t, colors.background, rgb_of(theme_colors().steps[1]))
+	testing.expect_value(t, colors.foreground, rgb_of(theme_colors().texts[2]))
 }
 
 @(test)
@@ -209,15 +207,17 @@ a_shells_colours_are_the_themes :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	sh := term_new("x", "t", "")
 	defer term_free(sh)
-	bg, fg := rgb_of(HEX_TERM_BG), rgb_of(HEX_TEXT)
+	c := theme_colors()
+	bg, fg := rgb_of(c.steps[1]), rgb_of(c.texts[2])
+	red := rgb_of(c.hues[5])
 	p := term_palette(bg, fg)
-	testing.expect_value(t, p[1], rgb_of(HEX_RED))
-	testing.expect_value(t, p[4], rgb_of(HEX_BLUE))
+	testing.expect_value(t, p[1], red)
+	testing.expect_value(t, p[4], rgb_of(c.hues[1]))
 	testing.expect(t, p[16] != {} || p[231] != {}, "the cube made")
 	term_recolour(sh)
 	term_feed(sh, "\x1b[31mr\x1b[0m")
 	row := first_row(sh)
-	if testing.expect(t, len(row) > 0, "a row") { testing.expect_value(t, row[0].fg, rgb_of(HEX_RED)) }
+	if testing.expect(t, len(row) > 0, "a row") { testing.expect_value(t, row[0].fg, red) }
 }
 
 // What the shell gets, byte for byte, through Ghostty's encoder: a wrong number of a key sends something else without a word.

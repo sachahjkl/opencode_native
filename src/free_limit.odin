@@ -64,17 +64,17 @@ free_limit_panel :: proc(app: ^App, em: f32) {
 	if ui.well("###free_limit", .Y, pad = ui.INNER_PAD) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###fl_top") {
-			glyph(lucide.CIRCLE_GAUGE, hex(HEX_YELLOW), math.round(em * ICON_SMALL), em * 1.3)
+			glyph(lucide.CIRCLE_GAUGE, ui.hue(.Yellow), math.round(em * ICON_SMALL), em * 1.3)
 			ui.space(ui.ICON_GAP)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column(id = "###fl_words") {
-				text("t", i18n.tr("Free limit reached"), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
+				text("t", i18n.tr("Free limit reached"), themed("bright text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
 				// (its time, and its day when it is not today)
 				at := app.free_limit.reset_ms
 				when_ := clock_text(at, app.prefs.clock24)
 				if !same_local_day(at, now_epoch_ms()) { when_ = fmt.tprintf("%s %s", date_text(at), when_) }
 				said := fmt.tprintf(i18n.tr("Free usage resets at %s. Connect a provider or subscribe to Go to continue."), when_)
-				ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), fg = hex(HEX_WEAK), text_pad = 0})
+				ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), fg = themed("weak text"), text_pad = 0})
 				ui.paragraph(fmt.tprintf("%s###fl_reset", ui.text_shown(said)))
 			}
 		}

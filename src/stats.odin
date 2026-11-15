@@ -360,11 +360,6 @@ PROJECT_TOOLS_SHOWN :: 12
 RANK_NAME_CHARS     :: 28
 DURATION_ORIGIN_MS  :: 0.001   // duration_text() takes a start of 0 as unknown; a sum of steps starts there
 
-HEX_METER_WELL  :: 0x0a0a0aff
-HEX_STAT_VALUE  :: 0xdadadaff
-HEX_RANK_NAME   :: 0xe2e2e2ff
-HEX_STAT_FAILED :: 0xe0a0a0ff
-HEX_PILL_HOT    :: 0x1a1a1aff
 
 @(private = "file")
 Bar :: struct { t: f32, color: Color }
@@ -375,7 +370,7 @@ bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	s := ui.scale()
 	r := b.rect
 	h := r.max.y - r.min.y
-	draw_well(dc, r, h * 0.5, hex(HEX_METER_WELL))
+	draw_well(dc, r, h * 0.5, themed("well"))
 	w := (r.max.x - r.min.x - 2 * s) * clamp(d.t, 0, 1)
 	if w > 1 {
 		fr := Rect{{r.min.x + s, r.min.y + s}, {r.min.x + s + max(w, h - 2 * s), r.max.y - s}}
@@ -401,7 +396,7 @@ figure :: proc(id, value, caption: string, color: Color, em: f32) {
 	if ui.column(id = id) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * FIGURE_H_EM)), fg = color, font = the_app.font, font_size = size, text_pad = 0})
 		ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###v", value))
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * FIGURE_CAPTION_EM)), fg = hex(HEX_FAINT), font = the_app.font, font_size = math.round(em * FS_CAPTION), text_pad = 0})
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * FIGURE_CAPTION_EM)), fg = themed("faint text"), font = the_app.font, font_size = math.round(em * FS_CAPTION), text_pad = 0})
 		ui.build_box({.Draw_Text}, fmt.tprintf("%s###c", caption))
 	}
 }
@@ -417,13 +412,13 @@ wrapped :: proc(id, v: string, color: Color, em: f32) {
 @(private = "file")
 kv :: proc(id, k, v: string, em: f32, col := Color{}) {
 	w := the_app.stats.width
-	color := col.a > 0 ? col : hex(HEX_STAT_VALUE)
+	color := col.a > 0 ? col : themed("text")
 	key := ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(math.round(em * 1.45))}
 	stacked := w <= em * STATS_STACK_EM
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = stacked ? .Y : .X})
 	b := ui.build_box({}, id)
 	if ui.parent(b) {
-		text("k", k, hex(HEX_FAINT), key, stacked ? ui.fill() : ui.px(min(em * STATS_KEY_W_EM, w * STATS_KEY_SHARE)))
+		text("k", k, themed("faint text"), key, stacked ? ui.fill() : ui.px(min(em * STATS_KEY_W_EM, w * STATS_KEY_SHARE)))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column(id = "###c") {
 			if !stacked { ui.spacer(ui.px(math.round(em * 0.2))) }
@@ -443,38 +438,38 @@ rank_row :: proc(id, name: string, n, max_n, failed: int, extra: string, em: f32
 	ui.next({width = ui.fill(), height = ui.px(em * 1.55), axis = .X, cross = .Center})
 	if ui.row(.Center, id = id) {
 		if the_app.stats.width > em * STATS_WIDE_EM {
-			text("n", ellipsize(name, RANK_NAME_CHARS), hex(HEX_RANK_NAME), mono, ui.px(em * 11))
+			text("n", ellipsize(name, RANK_NAME_CHARS), themed("text"), mono, ui.px(em * 11))
 			meter("###m", max_n > 0 ? f32(n) / f32(max_n) : 0, color, em)
 			ui.spacer(ui.px(em * 0.6))
-			text("c", fmt.tprintf("%d", n), hex(HEX_STAT_VALUE), bold, ui.px(em * 3))
-			text("f", failures, hex(HEX_RED), note, ui.px(em * 5))
-			text("x", extra, hex(HEX_FAINT), note, ui.px(em * 6.5))
+			text("c", fmt.tprintf("%d", n), themed("text"), bold, ui.px(em * 3))
+			text("f", failures, ui.hue(.Red), note, ui.px(em * 5))
+			text("x", extra, themed("faint text"), note, ui.px(em * 6.5))
 			return
 		}
-		text("n", ellipsize(name, RANK_NAME_CHARS), hex(HEX_RANK_NAME), mono, ui.fill())
+		text("n", ellipsize(name, RANK_NAME_CHARS), themed("text"), mono, ui.fill())
 		ui.spacer(ui.px(em * 0.5))
 		if the_app.stats.width > em * STATS_METER_EM {
 			meter("###m", max_n > 0 ? f32(n) / f32(max_n) : 0, color, em, ui.px(em * STATS_METER_W_EM))
 			ui.spacer(ui.px(em * 0.5))
 		}
 		if failures != "" {
-			text("f", failures, hex(HEX_RED), note)
+			text("f", failures, ui.hue(.Red), note)
 			ui.spacer(ui.px(em * 0.5))
 		}
 		if extra != "" {
-			text("x", extra, hex(HEX_FAINT), note)
+			text("x", extra, themed("faint text"), note)
 			ui.spacer(ui.px(em * 0.5))
 		}
-		text("c", fmt.tprintf("%d", n), hex(HEX_STAT_VALUE), bold)
+		text("c", fmt.tprintf("%d", n), themed("text"), bold)
 	}
 }
 
 @(private = "file")
-// A section of the panel: a stripe and its title in its colour (one of opencode's, as the theme shown has it), a weak note.
-heading :: proc(s: string, em: f32, color: u32 = HEX_BLUE, note := "") {
+// A section of the panel: a stripe and its title in a hue of the theme shown, a weak note.
+heading :: proc(s: string, em: f32, hue: ui.Hue = .Blue, note := "") {
 	ui.spacer(ui.px(em * 0.9))
 	if ui.style({font = the_app.mono, font_size = em}) {
-		ui.section_header(fmt.tprintf("###st_%s", s), s, hex(color), note)
+		ui.section_header(fmt.tprintf("###st_%s", s), s, ui.hue(hue), note)
 	}
 	ui.spacer(ui.px(em * 0.35))
 }
@@ -485,7 +480,7 @@ stats_panel :: proc(app: ^App, em: f32) {
 	stats_follow(app)
 	c := &pane.chat
 	s := c.have_self ? &c.self : find_session(app, c.id)
-	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = hex(HEX_BG0), radius = 0})
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = themed("background"), radius = 0})
 	if ui.column(flags = {.Draw_Background}, id = "###st") {
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###stats_scroll") {
@@ -499,7 +494,7 @@ stats_panel :: proc(app: ^App, em: f32) {
 						stats_body(app, s, em)
 					} else {
 						ui.spacer(ui.px(em * 1.2))
-						info_line(app, "###st_none", i18n.tr("Open a session: its statistics show here."), em, hex(HEX_FAINT))
+						info_line(app, "###st_none", i18n.tr("Open a session: its statistics show here."), em, themed("faint text"))
 					}
 				}
 				ui.spacer(ui.px(pad))
@@ -518,7 +513,7 @@ stats_body :: proc(app: ^App, s: ^Session_Info, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 2.2), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###title") {
 		if logo_of(app, "###lg", project_logo(app, chat_project(app)), math.round(em * 1.8)) { ui.spacer(ui.px(em * 0.5)) }
-		text("t", s != nil && s.title != "" ? s.title : i18n.tr("Session"), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_TITLE)}, ui.fill())
+		text("t", s != nil && s.title != "" ? s.title : i18n.tr("Session"), themed("bright text"), ui.Style_Mod{font_size = math.round(em * FS_TITLE)}, ui.fill())
 	}
 	totals := stats_totals(c, s)
 	used, window := context_used(app, c, l)
@@ -558,13 +553,13 @@ context_used :: proc(app: ^App, c: ^Chat, l: ^Local_Stats) -> (used, window: f64
 // Near full is the one thing here that a colour has to say.
 @(private = "file")
 context_color :: proc(t: f32) -> Color {
-	return t > CONTEXT_FULL_SHARE ? hex(HEX_RED) : t > CONTEXT_WARN_SHARE ? hex(HEX_YELLOW) : hex(HEX_TEXT)
+	return t > CONTEXT_FULL_SHARE ? ui.hue(.Red) : t > CONTEXT_WARN_SHARE ? ui.hue(.Yellow) : themed("text")
 }
 
 @(private = "file")
 stats_figures :: proc(t: Totals, used, window: f64, em: f32) {
 	tin, tout, reas, cread, cost := t.tin, t.tout, t.reas, t.cread, t.cost
-	plain := hex(HEX_TEXT)
+	plain := themed("text")
 	ui.spacer(ui.px(em * 0.8))
 	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.5, em * 0.7}})
 	if ui.flow({em * 0.5, em * 0.7}, "###figures") {
@@ -584,7 +579,7 @@ stats_figures :: proc(t: Totals, used, window: f64, em: f32) {
 // One colour, fainter from the largest part to the smallest: the bar says how much, the list says what.
 @(private = "file")
 context_shade :: proc(i: int) -> Color {
-	return ui.with_alpha(accent(), max(CTX_SHADE_FIRST - f32(i) * CTX_SHADE_STEP, CTX_SHADE_LAST))
+	return ui.with_alpha(ui.hue(.Accent), max(CTX_SHADE_FIRST - f32(i) * CTX_SHADE_STEP, CTX_SHADE_LAST))
 }
 
 @(private = "file")
@@ -599,7 +594,7 @@ stacked_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	s := ui.scale()
 	r := b.rect
 	h := r.max.y - r.min.y
-	draw_well(dc, r, h * 0.5, hex(HEX_METER_WELL))
+	draw_well(dc, r, h * 0.5, themed("well"))
 	room := r.max.x - r.min.x - 2 * s
 	x := r.min.x + s
 	for p in d.parts {
@@ -621,8 +616,8 @@ context_bar :: proc(app: ^App, used, window: f64, em: f32) {
 		if i < CTX_BAR_PARTS { append(&parts, Bar_Part{f32(g.tokens / whole), context_shade(i)}) } else { rest += g.tokens }
 	}
 	if rest > 0 { append(&parts, Bar_Part{f32(rest / whole), context_shade(CTX_BAR_PARTS)}) }
-	if x.unlisted > 0 { append(&parts, Bar_Part{f32(x.unlisted / whole), hex(HEX_FAINT)}) }
-	if len(x.groups) == 0 && x.unlisted == 0 { append(&parts, Bar_Part{f32(used / whole), hex(HEX_WEAK)}) }   // (only its total is known)
+	if x.unlisted > 0 { append(&parts, Bar_Part{f32(x.unlisted / whole), themed("faint text")}) }
+	if len(x.groups) == 0 && x.unlisted == 0 { append(&parts, Bar_Part{f32(used / whole), themed("weak text")}) }   // (only its total is known)
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 0.75))})
 	b := ui.build_box({}, "###ctx_bar")
 	d := ui.frame_new(Stacked_Bar)
@@ -656,7 +651,7 @@ context_line :: proc(app: ^App, id, name, size, key: string, indent: f32, shade:
 	if ui.parent(b) {
 		ui.spacer(ui.px(em * (0.2 + indent)))
 		if opens {
-			glyph(context_open(app, key) ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_TINY), em)
+			glyph(context_open(app, key) ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, themed("faint text"), math.round(em * ICON_TINY), em)
 		} else {
 			ui.spacer(ui.px(em))
 		}
@@ -664,9 +659,9 @@ context_line :: proc(app: ^App, id, name, size, key: string, indent: f32, shade:
 			swatch(c, em)
 			ui.spacer(ui.px(em * 0.45))
 		}
-		text("n", name, hex(HEX_RANK_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
+		text("n", name, themed("text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 		ui.spacer(ui.px(em * 0.5))
-		text("s", size, hex(HEX_STAT_VALUE), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+		text("s", size, themed("text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.px(em * 0.2))
 	}
 	return sig.clicked
@@ -697,7 +692,7 @@ context_list :: proc(app: ^App, used: f64, em: f32) {
 		if !context_open(app, key) { continue }
 		for &it, k in g.items {
 			if k == CTX_ITEMS_SHOWN {
-				info_line(app, fmt.tprintf("###cm%d", i), fmt.tprintf(i18n.tr(len(g.items) - CTX_ITEMS_SHOWN, "… and %d more", "… and %d more"), len(g.items) - CTX_ITEMS_SHOWN), em, hex(HEX_FAINT))
+				info_line(app, fmt.tprintf("###cm%d", i), fmt.tprintf(i18n.tr(len(g.items) - CTX_ITEMS_SHOWN, "… and %d more", "… and %d more"), len(g.items) - CTX_ITEMS_SHOWN), em, themed("faint text"))
 				break
 			}
 			item_key := it.text != "" ? fmt.tprintf("ctxi_%s", it.key) : ""
@@ -709,14 +704,14 @@ context_list :: proc(app: ^App, used: f64, em: f32) {
 		}
 	}
 	if x.unlisted > 0 {
-		context_line(app, "###cu", i18n.tr("Instructions and tool definitions"), size_of(x.unlisted, whole), "", 0, hex(HEX_FAINT), em)
+		context_line(app, "###cu", i18n.tr("Instructions and tool definitions"), size_of(x.unlisted, whole), "", 0, themed("faint text"), em)
 	}
 }
 
 // The context the last step filled, against the model's window, and what fills it.
 @(private = "file")
 stats_context :: proc(app: ^App, used, window: f64, em: f32) {
-	heading(i18n.tr("Context"), em, HEX_CYAN)
+	heading(i18n.tr("Context"), em, .Cyan)
 	if used > 0 {
 		t := f32(window > 0 ? used / window : 0)
 		wrapped("###ctx", window > 0 ? fmt.tprintf("%s  ·  %s / %s", i18n.percent(f64(t)), kfmt(used), kfmt(window)) : fmt.tprintf(i18n.tr("%s  (the model's window is not listed)"), kfmt(used)), context_color(t), em)
@@ -724,7 +719,7 @@ stats_context :: proc(app: ^App, used, window: f64, em: f32) {
 		context_bar(app, used, window, em)
 		ui.spacer(ui.px(em * 0.5))
 	} else {
-		info_line(app, "###ctxn", i18n.tr("Not known yet (no step in the loaded messages, or the model's window is not listed)."), em, hex(HEX_FAINT))
+		info_line(app, "###ctxn", i18n.tr("Not known yet (no step in the loaded messages, or the model's window is not listed)."), em, themed("faint text"))
 	}
 	if read_shown(app, "###ctxl", &app.stats.context_read, em, context_ask) {
 		context_list(app, used, em)
@@ -736,27 +731,27 @@ stats_context :: proc(app: ^App, used, window: f64, em: f32) {
 @(private = "file")
 stats_tokens :: proc(t: Totals, em: f32) {
 	tin, tout, reas, cread, cwrite, cost := t.tin, t.tout, t.reas, t.cread, t.cwrite, t.cost
-	heading(i18n.tr("Tokens"), em, HEX_YELLOW)
+	heading(i18n.tr("Tokens"), em, .Yellow)
 	// their mix at a glance: what went in (cached or not), what came out
 	if total := tin + cread + cwrite + tout + reas; total > 0 {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5))})
 		ui.stacked_bar("###kbar", {
-			{f32(tin), hex(HEX_BLUE), kfmt(tin)}, {f32(cread), hex(HEX_CYAN), kfmt(cread)}, {f32(cwrite), hex(HEX_PURPLE), kfmt(cwrite)},
-			{f32(tout), hex(HEX_GREEN), kfmt(tout)}, {f32(reas), hex(HEX_YELLOW), kfmt(reas)},
+			{f32(tin), ui.hue(.Blue), kfmt(tin)}, {f32(cread), ui.hue(.Cyan), kfmt(cread)}, {f32(cwrite), ui.hue(.Purple), kfmt(cwrite)},
+			{f32(tout), ui.hue(.Green), kfmt(tout)}, {f32(reas), ui.hue(.Yellow), kfmt(reas)},
 		})
 		ui.spacer(ui.px(em * 0.4))
 	}
-	kv("###k1", i18n.tr("input"), fmt.tprintf(i18n.tr("%s  (uncached)"), kfmt(tin)), em, hex(HEX_BLUE))   // (the colour of its part of the bar)
-	kv("###k2", i18n.tr("cache read"), kfmt(cread), em, hex(HEX_CYAN))
-	kv("###k3", i18n.tr("cache write"), kfmt(cwrite), em, hex(HEX_PURPLE))
-	kv("###k4", "output", kfmt(tout), em, hex(HEX_GREEN))
-	kv("###k5", "reasoning", kfmt(reas), em, hex(HEX_YELLOW))
+	kv("###k1", i18n.tr("input"), fmt.tprintf(i18n.tr("%s  (uncached)"), kfmt(tin)), em, ui.hue(.Blue))   // (the colour of its part of the bar)
+	kv("###k2", i18n.tr("cache read"), kfmt(cread), em, ui.hue(.Cyan))
+	kv("###k3", i18n.tr("cache write"), kfmt(cwrite), em, ui.hue(.Purple))
+	kv("###k4", "output", kfmt(tout), em, ui.hue(.Green))
+	kv("###k5", "reasoning", kfmt(reas), em, ui.hue(.Yellow))
 	kv("###k6", "cost", dollars(cost, 4), em)
 }
 
 @(private = "file")
 stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local_Stats, now: f64, clock24: bool, em: f32) {
-	heading(i18n.tr("Time"), em, HEX_PURPLE)
+	heading(i18n.tr("Time"), em, .Purple)
 	if s != nil {
 		kv("###d1", i18n.tr("created"), fmt.tprintf(i18n.tr("%s  (%s ago)"), clock_text(s.created, clock24), duration_text(s.created, now)), em)
 		if s.updated > 0 { kv("###d2", i18n.tr("last change"), fmt.tprintf(i18n.tr("%s  (%s ago)"), clock_text(s.updated, clock24), duration_text(s.updated, now)), em) }
@@ -771,19 +766,19 @@ stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local_Stats, now: f64, clock2
 // What the loaded messages called, and which models answered.
 @(private = "file")
 stats_rankings :: proc(app: ^App, l: ^Local_Stats, em: f32) {
-	heading(i18n.tr("Tools"), em, HEX_GREEN, fmt.tprintf(i18n.tr("%d calls, %d failed"), l.calls, l.failed))
+	heading(i18n.tr("Tools"), em, .Green, fmt.tprintf(i18n.tr("%d calls, %d failed"), l.calls, l.failed))
 	max_t := len(l.tools) > 0 ? l.tools[0].calls : 0
 	for t, i in l.tools {
-		if i == TOOLS_SHOWN { info_line(app, "###tm", fmt.tprintf(i18n.tr(len(l.tools) - TOOLS_SHOWN, "… and %d more tools", "… and %d more tools"), len(l.tools) - TOOLS_SHOWN), em, hex(HEX_FAINT)); break }
-		rank_row(fmt.tprintf("###tl%d", i), t.name, t.calls, max_t, t.failed, "", em, accent())
+		if i == TOOLS_SHOWN { info_line(app, "###tm", fmt.tprintf(i18n.tr(len(l.tools) - TOOLS_SHOWN, "… and %d more tools", "… and %d more tools"), len(l.tools) - TOOLS_SHOWN), em, themed("faint text")); break }
+		rank_row(fmt.tprintf("###tl%d", i), t.name, t.calls, max_t, t.failed, "", em, ui.hue(.Accent))
 	}
-	if len(l.tools) == 0 { info_line(app, "###tn", i18n.tr("No tool call in the loaded messages."), em, hex(HEX_FAINT)) }
+	if len(l.tools) == 0 { info_line(app, "###tn", i18n.tr("No tool call in the loaded messages."), em, themed("faint text")) }
 
 	if len(l.models) > 0 {
-		heading(i18n.tr("Models"), em, HEX_PEACH)
+		heading(i18n.tr("Models"), em, .Accent)
 		max_m := l.models[0].steps
 		for m, i in l.models {
-			rank_row(fmt.tprintf("###ml%d", i), m.name, m.steps, max_m, 0, fmt.tprintf(i18n.tr("%s out"), kfmt(m.tokens_out)), em, hex(HEX_WEAK))
+			rank_row(fmt.tprintf("###ml%d", i), m.name, m.steps, max_m, 0, fmt.tprintf(i18n.tr("%s out"), kfmt(m.tokens_out)), em, themed("weak text"))
 		}
 	}
 }
@@ -791,13 +786,13 @@ stats_rankings :: proc(app: ^App, l: ^Local_Stats, em: f32) {
 @(private = "file")
 stats_children :: proc(app: ^App, c: ^Chat, em: f32) {
 	if len(c.children) > 0 {
-		heading(i18n.tr("Sub-agents"), em, HEX_ROSE)
+		heading(i18n.tr("Sub-agents"), em, .Rose)
 		running, scost, sin, sout := 0, 0.0, 0.0, 0.0
 		for k in c.children {
 			if app.busy[k.id] or_else false { running += 1 }
 			scost += k.cost; sin += k.tokens_in + k.cache_read; sout += k.tokens_out
 		}
-		kv("###s1", i18n.tr("launched"), fmt.tprintf(i18n.tr("%d  (%d running)"), len(c.children), running), em, running > 0 ? hex(HEX_YELLOW) : {})
+		kv("###s1", i18n.tr("launched"), fmt.tprintf(i18n.tr("%d  (%d running)"), len(c.children), running), em, running > 0 ? ui.hue(.Yellow) : {})
 		kv("###s2", i18n.tr("their tokens"), fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(sin), kfmt(sout)), em)
 		if scost > 0 { kv("###s3", i18n.tr("their cost"), dollars(scost), em) }
 	}
@@ -808,7 +803,7 @@ stats_children :: proc(app: ^App, c: ^Chat, em: f32) {
 stats_project :: proc(app: ^App, now: f64, em: f32) {
 	ps := &app.stats.project
 	if ps.project != "" {
-		heading(i18n.tr("The project"), em, HEX_BLUE)
+		heading(i18n.tr("The project"), em, .Blue)
 		if read_shown(app, "###pl", &app.stats.read, em, stats_ask) {
 			kv("###p1", i18n.tr("sessions"), fmt.tprintf(i18n.tr("%d  (+ %d sub-agents)"), ps.sessions, ps.subagents), em)
 			kv("###p2", i18n.tr("prompts · steps"), fmt.tprintf("%d · %d", ps.prompts, ps.steps), em)
@@ -816,14 +811,14 @@ stats_project :: proc(app: ^App, now: f64, em: f32) {
 			if ps.cost > 0 { kv("###p4", "cost", dollars(ps.cost), em) }
 			kv("###p5", i18n.tr("active days"), fmt.tprintf(i18n.tr("%d  (streak %d)"), ps.active_days, ps.streak), em)
 			if ps.from > 0 { kv("###p6", i18n.tr("since"), fmt.tprintf(i18n.tr("%s ago"), duration_text(ps.from, now)), em) }
-			kv("###p7", i18n.tr("tool calls"), fmt.tprintf(i18n.tr("%d  (%d failed)"), ps.calls, ps.failed), em, ps.failed > 0 ? hex(HEX_STAT_FAILED) : {})
+			kv("###p7", i18n.tr("tool calls"), fmt.tprintf(i18n.tr("%d  (%d failed)"), ps.calls, ps.failed), em, ps.failed > 0 ? themed("bad text") : {})
 			if len(ps.tools) > 0 {
 				ui.spacer(ui.px(em * 0.4))
 				max_p := 0
 				for t in ps.tools { max_p = max(max_p, t.calls) }
 				for t, i in ps.tools {
 					if i == PROJECT_TOOLS_SHOWN { break }
-					rank_row(fmt.tprintf("###pt%d", i), t.name, t.calls, max_p, t.failed, t.p50 > 0 ? fmt.tprintf("p50 %s", ms_text(t.p50)) : "", em, accent())
+					rank_row(fmt.tprintf("###pt%d", i), t.name, t.calls, max_p, t.failed, t.p50 > 0 ? fmt.tprintf("p50 %s", ms_text(t.p50)) : "", em, ui.hue(.Accent))
 				}
 			}
 			if len(ps.models) > 0 {
@@ -831,7 +826,7 @@ stats_project :: proc(app: ^App, now: f64, em: f32) {
 				max_s := 0
 				for m in ps.models { max_s = max(max_s, m.steps) }
 				for m, i in ps.models {
-					rank_row(fmt.tprintf("###pm%d", i), m.name, m.steps, max_s, 0, m.cost > 0 ? dollars(m.cost) : fmt.tprintf(i18n.tr("%s out"), kfmt(m.tokens_out)), em, hex(HEX_WEAK))
+					rank_row(fmt.tprintf("###pm%d", i), m.name, m.steps, max_s, 0, m.cost > 0 ? dollars(m.cost) : fmt.tprintf(i18n.tr("%s out"), kfmt(m.tokens_out)), em, themed("weak text"))
 				}
 			}
 		}
@@ -846,12 +841,12 @@ pill_button :: proc(id: string, label: string, color := Color{}, icon := "") -> 
 	b := ui.build_box({.Clickable, .Focusable}, id)
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		h := b.rect.max.y - b.rect.min.y
-		draw_well(dc, b.rect, h * 0.5, hex(b.hot_t > FADE_VISIBLE ? HEX_PILL_HOT : HEX_PILL), b.hot_t * 0.6, accent())
+		draw_well(dc, b.rect, h * 0.5, themed(b.hot_t > FADE_VISIBLE ? "card background" : "well"), b.hot_t * 0.6, ui.hue(.Accent))
 	}
 	sig := ui.signal(b)
 	if ui.parent(b) {
 		ui.spacer(ui.px(em * 0.5))
-		fg := color.a > 0 ? color : hex(HEX_WEAK)
+		fg := color.a > 0 ? color : themed("weak text")
 		if sig.hovering { fg = ui.lighten(fg, 0.4) }
 		if icon != "" {
 			ui.next({width = ui.px(em), height = ui.pct(1), font = the_app.icons, font_size = math.round(em * ICON_SMALL), fg = fg, text_pad = 0, text_align = .Center})

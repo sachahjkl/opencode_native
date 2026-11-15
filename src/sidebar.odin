@@ -368,11 +368,11 @@ inbox_header :: proc(app: ^App, sec: ^Side_Section, folded: bool, em: f32) {
 	if hs.clicked { app.sidebar.folded[sec.key] = !folded }
 	if ui.parent(hdr) {
 		ui.spacer(ui.px(em * 0.8))
-		glyph(folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
+		glyph(folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, themed("faint text"), math.round(em * ICON_TINY), em * 0.9)
 		ui.spacer(ui.px(em * 0.2))
-		text("n", strings.to_upper(i18n.tr(sec.title), context.temp_allocator), hs.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+		text("n", strings.to_upper(i18n.tr(sec.title), context.temp_allocator), hs.hovering ? themed("text") : themed("weak text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.px(em * 0.4))
-		text("c", fmt.tprintf("%d", len(sec.items)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+		text("c", fmt.tprintf("%d", len(sec.items)), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.fill())
 		if sec.unseen {
 			if hint_action("###seen_all", i18n.tr("Mark as seen"), em) { section_seen(app, sec) }

@@ -197,14 +197,14 @@ field_line :: proc(id: string, f: ^ui.Line_Edit, hint: string, em: f32, label :=
 	if ui.well(fmt.tprintf("%s_w", id), .X) {
 		if label != "" {
 			ui.spacer(ui.px(em * 0.6))
-			text("l", label, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+			text("l", label, themed("weak text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		}
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * (label != "" ? 0.35 : 0.5)})
 			res = ui.line_edit(id, f, {placeholder = hint})
 		}
 		if unit != "" {
-			text("u", unit, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("u", unit, themed("faint text"), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.6))
 		}
 	}
@@ -282,11 +282,11 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, w, em: f32) {
 	if ui.row(.Center, id = fmt.tprintf("###scr%d", i)) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column() {
-			text("n", first_line(it.name != "" ? it.name : it.prompt), hex(it.status == .Done ? HEX_WEAK : HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.4)}, ui.fill())
-			text("d", schedule_detail(it), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.15)}, ui.fill())
+			text("n", first_line(it.name != "" ? it.name : it.prompt), themed(it.status == .Done ? "weak text" : "text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.4)}, ui.fill())
+			text("d", schedule_detail(it), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.15)}, ui.fill())
 		}
 		ui.spacer(ui.px(em * 0.5))
-		text("x", schedule_next(it, now), hex(it.status == .Active ? HEX_TEXT_SOFT : HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+		text("x", schedule_next(it, now), themed(it.status == .Active ? "soft text" : "faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.px(em * 0.6))
 		if it.id == s.removing {
 			if ui.button("sc_yes", i18n.tr("Delete"), lucide.TRASH_2, {intent = .Danger, height = small}).clicked {
@@ -345,7 +345,7 @@ schedule_form :: proc(app: ^App, w, em: f32) {
 	}
 	if s.problem != "" || remote.failed(&s.making) {
 		ui.spacer(ui.px(em * 0.4))
-		info_line(app, "###sc_failed", s.problem != "" ? s.problem : s.making.message, em, hex(HEX_RED))
+		info_line(app, "###sc_failed", s.problem != "" ? s.problem : s.making.message, em, ui.hue(.Red))
 	}
 	if go { schedule_submit(app) }
 }
@@ -486,11 +486,11 @@ artifact_card :: proc(app: ^App, a: Chat_Artifact, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * ARTIFACT_CARD_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###line") {
 			ui.spacer(ui.px(em * 0.8))
-			glyph(lucide.APP_WINDOW, accent(), math.round(em * ICON_REGULAR), em * 1.4)
+			glyph(lucide.APP_WINDOW, ui.hue(.Accent), math.round(em * ICON_REGULAR), em * 1.4)
 			ui.spacer(ui.px(em * 0.5))
-			text("k", i18n.tr("Artifact"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+			text("k", i18n.tr("Artifact"), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.6))
-			text("n", ellipsize(a.title != "" ? a.title : a.id, ARTIFACT_TITLE_CHARS), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+			text("n", ellipsize(a.title != "" ? a.title : a.id, ARTIFACT_TITLE_CHARS), themed("bright text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			if ui.button("show", i18n.tr("Show"), lucide.EYE, {height = math.round(em * BUTTON_SMALL_H_EM)}).clicked { show = true }
 			ui.spacer(ui.px(em * 0.6))
 		}
@@ -620,9 +620,9 @@ artifacts_view :: proc(v: ^ui.View, app: ^App) {
 						row := ui.build_box({.Clickable}, fmt.tprintf("###arr%d", i))
 						if ui.signal(row).clicked { artifact_show(app, it.id) }
 						if ui.parent(row) {
-							glyph(lucide.FILE, hex(it.id == a.shown ? HEX_BRIGHT : HEX_FAINT), math.round(em * ICON_SMALL), em * 1.1)
+							glyph(lucide.FILE, themed(it.id == a.shown ? "bright text" : "faint text"), math.round(em * ICON_SMALL), em * 1.1)
 							ui.spacer(ui.px(em * 0.3))
-							text("n", it.title, hex(it.id == a.shown ? HEX_BRIGHT : HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
+							text("n", it.title, themed(it.id == a.shown ? "bright text" : "text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 						}
 					}
 				}
@@ -646,7 +646,7 @@ artifact_right :: proc(app: ^App, em: f32) {
 	words := ui.parent_box().size.x >= em * ARTIFACTS_WORDS_MIN_EM   // (narrow: the buttons by their glyphs, or the last is cut)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###ar_bar") {
-		text("p", it.provider, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)}, ui.fill())
+		text("p", it.provider, themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)}, ui.fill())
 		if it.id == a.removing {
 			if ui.button("ar_yes", i18n.tr("Delete"), lucide.TRASH_2, {intent = .Danger, height = small}).clicked {
 				q := location_query(a.dir)
@@ -791,14 +791,14 @@ page_plugins :: proc(app: ^App, em: f32) {
 plugin_row :: proc(app: ^App, it: ^Plugin, i: int, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###plr%d", i)) {
-		color: u32 = it.failed ? HEX_RED : it.outdated ? HEX_YELLOW : HEX_FAINT
-		glyph(it.failed ? lucide.ALERT_TRIANGLE : lucide.PLUG, hex(color), math.round(em * ICON_SMALL), em * 1.2)
+		color := it.failed ? ui.hue(.Red) : it.outdated ? ui.hue(.Yellow) : themed("faint text")
+		glyph(it.failed ? lucide.ALERT_TRIANGLE : lucide.PLUG, color, math.round(em * ICON_SMALL), em * 1.2)
 		ui.spacer(ui.px(em * 0.3))
 		name := it.id != "" ? it.id : it.target != "" ? it.target : it.kind
-		text("n", name, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
+		text("n", name, themed("text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 		detail := it.features
 		if it.version != "" { detail = fmt.tprintf("%s  %s", it.version, detail) }
-		text("d", detail, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)})
+		text("d", detail, themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)})
 		if it.outdated && it.target != "" {
 			ui.spacer(ui.px(em * 0.4))
 			if ui.button("pl_up", ui.text_shown(it.updating ? i18n.tr("Updating…") : i18n.tr("Update")), o = {intent = .Success, height = math.round(em * BUTTON_SMALL_H_EM), disabled = it.updating}).clicked {
@@ -807,7 +807,7 @@ plugin_row :: proc(app: ^App, it: ^Plugin, i: int, em: f32) {
 			}
 		}
 	}
-	if it.failed { info_line(app, fmt.tprintf("###ple%d", i), it.error, em, hex(HEX_RED)) }
+	if it.failed { info_line(app, fmt.tprintf("###ple%d", i), it.error, em, ui.hue(.Red)) }
 	ui.spacer(ui.px(em * 0.15))
 }
 

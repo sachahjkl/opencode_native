@@ -14,23 +14,24 @@ import remote "gt:remote"
 import i18n "gt:i18n"
 
 // What a reading says while it has nothing to show, the same in every dialog. `again`: it can be tried again.
-read_words :: proc(app: ^App, x: ^remote.Remote) -> (words: string, color: u32, again: bool) {
+// `intent`: what it means, its colour (Neutral: weak words).
+read_words :: proc(app: ^App, x: ^remote.Remote) -> (words: string, intent: ui.Intent, again: bool) {
 	switch x.state {
-	case .Idle:    return online(app) ? i18n.tr("Reading…") : i18n.tr("Not connected: this is read when the server answers."), HEX_WEAK, false
-	case .Loading: return i18n.tr("Reading…"), HEX_WEAK, false
-	case .Refused: return x.message, HEX_YELLOW, true
-	case .Failed:  return x.message, HEX_RED, true
+	case .Idle:    return online(app) ? i18n.tr("Reading…") : i18n.tr("Not connected: this is read when the server answers."), .Neutral, false
+	case .Loading: return i18n.tr("Reading…"), .Neutral, false
+	case .Refused: return x.message, .Warning, true
+	case .Failed:  return x.message, .Danger, true
 	case .Ready:
 	}
-	return "", HEX_WEAK, false
+	return "", .Neutral, false
 }
 
 // In a dialog, in the place of what is read: true when that is there to show. Otherwise it says where the reading stands, and
 // `ask` is what Try again runs.
 read_shown :: proc(app: ^App, id: string, x: ^remote.Remote, em: f32, ask: proc(app: ^App)) -> bool {
 	if remote.shows(x) { return true }
-	words, color, again := read_words(app, x)
-	info_line(app, id, words, em, hex(color))
+	words, intent, again := read_words(app, x)
+	info_line(app, id, words, em, intent == .Neutral ? themed("weak text") : ui.hue(ui.intent_hue(intent)))
 	if again {
 		ui.spacer(ui.px(em * 0.4))
 		if ui.button(fmt.tprintf("%s_again", id), i18n.tr("Try again"), lucide.REFRESH_CW, {height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { ask(app) }

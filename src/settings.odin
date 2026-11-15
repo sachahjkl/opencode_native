@@ -29,7 +29,6 @@ import remote "gt:remote"
 ////////////////////////////////
 // The preferences
 
-HEX_ROSE :: 0xf28ba8ff
 
 // The bounds of the preferences (PREF_DEFS) that their sliders share.
 COLUMN_W_MIN          :: 560
@@ -46,13 +45,6 @@ SETTINGS_ROW_H_EM   :: 2.2
 USAGE_WARN_PERCENT  :: 80
 BUDGET_WARN_SHARE   :: 0.8
 
-HEX_SETTING_NAME   :: 0xeeeeeeff
-HEX_SWATCH_WELL    :: 0x0a0a0aff
-HEX_FACT_VALUE     :: 0xd0d0d0ff
-HEX_FACT_NAME      :: 0xd8d8d8ff
-HEX_MCP_NAME       :: 0xf0f0f0ff
-HEX_WORKSPACE_NAME :: 0xe0e0e0ff
-HEX_CATALOG_NAME   :: 0xe8e8e8ff
 
 // The shells' family: the client's own setting, beside the toolkit's three (prefs_page.UI_FONT_PREF...).
 TERMINAL_FONT_PREF :: "appearance.text.terminal_font"
@@ -196,7 +188,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.mode = config.string_of(p, prefs_page.MODE_PREF)
 	theme_set(app, theme_index(app, look.theme), theme_wants_light(s.mode))
 	theme_windows(app)
-	s.accent_hex = themed(HEX_PEACH)
+	s.accent_hex = theme_colors().hues[0]
 	s.font_size = look.font_size
 	s.zoom = f32(config.float_of(p, "appearance.zoom"))
 	s.glow = look.glow > 0 && look.finish != .Flat   // (no halos in the flat finish)
@@ -268,8 +260,6 @@ pref_set_float :: proc(app: ^App, name: string, v: f32) {
 	prefs_refresh(app)
 }
 
-// The accent colour (buttons, selection, lamps of attention): the theme's, as every colour of hex (prefs_refresh sets the theme).
-accent :: proc() -> Color { return hex(HEX_PEACH) }
 
 // Ctrl + wheel changed the zoom: keep it.
 prefs_track_zoom :: proc(app: ^App) {
@@ -792,7 +782,7 @@ font_button :: proc(app: ^App, name: string, em: f32) {
 
 // A line of quiet text.
 info_line :: proc(app: ^App, id, s: string, em: f32, color := Color{}) {
-	ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Text_Wrap}, fg = color.a > 0 ? color : hex(HEX_WEAK), text_pad = 0})
+	ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Text_Wrap}, fg = color.a > 0 ? color : themed("weak text"), text_pad = 0})
 	ui.paragraph(fmt.tprintf("%s%s", label_safe(s), id))
 }
 
@@ -800,7 +790,7 @@ info_line :: proc(app: ^App, id, s: string, em: f32, color := Color{}) {
 @(private = "file")
 fact :: proc(id, k, v: string, em: f32, col := Color{}) {
 	if ui.style({font_size = math.round(em * FS_SMALL)}) {
-		ui.stat_row(id, k, v, {height = em * 1.5, key_width = em * 8.5, value_color = col.a > 0 ? col : hex(HEX_FACT_VALUE), selectable = true, inset = [2]f32{0, 0}})   // (the well's pad is its inset)
+		ui.stat_row(id, k, v, {height = em * 1.5, key_width = em * 8.5, value_color = col.a > 0 ? col : themed("soft text"), selectable = true, inset = [2]f32{0, 0}})   // (the well's pad is its inset)
 	}
 }
 
@@ -828,7 +818,7 @@ page_server :: proc(app: ^App, em: f32) {
 	if ui.well("###srv", pad = ui.INNER_PAD) {
 		// (labels with a capital, as every other label of the settings)
 		fact("###s1", i18n.tr("Address"), server_base(app), em)
-		fact("###s2", i18n.tr("Status"), online(app) ? i18n.tr("connected") : i18n.tr("not connected"), em, online(app) ? hex(HEX_GREEN) : hex(HEX_YELLOW))
+		fact("###s2", i18n.tr("Status"), online(app) ? i18n.tr("connected") : i18n.tr("not connected"), em, online(app) ? ui.hue(.Green) : ui.hue(.Yellow))
 		fact("###s3", i18n.tr("Version"), app.server_version != "" ? app.server_version : "?", em)
 		fact("###s0", i18n.tr("Name"), i18n.tr(server_name(app)), em)
 		// (its own context: "none" here is an authentication's, a feminine word in French)
@@ -846,7 +836,7 @@ page_server :: proc(app: ^App, em: f32) {
 			if ui.row(.Center, id = fmt.tprintf("###%s", id)) {
 				clicked = ui.button(fmt.tprintf("%sb", id), ui.text_shown(label), lucide.SQUARE_TERMINAL, {face = on ? .Toggled : .Raised, height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked
 				ui.spacer(ui.px(em * 0.7))
-				text("p", path, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+				text("p", path, themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			}
 			ui.spacer(ui.px(em * 0.25))
 			return clicked
@@ -864,8 +854,8 @@ page_server :: proc(app: ^App, em: f32) {
 		if ui.row(.Center, id = fmt.tprintf("###cf%d", i)) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
-				text("p", c.path, hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}, ui.fill())
-				text("k", strings.join(c.keys, " · ", context.temp_allocator), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
+				text("p", c.path, themed("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}, ui.fill())
+				text("k", strings.join(c.keys, " · ", context.temp_allocator), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
 			}
 			// (only this computer's server speaks of this computer's files)
 			if app.servers[app.server].local && config_file_shaped(c.path) && os.is_file(c.path) {
@@ -876,7 +866,7 @@ page_server :: proc(app: ^App, em: f32) {
 		}
 		ui.spacer(ui.px(em * 0.4))
 	}
-	if len(f.files) == 0 { info_line(app, "###nocf", i18n.tr("No configuration file (the defaults apply)."), em, hex(HEX_FAINT)) }
+	if len(f.files) == 0 { info_line(app, "###nocf", i18n.tr("No configuration file (the defaults apply)."), em, themed("faint text")) }
 }
 
 page_mcp :: proc(app: ^App, em: f32) {
@@ -885,21 +875,21 @@ page_mcp :: proc(app: ^App, em: f32) {
 	ui.space(ui.LINE_GAP)
 	if !read_shown(app, "###mcp_read", &f.reads[.Mcp], em, server_facts_load) { return }
 	if len(f.mcp) == 0 {
-		info_line(app, "###none", i18n.tr("No MCP server is configured."), em, hex(HEX_FAINT))
+		info_line(app, "###none", i18n.tr("No MCP server is configured."), em, themed("faint text"))
 		return
 	}
 	// (one list: a card of rows, not a card per server)
 	if ui.list_card("###mcp") { for &m, i in f.mcp {
 		connected := m.status == .Connected
 		going := mcp_going(f, m.name)
-		col := connected ? hex(HEX_GREEN) : m.status == .Failed || m.error != "" ? hex(HEX_RED) : hex(HEX_FAINT)
+		col := connected ? ui.hue(.Green) : m.status == .Failed || m.error != "" ? ui.hue(.Red) : themed("faint text")
 		word := going != nil ? (going.connecting ? i18n.tr("connecting…") : i18n.tr("disconnecting…")) : m.word != "" ? m.word : "?"
 		if ui.card_row(fmt.tprintf("###mcp%d", i), .Y) {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * BUTTON_SMALL_H_EM)), axis = .X, cross = .Center})
 			if ui.row(.Center) {
 				lamp("###l", col, connected ? 1 : 0.4, size = em * 0.9)
 				ui.space(ui.ICON_GAP)
-				text("n", m.name, hex(HEX_MCP_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL)})
+				text("n", m.name, themed("text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL)})
 				ui.space(ui.ICON_GAP)
 				text("s", word, col, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 				// (what goes on says itself: no button says the opposite meanwhile)
@@ -916,7 +906,7 @@ page_mcp :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 				if ui.row() {
 					ui.spacer(ui.px(math.round(em * (0.9 + ui.ICON_GAP))))   // (under the name: the lamp and its gap)
-					info_line(app, "###err", m.error, em, hex(HEX_ERROR_TEXT))
+					info_line(app, "###err", m.error, em, themed("bad text"))
 				}
 			}
 		}
@@ -927,13 +917,13 @@ page_usage :: proc(app: ^App, em: f32) {
 	f := &app.facts
 	if !read_shown(app, "###use_read", &f.reads[.Usage], em, server_facts_load) { return }
 	if len(f.limits) == 0 && len(f.budgets) == 0 {
-		info_line(app, "###none", i18n.tr("The server reports no usage limit (a provider of your own, or no OpenCode workspace)."), em, hex(HEX_FAINT))
+		info_line(app, "###none", i18n.tr("The server reports no usage limit (a provider of your own, or no OpenCode workspace)."), em, themed("faint text"))
 		return
 	}
 	if f.workspace != "" {
 		ui.next({width = ui.fill(), height = ui.px(em * SETTINGS_ROW_H_EM), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###ws") {
-			text("w", fmt.tprintf(i18n.tr("Workspace “%s”"), f.workspace), hex(HEX_WORKSPACE_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+			text("w", fmt.tprintf(i18n.tr("Workspace “%s”"), f.workspace), themed("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			if f.usage_url != "" {
 				if ui.button("web", i18n.tr("Usage on opencode.ai"), lucide.GLOBE, {height = math.round(em * BUTTON_SMALL_H_EM)}).clicked { link_open(f.usage_url) }
 			}
@@ -944,26 +934,26 @@ page_usage :: proc(app: ^App, em: f32) {
 	for l, i in f.limits {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = fmt.tprintf("###lim%d", i)) {
-			text("n", l.name, hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.px(em * 6))
+			text("n", l.name, themed("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.px(em * 6))
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 0.7))})
 			ui.progress("###bar", f32(l.percent / 100))
 			ui.spacer(ui.px(em * 0.7))
-			col := l.limited ? hex(HEX_RED) : l.percent >= USAGE_WARN_PERCENT ? hex(HEX_YELLOW) : hex(HEX_WEAK)
+			col := l.limited ? ui.hue(.Red) : l.percent >= USAGE_WARN_PERCENT ? ui.hue(.Yellow) : themed("weak text")
 			text("p", i18n.percent(f64(l.percent) / 100), col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 3.5))
-			text("r", l.resets > now ? fmt.tprintf(i18n.tr("resets in %s"), duration_text(now, l.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
+			text("r", l.resets > now ? fmt.tprintf(i18n.tr("resets in %s"), duration_text(now, l.resets)) : "", themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
 		}
 	}
 	if len(f.budgets) > 0 { section(app, i18n.tr("BUDGETS"), em) }
 	for b, i in f.budgets {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = fmt.tprintf("###bud%d", i)) {
-			text("n", b.scope != "" ? b.scope : i18n.tr("budget"), hex(HEX_FACT_NAME), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.px(em * 6))
+			text("n", b.scope != "" ? b.scope : i18n.tr("budget"), themed("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.px(em * 6))
 			t := b.limit > 0 ? f32(b.spent / b.limit) : 0
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 0.7))})
 			ui.progress("###bar", t)
 			ui.spacer(ui.px(em * 0.7))
-			text("p", fmt.tprintf("%s / %s", dollars(b.spent), dollars(b.limit, 0)), t >= BUDGET_WARN_SHARE ? hex(HEX_YELLOW) : hex(HEX_GREEN), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 8))
-			text("r", b.resets > now ? fmt.tprintf(i18n.tr("resets in %s"), duration_text(now, b.resets)) : "", hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
+			text("p", fmt.tprintf("%s / %s", dollars(b.spent), dollars(b.limit, 0)), t >= BUDGET_WARN_SHARE ? ui.hue(.Yellow) : ui.hue(.Green), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 8))
+			text("r", b.resets > now ? fmt.tprintf(i18n.tr("resets in %s"), duration_text(now, b.resets)) : "", themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
 		}
 	}
 }
@@ -998,16 +988,16 @@ page_permissions :: proc(app: ^App, em: f32) {
 	info_line(app, "###ph", i18n.tr("Answers given with “Always”: the server applies them without asking again. Revoke one to be asked next time."), em)
 	ui.spacer(ui.px(em * 0.6))
 	if read_shown(app, "###sp_read", &f.reads[.Saved], em, server_facts_load) {
-		if len(f.saved) == 0 { info_line(app, "###none", i18n.tr("No saved permission."), em, hex(HEX_FAINT)) }
+		if len(f.saved) == 0 { info_line(app, "###none", i18n.tr("No saved permission."), em, themed("faint text")) }
 		for &s, i in f.saved {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.4)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###sp%d", i)) {
-				col := s.effect == "deny" ? hex(HEX_RED) : s.effect == "allow" ? hex(HEX_GREEN) : hex(HEX_YELLOW)
+				col := s.effect == "deny" ? ui.hue(.Red) : s.effect == "allow" ? ui.hue(.Green) : ui.hue(.Yellow)
 				ui.pill("e", s.effect != "" ? s.effect : "?", "", col, {mono = true})
 				ui.spacer(ui.px(em * 0.5))
-				text("a", s.action, hex(HEX_SETTING_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
+				text("a", s.action, themed("text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
 				ui.spacer(ui.px(em * 0.5))
-				text("r", s.resource, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
+				text("r", s.resource, themed("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 				if ui.button("rv", i18n.tr("Revoke"), lucide.TRASH_2, {intent = .Danger, height = math.round(em * BUTTON_SMALL_H_EM), disabled = saved_revoking(f, s.id)}).clicked { saved_revoke(app, s.id) }
 			}
 		}
@@ -1027,8 +1017,8 @@ page_catalog :: proc(app: ^App, em: f32) {
 		for it, i in items {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row(id = fmt.tprintf("###%s%d", title, i)) {
-				text("n", it.name, hex(HEX_CATALOG_NAME), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}, ui.px(em * 13))
-				ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Text_Wrap}, fg = hex(HEX_WEAK), text_pad = 0})
+				text("n", it.name, themed("text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}, ui.px(em * 13))
+				ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Text_Wrap}, fg = themed("weak text"), text_pad = 0})
 				ui.paragraph(fmt.tprintf("%s###d", label_safe(it.detail)))
 			}
 			ui.spacer(ui.px(em * 0.25))

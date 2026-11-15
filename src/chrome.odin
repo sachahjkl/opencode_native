@@ -14,12 +14,6 @@ TITLE_BAR_MIN_H_PX    :: 34
 TITLE_BAR_TITLE_CHARS :: 70
 CRUMB_PARENT_CHARS    :: 60
 
-HEX_TITLE_BAR_TOP     :: 0x181818ff
-HEX_TITLE_BAR_BOTTOM  :: 0x111111ff
-HEX_HEADER_TOP        :: 0x131313ff
-HEX_HEADER_BOTTOM     :: 0x0d0d0dff
-HEX_STATUS_TOP        :: 0x141414ff
-HEX_STATUS_BOTTOM     :: 0x0e0e0eff
 
 // What the bars show that is measured between builds: how long requests have waited, the frame rate.
 Chrome :: struct {
@@ -115,12 +109,12 @@ title_bar :: proc(app: ^App, em: f32) {
 	if ui.title_bar("###titlebar") {
 		b := ui.parent_box()
 		d := ui.frame_new(Bar_Draw)
-		d^ = {hex(HEX_TITLE_BAR_TOP), hex(HEX_TITLE_BAR_BOTTOM), true}
+		d^ = {themed("card background"), themed("bar background"), true}
 		b.custom = caption_draw   // (the finish's title bar: in the edged one the accent fading out, its words light: ui.caption_ink)
 		b.custom_user = d
 		ink := ui.caption_ink
 		ui.spacer(ui.px(em * 0.4))
-		ui.next({width = ui.px(math.round(h * 0.78)), height = ui.px(math.round(h * 0.78)), fg = ink(hex(HEX_WEAK))})
+		ui.next({width = ui.px(math.round(h * 0.78)), height = ui.px(math.round(h * 0.78)), fg = ink(themed("weak text"))})
 		msig := ui.button("appmenu", icon = lucide.MENU)
 		menu_key := "app_menu"
 		if msig.clicked { ui.menu_open(menu_key, msig.box.rect, msig.box.key) }
@@ -128,7 +122,7 @@ title_bar :: proc(app: ^App, em: f32) {
 		nav_button :: proc(app: ^App, id, icon, tip: string, d: int, size: f32) {
 			can := nav_can(app, d)
 			ui.a11y({role = .Button, name = tip})
-			ui.next({width = ui.px(size), height = ui.px(size), fg = ui.caption_ink(can ? hex(HEX_WEAK) : hex(HEX_FAINT))})
+			ui.next({width = ui.px(size), height = ui.px(size), fg = ui.caption_ink(can ? themed("weak text") : themed("faint text"))})
 			sig := ui.button(id, icon = icon)
 			if sig.clicked { nav_step(app, d) }
 			if can && ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(tip) } }
@@ -145,35 +139,35 @@ title_bar :: proc(app: ^App, em: f32) {
 			logo_box(app, "###tlogo", math.round(h * 0.6))
 			ui.spacer(ui.px(em * 0.5))
 			mono := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_HEADING)}
-			text("w1", "open", ink(hsig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK)), mono)
-			text("w2", "code", ink(hsig.hovering ? hex(HEX_BRIGHT) : hex(HEX_TEXT)), mono)
+			text("w1", "open", ink(hsig.hovering ? themed("text") : themed("weak text")), mono)
+			text("w2", "code", ink(hsig.hovering ? themed("bright text") : themed("text")), mono)
 			ui.spacer(ui.px(em * 0.45))
-			text("w3", "native", ink(accent()), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_HEADING)})
+			text("w3", "native", ink(ui.hue(.Accent)), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_HEADING)})
 		}
 		if hsig.clicked { command_run(app, command_find("nav.home")) }
 		if ui.hovered_for(hsig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Home  (Ctrl+H)")) } }
 		side_line(app, "###tg", b.last, em * 0.9)
 		ui.spacer(ui.px(em * 1.3))
 		if !app.servers[app.server].local {   // another computer's server: its name first
-			glyph(lucide.GLOBE, ink(hex(HEX_CYAN)), math.round(em * ICON_SMALL))
+			glyph(lucide.GLOBE, ink(ui.hue(.Cyan)), math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.3))
-			text("srv", i18n.tr(server_name(app)), ink(hex(HEX_CYAN)), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-			if pane.chat.id != "" { text("srvsep", "  /  ", ink(hex(HEX_FAINT)), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}) }
+			text("srv", i18n.tr(server_name(app)), ink(ui.hue(.Cyan)), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			if pane.chat.id != "" { text("srvsep", "  /  ", ink(themed("faint text")), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}) }
 		}
 		s := find_session(app, pane.chat.id)
 		if s == nil && pane.chat.have_self { s = &pane.chat.self }
 		if s != nil {
 			// the project's logo before its folder
 			if logo_of(app, "###tproj", project_logo(app, s.project), math.round(h * 0.55)) { ui.spacer(ui.px(em * 0.45)) }
-			text("dir", base_name(s.directory), ink(hex(HEX_WEAK)), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
-			text("sep", "  /  ", ink(hex(HEX_FAINT)), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
-			text("ttl", ellipsize(s.title, TITLE_BAR_TITLE_CHARS), ink(hex(HEX_TEXT)), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+			text("dir", base_name(s.directory), ink(themed("weak text")), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
+			text("sep", "  /  ", ink(themed("faint text")), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
+			text("ttl", ellipsize(s.title, TITLE_BAR_TITLE_CHARS), ink(themed("text")), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 		} else {
 			ui.spacer(ui.fill())
 		}
 		if pane.chat.busy {
 			ui.spacer(ui.px(em * 0.8))
-			throbber(app, pane, "###tscan", accent(), math.round(em * 3), math.round(em * 0.75), em)
+			throbber(app, pane, "###tscan", ui.hue(.Accent), math.round(em * 3), math.round(em * 0.75), em)
 			ui.spacer(ui.px(em))
 		}
 		missed_bell(app, math.round(h * 0.78), em)
@@ -198,7 +192,7 @@ session_id_copy_hint :: proc(app: ^App, id: string, em: f32) -> bool {
 	b := ui.build_box({.Clickable}, "###session_id")
 	sig := ui.signal(b)
 	if ui.parent(b) {
-		text("t", id, sig.hovering ? hex(HEX_WEAK) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+		text("t", id, sig.hovering ? themed("weak text") : themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 	}
 	ui.a11y_default(b, {role = .Button, name = i18n.tr("Copy the session ID")})
 	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Copy the session ID")) } }
@@ -218,7 +212,7 @@ chat_header :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###hdr") {
 		b := ui.parent_box()
 		d := ui.frame_new(Bar_Draw)
-		d^ = {hex(HEX_HEADER_TOP), hex(HEX_HEADER_BOTTOM), false}
+		d^ = {between("bar background", "card background", 0.5), between("background", "bar background", 0.5), false}
 		b.custom = bar_draw
 		b.custom_user = d
 		ui.spacer(ui.px(em * 1.3))
@@ -245,9 +239,9 @@ chat_header :: proc(app: ^App, em: f32) {
 						if back_target(app) == pane.chat.self.parent { go_back(app) } else { drill_down(app, pane.chat.self.parent) }
 					}
 					if ui.parent(pb) {
-						text("p", ellipsize(parent, CRUMB_PARENT_CHARS), ps.hovering ? accent() : hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+						text("p", ellipsize(parent, CRUMB_PARENT_CHARS), ps.hovering ? ui.hue(.Accent) : themed("weak text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 					}
-					text("s", i18n.tr("  ›  sub-agent"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+					text("s", i18n.tr("  ›  sub-agent"), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 				}
 			}
 			title := s != nil ? s.title : i18n.tr("New session")
@@ -259,7 +253,7 @@ chat_header :: proc(app: ^App, em: f32) {
 				if s != nil && ui.signal(tb).double_clicked { rename_inline(app, s.id, .Header) }
 				if ui.parent(tb) {
 					// (as wide as its words, shrinking first: the id goes right after it)
-					text("title", title != "" ? title : i18n.tr("Untitled"), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_HEADING), height = ui.px(em * 1.5)}, ui.text_size(0, 0))
+					text("title", title != "" ? title : i18n.tr("Untitled"), themed("bright text"), ui.Style_Mod{font_size = math.round(em * FS_HEADING), height = ui.px(em * 1.5)}, ui.text_size(0, 0))
 					// (the session's id, as opencode 2.3.0 lets it be found: muted beside the title, while the pointer is on the
 					// header; a click copies it. Never there otherwise: it is not something one reads)
 					if s != nil && ui.pointer_on(b) {
@@ -269,7 +263,7 @@ chat_header :: proc(app: ^App, em: f32) {
 				}
 			}
 			dir := s != nil ? s.directory : pane.chat.new_dir
-			text("dir", dir != "" ? dir : i18n.tr("default folder"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2), flags = dir != "" ? {.Selectable} : {}}, ui.fill())
+			text("dir", dir != "" ? dir : i18n.tr("default folder"), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2), flags = dir != "" ? {.Selectable} : {}}, ui.fill())
 			ui.spacer(ui.fill())
 		}
 		c := &pane.chat
@@ -287,7 +281,7 @@ chat_header :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.4))
 		}
 		if !narrow && c.cost > 0 {
-			if pill_button("###cost", dollars(c.cost), hex(HEX_GREEN)).clicked { stats_toggle(app) }
+			if pill_button("###cost", dollars(c.cost), ui.hue(.Green)).clicked { stats_toggle(app) }
 			ui.spacer(ui.px(em * 0.4))
 		}
 		if c.busy {
@@ -321,7 +315,7 @@ status_bar :: proc(app: ^App, em: f32) {
 	if ui.row(.Center, id = "###status") {
 		b := ui.parent_box()
 		d := ui.frame_new(Bar_Draw)
-		d^ = {hex(HEX_STATUS_TOP), hex(HEX_STATUS_BOTTOM), false}
+		d^ = {between("bar background", "card background", 0.67), between("background", "bar background", 0.67), false}
 		b.custom = bar_draw
 		b.custom_user = d
 		small := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
@@ -332,10 +326,10 @@ status_bar :: proc(app: ^App, em: f32) {
 			link_lamp(app, "###online", em * 0.8)
 			ui.spacer(ui.px(em * 0.4))
 			// (a server switch: the words that change morph in place, ui.morph_label)
-			morph_text("st", link_word(app), online(app) ? hex(HEX_WEAK) : link_color(app), small)
+			morph_text("st", link_word(app), online(app) ? themed("weak text") : link_color(app), small)
 			if base := server_base(app); base != "" {
 				ui.spacer(ui.px(em * 0.6))
-				morph_text("base", base, hex(HEX_FAINT), small)
+				morph_text("base", base, themed("faint text"), small)
 			}
 		}
 		side_line(app, "###sg_status", b.last, em * 0.8)
@@ -344,33 +338,33 @@ status_bar :: proc(app: ^App, em: f32) {
 		status_said_follow(app)
 		said := &app.chrome.said
 		if said.version != "" {
-			morph_text("v", fmt.tprintf("OpenCode %s", said.version), hex(HEX_FAINT), small)
+			morph_text("v", fmt.tprintf("OpenCode %s", said.version), themed("faint text"), small)
 			ui.spacer(ui.px(em * 0.8))
 		}
-		text("ocn_v", APP_TITLE + " " + APP_VERSION, hex(HEX_FAINT), small)
+		text("ocn_v", APP_TITLE + " " + APP_VERSION, themed("faint text"), small)
 		ui.spacer(ui.fill())
 		update_pill(app, em)
 		pend := int(app.pending)
 		if pend == 0 { app.chrome.pending_since = 0 } else if app.chrome.pending_since == 0 { app.chrome.pending_since = ui.now_ms() }
 		if pend > 0 && ui.now_ms() - app.chrome.pending_since >= PENDING_SHOW_MS {
-			text("p", fmt.tprintf(i18n.tr(pend, "%d request", "%d requests"), pend), hex(HEX_FAINT), small)
+			text("p", fmt.tprintf(i18n.tr(pend, "%d request", "%d requests"), pend), themed("faint text"), small)
 			ui.spacer(ui.px(em * 0.8))
 		}
 		if said.running > 0 {
-			morph_text("b", fmt.tprintf(i18n.tr("%d running"), said.running), accent(), small)
+			morph_text("b", fmt.tprintf(i18n.tr("%d running"), said.running), ui.hue(.Accent), small)
 			ui.spacer(ui.px(em * 0.8))
 		}
 		// (no count before a server's first list: never a "0 sessions" that is no server's)
 		if said.counted {
-			morph_text("n", fmt.tprintf(i18n.tr(said.sessions, "%d sessions", "%d sessions"), said.sessions), hex(HEX_FAINT), small)
+			morph_text("n", fmt.tprintf(i18n.tr(said.sessions, "%d sessions", "%d sessions"), said.sessions), themed("faint text"), small)
 			ui.spacer(ui.px(em * 0.8))
 		}
 		if app.prefs.show_fps {
 			fps := app.chrome.frame_ms > 0 ? 1000 / app.chrome.frame_ms : 0
-			text("fps", i18n.decimal_marks(fmt.tprintf(i18n.tr("%3.0f fps  %.1f ms"), fps, app.chrome.work_ms)), hex(HEX_FAINT), small)
+			text("fps", i18n.decimal_marks(fmt.tprintf(i18n.tr("%3.0f fps  %.1f ms"), fps, app.chrome.work_ms)), themed("faint text"), small)
 			ui.spacer(ui.px(em * 0.8))
 			if n := app.cx.unreadable.count; n > 0 {   // (unreadable.odin: the log says what they were)
-				text("unr", fmt.tprintf(i18n.tr(n, "%d unreadable", "%d unreadable"), n), hex(HEX_YELLOW), small)
+				text("unr", fmt.tprintf(i18n.tr(n, "%d unreadable", "%d unreadable"), n), ui.hue(.Yellow), small)
 				ui.spacer(ui.px(em * 0.8))
 			}
 		}

@@ -11,12 +11,6 @@ import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
 
-
-HEX_USER_PLATE_TOP    :: 0x222222ff
-HEX_USER_PLATE_BOTTOM :: 0x1a1a1aff
-HEX_USER_TEXT         :: 0xf2f2f2ff
-HEX_ANSWER_TEXT       :: 0xdcdcdcff
-
 // Where the conversation is on the window and how wide, and what the reader opened in it. (Where it is read and scrolled is
 // Chat_View_State: that starts over with each session.)
 Conversation :: struct {
@@ -50,7 +44,7 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32, avail: f32) {
 	// focus, which is mostly in the composer (the dock, below the messages). Keyed by the session shown, so another
 	// session shows its own zoom in this build; the home page ("") has the zone's own, not remembered.
 	zoom := ui.zoom_zone(&pane.zone, pane.chat.id)
-	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = hex(HEX_BG0), radius = 0})
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = themed("background"), radius = 0})
 	if ui.column(flags = {.Draw_Background}, id = "###main") {
 		pane.conversation.root = ui.parent_box().key
 		sc := ui.scale()
@@ -131,7 +125,7 @@ column_handles :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, side, col
 			s := ui.scale()
 			c := draw.rect_center(b.rect)
 			len_ := math.round(COLUMN_GRIP_PX * s)
-			col := ui.srgb_step(hex(HEX_LINE), hex(HEX_WEAK), lit)
+			col := ui.srgb_step(themed("border"), themed("weak text"), lit)
 			for i in ([]f32{-1, 1}) {   // two short strokes, side by side
 				x := math.round(c.x + i * 1.5 * p)
 				draw.rect(dc, {{x - p * 0.5, c.y - len_ * 0.5}, {x + p * 0.5, c.y + len_ * 0.5}}, col, p * 0.5)
@@ -161,8 +155,8 @@ go_bottom_pill :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, avail, em
 		a := (^f32)(user)^
 		r := (b.rect.max.y - b.rect.min.y) * 0.5
 		draw.box_shadow(dc, b.rect, radii4(r), 8 * ui.scale(), {0, 0, 0, 0.6 * a})
-		draw.rect(dc, b.rect, ui.with_alpha(hex(b.hot_t > FADE_VISIBLE ? HEX_BG4 : HEX_BG3), a), r)
-		draw.rect(dc, b.rect, ui.with_alpha(hex(HEX_FLOATING_BORDER), a), r, px1())
+		draw.rect(dc, b.rect, ui.with_alpha(b.hot_t > FADE_VISIBLE ? between("button background", "border", 0.83) : themed("button background"), a), r)
+		draw.rect(dc, b.rect, ui.with_alpha(themed("floating border"), a), r, px1())
 	}
 	sig := ui.signal(b)
 	if sig.clicked {
@@ -171,9 +165,9 @@ go_bottom_pill :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, avail, em
 	}
 	if ui.parent(b) {
 		ui.spacer(ui.fill())
-		glyph(lucide.CHEVRON_DOWN, ui.with_alpha(hex(HEX_TEXT_SOFT), t), math.round(em * ICON_SMALL))
+		glyph(lucide.CHEVRON_DOWN, ui.with_alpha(themed("soft text"), t), math.round(em * ICON_SMALL))
 		ui.spacer(ui.px(em * 0.3))
-		text("t", i18n.tr("Latest"), ui.with_alpha(hex(HEX_TEXT_SOFT), t), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+		text("t", i18n.tr("Latest"), ui.with_alpha(themed("soft text"), t), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.fill())
 	}
 }
@@ -216,10 +210,10 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		if ui.row(.Center, id = "###older") {
 			ui.spacer(ui.fill())
 			if c.loading_older {
-				scanner("###older_bar", accent(), math.round(em * 5), math.round(em * 0.9))
+				scanner("###older_bar", ui.hue(.Accent), math.round(em * 5), math.round(em * 0.9))
 				ui.spacer(ui.px(em * 0.7))
 			}
-			if ui.tags("weak") { text("older_t", c.older_failed > 0 ? i18n.tr("Earlier messages could not be read: scroll to try again") : i18n.tr("Loading earlier messages…"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
+			if ui.tags("weak") { text("older_t", c.older_failed > 0 ? i18n.tr("Earlier messages could not be read: scroll to try again") : i18n.tr("Loading earlier messages…"), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
 			ui.spacer(ui.fill())
 		}
 		ui.spacer(ui.px(em * 0.6))
@@ -290,7 +284,7 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(line), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###working") {
 			ui.spacer(ui.px(em * 0.4))
-			throbber(app, pane, "###wl", accent(), math.round(em * 7), math.round(em * 0.9), em)
+			throbber(app, pane, "###wl", ui.hue(.Accent), math.round(em * 7), math.round(em * 0.9), em)
 			ui.spacer(ui.fill())
 			if hint_action("###stop_hint", i18n.tr("Esc twice to stop"), em, intent = .Danger) { interrupt_session(app, c.id) }
 		}
@@ -357,9 +351,9 @@ first_line :: proc(s: string) -> string {
 note_line :: proc(app: ^App, m: ^Message, em: f32, icon: string, s: string) {
 	ui.next({width = ui.fill(), height = ui.px(em * 1.9), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###n_%s", m.id)) {
-		glyph(icon, hex(HEX_FAINT), math.round(em * ICON_SMALL))
+		glyph(icon, themed("faint text"), math.round(em * ICON_SMALL))
 		ui.spacer(ui.px(em * 0.3))
-		text("t", s, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
+		text("t", s, themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 	}
 	ui.spacer(ui.px(em * 0.6))
 }
@@ -377,15 +371,15 @@ switch_line :: proc(app: ^App, m: ^Message, em: f32) {
 	if ui.row(.Center, id = fmt.tprintf("###sw_%s", m.id)) {
 		groove(across = true)
 		ui.spacer(ui.px(em * 0.6))
-		glyph(icon, hex(HEX_FAINT), math.round(em * ICON_SMALL))
+		glyph(icon, themed("faint text"), math.round(em * ICON_SMALL))
 		ui.spacer(ui.px(em * 0.35))
-		text("w", word, hex(HEX_FAINT), small)
+		text("w", word, themed("faint text"), small)
 		ui.spacer(ui.px(em * 0.5))
 		if m.previous != "" && m.previous != m.text {
-			text("p", m.previous, hex(HEX_FAINT), small)
-			text("arrow", "  →  ", hex(HEX_FAINT), small)
+			text("p", m.previous, themed("faint text"), small)
+			text("arrow", "  →  ", themed("faint text"), small)
 		}
-		text("n", m.text, hex(HEX_WEAK), small)
+		text("n", m.text, themed("weak text"), small)
 		ui.spacer(ui.px(em * 0.6))
 		groove(across = true)
 	}
@@ -398,7 +392,7 @@ turn_end :: proc(app: ^App, m: ^Message, em: f32) {
 		groove(across = true)
 		if m.finish != "" && m.finish != "succeeded" {
 			ui.spacer(ui.px(em * 0.5))
-			col := m.finish == "interrupted" ? hex(HEX_YELLOW) : hex(HEX_RED)
+			col := m.finish == "interrupted" ? ui.hue(.Yellow) : ui.hue(.Red)
 			text("o", m.finish, col, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.5))
 			groove(across = true)
@@ -413,7 +407,7 @@ USER_IMAGE_H_PX :: 220
 user_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 	ui.spacer(ui.px(em * 0.4))
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if plate(fmt.tprintf("###u_%s", m.id), top = HEX_USER_PLATE_TOP, bottom = HEX_USER_PLATE_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.09) {
+	if plate(fmt.tprintf("###u_%s", m.id), top = between("button background", "border", 0.33), bottom = between("card background", "button background", 0.5), radius = CARD_RADIUS, shadow = 8, rim = 0.09) {
 		prompt_rail_focus(app, pane, m, ui.parent_box())
 		ui.spacer(ui.px(em * 0.75))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -423,14 +417,14 @@ user_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 			if ui.column() {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 				if ui.row(.Center, id = "###who") {
-					glyph(lucide.USER, accent(), math.round(em * ICON_SMALL), em * 1.1)
+					glyph(lucide.USER, ui.hue(.Accent), math.round(em * ICON_SMALL), em * 1.1)
 					ui.spacer(ui.px(em * 0.2))
-					text("you", i18n.tr("You"), accent(), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+					text("you", i18n.tr("You"), ui.hue(.Accent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 					ui.spacer(ui.fill())
-					text("at", clock_text(m.created, app.prefs.clock24), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					text("at", clock_text(m.created, app.prefs.clock24), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}
 				ui.spacer(ui.px(em * 0.35))
-				runs := link_runs(&m.text_runs, m.text, {color = hex(HEX_USER_TEXT)}, pane.chat.alloc)
+				runs := link_runs(&m.text_runs, m.text, {color = themed("text")}, pane.chat.alloc)
 				ui.next({width = ui.fill(), flags = {.Selectable}})
 				link_clicked(ui.rich_paragraph("###text", runs))
 				if len(m.images) > 0 {
@@ -448,12 +442,12 @@ user_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 
 agent_color :: proc(agent: string) -> Color {
 	switch agent {
-	case "build":   return accent()
-	case "plan":    return hex(HEX_BLUE)
-	case "general": return hex(HEX_PURPLE)
-	case "explore": return hex(HEX_CYAN)
+	case "build":   return ui.hue(.Accent)
+	case "plan":    return ui.hue(.Blue)
+	case "general": return ui.hue(.Purple)
+	case "explore": return ui.hue(.Cyan)
 	}
-	return hex(HEX_GREEN)
+	return ui.hue(.Green)
 }
 
 // `m` goes on from `prev` (an assistant step of the same agent and model, right after it): no header of its own.
@@ -499,11 +493,11 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 			text("ag", strings.to_upper(name[:1], context.temp_allocator), agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			text("ag2", name[1:], agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			if m.model != "" {
-				text("dot", "  ·  ", hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
-				text("md", m.model, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+				text("dot", "  ·  ", themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+				text("md", m.model, themed("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			}
 			ui.spacer(ui.fill())
-			text("at", clock_text(m.created, app.prefs.clock24), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("at", clock_text(m.created, app.prefs.clock24), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
 		ui.spacer(ui.px(em * 0.4))
 		}
@@ -512,7 +506,7 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 			switch p.kind {
 			case .Text:
 				if len(p.text) > 0 {
-					markdown.view(md_doc(&pane.chat, pid), pid, string(p.text[:]), md_config(app, hex(HEX_ANSWER_TEXT), pane))
+					markdown.view(md_doc(&pane.chat, pid), pid, string(p.text[:]), md_config(app, themed("text"), pane))
 					ui.spacer(ui.px(em * 0.6))
 				}
 			case .Reasoning: reasoning_part(app, pane, &p, pid, em)
@@ -528,7 +522,7 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 		if app.prefs.usage && !m.streaming && m.tokens_out > 0 && m.finish == "stop" {
 			ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###foot") {
-				text("tk", m.cost > 0 ? fmt.tprintf(i18n.tr("%s in · %s out · %s"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), dollars(m.cost, 3)) : fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out)), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				text("tk", m.cost > 0 ? fmt.tprintf(i18n.tr("%s in · %s out · %s"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), dollars(m.cost, 3)) : fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out)), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			}
 		}
 	}

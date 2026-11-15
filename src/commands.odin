@@ -172,8 +172,8 @@ help_view :: proc(v: ^ui.View, app: ^App) {
 				row :: proc(app: ^App, id, keys, what: string, em: f32) {
 					ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 					if ui.row(.Center, id = id) {
-						text("w", what, hex(HEX_TEXT_SOFT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
-						text("k", keys, hex(HEX_WEAK), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+						text("w", what, themed("soft text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+						text("k", keys, themed("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 					}
 				}
 				group := ""

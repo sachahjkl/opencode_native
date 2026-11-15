@@ -1,6 +1,9 @@
 package ocn
 
+import "core:os"
+import "core:strings"
 import "core:testing"
+import "gt:draw"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
 
@@ -14,40 +17,95 @@ theme_app :: proc(app: ^App) -> (prev: ^App) {
 
 @(private = "file")
 theme_app_end :: proc(app: ^App, prev: ^App) {
-	delete(app.cx.theme.cache)
 	prefs_page.themes_file_destroy(&app.cx.theme.file)
 	the_app = prev
 }
 
+// The magenta of an entry the theme does not have (ui.theme_lookup).
+@(private = "file")
+MISSING :: Color{1, 0, 1, 1}
+
+// Every name a view asks the theme for (themed, between: read in the program's own files) is an entry of every theme, dark
+// and light: a name the theme lacks draws magenta. And the entries are the version shown: its texts, its steps, its hues
+// (the palette's blue was 0, and a view's blue the accent).
 @(test)
-opencode_dark_moves_nothing :: proc(t: ^testing.T) {
+every_name_a_view_asks_for_is_the_themes :: proc(t: ^testing.T) {
 	app := new(App)
 	defer free(app)
 	prev := theme_app(app)
 	defer theme_app_end(app, prev)
-	theme_set(app, 0, false)
-	for c in ([]u32{HEX_BG0, HEX_TEXT, HEX_PEACH, HEX_DIFF_ADD_BG, HEX_ON_ACCENT, 0x12345678}) { testing.expect_value(t, themed(c), c) }
+	names := theme_names_asked()
+	testing.expectf(t, len(names) > 20, "the names asked for, read in the sources: %d", len(names))
+	for def, i in themes(app) {
+		for light in ([]bool{false, true}) {
+			theme_set(app, i, light)
+			th: ui.Theme
+			theme_setup(&th)
+			defer ui.theme_destroy(&th)
+			for name in names {
+				testing.expectf(t, ui.theme_lookup(&th, nil, name) != MISSING, "%s (light %v): no entry %q", def.name, light, name)
+			}
+			c := theme_colors()
+			testing.expect_value(t, ui.theme_lookup(&th, nil, "faint text"), draw.hex(c.texts[0]))
+			testing.expect_value(t, ui.theme_lookup(&th, nil, "weak text"), draw.hex(c.texts[1]))
+			testing.expect_value(t, ui.theme_lookup(&th, nil, "text"), draw.hex(c.texts[2]))
+			testing.expect_value(t, ui.theme_lookup(&th, nil, "bright text"), draw.hex(c.texts[3]))
+			testing.expect_value(t, ui.theme_lookup(&th, nil, "well"), draw.hex(c.steps[0]))
+			testing.expect_value(t, ui.theme_lookup(&th, nil, "background"), draw.hex(c.steps[1]))
+			testing.expect_value(t, ui.theme_lookup(&th, nil, "bar background"), draw.hex(c.steps[2]))
+			testing.expect_value(t, ui.theme_lookup(&th, nil, "card background"), draw.hex(c.steps[3]))
+			testing.expect_value(t, ui.theme_lookup(&th, nil, "button background"), draw.hex(c.steps[4]))
+			testing.expect_value(t, ui.theme_lookup(&th, nil, "border"), draw.hex(c.steps[5]))
+			hue_names := [8]string{"hue_accent", "hue_blue", "hue_purple", "hue_green", "hue_yellow", "hue_red", "hue_cyan", "hue_rose"}
+			for name, h in hue_names { testing.expect_value(t, ui.theme_lookup(&th, nil, name), draw.hex(c.hues[h])) }
+		}
+	}
 }
 
-@(test)
-a_theme_moves_greys_to_its_steps_and_colours_to_its_hues :: proc(t: ^testing.T) {
-	app := new(App)
-	defer free(app)
-	prev := theme_app(app)
-	defer theme_app_end(app, prev)
-	gruvbox := theme_index(app, "gruvbox")
-	testing.expect(t, gruvbox > 0, "Gruvbox, by its name in any case")
-	def := themes(app)[gruvbox]
-	theme_set(app, gruvbox, false)
-	testing.expect_value(t, themed(HEX_BG0), def.dark.steps[1])
-	testing.expect_value(t, themed(HEX_LINE), def.dark.steps[5])
-	testing.expect_value(t, themed(HEX_TEXT), def.dark.texts[2])
-	testing.expect_value(t, themed(HEX_GREEN), def.dark.hues[3])
-	testing.expect_value(t, themed(HEX_PEACH), def.dark.hues[0])
-	testing.expect_value(t, themed(HEX_PEACH & 0xffffff00 | 0x40), def.dark.hues[0] & 0xffffff00 | 0x40)   // (its alpha kept)
-	theme_set(app, gruvbox, true)
-	testing.expect_value(t, themed(HEX_BG0), def.light.steps[1])
-	testing.expect_value(t, themed(HEX_TEXT), def.light.texts[2])
+// The names in `themed("…")` and `between("…", "…", t)` in the program's files.
+@(private = "file")
+theme_names_asked :: proc() -> []string {
+	names := make([dynamic]string, context.temp_allocator)
+	entries, err := os.read_all_directory_by_path(#directory, context.temp_allocator)
+	if err != nil { return nil }
+	for e in entries {
+		if !strings.has_suffix(e.name, ".odin") || strings.has_suffix(e.name, "_test.odin") { continue }
+		data, rerr := os.read_entire_file(e.fullpath, context.temp_allocator)
+		if rerr != nil { continue }
+		rest := string(data)
+		for {
+			at := min_index(strings.index(rest, "themed("), strings.index(rest, "between("))
+			if at < 0 { break }
+			// (another package's procedure of that name, diff.between, or a longer name: not ours)
+			if at > 0 {
+				b := rest[at - 1]
+				if b == '.' || b == '_' || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') { rest = rest[at + 1:]; continue }
+			}
+			rest = rest[at:]
+			end := strings.index_byte(rest, ')')
+			if end < 0 { break }
+			call := rest[:end]
+			rest = rest[end:]
+			// (each quoted name in the call)
+			for {
+				q := strings.index_byte(call, '"')
+				if q < 0 { break }
+				call = call[q + 1:]
+				close := strings.index_byte(call, '"')
+				if close < 0 { break }
+				append(&names, call[:close])
+				call = call[close + 1:]
+			}
+		}
+	}
+	return names[:]
+}
+
+@(private = "file")
+min_index :: proc(a, b: int) -> int {
+	if a < 0 { return b }
+	if b < 0 { return a }
+	return min(a, b)
 }
 
 // In every theme, dark and light: the text reads on the conversation, and the session shown in the sidebar reads on its ground.
@@ -60,29 +118,31 @@ every_theme_reads :: proc(t: ^testing.T) {
 	for def, i in themes(app) {
 		for light in ([]bool{false, true}) {
 			theme_set(app, i, light)
-			testing.expectf(t, ui.contrast(hex(HEX_TEXT), hex(HEX_BG0)) >= READABLE_TEXT, "%s (light %v): the text on the conversation, %.2f", def.name, light, ui.contrast(hex(HEX_TEXT), hex(HEX_BG0)))
+			c := theme_colors()
+			text, page, bright, weak, accent := draw.hex(c.texts[2]), draw.hex(c.steps[1]), draw.hex(c.texts[3]), draw.hex(c.texts[1]), draw.hex(c.hues[0])
+			testing.expectf(t, ui.contrast(text, page) >= READABLE_TEXT, "%s (light %v): the text on the conversation, %.2f", def.name, light, ui.contrast(text, page))
 			g := chosen_ground()
-			title := ui.readable(hex(HEX_BRIGHT), g, READABLE_TEXT)
-			quiet := ui.readable(hex(HEX_WEAK), g, READABLE_QUIET)
+			title := ui.readable(bright, g, READABLE_TEXT)
+			quiet := ui.readable(weak, g, READABLE_QUIET)
 			testing.expectf(t, ui.contrast(title, g) >= READABLE_TEXT, "%s (light %v): the title of the session shown, %.2f", def.name, light, ui.contrast(title, g))
 			testing.expectf(t, ui.contrast(quiet, g) >= READABLE_QUIET, "%s (light %v): its folder and its age, %.2f", def.name, light, ui.contrast(quiet, g))
 			// an accent button's label (Send, New session) on the accent
-			testing.expectf(t, ui.contrast(hex(HEX_ON_ACCENT), hex(HEX_PEACH)) >= READABLE_QUIET, "%s (light %v): a label on the accent, %.2f", def.name, light, ui.contrast(hex(HEX_ON_ACCENT), hex(HEX_PEACH)))
+			on_accent := draw.hex(themed_palette().accent_text)
+			testing.expectf(t, ui.contrast(on_accent, accent) >= READABLE_QUIET, "%s (light %v): a label on the accent, %.2f", def.name, light, ui.contrast(on_accent, accent))
 		}
 	}
 }
 
 
 // An intent's button (accent, danger, success...) in a dialog keeps its own background (and its label stays readable on
-// it): our colours of what floats were an entry ahead of the palette's and won over the button's (the setup dialog's
-// Uninstall: white on white).
+// it): an entry of ours for what floats, ahead of the palette's, won over the button's (the setup dialog's Uninstall:
+// white on white).
 @(test)
 a_button_in_a_dialog_keeps_its_background :: proc(t: ^testing.T) {
 	th: ui.Theme
 	defer ui.theme_destroy(&th)
 	theme_setup(&th)
 	floating := ui.theme_lookup(&th, {"floating"}, "background")
-	testing.expect_value(t, floating, hex(HEX_FLOATING_BG))
 	for intent in ui.Intent {
 		kind := ui.intent_tag(intent)
 		if kind == "" { continue }
@@ -91,4 +151,3 @@ a_button_in_a_dialog_keeps_its_background :: proc(t: ^testing.T) {
 		testing.expect_value(t, bg, ui.theme_lookup(&th, {kind}, "background"))
 	}
 }
-

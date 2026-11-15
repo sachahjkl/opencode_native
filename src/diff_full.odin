@@ -48,9 +48,9 @@ diff_full_view :: proc(v: ^ui.View, d: ^Diff_Full) {
 	ui.view_title(v, d.title)
 	{
 		if ui.view_header_tools(v) {
-			text("a", fmt.tprintf("+%d", d.doc.added), hex(HEX_GREEN), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
+			text("a", fmt.tprintf("+%d", d.doc.added), ui.hue(.Green), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
 			ui.spacer(ui.px(em * 0.5))
-			text("d", fmt.tprintf("-%d", d.doc.removed), hex(HEX_RED), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
+			text("d", fmt.tprintf("-%d", d.doc.removed), ui.hue(.Red), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
 			ui.spacer(ui.px(em))
 			if ui.button("df_copy", i18n.tr("Copy")).clicked {
 				clip_set(d.doc.patch)

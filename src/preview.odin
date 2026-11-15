@@ -85,7 +85,7 @@ tab_look_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	r := b.rect
 	h := 2 * px1()
 	inset := TAB_LINE_INSET_EM * ui.font_size()
-	draw.rect(dc, {{r.min.x + inset, r.max.y - h}, {r.max.x - inset, r.max.y}}, accent())
+	draw.rect(dc, {{r.min.x + inset, r.max.y - h}, {r.max.x - inset, r.max.y}}, ui.hue(.Accent))
 }
 
 // The strip's bar under those tabs.
@@ -93,9 +93,9 @@ tab_look_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 strip_look :: proc() {
 	b := ui.parent_box()
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-		if ui.edged() { ui.caption_face(dc, b.rect, hex(HEX_BG1), hex(HEX_BG1), false); return }
-		draw.rect(dc, b.rect, hex(HEX_BG1))
-		draw.rect(dc, {{b.rect.min.x, b.rect.max.y - px1()}, b.rect.max}, hex(HEX_LINE))
+		if ui.edged() { ui.caption_face(dc, b.rect, themed("bar background"), themed("bar background"), false); return }
+		draw.rect(dc, b.rect, themed("bar background"))
+		draw.rect(dc, {{b.rect.min.x, b.rect.max.y - px1()}, b.rect.max}, themed("border"))
 	}
 }
 
@@ -319,7 +319,7 @@ preview_strip :: proc(app: ^App, p: ^Preview, em: f32) {
 			if sig.clicked { p.due_front = t }
 			if sig.middle_clicked { p.due_close = t }
 			if ui.parent(b) {
-				col := in_front ? hex(HEX_BRIGHT) : sig.hovering ? hex(HEX_TEXT_SOFT) : hex(HEX_WEAK)
+				col := in_front ? themed("bright text") : sig.hovering ? themed("soft text") : themed("weak text")
 				ui.spacer(ui.px(em * 0.6))
 				text("t", ellipsize(title, PREVIEW_TAB_TITLE_MOST), col, ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 				ui.a11y({role = .Button, name = i18n.tr("Close this tab")})
@@ -384,7 +384,7 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 			// (a remote server's loopback address, opened at its host: said where the address is read)
 			if mapped := preview_mapped_shown(app, t); mapped != "" {
 				ui.spacer(ui.px(em * 0.3))
-				ui.next({width = ui.text_size(em * 0.4), height = ui.px(math.round(em * 1.3)), font_size = math.round(em * FS_CAPTION), radius = math.round(em * 0.3), bg = ui.with_alpha(accent(), 0.16), fg = accent()})
+				ui.next({width = ui.text_size(em * 0.4), height = ui.px(math.round(em * 1.3)), font_size = math.round(em * FS_CAPTION), radius = math.round(em * 0.3), bg = ui.with_alpha(ui.hue(.Accent), 0.16), fg = ui.hue(.Accent)})
 				b := ui.build_box({.Draw_Text, .Draw_Background, .No_Text_Trunc}, fmt.tprintf("%s###pv_mapped", i18n.tr("on the server")))
 				if ui.hovered_for(ui.signal(b)) {
 					if ui.tooltip() { ui.tooltip_text(fmt.tprintf(i18n.tr("%s is the server's machine: opened at its address"), mapped)) }
@@ -411,7 +411,7 @@ preview_view :: proc(v: ^ui.View, app: ^App) {
 	// (unseen, it is measured: its page waits for where it shows)
 	if v.shown { p.shown = true }
 	t := preview_front_made(app, p)
-	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = hex(HEX_PREVIEW_BG), radius = 0})
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = themed("background"), radius = 0})
 	if ui.column(flags = {.Draw_Background}, id = "###pv") {
 		preview_strip(app, p, em)
 		preview_bar(app, t, em)
@@ -440,7 +440,7 @@ preview_view :: proc(v: ^ui.View, app: ^App) {
 			}
 			if msg != "" {
 				ui.spacer(ui.fill())
-				text("m", msg, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+				text("m", msg, themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 				if failed {
 					ui.spacer(ui.px(em * 0.5))
 					if ui.button("pv_again", i18n.tr("Try again"), lucide.REFRESH_CW, {height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { web_start(app, t) }

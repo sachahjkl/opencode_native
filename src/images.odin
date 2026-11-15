@@ -158,9 +158,6 @@ copy_job_free :: proc(data: rawptr) {
 ////////////////////////////////
 // Boxes
 
-HEX_IMAGE_PENDING     :: 0x0b0b0bff
-HEX_IMAGE_FAILED      :: 0x140b0bff
-HEX_IMAGE_FAILED_TEXT :: 0xc08080ff
 SHIMMER_RATE          :: 0.002   // radians per millisecond
 THUMB_PENDING_SCALE   :: 0.6     // of the room given, until its size is known
 
@@ -179,13 +176,13 @@ image_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		draw.image(dc, d.tex, r, {}, draw.WHITE, rad)
 		if d.frame { draw.rect(dc, r, {1, 1, 1, 0.08 + 0.18 * b.hot_t}, rad, max(1, math.round(s))) }
 	case .Pending:
-		draw_well(dc, r, rad, hex(HEX_IMAGE_PENDING))
+		draw_well(dc, r, rad, themed("well"))
 		// a slow shimmer while it decodes
 		t := f32(ui.now_ms()) * SHIMMER_RATE
 		x := r.min.x + (r.max.x - r.min.x) * (0.5 + 0.5 * math.sin(t))
 		draw.rect(dc, {{x - 20 * s, r.min.y + 2 * s}, {x + 20 * s, r.max.y - 2 * s}}, {1, 1, 1, 0.03}, rad, 0, 14 * s)
 	case .Failed:
-		draw_well(dc, r, rad, hex(HEX_IMAGE_FAILED))
+		draw_well(dc, r, rad, between("well", "hue_red", 0.05))
 	}
 }
 
@@ -217,7 +214,7 @@ image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) ->
 	if state == .Failed {
 		if ui.parent(b) {
 			em := ui.font_size()
-			ui.next({width = ui.fill(), height = ui.fill(), fg = hex(HEX_IMAGE_FAILED_TEXT), font_size = math.round(em * FS_SMALL), text_align = .Center})
+			ui.next({width = ui.fill(), height = ui.fill(), fg = themed("bad text"), font_size = math.round(em * FS_SMALL), text_align = .Center})
 			ui.build_box({.Draw_Text}, fmt.tprintf("%s###f", label_safe(picture_failed_words(p))))
 		}
 	}
@@ -290,8 +287,6 @@ image_view_open :: proc(app: ^App, ref: Image_Ref) {
 image_view_shown :: proc(app: ^App) -> bool { return ui.view_is_open(&app.program_views, IMAGE_VIEW) }
 
 IMAGE_NAME_CHARS :: 80
-HEX_VIEWER_NAME  :: 0xe0e0e0ff
-HEX_VIEWER_WELL  :: 0x070707ff
 VIEWER_PAD_EM    :: 0.5   // around the picture (the edges' grips are there)
 VIEWER_BAR_EM    :: 2.6   // the name, the size and the buttons, under the picture
 VIEWER_MIN_W_EM  :: 26    // what the bar needs: a small picture gets room on its sides
@@ -343,7 +338,7 @@ viewer_outside :: proc(p, view, picture, pan: [2]f32) -> bool {
 view_well_draw :: proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) {
 	// (the state of the window drawn, as corners(): ui.current_state is the open build's, nil while a frame is drawn)
 	app := the_app
-	if app == nil { ui.machined_well(dc, b.rect, 0, hex(HEX_VIEWER_WELL)); return }
+	if app == nil { ui.machined_well(dc, b.rect, 0, themed("well")); return }
 	state := view_state(app, IMAGE_VIEW)
 	radius: f32
 	for a := b.parent; a != nil; a = a.parent {
@@ -352,7 +347,7 @@ view_well_draw :: proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) {
 		radius = ui.concentric_radius(ui.box_drawn_radii(state, a)[0], inset)
 		break
 	}
-	ui.machined_well(dc, b.rect, radius, hex(HEX_VIEWER_WELL))
+	ui.machined_well(dc, b.rect, radius, themed("well"))
 }
 
 // The image viewer (IMAGE_VIEW): what it shows, and how it is zoomed, moved and sized. As a dialog it hugs its picture
@@ -441,11 +436,11 @@ image_view :: proc(v: ^ui.View, app: ^App) {
 			ui.next({width = ui.fill(), height = ui.px(bar), axis = .X, cross = .Center})
 			if ui.row(.Center) {
 				ui.spacer(ui.px(em))
-				text("n", ellipsize(name, IMAGE_NAME_CHARS), hex(HEX_VIEWER_NAME), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+				text("n", ellipsize(name, IMAGE_NAME_CHARS), themed("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 				ui.spacer(ui.px(em * 0.6))
 				zoom := f.fit * app.viewer.view.zoom / sc * 100
 				dims := fmt.tprintf("%d × %d  ·  %s", int(source.x), int(source.y), i18n.percent(f64(zoom) / 100))
-				text("d", dims, hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+				text("d", dims, themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.8))
 				bh := math.round(em * BUTTON_SMALL_H_EM)
 				most := max(1, VIEW_NATIVE_MAX * sc / f.fit)   // (as ui.preview's: its zoom_max over what fits)

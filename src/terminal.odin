@@ -153,7 +153,8 @@ color_of :: proc(c: Vt_Rgb) -> Color { return draw.hex(u32(c.r) << 24 | u32(c.g)
 // The grid's own background and text, the theme's.
 term_recolour :: proc(t: ^Term) {
 	if t.vt == nil { return }
-	bg, fg := rgb_of(themed(HEX_TERM_BG)), rgb_of(themed(HEX_TEXT))
+	c := theme_colors()
+	bg, fg := rgb_of(c.steps[1]), rgb_of(c.texts[2])
 	ghostty_terminal_set(t.vt, VT_OPT_COLOR_BACKGROUND, &bg)
 	ghostty_terminal_set(t.vt, VT_OPT_COLOR_FOREGROUND, &fg)
 	palette := term_palette(bg, fg)
@@ -165,12 +166,14 @@ term_recolour :: proc(t: ^Term) {
 // the diffs' are), the cube and the greys after them made between its background and its text (libghostty-vt's
 // palette_generate). Ghostty's own were a console's, the same in every theme.
 term_palette :: proc(bg, fg: Vt_Rgb) -> (palette: [256]Vt_Rgb) {
+	c := theme_colors()
+	h := c.hues   // (accent, blue, purple, green, yellow, red, cyan, rose)
 	named := [16]u32{
-		HEX_BG3, HEX_RED, HEX_GREEN, HEX_YELLOW, HEX_BLUE, HEX_PURPLE, HEX_CYAN, HEX_TEXT_SOFT,
-		HEX_FAINT, HEX_RED, HEX_GREEN, HEX_YELLOW, HEX_BLUE, HEX_PURPLE, HEX_CYAN, HEX_BRIGHT,
+		c.steps[4], h[5], h[3], h[4], h[1], h[2], h[6], c.texts[2],
+		c.texts[0], h[5], h[3], h[4], h[1], h[2], h[6], c.texts[3],
 	}
-	for c, i in named {
-		x := themed(c)
+	for x0, i in named {
+		x := x0
 		// (the bright eight: a step toward white, as terminals draw them)
 		if i >= 9 && i <= 14 { l := ui.lighten(draw.hex(x), 0.25); x = u32(l.r * 255) << 24 | u32(l.g * 255) << 16 | u32(l.b * 255) << 8 | 0xff }
 		palette[i] = rgb_of(x)
@@ -1150,7 +1153,7 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * TERM_BANNER_H_EM)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###term_banner") {
 		ui.spacer(ui.px(em * 0.6))
-		text("w", words, hex(t.link == .Closed ? HEX_WEAK : HEX_YELLOW), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
+		text("w", words, t.link == .Closed ? themed("weak text") : ui.hue(.Yellow), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		h := math.round(em * BUTTON_COMPACT_H_EM)
 		if t.link == .Closed {
 			if ui.button("term_restart", i18n.tr("Restart"), lucide.REFRESH_CW, {height = h, disabled = s.made.state == .Loading}).clicked { term_restart(app, t) }
@@ -1168,7 +1171,7 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 term_style :: proc(app: ^App, em: f32) -> term.Style {
 	return {
 		fonts = &app.fonts, font = app.term_font, font_bold = app.term_font_bold, font_size = em * FS_NOTE, pad = TERM_PAD,
-		background = hex(HEX_TERM_BG), selection = hex(HEX_TERM_SELECTION), faint = TERM_FAINT, cursor_alpha = TERM_CURSOR_ALPHA,
+		background = themed("background"), selection = between("background", "hue_blue", 0.42), faint = TERM_FAINT, cursor_alpha = TERM_CURSOR_ALPHA,
 	}
 }
 

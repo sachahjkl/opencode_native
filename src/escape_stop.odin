@@ -52,7 +52,7 @@ escape_stop_banner :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		return
 	}
 	ui.wake_within(built_state(app), max(1, int(math.ceil(app.escape_stop.until - ui.now_ms()))))
-	red := hex(HEX_RED)
+	red := ui.hue(.Red)
 	h := math.round(em * QUEUE_ROW_H_EM)
 	ui.next({width = ui.fill(), height = ui.px(h), axis = .X})
 	if ui.row(id = "###stop_armed") {

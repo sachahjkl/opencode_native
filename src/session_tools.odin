@@ -493,26 +493,26 @@ changes_view :: proc(view: ^ui.View, app: ^App) {
 						head := ui.build_box({.Clickable}, "###fh")
 						if ui.signal(head).clicked { f.open = !f.open }
 						if ui.parent(head) {
-							glyph(f.open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, hex(HEX_FAINT), math.round(em * ICON_SMALL))
+							glyph(f.open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, themed("faint text"), math.round(em * ICON_SMALL))
 							ui.spacer(ui.px(em * 0.3))
-							text("n", f.file, hex(HEX_TEXT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
+							text("n", f.file, themed("text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 							if f.status != "" && f.status != "modified" {
-								text("s", f.status, hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)})
+								text("s", f.status, themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)})
 								ui.spacer(ui.px(em * 0.6))
 							}
 							if f.patch != "" {
-								ui.next({width = ui.text_size(0), height = ui.px(em * 1.4), font_size = math.round(em * FS_CAPTION), fg = hex(HEX_FAINT), cursor = .Hand, text_pad = 0})
+								ui.next({width = ui.text_size(0), height = ui.px(em * 1.4), font_size = math.round(em * FS_CAPTION), fg = themed("faint text"), cursor = .Hand, text_pad = 0})
 								full := ui.build_box({.Clickable, .Draw_Text}, fmt.tprintf("%s###ff", i18n.tr("Full view")))
 								if ui.signal(full).clicked { diff_full_open(app, f.file, f.patch); f.open = !f.open }   // (the head's click is undone: this one was not for it)
 								ui.spacer(ui.px(em * 0.8))
 							}
-							text("a", fmt.tprintf("+%d", f.additions), hex(HEX_GREEN), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+							text("a", fmt.tprintf("+%d", f.additions), ui.hue(.Green), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 							ui.spacer(ui.px(em * 0.4))
-							text("d", fmt.tprintf("-%d", f.deletions), hex(HEX_RED), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+							text("d", fmt.tprintf("-%d", f.deletions), ui.hue(.Red), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 						}
 						if f.open {
 							diff_view(app, "###fd", f.diff, f.patch, em, CHANGES_DIFF_LINES, f.file)
-							if f.more { text("m", i18n.tr("The server gave only the beginning of this file."), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)}, ui.fill()) }
+							if f.more { text("m", i18n.tr("The server gave only the beginning of this file."), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)}, ui.fill()) }
 						}
 						ui.spacer(ui.px(em * 0.4))
 					}

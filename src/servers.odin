@@ -440,18 +440,18 @@ threads_stop :: proc(app: ^App) {
 
 // The state of the link to the server connected: a pip when it is up (the normal state), a lamp that breathes while it is not.
 link_lamp :: proc(app: ^App, id: string, size: f32) {
-	if online(app) { pip(id, hex(HEX_GREEN), size); return }
+	if online(app) { pip(id, ui.hue(.Green), size); return }
 	lamp(id, link_color(app), 1, pulse = true, size = size)
 	animate(app)
 }
 
 link_color :: proc(app: ^App) -> Color {
 	switch app.link {
-	case .Online:       return hex(HEX_GREEN)
-	case .Auth_Refused: return hex(HEX_RED)
+	case .Online:       return ui.hue(.Green)
+	case .Auth_Refused: return ui.hue(.Red)
 	case .Connecting, .Retrying:
 	}
-	return hex(HEX_YELLOW)
+	return ui.hue(.Yellow)
 }
 
 link_word :: proc(app: ^App) -> string {
@@ -499,9 +499,9 @@ Server_Tab_Draw :: struct { current: bool }
 server_tab_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Server_Tab_Draw)(user)
 	if d.current {
-		draw_bevel(dc, b.rect, 5 * ui.scale(), hex(HEX_BTN_FACE), b.hot_t, b.active_t * b.hot_t)
+		draw_bevel(dc, b.rect, 5 * ui.scale(), themed("button background"), b.hot_t, b.active_t * b.hot_t)
 	} else if b.hot_t > FADE_VISIBLE || b.active_t > FADE_VISIBLE {
-		draw_bevel(dc, b.rect, 5 * ui.scale(), hex(HEX_BG3), b.hot_t, b.active_t * b.hot_t)
+		draw_bevel(dc, b.rect, 5 * ui.scale(), themed("button background"), b.hot_t, b.active_t * b.hot_t)
 	}
 }
 
@@ -519,13 +519,13 @@ server_tab :: proc(app: ^App, s: Server, i: int, h, em: f32) -> ^ui.Box {
 	ui.a11y_default(b, {role = .Tab, name = name, selected = current, position = i + 1, set_size = len(app.servers), description = s.url})
 	if ui.parent(b) {
 		ui.spacer(ui.px(em * 0.55))
-		if current { link_lamp(app, "###srv_lamp", em * 0.8) } else { pip("###srv_lamp", hex(HEX_FAINT), em * 0.8) }
+		if current { link_lamp(app, "###srv_lamp", em * 0.8) } else { pip("###srv_lamp", themed("faint text"), em * 0.8) }
 		ui.spacer(ui.px(em * 0.4))
-		col := current ? hex(HEX_BRIGHT) : sig.hovering ? hex(HEX_TEXT) : hex(HEX_WEAK)
+		col := current ? themed("bright text") : sig.hovering ? themed("text") : themed("weak text")
 		text("n", ellipsize(name, SERVER_TAB_CHARS), col, ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 		if current {
 			ui.spacer(ui.px(em * 0.3))
-			glyph(lucide.CHEVRON_DOWN, hex(HEX_FAINT), math.round(em * ICON_TINY), em * 0.9)
+			glyph(lucide.CHEVRON_DOWN, themed("faint text"), math.round(em * ICON_TINY), em * 0.9)
 		}
 		ui.spacer(ui.px(em * 0.55))
 	}
@@ -597,7 +597,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = id) {
 				ui.space(ui.PAGE_MARGIN)
-				text("k", label, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.5)}, ui.px(em * 6))
+				text("k", label, themed("weak text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.5)}, ui.px(em * 6))
 				ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 				if ui.well("###w", .X) {
 					if ui.tags("bare") {
@@ -617,7 +617,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row() {
 				ui.spacer(ui.px(em * 7.4))
-				text("h", i18n.tr("the server's OPENCODE_SERVER_PASSWORD, as user opencode"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.3)}, ui.fill())
+				text("h", i18n.tr("the server's OPENCODE_SERVER_PASSWORD, as user opencode"), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.3)}, ui.fill())
 				ui.space(ui.PAGE_MARGIN)
 			}
 			if note := password_note(app); note != "" {
@@ -625,7 +625,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 				if ui.row(id = "###storenote") {
 					ui.spacer(ui.px(em * 7.4))
 					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-					if ui.column() { info_line(app, "###note", note, em, hex(HEX_YELLOW)) }
+					if ui.column() { info_line(app, "###note", note, em, ui.hue(.Yellow)) }
 					ui.space(ui.PAGE_MARGIN)
 				}
 			}
@@ -647,7 +647,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 				}
 			}
 			ui.spacer(ui.fill())
-			if taken { text("tk", i18n.tr("That name is taken"), hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
+			if taken { text("tk", i18n.tr("That name is taken"), ui.hue(.Red), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
 			if ui.button("cancel", i18n.tr("Cancel")).clicked { ui.view_end(v, ui.VIEW_CANCELLED) }
 			ui.space(ui.CONTROL_GAP)
 			if ui.button("ok", ui.text_shown(e.index >= 0 ? i18n.tr("Save and connect") : i18n.tr("Add and connect")), lucide.CHECK, {intent = .Success, disabled = !valid}).clicked { save = true }

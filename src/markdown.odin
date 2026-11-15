@@ -12,9 +12,6 @@ import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
 
-HEX_INLINE_CODE :: 0xe5c07bff
-HEX_CODE_TEXT   :: 0xd4d4d4ff
-HEX_TABLE_WELL  :: 0x090909ff
 
 // The doc of a Markdown text of the conversation, by the id it is built under: one per id, read again when its text is another.
 md_doc :: proc(c: ^Chat, id: string) -> ^markdown.Doc {
@@ -39,14 +36,14 @@ md_config :: proc(app: ^App, color: Color, pane: ^Chat_Pane = nil) -> markdown.V
 		prose = app.prose, face = app.font, mono = app.mono,
 		prose_scale = app.prose_scale, line_ratio = PROSE_LINE_RATIO, cell_scale = FS_LABEL,
 		colors = {
-			text = color, heading = hex(HEX_BRIGHT), quote = hex(HEX_WEAK), marker = accent(), rail = ui.with_alpha(accent(), 0.6),
-			inline_code = hex(HEX_INLINE_CODE), code_text = hex(HEX_CODE_TEXT), table_header = hex(HEX_BRIGHT),
-			table_stripe = ui.with_alpha(hex(HEX_TEXT), markdown.TABLE_STRIPE_ALPHA), table_rule = ui.with_alpha(accent(), markdown.TABLE_RULE_ALPHA),
+			text = color, heading = themed("bright text"), quote = themed("weak text"), marker = ui.hue(.Accent), rail = ui.with_alpha(ui.hue(.Accent), 0.6),
+			inline_code = ui.hue(.Yellow), code_text = themed("soft text"), table_header = themed("bright text"),
+			table_stripe = ui.with_alpha(themed("text"), markdown.TABLE_STRIPE_ALPHA), table_rule = ui.with_alpha(ui.hue(.Accent), markdown.TABLE_RULE_ALPHA),
 		},
 		user = u,
 		link = proc(user: rawptr, url: string) { link_open(url) },
 		code = md_code,
-		frame = proc(user: rawptr, b: ^ui.Box, kind: markdown.Frame_Kind) { well_paint(b, 6, kind == .Table ? HEX_TABLE_WELL : HEX_CODE_WELL) },
+		frame = proc(user: rawptr, b: ^ui.Box, kind: markdown.Frame_Kind) { well_paint(b, 6) },
 		rule = proc(user: rawptr, id: string) { groove(id) },
 		table_corner = md_table_copy,
 	}
@@ -113,9 +110,9 @@ code_block :: proc(id: string, lang: string, code: string, mono: Face_Id, table 
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###hdr") {
 				ui.spacer(ui.px(em * 0.7))
-				glyph(lucide.CODE, hex(HEX_FAINT), math.round(em * ICON_SMALL), em)
+				glyph(lucide.CODE, themed("faint text"), math.round(em * ICON_SMALL), em)
 				ui.spacer(ui.px(em * 0.3))
-				text("lang", lang != "" ? lang : "text", hex(HEX_FAINT), ui.Style_Mod{font = mono, font_size = math.round(em * FS_SMALL)})
+				text("lang", lang != "" ? lang : "text", themed("faint text"), ui.Style_Mod{font = mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.fill())
 				ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
 				if ui.button("copy", icon = lucide.COPY).clicked {
@@ -130,7 +127,7 @@ code_block :: proc(id: string, lang: string, code: string, mono: Face_Id, table 
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###body") {
 			ui.spacer(ui.px(em * 0.9))
-			plain := [1]ui.Rich_Run{{text = code, style = {font = mono, color = hex(table ? HEX_TEXT : HEX_CODE_TEXT)}}}
+			plain := [1]ui.Rich_Run{{text = code, style = {font = mono, color = themed(table ? "text" : "soft text")}}}
 			ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}})
 			ui.rich_paragraph("###code", len(runs) > 0 ? runs : plain[:], version = version)
 			ui.spacer(ui.px(em * 0.9))

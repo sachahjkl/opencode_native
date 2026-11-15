@@ -1,5 +1,5 @@
-// The numbers and colours of the interface's newer parts, in one place, by what they tune. (_EM: in font sizes, _PX: in logical
-// pixels, _MS: in milliseconds, HEX_: sRGB.)
+// The numbers of the interface's newer parts, in one place, by what they tune. (_EM: in font sizes, _PX: in logical pixels,
+// _MS: in milliseconds.) Their colours are the theme's (theme.odin).
 package ocn
 
 import i18n "gt:i18n"
@@ -64,8 +64,6 @@ ACT_FIRST_H_EM     :: 14      // its height before it was ever measured
 ACT_LINE_CHARS     :: 220
 TODO_MARK_H_EM :: 1.75   // an item's mark, centred on the first line of its text
 TRAY_RADIUS :: 10
-HEX_ACT_ROW_SELECTED :: 0x151515ff
-HEX_ACT_WELL         :: 0x0a0a0aff
 
 ////////////////////////////////
 // The composer's history
@@ -74,7 +72,6 @@ HEX_ACT_WELL         :: 0x0a0a0aff
 ////////////////////////////////
 // Lists
 
-HEX_PAL_SELECTED    :: 0x0c0c0cff   // a list's selected row (the files', what you missed)
 
 ////////////////////////////////
 // Commands
@@ -107,13 +104,6 @@ HOME_TOP_EM    :: 3.2
 ////////////////////////////////
 // Tool calls: diffs, lines of files
 
-HEX_DIFF_ADD_BG     :: 0x12261aff
-HEX_DIFF_DEL_BG     :: 0x2c1517ff
-HEX_DIFF_ADD_MARK   :: 0x1f5c33ff   // what changed in a line
-HEX_DIFF_DEL_MARK   :: 0x7a2b31ff
-HEX_DIFF_ADD_TEXT   :: 0xcdeed6ff
-HEX_DIFF_DEL_TEXT   :: 0xf2cdd0ff
-HEX_DIFF_LINE_NO    :: 0x4a4a4aff
 TOOL_TAB            :: "    "
 TOOL_LINE_CHARS     :: 400    // of one line, shown
 DIFF_FOLDED_LINES   :: 16     // of a diff shown with its call folded
@@ -164,7 +154,6 @@ THROBBER_LIGHT_MIN  :: 0.42   // a letter out of the wave
 ////////////////////////////////
 // The Preview panel
 
-HEX_PREVIEW_BG :: 0x0d0d0dff
 TAB_LINE_INSET_EM :: 0.6 // the line under the browser's tab shown, from its ends
 PREVIEW_TAB_H_EM  :: 2.1 // the strip of a session's browser tabs
 HEADER_FIGURES_MIN_EM :: 40   // a conversation narrower than this keeps its title, not its figures
@@ -229,8 +218,6 @@ TERM_BANNER_H_EM     :: 2.4    // what says a shell ended
 TERM_NEW_EM          :: 1.7    // the + of a shell's header
 TERM_FAINT           :: 0.6
 TERM_CURSOR_ALPHA    :: 0.6
-HEX_TERM_BG          :: 0x0d0d0dff
-HEX_TERM_SELECTION   :: 0x3a4a66ff
 INTEGRATIONS_ROWS    :: 40     // shown at once: the rest is searched
 CONNECT_POLL_MS      :: 1500   // how often a login under way is asked about
 CONNECT_POLL_MISSES  :: 5      // readings of it that fail in a row before they stop and the dialog says so
@@ -266,7 +253,6 @@ OUTPUT_ECHO_ON     :: "\x1b[1m"              // the command itself: bold
 SESSION_BADGE_EM       :: 1.45   // a session's mark in the sidebar, a row of one line (sidebar_rows.odin session_badge)
 SESSION_BADGE_INBOX_EM :: 1.9    // ... a row of two (the inbox)
 SESSION_BADGE_ALPHA    :: 0.2    // its colour behind its letter
-SESSION_BADGE_HEX := [?]u32{HEX_PEACH, HEX_BLUE, HEX_PURPLE, HEX_GREEN, HEX_YELLOW, HEX_RED, HEX_CYAN, HEX_ROSE}   // what a session's id picks from
 THEME_CARD_W_EM   :: 12    // a theme's card: its width (on the line, in the grid)
 THEME_CARD_RADIUS :: 8     // its corners, logical px
 COMPOSER_FIT_SLACK_EM :: 3   // the composer's toolbar gives back what it left out once this much wider than where it went past (composer.odin composer_fit)
