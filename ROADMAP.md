@@ -6,9 +6,9 @@
   link to that session: gui_toolkit 0.267's link words, after the migration to gui_toolkit 0.266.
 - **A Mermaid diagram maximised.** The diagram's viewer fills the window, with zoom and pan: gui_toolkit 0.267's
   maximised dialog (`view_maximise`), after the migration to gui_toolkit 0.266.
-- **Tab numbers while the modifier is held.** Holding the key of the tab shortcuts shows each tab's number.
-- **MCP events and freeform tools (experimental).** Subscribe to `experimental.mcp.event` when the flag is on; the
-  model's capabilities now list freeform tool input; the session's throughput is measured from the first token.
+- **Tab numbers while the modifier is held.** Holding Ctrl shows the number of each tab that Ctrl+1 to Ctrl+9 opens, as
+  the desktop does after 400 ms. opencode native has no such shortcuts yet: decide first which list gets them (the
+  sidebar's sessions, the server tabs).
 
 ## Next
 
@@ -19,6 +19,10 @@
 
 ## Later
 
+- **MCP events, freeform tools, a step's first token (opencode 2.3.0, experimental).** The stream can carry
+  `experimental.mcp.event`, a model can take freeform tool input, and a step says when its first token came
+  (`time.firstToken`). opencode 2.3.0's own clients show none of them yet: show them once one does, or once a step's
+  speed (from its first token) is wanted in the statistics.
 - **A shell that costs less per frame.** An open command view costs 4.3 to 5.0 ms a frame against 1.2 ms without it
   (Linux, -o:speed): every glyph of every row is emitted again each frame. Keep a row's draw list
   while the row does not change. The bench (OCN_BENCH) also has two checks that fail on Linux: the middle wheel's
