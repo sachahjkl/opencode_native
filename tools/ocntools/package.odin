@@ -7,6 +7,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 import tk_changelog "gt:changelog"
+import cli "gt:cli"
 import update "gt:update"
 import ocn_update "../../src/update"
 import toolbox "gt:toolbox"
@@ -106,17 +107,17 @@ package_linux :: proc(version: string) -> bool {
 	return true
 }
 
-run_package :: proc(args: []string) -> int {
+run_package :: proc(args: []string) -> cli.Exit {
 	version := ""
-	if len(args) > 1 { fmt.eprintln("package: [version]"); return EXIT_USAGE }
+	if len(args) > 1 { fmt.eprintln("package: [version]"); return .Usage }
 	if len(args) == 1 {
 		version = args[0]
 	} else {
 		found: bool
 		version = toolbox.project_version(OCN_PROJECT)
 		found = version != ""
-		if !found { fmt.eprintfln("package: no version in %s", SETUP_FILE); return 1 }
+		if !found { fmt.eprintfln("package: no version in %s", SETUP_FILE); return .Failed }
 	}
 	done := package_windows(version) when ODIN_OS == .Windows else package_linux(version)
-	return done ? 0 : 1
+	return toolbox.ended(done)
 }

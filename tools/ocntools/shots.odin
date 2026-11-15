@@ -21,6 +21,7 @@ import "core:os"
 import "core:strings"
 import "core:time"
 import cdp "gt:cdp"
+import cli "gt:cli"
 import toolbox "gt:toolbox"
 
 SHOTS_EXE   :: "build/screenshots" + EXE
@@ -444,9 +445,9 @@ take :: proc(s: ^Shots, p: Picture) -> bool {
 	return snap.ok
 }
 
-run_shots :: proc(args: []string) -> int {
+run_shots :: proc(args: []string) -> cli.Exit {
 	s := Shots{work_session = DEMO_SESSION}
-	if !live_setup(&s.live, nil) { return 1 }
+	if !live_setup(&s.live, nil) { return .Failed }
 	s.live.session = TOUR_SESSION
 	s.live.exe = SHOTS_EXE
 	s.docs = SHOTS_DOCS
@@ -456,7 +457,7 @@ run_shots :: proc(args: []string) -> int {
 		a := args[i]
 		value := ""
 		if a != "--build" && a != "--linux-build" {
-			if i + 1 >= len(args) { fmt.eprintfln("shots: what is %s?", a); return EXIT_USAGE }
+			if i + 1 >= len(args) { fmt.eprintfln("shots: what is %s?", a); return .Usage }
 			i += 1
 			value = args[i]
 		}
@@ -473,27 +474,27 @@ run_shots :: proc(args: []string) -> int {
 		case "--linux":        s.linux = value
 		case:
 			fmt.eprintfln("shots: what is %s?", a)
-			return EXIT_USAGE
+			return .Usage
 		}
 	}
 	absolute, err := os.get_absolute_path(s.docs, context.temp_allocator)   // (the viewer opens one of them, from a folder of its own)
-	if err != nil { return 1 }
+	if err != nil { return .Failed }
 	s.docs = absolute
-	if !make_folder(s.docs) || !make_folder(LIVE_DIR) { return 1 }
+	if !make_folder(s.docs) || !make_folder(LIVE_DIR) { return .Failed }
 	encoder, why := toolbox.webp_encoder("build")
-	if why != "" { fmt.eprintfln("shots: no WebP encoder: %s", why); return 1 }
+	if why != "" { fmt.eprintfln("shots: no WebP encoder: %s", why); return .Failed }
 	s.encoder = encoder
 	if linux_build {
 		program, built := wsl_build()
-		if !built { fmt.eprintln("shots: the build in WSL failed"); return 1 }
+		if !built { fmt.eprintln("shots: the build in WSL failed"); return .Failed }
 		s.linux = program
 	}
-	if build && !build_program({gt = gt, out = s.live.exe}) { return 1 }
-	if s.linux == "" && !os.exists(s.live.exe) { fmt.eprintfln("shots: %s is missing: run with --build", s.live.exe); return 1 }
+	if build && !build_program({gt = gt, out = s.live.exe}) { return .Failed }
+	if s.linux == "" && !os.exists(s.live.exe) { fmt.eprintfln("shots: %s is missing: run with --build", s.live.exe); return .Failed }
 	pictures := PICTURES
 	for p in pictures {
 		if !wanted(p, s.only, s.linux != "") { continue }
-		if !take(&s, p) { return 1 }
+		if !take(&s, p) { return .Failed }
 	}
-	return 0
+	return .Done
 }

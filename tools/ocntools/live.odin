@@ -10,6 +10,7 @@ import "core:os"
 import "core:strings"
 import "core:time"
 import cdp "gt:cdp"
+import cli "gt:cli"
 import toolbox "gt:toolbox"
 
 DEMO_DIR        :: "S:\\demo-clock"
@@ -517,13 +518,13 @@ tool_words :: proc(body: string) -> string {
 	return strings.to_string(b)
 }
 
-clean_now :: proc(l: ^Live) -> int {
+clean_now :: proc(l: ^Live) -> cli.Exit {
 	text := read_text(SNAPSHOT)
-	if text == "" && !os.exists(SNAPSHOT) { fmt.println("clean: no snapshot, nothing touched"); return 0 }
+	if text == "" && !os.exists(SNAPSHOT) { fmt.println("clean: no snapshot, nothing touched"); return .Done }
 	before_ptys, before_sessions := snapshot_read(text)
 	ptys, ok_ptys := api_list(l, "pty")
 	sessions, ok_sessions := api_list(l, "session")
-	if !ok_ptys || !ok_sessions { fmt.eprintln("clean: no answer from the server, the snapshot is kept"); return 1 }
+	if !ok_ptys || !ok_sessions { fmt.eprintln("clean: no answer from the server, the snapshot is kept"); return .Failed }
 	failed := 0
 	for id in new_ids(before_ptys, ptys) {
 		ok := api_delete(l, "pty", id)
@@ -535,9 +536,9 @@ clean_now :: proc(l: ^Live) -> int {
 		fmt.printfln("clean: session %s %s", id, ok ? "removed" : "NOT removed")
 		if !ok { failed += 1 }
 	}
-	if failed > 0 { return 1 }
+	if failed > 0 { return .Failed }
 	_ = os.remove(SNAPSHOT)
-	return 0
+	return .Done
 }
 
 // What is there now: what clean will leave alone.
@@ -549,15 +550,15 @@ snapshot_take :: proc(l: ^Live) -> bool {
 	return os.write_entire_file(SNAPSHOT, transmute([]byte)snapshot_text(ptys, sessions)) == nil
 }
 
-run_clean :: proc(args: []string) -> int {
+run_clean :: proc(args: []string) -> cli.Exit {
 	l: Live
-	if !live_setup(&l, args) { return 1 }
+	if !live_setup(&l, args) { return .Failed }
 	return clean_now(&l)
 }
 
-run_live :: proc(args: []string) -> int {
+run_live :: proc(args: []string) -> cli.Exit {
 	l: Live
-	if !live_setup(&l, args) { return 1 }
+	if !live_setup(&l, args) { return .Failed }
 	only := ""
 	for i := 0; i < len(args); i += 1 {
 		switch {
@@ -568,13 +569,13 @@ run_live :: proc(args: []string) -> int {
 			only = args[i]
 		case:
 			fmt.eprintfln("live: what is %s?", args[i])
-			return EXIT_USAGE
+			return .Usage
 		}
 	}
-	if only != "" && only != "link" && only != "password" && only != "prompt" && only != "diff" && only != "browser" && only != "folders" { fmt.eprintfln("live: no scenario %s", only); return EXIT_USAGE }
-	if !os.exists(l.exe) { fmt.eprintfln("live: no %s: ocntools check builds it", l.exe); return 1 }
-	if !make_folder(LIVE_DIR) { return 1 }
-	if !snapshot_take(&l) { return 1 }
+	if only != "" && only != "link" && only != "password" && only != "prompt" && only != "diff" && only != "browser" && only != "folders" { fmt.eprintfln("live: no scenario %s", only); return .Usage }
+	if !os.exists(l.exe) { fmt.eprintfln("live: no %s: ocntools check builds it", l.exe); return .Failed }
+	if !make_folder(LIVE_DIR) { return .Failed }
+	if !snapshot_take(&l) { return .Failed }
 
 	begun := time.now()
 	if only == "" || only == "link" { scenario_link(&l) }
@@ -585,5 +586,5 @@ run_live :: proc(args: []string) -> int {
 	if only == "folders" { scenario_folders(&l) }
 	cleaned := clean_now(&l)
 	fmt.printfln("live: %d failed, in %d s", l.failed, int(time.duration_seconds(time.since(begun))))
-	return l.failed > 0 || cleaned != 0 ? 1 : 0
+	return toolbox.ended(l.failed == 0 && cleaned == .Done)
 }

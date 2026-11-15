@@ -12,14 +12,15 @@ import "core:bytes"
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import cli "gt:cli"
 import toolbox "gt:toolbox"
 
-run_fonts_check :: proc(args: []string) -> int {
-	if len(args) != 1 { fmt.eprintln("fonts_check <program>"); return EXIT_USAGE }
+run_fonts_check :: proc(args: []string) -> cli.Exit {
+	if len(args) != 1 { fmt.eprintln("fonts_check <program>"); return .Usage }
 	program, err := os.read_entire_file(args[0], context.temp_allocator)
-	if err != nil { fmt.eprintfln("fonts_check: cannot read %s", args[0]); return 1 }
+	if err != nil { fmt.eprintfln("fonts_check: cannot read %s", args[0]); return .Failed }
 	entries, derr := os.read_all_directory_by_path("assets/fonts", context.temp_allocator)
-	if derr != nil { fmt.eprintln("fonts_check: no assets/fonts"); return 1 }
+	if derr != nil { fmt.eprintln("fonts_check: no assets/fonts"); return .Failed }
 	missing := 0
 	for e in entries {
 		if !strings.has_suffix(e.name, ".ttf") { continue }
@@ -29,7 +30,7 @@ run_fonts_check :: proc(args: []string) -> int {
 		fmt.printfln("%s %s (%d KiB)", found ? "ok     " : "MISSING", e.name, (len(face) + 512) / 1024)
 		if !found { missing += 1 }
 	}
-	return missing > 0 ? 1 : 0
+	return toolbox.ended(missing == 0)
 }
 
 // ui: the interface; prose: the answers, when it is another family; mono: code, paths and figures.
@@ -58,14 +59,14 @@ fetch_face :: proc(family: string, weight: int, style, file: string) -> (size: i
 	return len(data), err == nil
 }
 
-run_font_proposals :: proc(args: []string) -> int {
+run_font_proposals :: proc(args: []string) -> cli.Exit {
 	only, toolkit, exe := "", "", ""
 	for i := 0; i < len(args); i += 1 {
 		switch {
 		case args[i] == "--only" && i + 1 < len(args):    i += 1; only = args[i]
 		case args[i] == "--toolkit" && i + 1 < len(args): i += 1; toolkit = args[i]
 		case args[i] == "--exe" && i + 1 < len(args):     i += 1; exe = args[i]
-		case: fmt.eprintfln("font_proposals: what is %s?", args[i]); return EXIT_USAGE
+		case: fmt.eprintfln("font_proposals: what is %s?", args[i]); return .Usage
 		}
 	}
 	wanted := strings.split(only, ",", context.temp_allocator)
@@ -78,7 +79,7 @@ run_font_proposals :: proc(args: []string) -> int {
 		}
 		out := fmt.tprintf("build/font_proposals/%s", p.id)
 		fonts := fmt.tprintf("%s/fonts", out)
-		if !make_folder(fonts) { return 1 }
+		if !make_folder(fonts) { return .Failed }
 		total := 0
 		if p.ui != "" {
 			Role :: struct { name, family: string }
@@ -91,7 +92,7 @@ run_font_proposals :: proc(args: []string) -> int {
 				for f, i in faces {
 					if r.name == "mono" && i >= 2 { break }   // (code has no italic of its own here)
 					size, ok := fetch_face(r.family, f.weight, f.style, fmt.tprintf("%s/%s%s.ttf", fonts, r.name, f.suffix))
-					if !ok { return 1 }
+					if !ok { return .Failed }
 					total += size
 				}
 			}
@@ -101,8 +102,8 @@ run_font_proposals :: proc(args: []string) -> int {
 		if p.ui != "" { append(&shots, "--font-dir", fonts) }
 		if toolkit != "" { append(&shots, "--toolkit", toolkit) }
 		if exe != "" { append(&shots, "--exe", exe) }
-		if run_shots(shots[:]) != 0 { return 1 }
+		if run_shots(shots[:]) != .Done { return .Failed }
 		fmt.printfln("%s: %d KiB of faces (Latin only)", p.id, (total + 512) / 1024)
 	}
-	return 0
+	return .Done
 }

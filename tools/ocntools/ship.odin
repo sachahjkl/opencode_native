@@ -4,6 +4,7 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:strings"
 import "core:time"
+import cli "gt:cli"
 import toolbox "gt:toolbox"
 
 RUN_FOUND_TRIES :: 40
@@ -127,18 +128,18 @@ deploy_site :: proc(sha: string) -> bool {
 }
 
 @(private = "file")
-stop :: proc(what: string) -> int {
+stop :: proc(what: string) -> cli.Exit {
 	fmt.eprintfln("ship: STOP, %s", what)
-	return 1
+	return .Failed
 }
 
-run_ship :: proc(args: []string) -> int {
+run_ship :: proc(args: []string) -> cli.Exit {
 	version := ""
 	dry := false
 	for a in args {
-		if a == "--dry-run" { dry = true } else if version == "" { version = a } else { fmt.eprintfln("ship: what is %s?", a); return EXIT_USAGE }
+		if a == "--dry-run" { dry = true } else if version == "" { version = a } else { fmt.eprintfln("ship: what is %s?", a); return .Usage }
 	}
-	if version == "" { fmt.eprintln("ship <version> [--dry-run]"); return EXIT_USAGE }
+	if version == "" { fmt.eprintln("ship <version> [--dry-run]"); return .Usage }
 	tag := fmt.tprintf("v%s", version)
 
 	branch, _ := toolbox.capture({"git", "branch", "--show-current"})
@@ -154,7 +155,7 @@ run_ship :: proc(args: []string) -> int {
 	base, _ := toolbox.capture({"git", "rev-parse", "origin/master"})
 	base = strings.trim_space(base)
 	fmt.printfln("ship: %s, commit %s, on master %s", version, sha[:7], base[:7])
-	if dry { fmt.println("ship: ready, nothing done"); return 0 }
+	if dry { fmt.println("ship: ready, nothing done"); return .Done }
 
 	if !run("git", "push", "-q", "-u", "origin", branch) { return stop("the branch was not pushed") }
 	if !run("gh", "workflow", "run", "ci.yml", "--ref", branch) { return stop("CI did not start") }
@@ -184,5 +185,5 @@ run_ship :: proc(args: []string) -> int {
 	fmt.printfln("ship: %s published, the stable manifest says %s", version, served)
 	if served != version { return stop("the stable manifest does not say this version") }
 	if !ok { fmt.eprintln("ship: published, but the local tidying up failed: see above") }
-	return site && ok ? 0 : 1
+	return toolbox.ended(site && ok)
 }

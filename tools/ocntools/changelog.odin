@@ -7,6 +7,7 @@ package ocntools
 
 import "core:fmt"
 import "core:os"
+import cli "gt:cli"
 import toolbox "gt:toolbox"
 import tk_changelog "gt:changelog"
 
@@ -49,14 +50,14 @@ changelog_check :: proc(release := "") -> bool {
 }
 
 // The files of a release, on its branch release/<version>: what ship's not_ready then finds. Nothing is committed.
-run_prepare :: proc(args: []string) -> int {
-	if len(args) != 1 { fmt.eprintln("prepare <version>"); return EXIT_USAGE }
+run_prepare :: proc(args: []string) -> cli.Exit {
+	if len(args) != 1 { fmt.eprintln("prepare <version>"); return .Usage }
 	version := args[0]
-	if !version_is_valid(version) { fmt.eprintfln("prepare: %s is not a version", version); return EXIT_USAGE }
-	if !changelog_check() { return 1 }
+	if !version_is_valid(version) { fmt.eprintfln("prepare: %s is not a version", version); return .Usage }
+	if !changelog_check() { return .Failed }
 	n, errors := tk_changelog.assemble(changelog_options(), version)   // (and set_version: APP_VERSION, the badge)
-	if !say_errors("prepare", errors[:]) { return 1 }
-	if !changelog_check(version) { return 1 }
+	if !say_errors("prepare", errors[:]) { return .Failed }
+	if !changelog_check(version) { return .Failed }
 	fmt.printfln("prepare: %s, %d entries in CHANGELOG.md, APP_VERSION and the README's badge; commit them with the deletion of the fragments", version, n)
-	return 0
+	return .Done
 }

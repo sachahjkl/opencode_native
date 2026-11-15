@@ -10,6 +10,7 @@ import "core:os"
 import "core:slice"
 import "core:strconv"
 import "core:strings"
+import cli "gt:cli"
 
 VT_HEADERS :: VT_SOURCE + "/include/ghostty/vt"
 VT_GEN     :: "src/vt_gen.odin"
@@ -394,7 +395,7 @@ vt_generate :: proc(h: ^Vt_Headers, commit: string) -> (text: string, problems: 
 	return strings.to_string(b), bad[:]
 }
 
-run_vt :: proc(args: []string) -> int {
+run_vt :: proc(args: []string) -> cli.Exit {
 	folder := VT_HEADERS
 	check := false
 	for i := 0; i < len(args); i += 1 {
@@ -406,14 +407,14 @@ run_vt :: proc(args: []string) -> int {
 			folder = args[i]
 		case:
 			fmt.eprintfln("vt: what is %s?", args[i])
-			return EXIT_USAGE
+			return .Usage
 		}
 	}
 	return vt_run(folder, check)
 }
 
 // (`check`: the file must be what these headers make)
-vt_run :: proc(folder: string, check: bool) -> int {
+vt_run :: proc(folder: string, check: bool) -> cli.Exit {
 	files := make([dynamic]string, context.temp_allocator)
 	files_under(folder, &files)
 	slice.sort(files[:])
@@ -425,19 +426,19 @@ vt_run :: proc(folder: string, check: bool) -> int {
 	h.calls = make(map[string]string, context.temp_allocator)
 	// (first the defines and the types, whichever header they are in: an enumerator may name one of another)
 	for f in files { if strings.has_suffix(f, ".h") { vt_read(&h, read_text(f)) } }
-	if len(h.calls) == 0 { fmt.eprintfln("vt: no headers in %s: ocntools build first", folder); return 1 }
+	if len(h.calls) == 0 { fmt.eprintfln("vt: no headers in %s: ocntools build first", folder); return .Failed }
 	text, problems := vt_generate(&h, GHOSTTY_COMMIT)
 	if len(problems) > 0 {
 		for p in problems { fmt.eprintfln("vt: %s", p) }
-		return 1
+		return .Failed
 	}
 	if check {
 		now, _ := strings.replace_all(read_text(VT_GEN), "\r\n", "\n", context.temp_allocator)
-		if now != text { fmt.eprintfln("vt: %s is not what these headers make: ocntools vt", VT_GEN); return 1 }
+		if now != text { fmt.eprintfln("vt: %s is not what these headers make: ocntools vt", VT_GEN); return .Failed }
 		fmt.printfln("vt: %s is what the headers make", VT_GEN)
-		return 0
+		return .Done
 	}
-	if os.write_entire_file(VT_GEN, transmute([]byte)text) != nil { fmt.eprintfln("vt: cannot write %s", VT_GEN); return 1 }
+	if os.write_entire_file(VT_GEN, transmute([]byte)text) != nil { fmt.eprintfln("vt: cannot write %s", VT_GEN); return .Failed }
 	fmt.printfln("vt: %s written", VT_GEN)
-	return 0
+	return .Done
 }

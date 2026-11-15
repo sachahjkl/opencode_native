@@ -7,6 +7,7 @@ package ocntools
 
 import "core:fmt"
 import "core:strconv"
+import cli "gt:cli"
 import paint "gt:paint"
 import toolbox "gt:toolbox"
 
@@ -29,7 +30,7 @@ LOGO_PEACH :: 0xE8935A
 LOGO_WARM_TIP :: 0xFAB283
 LOGO_COOL_TIP :: 0x9C9C9C
 
-run_logo :: proc(args: []string) -> int {
+run_logo :: proc(args: []string) -> cli.Exit {
 	out := LOGO_DEFAULT_OUT
 	hint := LOGO_HINT_DEFAULT
 	for i := 0; i < len(args); i += 1 {
@@ -40,11 +41,11 @@ run_logo :: proc(args: []string) -> int {
 		case args[i] == "--hint" && i + 1 < len(args):
 			i += 1
 			n, ok := strconv.parse_int(args[i])
-			if !ok || n < 0 || n > LOGO_HINT_MAX { fmt.eprintfln("logo: --hint 0, 1 or 2, not %s", args[i]); return EXIT_USAGE }
+			if !ok || n < 0 || n > LOGO_HINT_MAX { fmt.eprintfln("logo: --hint 0, 1 or 2, not %s", args[i]); return .Usage }
 			hint = n
 		case:
 			fmt.eprintfln("logo: what is %s?", args[i])
-			return EXIT_USAGE
+			return .Usage
 		}
 	}
 	// (the drawing is this program's; the files every program makes of its logo are the toolbox's)
@@ -52,8 +53,8 @@ run_logo :: proc(args: []string) -> int {
 		render = proc(size: int, user: rawptr) -> paint.Canvas { return draw_logo(size, (^int)(user)^) },
 		user = &hint, dir = out, master = 512, sizes = LOGO_FILE_SIZES[:], ico = fmt.tprintf("%s/%s", out, LOGO_ICO), project_image = true,
 	})
-	if why != "" { fmt.eprintfln("logo: %s", why); return 1 }
-	return 0
+	if why != "" { fmt.eprintfln("logo: %s", why); return .Failed }
+	return .Done
 }
 
 // The logo at `size` pixels.

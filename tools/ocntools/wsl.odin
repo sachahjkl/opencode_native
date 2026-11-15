@@ -17,39 +17,40 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 import "core:thread"
+import cli "gt:cli"
 import toolbox "gt:toolbox"
 
 _ :: toolbox   // (the Linux side's)
 
 WSL_BUILD_DEFAULT :: ".cache/opencode-native-build"
 
-run_wsl_build :: proc(args: []string) -> int {
+run_wsl_build :: proc(args: []string) -> cli.Exit {
 	when ODIN_OS == .Windows {
 		fmt.eprintln("wsl_build: in Linux (shots --linux-build starts it through wsl.exe)")
-		return 1
+		return .Failed
 	} else {
 		dest := len(args) > 0 ? args[0] : fmt.tprintf("%s/%s", os.get_env("HOME", context.temp_allocator), WSL_BUILD_DEFAULT)
-		if !make_folder(dest) { return 1 }
+		if !make_folder(dest) { return .Failed }
 		here, _ := os.get_working_directory(context.temp_allocator)
 		if !run("rsync", "-a", "--delete", "--exclude", "build", "--exclude", "target", "--exclude", ".git", "--exclude", ".claude",
-			"--exclude", "*.exe", "--exclude", "*.pdb", fmt.tprintf("%s/", here), fmt.tprintf("%s/", dest)) { return 1 }
-		if !toolbox.run({"odin", "run", "tools/ocntools", fmt.tprintf("-collection:gt=%s/src", GT_DEFAULT), "-out:build/ocntools", "--", "build"}, {dir = dest, echo = true}) { return 1 }
+			"--exclude", "*.exe", "--exclude", "*.pdb", fmt.tprintf("%s/", here), fmt.tprintf("%s/", dest)) { return .Failed }
+		if !toolbox.run({"odin", "run", "tools/ocntools", fmt.tprintf("-collection:gt=%s/src", GT_DEFAULT), "-out:build/ocntools", "--", "build"}, {dir = dest, echo = true}) { return .Failed }
 		fmt.printfln("%s/build/opencode-native", dest)
-		return 0
+		return .Done
 	}
 }
 
-run_wsl_client :: proc(args: []string) -> int {
+run_wsl_client :: proc(args: []string) -> cli.Exit {
 	when ODIN_OS == .Windows {
 		fmt.eprintln("wsl_client: in Linux (shots --linux starts it through wsl.exe)")
-		return 1
+		return .Failed
 	} else {
-		if len(args) < 2 { fmt.eprintln("wsl_client <relay> <program> [arguments]"); return EXIT_USAGE }
+		if len(args) < 2 { fmt.eprintln("wsl_client <relay> <program> [arguments]"); return .Usage }
 		relay, program := args[0], args[1]
 		port := os.get_env("OC_PORT", context.temp_allocator)
 		password := os.get_env("OC_PASSWORD", context.temp_allocator)
 		settings, err := os.make_directory_temp("", "ocn-wsl-*", context.temp_allocator)
-		if err != nil { fmt.eprintln("wsl_client: no settings folder"); return 1 }
+		if err != nil { fmt.eprintln("wsl_client: no settings folder"); return .Failed }
 		defer os.remove_all(settings)
 
 		env := make([dynamic]string, context.temp_allocator)
@@ -61,20 +62,20 @@ run_wsl_client :: proc(args: []string) -> int {
 		}
 		// What the opencode service writes where it runs: the client finds "This computer" by itself, and no command line holds the password.
 		state := fmt.tprintf("%s/state/opencode", settings)
-		if !make_folder(state) { return 1 }
+		if !make_folder(state) { return .Failed }
 		service := fmt.tprintf(`{{"url":"http://127.0.0.1:%s","password":%s}}`+"\n", port, json_string(password))
-		if os.write_entire_file(fmt.tprintf("%s/service.json", state), service) != nil { return 1 }
+		if os.write_entire_file(fmt.tprintf("%s/service.json", state), service) != nil { return .Failed }
 
 		// (the relay runs on the Windows side, where 127.0.0.1 is the server)
 		listen := fmt.tprintf("TCP-LISTEN:%s,bind=127.0.0.1,fork,reuseaddr", port)
 		relay_p, rerr := os.process_start({command = {"socat", listen, fmt.tprintf("EXEC:%s relay 127.0.0.1 %s", relay, port)}, stdout = os.stdout, stderr = os.stderr})
-		if rerr != nil { fmt.eprintln("wsl_client: socat does not start"); return 1 }
+		if rerr != nil { fmt.eprintln("wsl_client: socat does not start"); return .Failed }
 		defer { _ = os.process_kill(relay_p); _, _ = os.process_wait(relay_p) }
 
 		cmd := make([dynamic]string, context.temp_allocator)
 		append(&cmd, program)
 		append(&cmd, ..args[2:])
-		return toolbox.run(cmd[:], {env = toolbox.env_with({"XDG_CONFIG_HOME", "XDG_STATE_HOME", "LD_LIBRARY_PATH", "VK_ICD_FILENAMES"}, ..env[:]), echo = true}) ? 0 : 1
+		return toolbox.ended(toolbox.run(cmd[:], {env = toolbox.env_with({"XDG_CONFIG_HOME", "XDG_STATE_HOME", "LD_LIBRARY_PATH", "VK_ICD_FILENAMES"}, ..env[:]), echo = true}))
 	}
 }
 
@@ -93,14 +94,14 @@ json_string :: proc(s: string) -> string {
 	return strings.to_string(b)
 }
 
-run_relay :: proc(args: []string) -> int {
-	if len(args) != 2 { fmt.eprintln("relay <host> <port>"); return EXIT_USAGE }
+run_relay :: proc(args: []string) -> cli.Exit {
+	if len(args) != 2 { fmt.eprintln("relay <host> <port>"); return .Usage }
 	port, ok := strconv.parse_int(args[1])
-	if !ok { fmt.eprintln("relay: the port is a number"); return EXIT_USAGE }
+	if !ok { fmt.eprintln("relay: the port is a number"); return .Usage }
 	addr, aok := net.parse_ip4_address(args[0])
-	if !aok { fmt.eprintln("relay: the host is an IPv4 address"); return EXIT_USAGE }
+	if !aok { fmt.eprintln("relay: the host is an IPv4 address"); return .Usage }
 	socket, err := net.dial_tcp(net.Endpoint{addr, port})
-	if err != nil { return 1 }
+	if err != nil { return .Failed }
 	// stdin to the socket on a thread of its own; the socket to stdout here, until the server closes
 	t := thread.create_and_start_with_poly_data(socket, proc(socket: net.TCP_Socket) {
 		buf: [16 * 1024]u8
@@ -119,5 +120,5 @@ run_relay :: proc(args: []string) -> int {
 		if _, werr := os.write(os.stdout, buf[:n]); werr != nil { break }
 	}
 	net.close(socket)
-	return 0
+	return .Done
 }

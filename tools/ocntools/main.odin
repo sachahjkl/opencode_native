@@ -8,8 +8,6 @@ import tk_changelog "gt:changelog"
 import toolbox "gt:toolbox"
 import product "../../src/product"
 
-EXIT_USAGE :: 2
-
 // What opencode native is to the toolkit's tools: its name, its repository, where it keeps its version, what it takes of
 // the toolkit (Mermaid; the CDP endpoint in a release build too, which shots, live and measure drive; only the Lucide icons
 // it names, in a release build), what Windows shows of it, and the rules of its console launcher (opencode-native.com:

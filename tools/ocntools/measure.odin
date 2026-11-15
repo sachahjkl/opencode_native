@@ -9,6 +9,7 @@ import "core:slice"
 import "core:strconv"
 import "core:time"
 import cdp "gt:cdp"
+import cli "gt:cli"
 
 MEASURE_RUNS :: 7
 MB           :: 1024.0 * 1024.0
@@ -51,34 +52,34 @@ one_run :: proc(l: ^Live, s: ^Sample) -> bool {
 
 // From a key to the file found, on the screen: the whole way, through the server and back.
 @(private = "file")
-measure_find :: proc(l: ^Live, runs: int) -> int {
+measure_find :: proc(l: ^Live, runs: int) -> cli.Exit {
 	app, ok := launch(l, "measure_find", "--session=ses_e7633e562ffeJfyNPycNzsVrb1", "--search=Tour")
-	if !ok { return 1 }
+	if !ok { return .Failed }
 	defer app_end(&app)
 	dt := &app.dt
-	if !cdp.wait_for(dt, "connected", STEP_LIMIT) { return 1 }
+	if !cdp.wait_for(dt, "connected", STEP_LIMIT) { return .Failed }
 	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
 	cdp.key(dt, "ctrl+p")
-	if !cdp.wait_name(dt, "flr0", STEP_LIMIT) { return 1 }
+	if !cdp.wait_name(dt, "flr0", STEP_LIMIT) { return .Failed }
 	cdp.call(dt, "Toolkit.waitIdle", `{"timeout":5000}`)
 	found := make([]f64, runs, context.temp_allocator)
 	for i in 0 ..< runs {
 		begun := time.now()
 		cdp.type_text(dt, "make_logo.p")   // (not the whole name: the field must not be what is found)
-		if !cdp.wait_for(dt, "make_logo.ps1", STEP_LIMIT) { return 1 }
+		if !cdp.wait_for(dt, "make_logo.ps1", STEP_LIMIT) { return .Failed }
 		found[i] = time.duration_milliseconds(time.since(begun))
 		cdp.key(dt, "ctrl+a")
 		cdp.key(dt, "Backspace")
-		if !cdp.wait_for(dt, "make_logo.ps1", STEP_LIMIT, gone = true) { return 1 }
+		if !cdp.wait_for(dt, "make_logo.ps1", STEP_LIMIT, gone = true) { return .Failed }
 		cdp.call(dt, "Toolkit.waitIdle", `{"timeout":3000}`)
 	}
 	report("a key to the file found", found, "ms")
-	return 0
+	return .Done
 }
 
-run_measure :: proc(args: []string) -> int {
+run_measure :: proc(args: []string) -> cli.Exit {
 	l: Live
-	if !live_setup(&l, args) { return 1 }
+	if !live_setup(&l, args) { return .Failed }
 	runs := MEASURE_RUNS
 	if len(args) > 0 && args[0] == "find" { return measure_find(&l, runs) }
 	for i := 0; i < len(args); i += 1 {
@@ -89,19 +90,19 @@ run_measure :: proc(args: []string) -> int {
 		case args[i] == "--runs" && i + 1 < len(args):
 			i += 1
 			n, ok := strconv.parse_int(args[i])
-			if !ok || n < 1 { fmt.eprintfln("measure: %s runs?", args[i]); return EXIT_USAGE }
+			if !ok || n < 1 { fmt.eprintfln("measure: %s runs?", args[i]); return .Usage }
 			runs = n
 		case:
 			fmt.eprintfln("measure: what is %s?", args[i])
-			return EXIT_USAGE
+			return .Usage
 		}
 	}
 	info, err := os.stat(l.exe, context.temp_allocator)
-	if err != nil { fmt.eprintfln("measure: no %s: ocntools check builds it", l.exe); return 1 }
-	if !make_folder(LIVE_DIR) { return 1 }
+	if err != nil { fmt.eprintfln("measure: no %s: ocntools check builds it", l.exe); return .Failed }
+	if !make_folder(LIVE_DIR) { return .Failed }
 
 	warm: Sample
-	if !one_run(&l, &warm) { fmt.eprintln("measure: the first run failed"); return 1 }
+	if !one_run(&l, &warm) { fmt.eprintln("measure: the first run failed"); return .Failed }
 	fmt.printfln("first run, apart: content at %.0f ms, session at %.0f ms", warm.first_ms, warm.session_ms)
 
 	first := make([]f64, runs, context.temp_allocator)
@@ -110,7 +111,7 @@ run_measure :: proc(args: []string) -> int {
 	private := make([]f64, runs, context.temp_allocator)
 	for i in 0 ..< runs {
 		s: Sample
-		if !one_run(&l, &s) { fmt.eprintfln("measure: run %d failed", i + 1); return 1 }
+		if !one_run(&l, &s) { fmt.eprintfln("measure: run %d failed", i + 1); return .Failed }
 		first[i], session[i], working[i], private[i] = s.first_ms, s.session_ms, s.working, s.private
 	}
 	fmt.printfln("%d runs of %s (%.1f MB):", runs, l.exe, f64(info.size) / MB)
@@ -118,5 +119,5 @@ run_measure :: proc(args: []string) -> int {
 	report("start to a session shown", session, "ms")
 	report("memory at rest, working set", working, "MB")
 	report("memory at rest, private", private, "MB")
-	return 0
+	return .Done
 }

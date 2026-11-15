@@ -9,6 +9,7 @@ import "core:os"
 import "core:path/filepath"
 import "core:slice"
 import "core:strings"
+import cli "gt:cli"
 import toolbox "gt:toolbox"
 
 // What the program needs on Linux, built or tested: the text backend is the toolkit's native one (its default there), inside
@@ -255,7 +256,7 @@ build_program :: proc(b: Build) -> bool {
 	return true
 }
 
-run_build :: proc(args: []string) -> int {
+run_build :: proc(args: []string) -> cli.Exit {
 	b := Build {
 		gt  = os.get_env("GT", context.temp_allocator),
 		out = os.get_env("OUT", context.temp_allocator),
@@ -267,8 +268,8 @@ run_build :: proc(args: []string) -> int {
 		case "--force": b.force = true
 		case:
 			fmt.eprintfln("build: what is %s?", a)
-			return EXIT_USAGE
+			return .Usage
 		}
 	}
-	return build_program(b) ? 0 : 1
+	return toolbox.ended(build_program(b))
 }

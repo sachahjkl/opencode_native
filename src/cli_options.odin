@@ -56,7 +56,7 @@ cli_start :: proc() -> Cli_Options {
 		footer = "Files: ~/.config/opencode-native/ (Windows: %APPDATA%\\opencode-native\\): prefs.txt, servers.txt, themes.txt."}
 	if out, code, stop := cli.check(program, all_options(), os.args[1:]); stop {
 		say("%s", out)
-		os.exit(code)
+		cli.exit(code)
 	}
 	return cli_read(os.args[1:])
 }

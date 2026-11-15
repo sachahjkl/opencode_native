@@ -12,6 +12,7 @@ import "core:math"
 import "core:os"
 import "core:time"
 import prefs_page "gt:prefs_page"
+import "gt:cli"
 import "gt:config"
 import "gt:devtools"
 import "gt:draw"
@@ -596,7 +597,7 @@ main :: proc() {
 	opts := cli_start()   // (--help, --version, a line not understood: said, no window; everything else reads app.cli)
 	started := time.tick_now()
 	// --install / --uninstall / --status: the install, without a window
-	if setup.command_alone(opts.command) { os.exit(setup.command_run(opts.command, setup_options(), process.console_write)) }
+	if setup.command_alone(opts.command) { cli.exit(setup.command_run(opts.command, setup_options(), process.console_write)) }
 	logger, crashed := log_start()
 	context.logger = logger
 	// the graphics device on a thread of its own while the rest starts (the driver's load is the longest step: 160 ms here)

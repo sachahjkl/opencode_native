@@ -16,6 +16,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 import cdp "gt:cdp"
+import cli "gt:cli"
 import toolbox "gt:toolbox"
 import tk_site "gt:site"
 
@@ -140,30 +141,30 @@ SELLER :: tk_site.Seller{
 	vat        = "not applicable, article 293 B of the French General Tax Code (<em>franchise en base de TVA</em>)",
 }
 
-run_site :: proc(args: []string) -> int {
+run_site :: proc(args: []string) -> cli.Exit {
 	what := len(args) > 0 ? args[0] : ""
 	switch what {
 	case "build", "changelog", "meta":
 		if len(args) != 3 { break }
 		site, out := args[1], args[2]
-		if what == "changelog" { return site_changelog(site, out, nil) ? 0 : 1 }
-		if what == "meta" { return tk_site.build_meta(site_meta(), site, out) ? 0 : 1 }
-		if !site_changelog(site, out, nil) { return 1 }
-		if !tk_site.build_meta(site_meta(), out, out) { return 1 }
-		if !site_screenshots(out) { return 1 }
+		if what == "changelog" { return toolbox.ended(site_changelog(site, out, nil)) }
+		if what == "meta" { return toolbox.ended(tk_site.build_meta(site_meta(), site, out)) }
+		if !site_changelog(site, out, nil) { return .Failed }
+		if !tk_site.build_meta(site_meta(), out, out) { return .Failed }
+		if !site_screenshots(out) { return .Failed }
 		o := site_images()
 		why: string
-		if o.encoder, why = toolbox.webp_encoder("build"); why != "" { fmt.eprintfln("site: no WebP encoder: %s", why); return 1 }
-		return tk_site.build_images(out, o) ? 0 : 1
+		if o.encoder, why = toolbox.webp_encoder("build"); why != "" { fmt.eprintfln("site: no WebP encoder: %s", why); return .Failed }
+		return toolbox.ended(tk_site.build_images(out, o))
 	case "card":
-		if len(args) == 1 { return tk_site.draw_card(site_meta(), SITE_DIR) ? 0 : 1 }
+		if len(args) == 1 { return toolbox.ended(tk_site.draw_card(site_meta(), SITE_DIR)) }
 	case "check":
 		o := tk_site.Check_Options{site = SITE_DIR, generate = site_changelog, extra = site_downloads}
-		if why := tk_site.check_arguments(args[1:], &o); why != "" { fmt.eprintfln("site check: %s", why); return EXIT_USAGE }
-		return tk_site.check(o) ? 0 : 1
+		if why := tk_site.check_arguments(args[1:], &o); why != "" { fmt.eprintfln("site check: %s", why); return .Usage }
+		return toolbox.ended(tk_site.check(o))
 	}
 	fmt.eprintln("site build|changelog|meta <site> <out> | card | check [--site folder] [--shot file.png] [--browser program]")
-	return EXIT_USAGE
+	return .Usage
 }
 
 // A browser of each system: what it says it runs on (navigator.userAgent, navigator.platform, navigator.userAgentData), the

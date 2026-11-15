@@ -9,6 +9,8 @@ import "core:os"
 import "core:strings"
 import "core:time"
 import cdp "gt:cdp"
+import cli "gt:cli"
+import toolbox "gt:toolbox"
 
 FILM_DIR        :: "build/film"
 FILM_FPS        :: "30"
@@ -309,13 +311,13 @@ shoot :: proc(l: ^Live, scene: Scene) -> bool {
 	return done
 }
 
-run_film :: proc(args: []string) -> int {
+run_film :: proc(args: []string) -> cli.Exit {
 	l: Live
-	if !live_setup(&l, args) { return 1 }
-	if !make_folder(FILM_DIR) || !make_folder(LIVE_DIR) { return 1 }
+	if !live_setup(&l, args) { return .Failed }
+	if !make_folder(FILM_DIR) || !make_folder(LIVE_DIR) { return .Failed }
 	what := len(args) > 0 ? args[0] : "all"
-	if what == "prepare" { return prepare(&l) ? 0 : 1 }
-	if !snapshot_take(&l) { return 1 }
+	if what == "prepare" { return toolbox.ended(prepare(&l)) }
+	if !snapshot_take(&l) { return .Failed }
 	failed, found := 0, false
 	scenes := SCENES
 	for scene in scenes {
@@ -323,8 +325,8 @@ run_film :: proc(args: []string) -> int {
 		found = true
 		if !shoot(&l, scene) { failed += 1 }
 	}
-	if clean_now(&l) != 0 { failed += 1 }
-	if !found { fmt.eprintfln("film: no scene %s", what); return EXIT_USAGE }
+	if clean_now(&l) != .Done { failed += 1 }
+	if !found { fmt.eprintfln("film: no scene %s", what); return .Usage }
 	fmt.printfln("film: %d failed", failed)
-	return failed > 0 ? 1 : 0
+	return toolbox.ended(failed == 0)
 }

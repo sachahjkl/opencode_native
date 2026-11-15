@@ -14,17 +14,18 @@ import "core:fmt"
 import "core:os"
 import "core:slice"
 import "core:strings"
+import cli "gt:cli"
 import update "gt:update"
 import ocn_update "../../src/update"
 import toolbox "gt:toolbox"
 
-run_release :: proc(args: []string) -> int {
+run_release :: proc(args: []string) -> cli.Exit {
 	switch {
 	case len(args) == 2 && args[0] == "dist":    return release_dist(args[1])
 	case len(args) == 3 && args[0] == "publish": return release_publish(args[1], args[2])
 	}
 	fmt.eprintln("release dist <tag> | publish <tag> <folder>")
-	return EXIT_USAGE
+	return .Usage
 }
 
 // The version of a tag (v0.20.0, v0.20.0-beta.1: 0.20.0), and whether it is a beta.
@@ -35,29 +36,29 @@ tag_version :: proc(tag: string) -> (version: string, beta: bool) {
 }
 
 @(private = "file")
-release_dist :: proc(tag: string) -> int {
+release_dist :: proc(tag: string) -> cli.Exit {
 	version, beta := tag_version(tag)
 	source := toolbox.project_version(OCN_PROJECT)
 	found := source != ""
-	if !found || source != version { fmt.eprintfln("release: tag %s does not match APP_VERSION %s (%s)", tag, source, SETUP_FILE); return 1 }
-	if run_package({version}) != 0 { return 1 }
+	if !found || source != version { fmt.eprintfln("release: tag %s does not match APP_VERSION %s (%s)", tag, source, SETUP_FILE); return .Failed }
+	if run_package({version}) != .Done { return .Failed }
 	file := fmt.tprintf("%s/%s", DIST_DIR, update.expected_file_name(ocn_update.PRODUCT, version, update.PLATFORM, context.temp_allocator))
 	channels := beta ? []string{"beta"} : []string{"stable", "beta"}
 	for c in channels {
 		out := fmt.tprintf("%s/%s", DIST_DIR, update.manifest_name(update.PLATFORM, c, context.temp_allocator))
-		if why := toolbox.update_manifest(ocn_update.PRODUCT, file, version, c, out); why != "" { fmt.eprintfln("release: the %s manifest could not be signed: %s", c, why); return 1 }
+		if why := toolbox.update_manifest(ocn_update.PRODUCT, file, version, c, out); why != "" { fmt.eprintfln("release: the %s manifest could not be signed: %s", c, why); return .Failed }
 	}
-	return 0
+	return .Done
 }
 
 NOT_THEIRS_NOTE :: "\n---\n\nAn independent project: not built by the OpenCode team, and not affiliated with them.\n"
 BETA_RELEASE    :: "channel-beta"
 
 @(private = "file")
-release_publish :: proc(tag, folder: string) -> int {
+release_publish :: proc(tag, folder: string) -> cli.Exit {
 	version, beta := tag_version(tag)
 	entries, err := os.read_all_directory_by_path(folder, context.temp_allocator)
-	if err != nil { fmt.eprintfln("release: cannot read %s", folder); return 1 }
+	if err != nil { fmt.eprintfln("release: cannot read %s", folder); return .Failed }
 	programs := make([dynamic]string, context.temp_allocator)   // opencode-native-*: the files of the release
 	manifests := make([dynamic]string, context.temp_allocator)  // update-*: their signed manifests
 	for e in entries {
@@ -70,7 +71,7 @@ release_publish :: proc(tag, folder: string) -> int {
 	sums := strings.builder_make(context.temp_allocator)
 	for name in programs {
 		data, rerr := os.read_entire_file(fmt.tprintf("%s/%s", folder, name), context.temp_allocator)
-		if rerr != nil { fmt.eprintfln("release: cannot read %s", name); return 1 }
+		if rerr != nil { fmt.eprintfln("release: cannot read %s", name); return .Failed }
 		ctx: sha2.Context_256
 		sha2.init_256(&ctx)
 		sha2.update(&ctx, data)
@@ -78,7 +79,7 @@ release_publish :: proc(tag, folder: string) -> int {
 		sha2.final(&ctx, digest[:])
 		fmt.sbprintf(&sums, "%s  %s\n", string(hex.encode(digest[:], context.temp_allocator)), name)
 	}
-	if os.write_entire_file(fmt.tprintf("%s/SHA256SUMS.txt", folder), strings.to_string(sums)) != nil { return 1 }
+	if os.write_entire_file(fmt.tprintf("%s/SHA256SUMS.txt", folder), strings.to_string(sums)) != nil { return .Failed }
 	fmt.print(strings.to_string(sums))
 
 	files := make([dynamic]string, context.temp_allocator)
@@ -91,17 +92,17 @@ release_publish :: proc(tag, folder: string) -> int {
 		append(&cmd, "gh", "release", "upload", tag)
 		append(&cmd, ..files[:])
 		append(&cmd, "--clobber")
-		if !toolbox.run(cmd[:], in_folder) { return 1 }
+		if !toolbox.run(cmd[:], in_folder) { return .Failed }
 	} else {
 		notes := fmt.tprintf("%s/NOTES.md", folder)
 		text := read_text(notes)
-		if os.write_entire_file(notes, strings.concatenate({text, NOT_THEIRS_NOTE}, context.temp_allocator)) != nil { return 1 }
+		if os.write_entire_file(notes, strings.concatenate({text, NOT_THEIRS_NOTE}, context.temp_allocator)) != nil { return .Failed }
 		cmd := make([dynamic]string, context.temp_allocator)
 		append(&cmd, "gh", "release", "create", tag)
 		append(&cmd, ..files[:])
 		if beta { append(&cmd, "--prerelease") }
 		append(&cmd, "--title", fmt.tprintf("opencode native %s", version), "--notes-file", "NOTES.md")
-		if !toolbox.run(cmd[:], in_folder) { return 1 }
+		if !toolbox.run(cmd[:], in_folder) { return .Failed }
 	}
 
 	// the beta channel's fixed address: the programs and their beta manifests
@@ -109,11 +110,11 @@ release_publish :: proc(tag, folder: string) -> int {
 	for name in programs { if !strings.has_suffix(name, ".tar.gz") { append(&beta_files, name) } }
 	for name in manifests { if strings.contains(name, "-beta.json") { append(&beta_files, name) } }
 	if _, code := toolbox.capture({"gh", "release", "view", BETA_RELEASE}); code != 0 {
-		if !run("gh", "release", "create", BETA_RELEASE, "--prerelease", "--title", "Beta channel", "--notes", "What the beta channel of the updater reads.") { return 1 }
+		if !run("gh", "release", "create", BETA_RELEASE, "--prerelease", "--title", "Beta channel", "--notes", "What the beta channel of the updater reads.") { return .Failed }
 	}
 	cmd := make([dynamic]string, context.temp_allocator)
 	append(&cmd, "gh", "release", "upload", BETA_RELEASE)
 	append(&cmd, ..beta_files[:])
 	append(&cmd, "--clobber")
-	return toolbox.run(cmd[:], in_folder) ? 0 : 1
+	return toolbox.ended(toolbox.run(cmd[:], in_folder))
 }

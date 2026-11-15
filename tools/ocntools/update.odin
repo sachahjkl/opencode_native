@@ -7,7 +7,8 @@ package ocntools
 //   ocntools update manifest <exe> <version> <channel> <out.json>  a manifest and its .sig, by $UPDATE_SIGNING_KEY
 //   ocntools update verify <file.json> <channel>                   checks a manifest and its .sig with the built-in key
 
+import cli "gt:cli"
 import toolbox "gt:toolbox"
 import ocn_update "../../src/update"
 
-run_update :: proc(args: []string) -> int { return toolbox.update_command(ocn_update.PRODUCT, args) }
+run_update :: proc(args: []string) -> cli.Exit { return toolbox.update_command(ocn_update.PRODUCT, args) }
