@@ -307,6 +307,30 @@ one_action_at_a_time_on_an_item :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(app.cx.queue.items), 0)
 }
 
+// The other way with nothing written, while a run works, steers the first queued prompt into it (opencode 2.3.0's
+// Ctrl+Enter); one already steered is passed, one on its way is waited for; nothing runs: nothing goes.
+@(test)
+the_other_way_with_nothing_written_steers_the_first_queued :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	running(app, "s")
+	enqueued(app, "s1", "now", "steer")
+	enqueued(app, "q1", "first", "queue")
+	enqueued(app, "q2", "second", "queue")
+	submit_prompt(app, false)
+	testing.expect_value(t, bench_count(.Queue_Steer), 0)   // (Enter with nothing: nothing)
+	submit_prompt(app, true)
+	r := bench_take(t, .Queue_Steer)
+	testing.expectf(t, strings.contains(r.path, "/inbox/q1"), "the first queued: %s", r.path)
+	testing.expect_value(t, bench_count(.Prompt), 0)
+	submit_prompt(app, true)
+	testing.expect_value(t, bench_count(.Queue_Steer), 0)   // (q1 on its way: not q2 instead)
+	bench_answer(app, r, 204, "")
+	bench_event(app, `{"type":"session.execution.succeeded","data":{"sessionID":"s"}}`)
+	submit_prompt(app, true)
+	testing.expect_value(t, bench_count(.Queue_Steer), 0)   // (nothing runs)
+}
+
 @(test)
 steer_changes_the_delivery_and_leaves_it_until_it_is_delivered :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()

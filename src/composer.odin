@@ -375,7 +375,11 @@ prompt_restore :: proc(app: ^App, text: string) {
 // turn runs `other` is the way that is not Enter's (composer_send_as); what is being edited goes back where it was, whichever.
 submit_prompt :: proc(app: ^App, other := false) {
 	t := strings.clone(strings.trim_space(ui.text_edit_string(&app.composer.area)), context.temp_allocator)
-	if (t == "" && len(app.composer.attachments) == 0) || !online(app) || composer_held(app) { return }
+	empty := t == "" && len(app.composer.attachments) == 0
+	// (the other way, nothing written, while a run works: the first queued prompt is steered into it, as opencode 2.3.0's
+	// desktop does)
+	if empty && other && app.chat.busy && !queue_editing(app) { queue_steer_first(app); return }
+	if empty || !online(app) || composer_held(app) { return }
 	history_leave(app, false)
 	if queue_editing(app) { queue_edit_commit(app, t); return }
 	as := composer_send_as(app, other)

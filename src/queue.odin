@@ -258,6 +258,18 @@ queue_steer :: proc(app: ^App, id: string) {
 	request(app, .Queue_Steer, "PATCH", fmt.tprintf("/api/session/%s/inbox/%s", app.cx.queue.session, id), `{"delivery":"steer"}`, id)
 }
 
+// The first prompt that waits for the run's end, steered into the run (the composer's other way with nothing written).
+queue_steer_first :: proc(app: ^App) {
+	q := &app.cx.queue
+	if q.session != app.chat.id { return }
+	// (the first one only: one already on its way is not skipped for the next, as the desktop does)
+	for &it in q.items {
+		if it.delivery != .Queue { continue }
+		if it.act == .None { queue_steer(app, it.id) }
+		return
+	}
+}
+
 // A steered message waits for the next step of the run; a long step (a long thought, a command that takes its time) keeps it
 // waiting. This stops the step: the run interrupted, what was steered goes as a prompt at once, in its order (inbox_resume, on
 // session.execution.interrupted). What the step was doing is lost, which is what the reader chose. Nothing runs: it goes now.
