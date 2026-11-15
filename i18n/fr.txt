@@ -1537,14 +1537,8 @@ fr Mise à jour…
 en Update
 fr Mettre à jour
 
-en No usable Secret Service (none here, or its keyring is locked): the password stays in clear in servers.txt, which only you can read (mode 0600).
-fr Aucun Secret Service utilisable (absent, ou son trousseau est verrouillé) : le mot de passe reste en clair dans servers.txt, que vous seul pouvez lire (mode 0600).
-
 en Command line
 fr Ligne de commande
-
-en The password of %s could not be protected: the list of servers was not saved
-fr Impossible de protéger le mot de passe de %s : la liste des serveurs n'a pas été enregistrée
 
 en No HTTP client for %s
 fr Pas de client HTTP pour %s
@@ -1602,6 +1596,9 @@ fr Enregistrer et connecter
 
 en Add and connect
 fr Ajouter et connecter
+
+en No usable Secret Service (none here, or its keyring is locked): the password stays in clear in servers.txt, which only you can read (mode 0600).
+fr Aucun Secret Service utilisable (absent, ou son trousseau est verrouillé) : le mot de passe reste en clair dans servers.txt, que vous seul pouvez lire (mode 0600).
 
 en Session exported
 fr Session exportée

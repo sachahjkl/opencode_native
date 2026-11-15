@@ -68,7 +68,8 @@ App :: struct {
 	program_views:  ui.Views,          // the dialogs, the sidebar, the panels, the windows of their own, and how each was last shown (window_views.odin; `views` is host.Shared's: their windows)
 	rename:         Rename,            // a session's title (context_menus.odin)
 	scale:          f32,               // --scale=<factor>: the interface's scale whatever the screen says (0: the screen's)
-	servers_in_clear: bool,            // read passwords in clear from an older version's file: saved protected at start
+	servers_in_clear: bool,            // passwords read in clear from the file: a save seals them, if a store takes them
+	passwords_in_clear: bool,          // the last save of the servers found no store for a password: the dialog says so
 	rediscover_ms:  f64,               // when this computer's server was last looked for (servers_rediscover)
 	connect_seq:     u64,              // the connection last asked for (server_connect): one read for an earlier one is not connected
 	rediscover_busy: bool,             // ... a look is under way, on a chore

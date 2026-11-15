@@ -33,3 +33,5 @@ purpose, the decisions, what was refused.
   command line to the window that runs; `--quit` ends it as Quit does; the starts that stay on their own.
 - [features/palette.md](features/palette.md): the toolkit's palette with ocn's sources; the shared prefixes; what was
   lost and why.
+- [features/server-passwords.md](features/server-passwords.md): the servers' passwords sealed with `gt:secrets`; the
+  field kept per server, the one forget after the seals, a password in clear where no store answers.

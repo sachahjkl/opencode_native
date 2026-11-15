@@ -5,6 +5,7 @@ import "core:strings"
 import "core:testing"
 import "gt:ui"
 import lucide "gt:lucide"
+import secrets "gt:secrets"
 
 _ :: os        // (the tests of Windows)
 _ :: strings
@@ -102,26 +103,25 @@ one_server_or_two :: proc(t: ^testing.T) {
 passwords_in_the_file :: proc(t: ^testing.T) {
 	when ODIN_OS == .Windows {
 		password := "s3cret \t with \u00fcnicode"
-		field, ok := password_seal("a server", password)
-		testing.expect(t, ok)
+		field, sealed := secrets.seal(SECRETS_APP, "a server", password, context.temp_allocator)
+		testing.expect_value(t, sealed, secrets.Seal_Result.Sealed)
 		testing.expect(t, !strings.contains(field, "s3cret"), "not in clear")
-		got, stored, clear_text := password_from_field("a server", field)
-		testing.expect_value(t, got, password)
-		testing.expect_value(t, stored, "")
-		testing.expect(t, !clear_text)
-		got, stored, clear_text = password_from_field("a server", "dpapi:AAAAAAAA")
-		testing.expect_value(t, got, "")
-		testing.expect_value(t, stored, "dpapi:AAAAAAAA")   // this account cannot open it: it stays
-		testing.expect(t, !clear_text)
+		opened, opened_clear := password_from_field(field)
+		testing.expect_value(t, opened, password)
+		testing.expect(t, !opened_clear)
 	}
-	// an older version's file
-	got2, stored2, clear2 := password_from_field("a server", "old-password")
-	testing.expect_value(t, got2, "old-password")
-	testing.expect(t, clear2)
-	testing.expect_value(t, stored2, "")
-	got2, _, clear2 = password_from_field("a server", "")
-	testing.expect_value(t, got2, "")
-	testing.expect(t, !clear2)
+	// A field sealed on the other system (the file moved): no password, and never the field taken for one in clear.
+	other := ODIN_OS == .Windows ? secrets.SERVICE_MARK + "a server" : secrets.DPAPI_MARK + "AAAAAAAA"
+	got, clear_text := password_from_field(other)
+	testing.expect_value(t, got, "")
+	testing.expect(t, !clear_text)
+	// where no store took it
+	got, clear_text = password_from_field("a-password")
+	testing.expect_value(t, got, "a-password")
+	testing.expect(t, clear_text)
+	got, clear_text = password_from_field("")
+	testing.expect_value(t, got, "")
+	testing.expect(t, !clear_text)
 }
 
 // The viewer is the picture and its chrome, nothing more: the black around a picture smaller than the dialog was taken for the outside,

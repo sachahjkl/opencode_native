@@ -1024,31 +1024,49 @@ what_a_call_counts_is_what_a_diff_shows :: proc(t: ^testing.T) {
 
 @(test)
 a_rename_with_the_keyring_locked_keeps_the_password :: proc(t: ^testing.T) {
-	old := Server{name = "a", stored = "sealed"}
-	stored, drop := server_password_moves(old, Server{name = "b"})
-	testing.expect(t, !drop, "the only copy is not deleted")
-	testing.expect(t, stored != "", "the field still leads to it")
+	old := Server{name = "a", field = "sealed"}
+	field, forget := server_password_moves(old, Server{name = "b"})
+	testing.expect_value(t, forget, "")   // the only copy is not deleted
+	testing.expect_value(t, field, "sealed")   // the field still leads to it
 }
 
 @(test)
 what_the_old_name_held_goes_when_the_new_one_has_it :: proc(t: ^testing.T) {
-	old := Server{name = "a", password = "p"}
-	stored, drop := server_password_moves(old, Server{name = "b", password = "p"})
-	testing.expect_value(t, stored, "")
-	testing.expect(t, drop, "after the save")
+	old := Server{name = "a", password = "p", field = "secret-service:v1:a"}
+	field, forget := server_password_moves(old, Server{name = "b", password = "p"})
+	testing.expect_value(t, field, "")
+	testing.expect_value(t, forget, "secret-service:v1:a")   // after the save
+}
+
+// A server renamed while its keyring was locked keeps the item of its old name; renamed again once it opens, the item its field names
+// goes, not the one its name names.
+@(test)
+a_rename_forgets_the_item_of_the_field :: proc(t: ^testing.T) {
+	old := Server{name = "b", password = "p", field = "secret-service:v1:a"}
+	_, forget := server_password_moves(old, Server{name = "c", password = "p"})
+	testing.expect_value(t, forget, "secret-service:v1:a")
 }
 
 @(test)
 a_password_removed_is_removed :: proc(t: ^testing.T) {
-	_, drop := server_password_moves(Server{name = "a", password = "p"}, Server{name = "a"})
-	testing.expect(t, drop, "nothing stays in the keyring")
+	_, forget := server_password_moves(Server{name = "a", password = "p", field = "secret-service:v1:a"}, Server{name = "a"})
+	testing.expect_value(t, forget, "secret-service:v1:a")   // nothing stays in the keyring
 }
 
 @(test)
 the_same_name_keeps_its_password :: proc(t: ^testing.T) {
-	stored, drop := server_password_moves(Server{name = "a", stored = "sealed"}, Server{name = "a"})
-	testing.expect_value(t, stored, "sealed")
-	testing.expect(t, !drop, "left as it was")
+	field, forget := server_password_moves(Server{name = "a", field = "sealed"}, Server{name = "a"})
+	testing.expect_value(t, field, "sealed")
+	testing.expect_value(t, forget, "")   // left as it was
+}
+
+// The same name sealed again gives the same field (Linux: the item the seal just replaced): forgetting it would lose the new password.
+@(test)
+a_save_keeps_the_item_it_just_wrote :: proc(t: ^testing.T) {
+	written := []Server{{name = "a", field = "secret-service:v1:a"}}
+	testing.expect(t, !server_forget_after("secret-service:v1:a", written))
+	testing.expect(t, server_forget_after("secret-service:v1:b", written))
+	testing.expect(t, !server_forget_after("", written))
 }
 
 ////////////////////////////////
@@ -1227,13 +1245,13 @@ the_servers_start_with_nothing_read :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app := bench_new()
 	defer store.close(&app.stores.servers)
-	testing.expect(t, store.set(&app.stores.servers, "Work", "http://work:4096\tsecret-service:v1"))
+	testing.expect(t, store.set(&app.stores.servers, "Work", "http://work:4096\tsecret-service:v1:Work"))
 	servers_init(app)
 	if !testing.expect_value(t, len(app.servers), 2) { return }
 	here, work := app.servers[0], app.servers[1]
 	testing.expect(t, here.local && here.url == "" && here.password == "", "this computer's address is not read yet")
 	testing.expect_value(t, work.url, "http://work:4096")
 	testing.expect_value(t, work.password, "")
-	testing.expect_value(t, work.stored, "secret-service:v1")
+	testing.expect_value(t, work.field, "secret-service:v1:Work")
 	testing.expect(t, !app.servers_in_clear)
 }
