@@ -4,6 +4,24 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.57.0] - 2026-11-15
+
+### Added
+- **The free-limit panel**: when opencode's free usage is used up and no provider is paid, a panel takes the composer's place until it resets. It says when, with Subscribe to Go and Connect provider, as in opencode 2.3.0.
+- **The terminal shell from the server's menu**: the server's menu chooses its terminal shell, Auto or one of the server's. A shell the agents cannot use says terminal only and can be chosen for the terminal, on the settings page too.
+- **Queue first**: while a run works, Alt+Enter queues the prompt before the ones already waiting for the end of the run, as in opencode 2.3.0. The prompts behind it keep their order, and none is lost if the server refuses one.
+- **Steer the next queued prompt**: while a run works, the other way to send (Ctrl+Enter, or Ctrl+Shift+Enter in Ctrl+Enter mode) with nothing written steers the first queued prompt into the run, as in opencode 2.3.0.
+- **The session's id in its header**: at the end of the folder's line, and a click copies it; Copy the session ID is in the palette too, as in opencode 2.3.0.
+- **Jump to message**: Ctrl+Alt+G, or Jump to message in the palette, lists the session's prompts, the newest first. A few words find an earlier one, and Enter takes the conversation there, as in opencode 2.3.0.
+
+### Changed
+- **Sub-agents run in the background**: as opencode 2.3.0 launches them, a sub-agent shows as running until its report comes, several at a time, while the session goes on. Each report shows as it arrives, and one that says its work still runs keeps it running until the last one.
+
+### Fixed
+- **Copy on a background job's card copies what the card shows**: a command and its output, or a sub-agent's report, not the raw markup it came in.
+- **A remote server's localhost opens on that server**: a page at localhost, 127.0.0.1, ::1 or 0.0.0.0 in a remote server's session opened on this computer. The browser panel now opens it at the server's address, the port kept, and its address bar says on the server.
+- **The composer menu's Paste attaches files and pictures**, as Ctrl+V does: one paste of the toolkit for both.
+
 ## [0.56.1] - 2026-11-15
 
 ### Changed
@@ -1663,6 +1681,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.57.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.57.0
 [0.56.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.56.1
 [0.56.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.56.0
 [0.55.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.55.1
