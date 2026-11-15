@@ -157,8 +157,8 @@ go_bottom_pill :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, avail, em
 		a := (^f32)(user)^
 		r := (b.rect.max.y - b.rect.min.y) * 0.5
 		draw.box_shadow(dc, b.rect, radii4(r), 8 * ui.scale(), {0, 0, 0, 0.6 * a})
-		draw.rect(dc, b.rect, with_alpha(hex(b.hot_t > FADE_VISIBLE ? HEX_BG4 : HEX_BG3), a), r)
-		draw.rect(dc, b.rect, with_alpha(hex(HEX_FLOATING_BORDER), a), r, px1())
+		draw.rect(dc, b.rect, ui.with_alpha(hex(b.hot_t > FADE_VISIBLE ? HEX_BG4 : HEX_BG3), a), r)
+		draw.rect(dc, b.rect, ui.with_alpha(hex(HEX_FLOATING_BORDER), a), r, px1())
 	}
 	sig := ui.signal(b)
 	if sig.clicked {
@@ -167,9 +167,9 @@ go_bottom_pill :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, avail, em
 	}
 	if ui.parent(b) {
 		ui.spacer(ui.fill())
-		glyph(lucide.CHEVRON_DOWN, with_alpha(hex(HEX_TEXT_SOFT), t), math.round(em * ICON_SMALL))
+		glyph(lucide.CHEVRON_DOWN, ui.with_alpha(hex(HEX_TEXT_SOFT), t), math.round(em * ICON_SMALL))
 		ui.spacer(ui.px(em * 0.3))
-		text("t", i18n.tr("Latest"), with_alpha(hex(HEX_TEXT_SOFT), t), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+		text("t", i18n.tr("Latest"), ui.with_alpha(hex(HEX_TEXT_SOFT), t), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.fill())
 	}
 }
@@ -482,9 +482,9 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 				r := Rect{{c.x - 1.5 * s, b.rect.min.y}, {c.x + 1.5 * s, b.rect.max.y}}
 				if d.live && d.glow {
 					a := 0.15 + 0.15 * (0.5 + 0.5 * math.sin(f32(ui.now_ms()) * PULSE_RATE))
-					draw.box_shadow(dc, r, radii4(1.5 * s), 4 * s, with_alpha(d.col, a))
+					draw.box_shadow(dc, r, radii4(1.5 * s), 4 * s, ui.with_alpha(d.col, a))
 				}
-				draw.rect(dc, r, d.live ? d.col : with_alpha(d.col, 0.75), 1.5 * s)
+				draw.rect(dc, r, d.live ? d.col : ui.with_alpha(d.col, 0.75), 1.5 * s)
 			}
 			rb.custom_user = wd
 			if m.streaming { animate(app) }

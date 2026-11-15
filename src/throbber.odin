@@ -87,7 +87,7 @@ throbber :: proc(app: ^App, pane: ^Chat_Pane, id: string, color: Color, width, h
 		ui.next({width = ui.children_sum(), height = ui.px(math.round(em * 1.4)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = id) {
 			for i in 0 ..< len(word) {
-				text(fmt.tprintf("c%d", i), board_letter(word, i, t.since_ms, now), with_alpha(color, board_light(i, now)), st)
+				text(fmt.tprintf("c%d", i), board_letter(word, i, t.since_ms, now), ui.with_alpha(color, board_light(i, now)), st)
 			}
 		}
 	}

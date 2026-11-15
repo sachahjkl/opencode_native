@@ -171,7 +171,7 @@ term_palette :: proc(bg, fg: Vt_Rgb) -> (palette: [256]Vt_Rgb) {
 	for c, i in named {
 		x := themed(c)
 		// (the bright eight: a step toward white, as terminals draw them)
-		if i >= 9 && i <= 14 { l := lighten(draw.hex(x), 0.25); x = u32(l.r * 255) << 24 | u32(l.g * 255) << 16 | u32(l.b * 255) << 8 | 0xff }
+		if i >= 9 && i <= 14 { l := ui.lighten(draw.hex(x), 0.25); x = u32(l.r * 255) << 24 | u32(l.g * 255) << 16 | u32(l.b * 255) << 8 | 0xff }
 		palette[i] = rgb_of(x)
 	}
 	keep: Vt_Palette_Mask

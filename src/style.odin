@@ -73,9 +73,6 @@ BLACK :: Color{0, 0, 0, 1}
 WHITE :: Color{1, 1, 1, 1}
 CLEAR :: Color{0, 0, 0, 0}
 
-with_alpha :: proc(c: Color, a: f32) -> Color { return {c.r, c.g, c.b, c.a * a} }
-lighten :: proc(c: Color, t: f32) -> Color { return ui.srgb_step(c, WHITE, t) }
-darken :: proc(c: Color, t: f32) -> Color { return ui.srgb_step(c, BLACK, t) }
 
 // Theme entries of our own, ahead of the palette's (equal specificity: the first one wins).
 theme_setup :: proc(t: ^ui.Theme) {
@@ -92,7 +89,7 @@ theme_setup :: proc(t: ^ui.Theme) {
 	ui.theme_add(t, "code_bg", hex(HEX_CODE_BG))
 	ui.theme_add(t, "link", hex(HEX_BLUE))
 	ui.theme_add(t, "floating scrim background", CLEAR)   // (dialog_backdrop paints it; "floating background" made it opaque)
-	ui.theme_add(t, "selection", with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
+	ui.theme_add(t, "selection", ui.with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
 	ui.theme_add(t, "selection text", hex(HEX_BRIGHT))   // (over the selection, whatever the text's own colour: a faint one was lost on it)
 	diff_colours(t, false)
 	ui.apply_palette(t, themed_palette())
@@ -131,7 +128,7 @@ floating_colours :: proc(t: ^ui.Theme) {
 theme_refresh :: proc(t: ^ui.Theme) {
 	ui.theme_set(t, "code_bg", hex(HEX_CODE_BG))
 	ui.theme_set(t, "link", hex(HEX_BLUE))
-	ui.theme_set(t, "selection", with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
+	ui.theme_set(t, "selection", ui.with_alpha(hex(HEX_PEACH), SELECTION_ALPHA))
 	ui.theme_set(t, "selection text", hex(HEX_BRIGHT))
 	diff_colours(t, true)
 	ui.apply_palette(t, themed_palette())
@@ -161,7 +158,7 @@ themed_palette :: proc() -> ui.Palette {
 flat :: proc() -> bool { return !ui.machined() }
 
 // The thin edge of a flat surface of this face: the theme's line, lit a little under the pointer.
-flat_edge :: proc(face: Color, hot: f32) -> Color { return draw.mix(hex(HEX_LINE), lighten(hex(HEX_LINE), 0.25), hot) }
+flat_edge :: proc(face: Color, hot: f32) -> Color { return draw.mix(hex(HEX_LINE), ui.lighten(hex(HEX_LINE), 0.25), hot) }
 
 
 
@@ -345,8 +342,8 @@ scanner :: proc(id: string, color: Color, width, height: f32) {
 		x := slot.min.x + (w - gw) * t
 		g := Rect{{x, slot.min.y + s}, {x + gw, slot.max.y - s}}
 		draw.push_clip(dc, slot)
-		if the_app.prefs.glow { draw.box_shadow(dc, g, radii4(h * 0.5), 4 * s, with_alpha(col, 0.22)) }
-		draw.rect(dc, g, with_alpha(col, 0.9), h * 0.5)
+		if the_app.prefs.glow { draw.box_shadow(dc, g, radii4(h * 0.5), 4 * s, ui.with_alpha(col, 0.22)) }
+		draw.rect(dc, g, ui.with_alpha(col, 0.9), h * 0.5)
 		draw.pop_clip(dc)
 	}
 	b.custom_user = d

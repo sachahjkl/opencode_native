@@ -30,7 +30,7 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	if d.selected {
 		draw.rect(dc, r, chosen_ground())
 	} else if b.hot_t > FADE_VISIBLE {
-		draw.rect(dc, r, with_alpha(hex(HEX_TEXT), ITEM_HOVER_TINT * b.hot_t))
+		draw.rect(dc, r, ui.with_alpha(hex(HEX_TEXT), ITEM_HOVER_TINT * b.hot_t))
 	}
 }
 
@@ -183,7 +183,7 @@ session_badge :: proc(app: ^App, s: ^Session_Info, size, em: f32) {
 		if unicode.is_letter(r) || unicode.is_digit(r) { letter = strings.to_upper(s.title[i:i + utf8.rune_size(r)], context.temp_allocator); break }
 	}
 	c := hex(SESSION_BADGE_HEX[session_badge_index(s.id)])
-	ui.next({width = ui.px(size), height = ui.px(size), bg = with_alpha(c, SESSION_BADGE_ALPHA), fg = c, radius = math.round(size * 0.3 * corners()),
+	ui.next({width = ui.px(size), height = ui.px(size), bg = ui.with_alpha(c, SESSION_BADGE_ALPHA), fg = c, radius = math.round(size * 0.3 * corners()),
 		text_align = .Center, font = ui.styled_face(app.font, true, false), font_size = math.round(size * 0.55), text_pad = 0})
 	ui.build_box({.Draw_Background, .Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###badge", letter))
 }

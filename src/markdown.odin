@@ -32,9 +32,9 @@ md_config :: proc(app: ^App, color: Color) -> markdown.View_Options {
 		prose = app.prose, face = app.font, mono = app.mono,
 		prose_scale = app.prose_scale, line_ratio = PROSE_LINE_RATIO, cell_scale = FS_LABEL,
 		colors = {
-			text = color, heading = hex(HEX_BRIGHT), quote = hex(HEX_WEAK), marker = accent(), rail = with_alpha(accent(), 0.6),
+			text = color, heading = hex(HEX_BRIGHT), quote = hex(HEX_WEAK), marker = accent(), rail = ui.with_alpha(accent(), 0.6),
 			inline_code = hex(HEX_INLINE_CODE), code_text = hex(HEX_CODE_TEXT), table_header = hex(HEX_BRIGHT),
-			table_stripe = with_alpha(hex(HEX_TEXT), markdown.TABLE_STRIPE_ALPHA), table_rule = with_alpha(accent(), markdown.TABLE_RULE_ALPHA),
+			table_stripe = ui.with_alpha(hex(HEX_TEXT), markdown.TABLE_STRIPE_ALPHA), table_rule = ui.with_alpha(accent(), markdown.TABLE_RULE_ALPHA),
 		},
 		user = app,
 		link = proc(user: rawptr, url: string) { link_open(url) },

@@ -323,7 +323,7 @@ form_card :: proc(app: ^App, pane: ^Chat_Pane, f: ^Form_Req, others: int, em: f3
 	sub := f.session != pane.chat.id
 	send, dismiss, next := false, false, false
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if plate(fmt.tprintf("###form_%s", f.id), top = HEX_PERM_TOP, bottom = HEX_PERM_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.1, border = with_alpha(accent(), 0.55)) {
+	if plate(fmt.tprintf("###form_%s", f.id), top = HEX_PERM_TOP, bottom = HEX_PERM_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.1, border = ui.with_alpha(accent(), 0.55)) {
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###head") {

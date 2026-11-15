@@ -707,7 +707,7 @@ subagent_result :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 		}
 		if open && m.text != "" {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-			if rail_row(fmt.tprintf("###srb_%s", m.id), with_alpha(hex(HEX_WEAK), 0.4)) {
+			if rail_row(fmt.tprintf("###srb_%s", m.id), ui.with_alpha(hex(HEX_WEAK), 0.4)) {
 				ui.spacer(ui.px(em * 1.0))
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column() {

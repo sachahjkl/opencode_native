@@ -384,7 +384,7 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 			// (a remote server's loopback address, opened at its host: said where the address is read)
 			if mapped := preview_mapped_shown(app, t); mapped != "" {
 				ui.spacer(ui.px(em * 0.3))
-				ui.next({width = ui.text_size(em * 0.4), height = ui.px(math.round(em * 1.3)), font_size = math.round(em * FS_CAPTION), radius = math.round(em * 0.3), bg = with_alpha(accent(), 0.16), fg = accent()})
+				ui.next({width = ui.text_size(em * 0.4), height = ui.px(math.round(em * 1.3)), font_size = math.round(em * FS_CAPTION), radius = math.round(em * 0.3), bg = ui.with_alpha(accent(), 0.16), fg = accent()})
 				b := ui.build_box({.Draw_Text, .Draw_Background, .No_Text_Trunc}, fmt.tprintf("%s###pv_mapped", i18n.tr("on the server")))
 				if ui.hovered_for(ui.signal(b)) {
 					if ui.tooltip() { ui.tooltip_text(fmt.tprintf(i18n.tr("%s is the server's machine: opened at its address"), mapped)) }

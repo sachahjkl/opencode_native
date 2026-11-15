@@ -323,7 +323,7 @@ job_card :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, r: ^Job_Report, k: in
 		}
 		if open {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-			if rail_row(fmt.tprintf("###jobb_%s_%d", m.id, k), with_alpha(hex(HEX_WEAK), 0.4)) {
+			if rail_row(fmt.tprintf("###jobb_%s_%d", m.id, k), ui.with_alpha(hex(HEX_WEAK), 0.4)) {
 				ui.spacer(ui.px(em * 1.0))
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column() {

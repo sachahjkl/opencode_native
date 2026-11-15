@@ -378,7 +378,7 @@ bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	w := (r.max.x - r.min.x - 2 * s) * clamp(d.t, 0, 1)
 	if w > 1 {
 		fr := Rect{{r.min.x + s, r.min.y + s}, {r.min.x + s + max(w, h - 2 * s), r.max.y - s}}
-		draw.rect_corners(dc, fr, {lighten(d.color, 0.2), darken(d.color, 0.15), lighten(d.color, 0.2), darken(d.color, 0.15)}, radii4((h - 2 * s) * 0.5))
+		draw.rect_corners(dc, fr, {ui.lighten(d.color, 0.2), ui.darken(d.color, 0.15), ui.lighten(d.color, 0.2), ui.darken(d.color, 0.15)}, radii4((h - 2 * s) * 0.5))
 	}
 }
 
@@ -583,7 +583,7 @@ stats_figures :: proc(t: Totals, used, window: f64, em: f32) {
 // One colour, fainter from the largest part to the smallest: the bar says how much, the list says what.
 @(private = "file")
 context_shade :: proc(i: int) -> Color {
-	return with_alpha(accent(), max(CTX_SHADE_FIRST - f32(i) * CTX_SHADE_STEP, CTX_SHADE_LAST))
+	return ui.with_alpha(accent(), max(CTX_SHADE_FIRST - f32(i) * CTX_SHADE_STEP, CTX_SHADE_LAST))
 }
 
 @(private = "file")
@@ -851,7 +851,7 @@ pill_button :: proc(id: string, label: string, color := Color{}, icon := "") -> 
 	if ui.parent(b) {
 		ui.spacer(ui.px(em * 0.5))
 		fg := color.a > 0 ? color : hex(HEX_WEAK)
-		if sig.hovering { fg = lighten(fg, 0.4) }
+		if sig.hovering { fg = ui.lighten(fg, 0.4) }
 		if icon != "" {
 			ui.next({width = ui.px(em), height = ui.pct(1), font = the_app.icons, font_size = math.round(em * ICON_SMALL), fg = fg, text_pad = 0, text_align = .Center})
 			ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###i", icon))

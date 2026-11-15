@@ -57,7 +57,7 @@ escape_stop_banner :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	if ui.row(id = "###stop_armed") {
 		ui.spacer(ui.px(em * 0.45))
 		// (tinted: it must catch the eye of one who pressed Escape by habit)
-		ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center, bg = with_alpha(red, ESCAPE_STOP_TINT), radius = math.round(em * 0.4 * corners())})
+		ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center, bg = ui.with_alpha(red, ESCAPE_STOP_TINT), radius = math.round(em * 0.4 * corners())})
 		if ui.row(.Center, flags = {.Draw_Background}, id = "###tint") {
 			ui.spacer(ui.px(em * 0.4))
 			glyph(lucide.OCTAGON_X, red, math.round(em * ICON_SMALL), em * 1.1)

@@ -213,7 +213,7 @@ reasoning_part :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string, em: f
 	}
 	if open {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if rail_row(fmt.tprintf("###rb_%s", pid), with_alpha(hex(HEX_WEAK), 0.4)) {
+		if rail_row(fmt.tprintf("###rb_%s", pid), ui.with_alpha(hex(HEX_WEAK), 0.4)) {
 			ui.spacer(ui.px(em * 0.9))
 			runs := link_runs(&p.text_runs, string(p.text[:]), {italic = true, color = hex(HEX_REASONING_TEXT)}, pane.chat.alloc)
 			ui.next({width = ui.fill(), font_size = math.round(em * FS_LABEL), flags = {.Selectable}})

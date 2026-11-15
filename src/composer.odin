@@ -58,7 +58,7 @@ dock :: proc(app: ^App, pane: ^Chat_Pane, em: f32, side, col: f32) {
 
 permission_card :: proc(app: ^App, p: ^Permission, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if plate(fmt.tprintf("###perm_%s", p.id), top = HEX_PERM_TOP, bottom = HEX_PERM_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.1, border = with_alpha(hex(HEX_YELLOW), 0.55)) {
+	if plate(fmt.tprintf("###perm_%s", p.id), top = HEX_PERM_TOP, bottom = HEX_PERM_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.1, border = ui.with_alpha(hex(HEX_YELLOW), 0.55)) {
 		ui.spacer(ui.px(em * 0.7))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###r") {
