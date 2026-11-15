@@ -13,7 +13,6 @@ import "core:fmt"
 import "core:mem/virtual"
 import "core:strings"
 import prefs_page "gt:prefs_page"
-import "gt:platform"
 import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
@@ -29,8 +28,6 @@ Palette :: struct {
 	// the commands source's table: COMMANDS one for one (a choice's index is a COMMANDS index), in table_arena, made
 	// again when the language changes; `disabled` made again when what can act changes, while the palette is open
 	table:       []ui.Command,
-	names:       []string,   // each command's id: the usage memory's key ("command:<id>")
-	keys:        []string,   // each one's keys as the program shows them
 	disabled:    [dynamic]bool,
 	gated:       [dynamic]int,   // the commands that have an `enabled` (read at a build while open: a few dozen)
 	enabled:     [dynamic]bool,  // ... what each said at the last look
@@ -153,17 +150,14 @@ palette_table_keep :: proc(app: ^App) {
 		virtual.arena_free_all(&p.table_arena)
 		a := virtual.arena_allocator(&p.table_arena)
 		table := make([]ui.Command, len(COMMANDS), a)
-		names := make([]string, len(COMMANDS), a)
-		keys := make([]string, len(COMMANDS), a)
 		for &c, i in COMMANDS {
 			// (in English: the palette says them in the language in use, and finds them by their English too)
 			// (a command with a state on or off is a switch: its row has the mark, and choosing it keeps the palette)
-			table[i] = {label = c.title, group = c.group, icon = c.icon, tags = strings.fields(c.tags, a), scope = c.scope, toggle = c.checked != nil}
+			// (its id: the usage memory's key, and the toolkit's for the person's own key)
+			table[i] = {id = c.id, label = c.title, group = c.group, icon = c.icon, tags = strings.fields(c.tags, a), scope = c.scope, toggle = c.checked != nil}
 			if c.key != .None { table[i].keys = slice_of_one(ui.Chord{c.key, c.mods}, a) }
-			names[i] = c.id
-			keys[i] = c.keys != "" ? strings.clone(platform.key_text(c.keys), a) : ""
 		}
-		p.table, p.names, p.keys = table, names, keys
+		p.table = table
 		resize(&p.disabled, len(COMMANDS))
 	}
 	for ci, k in p.gated {
@@ -198,7 +192,7 @@ palette_table_keep :: proc(app: ^App) {
 palette_commands_give :: proc(app: ^App) {
 	p := &app.palette
 	ui.palette_commands(&p.pal, p.table, p.disabled[:], {
-		names = p.names, keys = p.keys, details = p.details, version = p.version, user = app,
+		details = p.details, version = p.version, user = app,
 		// (read for the rows in view, at each build: a switch's state is not versioned)
 		checked = proc(user: rawptr, index: int) -> bool {
 			if index < 0 || index >= len(COMMANDS) { return false }
