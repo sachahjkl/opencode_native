@@ -9,6 +9,7 @@ import "base:runtime"
 import "core:encoding/base64"
 import "core:encoding/json"
 import "core:fmt"
+import "core:math"
 import "core:os"
 import "core:strings"
 import "gt:image"
@@ -85,9 +86,18 @@ project_icon_set_file :: proc(app: ^App, project, path: string) {
 // An image's bytes as the icon: decoded, made PROJECT_ICON_SIDE at most (its proportions kept), a PNG (temp allocator).
 project_icon_png :: proc(data: []u8) -> (out: []u8, ok: bool) {
 	if len(data) == 0 { return }
-	img, why := image_decode_data(string(data), .Bytes, PROJECT_ICON_SIDE)
-	if why != "" { return }
-	defer image.destroy(&img, runtime.heap_allocator())
+	h := runtime.heap_allocator()
+	img, _, decoded := image.decode(data, h)
+	if !decoded || img.width <= 0 || img.height <= 0 { image.destroy(&img, h); return }
+	defer image.destroy(&img, h)
+	if longest := max(img.width, img.height); longest > PROJECT_ICON_SIDE {
+		// (its proportions kept, each side at least a pixel)
+		k := f64(PROJECT_ICON_SIDE) / f64(longest)
+		small := image.resize(img, max(1, int(math.round(f64(img.width) * k))), max(1, int(math.round(f64(img.height) * k))), .Bilinear, h)
+		image.destroy(&img, h)
+		img = small
+		if len(img.pixels) == 0 { return }
+	}
 	out = png.encode(img.pixels, img.width, img.height, allocator = context.temp_allocator)
 	return out, len(out) > 0
 }

@@ -851,6 +851,9 @@ fr Ctrl+Maj+B  aperçu
 en F1  shortcuts
 fr F1  raccourcis
 
+en image unreadable: %s
+fr image illisible : %s
+
 en The image could not be copied: it is unreadable
 fr Impossible de copier l'image : elle est illisible
 
@@ -859,15 +862,6 @@ fr Impossible de copier l'image
 
 en Image copied
 fr Image copiée
-
-en no room for its texture
-fr pas de place pour sa texture
-
-en image unreadable: %s
-fr image illisible : %s
-
-en image unreadable
-fr image illisible
 
 en Image
 fr Image

@@ -19,6 +19,7 @@ import "gt:font"
 import "gt:host"
 import instance "gt:instance"
 import "gt:platform"
+import pictures "gt:pictures"
 import "gt:render"
 import "gt:term"
 import setup "gt:setup"
@@ -111,8 +112,7 @@ App :: struct {
 	facts:            Server_Facts,   // what the server said for the settings pages
 	seek_subagent:    bool,   // --seek-subagent (tests): scroll to the first sub-agent card
 	logo:             Logo,
-	images:           map[u64]Image_Entry,   // decoded images, by key and size (images.odin)
-	frame_no:         u64,
+	pictures:         pictures.Cache,   // the textures of the images, by Image_Ref.key and size (images.odin)
 	devtools:         ^devtools.Server,   // TOOLKIT_DEVTOOLS=<port>: driven over the Chrome DevTools Protocol (the toolkit's tk cdp, or gt:cdp in ocntools)
 	install:          prefs_page.Install,   // the install: its offer, its dialog, the settings' Installation page (setup.odin)
 	crash_bar:        crash_bar.Bar,        // the last session's crash, said in a bar under the title bar
@@ -154,8 +154,6 @@ App_Context :: struct {
 	waits_unread:   bool,              // the stream just came up: what sessions wait on, asked before it, is read from the next list
 	answers_spent:  [dynamic]^virtual.Arena,   // what this frame's answers were read into (net.odin)
 	effects:        [dynamic]Effect,   // what the model asked of the interface, done by the build (effects.odin)
-	image_queue:    [dynamic]^Decode_Job,      // images waiting for a decoder, the last asked for first (images.odin)
-	image_decoding: int,                       // ... decoders at work
 	flights:        [dynamic]Flight,   // what is on its way (net.odin)
 	stream_seq:     Seq,               // events applied so far: the clock of what is newer than an answer (Request.asked_at)
 	busy_seq:       map[string]Seq,    // when the stream last said a session started or ended (keys owned)
@@ -222,7 +220,7 @@ main_window_adopt :: proc(app: ^App) {
 	h.before_input = proc(h: ^host.Host) {
 		app := (^App)(h.user)
 		film_slow_tick(app)
-		app.frame_no += 1
+		pictures.frame(&app.pictures)   // (before the builds ask for pictures)
 		devtools.service(app.devtools, &app.state, &app.r)
 	}
 	h.input = main_input
@@ -582,6 +580,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	zooms_load(app)
 	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
 	tasks.start(&app.cx.chores, {threads = CHORES_WORKERS})
+	pictures.cache_init(&app.pictures, &app.r, &app.state)   // (after the renderer: it reads its largest texture)
 }
 
 // The zooms remembered (the toolkit's zoom memories over their stores): each shell's and each session's. Their values are
