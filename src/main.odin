@@ -568,10 +568,16 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	palette_start(app)   // (after the preferences: the settings source reads them)
 	prefs_page.install_init(&app.install, &app.cfg_prefs, setup_options())
 	licence_init(app)
-	term_zooms_load(app)
-	store.kept_load(&app.session_zooms, &app.stores.session_zooms, f64(CONTENT_ZOOM_MIN), f64(CONTENT_ZOOM_MAX))
+	zooms_load(app)
 	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
 	tasks.start(&app.cx.chores, {threads = CHORES_WORKERS})
+}
+
+// The kept zooms (store.Kept over their stores): each shell's and each session's. Their values are written through the
+// stores from then on (a test's stores are in memory).
+zooms_load :: proc(app: ^App) {
+	term_zooms_load(app)
+	store.kept_load(&app.session_zooms, &app.stores.session_zooms, f64(CONTENT_ZOOM_MIN), f64(CONTENT_ZOOM_MAX))
 }
 
 // The fonts, before the renderer: they load while the graphics device is made (render.preload_device).
