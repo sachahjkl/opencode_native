@@ -2,11 +2,7 @@
 
 ## Now
 
-- **A session's id in a message opens it** (opencode 2.3.0, as the entries below). A `ses_…` word in a message is a
-  link to that session: gui_toolkit 0.267's link words, after the migration to gui_toolkit 0.266.
-- **A Mermaid diagram maximised.** The diagram's viewer fills the window, with zoom and pan: gui_toolkit 0.267's
-  maximised dialog (`view_maximise`), after the migration to gui_toolkit 0.266.
-- **Tab numbers while the modifier is held.** Holding Ctrl shows the number of each tab that Ctrl+1 to Ctrl+9 opens, as
+- **Tab numbers while the modifier is held** (opencode 2.3.0). Holding Ctrl shows the number of each tab that Ctrl+1 to Ctrl+9 opens, as
   the desktop does after 400 ms. opencode native has no such shortcuts yet: decide first which list gets them (the
   sidebar's sessions, the server tabs).
 

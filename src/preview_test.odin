@@ -9,6 +9,7 @@ import "core:fmt"
 import "core:strings"
 import "core:sync"
 import "core:testing"
+import "gt:markdown"
 import "gt:platform"
 import "gt:ui"
 
@@ -270,6 +271,29 @@ the_home_page_has_a_browser_of_its_own :: proc(t: ^testing.T) {
 	testing.expect(t, !app.preview.open, "the session has none")
 	go_home(app)
 	testing.expect_value(t, fr(app).url, "http://home.local/")
+}
+
+// A session's id in a message is a link (opencode 2.3.0), in plain text and in Markdown, and opening it goes to that
+// session as a sub-agent's card does (Back comes back); a web address stays a web address.
+@(test)
+a_session_id_in_a_message_opens_it :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	the_app = app   // (link_open acts on the window's app)
+	runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
+	ui.rich_links("the child was ses_01HZabc, see https://a.b.", {}, &runs)
+	links := make([dynamic]string, context.temp_allocator)
+	for r in runs { if r.link != "" { append(&links, r.link) } }
+	testing.expectf(t, len(links) == 2 && links[0] == "ses_01HZabc" && links[1] == "https://a.b", "%v", links[:])
+	md := make([dynamic]ui.Rich_Run, context.temp_allocator)
+	markdown.inline_runs("**done** in `ses_xyz`", {}, &md)
+	found := false
+	for r in md { if r.link == "ses_xyz" { found = true } }
+	testing.expect(t, found, "in Markdown's inline code too")
+	link_open("ses_01HZabc")
+	testing.expect(t, len(app.nav.steps) == 1 && app.nav.steps[0].kind == .Drill && app.nav.steps[0].id == "ses_01HZabc", "that session asked for")
+	nav_apply(app)
+	testing.expect_value(t, app.chat.id, "ses_01HZabc")
 }
 
 // A remote server's loopback address is its machine (src/md/features/remote-localhost.md): the panel loads it at the

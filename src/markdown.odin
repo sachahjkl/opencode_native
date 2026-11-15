@@ -2,6 +2,7 @@
 // does with a link (link_open), a code block (code_block, a mermaid diagram), a table's frame and its copy button.
 package ocn
 
+import "base:runtime"
 import "core:fmt"
 import "core:math"
 import "core:strings"
@@ -76,7 +77,18 @@ link_allowed :: proc(url: string) -> bool {
 	return strings.has_prefix(u, "http://") || strings.has_prefix(u, "https://") || strings.has_prefix(u, "mailto:")
 }
 
+// A session's id is a link (the toolkit's link words): set once for the process, before any text is read.
+@(init)
+session_links_init :: proc "contextless" () {
+	context = runtime.default_context()
+	ui.link_words_set({SESSION_ID_PREFIX})
+}
+
+SESSION_ID_PREFIX :: "ses_"
+
 link_open :: proc(url: string) {
+	// (a session's id in a message: that session opens, and Back comes here again, as a sub-agent's does)
+	if strings.has_prefix(url, SESSION_ID_PREFIX) { drill_down(the_app, url); return }
 	if link_allowed(url) {
 		// (what an agent serves here is what the panel is for)
 		if strings.contains(url, "://localhost") || strings.contains(url, "://127.0.0.1") { preview_open(the_app, url) } else { ui.open(url, .Url) }

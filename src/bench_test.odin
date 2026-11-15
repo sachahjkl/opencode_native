@@ -1867,6 +1867,17 @@ a_diagram_is_zoomed_moved_and_laid_out_in_the_viewer :: proc(t: ^testing.T) {
 		inked := 0
 		for p in pic.pixels { if abs(p.r - pic.pixels[0].r) + abs(p.g - pic.pixels[0].g) > 0.1 { inked += 1 } }
 		testing.expectf(t, inked > len(pic.pixels) / 50, "its boxes, lines and words: %d", inked)
+		// maximised (opencode 2.3.0): the viewer fills the window, its diagram fitted there; Restore gives its size back
+		session.click(s, "view_maximise")
+		session.frames(s, 3)
+		testing.expect(t, ui.view_maximised(&app.program_views, DIAGRAM_VIEW), "maximised")
+		if panel := session.find(s, "modal_view_diagram"); panel != nil {
+			w := f32(app.win.size.x)
+			testing.expectf(t, panel.rect.max.x - panel.rect.min.x > w * 0.9, "it fills the window: %v of %v", panel.rect, w)
+		}
+		session.click(s, "view_maximise")
+		session.frames(s, 3)
+		testing.expect(t, !ui.view_maximised(&app.program_views, DIAGRAM_VIEW), "restored")
 		session.event(s, {kind = .Key_Press, key = .Escape})
 		session.frames(s, 3)
 		testing.expect(t, !ui.view_is_open(&app.program_views, DIAGRAM_VIEW), "Escape closes it")
