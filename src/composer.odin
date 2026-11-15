@@ -112,6 +112,7 @@ composer :: proc(app: ^App, em: f32) {
 		card := ui.parent_box()
 		defer ctx_check(app, card, .Composer)
 		ui.spacer(ui.px(em * 0.45))
+		escape_stop_banner(app, em)
 		queue_edit_banner(app, em)
 		mention_list(app, em)
 		slash_list(app, em)
@@ -140,10 +141,11 @@ composer :: proc(app: ^App, em: f32) {
 						down = ui.key_pressed_peek(.Down)
 					}
 				}
-				// Escape while a turn runs stops it, and the composer keeps the keyboard (one goes on writing what made one stop it);
-				// the editor would have let go of it. With nothing running, Escape lets go of it, as everywhere.
+				// Escape while a turn runs arms its stop, a second one stops it (escape_stop), and the composer keeps the
+				// keyboard (one goes on writing what made one stop it); the editor would have let go of it. With nothing
+				// running, Escape lets go of it, as everywhere.
 				if app.composer.focused && app.chat.busy && !overlay_open(app) && !mention_takes_escape(app) && !history_browsing(app) && !queue_editing(app) && ui.key_press(.Escape) {
-					interrupt_session(app, app.chat.id)
+					escape_stop(app)
 				}
 				// typed with nothing focused (a click in the conversation took the keyboard away): the composer takes it. Not a
 				// space (a focused button's), nor while a dialog is over the window or a box (the terminal) has the keyboard.
@@ -223,7 +225,7 @@ composer :: proc(app: ^App, em: f32) {
 				switch composer_send_as(app) {
 				case .Idle:
 				case .Queue: send_label, send_icon = i18n.tr("Queue"), lucide.LIST
-				case .Steer: send_label = i18n.tr("Steer")
+				case .Steer: send_label, send_icon = i18n.tr("Steer"), lucide.SHIP_WHEEL
 				}
 			}
 			if app.conversation.column_w <= em * QUEUE_WORDS_MIN_EM || fit >= 2 { send_label = "" }   // (narrow, its glyph says it: the toolbar has no room)

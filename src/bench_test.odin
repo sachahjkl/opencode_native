@@ -2185,6 +2185,43 @@ escape_in_the_file_browser_does_not_interrupt :: proc(t: ^testing.T) {
 	})
 }
 
+// Escape stops a run in two presses (src/md/features/escape-stop.md): the first one only arms the stop and the composer
+// says so, the second one stops. The arming ends by itself; an Escape after that arms again. From the composer and from
+// nothing focused alike.
+@(test)
+escape_stops_a_run_in_two_presses :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil; app.chat.busy = false }
+		app.chat.busy = true
+		session.frames(s, 2)
+		for focused in ([]bool{false, true}) {
+			if focused {
+				app.composer.focus_next = true
+				session.wait_until(s, proc(s: ^session.Session) -> bool { return (^App)(s.user).composer.focused }, "the composer focused")
+			}
+			before := bench_count(.Action)
+			session.key(s, .Escape)
+			session.frames(s, 2)
+			testing.expectf(t, bench_count(.Action) == before, "the first Escape stops nothing (composer focused: %v)", focused)
+			testing.expect(t, session.find(s, "stop_armed") != nil, "the composer says a second one stops")
+			// the arming ends by itself, the banner with it, without input
+			session.advance(s, ESCAPE_STOP_MS + 100)
+			testing.expect(t, session.find(s, "stop_armed") == nil, "the banner went")
+			session.key(s, .Escape)
+			session.frames(s, 2)
+			testing.expect_value(t, bench_count(.Action), before)
+			session.key(s, .Escape)
+			session.frames(s, 2)
+			testing.expect_value(t, bench_count(.Action), before + 1)
+			testing.expect(t, session.find(s, "stop_armed") == nil, "stopped: the banner went")
+			testing.expect(t, focused == app.composer.focused, "the composer keeps the keyboard")
+		}
+	})
+}
+
 // The server left while a folder was read: the browser is told, and does not wait for an answer that will not come.
 @(test)
 a_folder_read_when_the_server_leaves_ends :: proc(t: ^testing.T) {

@@ -81,6 +81,7 @@ App :: struct {
 
 	// the interface's own state, by feature (each struct is in the file of its feature)
 	composer:         Composer,       // composer.odin
+	escape_stop:      Escape_Stop,    // escape_stop.odin
 	sidebar:          Sidebar,        // sidebar.odin
 	chrome:           Chrome,         // chrome.odin
 	conversation:     Conversation,   // conversation.odin
