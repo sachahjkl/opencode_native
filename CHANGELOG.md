@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.59.2] - 2026-11-15 16:55
+
+### Fixed
+- **The diagram viewer's direction shows**: the Top to bottom / Left to right choice in the Mermaid viewer's header was squeezed to an empty sliver; it shows its words again (and so does every choice list of the same kind).
+
 ## [0.59.1] - 2026-11-15 15:10
 
 ### Changed
@@ -1707,6 +1712,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.59.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.59.2
 [0.59.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.59.1
 [0.59.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.59.0
 [0.58.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.58.0
