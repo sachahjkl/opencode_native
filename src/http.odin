@@ -18,6 +18,9 @@ REQUEST_MAX_BYTES :: 256 << 20
 STREAM_SILENCE :: 95 * time.Second
 // A socket's handshake.
 SOCKET_TIMEOUT :: 30 * time.Second
+// The name's lookup and the connection, of a request, the stream and a socket: a server that does not answer is said
+// down after this, not after the whole REQUEST_TIMEOUT.
+CONNECT_TIMEOUT :: 5 * time.Second
 
 USER_AGENT :: "opencode-native/" + APP_VERSION
 
@@ -51,11 +54,12 @@ http_headers :: proc(h: ^Http, extra: ..tk_http.Header) -> []tk_http.Header {
 	return out[:]
 }
 
-// What a request to the server takes: its headers (`json`: a JSON body goes with it), its limits.
+// What a request to the server takes: its headers (`json`: a JSON body goes with it), its limits. Its answer comes
+// compressed when the server can (a session's messages are JSON: a remote server's answers cost several times less).
 http_request_of :: proc(h: ^Http, method, body: string) -> tk_http.Request {
 	json := body != "" || method == "POST" || method == "PUT" || method == "PATCH"
 	headers := json ? http_headers(h, {"Accept", "application/json"}, {"Content-Type", "application/json"}) : http_headers(h, {"Accept", "application/json"})
-	return {max_bytes = REQUEST_MAX_BYTES, user_agent = USER_AGENT, timeout = REQUEST_TIMEOUT, headers = headers, body = body == "" ? nil : transmute([]u8)body}
+	return {max_bytes = REQUEST_MAX_BYTES, user_agent = USER_AGENT, timeout = REQUEST_TIMEOUT, connect_timeout = CONNECT_TIMEOUT, compressed = true, headers = headers, body = body == "" ? nil : transmute([]u8)body}
 }
 
 // A whole request: the response body is allocated with `allocator`. `ok` = false: the server was not reached (`resp`
@@ -69,9 +73,10 @@ http_request :: proc(h: ^Http, method, path: string, body := "", allocator := co
 	return status, resp, true
 }
 
-// What the event stream takes: no limit of its own but its silence.
+// What the event stream takes: no limit of its own but its silence, and its connection's. Not compressed: a server's
+// compressor may hold a small event until its buffer fills, and an event must come when it happens.
 http_stream_of :: proc(h: ^Http) -> tk_http.Request {
-	return {user_agent = USER_AGENT, timeout = STREAM_SILENCE, headers = http_headers(h)}
+	return {user_agent = USER_AGENT, timeout = STREAM_SILENCE, connect_timeout = CONNECT_TIMEOUT, headers = http_headers(h)}
 }
 
 // Reads the event stream at `path` until it ends, `on_event` says .Stop or `stop` is asked. Returns the status of its
@@ -89,8 +94,13 @@ http_ws_open :: proc(h: ^Http, path: string) -> ^tk_http.Socket {
 	case strings.has_prefix(rest, "http://"):  rest = rest[len("http://"):]
 	}
 	url := fmt.tprintf("%s://%s%s", scheme, rest, path)
-	s, err := tk_http.ws_connect(url, {user_agent = USER_AGENT, timeout = SOCKET_TIMEOUT, headers = http_headers(h)})
+	s, err := tk_http.ws_connect(url, http_socket_of(h))
 	return err == .None ? s : nil
+}
+
+// What a socket's handshake takes.
+http_socket_of :: proc(h: ^Http) -> tk_http.Request {
+	return {user_agent = USER_AGENT, timeout = SOCKET_TIMEOUT, connect_timeout = CONNECT_TIMEOUT, headers = http_headers(h)}
 }
 
 // The address of a server ("http://127.0.0.1:4096").

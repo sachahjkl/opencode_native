@@ -34,14 +34,14 @@ home_session :: proc(app: ^App, s: ^Session_Info, em, now: f64, busy: bool) {
 		if busy {
 			session_lamp("###l", LAMP_WORKING, e)
 		} else if !logo_of(app, "###lg", project_logo(app, s.project), math.round(e * 1.25)) {
-			glyph(lucide.MESSAGE_SQUARE, themed("faint text"), math.round(e * ICON_SMALL), e * 1.25)
+			glyph(lucide.MESSAGE_SQUARE, ui.theme_color("faint text"), math.round(e * ICON_SMALL), e * 1.25)
 		}
 		ui.spacer(ui.px(e * 0.55))
-		text("t", s.title != "" ? s.title : i18n.tr("Untitled"), themed("soft text"), ui.Style_Mod{font_size = math.round(e * FS_LABEL)}, ui.fill())
+		text("t", s.title != "" ? s.title : i18n.tr("Untitled"), ui.theme_color("soft text"), ui.Style_Mod{font_size = math.round(e * FS_LABEL)}, ui.fill())
 		ui.spacer(ui.px(e * 0.5))
-		text("d", base_name(s.directory), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(e * FS_CAPTION)})
+		text("d", base_name(s.directory), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(e * FS_CAPTION)})
 		ui.spacer(ui.px(e * 0.8))
-		text("a", age_text(now, s.updated), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(e * FS_CAPTION)})
+		text("a", age_text(now, s.updated), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(e * FS_CAPTION)})
 		ui.spacer(ui.px(e * 0.6))
 	}
 }
@@ -90,8 +90,8 @@ home :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 3.2), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###h_logo") {
 		big := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_WORDMARK * 0.8)}
-		text("l1", "open", themed("faint text"), big)
-		text("l2", "code", themed("text"), big)
+		text("l1", "open", ui.theme_color("faint text"), big)
+		text("l2", "code", ui.theme_color("text"), big)
 		ui.spacer(ui.px(em * 0.6))
 		text("l3", "native", ui.hue(.Accent), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_WORDMARK * 0.8)})
 		ui.spacer(ui.fill())
@@ -101,7 +101,7 @@ home :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		refused := app.link == .Auth_Refused
 		info_line(app, "###h_link", fmt.tprintf(refused ? i18n.tr("%s refused the password") : i18n.tr("Connecting to %s…"), server_base(app)), em, refused ? ui.hue(.Red) : ui.hue(.Yellow))
 	}
-	info_line(app, "###h_not_theirs", i18n.tr(APP_NOT_THEIRS), em, themed("faint text"))
+	info_line(app, "###h_not_theirs", i18n.tr(APP_NOT_THEIRS), em, ui.theme_color("faint text"))
 	ui.spacer(ui.px(em * 0.8))
 
 	// where a new session starts
@@ -137,7 +137,7 @@ home :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		for i in lists.recent { home_session(app, &app.sessions[i], f64(em), now, false) }
 		if len(lists.recent) == 0 {
 			ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
-			if ui.row(.Center, id = "###h_none") { text("n", i18n.tr("No session yet: ask anything below."), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
+			if ui.row(.Center, id = "###h_none") { text("n", i18n.tr("No session yet: ask anything below."), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
 		}
 		ui.spacer(ui.px(em * 1.1))
 	}

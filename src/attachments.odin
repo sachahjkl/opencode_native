@@ -339,7 +339,7 @@ attachments_row :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			ui.next({width = ui.children_sum(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###att%d", i)) {
 				ui.spacer(ui.px(em * 0.8))
-				text("n", fmt.tprintf("%s  %s", a.name, kfmt(f64(a.size))), themed("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				text("n", fmt.tprintf("%s  %s", a.name, kfmt(f64(a.size))), ui.theme_color("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.2))
 				ui.next({width = ui.px(math.round(em * 1.3)), height = ui.px(math.round(em * 1.3))})
 				if ui.button("x", icon = lucide.X).clicked { gone = i }

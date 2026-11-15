@@ -15,8 +15,14 @@ what opencode native decides on top of it.
   command with `ui.command_pressed` on its line: a person's key replaces the command's own, or takes that chord from
   another command. Its own reading of `key` and `mods` went.
 - **A command's own keys are chords** (`Command.keys: []ui.Chord`). The text shown is the keymap's, in the language in
-  use: the help (`help_view`), the main menu, the sidebar's and the selection's menus read `command_shortcut`. A text
-  written beside a command was refused: it said the old key once a person changed it.
+  use: the main menu, the sidebar's and the selection's menus read `command_shortcut`; the sheet of the keys reads the
+  keymap. A text written beside a command was refused: it said the old key once a person changed it.
+- **F1 is the toolkit's sheet of the keys** (`help_open`, `ui.shortcuts_sheet_open` over `Palette.table`). The keys
+  that a widget reads itself are no command: Up and Down in the composer's history, Down on its last line, Ctrl+V a
+  picture or files, the middle click, Escape twice to stop a run. They are the sheet's extra lines
+  (`Palette.sheet_lines`, group Composer). ocn's own help view went: it was a second list of the same keys. The sheet
+  holds the table it was opened with, so when the table is made again (a new language) it is opened again over the
+  new one.
 - **Keys read elsewhere** (`Command.keys_elsewhere`): Ctrl+T and Ctrl+W are the Preview's while its address bar has the
   keyboard (elsewhere a shell's, or nothing in the composer); the conversation's zoom keys are its zone's (outside it
   they zoom the interface); Alt+F4 is the system's. Their own keys are shown (the palette, the help, the menus) and not

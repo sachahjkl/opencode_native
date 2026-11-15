@@ -22,7 +22,6 @@ STATS_VIEW     :: "stats"
 TERMINAL_VIEW  :: "terminal"   // an instance per shell (its server's id); "": what stands there while there is no shell
 OUTPUT_VIEW    :: "output"     // an instance per command (Output_View.name)
 SETTINGS_VIEW  :: "settings"
-HELP_VIEW      :: "help"
 CHANGES_VIEW   :: "changes"
 SCHEDULES_VIEW :: "schedules"
 ARTIFACTS_VIEW :: "artifacts"
@@ -95,7 +94,6 @@ dialogs_register :: proc(app: ^App) {
 			min_width_em = least.x, min_height_em = least.y, resizable = true, backdrop = view_backdrop})
 	}
 	sized(vs, SETTINGS_VIEW, settings_view, i18n.later("Settings"), lucide.SLIDERS_HORIZONTAL, {62, 44}, {40, 24})
-	sized(vs, HELP_VIEW, help_view, i18n.later("Keyboard shortcuts"), lucide.KEYBOARD, {42, 44}, {30, 20})
 	sized(vs, CHANGES_VIEW, changes_view, i18n.later("What this session changed"), lucide.FILE, {62, 46}, {34, 20})
 	sized(vs, ARTIFACTS_VIEW, artifacts_view, i18n.later("Artifacts of this folder"), lucide.FILE, {70, 46}, {44, 22})
 	sized(vs, DIFF_VIEW, diff_full_view, i18n.later("Diff"), lucide.FILE, {130, 80}, {50, 24})

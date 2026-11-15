@@ -1153,7 +1153,7 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * TERM_BANNER_H_EM)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###term_banner") {
 		ui.spacer(ui.px(em * 0.6))
-		text("w", words, t.link == .Closed ? themed("weak text") : ui.hue(.Yellow), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
+		text("w", words, t.link == .Closed ? ui.theme_color("weak text") : ui.hue(.Yellow), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		h := math.round(em * BUTTON_COMPACT_H_EM)
 		if t.link == .Closed {
 			if ui.button("term_restart", i18n.tr("Restart"), lucide.REFRESH_CW, {height = h, disabled = s.made.state == .Loading}).clicked { term_restart(app, t) }
@@ -1171,7 +1171,7 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 term_style :: proc(app: ^App, em: f32) -> term.Style {
 	return {
 		fonts = &app.fonts, font = app.term_font, font_bold = app.term_font_bold, font_size = em * FS_NOTE, pad = TERM_PAD,
-		background = themed("background"), selection = between("background", "hue_blue", 0.42), faint = TERM_FAINT, cursor_alpha = TERM_CURSOR_ALPHA,
+		background = ui.theme_color("background"), selection = between("background", "hue_blue", 0.42), faint = TERM_FAINT, cursor_alpha = TERM_CURSOR_ALPHA,
 	}
 }
 

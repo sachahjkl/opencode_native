@@ -44,7 +44,7 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32, avail: f32) {
 	// focus, which is mostly in the composer (the dock, below the messages). Keyed by the session shown, so another
 	// session shows its own zoom in this build; the home page ("") has the zone's own, not remembered.
 	zoom := ui.zoom_zone(&pane.zone, pane.chat.id)
-	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = themed("background"), radius = 0})
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = ui.theme_color("background"), radius = 0})
 	if ui.column(flags = {.Draw_Background}, id = "###main") {
 		pane.conversation.root = ui.parent_box().key
 		sc := ui.scale()
@@ -125,7 +125,7 @@ column_handles :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, side, col
 			s := ui.scale()
 			c := draw.rect_center(b.rect)
 			len_ := math.round(COLUMN_GRIP_PX * s)
-			col := ui.srgb_step(themed("border"), themed("weak text"), lit)
+			col := ui.srgb_step(ui.theme_color("border"), ui.theme_color("weak text"), lit)
 			for i in ([]f32{-1, 1}) {   // two short strokes, side by side
 				x := math.round(c.x + i * 1.5 * p)
 				draw.rect(dc, {{x - p * 0.5, c.y - len_ * 0.5}, {x + p * 0.5, c.y + len_ * 0.5}}, col, p * 0.5)
@@ -155,8 +155,8 @@ go_bottom_pill :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, avail, em
 		a := (^f32)(user)^
 		r := (b.rect.max.y - b.rect.min.y) * 0.5
 		draw.box_shadow(dc, b.rect, radii4(r), 8 * ui.scale(), {0, 0, 0, 0.6 * a})
-		draw.rect(dc, b.rect, ui.with_alpha(b.hot_t > FADE_VISIBLE ? between("button background", "border", 0.83) : themed("button background"), a), r)
-		draw.rect(dc, b.rect, ui.with_alpha(themed("floating border"), a), r, px1())
+		draw.rect(dc, b.rect, ui.with_alpha(b.hot_t > FADE_VISIBLE ? between("button background", "border", 0.83) : ui.theme_color("button background"), a), r)
+		draw.rect(dc, b.rect, ui.with_alpha(ui.theme_color("floating border"), a), r, px1())
 	}
 	sig := ui.signal(b)
 	if sig.clicked {
@@ -165,9 +165,9 @@ go_bottom_pill :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, avail, em
 	}
 	if ui.parent(b) {
 		ui.spacer(ui.fill())
-		glyph(lucide.CHEVRON_DOWN, ui.with_alpha(themed("soft text"), t), math.round(em * ICON_SMALL))
+		glyph(lucide.CHEVRON_DOWN, ui.with_alpha(ui.theme_color("soft text"), t), math.round(em * ICON_SMALL))
 		ui.spacer(ui.px(em * 0.3))
-		text("t", i18n.tr("Latest"), ui.with_alpha(themed("soft text"), t), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+		text("t", i18n.tr("Latest"), ui.with_alpha(ui.theme_color("soft text"), t), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.fill())
 	}
 }
@@ -213,7 +213,7 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 				scanner("###older_bar", ui.hue(.Accent), math.round(em * 5), math.round(em * 0.9))
 				ui.spacer(ui.px(em * 0.7))
 			}
-			if ui.tags("weak") { text("older_t", c.older_failed > 0 ? i18n.tr("Earlier messages could not be read: scroll to try again") : i18n.tr("Loading earlier messages…"), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
+			if ui.tags("weak") { text("older_t", c.older_failed > 0 ? i18n.tr("Earlier messages could not be read: scroll to try again") : i18n.tr("Loading earlier messages…"), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
 			ui.spacer(ui.fill())
 		}
 		ui.spacer(ui.px(em * 0.6))
@@ -351,9 +351,9 @@ first_line :: proc(s: string) -> string {
 note_line :: proc(app: ^App, m: ^Message, em: f32, icon: string, s: string) {
 	ui.next({width = ui.fill(), height = ui.px(em * 1.9), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###n_%s", m.id)) {
-		glyph(icon, themed("faint text"), math.round(em * ICON_SMALL))
+		glyph(icon, ui.theme_color("faint text"), math.round(em * ICON_SMALL))
 		ui.spacer(ui.px(em * 0.3))
-		text("t", s, themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
+		text("t", s, ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 	}
 	ui.spacer(ui.px(em * 0.6))
 }
@@ -371,15 +371,15 @@ switch_line :: proc(app: ^App, m: ^Message, em: f32) {
 	if ui.row(.Center, id = fmt.tprintf("###sw_%s", m.id)) {
 		groove(across = true)
 		ui.spacer(ui.px(em * 0.6))
-		glyph(icon, themed("faint text"), math.round(em * ICON_SMALL))
+		glyph(icon, ui.theme_color("faint text"), math.round(em * ICON_SMALL))
 		ui.spacer(ui.px(em * 0.35))
-		text("w", word, themed("faint text"), small)
+		text("w", word, ui.theme_color("faint text"), small)
 		ui.spacer(ui.px(em * 0.5))
 		if m.previous != "" && m.previous != m.text {
-			text("p", m.previous, themed("faint text"), small)
-			text("arrow", "  →  ", themed("faint text"), small)
+			text("p", m.previous, ui.theme_color("faint text"), small)
+			text("arrow", "  →  ", ui.theme_color("faint text"), small)
 		}
-		text("n", m.text, themed("weak text"), small)
+		text("n", m.text, ui.theme_color("weak text"), small)
 		ui.spacer(ui.px(em * 0.6))
 		groove(across = true)
 	}
@@ -406,36 +406,27 @@ USER_IMAGE_H_PX :: 220
 
 user_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 	ui.spacer(ui.px(em * 0.4))
-	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if plate(fmt.tprintf("###u_%s", m.id), top = between("button background", "border", 0.33), bottom = between("card background", "button background", 0.5), radius = CARD_RADIUS, shadow = 8, rim = 0.09) {
-		prompt_rail_focus(app, pane, m, ui.parent_box())
-		ui.spacer(ui.px(em * 0.75))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row(id = "###in") {
-			ui.spacer(ui.px(em * 1.1))
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-			if ui.column() {
-				ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
-				if ui.row(.Center, id = "###who") {
-					glyph(lucide.USER, ui.hue(.Accent), math.round(em * ICON_SMALL), em * 1.1)
-					ui.spacer(ui.px(em * 0.2))
-					text("you", i18n.tr("You"), ui.hue(.Accent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-					ui.spacer(ui.fill())
-					text("at", clock_text(m.created, app.prefs.clock24), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-				}
-				ui.spacer(ui.px(em * 0.35))
-				runs := link_runs(&m.text_runs, m.text, {color = themed("text")}, pane.chat.alloc)
-				ui.next({width = ui.fill(), flags = {.Selectable}})
-				link_clicked(ui.rich_paragraph("###text", runs))
-				if len(m.images) > 0 {
-					ui.spacer(ui.px(em * 0.6))
-					sc := ui.scale()
-					image_strip(app, "###imgs", m.images[:], USER_IMAGE_W_PX * sc, USER_IMAGE_H_PX * sc)
-				}
-			}
-			ui.spacer(ui.px(em * 1.1))
+	look := ui.Plate_Look{top = between("button background", "border", 0.33), bottom = between("card background", "button background", 0.5), rim = 0.09, shadow = 8}
+	if ui.card("", id = fmt.tprintf("###u_%s", m.id), o = {radius = CARD_RADIUS, look = look}) {
+		// (the card's own box, around its padding: the body is ui.card's, two levels in)
+		prompt_rail_focus(app, pane, m, ui.parent_box().parent.parent)
+		ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###who") {
+			glyph(lucide.USER, ui.hue(.Accent), math.round(em * ICON_SMALL), em * 1.1)
+			ui.spacer(ui.px(em * 0.2))
+			text("you", i18n.tr("You"), ui.hue(.Accent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			ui.spacer(ui.fill())
+			text("at", clock_text(m.created, app.prefs.clock24), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
-		ui.spacer(ui.px(em * 0.85))
+		ui.spacer(ui.px(em * 0.35))
+		runs := link_runs(&m.text_runs, m.text, {color = ui.theme_color("text")}, pane.chat.alloc)
+		ui.next({width = ui.fill(), flags = {.Selectable}})
+		link_clicked(ui.rich_paragraph("###text", runs))
+		if len(m.images) > 0 {
+			ui.spacer(ui.px(em * 0.6))
+			sc := ui.scale()
+			image_strip(app, "###imgs", m.images[:], USER_IMAGE_W_PX * sc, USER_IMAGE_H_PX * sc)
+		}
 	}
 	ui.spacer(ui.px(em * 1.1))
 }
@@ -493,11 +484,11 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 			text("ag", strings.to_upper(name[:1], context.temp_allocator), agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			text("ag2", name[1:], agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			if m.model != "" {
-				text("dot", "  ·  ", themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
-				text("md", m.model, themed("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+				text("dot", "  ·  ", ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
+				text("md", m.model, ui.theme_color("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			}
 			ui.spacer(ui.fill())
-			text("at", clock_text(m.created, app.prefs.clock24), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("at", clock_text(m.created, app.prefs.clock24), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
 		ui.spacer(ui.px(em * 0.4))
 		}
@@ -506,7 +497,7 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 			switch p.kind {
 			case .Text:
 				if len(p.text) > 0 {
-					markdown.view(md_doc(&pane.chat, pid), pid, string(p.text[:]), md_config(app, themed("text"), pane))
+					markdown.view(md_doc(&pane.chat, pid), pid, string(p.text[:]), md_config(app, ui.theme_color("text"), pane))
 					ui.spacer(ui.px(em * 0.6))
 				}
 			case .Reasoning: reasoning_part(app, pane, &p, pid, em)
@@ -522,7 +513,7 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 		if app.prefs.usage && !m.streaming && m.tokens_out > 0 && m.finish == "stop" {
 			ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###foot") {
-				text("tk", m.cost > 0 ? fmt.tprintf(i18n.tr("%s in · %s out · %s"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), dollars(m.cost, 3)) : fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out)), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				text("tk", m.cost > 0 ? fmt.tprintf(i18n.tr("%s in · %s out · %s"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), dollars(m.cost, 3)) : fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out)), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			}
 		}
 	}

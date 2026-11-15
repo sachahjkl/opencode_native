@@ -130,14 +130,19 @@ find_bar :: proc(app: ^App, pane: ^Chat_Pane, em: f32, right, top: f32) {
 	if !f.open { return }
 	n := ui.find_count()
 	w := math.round(em * 24)
-	ui.next({fixed_x = right - w, fixed_y = top, width = ui.px(w), height = ui.children_sum(), axis = .X, cross = .Center})
+	ui.next({fixed_x = right - w, fixed_y = top, width = ui.px(w), height = ui.children_sum(), axis = .X, cross = .Center, radius = FIND_RADIUS * ui.scale()})
 	// One box: the field and its buttons in a single well, its focus ring around all of it. (The plate under it is only its shadow:
-	// the same size and the same corners, all of it covered; a well inside a plate showed the plate's edge beside it.)
-	if plate("###findbar", radius = FIND_RADIUS, shadow = 8, rim = 0, border = CLEAR) {
+	// the same size and the same corners, all of it covered; a well inside a plate showed the plate's edge beside it. Its edge is
+	// drawn after the well: transparent, and no rim. Not a ui.card: a card's inset would part the well from the shadow.)
+	bar := ui.build_box({.Plate}, "###findbar")
+	bar.plate = ui.frame_new(ui.Plate_Look)
+	face := ui.theme_color("card background")
+	bar.plate^ = {top = face, bottom = face, border = ui.with_alpha(ui.theme_color("border"), 0), rim = 0, shadow = 8}
+	if ui.parent(bar) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), cross = .Center, radius = FIND_RADIUS * ui.scale()})
 		if ui.well("###fw", .X, flags = {.Focus_Within, .Draw_Focus_Ring}) {
 			ui.spacer(ui.px(em * 0.6))
-			glyph(lucide.SEARCH, themed("faint text"), math.round(em * ICON_SMALL))
+			glyph(lucide.SEARCH, ui.theme_color("faint text"), math.round(em * ICON_SMALL))
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 				res := ui.line_edit("###ff", &f.field, {placeholder = i18n.tr("Find in the conversation")})
@@ -148,7 +153,7 @@ find_bar :: proc(app: ^App, pane: ^Chat_Pane, em: f32, right, top: f32) {
 			needle := ui.line_edit_string(&f.field)
 			pending := ui.find_pending()   // (read so far, and how far: "no match" would be a lie before the end; nothing while the needle rests)
 			count := needle == "" ? "" : pending ? (ui.find_progress() < 1 ? fmt.tprintf("%d…  %s", n, i18n.percent(f64(int(ui.find_progress() * 100)) / 100)) : "") : n == 0 ? i18n.tr("no match") : fmt.tprintf("%d / %d", max(f.index, 0) + 1, n)
-			text("fc", count, n == 0 && !pending ? ui.hue(.Red) : themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)})
+			text("fc", count, n == 0 && !pending ? ui.hue(.Red) : ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)})
 			ui.spacer(ui.px(em * 0.4))
 			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
 			if ui.button("fprev", icon = lucide.CHEVRON_UP).clicked { find_step(app, pane, -1) }

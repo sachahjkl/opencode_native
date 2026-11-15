@@ -1,5 +1,5 @@
 // The themes: the colours of the whole interface, from a few of each theme's own, in a dark and a light version (gui_toolkit's
-// themes: docs/themes.md). The views draw with the theme shown, by role and by hue (themed, ui.hue): opencode's own colours are
+// themes: docs/themes.md). The views draw with the theme shown, by role and by hue (ui.theme_color, ui.hue): opencode's own colours are
 // the theme OpenCode, the only place that holds them (src/md/features/colours.md). The themes: OpenCode, then the toolkit's;
 // themes of the user's own come from themes.txt, beside the preferences (themes_poll).
 package ocn
@@ -30,13 +30,9 @@ theme_colors :: proc() -> ui.Theme_Colors {
 	return THEME_OPENCODE.dark
 }
 
-// An entry of the toolkit's theme by its name ("weak text", "bar background"), whatever tags are pushed where it is asked:
-// while a view is built and in a custom draw (no build: the main window's state; every window shares the one theme).
-themed :: proc(name: string) -> Color { return ui.color_from_tags(built_state(the_app), 0, name) }
-
 // A shade `t` of the way from one entry of the theme to another, in sRGB steps: between two of its steps, it keeps its place
 // in every theme, dark or light (a share toward white or black is a large step on a light page).
-between :: proc(from, to: string, t: f32) -> Color { return ui.srgb_step(themed(from), themed(to), t) }
+between :: proc(from, to: string, t: f32) -> Color { return ui.srgb_step(ui.theme_color(from), ui.theme_color(to), t) }
 
 // The program's themes: OpenCode, then the toolkit's.
 @(private = "file")

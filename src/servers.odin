@@ -499,9 +499,9 @@ Server_Tab_Draw :: struct { current: bool }
 server_tab_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Server_Tab_Draw)(user)
 	if d.current {
-		draw_bevel(dc, b.rect, 5 * ui.scale(), themed("button background"), b.hot_t, b.active_t * b.hot_t)
+		draw_bevel(dc, b.rect, 5 * ui.scale(), ui.theme_color("button background"), b.hot_t, b.active_t * b.hot_t)
 	} else if b.hot_t > FADE_VISIBLE || b.active_t > FADE_VISIBLE {
-		draw_bevel(dc, b.rect, 5 * ui.scale(), themed("button background"), b.hot_t, b.active_t * b.hot_t)
+		draw_bevel(dc, b.rect, 5 * ui.scale(), ui.theme_color("button background"), b.hot_t, b.active_t * b.hot_t)
 	}
 }
 
@@ -519,13 +519,13 @@ server_tab :: proc(app: ^App, s: Server, i: int, h, em: f32) -> ^ui.Box {
 	ui.a11y_default(b, {role = .Tab, name = name, selected = current, position = i + 1, set_size = len(app.servers), description = s.url})
 	if ui.parent(b) {
 		ui.spacer(ui.px(em * 0.55))
-		if current { link_lamp(app, "###srv_lamp", em * 0.8) } else { pip("###srv_lamp", themed("faint text"), em * 0.8) }
+		if current { link_lamp(app, "###srv_lamp", em * 0.8) } else { pip("###srv_lamp", ui.theme_color("faint text"), em * 0.8) }
 		ui.spacer(ui.px(em * 0.4))
-		col := current ? themed("bright text") : sig.hovering ? themed("text") : themed("weak text")
+		col := current ? ui.theme_color("bright text") : sig.hovering ? ui.theme_color("text") : ui.theme_color("weak text")
 		text("n", ellipsize(name, SERVER_TAB_CHARS), col, ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 		if current {
 			ui.spacer(ui.px(em * 0.3))
-			glyph(lucide.CHEVRON_DOWN, themed("faint text"), math.round(em * ICON_TINY), em * 0.9)
+			glyph(lucide.CHEVRON_DOWN, ui.theme_color("faint text"), math.round(em * ICON_TINY), em * 0.9)
 		}
 		ui.spacer(ui.px(em * 0.55))
 	}
@@ -597,7 +597,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = id) {
 				ui.space(ui.PAGE_MARGIN)
-				text("k", label, themed("weak text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.5)}, ui.px(em * 6))
+				text("k", label, ui.theme_color("weak text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.5)}, ui.px(em * 6))
 				ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 				if ui.well("###w", .X) {
 					if ui.tags("bare") {
@@ -617,7 +617,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row() {
 				ui.spacer(ui.px(em * 7.4))
-				text("h", i18n.tr("the server's OPENCODE_SERVER_PASSWORD, as user opencode"), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.3)}, ui.fill())
+				text("h", i18n.tr("the server's OPENCODE_SERVER_PASSWORD, as user opencode"), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.3)}, ui.fill())
 				ui.space(ui.PAGE_MARGIN)
 			}
 			if note := password_note(app); note != "" {

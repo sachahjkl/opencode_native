@@ -93,9 +93,9 @@ tab_look_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 strip_look :: proc() {
 	b := ui.parent_box()
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-		if ui.edged() { ui.caption_face(dc, b.rect, themed("bar background"), themed("bar background"), false); return }
-		draw.rect(dc, b.rect, themed("bar background"))
-		draw.rect(dc, {{b.rect.min.x, b.rect.max.y - px1()}, b.rect.max}, themed("border"))
+		if ui.edged() { ui.caption_face(dc, b.rect, ui.theme_color("bar background"), ui.theme_color("bar background"), false); return }
+		draw.rect(dc, b.rect, ui.theme_color("bar background"))
+		draw.rect(dc, {{b.rect.min.x, b.rect.max.y - px1()}, b.rect.max}, ui.theme_color("border"))
 	}
 }
 
@@ -319,7 +319,7 @@ preview_strip :: proc(app: ^App, p: ^Preview, em: f32) {
 			if sig.clicked { p.due_front = t }
 			if sig.middle_clicked { p.due_close = t }
 			if ui.parent(b) {
-				col := in_front ? themed("bright text") : sig.hovering ? themed("soft text") : themed("weak text")
+				col := in_front ? ui.theme_color("bright text") : sig.hovering ? ui.theme_color("soft text") : ui.theme_color("weak text")
 				ui.spacer(ui.px(em * 0.6))
 				text("t", ellipsize(title, PREVIEW_TAB_TITLE_MOST), col, ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 				ui.a11y({role = .Button, name = i18n.tr("Close this tab")})
@@ -411,7 +411,7 @@ preview_view :: proc(v: ^ui.View, app: ^App) {
 	// (unseen, it is measured: its page waits for where it shows)
 	if v.shown { p.shown = true }
 	t := preview_front_made(app, p)
-	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = themed("background"), radius = 0})
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = ui.theme_color("background"), radius = 0})
 	if ui.column(flags = {.Draw_Background}, id = "###pv") {
 		preview_strip(app, p, em)
 		preview_bar(app, t, em)
@@ -440,7 +440,7 @@ preview_view :: proc(v: ^ui.View, app: ^App) {
 			}
 			if msg != "" {
 				ui.spacer(ui.fill())
-				text("m", msg, themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+				text("m", msg, ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 				if failed {
 					ui.spacer(ui.px(em * 0.5))
 					if ui.button("pv_again", i18n.tr("Try again"), lucide.REFRESH_CW, {height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { web_start(app, t) }

@@ -24,6 +24,30 @@ the_command_ids_are_valid_and_unique :: proc(t: ^testing.T) {
 	for line in ui.command_ids_check(table) { testing.expectf(t, false, "%s", line) }
 }
 
+// F1 is the toolkit's sheet over every command, with the keys that the composer reads itself, which no command holds:
+// before any palette was shown too (the table is made for it). Escape stops a run in two presses (escape_stop).
+@(test)
+the_sheet_says_the_composers_keys :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	help_open(app)
+	sheet := &app.palette.sheet
+	testing.expect(t, ui.shortcuts_sheet_is_open(sheet))
+	testing.expect_value(t, len(sheet.commands), len(COMMANDS))
+	keys := make(map[string]string, context.temp_allocator)
+	for x in sheet.extra {
+		testing.expect_value(t, x.group, "Composer")
+		keys[x.label] = x.keys
+	}
+	testing.expect_value(t, keys["Go through what you sent in this session"], "Up / Down")
+	testing.expect_value(t, keys["Paste text, an image or files"], "Ctrl+V")
+	testing.expect_value(t, keys["Scroll by the pointer"], "Middle click")
+	testing.expect_value(t, keys["Stop the run, what was sent during it goes next"], "Esc, Esc")
+	command_run(app, command_find("app.help"))
+	commands_apply(app)
+	testing.expect(t, !ui.shortcuts_sheet_is_open(sheet), "F1 again closes it")
+}
+
 // A person's key set from the palette replaces a command's own, and takes that chord from another: the keys read are the
 // keymap's, the menus and the help say them. A command whose own keys are read elsewhere (Ctrl+T, the Preview's address
 // bar) shows them and acts on a person's key.
@@ -42,13 +66,13 @@ a_persons_key_replaces_the_commands_own :: proc(t: ^testing.T) {
 		sidebar := ui.view_is_open(&app.program_views, SIDEBAR_VIEW)
 		session.key(s, .B, {.Ctrl})
 		session.frames(s, 2)
-		testing.expect(t, ui.view_is_open(&app.program_views, HELP_VIEW), "Ctrl+B opens the help")
+		testing.expect(t, ui.shortcuts_sheet_is_open(&app.palette.sheet), "Ctrl+B opens the help")
 		testing.expect_value(t, ui.view_is_open(&app.program_views, SIDEBAR_VIEW), sidebar)
-		ui.view_close(&app.program_views, HELP_VIEW)
+		ui.shortcuts_sheet_close(&app.palette.sheet)
 		session.frames(s, 2)
 		session.key(s, .F1)
 		session.frames(s, 2)
-		testing.expect(t, !ui.view_is_open(&app.program_views, HELP_VIEW), "F1 is the help's no more")
+		testing.expect(t, !ui.shortcuts_sheet_is_open(&app.palette.sheet), "F1 is the help's no more")
 		// (a person's key on a command whose own keys are read elsewhere, the conversation's zone's, acts)
 		zone := &main_pane(app).zone
 		before := ui.zoom_zone_value(zone)

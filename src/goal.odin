@@ -76,17 +76,17 @@ goal_strip :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		ui.spacer(ui.px(em * 0.5))
 		switch g.status {
 		case .Active:   lamp("###gl", ui.hue(.Yellow), 1, pulse = true, size = em * CARD_MARK_EM)
-		case .Paused:   lamp("###gl", themed("faint text"), 1, size = em * CARD_MARK_EM)
+		case .Paused:   lamp("###gl", ui.theme_color("faint text"), 1, size = em * CARD_MARK_EM)
 		case .Complete: glyph(lucide.CHECK, ui.hue(.Green), math.round(em * ICON_SMALL))
 		}
 		ui.spacer(ui.px(em * 0.35))
 		word := g.status == .Active ? i18n.tr("goal") : g.status == .Paused ? i18n.tr("goal paused") : i18n.tr("goal met")
-		text("w", word, themed("weak text"), note)
+		text("w", word, ui.theme_color("weak text"), note)
 		ui.spacer(ui.px(em * 0.5))
-		text("o", g.objective, themed("soft text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
+		text("o", g.objective, ui.theme_color("soft text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		if g.max_rounds > 0 {
 			ui.spacer(ui.px(em * 0.6))
-			text("r", fmt.tprintf(i18n.tr("round %d/%d"), g.rounds, g.max_rounds), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("r", fmt.tprintf(i18n.tr("round %d/%d"), g.rounds, g.max_rounds), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
 		ui.spacer(ui.px(em * 1.0))
 		switch g.status {
@@ -118,11 +118,11 @@ goal_reason_line :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	if ui.row(.Center, id = "###goal_why") {
 		groove(across = true)
 		ui.spacer(ui.px(em * 0.6))
-		lamp("###gwl", themed("faint text"), 1, size = em * CARD_MARK_EM)
+		lamp("###gwl", ui.theme_color("faint text"), 1, size = em * CARD_MARK_EM)
 		ui.spacer(ui.px(em * 0.35))
-		text("w", i18n.tr("goal paused"), themed("weak text"), small)
+		text("w", i18n.tr("goal paused"), ui.theme_color("weak text"), small)
 		if resets > 0 {
-			text("when", reset_text(resets, now_epoch_ms(), app.prefs.clock24), themed("faint text"), small)
+			text("when", reset_text(resets, now_epoch_ms(), app.prefs.clock24), ui.theme_color("faint text"), small)
 			if !over { ui.wake_within(&app.state, GOAL_RESET_TICK_MS) }   // (the time left, minute after minute)
 		}
 		if over {
@@ -132,7 +132,7 @@ goal_reason_line :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		ui.spacer(ui.px(em * 0.6))
 		groove(across = true)
 	}
-	ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Text_Wrap}, fg = over ? themed("faint text") : themed("weak text"), text_pad = 0, text_align = .Center})
+	ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Text_Wrap}, fg = over ? ui.theme_color("faint text") : ui.theme_color("weak text"), text_pad = 0, text_align = .Center})
 	ui.paragraph(fmt.tprintf("%s###goal_reason", label_safe(why)))
 	ui.spacer(ui.px(em * 1.2))
 }

@@ -31,7 +31,7 @@ read_words :: proc(app: ^App, x: ^remote.Remote) -> (words: string, intent: ui.I
 read_shown :: proc(app: ^App, id: string, x: ^remote.Remote, em: f32, ask: proc(app: ^App)) -> bool {
 	if remote.shows(x) { return true }
 	words, intent, again := read_words(app, x)
-	info_line(app, id, words, em, intent == .Neutral ? themed("weak text") : ui.hue(ui.intent_hue(intent)))
+	info_line(app, id, words, em, intent == .Neutral ? ui.theme_color("weak text") : ui.hue(ui.intent_hue(intent)))
 	if again {
 		ui.spacer(ui.px(em * 0.4))
 		if ui.button(fmt.tprintf("%s_again", id), i18n.tr("Try again"), lucide.REFRESH_CW, {height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { ask(app) }

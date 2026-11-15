@@ -237,19 +237,19 @@ completion_list :: proc(app: ^App, id: string, rows: []Completion_Row, sel: int,
 			row.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 				if (^Completion_Row_Draw)(user).selected {
 					r := b.rect   // (flush: a highlight runs from one edge of the list to the other)
-					draw_well(dc, r, 0, themed("background"))   // (square: a row)
+					draw_well(dc, r, 0, ui.theme_color("background"))   // (square: a row)
 				}
 			}
 			row.custom_user = d
 			if ui.signal(row).clicked { clicked = k }
 			if ui.parent(row) {
 				ui.spacer(ui.px(em * 0.9))
-				glyph(r.icon, themed("faint text"), math.round(em * ICON_SMALL), em * 1.1)
+				glyph(r.icon, ui.theme_color("faint text"), math.round(em * ICON_SMALL), em * 1.1)
 				ui.spacer(ui.px(em * 0.3))
-				text("n", r.label, themed("text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+				text("n", r.label, ui.theme_color("text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 				if r.detail != "" {
 					ui.spacer(ui.px(em * 0.8))
-					text("d", ellipsize(r.detail, MENTION_DETAIL_CHARS), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)})
+					text("d", ellipsize(r.detail, MENTION_DETAIL_CHARS), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)})
 				}
 			}
 		}

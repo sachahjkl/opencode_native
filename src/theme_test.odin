@@ -50,6 +50,8 @@ every_name_a_view_asks_for_is_the_themes :: proc(t: ^testing.T) {
 			testing.expect_value(t, ui.theme_lookup(&th, nil, "weak text"), draw.hex(c.texts[1]))
 			testing.expect_value(t, ui.theme_lookup(&th, nil, "text"), draw.hex(c.texts[2]))
 			testing.expect_value(t, ui.theme_lookup(&th, nil, "bright text"), draw.hex(c.texts[3]))
+			// (the toolkit's soft text is the one ocn made: 70 % of the way from weak to text, in sRGB steps)
+			testing.expect_value(t, ui.theme_lookup(&th, nil, "soft text"), ui.srgb_step(draw.hex(c.texts[1]), draw.hex(c.texts[2]), 0.7))
 			testing.expect_value(t, ui.theme_lookup(&th, nil, "well"), draw.hex(c.steps[0]))
 			testing.expect_value(t, ui.theme_lookup(&th, nil, "background"), draw.hex(c.steps[1]))
 			testing.expect_value(t, ui.theme_lookup(&th, nil, "bar background"), draw.hex(c.steps[2]))
@@ -62,7 +64,7 @@ every_name_a_view_asks_for_is_the_themes :: proc(t: ^testing.T) {
 	}
 }
 
-// The names in `themed("…")` and `between("…", "…", t)` in the program's files.
+// The names in `ui.theme_color("…")` and `between("…", "…", t)` in the program's files.
 @(private = "file")
 theme_names_asked :: proc() -> []string {
 	names := make([dynamic]string, context.temp_allocator)
@@ -74,7 +76,7 @@ theme_names_asked :: proc() -> []string {
 		if rerr != nil { continue }
 		rest := string(data)
 		for {
-			at := min_index(strings.index(rest, "themed("), strings.index(rest, "between("))
+			at := min_index(strings.index(rest, "ui.theme_color("), strings.index(rest, "between("))
 			if at < 0 { break }
 			// (another package's procedure of that name, diff.between, or a longer name: not ours)
 			if at > 0 {

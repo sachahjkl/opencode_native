@@ -10,13 +10,15 @@ program keeps no spacing constant of its own for these.
   edges through `ui.well`'s `pad`; the rows in it have no inset of their own (a `stat_row` gets `inset = {0, 0}`,
   `mono_text` starts at its box's edge). Before, each row padded itself and the top and bottom were spacers of their
   own: 0.4, 0.45, 0.5 em, and the left 0.75 or 0.8 em, depending on the place.
-- **The dock's cards keep their plate.** A permission and a form are drawn by `plate` (their colours and the accent's
-  border are theirs, which `ui.card` does not take); what is inside them uses `CARD_PAD`, `ICON_GAP`, `CONTROL_GAP`
-  and `LINE_GAP`, and `ITEM_GAP` follows each.
+- **A raised card is `ui.card`.** A permission, a form, the person's prompt, a sub-agent's card and its banner are
+  `ui.card` with their own look (colours.md); the card puts `CARD_PAD` on its four sides, so what is inside them has
+  no inset of its own. Inside, they use `ICON_GAP`, `CONTROL_GAP` and `LINE_GAP`; `ITEM_GAP` follows a dock's card.
+  The find bar keeps a `.Plate` box with a look and no card: it is only the shadow under its well, which an inset would
+  part from it.
 - **A list is one card.** The MCP servers of the settings are a `list_card` with a row each, split by hairlines, not a
   plate per server with gaps between.
 - **Dialogs and panels** (servers, schedules, artifacts, session tools, statistics) use `PAGE_MARGIN` at their sides;
-  the tray under the composer uses `CARD_PAD`; a sub-agent's card uses `CARD_PAD` and `ICON_GAP` on its first line.
+  the tray under the composer uses `CARD_PAD`; a sub-agent's card uses `ICON_GAP` on its first line.
 
 ## Left as they are
 

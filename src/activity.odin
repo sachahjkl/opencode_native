@@ -778,21 +778,21 @@ activity_strip :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.35))
 		}
 		if agents > 0 {
-			text("a", fmt.tprintf(i18n.tr(agents, "%d agent", "%d agents"), agents), themed("soft text"), note)
+			text("a", fmt.tprintf(i18n.tr(agents, "%d agent", "%d agents"), agents), ui.theme_color("soft text"), note)
 			ui.spacer(ui.px(em * 0.8))
 		}
 		if shells > 0 {
-			glyph(lucide.SQUARE_TERMINAL, themed("weak text"), math.round(em * ICON_SMALL))
+			glyph(lucide.SQUARE_TERMINAL, ui.theme_color("weak text"), math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.25))
-			text("s", fmt.tprintf(i18n.tr(shells, "%d command", "%d commands"), shells), themed("soft text"), note)
+			text("s", fmt.tprintf(i18n.tr(shells, "%d command", "%d commands"), shells), ui.theme_color("soft text"), note)
 			ui.spacer(ui.px(em * 0.8))
 		}
 		if open_todos {
-			glyph(lucide.LIST, themed("weak text"), math.round(em * ICON_SMALL))
+			glyph(lucide.LIST, ui.theme_color("weak text"), math.round(em * ICON_SMALL))
 			ui.spacer(ui.px(em * 0.25))
-			text("t", fmt.tprintf("%d/%d", done, len(a.todos)), themed("soft text"), note)
+			text("t", fmt.tprintf("%d/%d", done, len(a.todos)), ui.theme_color("soft text"), note)
 			ui.spacer(ui.px(em * 0.45))
-			if doing != "" { text("d", doing, themed("weak text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill()) }
+			if doing != "" { text("d", doing, ui.theme_color("weak text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill()) }
 		}
 		if !open_todos || doing == "" { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(em * 0.8)) }
 		// (a command that holds the turn: it can go on in the background while the session does)
@@ -800,7 +800,7 @@ activity_strip :: proc(app: ^App, em: f32) {
 			if hint_action("###bg", i18n.tr("push to background"), em, app.mono, lucide.SEND_TO_BACK) { background_session(app, pane.chat.id) }
 			ui.spacer(ui.px(em * 1.2))
 		}
-		text("k", a.open ? i18n.tr("Esc  close") : i18n.tr("↓  details"), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+		text("k", a.open ? i18n.tr("Esc  close") : i18n.tr("↓  details"), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		ui.spacer(ui.px(em * 0.5))
 	}
 	ui.spacer(ui.px(em * 0.25))
@@ -817,7 +817,7 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	s := ui.scale()
 	r := b.rect   // (flush: a highlight runs from one edge of the list to the other)
 	if (^Row_Draw)(user).selected {
-		draw.rect(dc, r, themed("card background"))   // (square: a row)
+		draw.rect(dc, r, ui.theme_color("card background"))   // (square: a row)
 		draw.rect(dc, {{r.min.x + 2 * s, r.min.y + 5 * s}, {r.min.x + 4 * s, r.max.y - 5 * s}}, ui.hue(.Accent), 1 * s)
 	} else if b.hot_t > FADE_VISIBLE {
 		draw.rect(dc, r, {1, 1, 1, 0.025 * b.hot_t})
@@ -849,12 +849,12 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 			ui.space(ui.CARD_PAD)
 			state_mark("###st", r.state, size = em * 0.8)
 			ui.spacer(ui.px(em * 0.4))
-			text("n", r.name, running ? themed("weak text") : themed("faint text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			text("n", r.name, running ? ui.theme_color("weak text") : ui.theme_color("faint text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.5))
-			text("t", r.title, running ? themed("text") : themed("weak text"), ui.Style_Mod{font = r.kind == .Agent ? app.font : app.mono, font_size = math.round(em * (r.kind == .Agent ? FS_LABEL : FS_SMALL))}, ui.fill())
+			text("t", r.title, running ? ui.theme_color("text") : ui.theme_color("weak text"), ui.Style_Mod{font = r.kind == .Agent ? app.font : app.mono, font_size = math.round(em * (r.kind == .Agent ? FS_LABEL : FS_SMALL))}, ui.fill())
 			ui.spacer(ui.px(em * 0.5))
 			if r.what != "" {
-				text("w", ellipsize(r.what, CHIP_ACTIVITY_CHARS), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				text("w", ellipsize(r.what, CHIP_ACTIVITY_CHARS), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.5))
 			}
 			end := r.ended > 0 ? r.ended : (running ? now : 0)
@@ -898,7 +898,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 				ui.next({width = ui.fill(), height = ui.px(line_h), axis = .X, cross = .Center})
 				if ui.row(.Center, id = fmt.tprintf("###o%d", k)) {
 					ui.spacer(ui.px(math.round(em * (ui.CARD_PAD + 1.2))))   // (under the row's title: the inset, its mark and the gap)
-					text("x", ellipsize(l, ACT_LINE_CHARS), themed("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+					text("x", ellipsize(l, ACT_LINE_CHARS), ui.theme_color("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 					ui.spacer(ui.px(em * 0.5))
 				}
 			}
@@ -916,14 +916,14 @@ todo_row :: proc(app: ^App, t: Todo, k: int, em: f32) {
 		if ui.row(.Center, id = "###m") {
 			switch t.status {
 			case "completed": glyph(lucide.CHECK, ui.hue(.Green), math.round(em * ICON_SMALL), em * 1.1)
-			case "cancelled": glyph(lucide.X, themed("faint text"), math.round(em * ICON_SMALL), em * 1.1)
+			case "cancelled": glyph(lucide.X, ui.theme_color("faint text"), math.round(em * ICON_SMALL), em * 1.1)
 			case "in_progress":
 				state_mark("###s", .Running, size = em * 0.8)
-			case: glyph(lucide.CHEVRON_RIGHT, themed("faint text"), math.round(em * ICON_TINY), em * 1.1)
+			case: glyph(lucide.CHEVRON_RIGHT, ui.theme_color("faint text"), math.round(em * ICON_TINY), em * 1.1)
 			}
 		}
 		ui.spacer(ui.px(em * 0.25))
-		col := t.status == "in_progress" ? themed("text") : t.status == "pending" ? themed("soft text") : themed("faint text")
+		col := t.status == "in_progress" ? ui.theme_color("text") : t.status == "pending" ? ui.theme_color("soft text") : ui.theme_color("faint text")
 		runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
 		ui.rich_links(t.content, {color = col}, &runs)
 		ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}})
@@ -961,7 +961,7 @@ activity_todos :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###td_none") {
 			ui.space(ui.CARD_PAD)
-			text("n", a.todo_filter == .Active ? i18n.tr("Nothing left to do.") : i18n.tr("Nothing done yet."), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+			text("n", a.todo_filter == .Active ? i18n.tr("Nothing left to do.") : i18n.tr("Nothing done yet."), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		}
 	}
 }
@@ -980,7 +980,7 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 		ui.space(ui.CARD_PAD)
 		caption_title("h", i18n.tr("ACTIVITY"), fmt.tprintf(i18n.tr("%d running"), running), em, ui.hue(.Cyan))
 		ui.spacer(ui.fill())
-		if pane.conversation.column_w > em * ACT_KEYS_MIN_EM { text("k", i18n.tr("↑↓ move   Enter open   Del stop   "), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
+		if pane.conversation.column_w > em * ACT_KEYS_MIN_EM { text("k", i18n.tr("↑↓ move   Enter open   Del stop   "), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
 		if hint_action("###act_close", i18n.tr("Esc close"), em, app.mono) { activity_close(app) }
 		ui.space(ui.CARD_PAD)
 	}
@@ -989,7 +989,7 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###act_none") {
 			ui.space(ui.CARD_PAD)
-			text("n", i18n.tr("Nothing runs in the background of this session."), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+			text("n", i18n.tr("Nothing runs in the background of this session."), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		}
 	}
 	now := now_epoch_ms()
@@ -1008,8 +1008,8 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 // which go past the box, were cut with it and left the corners ragged.
 tray_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	r := TRAY_RADIUS * ui.scale() * corners()
-	draw.rect(dc, b.rect, themed("well"), r)
-	draw.rect(dc, b.rect, themed("border"), r, px1())
+	draw.rect(dc, b.rect, ui.theme_color("well"), r)
+	draw.rect(dc, b.rect, ui.theme_color("border"), r, px1())
 }
 
 // Under the composer: it opens downward, as the key says. Its height glides to what it holds, up to a part of the window.

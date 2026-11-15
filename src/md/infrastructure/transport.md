@@ -11,9 +11,16 @@ does HTTP, TLS and the proxy: WinHTTP on Windows, libcurl on Linux. The toolkit'
   what the toolkit has no Odin equivalent for (the toolkit's Rust crates, the WebView2 on Windows).
 - **The credentials are computed once.** `Http` holds the base address and the `Authorization` header (Basic, user
   `opencode`), built when a server is chosen. Threads read it and never change it.
-- **A request is bounded as a whole: `REQUEST_TIMEOUT`, 3 minutes.** The old client bounded the connection (5 s), the
-  wait for the answer (60 s) and the body (120 s) apart. `gt:http` has one limit; 3 minutes covers the sum. A body is
-  bounded by `REQUEST_MAX_BYTES` (256 MiB: a long session's export).
+- **A request is bounded as a whole: `REQUEST_TIMEOUT`, 3 minutes.** The old client bounded the wait for the answer
+  (60 s) and the body (120 s) apart; 3 minutes covers the sum. A body is bounded by `REQUEST_MAX_BYTES` (256 MiB: a
+  long session's export).
+- **The connection is bounded apart: `CONNECT_TIMEOUT`, 5 s**, for a request, the event stream and a socket, as the old
+  client did. A server that does not answer is said down after it, not after the whole limit (3 minutes for a request,
+  the 95 s silence for the stream).
+- **The answers come compressed** (`Request.compressed`: gzip or deflate, decoded by `gt:http`). A session's messages
+  are JSON, several times smaller packed: a remote server over a slow link costs that much less. The event stream is
+  not compressed: a server's compressor can hold a small event until its buffer fills, and an event must come when it
+  happens. A socket's handshake has no body.
 - **The event stream is bounded by its silence: `STREAM_SILENCE`, 95 s.** A machine that slept leaves the socket open.
   The server's heartbeats restart the clock; several can be missed.
 - **The stream is up at its first event.** The server opens every stream with `server.connected`. `stream_run` posts
@@ -28,5 +35,3 @@ does HTTP, TLS and the proxy: WinHTTP on Windows, libcurl on Linux. The toolkit'
 ## Refused
 
 - **A send from the interface's thread.** A send blocks on a full or dead connection.
-- **gzip.** ureq asked for gzip answers. `gt:http` sends no `Accept-Encoding`; the server's answers come plain. A remote
-  server over a slow link costs more bytes; nothing else changes.

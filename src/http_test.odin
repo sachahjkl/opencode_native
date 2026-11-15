@@ -6,6 +6,7 @@ import "core:net"
 import "core:strings"
 import "core:testing"
 import "core:thread"
+import "gt:flate"
 import tk_http "gt:http"
 
 // A server of one answer, on 127.0.0.1: it reads the request's head, sends `answer`, and closes.
@@ -75,6 +76,30 @@ a_request_with_a_body_says_it_is_json :: proc(t: ^testing.T) {
 	testing.expect(t, has_type(post), "a POST, even empty")
 	testing.expect(t, !has_type(get), "a GET has none")
 	testing.expect_value(t, len(get.headers), 1)   // (Accept; no password, no Authorization)
+	free_all(context.temp_allocator)
+}
+
+// A server's answers come compressed when it can, decoded for the views; the event stream is not compressed (an event
+// must come when it happens). Each call gives up on a server that does not answer after CONNECT_TIMEOUT.
+@(test)
+the_answers_come_compressed :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	text := strings.repeat(`{"id":"ses_1","title":"a session"},`, 40, context.temp_allocator)
+	zipped := flate.deflate(.Gzip, transmute([]u8)text, context.temp_allocator)
+	s := one_answer_start(t, fmt.tprintf("HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s", len(zipped), string(zipped)))
+	h := http_init(fmt.tprintf("http://127.0.0.1:%d", s.port), "opencode", "")
+	status, body, ok := http_request(&h, "GET", "/session")
+	testing.expect(t, ok)
+	testing.expect_value(t, status, 200)
+	testing.expect_value(t, body, text)
+	head := strings.to_lower(s.head, context.temp_allocator)
+	testing.expectf(t, strings.contains(head, "accept-encoding: gzip"), "asked for gzip: %q", s.head)
+	delete(body)
+	one_answer_end(s)
+	stream, socket := http_stream_of(&h), http_socket_of(&h)
+	testing.expect(t, !stream.compressed)
+	for r in ([]tk_http.Request{http_request_of(&h, "GET", ""), stream, socket}) { testing.expect_value(t, r.connect_timeout, CONNECT_TIMEOUT) }
+	http_destroy(&h)
 	free_all(context.temp_allocator)
 }
 

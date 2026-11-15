@@ -41,7 +41,7 @@ one mark, one choice (`choice_take`) for both places.
   `#` models. Now `@` is Go to (the sessions), `#` is Choose (the models and the agents, the one in use marked), and the
   server's commands are commands (`>`, and the plain search). `/` means a path in every program.
 - **The palette's command is the toolkit's.** Ctrl+K and Ctrl+Shift+P are `ui.palette_command()`, read by
-  `ui.palette_keys` alone. `COMMANDS` has no `app.palette` line; the help view lists the toolkit's command first.
+  `ui.palette_keys` alone. `COMMANDS` has no `app.palette` line; the sheet of the keys (F1, the toolkit's) lists it.
 - **One reader of the keys, gated as the window commands are.** `palette_build` calls `palette_keys` unless the file
   dialog holds the window's keys (`command_keyed`'s rule). An open menu holds them in the toolkit.
 - **The commands' table is made once per language.** `palette_table_keep` makes it when `i18n.version()` changes.

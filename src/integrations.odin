@@ -450,14 +450,14 @@ integration_row :: proc(app: ^App, it: ^Integration, k: int, em: f32) {
 	}
 	if ui.parent(row) {
 		connected := len(it.connections) > 0
-		glyph(connected ? lucide.CHECK : lucide.PLUG, connected ? ui.hue(.Green) : themed("faint text"), math.round(em * ICON_SMALL), em * 1.2)
+		glyph(connected ? lucide.CHECK : lucide.PLUG, connected ? ui.hue(.Green) : ui.theme_color("faint text"), math.round(em * ICON_SMALL), em * 1.2)
 		ui.spacer(ui.px(em * 0.3))
-		text("n", it.name, themed("text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
+		text("n", it.name, ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 		if connected {
-			text("c", fmt.tprintf(i18n.tr(len(it.connections), "%d connected", "%d connected"), len(it.connections)), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)})
+			text("c", fmt.tprintf(i18n.tr(len(it.connections), "%d connected", "%d connected"), len(it.connections)), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)})
 			ui.spacer(ui.px(em * 0.4))
 		}
-		glyph(lucide.CHEVRON_RIGHT, themed("faint text"), math.round(em * ICON_SMALL), em)
+		glyph(lucide.CHEVRON_RIGHT, ui.theme_color("faint text"), math.round(em * ICON_SMALL), em)
 	}
 }
 
@@ -503,7 +503,7 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 	small := math.round(em * BUTTON_SMALL_H_EM)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###intc%d", i)) {
-		lamp := c.needs_auth ? ui.hue(.Yellow) : c.active ? ui.hue(.Green) : themed("faint text")
+		lamp := c.needs_auth ? ui.hue(.Yellow) : c.active ? ui.hue(.Green) : ui.theme_color("faint text")
 		glyph(c.needs_auth ? lucide.ALERT_TRIANGLE : lucide.CHECK, lamp, math.round(em * ICON_SMALL), em * 1.2)
 		ui.spacer(ui.px(em * 0.3))
 		if c.id == n.renaming && c.credential {
@@ -516,11 +516,11 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 			if res.cancelled { set_text(&n.renaming, "") }
 		} else {
 			name := c.label != "" ? c.label : c.method
-			text("n", c.credential ? name : fmt.tprintf(i18n.tr("%s, in the environment"), name), themed("text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
+			text("n", c.credential ? name : fmt.tprintf(i18n.tr("%s, in the environment"), name), ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 		}
 		if c.credential && c.id != n.renaming {
 			if c.id == n.removing {
-				text("q", i18n.tr("Remove it?"), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)})
+				text("q", i18n.tr("Remove it?"), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)})
 				ui.spacer(ui.px(em * 0.4))
 				if ui.button("int_yes", i18n.tr("Remove"), lucide.TRASH_2, {intent = .Danger, height = small}).clicked {
 					request(app, .Credential_Done, "DELETE", fmt.tprintf("/api/credential/%s", tk_http.component_encode(c.id, context.temp_allocator)))
@@ -564,7 +564,7 @@ connect_fill :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int, e
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column(id = fmt.tprintf("###intf%d", i)) {
 				title := fd.title != "" ? fd.title : fd.key
-				text("l", title, themed("text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
+				text("l", title, ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 				if fd.description != "" { info_line(app, "###d", fd.description, em) }
 				done := false
 				form_field(app, &fd, em, &done)
@@ -603,7 +603,7 @@ connect_wait :: proc(app: ^App, em: f32) {
 	case Connect_Finishing: w, finishing = s.wait, true
 	}
 	section(app, w.by_code ? i18n.tr("PASTE THE CODE") : i18n.tr("WAITING"), em)
-	ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Text_Wrap, .Selectable}, fg = themed("text"), text_pad = 0})
+	ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Text_Wrap, .Selectable}, fg = ui.theme_color("text"), text_pad = 0})
 	ui.paragraph(fmt.tprintf("%s###int_say", label_safe(w.instructions != "" ? w.instructions : i18n.tr("It goes on in the browser."))))
 	ui.spacer(ui.px(em * 0.5))
 	if remote.failed(&n.poll) {

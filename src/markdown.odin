@@ -36,9 +36,9 @@ md_config :: proc(app: ^App, color: Color, pane: ^Chat_Pane = nil) -> markdown.V
 		prose = app.prose, face = app.font, mono = app.mono,
 		prose_scale = app.prose_scale, line_ratio = PROSE_LINE_RATIO, cell_scale = FS_LABEL,
 		colors = {
-			text = color, heading = themed("bright text"), quote = themed("weak text"), marker = ui.hue(.Accent), rail = ui.with_alpha(ui.hue(.Accent), 0.6),
-			inline_code = ui.hue(.Yellow), code_text = themed("soft text"), table_header = themed("bright text"),
-			table_stripe = ui.with_alpha(themed("text"), markdown.TABLE_STRIPE_ALPHA), table_rule = ui.with_alpha(ui.hue(.Accent), markdown.TABLE_RULE_ALPHA),
+			text = color, heading = ui.theme_color("bright text"), quote = ui.theme_color("weak text"), marker = ui.hue(.Accent), rail = ui.with_alpha(ui.hue(.Accent), 0.6),
+			inline_code = ui.hue(.Yellow), code_text = ui.theme_color("soft text"), table_header = ui.theme_color("bright text"),
+			table_stripe = ui.with_alpha(ui.theme_color("text"), markdown.TABLE_STRIPE_ALPHA), table_rule = ui.with_alpha(ui.hue(.Accent), markdown.TABLE_RULE_ALPHA),
 		},
 		user = u,
 		link = proc(user: rawptr, url: string) { link_open(url) },
@@ -110,9 +110,9 @@ code_block :: proc(id: string, lang: string, code: string, mono: Face_Id, table 
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###hdr") {
 				ui.spacer(ui.px(em * 0.7))
-				glyph(lucide.CODE, themed("faint text"), math.round(em * ICON_SMALL), em)
+				glyph(lucide.CODE, ui.theme_color("faint text"), math.round(em * ICON_SMALL), em)
 				ui.spacer(ui.px(em * 0.3))
-				text("lang", lang != "" ? lang : "text", themed("faint text"), ui.Style_Mod{font = mono, font_size = math.round(em * FS_SMALL)})
+				text("lang", lang != "" ? lang : "text", ui.theme_color("faint text"), ui.Style_Mod{font = mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.fill())
 				ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
 				if ui.button("copy", icon = lucide.COPY).clicked {
@@ -127,7 +127,7 @@ code_block :: proc(id: string, lang: string, code: string, mono: Face_Id, table 
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###body") {
 			ui.spacer(ui.px(em * 0.9))
-			plain := [1]ui.Rich_Run{{text = code, style = {font = mono, color = themed(table ? "text" : "soft text")}}}
+			plain := [1]ui.Rich_Run{{text = code, style = {font = mono, color = ui.theme_color(table ? "text" : "soft text")}}}
 			ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}})
 			ui.rich_paragraph("###code", len(runs) > 0 ? runs : plain[:], version = version)
 			ui.spacer(ui.px(em * 0.9))

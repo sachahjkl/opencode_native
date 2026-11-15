@@ -422,6 +422,9 @@ fr Clic du milieu
 en Scroll by the pointer
 fr Défiler avec le pointeur
 
+en Esc, Esc
+fr Échap, Échap
+
 en Stop the run, what was sent during it goes next
 fr Arrêter l'exécution ; ce qui a été envoyé pendant part ensuite
 

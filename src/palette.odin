@@ -40,6 +40,9 @@ Palette :: struct {
 	made:        bool,
 	version:     u64,
 	table_arena: virtual.Arena,
+	// F1: the toolkit's sheet of the keys over `table`, and its lines that are no command (help_open)
+	sheet:       ui.Shortcuts_Sheet,
+	sheet_lines: [5]ui.Sheet_Line,
 
 	due:       bool,     // palette_show: opened at the next build (asked from outside one: a page's key, a test)
 	due_typed: string,   // (owned) what its field starts with
@@ -97,6 +100,7 @@ palette_destroy :: proc(app: ^App) {
 	jump_destroy(app)
 	ui.palette_destroy(&p.chooser)
 	ui.palette_destroy(&p.pal)
+	ui.shortcuts_sheet_destroy(&p.sheet)
 	virtual.arena_destroy(&p.table_arena)
 	virtual.arena_destroy(&p.details_arena)
 	delete(p.detail_id)
@@ -187,13 +191,12 @@ chooser_build :: proc(app: ^App) {
 
 // The commands' table kept: made again when the language changed (the keys' texts are said in it), `disabled` when a
 // gated command can act or no longer. Either bumps the version the palette compares.
-@(private = "file")
 palette_table_keep :: proc(app: ^App) {
 	pane := main_pane(app)
 	p := &app.palette
-	changed := false
+	changed, remade := false, false
 	if language := i18n.version(); !p.made || language != p.language {
-		p.made, p.language, changed = true, language, true
+		p.made, p.language, changed, remade = true, language, true, true
 		virtual.arena_free_all(&p.table_arena)
 		a := virtual.arena_allocator(&p.table_arena)
 		table := make([]ui.Command, len(COMMANDS), a)
@@ -233,6 +236,9 @@ palette_table_keep :: proc(app: ^App) {
 		changed = true
 	}
 	if changed { p.version += 1 }
+	// (the sheet holds the table it was opened with, and that one is freed: it takes the new one, and the keys' words in
+	// the new language)
+	if remade && ui.shortcuts_sheet_is_open(&p.sheet) { help_open(app) }
 }
 
 // The commands source given its table (compared by the version), the switches' marks and the details.

@@ -83,7 +83,7 @@ missed_bell :: proc(app: ^App, size, em: f32) {
 	missed_rows_refresh(app)
 	n := app.missed.new_here
 	ui.a11y({role = .Button, name = i18n.tr("What you missed")})
-	ui.next({width = ui.px(size), height = ui.px(size), fg = ui.caption_ink(themed(n > 0 ? "weak text" : "faint text"))})
+	ui.next({width = ui.px(size), height = ui.px(size), fg = ui.caption_ink(ui.theme_color(n > 0 ? "weak text" : "faint text"))})
 	sig := ui.button("bell", icon = lucide.BELL)
 	if app.prefs.notices_badge { ui.badge(sig.box, n) }
 	if sig.clicked { command_run(app, command_find("view.notices")) }
@@ -284,7 +284,7 @@ missed_foot :: proc(app: ^App, keys: string, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###mi_foot") {
 		ui.spacer(ui.px(em * 1))
-		text("h", keys, themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+		text("h", keys, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 		ui.spacer(ui.px(em * 1))
 	}
 }
@@ -373,10 +373,10 @@ missed_header :: proc(app: ^App, r: ^Missed_Row, k: int, h, em: f32) -> (acknowl
 			session_badge(app, s, math.round(em * SESSION_BADGE_EM), em)
 			ui.spacer(ui.px(em * 0.55))
 		}
-		text("t", missed_title(s, r.root), themed("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
+		text("t", missed_title(s, r.root), ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
 		if s != nil && s.directory != "" {
 			ui.spacer(ui.px(em * 0.6))
-			text("d", base_name(s.directory), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)}, ui.fill())
+			text("d", base_name(s.directory), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)}, ui.fill())
 		} else {
 			ui.spacer(ui.fill())
 		}
@@ -400,7 +400,7 @@ missed_title :: proc(s: ^Session_Info, root: string) -> string {
 missed_mark :: proc(e: ^notices.Entry, em: f32) {
 	mark := math.round(em * 0.8)
 	if missed_is_wait(e) {
-		if e.state == .Acknowledged { pip("###mk", themed("faint text"), mark) } else { session_lamp("###mk", LAMP_WAITS, em) }
+		if e.state == .Acknowledged { pip("###mk", ui.theme_color("faint text"), mark) } else { session_lamp("###mk", LAMP_WAITS, em) }
 	} else {
 		state_mark("###mk", Sub_State(e.outcome), mark)
 	}
@@ -422,7 +422,7 @@ missed_entry_row :: proc(app: ^App, r: ^Missed_Row, k: int, selected, cursor: bo
 		d := (^Missed_Row_Draw)(user)
 		s := ui.scale()
 		r := b.rect
-		if d.selected { draw_well(dc, r, 0, themed("background")) }
+		if d.selected { draw_well(dc, r, 0, ui.theme_color("background")) }
 		if d.cursor { draw.rect(dc, {{r.min.x + 2 * s, r.min.y + 6 * s}, {r.min.x + 4 * s, r.max.y - 6 * s}}, ui.hue(.Accent), 1 * s) }
 	}
 	rb.custom_user = rd
@@ -438,12 +438,12 @@ missed_entry_row :: proc(app: ^App, r: ^Missed_Row, k: int, selected, cursor: bo
 			ui.spacer(ui.px(em * 0.2))
 			missed_mark(e, em)
 			ui.spacer(ui.px(em * 0.5))
-			ink := acked ? themed("faint text") : e.state == .New ? themed("bright text") : themed("text")
+			ink := acked ? ui.theme_color("faint text") : e.state == .New ? ui.theme_color("bright text") : ui.theme_color("text")
 			text("w", missed_words(e), ink, ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
 			ui.spacer(ui.px(em * 0.6))
-			text("x", e.text, themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
+			text("x", e.text, ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
 			ui.spacer(ui.px(em * 0.5))
-			text("a", age_text(now, f64(e.at)), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("a", age_text(now, f64(e.at)), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.5))
 			if missed_is_wait(e) && !acked {
 				button = ui.button("answer", i18n.tr("Answer"), lucide.ARROW_RIGHT, {intent = .Primary, height = small, quiet = true}).clicked
@@ -472,9 +472,9 @@ missed_entry_row :: proc(app: ^App, r: ^Missed_Row, k: int, selected, cursor: bo
 missed_brief :: proc(app: ^App, e: ^notices.Entry, em: f32) -> (retry: bool) {
 	switch Missed_Kind(e.kind) {
 	case .Permission, .Question:
-		missed_para("as", e.text, themed("text"), em)
+		missed_para("as", e.text, ui.theme_color("text"), em)
 	case .Shell:
-		missed_para("cm", fmt.tprintf("$ %s", e.text), themed("soft text"), em, mono = true)
+		missed_para("cm", fmt.tprintf("$ %s", e.text), ui.theme_color("soft text"), em, mono = true)
 		missed_shell_exit(app, e, em)
 	case .End, .Sub, .Scheduled:
 		rep := missed_report_find(app, missed_report_session(app, e))
@@ -482,12 +482,12 @@ missed_brief :: proc(app: ^App, e: ^notices.Entry, em: f32) -> (retry: bool) {
 		if rep.state == .Failed { return missed_failed(em) }
 		if rep.request_head != "" {
 			section_label("rq", i18n.tr("REQUEST"), em)
-			missed_para("rq_t", rep.request_head, themed("soft text"), em)
+			missed_para("rq_t", rep.request_head, ui.theme_color("soft text"), em)
 		}
 		section_label("re", i18n.tr("REPORT"), em)
 		if rep.answer_head != "" {
 			// (Markdown, as the card shows it: its marks read, not shown)
-			markdown.view(missed_report_head_doc(rep), "re_md", rep.answer_head, md_config(app, themed("text")), math.round(em * FS_SMALL))
+			markdown.view(missed_report_head_doc(rep), "re_md", rep.answer_head, md_config(app, ui.theme_color("text")), math.round(em * FS_SMALL))
 		} else {
 			missed_faint("na", i18n.tr("No answer"), em)
 		}
@@ -496,7 +496,7 @@ missed_brief :: proc(app: ^App, e: ^notices.Entry, em: f32) -> (retry: bool) {
 			shown := rep.files[:min(len(rep.files), MISSED_FILES_BRIEF)]
 			line := strings.join(shown, "   ", context.temp_allocator)
 			if more := len(rep.files) - len(shown); more > 0 { line = fmt.tprintf("%s   %s", line, fmt.tprintf(i18n.tr(more, "and %d more", "and %d more"), more)) }
-			missed_para("fl_t", line, themed("soft text"), em, mono = true)
+			missed_para("fl_t", line, ui.theme_color("soft text"), em, mono = true)
 		}
 	}
 	return
@@ -521,24 +521,24 @@ missed_card :: proc(app: ^App, r: ^Missed_Row, now: f64, em: f32) -> (retry: boo
 					session_badge(app, s, math.round(em * SESSION_BADGE_EM), em)
 					ui.spacer(ui.px(em * 0.6))
 				}
-				text("t", missed_title(s, r.root), themed("bright text"), ui.Style_Mod{font_size = math.round(em * FS_HEADING)})
+				text("t", missed_title(s, r.root), ui.theme_color("bright text"), ui.Style_Mod{font_size = math.round(em * FS_HEADING)})
 				if s != nil && s.directory != "" {
 					ui.spacer(ui.px(em * 0.7))
-					text("d", base_name(s.directory), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)}, ui.fill())
+					text("d", base_name(s.directory), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)}, ui.fill())
 				} else {
 					ui.spacer(ui.fill())
 				}
-				text("a", age_text(now, f64(e.at)), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				text("a", age_text(now, f64(e.at)), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			}
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###what") {
 				missed_mark(e, em)
 				ui.spacer(ui.px(em * 0.5))
-				text("w", missed_words(e), e.state == .Acknowledged ? themed("faint text") : themed("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
+				text("w", missed_words(e), e.state == .Acknowledged ? ui.theme_color("faint text") : ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
 				kind := Missed_Kind(e.kind)
 				if e.text != "" && (kind == .Sub || kind == .Scheduled) {
 					ui.spacer(ui.px(em * 0.6))
-					text("x", e.text, themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
+					text("x", e.text, ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
 				}
 			}
 			ui.spacer(ui.px(em * 0.5))
@@ -547,11 +547,11 @@ missed_card :: proc(app: ^App, r: ^Missed_Row, now: f64, em: f32) -> (retry: boo
 				// (still waiting: answered here, with the conversation's own card; its answer acknowledges it, missed_sync)
 				if !missed_answer_card(app, e, em) {
 					section_label("as", i18n.tr("ASKED"), em)
-					missed_para("as_t", e.text, themed("text"), em)
+					missed_para("as_t", e.text, ui.theme_color("text"), em)
 				}
 			case .Shell:
 				section_label("cm", i18n.tr("COMMAND"), em)
-				missed_para("cm_t", fmt.tprintf("$ %s", e.text), themed("soft text"), em, mono = true)
+				missed_para("cm_t", fmt.tprintf("$ %s", e.text), ui.theme_color("soft text"), em, mono = true)
 				missed_shell_exit(app, e, em)
 				missed_shell_tail(app, e, em)
 			case .End, .Sub, .Scheduled:
@@ -587,7 +587,7 @@ missed_report_card :: proc(app: ^App, rep: ^Missed_Report, em: f32) -> (retry: b
 	if rep.state == .Failed { return missed_failed(em) }
 	if rep.request != "" {
 		section_label("rq", i18n.tr("REQUEST"), em)
-		missed_para("rq_t", rep.request_card, themed("soft text"), em)
+		missed_para("rq_t", rep.request_card, ui.theme_color("soft text"), em)
 		ui.spacer(ui.px(em * 0.6))
 	}
 	note := rep.tools > 0 ? fmt.tprintf(i18n.tr(rep.tools, "%d tool call", "%d tool calls"), rep.tools) : ""
@@ -596,7 +596,7 @@ missed_report_card :: proc(app: ^App, rep: ^Missed_Report, em: f32) -> (retry: b
 	if rep.answer != "" {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column(id = "###answer") {
-			markdown.view(missed_report_doc(rep), "mi_md", rep.answer, md_config(app, themed("text")), math.round(em * FS_LABEL))
+			markdown.view(missed_report_doc(rep), "mi_md", rep.answer, md_config(app, ui.theme_color("text")), math.round(em * FS_LABEL))
 		}
 	} else {
 		missed_faint("na", i18n.tr("No answer"), em)
@@ -613,9 +613,9 @@ missed_report_card :: proc(app: ^App, rep: ^Missed_Report, em: f32) -> (retry: b
 			}
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.45)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###f%d", k)) {
-				glyph(lucide.FILE, themed("faint text"), math.round(em * ICON_SMALL), em * 1.2)
+				glyph(lucide.FILE, ui.theme_color("faint text"), math.round(em * ICON_SMALL), em * 1.2)
 				ui.spacer(ui.px(em * 0.3))
-				text("p", f, themed("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
+				text("p", f, ui.theme_color("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 			}
 		}
 	}
@@ -655,7 +655,7 @@ missed_shell_tail :: proc(app: ^App, e: ^notices.Entry, em: f32) {
 	if lines == MISSED_TAIL_LINES { at += 1 }
 	ui.spacer(ui.px(em * 0.4))
 	section_label("ou", i18n.tr("OUTPUT"), em)
-	missed_para("ou_t", out[at:], themed("soft text"), em, mono = true)
+	missed_para("ou_t", out[at:], ui.theme_color("soft text"), em, mono = true)
 }
 
 // Text that wraps, whole.
@@ -668,7 +668,7 @@ missed_para :: proc(id, s: string, color: Color, em: f32, mono := false) {
 @(private = "file")
 missed_faint :: proc(id, s: string, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
-	if ui.row(.Center, id = fmt.tprintf("###%s", id)) { text("t", s, themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill()) }
+	if ui.row(.Center, id = fmt.tprintf("###%s", id)) { text("t", s, ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill()) }
 }
 
 // The report could not be read: said, with Try again. True: Try again.
@@ -676,7 +676,7 @@ missed_faint :: proc(id, s: string, em: f32) {
 missed_failed :: proc(em: f32) -> (retry: bool) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###failed") {
-		text("t", i18n.tr("Could not be read"), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+		text("t", i18n.tr("Could not be read"), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		ui.spacer(ui.px(em * 0.6))
 		retry = ui.button("mi_retry", i18n.tr("Try again"), lucide.REFRESH_CW, {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM)}).clicked
 		ui.spacer(ui.fill())

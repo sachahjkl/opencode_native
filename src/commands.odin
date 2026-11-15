@@ -4,9 +4,6 @@
 package ocn
 
 import "core:fmt"
-import "core:math"
-import "core:strings"
-import "gt:platform"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -151,59 +148,22 @@ command_shortcut :: proc(app: ^App, id: string) -> string {
 	return ""
 }
 
-help_open :: proc(app: ^App) { ui.view_open(&app.program_views, HELP_VIEW, app) }
-
-help_toggle :: proc(app: ^App) {
-	if ui.view_is_open(&app.program_views, HELP_VIEW) { ui.view_close(&app.program_views, HELP_VIEW) } else { help_open(app) }
+// The toolkit's sheet of the keys: the commands' table (the palette's: made first if no palette was shown yet), and the
+// keys that widgets read themselves, which no command holds.
+help_open :: proc(app: ^App) {
+	p := &app.palette
+	if !p.made { palette_table_keep(app) }
+	// (the keys' words in the language in use, each time it opens: the sheet shows `keys` as written)
+	p.sheet_lines = {
+		{group = i18n.later("Composer"), keys = i18n.tr("Up / Down"), label = i18n.later("Go through what you sent in this session")},
+		{group = i18n.later("Composer"), keys = i18n.tr("Down"), label = i18n.later("On the last line: what runs in the background")},
+		{group = i18n.later("Composer"), keys = "Ctrl+V", label = i18n.later("Paste text, an image or files")},
+		{group = i18n.later("Composer"), keys = i18n.tr("Middle click"), label = i18n.later("Scroll by the pointer")},
+		{group = i18n.later("Composer"), keys = i18n.tr("Esc, Esc"), label = i18n.later("Stop the run, what was sent during it goes next")},
+	}
+	ui.shortcuts_sheet_open(&p.sheet, p.table, version = p.version, extra = p.sheet_lines[:])
 }
 
-// The keys of the table as a view: what can be done, by group. (Its title is the view's header.)
-help_view :: proc(v: ^ui.View, app: ^App) {
-	em := ui.font_size()
-	{
-		ui.next({width = ui.fill(), height = ui.fill()})
-		if ui.scroll_y("###help_scroll") {
-		ui.spacer(ui.px(em))
-		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if ui.row(id = "###help") {
-			ui.spacer(ui.px(em * 1.2))
-			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-			if ui.column() {
-				row :: proc(app: ^App, id, keys, what: string, em: f32) {
-					ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
-					if ui.row(.Center, id = id) {
-						text("w", what, themed("soft text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
-						text("k", keys, themed("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
-					}
-				}
-				group := ""
-				for &c, i in COMMANDS {
-					// (the keys in effect: a person's, else its own that no person's key took)
-					keys := ui.command_keys_text(app.palette.table[i])
-					if keys == "" { continue }
-					if c.group != group {
-						group = c.group
-						ui.spacer(ui.px(em * 0.4))
-						section_label(fmt.tprintf("g%d", i), strings.to_upper(i18n.tr(group), context.temp_allocator), em)
-						if i == 0 {
-							// (the palette's command is the toolkit's, not a line of COMMANDS: first, as the sheet lists it)
-							pc := ui.palette_command()
-							row(app, "###h_palette", ui.command_keys_text(pc), i18n.tr(pc.label), em)
-						}
-					}
-					row(app, fmt.tprintf("###h%d", i), keys, i18n.tr(c.title), em)
-				}
-				ui.spacer(ui.px(em * 0.4))
-				section_label("gc", strings.to_upper(i18n.tr("Composer"), context.temp_allocator), em)
-				row(app, "###hc1", i18n.tr("Up / Down"), i18n.tr("Go through what you sent in this session"), em)
-				row(app, "###hc2", i18n.tr("Down"), i18n.tr("On the last line: what runs in the background"), em)
-				row(app, "###hc3", "Ctrl+V", i18n.tr("Paste text, an image or files"), em)
-				row(app, "###hc4", i18n.tr("Middle click"), i18n.tr("Scroll by the pointer"), em)
-				row(app, "###hc5", platform.key_text("Esc"), i18n.tr("Stop the run, what was sent during it goes next"), em)
-				ui.spacer(ui.px(em))
-			}
-			ui.spacer(ui.px(em * 1.2))
-		}
-		}
-	}
+help_toggle :: proc(app: ^App) {
+	if ui.shortcuts_sheet_is_open(&app.palette.sheet) { ui.shortcuts_sheet_close(&app.palette.sheet) } else { help_open(app) }
 }

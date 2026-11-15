@@ -176,7 +176,7 @@ image_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		draw.image(dc, d.tex, r, {}, draw.WHITE, rad)
 		if d.frame { draw.rect(dc, r, {1, 1, 1, 0.08 + 0.18 * b.hot_t}, rad, max(1, math.round(s))) }
 	case .Pending:
-		draw_well(dc, r, rad, themed("well"))
+		draw_well(dc, r, rad, ui.theme_color("well"))
 		// a slow shimmer while it decodes
 		t := f32(ui.now_ms()) * SHIMMER_RATE
 		x := r.min.x + (r.max.x - r.min.x) * (0.5 + 0.5 * math.sin(t))
@@ -214,7 +214,7 @@ image_thumb :: proc(app: ^App, id: string, ref: Image_Ref, max_w, max_h: f32) ->
 	if state == .Failed {
 		if ui.parent(b) {
 			em := ui.font_size()
-			ui.next({width = ui.fill(), height = ui.fill(), fg = themed("bad text"), font_size = math.round(em * FS_SMALL), text_align = .Center})
+			ui.next({width = ui.fill(), height = ui.fill(), fg = ui.theme_color("bad text"), font_size = math.round(em * FS_SMALL), text_align = .Center})
 			ui.build_box({.Draw_Text}, fmt.tprintf("%s###f", label_safe(picture_failed_words(p))))
 		}
 	}
@@ -338,7 +338,7 @@ viewer_outside :: proc(p, view, picture, pan: [2]f32) -> bool {
 view_well_draw :: proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) {
 	// (the state of the window drawn, as corners(): ui.current_state is the open build's, nil while a frame is drawn)
 	app := the_app
-	if app == nil { ui.machined_well(dc, b.rect, 0, themed("well")); return }
+	if app == nil { ui.machined_well(dc, b.rect, 0, ui.theme_color("well")); return }
 	state := view_state(app, IMAGE_VIEW)
 	radius: f32
 	for a := b.parent; a != nil; a = a.parent {
@@ -347,7 +347,7 @@ view_well_draw :: proc(b: ^ui.Box, _: rawptr, dc: ^draw.Context) {
 		radius = ui.concentric_radius(ui.box_drawn_radii(state, a)[0], inset)
 		break
 	}
-	ui.machined_well(dc, b.rect, radius, themed("well"))
+	ui.machined_well(dc, b.rect, radius, ui.theme_color("well"))
 }
 
 // The image viewer (IMAGE_VIEW): what it shows, and how it is zoomed, moved and sized. As a dialog it hugs its picture
@@ -436,11 +436,11 @@ image_view :: proc(v: ^ui.View, app: ^App) {
 			ui.next({width = ui.fill(), height = ui.px(bar), axis = .X, cross = .Center})
 			if ui.row(.Center) {
 				ui.spacer(ui.px(em))
-				text("n", ellipsize(name, IMAGE_NAME_CHARS), themed("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
+				text("n", ellipsize(name, IMAGE_NAME_CHARS), ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 				ui.spacer(ui.px(em * 0.6))
 				zoom := f.fit * app.viewer.view.zoom / sc * 100
 				dims := fmt.tprintf("%d × %d  ·  %s", int(source.x), int(source.y), i18n.percent(f64(zoom) / 100))
-				text("d", dims, themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+				text("d", dims, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.px(em * 0.8))
 				bh := math.round(em * BUTTON_SMALL_H_EM)
 				most := max(1, VIEW_NATIVE_MAX * sc / f.fit)   // (as ui.preview's: its zoom_max over what fits)

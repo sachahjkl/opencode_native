@@ -47,9 +47,6 @@ theme_setup :: proc(t: ^ui.Theme) {
 	t.glow = the_app != nil && the_app.prefs.glow ? 1 : 0
 }
 
-// A text 70 % of the way from the theme's weak text to its text: tool output, quiet labels (the palette has two texts).
-SOFT_TEXT_STEP :: 0.7
-
 // The entries the toolkit's palette lacks, made from the version shown (src/md/features/colours.md): ahead of the palette's,
 // those of a kind before the plain ones (the first of two equal patterns wins). `set`: a theme was chosen, they are there.
 @(private = "file")
@@ -58,10 +55,9 @@ theme_entries :: proc(t: ^ui.Theme, set: bool) {
 	page, line := draw.hex(c.steps[1]), draw.hex(c.steps[5])
 	faint, weak, text, bright := draw.hex(c.texts[0]), draw.hex(c.texts[1]), draw.hex(c.texts[2]), draw.hex(c.texts[3])
 	accent, blue, green, red := draw.hex(c.hues[0]), draw.hex(c.hues[1]), draw.hex(c.hues[3]), draw.hex(c.hues[5])
-	soft := ui.srgb_step(weak, text, SOFT_TEXT_STEP)
+	soft := ui.srgb_step(weak, text, ui.SOFT_STEP)   // (the palette's "soft text")
 	Entry :: struct { tags: string, c: Color }
 	entries := [?]Entry{
-		{"faint text", faint}, {"soft text", soft}, {"bright text", bright},
 		{"link", blue},
 		{"selection", ui.with_alpha(accent, SELECTION_ALPHA)},
 		{"selection text", bright},   // (over the selection, whatever the text's own colour: a faint one was lost on it)
@@ -100,7 +96,7 @@ themed_palette :: proc() -> ui.Palette {
 flat :: proc() -> bool { return !ui.machined() }
 
 // The thin edge of a flat surface of this face: the theme's line, lit a little under the pointer.
-flat_edge :: proc(face: Color, hot: f32) -> Color { return draw.mix(themed("border"), ui.lighten(themed("border"), 0.25), hot) }
+flat_edge :: proc(face: Color, hot: f32) -> Color { return draw.mix(ui.theme_color("border"), ui.lighten(ui.theme_color("border"), 0.25), hot) }
 
 
 
@@ -200,7 +196,7 @@ draw_pip :: proc(dc: ^draw.Context, c: Vec2, d: f32, col: Color) { ui.machined_p
 // of its hue (the same in every theme, light or dark), or this look's plain face (Neutral). Read while it is built: soft_pair
 // reads the page.
 intent_colors :: proc(intent: ui.Intent) -> (fill, ink, glow: Color) {
-	if intent == .Neutral { return themed("button background"), themed("text"), CLEAR }
+	if intent == .Neutral { return ui.theme_color("button background"), ui.theme_color("text"), CLEAR }
 	glow = ui.hue_color(ui.intent_hue(intent))
 	glow.a = 1
 	fill, ink = ui.soft_pair(glow)
@@ -219,7 +215,7 @@ well_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 // Paints `b` as a well of the theme: for a box another builds (the Markdown package's frames).
 well_paint :: proc(b: ^ui.Box, radius: f32 = 7) {
 	d := ui.frame_new(Well_Draw)
-	d^ = {radius = radius, base = themed("well")}
+	d^ = {radius = radius, base = ui.theme_color("well")}
 	b.custom = well_box_draw
 	b.custom_user = d
 }
@@ -276,7 +272,7 @@ scanner :: proc(id: string, color: Color, width, height: f32) {
 		h := max(3 * s, math.round((r.max.y - r.min.y) * 0.4))
 		cy := math.round((r.min.y + r.max.y) * 0.5)
 		slot := Rect{{r.min.x, cy - h * 0.5}, {r.max.x, cy + h * 0.5}}
-		draw_well(dc, slot, h * 0.5, themed("well"))
+		draw_well(dc, slot, h * 0.5, ui.theme_color("well"))
 		w := slot.max.x - slot.min.x
 		t := 0.5 - 0.5 * math.cos(f32(ui.now_ms()) * SCANNER_RATE)   // eased back and forth
 		gw := w * 0.28
@@ -340,29 +336,15 @@ edge_line :: proc(id: string, vertical := false) {
 	}
 }
 
-@(private = "file")
-Plate_Draw :: struct { radius: f32, top, bottom: Color, border: Color, shadow: f32, rim: f32, glow: Color }
-
-@(private = "file")
-plate_box_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	d := (^Plate_Draw)(user)
-	ui.machined_plate(dc, b.rect, d.radius * ui.scale() * corners(), d.top, d.bottom, d.shadow, d.rim, d.border, d.glow)
+// A card that asks the person for something (a permission, a form): a face warmed toward the accent, an edge in `edge`'s hue,
+// a deeper shadow than the conversation's cards: it stands out of the dock.
+warm_card :: proc(edge: Color) -> ui.Card_Options {
+	look := ui.Plate_Look{top = between("card background", "hue_accent", 0.08), bottom = between("bar background", "hue_accent", 0.06), border = ui.with_alpha(edge, 0.55), rim = 0.1, shadow = 8}
+	return {radius = CARD_RADIUS, look = look}
 }
 
-// `if plate("###id", ...) { ... }`: a raised panel (cards, the user's prompt, popover bodies): gradient face, lit rim,
-// soft shadow. Size and axis with `next` before it. `top`, `bottom` zero: a face around the theme's cards.
-@(deferred_none = ui.pop_parent)
-plate :: proc(id: string, top: Color = {}, bottom: Color = {}, radius: f32 = 8, shadow: f32 = 6, rim: f32 = 0.07, border: Color = {0, 0, 0, 0.85}, glow := Color{}) -> bool {
-	b := ui.build_box({}, id)
-	d := ui.frame_new(Plate_Draw)
-	face_top := top != {} ? top : between("card background", "button background", 0.6)
-	face_bottom := bottom != {} ? bottom : between("bar background", "card background", 0.67)
-	d^ = {radius = radius, top = face_top, bottom = face_bottom, border = border, shadow = shadow, rim = rim, glow = glow}
-	b.custom = plate_box_draw
-	b.custom_user = d
-	ui.push_parent(b)
-	return true
-}
+// A card of the conversation that only reports (a sub-agent's): the theme's face, a short shadow.
+calm_card :: proc() -> ui.Card_Options { return {radius = CARD_RADIUS, look = {shadow = 3}} }
 
 // An icon glyph as a box.
 // (a fixed height, not the parent's: in a row sized by its children a percentage is of a distant ancestor, the whole view)

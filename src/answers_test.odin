@@ -998,9 +998,9 @@ what_is_open_has_the_keys :: proc(t: ^testing.T) {
 	testing.expect(t, !command_keyed(app, new_one), "nor behind the palette")
 	testing.expect(t, command_keyed(app, help), "a window command works over the palette")
 	ui.palette_close(&app.palette.pal)
-	ui.view_open(vs, HELP_VIEW, app)
+	help_open(app)
 	testing.expect(t, command_keyed(app, help))
-	ui.view_close(vs, HELP_VIEW)
+	ui.shortcuts_sheet_close(&app.palette.sheet)
 	// (the composer's chooser is a palette: its letters search, a window command works over it)
 	ui.palette_open(&app.palette.chooser)
 	testing.expect(t, !command_keyed(app, new_one), "nor behind the chooser")
@@ -1015,7 +1015,7 @@ commands_asked_together_all_run :: proc(t: ^testing.T) {
 	command_run(app, command_find("view.sidebar"))
 	command_run(app, command_find("app.help"))
 	commands_apply(app)
-	testing.expect(t, !ui.view_is_open(&app.program_views, SIDEBAR_VIEW) && ui.view_is_open(&app.program_views, HELP_VIEW))
+	testing.expect(t, !ui.view_is_open(&app.program_views, SIDEBAR_VIEW) && ui.shortcuts_sheet_is_open(&app.palette.sheet))
 	testing.expect_value(t, len(app.cx.commands_due), 0)
 }
 

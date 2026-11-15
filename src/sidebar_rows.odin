@@ -27,12 +27,12 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	if d.selected {
 		draw.rect(dc, r, chosen_ground())
 	} else if b.hot_t > FADE_VISIBLE {
-		draw.rect(dc, r, ui.with_alpha(themed("text"), ITEM_HOVER_TINT * b.hot_t))
+		draw.rect(dc, r, ui.with_alpha(ui.theme_color("text"), ITEM_HOVER_TINT * b.hot_t))
 	}
 }
 
 sidebar :: proc(app: ^App, em: f32) {
-	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = themed("bar background"), radius = 0})   // (square: its rounded corner notched the bar's edge; as wide as its view)
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = ui.theme_color("bar background"), radius = 0})   // (square: its rounded corner notched the bar's edge; as wide as its view)
 	if ui.column(flags = {.Draw_Background}, id = "###sidebar") {
 		ui.spacer(ui.px(em * 0.5))
 		server_tabs(app, em)
@@ -55,7 +55,7 @@ sidebar :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 			if ui.well("###search_well", .X) {
 				ui.spacer(ui.px(em * 0.5))
-				glyph(lucide.SEARCH, themed("faint text"), math.round(em * ICON_SMALL))
+				glyph(lucide.SEARCH, ui.theme_color("faint text"), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 					ui.line_edit("###search", &app.sidebar.search, {placeholder = i18n.tr("Search sessions"), clearable = true})
@@ -145,20 +145,20 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 	}
 	if ui.parent(hdr) {
 		ui.spacer(ui.px(em * 0.8))
-		glyph(folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, themed("faint text"), math.round(em * ICON_TINY), em * 0.9)
+		glyph(folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, ui.theme_color("faint text"), math.round(em * ICON_TINY), em * 0.9)
 		// the project's logo, else a folder
 		logo := len(gr.items) > 0 ? project_logo(app, app.sessions[gr.items[0]].project) : nil
 		if !logo_of(app, "###glogo", logo, math.round(em * 1.25)) { glyph(lucide.FOLDER, ui.hue(.Accent), math.round(em * ICON_REGULAR)) }
 		ui.spacer(ui.px(em * 0.35))
 		name := gr.dir != "" ? base_name(gr.dir) : i18n.tr("(no folder)")
-		text("n", strings.to_upper(name, context.temp_allocator), hs.hovering ? themed("text") : themed("weak text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+		text("n", strings.to_upper(name, context.temp_allocator), hs.hovering ? ui.theme_color("text") : ui.theme_color("weak text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.px(em * 0.4))
-		text("c", fmt.tprintf("%d", len(gr.items)), themed("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+		text("c", fmt.tprintf("%d", len(gr.items)), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.fill())
 		// "+": always there (built only while the header was hovered, it vanished as soon as the pointer moved onto
 		// it: the header is no longer the box under the pointer), shown while the header is hot (Hot_Within keeps it
 		// hot over its button)
-		plus_col := hdr.hot_t > FADE_VISIBLE ? themed("weak text") : Color{0, 0, 0, 0.001}
+		plus_col := hdr.hot_t > FADE_VISIBLE ? ui.theme_color("weak text") : Color{0, 0, 0, 0.001}
 		ui.next({width = ui.px(math.round(em * 1.5)), height = ui.px(math.round(em * 1.5)), fg = plus_col})
 		if ui.button("gadd", icon = lucide.PLUS).clicked {
 			new_session(app)
@@ -232,7 +232,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				if busy { st = .Running }
 				state_mark("###st", st, size = em * 0.75)
 				ui.spacer(ui.px(em * 0.3))
-				text("ag", s.agent, themed("faint text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+				text("ag", s.agent, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 				ui.spacer(ui.px(em * 0.35))
 			} else if session_waits(app, s.id) {   // (a run that cannot go on without the person)
 				session_lamp("###waits", LAMP_WAITS, em)
@@ -250,11 +250,11 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			}
 			title := s.title != "" ? s.title : i18n.tr("Untitled")
 			// a sub-agent: lit while it runs, dimmed once it is done
-			tcol := themed("soft text")
-			if depth > 0 { tcol = busy ? themed("text") : themed("weak text") }
-			ground := selected ? chosen_ground() : themed("bar background")
-			if selected { tcol = ui.readable(themed("bright text"), ground, READABLE_TEXT) }
-			quiet := selected ? ui.readable(themed("weak text"), ground, READABLE_QUIET) : themed("faint text")   // (the folder, the age)
+			tcol := ui.theme_color("soft text")
+			if depth > 0 { tcol = busy ? ui.theme_color("text") : ui.theme_color("weak text") }
+			ground := selected ? chosen_ground() : ui.theme_color("bar background")
+			if selected { tcol = ui.readable(ui.theme_color("bright text"), ground, READABLE_TEXT) }
+			quiet := selected ? ui.readable(ui.theme_color("weak text"), ground, READABLE_QUIET) : ui.theme_color("faint text")   // (the folder, the age)
 			title_style := ui.Style_Mod{font_size = math.round(em * (depth > 0 ? FS_NOTE : FS_LABEL))}
 			if project {
 				ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
@@ -295,7 +295,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 				if ui.row(.Center, id = fmt.tprintf("###more_%s", s.id)) {
 					ui.spacer(ui.px(em * 2.6))
-					text("m", fmt.tprintf(i18n.tr(len(kids) - LIMIT, "… %d more: open the session and use its sub-agents menu", "… %d more: open the session and use its sub-agents menu"), len(kids) - LIMIT), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
+					text("m", fmt.tprintf(i18n.tr(len(kids) - LIMIT, "… %d more: open the session and use its sub-agents menu", "… %d more: open the session and use its sub-agents menu"), len(kids) - LIMIT), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
 				}
 				break
 			}

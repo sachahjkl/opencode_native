@@ -23,7 +23,7 @@ caption_title :: proc(id, title, note: string, em: f32, color := Color{}) {
 		return
 	}
 	words := note != "" ? fmt.tprintf("%s  %s", title, note) : title
-	text(id, words, themed("faint text"), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+	text(id, words, ui.theme_color("faint text"), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 }
 
 MONO_WELL_MAX_BYTES :: 20000   // of a tool's text, whatever the lines allow
@@ -114,7 +114,7 @@ mono_well :: proc(id: string, s: string, em: f32, max_lines: int, color := Color
 mono_text :: proc(body: string, extra: int, em: f32, color := Color{}, kept: ^Link_Runs = nil, kept_in := mem.Allocator{}) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###r") {
-		style := ui.Rich_Style{font = the_app.mono, color = color.a > 0 ? color : themed("soft text")}
+		style := ui.Rich_Style{font = the_app.mono, color = color.a > 0 ? color : ui.theme_color("soft text")}
 		runs: []ui.Rich_Run
 		if kept != nil {
 			runs = link_runs(kept, body, style, kept_in)
@@ -129,7 +129,7 @@ mono_text :: proc(body: string, extra: int, em: f32, color := Color{}, kept: ^Li
 	if extra > 0 {
 		ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###more") {
-			text("m", fmt.tprintf(i18n.tr(extra, "… %d more lines", "… %d more lines"), extra), themed("faint text"), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
+			text("m", fmt.tprintf(i18n.tr(extra, "… %d more lines", "… %d more lines"), extra), ui.theme_color("faint text"), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
 		}
 	}
 }

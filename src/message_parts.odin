@@ -45,7 +45,7 @@ tool_icon :: proc(name: string) -> string {
 
 status_color :: proc(s: Tool_Status) -> Color {
 	switch s {
-	case .Pending, .Unknown: return themed("faint text")
+	case .Pending, .Unknown: return ui.theme_color("faint text")
 	case .Running: return ui.hue(.Yellow)
 	case .Done:    return ui.hue(.Green)
 	case .Error:   return ui.hue(.Red)
@@ -113,11 +113,11 @@ tool_part :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string, em: f32, a
 		if ui.parent(hb) {
 			ui.spacer(ui.px(em * 0.5))
 			failed := p.status == .Error
-			glyph(tool_icon(p.tool_name), failed ? ui.hue(.Red) : themed("faint text"), math.round(em * ICON_REGULAR))
+			glyph(tool_icon(p.tool_name), failed ? ui.hue(.Red) : ui.theme_color("faint text"), math.round(em * ICON_REGULAR))
 			ui.spacer(ui.px(em * 0.35))
-			text("nm", p.tool_name != "" ? p.tool_name : "tool", failed ? themed("bad text") : running ? themed("text") : themed("weak text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
+			text("nm", p.tool_name != "" ? p.tool_name : "tool", failed ? ui.theme_color("bad text") : running ? ui.theme_color("text") : ui.theme_color("weak text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
 			ui.spacer(ui.px(em * 0.6))
-			text("sj", p.subject, themed("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
+			text("sj", p.subject, ui.theme_color("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 			ui.spacer(ui.px(em * 0.4))
 			if edits && p.added + p.removed > 0 {
 				st := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}
@@ -128,13 +128,13 @@ tool_part :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string, em: f32, a
 			// how long it took, or has taken so far (it counts while it runs: animate above)
 			// (and when, under the pointer: its start and its end. A click on it is the header's)
 			if took := tool_elapsed(p, running, now_epoch_ms()); took != "" {
-				ui.next({width = ui.text_size(0), height = ui.pct(1), fg = running ? themed("soft text") : themed("faint text"), font = app.mono, font_size = math.round(em * FS_CAPTION), text_pad = 0})
+				ui.next({width = ui.text_size(0), height = ui.pct(1), fg = running ? ui.theme_color("soft text") : ui.theme_color("faint text"), font = app.mono, font_size = math.round(em * FS_CAPTION), text_pad = 0})
 				tk := ui.signal(ui.build_box({.Draw_Text, .Clickable}, fmt.tprintf("%s###tk", took)))
 				if tk.clicked { part_toggle(app, pane, p.tool_id != "" ? p.tool_id : pid, hb) }
 				if ui.hovered_for(tk) { if ui.tooltip() { ui.tooltip_text(tool_when(p, running, now_epoch_ms(), app.prefs.clock24)) } }
 				ui.spacer(ui.px(em * 0.5))
 			}
-			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, themed("faint text"), math.round(em * ICON_TINY))
+			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, ui.theme_color("faint text"), math.round(em * ICON_TINY))
 			ui.spacer(ui.px(em * 0.6))
 		}
 		// a shell call: it can go to the background while it holds the turn, and says so once it is there
@@ -144,7 +144,7 @@ tool_part :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string, em: f32, a
 				ui.spacer(ui.px(em * 0.5))
 				if bg {
 					if bg_running { session_lamp("###bgl", LAMP_BACKGROUND, em); ui.spacer(ui.px(em * 0.35)) }
-					text("bgt", bg_running ? i18n.tr("in background") : i18n.tr("finished in background"), themed(bg_running ? "soft text" : "faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					text("bgt", bg_running ? i18n.tr("in background") : i18n.tr("finished in background"), ui.theme_color(bg_running ? "soft text" : "faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				} else if hint_action("###bgpush", i18n.tr("push to background"), em, app.mono, lucide.SEND_TO_BACK) {
 					background_session(app, pane.chat.id)
 				}
@@ -169,7 +169,7 @@ tool_part :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string, em: f32, a
 					} else if show_diff {
 						diff_view(app, "###diff", p.diff, p.patch, em, DIFF_FOLDED_LINES, tool_diff_title(p))
 					} else if show_error {
-						mono_well("###output", p.output, em, TOOL_ERROR_LINES_FOLDED, themed("bad text"), &p.output_well, pane.chat.alloc)
+						mono_well("###output", p.output, em, TOOL_ERROR_LINES_FOLDED, ui.theme_color("bad text"), &p.output_well, pane.chat.alloc)
 					}
 					if len(p.images) > 0 {
 						ui.spacer(ui.px(em * 0.5))
@@ -196,22 +196,22 @@ reasoning_part :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string, em: f
 	if hs.clicked { part_toggle(app, pane, pid, hb) }
 	if ui.parent(hb) {
 		ui.spacer(ui.px(em * 0.2))
-		glyph(lucide.LIGHTBULB, themed("faint text"), math.round(em * ICON_REGULAR))
+		glyph(lucide.LIGHTBULB, ui.theme_color("faint text"), math.round(em * ICON_REGULAR))
 		ui.spacer(ui.px(em * 0.3))
 		// (a run over says no more about this part: it thought)
-		text("t", p.done || !pane.chat.busy ? i18n.tr("Thought") : i18n.tr("Thinking…"), themed("weak text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
+		text("t", p.done || !pane.chat.busy ? i18n.tr("Thought") : i18n.tr("Thinking…"), ui.theme_color("weak text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		ui.spacer(ui.px(em * 0.5))
 		if !open {
-			text("pv", preview_text(string(p.text[:])), themed("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
+			text("pv", preview_text(string(p.text[:])), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		} else { ui.spacer(ui.fill()) }
-		glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, themed("faint text"), math.round(em * ICON_TINY))
+		glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, ui.theme_color("faint text"), math.round(em * ICON_TINY))
 		ui.spacer(ui.px(em * 0.4))
 	}
 	if open {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
-		if rail_row(fmt.tprintf("###rb_%s", pid), ui.with_alpha(themed("weak text"), 0.4)) {
+		if rail_row(fmt.tprintf("###rb_%s", pid), ui.with_alpha(ui.theme_color("weak text"), 0.4)) {
 			ui.spacer(ui.px(em * 0.9))
-			runs := link_runs(&p.text_runs, string(p.text[:]), {italic = true, color = themed("weak text")}, pane.chat.alloc)
+			runs := link_runs(&p.text_runs, string(p.text[:]), {italic = true, color = ui.theme_color("weak text")}, pane.chat.alloc)
 			ui.next({width = ui.fill(), font_size = math.round(em * FS_LABEL), flags = {.Selectable}})
 			link_clicked(ui.rich_paragraph("###t", runs))
 		}

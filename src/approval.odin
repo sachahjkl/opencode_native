@@ -84,7 +84,7 @@ approval_button :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	mode := approval_shown(app, pane)
 	color: Color
 	switch mode {
-	case .Configured:  color = themed("weak text")
+	case .Configured:  color = ui.theme_color("weak text")
 	case .Allow_Edits: color = ui.hue(.Blue)
 	case .Allow_All:   color = ui.hue(.Yellow)   // (nothing is asked: it says so)
 	case .Ask_All:     color = ui.hue(.Green)
