@@ -3,6 +3,10 @@
 package ocn
 
 import desktop "gt:desktop"
+import "gt:platform"
+
+// The kinds of folders the earlier layout's move takes: all (the install was apart, in Programs).
+FOLDERS_MOVED :: platform.USER_DIRS_MOVED
 
 // (Windows uses the executable's own icon)
 desktop_icons :: proc() -> []desktop.Icon { return nil }

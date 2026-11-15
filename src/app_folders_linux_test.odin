@@ -30,8 +30,13 @@ the_folders_are_the_vendors :: proc(t: ^testing.T) {
 	old_logs := pjoin({root, "XDG_STATE_HOME", APP_FOLDER_BEFORE, "logs"})
 	testing.expect(t, os.make_directory_all(old_config) == nil && os.make_directory_all(old_logs) == nil)
 	testing.expect(t, os.write_entire_file(pjoin({old_config, "servers.txt"}), "s = 1\n") == nil)
+	// (an install of the earlier Setup, in the earlier data folder: its menu entry names it, so it stays)
+	old_install := pjoin({root, "XDG_DATA_HOME", APP_FOLDER_BEFORE})
+	testing.expect(t, os.make_directory_all(old_install) == nil)
+	testing.expect(t, os.write_entire_file(pjoin({old_install, "opencode-native"}), "#!/bin/sh\n") == nil)
 
 	folders_move()
+	testing.expect(t, os.exists(pjoin({old_install, "opencode-native"})), "the earlier install stayed where its menu entry names it")
 	testing.expect_value(t, config_dir(), pjoin({root, "XDG_CONFIG_HOME", "FromentSoftware", "OpencodeNative"}))
 	data, err := os.read_entire_file(servers_path(), context.temp_allocator)
 	testing.expect(t, err == nil && string(data) == "s = 1\n", "the servers came along")

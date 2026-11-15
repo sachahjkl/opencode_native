@@ -116,7 +116,7 @@ set_app_id :: proc() {
 // APP_FOLDER (the toolkit's move), so the person's settings, servers, drafts, licence and logs come along. A failure is
 // said on the standard error: the log is not open yet.
 folders_move :: proc() {
-	if _, why := platform.user_dirs_move(APP_FOLDER_BEFORE, APP_FOLDER); why != "" { say("opencode-native: %s\n", why) }
+	if _, why := platform.user_dirs_move(APP_FOLDER_BEFORE, APP_FOLDER, FOLDERS_MOVED); why != "" { say("opencode-native: %s\n", why) }
 }
 
 // A path made of `parts` (temp memory).

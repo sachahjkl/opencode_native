@@ -2,6 +2,11 @@
 package ocn
 
 import desktop "gt:desktop"
+import "gt:platform"
+
+// The kinds of folders the earlier layout's move takes: not the data folder, where the earlier Setup installed the
+// program (~/.local/share/opencode-native) and which its menu entry names; this program keeps nothing else there.
+FOLDERS_MOVED :: platform.User_Dirs{.Config, .State, .Cache}
 
 @(private = "file")
 ICON_SET := [?]desktop.Icon{{256, #load("../assets/logo_256.png")}}

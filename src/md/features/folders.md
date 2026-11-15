@@ -29,6 +29,5 @@ what it chose on top of it.
 ## Subtle points
 
 - On Linux, before toolkit 0.282.0, the install folder was `~/.local/share/opencode-native`, the data folder of the
-  earlier layout. `user_dirs_move` moves every kind but Runtime, so such an install moves with the data, into
-  `~/.local/share/FromentSoftware/OpencodeNative`: its menu entry then points to a missing program until the person
-  installs again. The toolkit's move takes no list of kinds.
+  earlier layout. The move leaves the data folder out (`FOLDERS_MOVED`, `user_dirs_move`'s `kinds`): moved, the install
+  would leave its menu entry and its updater on a path that is gone. This program keeps nothing else there.
