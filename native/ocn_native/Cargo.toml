@@ -1,6 +1,5 @@
-# HTTP for the opencode client: requests and the server-sent event stream, over ureq (HTTP/1.1, blocking, called from
-# the client's worker threads), TLS by rustls with the ring provider, certificates checked against the operating
-# system's trust store (rustls-platform-verifier). Exposed as C functions (src/lib.rs), used by src/http.odin.
+# The client's native library: what the toolkit has no Odin equivalent for (the toolkit's Rust crates linked in, and the
+# Preview panel's WebView2 on Windows), linked by src/native.odin. HTTP is the toolkit's gt:http, in Odin.
 # Versions are pinned here and by ../Cargo.lock; ocntools build builds with --locked.
 [package]
 name = "ocn_native"
@@ -12,13 +11,6 @@ license = "MIT"
 [lib]
 crate-type = ["staticlib"]
 path = "src/lib.rs"
-
-[dependencies]
-ureq = { version = "=3.5.0", default-features = false, features = ["rustls", "platform-verifier", "gzip"] }
-base64 = "=0.22.1"
-
-# the agents' browser tools: a WebSocket to the server (client-mcp), by the same TLS as the rest
-tungstenite = { version = "=0.28.0", default-features = false, features = ["handshake", "rustls-tls-native-roots"] }
 
 # Windows: the Preview panel, a WebView2 child window (the Edge runtime is the system's; its loader is linked in)
 [target.'cfg(windows)'.dependencies]

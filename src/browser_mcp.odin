@@ -137,17 +137,17 @@ browser_link_knows :: proc(l: ^Browser_Link) -> bool {
 }
 
 @(private = "file")
-browser_link_over :: proc(l: ^Browser_Link) -> bool { return sync.atomic_load(&l.stop) || sync.atomic_load(&l.conn.stop) }
+browser_link_over :: proc(l: ^Browser_Link) -> bool { return sync.atomic_load(&l.stop) || conn_stopped(l.conn) }
 
 // What waits goes on the socket it was for; what was for another socket has nowhere to go.
 @(private = "file")
-browser_link_flush :: proc(l: ^Browser_Link, ws: rawptr, socket: u64) {
+browser_link_flush :: proc(l: ^Browser_Link, ws: ^tk_http.Socket, socket: u64) {
 	sync.lock(&l.lock)
 	batch := l.outbox
 	l.outbox = {}
 	sync.unlock(&l.lock)
 	for o in batch {
-		if o.socket == socket { _ = l.ws.send(ws, raw_data(o.text), len(o.text)) }
+		if o.socket == socket { _ = l.ws.send(ws, transmute([]u8)o.text) }
 		delete(o.text)
 	}
 	delete(batch)
@@ -163,7 +163,7 @@ browser_thread :: proc(l: ^Browser_Link) {
 			time.sleep(BROWSER_DIR_WAIT_MS * time.Millisecond)
 		}
 		path, moved := browser_link_target(l)
-		ws := l.ws.open(l.conn.http.client, raw_data(path), len(path))
+		ws := l.ws.open(&l.conn.http, path)
 		delete(path)
 		free_all(context.temp_allocator)
 		if ws == nil {
@@ -173,15 +173,14 @@ browser_thread :: proc(l: ^Browser_Link) {
 			}
 			continue
 		}
-		l.ws.read_timeout(ws, BROWSER_READ_MS)
 		l.serial += 1
 		socket := l.serial
 		sync.atomic_store(&l.socket, socket)
 		sync.atomic_store(&l.state, Browser_Link_State.Open)
 		pump := Browser_Pump{l, socket, moved}
-		ws_pump(l.ws, ws, &pump,
+		ws_pump(l.ws, ws, BROWSER_READ_MS * time.Millisecond, &pump,
 			proc(p: ^Browser_Pump) -> bool { return !browser_link_over(p.link) && !browser_link_moved(p.link, p.moved) },
-			proc(p: ^Browser_Pump, ws: rawptr) { browser_link_flush(p.link, ws, p.socket) },
+			proc(p: ^Browser_Pump, ws: ^tk_http.Socket) { browser_link_flush(p.link, ws, p.socket) },
 			proc(p: ^Browser_Pump, text: string) {
 				m := new(Mcp_Msg)
 				m^ = {{p.link, p.socket}, strings.clone(text)}
@@ -190,7 +189,7 @@ browser_thread :: proc(l: ^Browser_Link) {
 		sync.atomic_store(&l.socket, 0)   // (what comes now waits for the next one)
 		browser_link_flush(l, ws, socket)   // (what the page answered as the folder changed: the agent is told, or it does it again)
 		sync.atomic_store(&l.state, Browser_Link_State.Waiting)
-		l.ws.free(ws)
+		l.ws.close(ws)
 		m := new(Mcp_Msg)
 		m^ = {to = {l, socket}}
 		if !ui.post(&app.state, on_mcp_closed, m) { free(m) }

@@ -225,7 +225,7 @@ reconnects :: proc(p: ^Proxy, dt: ^cdp.Client, was: int) -> bool {
 }
 
 // A shell open, the link cut, then gone mute and given up on. A silence past its limit ends in that same failure of a read
-// (native/ocn_native: a_silent_stream_ends): the limit itself is tested there, its effect here.
+// (gt:http's stream tests; src/http_test.odin: the stream asks for STREAM_SILENCE): the limit itself is tested there, its effect here.
 @(private = "file")
 scenario_link :: proc(l: ^Live) {
 	fmt.println("=== the link")

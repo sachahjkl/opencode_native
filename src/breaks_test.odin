@@ -8,6 +8,8 @@ import "base:runtime"
 import "core:fmt"
 import "core:strings"
 import "core:testing"
+import "core:time"
+import tk_http "gt:http"
 import "gt:platform"
 import "gt:term"
 import "gt:ui"
@@ -192,27 +194,24 @@ leaving_a_server_closes_what_acts_on_its_sessions :: proc(t: ^testing.T) {
 // The browser's last answer before a change of folder: the link's thread, on a socket of the test's
 
 @(private = "file")
-Fake_Socket :: struct { app: ^App, l: ^Browser_Link, move: bool, reads, opens: int, sent: [dynamic]string, ctx: runtime.Context }
+Fake_Socket :: struct { app: ^App, l: ^Browser_Link, move: bool, reads, opens: int, sent: [dynamic]string }
 
 @(thread_local, private = "file") fake: Fake_Socket
 
 @(private = "file")
 FAKE_SOCKET :: Ws_Ops{
-	open = proc "c" (c: rawptr, path: [^]u8, n: uint) -> rawptr {
+	open = proc(h: ^Http, path: string) -> ^tk_http.Socket {
 		fake.opens += 1
 		if fake.opens > 1 { fake.l.stop = true; return nil }
-		return rawptr(uintptr(1))
+		return (^tk_http.Socket)(uintptr(1))
 	},
-	read_timeout = proc "c" (w: rawptr, ms: u32) {},
-	free = proc "c" (w: rawptr) {},
-	send = proc "c" (w: rawptr, data: [^]u8, n: uint) -> i32 {
-		context = fake.ctx
-		append(&fake.sent, strings.clone(string(data[:n])))
-		return 0
+	close = proc(s: ^tk_http.Socket) {},
+	send = proc(s: ^tk_http.Socket, data: []u8) -> tk_http.Error {
+		append(&fake.sent, strings.clone(string(data)))
+		return .None
 	},
 	// All that happens on the interface's thread during one read.
-	read = proc "c" (w: rawptr, out: ^Ocn_Buf) -> i32 {
-		context = fake.ctx
+	recv = proc(s: ^tk_http.Socket, wait: time.Duration) -> (tk_http.Message, tk_http.Error) {
 		app, l := fake.app, fake.l
 		pane := main_pane(app)
 		fake.reads += 1
@@ -229,7 +228,7 @@ FAKE_SOCKET :: Ws_Ops{
 		case:
 			l.stop = true
 		}
-		return 0
+		return {}, .Timed_Out
 	},
 }
 
@@ -252,7 +251,7 @@ answers_sent :: proc(move: bool) -> int {
 	l.app, l.ws, l.conn = app, FAKE_SOCKET, app.conn
 	l.dir = strings.clone("A")
 	app.conn.browser = l
-	fake = {app = app, l = l, move = move, ctx = context}
+	fake = {app = app, l = l, move = move}
 	conn_hold(app.conn)   // (as browser_start does: the thread lets go at its end)
 	browser_thread(l)
 	n := 0

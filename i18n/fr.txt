@@ -1546,9 +1546,6 @@ fr Ligne de commande
 en The password of %s could not be protected: the list of servers was not saved
 fr Impossible de protéger le mot de passe de %s : la liste des serveurs n'a pas été enregistrée
 
-en No HTTP client for %s
-fr Pas de client HTTP pour %s
-
 en connecting
 fr connexion
 

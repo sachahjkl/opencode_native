@@ -323,7 +323,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		// a tool of no known kind, open: its input in one well, the long value under its key
 		app.prefs.expand_tools = true
 		session.frames(s, 6)
-		testing.expect(t, session.find(s, "iv0") != nil && session.find(s, "kv1") != nil, "the input's long value and its short one")
+		testing.expect(t, session.find(s, "iv0") != nil && session.find(s, "sr_kv1") != nil, "the input's long value and its short one")
 		app.prefs.expand_tools = false
 		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.frames(s, 6)

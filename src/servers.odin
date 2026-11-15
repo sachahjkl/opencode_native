@@ -303,13 +303,7 @@ server_connect :: proc(app: ^App, i: int, all := false) {
 server_connect_now :: proc(app: ^App, i: int) {
 	if i < 0 || i >= len(app.servers) { return }
 	s := app.servers[i]
-	h: Http
-	if !http_init(&h, s.url, "opencode", s.password) {
-		ui.announce(&app.announcer, .Bad, fmt.tprintf(i18n.tr("No HTTP client for %s"), s.url))
-		delete(h.base)
-		return
-	}
-	c := conn_make(app, h, HTTP_TRANSPORT, CONN_WORKERS)
+	c := conn_make(app, http_init(s.url, "opencode", s.password), HTTP_TRANSPORT, CONN_WORKERS)
 	if old := app.conn; old != nil {
 		conn_stop(old)
 		server_forget(app)   // (app.conn is still that one: what must be undone there is asked of it)
