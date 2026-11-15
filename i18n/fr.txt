@@ -2581,9 +2581,6 @@ fr Stable
 en Beta
 fr Bêta
 
-en Restart it by hand: it could not be started
-fr Redémarrez-le vous-même : il n'a pas pu être lancé
-
 en Command palette…
 fr Palette de commandes…
 
