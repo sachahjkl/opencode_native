@@ -2204,8 +2204,18 @@ the_header_shows_the_session_id_and_copies_it :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		_, s := bench_app(t)
-		session.wait_box(s, "session_id")
-		session.wait_text(s, BENCH_CHAT_ID)   // (the id shown)
+		session.move(s, {1, 1})
+		session.frames(s, 2)
+		testing.expect(t, session.find(s, "session_id") == nil, "not there while the pointer is away")
+		// the pointer on the header: muted, right after the title
+		hdr := session.get(s, "hdr")
+		session.move(s, {hdr.rect.max.x - 40, (hdr.rect.min.y + hdr.rect.max.y) * 0.5})
+		b := session.wait_box(s, "session_id")
+		title := session.get(s, "title")
+		testing.expectf(t, b.rect.min.x >= title.rect.max.x && b.rect.min.x - title.rect.max.x < title.font_size * 1.5, "beside the title: %v, %v", b.rect, title.rect)
+		mid := (title.rect.min.y + title.rect.max.y) * 0.5
+		testing.expectf(t, b.rect.min.y < mid && b.rect.max.y > mid, "on the title's line: %v, %v", b.rect, title.rect)
+		session.wait_text(s, BENCH_CHAT_ID)
 		session.click(s, "session_id")
 		session.frames(s, 2)
 		testing.expect_value(t, session.clipboard(s), BENCH_CHAT_ID)

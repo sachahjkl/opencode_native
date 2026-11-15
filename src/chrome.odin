@@ -189,13 +189,17 @@ base_name :: proc(path: string) -> string {
 	return p
 }
 
-// The session's id at the end of the header's folder line, weak: a click copies it.
+// The session's id beside its title, muted, while the pointer is on the header: a click copies it.
 @(private = "file")
 session_id_copy_hint :: proc(app: ^App, id: string, em: f32) -> bool {
-	sig: ui.Signal
-	if ui.style(ui.Style_Mod{font_size = math.round(em * FS_CAPTION), font = app.mono}) {
-		sig = ui.button("###session_id", id, lucide.HASH, {face = .Link})
+	// (muted: found when looked for, never read in passing; brighter under the pointer, which says it is a target)
+	ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .X, cross = .Center, cursor = .Hand})
+	b := ui.build_box({.Clickable}, "###session_id")
+	sig := ui.signal(b)
+	if ui.parent(b) {
+		text("t", id, sig.hovering ? hex(HEX_WEAK) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 	}
+	ui.a11y_default(b, {role = .Button, name = i18n.tr("Copy the session ID")})
 	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Copy the session ID")) } }
 	return sig.clicked
 }
@@ -252,19 +256,18 @@ chat_header :: proc(app: ^App, em: f32) {
 				tb := ui.build_box(s != nil ? {.Clickable} : {}, "###title_b")
 				if s != nil && ui.signal(tb).double_clicked { rename_inline(app, s.id, .Header) }
 				if ui.parent(tb) {
-					text("title", title != "" ? title : i18n.tr("Untitled"), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_HEADING), height = ui.px(em * 1.5)}, ui.fill())
+					// (as wide as its words, shrinking first: the id goes right after it)
+					text("title", title != "" ? title : i18n.tr("Untitled"), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_HEADING), height = ui.px(em * 1.5)}, ui.text_size(0, 0))
+					// (the session's id, as opencode 2.3.0 lets it be found: muted beside the title, while the pointer is on the
+					// header; a click copies it. Never there otherwise: it is not something one reads)
+					if s != nil && ui.pointer_on(b) {
+						ui.spacer(ui.px(em * 0.6))
+						if session_id_copy_hint(app, s.id, em) { session_id_copy(app, s.id) }
+					}
 				}
 			}
 			dir := s != nil ? s.directory : app.chat.new_dir
-			ui.next({width = ui.fill(), height = ui.px(em * 1.2), axis = .X, cross = .Center})
-			if ui.row(.Center, id = "###dir_row") {
-				text("dir", dir != "" ? dir : i18n.tr("default folder"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2), flags = dir != "" ? {.Selectable} : {}}, ui.fill())
-				// (the session's id, as opencode 2.3.0 shows it: a click copies it)
-				if s != nil {
-					ui.spacer(ui.px(em * 0.8))
-					if session_id_copy_hint(app, s.id, em) { session_id_copy(app, s.id) }
-				}
-			}
+			text("dir", dir != "" ? dir : i18n.tr("default folder"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.2), flags = dir != "" ? {.Selectable} : {}}, ui.fill())
 			ui.spacer(ui.fill())
 		}
 		c := &app.chat
