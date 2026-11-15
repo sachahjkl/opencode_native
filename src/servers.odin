@@ -8,8 +8,11 @@ import tasks "gt:tasks"
 import "core:math"
 import "core:mem/virtual"
 import "core:strings"
+import "core:sync"
 import "core:thread"
+import "core:time"
 import store "gt:store"
+import secrets "gt:secrets"
 import "gt:draw"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -19,36 +22,44 @@ import i18n "gt:i18n"
 Server :: struct {
 	name:     string,
 	url:      string,   // "http(s)://host[:port]"
-	password: string,   // Basic authentication as "opencode" ("" : none)
-	stored:   string,   // its field in the file when it could not be opened (another account, a locked keyring): kept as it is
+	password: string,   // Basic authentication as "opencode" ("" : none, or its field not opened yet)
+	field:    string,   // what the file holds for the password ("" : none): a forget must name the item the field names
 	local:    bool,     // the desktop app's (found again at every start, not saved)
 	argv:     bool,     // given by --url (not saved)
 }
+
+// The `app` of every gt:secrets call: the attribute that keeps this program's items apart in a keyring.
+SECRETS_APP :: "opencode-native"
 
 servers_path :: proc() -> string {
 	return pjoin({config_dir(), "servers.txt"})
 }
 
-// A field of the file as a password: what password_seal wrote, or a password in clear from an older version.
-password_from_field :: proc(name, field: string) -> (password, stored: string, clear_text: bool) {
-	if field == "" { return "", "", false }
-	if p, is_sealed, ok := password_open(name, field); is_sealed {
-		return p, ok ? "" : field, false
+// A field of the file as a password (temp memory): what secrets.seal wrote, or a password in clear where no store took it.
+// A sealed field that cannot be opened here gives no password: the field stays, and the next connection asks again.
+// Blocks on the system: a chore's.
+password_from_field :: proc(field: string) -> (password: string, clear_text: bool) {
+	if field == "" { return "", false }
+	p, opened := secrets.open(SECRETS_APP, field, context.temp_allocator)
+	switch opened {
+	case .Opened:     return p, false
+	case .Not_Sealed: return field, true
+	case .Refused:    return "", false
 	}
-	return field, "", true
+	return "", false
 }
 
 // The list at start, as far as it is known without reading anything: this computer's server, the saved ones (a line
 // "name<TAB>url<TAB>protected password"), then --url's. Where this computer's server runs (its files), --url's password and the
 // saved passwords (the keyring) are read on a chore when one of them is connected to (server_connect): until then a saved
-// server's field waits in `stored`, as one the keyring would not open.
+// server has its field and no password, as one the keyring would not open.
 servers_init :: proc(app: ^App) {
 	argv := app.cli.url != ""
 	append(&app.servers, Server{name = strings.clone(i18n.later("This computer")), local = true})
 	for e in store.list(&app.stores.servers) {   // (read at the start, stores_open: the name, then "url<TAB>field")
 		if strings.trim_space(e.key) == "" { continue }
 		url, _, field := strings.partition(e.value, "\t")
-		append(&app.servers, Server{name = strings.clone(e.key), url = strings.clone(url), stored = strings.clone(field)})
+		append(&app.servers, Server{name = strings.clone(e.key), url = strings.clone(url), field = strings.clone(field)})
 	}
 	app.server = 0
 	if argv {
@@ -129,17 +140,16 @@ reopen_clear :: proc(app: ^App) {
 }
 
 // The whole list at once to its store, whose worker writes it beside the file, then moves it over, readable by the user only
-// (stores_open): a failure leaves the file as it was, no password lost. The passwords are protected on a chore (the keyring is a call
-// over D-Bus, or DPAPI), the list handed over when that is done. `forget`: a keyring item that goes once every password is safe (a
-// server renamed); `forget_first`: one that goes whatever happens (a server removed). The chores keep their order: two saves land as
-// they were asked.
-servers_save :: proc(app: ^App, forget := "", forget_first := "") {
+// (stores_open). The passwords are sealed on a chore (gt:secrets: a call over D-Bus, or DPAPI), the list handed over when that is done;
+// where no store takes one, it stays in clear and the dialog says so. `forget`: the field of a server renamed or removed, whose item goes
+// once every password is sealed (server-passwords.md). The chores keep their order: two saves land as they were asked.
+servers_save :: proc(app: ^App, forget := "") {
 	job := new(Servers_Save)
 	job.app = app
-	job.forget, job.forget_first = strings.clone(forget), strings.clone(forget_first)
+	job.forget = strings.clone(forget)
 	for s in app.servers {
 		if s.local || s.argv { continue }
-		append(&job.servers, Server{name = strings.clone(s.name), url = strings.clone(s.url), password = strings.clone(s.password), stored = strings.clone(s.stored)})
+		append(&job.servers, Server{name = strings.clone(s.name), url = strings.clone(s.url), password = strings.clone(s.password), field = strings.clone(s.field)})
 	}
 	tasks.add(&app.cx.chores, servers_save_work, job)
 }
@@ -147,27 +157,33 @@ servers_save :: proc(app: ^App, forget := "", forget_first := "") {
 @(private = "file")
 Servers_Save :: struct {
 	app:      ^App,
-	servers:  [dynamic]Server,        // (copies, owned)
-	forget, forget_first: string,     // (owned)
-	failed:   string,                 // the server whose password could not be protected: nothing was saved (owned)
+	servers:  [dynamic]Server,        // (copies, owned; `field` becomes what is written)
+	forget:   string,                 // (owned)
+	in_clear: bool,                   // a password that no store took: written in clear
 	entries:  [dynamic]store.Entry,   // what goes to the store (owned)
 }
 
 @(private = "file")
 servers_save_work :: proc(data: rawptr) {
 	job := (^Servers_Save)(data)
-	if job.forget_first != "" { password_forget(job.forget_first) }
-	for s in job.servers {
-		field := s.stored
+	for &s in job.servers {
 		if s.password != "" {
-			f, ok := password_seal(s.name, s.password)
-			if !ok { job.failed = strings.clone(s.name); break }
-			field = f
+			field, sealed := secrets.seal(SECRETS_APP, s.name, s.password)
+			if sealed == .Unavailable { field = strings.clone(s.password); job.in_clear = true }
+			delete(s.field)
+			s.field = field
 		}
-		append(&job.entries, store.Entry{strings.clone(s.name), fmt.aprintf("%s\t%s", s.url, field)})
+		append(&job.entries, store.Entry{strings.clone(s.name), fmt.aprintf("%s\t%s", s.url, s.field)})
 	}
-	if job.failed == "" && job.forget != "" { password_forget(job.forget) }
+	if server_forget_after(job.forget, job.servers[:]) { secrets.forget(SECRETS_APP, job.forget) }
 	if !ui.post(&job.app.state, servers_saved, job) { servers_save_free(job) }
+}
+
+// Whether a save forgets `forget`: not when a field just written is the same one (Linux: the item a seal under that name just replaced).
+server_forget_after :: proc(forget: string, written: []Server) -> bool {
+	if forget == "" { return false }
+	for s in written { if s.field == forget { return false } }
+	return true
 }
 
 @(private = "file")
@@ -175,20 +191,26 @@ servers_saved :: proc(data: rawptr, word: u64) {
 	job := (^Servers_Save)(data)
 	defer servers_save_free(job)
 	app := job.app
-	if job.failed != "" {
-		ui.announce(&app.announcer, .Bad, fmt.tprintf(i18n.tr("The password of %s could not be protected: the list of servers was not saved"), label_safe(job.failed)))
-		return
-	}
 	store.replace(&app.stores.servers, job.entries[:])
 	app.servers_in_clear = false
+	app.passwords_in_clear = job.in_clear
+	// (by name and password: a server edited meanwhile keeps its own, which its own save writes)
+	for saved in job.servers {
+		if saved.password == "" { continue }   // (nothing sealed: its field was the server's own)
+		for &s in app.servers {
+			if s.local || s.argv || s.name != saved.name || s.password != saved.password || s.field == saved.field { continue }
+			delete(s.field)
+			s.field = strings.clone(saved.field)
+		}
+	}
 }
 
 @(private = "file")
 servers_save_free :: proc(job: ^Servers_Save) {
-	for s in job.servers { delete(s.name); delete(s.url); delete(s.password); delete(s.stored) }
+	for s in job.servers { delete(s.name); delete(s.url); delete(s.password); delete(s.field) }
 	for e in job.entries { delete(e.key); delete(e.value) }
 	delete(job.servers); delete(job.entries)
-	delete(job.forget); delete(job.forget_first); delete(job.failed)
+	delete(job.forget)
 	free(job)
 }
 
@@ -208,7 +230,7 @@ Servers_Read :: struct {
 
 // A saved server's field, and what it holds (all owned).
 @(private = "file")
-Field_Read :: struct { name, field, password, stored: string, clear_text: bool }
+Field_Read :: struct { name, field, password: string, clear_text: bool }
 
 @(private = "file")
 servers_read_work :: proc(data: rawptr) {
@@ -216,15 +238,15 @@ servers_read_work :: proc(data: rawptr) {
 	if job.local { job.local_cfg = discover_server() }
 	if job.argv { job.argv_cfg = discover_server(job.cli_url, job.cli_password) }
 	for &f in job.fields {
-		password, stored, clear_text := password_from_field(f.name, f.field)
-		f.password, f.stored, f.clear_text = strings.clone(password), strings.clone(stored), clear_text
+		password, clear_text := password_from_field(f.field)
+		f.password, f.clear_text = strings.clone(password), clear_text
 	}
 	if !ui.post(&job.app.state, servers_read_done, job) { servers_read_free(job) }
 }
 
 @(private = "file")
 servers_read_free :: proc(job: ^Servers_Read) {
-	for f in job.fields { delete(f.name); delete(f.field); delete(f.password); delete(f.stored) }
+	for f in job.fields { delete(f.name); delete(f.field); delete(f.password) }
 	delete(job.fields)
 	delete(job.cli_url); delete(job.cli_password)
 	delete(job.local_cfg.host); delete(job.local_cfg.password)
@@ -248,14 +270,13 @@ servers_read_done :: proc(data: rawptr, word: u64) {
 		case !s.local && !s.argv && s.password == "":
 			// (by its name and the field read: a server renamed or edited meanwhile keeps what it has now)
 			for f in job.fields {
-				if f.name != s.name || f.field != s.stored { continue }
-				delete(s.stored)
-				s.password, s.stored = strings.clone(f.password), strings.clone(f.stored)
+				if f.name != s.name || f.field != s.field || f.password == "" { continue }
+				s.password = strings.clone(f.password)
 				if f.clear_text { app.servers_in_clear = true }
 			}
 		}
 	}
-	if app.servers_in_clear { servers_save(app) }   // (an older version's password in clear: protected now)
+	if app.servers_in_clear { servers_save(app) }   // (a password in clear: sealed now, if a store takes it)
 	if job.seq == app.connect_seq { server_connect_now(app, job.index) }
 }
 
@@ -274,7 +295,7 @@ server_name :: proc(app: ^App) -> string { return app.server >= 0 && app.server 
 
 // Connects to server `i`: the last connection's threads are told to stop, everything read from it is dropped, the App lets go of it
 // (freed once what still uses it ended), and the new one's event stream loads everything when it connects (stream_up).
-// `all`: every saved password is read, not only this server's (the start: an older version's in clear are protected then).
+// `all`: every saved password is read, not only this server's (the start: those in clear are sealed then).
 server_connect :: proc(app: ^App, i: int, all := false) {
 	if i < 0 || i >= len(app.servers) { return }
 	app.connect_seq += 1
@@ -286,8 +307,8 @@ server_connect :: proc(app: ^App, i: int, all := false) {
 			job.argv = true
 			job.cli_url, job.cli_password = strings.clone(app.cli.url), strings.clone(app.cli.password)
 		}
-		if !s.local && !s.argv && s.password == "" && s.stored != "" && (all || k == i) {
-			append(&job.fields, Field_Read{name = strings.clone(s.name), field = strings.clone(s.stored)})
+		if !s.local && !s.argv && s.password == "" && s.field != "" && (all || k == i) {
+			append(&job.fields, Field_Read{name = strings.clone(s.name), field = strings.clone(s.field)})
 		}
 	}
 	if !job.local && !job.argv && len(job.fields) == 0 {
@@ -642,13 +663,13 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 		if save && valid {
 			s := Server{name = strings.clone(name), url = strings.clone(server_normalize(url)), password = strings.clone(ui.line_edit_string(&e.password))}
 			i := e.index
-			forget := ""   // (after the save: what was under the old name goes once it is safe under the new one)
+			forget := ""   // (after the save: the old field's item goes once the new password is sealed)
 			if i >= 0 {
 				old := app.servers[i]
-				stored, drop := server_password_moves(old, s)
-				s.stored = strings.clone(stored)
-				if drop { forget = strings.clone(old.name, context.temp_allocator) }
-				delete(old.name); delete(old.url); delete(old.password); delete(old.stored)
+				field, drop := server_password_moves(old, s)
+				s.field = strings.clone(field)
+				forget = strings.clone(drop, context.temp_allocator)
+				delete(old.name); delete(old.url); delete(old.password); delete(old.field)
 				app.servers[i] = s
 			} else {
 				append(&app.servers, s)
@@ -662,13 +683,48 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 	}
 }
 
-// A server edited: what its file field keeps, and whether what the old name held in the keyring can go. A password left empty that could not
-// be opened (a locked keyring) stays where it is, and the field says under which name: it is the only copy, and renaming must not lose it. A
-// password typed goes under the new name; only then is the old one's dropped.
-server_password_moves :: proc(old, new: Server) -> (stored: string, drop_old: bool) {
-	if new.password != "" { return "", new.name != old.name }
-	if old.stored == "" { return "", true }   // (no password any more)
-	return new.name != old.name ? password_field_of(old.name, old.stored) : old.stored, false
+SECRET_ASK_S :: 5   // how long what the store answered holds
+
+// Whether a store answers, as the chores last found it: secrets.available waits on the system, so it is never called on the interface's
+// thread. Read by the dialog at each frame, asked again SECRET_ASK_S after the last ask (a service may start), one ask at a time.
+@(private = "file") store_up, store_known, store_asking: bool   // (atomic: a chore writes them)
+@(private = "file") store_asked: time.Tick                      // (the interface's thread only)
+
+secret_available :: proc(app: ^App) -> (up, known: bool) {
+	stale := !sync.atomic_load(&store_known) || time.duration_seconds(time.tick_since(store_asked)) >= SECRET_ASK_S
+	if stale && !sync.atomic_load(&store_asking) {
+		sync.atomic_store(&store_asking, true)
+		store_asked = time.tick_now()
+		tasks.add(&app.cx.chores, secret_ask_work, app)
+	}
+	return sync.atomic_load(&store_up), sync.atomic_load(&store_known)
+}
+
+@(private = "file")
+secret_ask_work :: proc(data: rawptr) {
+	app := (^App)(data)
+	up := secrets.available()
+	changed := !sync.atomic_load(&store_known) || up != sync.atomic_load(&store_up)
+	sync.atomic_store(&store_up, up)
+	sync.atomic_store(&store_known, true)
+	sync.atomic_store(&store_asking, false)
+	if changed { ui.post(&app.state, proc(data: rawptr, word: u64) {}, nil) }   // (a frame: the dialog says what is known now)
+}
+
+// What the server dialog says of where a password goes: "" when it is sealed. What it says of the servers is what their last save found
+// (App.passwords_in_clear): a keyring unlocked since, and the next save moves the password there.
+password_note :: proc(app: ^App) -> string {
+	up, known := secret_available(app)
+	if !known || (up && !app.passwords_in_clear) { return "" }   // (not known yet: nothing said rather than a warning that may be wrong)
+	return i18n.tr("No usable Secret Service (none here, or its keyring is locked): the password stays in clear in servers.txt, which only you can read (mode 0600).")
+}
+
+// A server edited: the field it keeps, and the field whose item the save forgets. A password left empty that could not be opened (a locked
+// keyring) keeps its field, which names its item whatever the server is called: it is the only copy, and renaming must not lose it. A
+// password typed or removed leaves the old field to forget, after the new one is sealed.
+server_password_moves :: proc(old, new: Server) -> (field, forget: string) {
+	if new.password == "" && old.password == "" { return old.field, "" }
+	return "", old.field
 }
 
 @(private = "file")
@@ -676,8 +732,8 @@ server_remove :: proc(app: ^App, i: int) {
 	if i <= 0 || i >= len(app.servers) || app.servers[i].local { return }
 	s := app.servers[i]
 	ordered_remove(&app.servers, i)
-	servers_save(app, forget_first = s.name)
-	delete(s.name); delete(s.url); delete(s.password); delete(s.stored)
+	servers_save(app, forget = s.field)
+	delete(s.name); delete(s.url); delete(s.password); delete(s.field)
 	if app.server == i {
 		server_connect(app, 0)
 	} else if app.server > i {
