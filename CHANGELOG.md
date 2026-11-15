@@ -4,6 +4,17 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.64.0] - 2026-11-15 23:55
+
+### Changed
+- **The server's answers come compressed**: a remote server over a slow link loads a long session faster.
+- **F1 shows the toolkit's sheet of the keys**: your own keys show in the accent colour, and the composer's keys come after the commands. Escape is now listed as two presses, as it works.
+- **The cards have the same inset on all four sides**: a permission, a question, your prompt in the conversation and a sub-agent's card are the toolkit's cards with their own colours; screen readers announce each as a group.
+- **Colours from the theme**: every view draws with the theme you chose, by role and hue, as the toolkit's own controls do, so a theme of your own colours the whole window. Inline code takes the theme's yellow, menus and dialogs its raised surface.
+
+### Fixed
+- **A server that does not answer is shown as unreachable after 5 seconds**: before, a request waited up to 3 minutes; the event stream and the terminals have the same limit.
+
 ## [0.63.1] - 2026-11-15 23:16
 
 ### Fixed
@@ -1756,6 +1767,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.64.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.64.0
 [0.63.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.63.1
 [0.63.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.63.0
 [0.62.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.62.0
