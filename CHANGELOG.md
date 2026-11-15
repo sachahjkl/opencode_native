@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.56.1] - 2026-11-15
+
+### Changed
+- **The bubble of a cut text is compact**: Copy and close are two small glyphs in its corner, and its text wraps at a reasonable width.
+
 ## [0.56.0] - 2026-11-15
 
 ### Added
@@ -1658,6 +1663,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.56.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.56.1
 [0.56.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.56.0
 [0.55.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.55.1
 [0.55.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.55.0
