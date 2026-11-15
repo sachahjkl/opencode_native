@@ -102,3 +102,18 @@ jobs:
           name: opencode-native-linux-x64-${{ github.sha }}
           path: build/opencode-native
           if-no-files-found: error
+
+  # The flake's package, as a person's `nix profile upgrade` builds it: its filtered sources caught nothing a plain
+  # build sees (0.63.0 #loaded a file the filter left out).
+  nix:
+    name: Nix package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: DeterminateSystems/magic-nix-cache-action@v8
+      - name: nix build
+        run: nix build .#default -L --no-link

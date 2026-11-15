@@ -122,7 +122,8 @@
       inherit version;
       src = lib.fileset.toSource {
         root = ./.;
-        fileset = lib.fileset.difference ./. (lib.fileset.unions (map lib.fileset.maybeMissing [./site ./docs ./build]));
+        # (the site stays out, but the vendor's mark the setup screen #loads from it comes along)
+        fileset = lib.fileset.union ./site/img/froment-software-64.png (lib.fileset.difference ./. (lib.fileset.unions (map lib.fileset.maybeMissing [./site ./docs ./build])));
       };
       cargoDeps = pkgs.rustPlatform.importCargoLock {lockFile = ./native/Cargo.lock;};
 
