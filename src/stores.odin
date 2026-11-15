@@ -19,6 +19,7 @@ import "core:path/filepath"
 import "core:strings"
 import store "gt:store"
 import "gt:fsx"
+import prefs_page "gt:prefs_page"
 import "gt:ui"
 import i18n "gt:i18n"
 
@@ -51,6 +52,7 @@ stores_close :: proc(app: ^App) {
 	st := &app.stores
 	store.close(&st.settings)
 	palette_destroy(app)   // (the last palette writes the usage memory, the disk waited for; a test's: in memory)
+	prefs_page.changelog_destroy(&app.changelog)
 	store.close(&st.zooms)
 	store.close(&st.session_zooms)
 	store.close(&st.servers)

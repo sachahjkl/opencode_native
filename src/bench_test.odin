@@ -2201,6 +2201,43 @@ the_header_shows_the_session_id_and_copies_it :: proc(t: ^testing.T) {
 	})
 }
 
+// A server switch, in the status bar: until the new server has said its own, the old one's version and counts stay
+// (no "0 sessions", no empty text, on any frame between); then they change to the new ones (ui.morph_label).
+@(test)
+a_server_switch_shows_no_empty_state :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		app.server_version = strings.clone("2.3.0")
+		session.frames(s, 2)
+		label :: proc(s: ^session.Session, name: string) -> string {
+			bar := session.find(s, "status")
+			b := bar != nil ? session.find(s, name, within = bar) : nil
+			return b != nil ? b.text : ""
+		}
+		before := label(s, "n")
+		testing.expectf(t, strings.has_suffix(before, " sessions") && before != "0 sessions", "a count: %q", before)
+		testing.expect_value(t, label(s, "v"), "OpenCode 2.3.0")
+		// the switch: everything of the old server forgotten, the new one not answered yet
+		server_forget(app)
+		for _ in 0 ..< 6 {
+			session.frames(s, 1)
+			n, v := label(s, "n"), label(s, "v")
+			testing.expectf(t, n != "" && n != "0 sessions", "the count held: %q", n)
+			testing.expectf(t, v != "" && v != "OpenCode ", "the version held: %q", v)
+		}
+		// the new server answers: its own values, once the change has settled
+		app.server_version = strings.clone("2.3.1")
+		v, _ := json.parse_string(`{"data":[{"id":"ses_a","title":"A","time":{"created":1,"updated":2}},{"id":"ses_b","title":"B","time":{"created":1,"updated":3}}]}`, allocator = context.temp_allocator)
+		sessions_load(app, v)
+		session.advance(s, ui.MORPH_MS + 100)
+		testing.expect_value(t, label(s, "n"), "2 sessions")
+		testing.expect_value(t, label(s, "v"), "OpenCode 2.3.1")
+	})
+}
+
 // The composer's toolbar buttons sit close: each one's room beside its words is COMPOSER_TOOL_PAD_EM, and no spacer
 // separates them (the toolkit's lone-button padding read as four buttons far apart).
 @(test)

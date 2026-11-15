@@ -18,6 +18,8 @@ purpose, the decisions, what was refused.
   that server's machine: translated in `web_navigate`, said in the address bar.
 - [features/free-limit.md](features/free-limit.md): the free limit reached: a panel in the composer's place until it
   resets, unless a provider is paid.
+- [features/server-switch.md](features/server-switch.md): a server switch without a blink: the status bar holds the
+  old server's values until the new one says its own; the changes morph.
 - [features/jump.md](features/jump.md): Jump to message (Ctrl+Alt+G): a chooser over the session's prompts; why a
   palette of its own.
 - [features/queue-first.md](features/queue-first.md): Alt+Enter queues a prompt first while a run works; the inbox

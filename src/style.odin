@@ -463,6 +463,17 @@ label_safe :: proc(s: string) -> string {
 }
 
 // A label with a colour and an optional font, as wide as its text.
+// `text` whose changes morph (ui.morph_label): the characters that differ flip into the new ones, its width the new
+// text's at once. For a value another source replaces (the status bar's at a server switch).
+morph_text :: proc(id: string, s: string, color: Color, f: Maybe(ui.Style_Mod) = nil) {
+	m := f.? or_else ui.Style_Mod{}
+	if m.height == nil { m.height = ui.pct(1) }
+	m.fg = color
+	if m.text_pad == nil { m.text_pad = 0 }
+	ui.next(m)
+	ui.morph_label(fmt.tprintf("%s###%s", label_safe(s), id))
+}
+
 text :: proc(id: string, s: string, color: Color, f: Maybe(ui.Style_Mod) = nil, width: Maybe(ui.Size) = nil) {
 	m := f.? or_else ui.Style_Mod{}
 	m.width = width.? or_else ui.text_size(0)

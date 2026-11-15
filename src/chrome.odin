@@ -26,6 +26,28 @@ Chrome :: struct {
 	pending_since: f64,   // when requests went from none to some (the status bar)
 	frame_ms:      f32,   // what the status bar's rate says: between two frames, smoothed
 	work_ms:       f32,   // ... what a frame costs (build, draw, render)
+	said:          Status_Said,
+}
+
+// What the status bar says of the server, held (status_said_follow): a server switch forgets everything of the old
+// one before the new one answers, and the bar showed "0 sessions", no version, a width that jumped. Each value changes
+// only when the new server has said its own; until then the old one's stays, and the change morphs (ui.morph_label).
+Status_Said :: struct {
+	version:  string,   // (owned) "": none said yet, ever
+	sessions: int,
+	running:  int,
+	counted:  bool,     // `sessions` and `running` are a server's (its list was read once)
+}
+
+// The held values follow what the server says, once it has said it.
+status_said_follow :: proc(app: ^App) {
+	s := &app.chrome.said
+	if app.server_version != "" && app.server_version != s.version {
+		delete(s.version)
+		s.version = strings.clone(app.server_version)
+	}
+	// (the list read: its count and what runs are the server's; before it, the old server's stay)
+	if app.sessions_loaded { s.sessions, s.running, s.counted = len(app.sessions), len(app.busy), true }
 }
 
 ////////////////////////////////
@@ -304,17 +326,20 @@ status_bar :: proc(app: ^App, em: f32) {
 		if ui.row(.Center, id = "###link") {
 			link_lamp(app, "###online", em * 0.8)
 			ui.spacer(ui.px(em * 0.4))
-			text("st", link_word(app), online(app) ? hex(HEX_WEAK) : link_color(app), small)
+			// (a server switch: the words that change morph in place, ui.morph_label)
+			morph_text("st", link_word(app), online(app) ? hex(HEX_WEAK) : link_color(app), small)
 			if base := server_base(app); base != "" {
 				ui.spacer(ui.px(em * 0.6))
-				text("base", base, hex(HEX_FAINT), small)
+				morph_text("base", base, hex(HEX_FAINT), small)
 			}
 		}
 		side_line(app, "###sg_status", b.last, em * 0.8)
 		// the versions: the server's, and this program's (names of products: not translated)
 		ui.spacer(ui.px(em * 1.3))
-		if app.server_version != "" {
-			text("v", fmt.tprintf("OpenCode %s", app.server_version), hex(HEX_FAINT), small)
+		status_said_follow(app)
+		said := &app.chrome.said
+		if said.version != "" {
+			morph_text("v", fmt.tprintf("OpenCode %s", said.version), hex(HEX_FAINT), small)
 			ui.spacer(ui.px(em * 0.8))
 		}
 		text("ocn_v", "opencode native " + APP_VERSION, hex(HEX_FAINT), small)
@@ -326,13 +351,15 @@ status_bar :: proc(app: ^App, em: f32) {
 			text("p", fmt.tprintf(i18n.tr(pend, "%d request", "%d requests"), pend), hex(HEX_FAINT), small)
 			ui.spacer(ui.px(em * 0.8))
 		}
-		nbusy := len(app.busy)
-		if nbusy > 0 {
-			text("b", fmt.tprintf(i18n.tr("%d running"), nbusy), accent(), small)
+		if said.running > 0 {
+			morph_text("b", fmt.tprintf(i18n.tr("%d running"), said.running), accent(), small)
 			ui.spacer(ui.px(em * 0.8))
 		}
-		text("n", fmt.tprintf(i18n.tr(len(app.sessions), "%d sessions", "%d sessions"), len(app.sessions)), hex(HEX_FAINT), small)
-		ui.spacer(ui.px(em * 0.8))
+		// (no count before a server's first list: never a "0 sessions" that is no server's)
+		if said.counted {
+			morph_text("n", fmt.tprintf(i18n.tr(said.sessions, "%d sessions", "%d sessions"), said.sessions), hex(HEX_FAINT), small)
+			ui.spacer(ui.px(em * 0.8))
+		}
 		if app.prefs.show_fps {
 			fps := app.chrome.frame_ms > 0 ? 1000 / app.chrome.frame_ms : 0
 			text("fps", i18n.decimal_marks(fmt.tprintf(i18n.tr("%3.0f fps  %.1f ms"), fps, app.chrome.work_ms)), hex(HEX_FAINT), small)

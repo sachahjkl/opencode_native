@@ -13,7 +13,6 @@ import "core:mem"
 import "core:mem/virtual"
 import "core:os"
 import "core:path/filepath"
-import "core:strconv"
 import "core:strings"
 import "gt:config"
 import desktop "gt:desktop"
@@ -92,7 +91,6 @@ PREF_DEFS := [?]config.Def{
 	{name = "general.start", title = i18n.later("Start"), description = i18n.later("What the window opens on: the home page, or the session it showed when it closed (the latest one if it showed none yet)."), kind = .String, default = {s = "last"}, choices = {"home", "last"}, choice_labels = {i18n.later("Home"), i18n.later("Last")}},
 	{name = "advanced.experimental", title = i18n.later("Experimental"), description = i18n.later("Turn on the experimental options of a server on this computer, in its configuration file. What you set there yourself stays."), kind = .Bool, default = {b = true}},
 	{name = "advanced.fps", title = i18n.later("FPS"), description = i18n.later("The frame rate and what a frame costs, in the status bar."), kind = .Bool, default = {b = false}},
-	{name = "advanced.frame_rate", title = i18n.later("Frame rate"), description = i18n.later("The most frames a second, when there is something to draw (nothing moving, nothing is drawn): what the screen takes, a number, or no limit. Above the screen's rate it shows the newest of them: not smoother, but quicker to answer, for more power. What you type and click is read at once whatever this says."), kind = .String, default = {s = "screen"}, choices = {"screen", "30", "60", "120", "240", "uncapped"}, choice_labels = {i18n.later("Screen"), "30", "60", "120", "240", i18n.later("Uncapped")}},
 }
 
 // The preferences as plain values (read on every frame: no lookups by name there).
@@ -126,8 +124,6 @@ Prefs :: struct {
 	viewer_scale: f32,   // conversation.image_viewer_size (images.odin: viewer_frame)
 	start:        string,
 	show_fps:     bool,
-	target_hz:    f64,    // advanced.frame_rate: the most frames a second, above the screen too (0: the screen's)
-	uncapped:     bool,
 	throbber:     string,
 	browser_tools: bool,
 	experimental: bool,
@@ -154,6 +150,7 @@ prefs_register :: proc(p: ^config.Prefs) {
 	d.update_channels, d.update_channel_labels = UPDATE_CHANNEL_NAMES[:], UPDATE_CHANNEL_LABELS[:]
 	prefs_page.standard_register(p, prefs_page.STANDARD_ALL, d)
 	config.register(p, PREF_DEFS[:])
+	prefs_page.changelog_register(p)   // (the version last started: What's new after an update)
 	// (the titles the settings page made from the names, said here so that they are translated; order 0: their places stay)
 	for g in PREF_GROUPS { config.title_register(p, g[0], g[1]) }
 }
@@ -184,7 +181,8 @@ prefs_init :: proc(app: ^App, file: string) {
 	// motion, scrolling, delays, text rendering, the families of the interface, the answers and code (live: the client's
 	// own faces are their Default; fonts_follow takes the faces in use)
 	targets := prefs_page.Standard_Targets{faces = own_text_faces(app)}
-	if app.win != nil { targets = {renderer = &app.r, fonts = &app.fonts, partial_redraw = &app.window.partial_redraw, faces = own_text_faces(app)} }
+	// (rendering.frame_rate is the toolkit's: it sets the main window's pacer)
+	if app.win != nil { targets = {renderer = &app.r, fonts = &app.fonts, partial_redraw = &app.window.partial_redraw, pacer = &app.window.pacer, faces = own_text_faces(app)} }
 	prefs_page.standard_watch(&app.standard, &app.cfg_prefs, &app.state, targets)
 	prefs_refresh(app)
 }
@@ -226,9 +224,6 @@ prefs_refresh :: proc(app: ^App) {
 	s.viewer_scale = f32(config.float_of(p, "conversation.image_viewer_size"))
 	s.start = config.string_of(p, "general.start")
 	s.show_fps = config.bool_of(p, "advanced.fps")
-	rate := config.string_of(p, "advanced.frame_rate")
-	s.uncapped = rate == "uncapped"
-	s.target_hz = strconv.parse_f64(rate) or_else 0
 	s.throbber = config.string_of(p, "appearance.throbber")
 	s.browser_tools = config.bool_of(p, "browser.tools")
 	s.experimental = config.bool_of(p, "advanced.experimental")
@@ -698,7 +693,7 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "timing", title = i18n.later("Delays and menus"), icon = lucide.TIMER},
 	{category = "update", title = i18n.later("Updates"), icon = lucide.REFRESH_CW},
 	{category = "rendering", title = i18n.later("Rendering"), icon = lucide.MONITOR},
-	{category = "advanced", title = i18n.later("Advanced"), icon = lucide.WRENCH, names = {"browser.tools", "advanced.experimental", "advanced.fps", "advanced.frame_rate"}},
+	{category = "advanced", title = i18n.later("Advanced"), icon = lucide.WRENCH, names = {"browser.tools", "advanced.experimental", "advanced.fps"}},
 	{category = "server", title = i18n.later("Server & shell"), icon = lucide.SQUARE_TERMINAL, heading = "OPENCODE", build = proc(user: rawptr, em: f32) { page_server((^App)(user), em) }},
 	{category = "connections", title = i18n.later("Connections"), icon = lucide.USER, build = proc(user: rawptr, em: f32) { page_connections((^App)(user), em) }},
 	{category = "mcp", title = i18n.later("MCP servers"), icon = lucide.PLUG, build = proc(user: rawptr, em: f32) { page_mcp((^App)(user), em) }},
@@ -745,6 +740,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 		custom = proc(user: rawptr, name: string, em: f32) { font_button((^App)(user), name, em) },
 		page_foot = settings_page_foot,
 		licence = licence_page(app), install = &app.install, diagnostics = &app.window,
+		changelog = &app.changelog,   // (What's new: CHANGELOG.md as a page of the settings)
 	}
 }
 

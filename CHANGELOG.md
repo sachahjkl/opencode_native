@@ -4,17 +4,17 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
-## [0.58.0] - 2026-11-15
+## [0.58.0] - 2026-11-15 13:28
 
 ### Changed
 - **Production licences**: the program now checks licences against the production key, so a licence bought for opencode native works in it.
 
-## [0.57.1] - 2026-11-15
+## [0.57.1] - 2026-11-15 12:35
 
 ### Changed
 - **The composer's buttons sit closer**: the agent, the model, how hard it thinks and the approvals no longer stand far apart under the prompt.
 
-## [0.57.0] - 2026-11-15
+## [0.57.0] - 2026-11-15 12:07
 
 ### Added
 - **The free-limit panel**: when opencode's free usage is used up and no provider is paid, a panel takes the composer's place until it resets. It says when, with Subscribe to Go and Connect provider, as in opencode 2.3.0.
@@ -32,12 +32,12 @@ two branches never conflict on this file.
 - **A remote server's localhost opens on that server**: a page at localhost, 127.0.0.1, ::1 or 0.0.0.0 in a remote server's session opened on this computer. The browser panel now opens it at the server's address, the port kept, and its address bar says on the server.
 - **The composer menu's Paste attaches files and pictures**, as Ctrl+V does: one paste of the toolkit for both.
 
-## [0.56.1] - 2026-11-15
+## [0.56.1] - 2026-11-15 08:07
 
 ### Changed
 - **The bubble of a cut text is compact**: Copy and close are two small glyphs in its corner, and its text wraps at a reasonable width.
 
-## [0.56.0] - 2026-11-15
+## [0.56.0] - 2026-11-15 07:41
 
 ### Added
 - **A cut text shows itself whole**: the ... at the end of a title or a value too long for its place opens, on a click, a bubble with the whole text, to select and copy. It stays until its cross, Escape or a click outside it.
@@ -50,12 +50,12 @@ two branches never conflict on this file.
 - **The image viewer keeps a long path inside its header**: the file's path ran under the close cross; it now wraps.
 - **A view in a window of its own closes again on Wayland**: its close button put it back in place; the window stayed on the screen before. The palette also puts the whole word first: a search for a name ranks the item whose word ends there above a longer one that starts with it.
 
-## [0.55.1] - 2026-11-15
+## [0.55.1] - 2026-11-15 00:49
 
 ### Fixed
 - **Two copies open at once no longer hide each other's crash**: when two copies of opencode native ran at the same time, a crash or a forced end of one could go unreported, and its report could be hidden by the clean end of the other. Each copy now keeps its own trace, and the next start shows what it did not see.
 
-## [0.55.0] - 2026-11-14
+## [0.55.0] - 2026-11-14 23:42
 
 ### Changed
 - **The server tabs scroll with arrows**: when the tabs do not fit the sidebar, an arrow on each side that hides tabs brings the next ones into view, and the tabs fade out beyond it; there is no scroll bar.
@@ -65,13 +65,13 @@ two branches never conflict on this file.
   - A setting or a command that is a switch (the sidebar, the Statistics, the prompt marks…) shows its state, flips, and the palette stays open. A session's command says the session it acts on.
   - What you chose before is remembered again from the start: the old list of choices is not read.
 
-## [0.54.1] - 2026-11-14
+## [0.54.1] - 2026-11-14 21:52
 
 ### Fixed
 - **The title bar's and the status bar's line meet the sidebar's edge**: the vertical line of both bars is on the same pixel column as the edge between the sidebar and the conversation, while you drag that edge, after you release it, and at every display scale.
 - **Every background job's report shows as a card.** A command whose own quotes are not escaped in its report (`grep "Error"`) was shown as raw markup.
 
-## [0.54.0] - 2026-11-14
+## [0.54.0] - 2026-11-14 19:17
 
 ### Added
 - **Select several items with Ctrl and Shift in What you missed**: in the list, Ctrl+click, Shift+click, Shift and the arrows, Ctrl+Space and Ctrl+A select several entries, and A acknowledges all of them at once. A plain click still opens the session; Shift+A and Ctrl+Shift+A still acknowledge the session and everything. Escape on several entries keeps the one under the cursor; Escape again closes the view.
@@ -86,28 +86,28 @@ two branches never conflict on this file.
 - **Escape in a font picker of the settings closes the picker only**: the settings stay open.
 - **The text of a tool call can be selected**: the diff an edit shows in the conversation, the lines a read or a search shows, and a call's arguments are selected by a drag and copied with Ctrl+C, as in the full diff view; a click on a call's header still opens it.
 
-## [0.53.3] - 2026-11-14
+## [0.53.3] - 2026-11-14 11:29
 
 ### Fixed
 - **The update is shown once**: the status bar's button alone says that a new version is on offer, downloading or ready to restart; no message pops up to say it again. A failed update is said in a message.
 - **A permission names every command it asks about**: in What you missed, the line showed only the first resource of the request, so a compound shell command looked like it asked about `[ -f "$f" ]` while the rule was about `dd` in the same command. It names them all now.
 
-## [0.53.2] - 2026-11-14
+## [0.53.2] - 2026-11-14 11:08
 
 ### Fixed
 - **A panel in its own window no longer stretches while you resize it**: on Linux (Wayland), each new size of a terminal, a command's output or another panel moved to its own window is drawn at once, as the main window's is. The old picture is no longer shown stretched or squashed over the new size.
 
-## [0.53.1] - 2026-11-14
+## [0.53.1] - 2026-11-14 10:47
 
 ### Fixed
 - **Slash commands are listed again**: when opencode native started with the server, it read the server's commands before the server had them all, and kept that empty list until it was restarted: / in the composer and the palette listed nothing. The commands, the agents and the models are now read again each time their list opens.
 
-## [0.53.0] - 2026-11-14
+## [0.53.0] - 2026-11-14 10:21
 
 ### Changed
 - **A path you can click and search**: in the file picker, the path is a line of folders split by slashes, each one a click away; a click beside them, or Ctrl+L, turns it into an address field whose list finds the folders and files of what you type, letters in order, with your places and recent folders below.
 
-## [0.52.0] - 2026-11-14
+## [0.52.0] - 2026-11-14 09:44
 
 ### Changed
 - **Browse the files with the file picker**: Browse the files opens the same file picker as every other dialog, on the session's folder. What you type searches its subfolders, a preview shows the file selected, and Mention puts the files you choose in your prompt; with a server on another machine, the preview and the search cover the session's folder.
@@ -115,38 +115,38 @@ two branches never conflict on this file.
 ### Fixed
 - **Escape in a file dialog no longer stops the session**: Escape in a file or folder dialog reached the window behind it and interrupted the session that was running; it now clears the filter or closes the dialog only.
 
-## [0.51.0] - 2026-11-14
+## [0.51.0] - 2026-11-14 09:05
 
 ### Changed
 - **A file picker of its own, the same everywhere**: every file and folder dialog is now drawn by opencode native, in its theme: a path you can click or type, places, a sortable list that you filter by typing, a preview of text and images, and New folder. With a server on another machine, it shows the folders of that server, and the folders of your recent sessions as places. The system dialog is still there: Settings, General, File dialogs.
 
-## [0.50.3] - 2026-11-14
+## [0.50.3] - 2026-11-14 08:09
 
 ### Added
 - **Choose a folder of a remote server**: with a server on another machine, Other folder… on the home page and Move the session browse the folders of that server, not the ones of this computer. Type a path to go to it, or click a folder to enter it.
 
-## [0.50.2] - 2026-11-14
+## [0.50.2] - 2026-11-14 07:50
 
 ### Fixed
 - **A table's stripes are square, from side to side**: a striped row of a table in an answer stood off the table's sides with rounded corners of its own; it now runs up to the table's edge, and only the table is rounded.
 
-## [0.50.1] - 2026-11-14
+## [0.50.1] - 2026-11-14 02:05
 
 ### Fixed
 - **opencode native starts on Windows**: Windows refused to start 0.49.0 to 0.50.0 (their manifest was broken). This version starts; a copy stuck on one of those is updated by installing this version by hand from the site.
 
-## [0.50.0] - 2026-11-14
+## [0.50.0] - 2026-11-14 01:42
 
 ### Changed
 - **The servers are tabs at the top of the sessions panel**: a tab for each server, with the state of its link; a click on a tab connects to its server, "+" adds a server, the tab of the server in use opens its menu. The bottom left of the status bar now shows the state of the link and the versions of OpenCode and of opencode native.
 - **"What you missed" shows what happened**: each notification has its request, the agent's last answer, the files it touched and its todo list. It shows one card at a time by default (←, Acknowledge, →, or the arrow keys and A; a question or a permission says Answer and opens its session), or a list whose items unfold in place (the chevron, → or Space). The choice is kept, and it is also in Settings, Behaviour.
 
-## [0.49.1] - 2026-11-14
+## [0.49.1] - 2026-11-14 00:22
 
 ### Fixed
 - **opencode native starts on Windows again**: Windows refused to start the 0.49.0 program. Dialogs also open at their final size, without a jump.
 
-## [0.49.0] - 2026-11-13
+## [0.49.0] - 2026-11-13 23:51
 
 ### Added
 - **Windows: `opencode-native` works from a terminal.** If the install puts opencode native on the PATH, `opencode-native --help`, `--version` and `--status` print in cmd or PowerShell and give their exit code. The other command lines open the window and give the prompt back. After an update, opencode native comes back in front with the keyboard. Paths longer than 260 characters and UTF-8 text work.
@@ -168,12 +168,12 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **French done right.** Menus, the palette, the shortcuts sheet and the composer's hints name the keys as a French keyboard prints them ("Ctrl+Maj+N"). Numbers, percents and costs use the language's decimal mark and percent sign ("0,42 $", "34 %"). French texts agree in gender and say "Rechercher" and "Zoom avant", as in the other programs. The server's facts start with a capital.
 - **What you read stays in place while the agent answers.** If you scrolled up in a conversation, the view no longer moves while the answer streams in, a tool's output arrives or a message above is measured.
 
-## [0.48.1] - 2026-11-13
+## [0.48.1] - 2026-11-13 18:53
 
 ### Changed
 - **One licence at one price, and a new pricing page**: the opencode native licence is now one edition at 15 €, paid once, taxes included; the Patron edition is gone. The pricing page shows opencode native's icon and name, one card with the price, what the licence gives as a list, one button, then "Before you buy". The licence is named "opencode native licence" on the site, at checkout and in the licence file.
 
-## [0.48.0] - 2026-11-13
+## [0.48.0] - 2026-11-13 17:54
 
 ### Added
 - **opencode native in French**: the window, its menus, dialogs, the command palette, the messages and the settings read in French. Settings › General › Language chooses: System follows the language of the system, English and Français force one. A change takes effect at the next start. What the server sends (session titles, models, tool output, the messages of a conversation) stays as the server writes it.
@@ -200,12 +200,12 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **The window no longer freezes on the disk or the system**: the file dialogs, opening a link, a file or a folder, exporting or importing a session, reading the icon of a project, writing the files of an artifact, the restart after an update, a notification and saving the preferences no longer stop the window.
 - **The activity line over the composer** shows the pointer over it in a light theme too.
 
-## [0.47.13] - 2026-11-13
+## [0.47.13] - 2026-11-13 00:18
 
 ### Fixed
 - **The themes' line shows it scrolls**: its scroll bar was drawn over the cards; it is under them now, and the side that hides themes fades out.
 
-## [0.47.12] - 2026-11-12
+## [0.47.12] - 2026-11-12 22:48
 
 ### Added
 - **"What you missed"**: a bell with the count of what happened while you were away (runs that ended, questions and permissions waiting, commands, scheduled runs and sub-agents that ended), a view that lists them by session, and acknowledges them; opening a session acknowledges its end.
@@ -213,7 +213,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 ### Fixed
 - **The corner of a detached panel has a corner's cursor**: with some cursor themes it showed a diagonal toward the bottom left.
 
-## [0.47.11] - 2026-11-12
+## [0.47.11] - 2026-11-12 22:14
 
 ### Changed
 - **A finished sub-agent says so**: its card shows a check and "done", a cross and "failed", or a square and "stopped", with its time, and the first line of its result even when the card is folded. The same mark is in the activity, the sidebar, the sub-agent's banner and its result's line. A sub-agent that returned and is still busy says "finishing"; one launched in the background says "in background".
@@ -222,23 +222,23 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 ### Fixed
 - **No bars of white or of the desktop in the window on Wayland**: with some graphics drivers (NVIDIA's), bright edges such as the top of the activity panel showed white, or let the desktop behind the window through.
 
-## [0.47.10] - 2026-11-12
+## [0.47.10] - 2026-11-12 21:47
 
 ### Fixed
 - **The palette's search is as dark as a menu's**: its strip had the palette's own colour; it is now a field's, the colour of the search in a right-click menu.
 
-## [0.47.9] - 2026-11-12
+## [0.47.9] - 2026-11-12 20:52
 
 ### Changed
 - **A smaller program on Linux**: the release no longer carries its table of symbols, which nothing reads (about a quarter of the file).
 - **The palette's search on a darker strip**: the field at the top of the command palette sits on a field's darker background, as in the menus that search.
 
-## [0.47.8] - 2026-11-12
+## [0.47.8] - 2026-11-12 20:00
 
 ### Fixed
 - **No empty band under the terminal**: what the rows leave of the terminal's height is shared above and below the grid, not all left under the last row.
 
-## [0.47.7] - 2026-11-12
+## [0.47.7] - 2026-11-12 19:35
 
 ### Fixed
 - **"inspect" on every command at work**: a command that printed nothing yet (its output sent to a file) had no "inspect"; its view now opens at work and follows the command as soon as the server names it, or shows what it handed back when it ends.
@@ -246,12 +246,12 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **The command palette stays fast**: with hundreds of sessions, an open palette at rest cost as much as typing in it, and more with a few slips in what was typed; it now builds only the rows in view and searches again only when what it lists changes.
 - **The close button of dialogs sits in its corner**: it has the same margin from the dialog's top and right edges, its corners follow the dialog's, and it is centered with the header's controls. It no longer touches them (the "Stacked | Split" choice of the full diff). The title of a settings page stays in place while the page scrolls.
 
-## [0.47.6] - 2026-11-12
+## [0.47.6] - 2026-11-12 18:48
 
 ### Fixed
 - **A wide table has one scroll bar**: a table in an answer that scrolls sideways showed two bars, the toolkit's and a thin one of its own under it; it keeps the toolkit's alone.
 
-## [0.47.5] - 2026-11-12
+## [0.47.5] - 2026-11-12 17:33
 
 ### Added
 - **A command at work can be inspected from its row**: a shell call shows "inspect" beside "push to background" (and "in background"): its output opens in its view, as it prints it, as a background job's does from the tray.
@@ -259,24 +259,24 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 ### Changed
 - **The composer has the toolkit's scroll bar**: a long prompt's bar looks as the conversation's does (its thumb in the theme's greys), and a right click goes to what is in front at the pointer everywhere a menu opens on a box.
 
-## [0.47.4] - 2026-11-12
+## [0.47.4] - 2026-11-12 16:52
 
 ### Fixed
 - **The composer's menu on all of the composer**: a right click on the composer, its focus there or not, opens its menu (Undo, Cut, Copy, Paste, Select all) on its text and around it; it opened the menu of the last message, which the conversation scrolls under it.
 - **A screenshot pastes whole**: a screenshot pasted in the composer came cut, its thumbnail "image unreadable", when the program that holds it wrote it in one go (an image copied from a browser passed). The clipboard is now read as such a program writes it.
 
-## [0.47.3] - 2026-11-12
+## [0.47.3] - 2026-11-12 15:19
 
 ### Fixed
 - **A resizable dialog's corner is clean in the machined finish**: the corner under the resize grip (a diff's full view, the palette) stays square with its frame; the panel's rounded rim was drawn over it.
 
-## [0.47.2] - 2026-11-12
+## [0.47.2] - 2026-11-12 14:16
 
 ### Fixed
 - **Text selected in a dialog is copied**: Ctrl+C (or Ctrl+Insert) copies the text selected in a dialog, a diff's title or a path for one; it did nothing there.
 - **Pasting files or an image no longer waits for the clipboard either**: a paste in the composer asks the clipboard for its files, its image and its text at once and takes them when they come; an image is decoded on a thread of its own. A slow program holding the clipboard, or a large picture, no longer freezes the window.
 
-## [0.47.1] - 2026-11-12
+## [0.47.1] - 2026-11-12 13:10
 
 ### Changed
 - **Each session has its own zoom**: Ctrl+= and Ctrl+- (or Ctrl and the wheel over the conversation) zoom the session shown alone, and it finds its zoom again when it is opened later, the program started again. A session with no zoom of its own follows the setting "Conversation zoom", which the home page sets too; Ctrl+0 brings the session back to it.
@@ -286,7 +286,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **Shift+Insert pastes in the composer**: the composer and every text of several lines take Ctrl+Insert to copy, Shift+Delete to cut and Shift+Insert to paste, as the one-line fields and the shells already did.
 - **The window no longer waits for the keyring or the server's files**: at the start, where this computer's server runs and the saved servers' passwords are read in the background, and the connection starts once they are known; the server dialog asks whether a keyring is there in the background too, and the log is written there. A locked or slow keyring no longer delays the first frame or freezes the dialog.
 
-## [0.47.0] - 2026-11-12
+## [0.47.0] - 2026-11-12 09:36
 
 ### Added
 - **Diffs show code in its colours**: the lines of an edit, of What changed and of a diff's full view are coloured by the language of their file, and what changed in a changed line stays marked over them.
@@ -305,7 +305,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **Settings and remembered lists are saved in the background**: the last session, the server, the palette's ranking, each shell's zoom, the drafts and the list of servers are read once at the start, then saved by a background thread a moment after they change. The window no longer waits on the disk for them, and a crash can no longer leave one of these files cut.
 - **Times on the local clock follow a change of daylight saving time**: the offset from UTC was read once for the life of the program; it is read again every minute, on a thread of its own, never on the interface's.
 
-## [0.46.9] - 2026-11-12
+## [0.46.9] - 2026-11-12 01:11
 
 ### Added
 - **Shift+Insert pastes in a shell, Ctrl+Insert copies**, as in other terminals, beside Ctrl+Shift+V and Ctrl+Shift+C.
@@ -316,7 +316,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 ### Fixed
 - **A shell's scroll bar is the interface's**: the same as every list's, in the theme's look (its track, its thumb lit under the pointer and held), it can be held and dragged through the scrollback and pressed in its track; a press on it no longer starts a selection (gui_toolkit 0.197.0's scrollbar_under).
 
-## [0.46.8] - 2026-11-12
+## [0.46.8] - 2026-11-12 00:34
 
 ### Changed
 - **A row's highlight runs from edge to edge**: the row chosen and the one under the pointer fill their whole width, square, with no margin at their sides, in the sidebar (its indent included), the palette, the pickers (sessions, models, folders), the files and the activity.
@@ -324,27 +324,27 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 ### Fixed
 - **Search sessions' lit words are readable**: on the theme's tint for a match, as the palette's, not a heavier orange the white text was lost on (gui_toolkit 0.196.3).
 
-## [0.46.7] - 2026-11-12
+## [0.46.7] - 2026-11-12 00:13
 
 ### Fixed
 - **A window the compositor does not show no longer freezes the program** (another workspace, minimized on Wayland), and images and screenshots are read and written faster (gui_toolkit 0.196.2).
 
-## [0.46.6] - 2026-11-11
+## [0.46.6] - 2026-11-11 23:42
 
 ### Fixed
 - **A shell's scroll bar shows it can be taken**: its thumb is wider at rest; under the pointer its track shows, the thumb widens and lights, the pointer is an arrow; held, it is lighter still. Its band takes a press 14 px from the grid's edge.
 
-## [0.46.5] - 2026-11-11
+## [0.46.5] - 2026-11-11 23:14
 
 ### Fixed
 - **A shell's scroll bar can be taken**: its thumb held follows the pointer through the scrollback, and a press in its track brings the thumb there (a band along the grid's right edge, wider than the thumb drawn). It was only drawn.
 
-## [0.46.4] - 2026-11-11
+## [0.46.4] - 2026-11-11 22:56
 
 ### Added
 - **Each tool call says its time**: how long it took at the end of its row ("0.4s", "4m 12s"), and while it runs, the time so far, counting. Under the pointer, when it ran: its start and its end to the second, with the date on another day than today.
 
-## [0.46.3] - 2026-11-11
+## [0.46.3] - 2026-11-11 22:34
 
 ### Added
 - **Restart opencode native** in the palette: the program starts again.
@@ -353,7 +353,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 ### Fixed
 - **What a search lit is readable**: the letters found keep the text's colour on the accent's tint; in the accent's colour they read at a contrast of about 3.
 
-## [0.46.2] - 2026-11-11
+## [0.46.2] - 2026-11-11 22:08
 
 ### Added
 - **Search sessions lights what it found**: the words of the search are lit in the titles they are in.
@@ -365,7 +365,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 ### Fixed
 - **A shell's zoom no longer lags under the wheel**: its grid keeps its columns while the wheel turns and takes its new size once, when it stops (each notch rewrapped the whole scrollback).
 
-## [0.46.1] - 2026-11-11
+## [0.46.1] - 2026-11-11 20:58
 
 ### Added
 - **The version in the settings**: "opencode native" and its version at the bottom of the settings' list of pages, above where the preferences are.
@@ -373,7 +373,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 ### Fixed
 - **The themes' line scrolls with the mouse's wheel** (Settings > Appearance): it scrolled only with a wheel turned sideways or a touchpad (gui_toolkit's strip_grid).
 
-## [0.46.0] - 2026-11-11
+## [0.46.0] - 2026-11-11 19:44
 
 ### Added
 - **Each shell has its own zoom**: Ctrl+= / Ctrl+- / Ctrl+0 in the shell with the keyboard, Ctrl and the wheel over one, or its menu. It stays with the shell: the program started again finds it (`terminal_zoom.txt` beside the preferences, by the shell's id on the server).
@@ -390,7 +390,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **Scrolling up through a long session no longer jumps**: the wheel stopped at the top while the earlier messages were read glided over all of them once they came; the view now stays on what it shows.
 - **A theme card's colours stay under its name at any scale of the screen**: at 200 % they rose onto it (the font's size, already scaled, was scaled again).
 
-## [0.45.0] - 2026-11-11
+## [0.45.0] - 2026-11-11 13:47
 
 ### Added
 
@@ -415,7 +415,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **"Allow every permission"** (permission.allow_all): this client answered yes in the server's place, over the configuration's own asks (`rm`, `sudo`...), and another client connected to the same server still told of a request already answered. The shield sets the session's rules on the server instead.
 
-## [0.44.0] - 2026-11-11
+## [0.44.0] - 2026-11-11 09:16
 
 ### Added
 
@@ -430,13 +430,13 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **A thin border's rounded corners are as heavy as its sides** (the "Installed" badge of Setup, every framed box): blended in linear light, the pixels of a curve were paler than a browser draws them (gui_toolkit 0.181.0).
 
-## [0.43.3] - 2026-11-11
+## [0.43.3] - 2026-11-11 08:12
 
 ### Fixed
 
 - **Setup's check box stands on its line**: "Shortcut on the Desktop" had its mark at the top of its tile, above the middle of its text (gui_toolkit 0.178.0, with the toolkit's changes from 0.174.0).
 
-## [0.43.2] - 2026-11-11
+## [0.43.2] - 2026-11-11 00:56
 
 ### Fixed
 
@@ -446,7 +446,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **A cross empties the sessions' search**: at its end while it holds text; Undo brings the text back.
 
-## [0.43.1] - 2026-11-11
+## [0.43.1] - 2026-11-11 00:04
 
 ### Fixed
 
@@ -474,7 +474,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **The icons of the menus were wrong or missing**: they are Lucide's characters, and the menus drew them in the toolkit's own icon face ("Copy the text" showed a dash, "Copy as PNG" nothing). The interface's icon face is now Lucide's (gui_toolkit 0.168.0).
 
-## [0.41.1] - 2026-11-10
+## [0.41.1] - 2026-11-10 22:37
 
 ### Fixed
 
@@ -484,7 +484,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **Setup, run from Nix, beside what an earlier install left**: an icon left in `~/.local/share/icons` made it say "To repair", in red. A copy of the Nix store is now the Nix package's: the dialog says an earlier install left files, and offers only "Remove what is left" (gui_toolkit 0.163.0). `--status` says 0 for a Nix package.
 - From gui_toolkit 0.156.0 to 0.167.0: typing a letter to the composer no longer takes a shortcut's letter (Alt+P), and an input method's text right after a shortcut comes through again.
 
-## [0.41.0] - 2026-11-10
+## [0.41.0] - 2026-11-10 17:00
 
 ### Changed
 
@@ -494,32 +494,32 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **A selection in a terminal stays on its text**: the next line a running command printed dropped what was selected. The selection is now the emulation's own (libghostty-vt): it follows its text as rows come and leave the view, when the wheel moves the view and when the grid is resized; only typing drops it. A copy reads the text through Ghostty's formatter: a selection scrolled out of the view is copied whole, and a line the grid wrapped is copied as one line. Select all takes the scrollback too.
 
-## [0.40.0] - 2026-11-10
+## [0.40.0] - 2026-11-10 16:23
 
 ### Added
 
 - **A diagram opens in the viewer**: a click on a Mermaid diagram, or its header's zoom button, opens it in the image viewer, at the size the window gives it. The wheel zooms where the pointer is, a drag moves it, + − and 0 too; it is drawn as paths at every zoom, so its lines and words stay sharp.
 - **Copy as PNG**: the copy button of a diagram, and its right-click menu, give "Copy as PNG" (the picture, at twice its size in the conversation, on the colour of code) and "Copy the text". In the viewer, Ctrl+C copies the picture. The picture is made on the CPU (gui_toolkit 0.153.0, `svg.raster`).
 
-## [0.39.0] - 2026-11-10
+## [0.39.0] - 2026-11-10 15:21
 
 ### Added
 
 - **Mermaid diagrams**: a ```mermaid block in an answer is drawn as its diagram (flowchart, sequence, class, state, ER, gantt, pie, mindmap, timeline, git graph...), in the interface's fonts, at the size of the text around it and never wider than the column, in the theme's lightness. Its header's button shows its text and back. While the block is still being written, or when its text is no diagram (the header says why), its text shows. The diagram is laid out by mermaid-svg, built into the program's Rust library, and drawn by the toolkit (gui_toolkit 0.149.0's svg and mermaid packages): no browser.
 
-## [0.38.2] - 2026-11-10
+## [0.38.2] - 2026-11-10 14:14
 
 ### Fixed
 
 - **The window opens where it was**: on the monitor it was on, at its size, maximized or not, after an update's restart as after a close (it was where the system put it, on Windows the main monitor). Its place is kept when it changes; a monitor that is gone brings it onto one that is there (gui_toolkit 0.148.0, `platform.placement_text`).
 
-## [0.38.1] - 2026-11-10
+## [0.38.1] - 2026-11-10 13:48
 
 ### Fixed
 
 - **Escape in the composer stops the run and keeps the keyboard there**: the editor took Escape first and let go of the keyboard, and the run went on until a second Escape. With nothing running, Escape still lets go of it.
 
-## [0.38.0] - 2026-11-10
+## [0.38.0] - 2026-11-10 13:28
 
 ### Added
 
@@ -529,13 +529,13 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **When a paused goal can go on**: the reason no longer ends with the time in UTC ("Resets at 2026-11-10T11:20:00.000Z."); the line over it says the time on the local clock and what is left ("resets at 12:20 · in 42 min", with the date when it is another day). Past that time the goal is still paused on the server, which waits for a word: the line says the limit reset and offers to resume it.
 
-## [0.37.1] - 2026-11-10
+## [0.37.1] - 2026-11-10 13:08
 
 ### Added
 
 - **A password can be shown**: the server's password and an integration's key have an eye at the end of their field, which shows what was typed and hides it again (gui_toolkit 0.144.0). Each time the dialog opens, it is hidden.
 
-## [0.37.0] - 2026-11-10
+## [0.37.0] - 2026-11-10 12:20
 
 ### Added
 
@@ -548,7 +548,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **gui_toolkit 0.143.0**: on Windows, a copy installed in the default folder is no longer taken for one "to repair" after its restart; the Linux desktop entry names the window's class, so a dock matches the window to its entry. ocntools writes the logo's files and the version header with the toolbox (`write_logo`, `write_version_header`).
 - **The project's picture is the logo again** (`.project/image.png`, which opencode shows for the project): `ocntools logo` writes it with the other files of the logo.
 
-## [0.36.0] - 2026-11-10
+## [0.36.0] - 2026-11-10 11:12
 
 ### Added
 
@@ -558,7 +558,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **"Steer" says what steers**: while a turn runs, the send button, the keys' hint and the setting say "Steer" (the message goes in at the turn's next step), and a queued message's action that steers it says "Steer". "Send now" is the action that interrupts.
 
-## [0.35.0] - 2026-11-10
+## [0.35.0] - 2026-11-10 08:21
 
 ### Added
 
@@ -568,7 +568,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **Why a goal is paused shows at the end of the conversation**, across it and in full, instead of under the objective: the strip over the composer is one line again.
 
-## [0.34.1] - 2026-11-10
+## [0.34.1] - 2026-11-10 08:01
 
 ### Fixed
 
@@ -585,7 +585,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **The source's short name is `ocn`**, not `occ`: the Odin package, the tool (`tools/ocntools`, `build/ocntools`), the Rust library (`native/ocn_native`, its `ocn_*` functions) and the defines (`-define:OCN_BENCH`, `-define:OCN_PROFILE`).
 
-## [0.33.0] - 2026-11-09
+## [0.33.0] - 2026-11-09 22:45
 
 ### Added
 
@@ -596,19 +596,19 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **A running sub-agent's card opens its session**: the server names that session only when the call ends, so Open and the double click did nothing while it ran. The card now finds it among the children of the session shown.
 - **The program's own preferences** (layouts, last choices) are hidden from the settings and the palette (gui_toolkit 0.137.0, `Def.hidden`).
 
-## [0.32.2] - 2026-11-09
+## [0.32.2] - 2026-11-09 22:24
 
 ### Fixed
 
 - **A form's tabs no longer overlap**: each is as wide as its title, and those that do not fit go on to a next line. They shared the width out equally, and a long title ran over the next tab.
 
-## [0.32.1] - 2026-11-09
+## [0.32.1] - 2026-11-09 21:54
 
 ### Fixed
 
 - **A table's copy button can be seen and clicked**: in the table's top right corner under the pointer, on a face of its own. It was built before the rows, which hid it and took its clicks. It puts the table on the clipboard as a grid (pastes as a table in a document, a mail, a sheet) and as its Markdown text.
 
-## [0.32.0] - 2026-11-09
+## [0.32.0] - 2026-11-09 21:29
 
 ### Changed
 
@@ -622,13 +622,13 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **A question's long options and the review's answers stay in their card**: they go on to the next lines instead of running past its edge.
 - **DevTools' screenshots** work again once a dialog has opened (gui_toolkit 0.133.0).
 
-## [0.31.1] - 2026-11-09
+## [0.31.1] - 2026-11-09 19:39
 
 ### Changed
 
 - **The icons are gui_toolkit's** (gui_toolkit 0.128.0): the Lucide font and the names of its icons come from the toolkit's `lucide` package, shared with Wren, instead of a copy of the font and constants of opencode native's own. The same icons.
 
-## [0.31.0] - 2026-11-09
+## [0.31.0] - 2026-11-09 18:57
 
 ### Changed
 
@@ -638,7 +638,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **An accent or a danger button in a dialog keeps its colours**: opencode's colours of what floats came ahead of the buttons' and gave them the dialog's background (a white label on white).
 
-## [0.30.0] - 2026-11-09
+## [0.30.0] - 2026-11-09 17:56
 
 ### Added
 
@@ -654,7 +654,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **Switching sessions no longer moves the conversation**: the todo line over the composer came a moment after the session (its pages read again) and pushed everything up by its height; each session's last list now shows at once.
 
-## [0.29.0] - 2026-11-09
+## [0.29.0] - 2026-11-09 16:53
 
 ### Changed
 
@@ -664,27 +664,27 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **Linux: "Auto" reads fontconfig** (gui_toolkit 0.124.1): a configuration that asks for BGR, grey or no smoothing is followed. It was always RGB.
 
-## [0.28.2] - 2026-11-09
+## [0.28.2] - 2026-11-09 16:00
 
 ### Fixed
 
 - **The image viewer can be made larger than the picture's pixels**: a picture still opens no larger than its pixels, but dragging the viewer's edges or corners now enlarges it up to the room the window gives. The size kept is a share of that room.
 
-## [0.28.1] - 2026-11-09
+## [0.28.1] - 2026-11-09 15:25
 
 ### Changed
 
 - **A dialog's resize grip sits in a square corner** (gui_toolkit 0.121.0): its bottom right corner is cut by a bevel in the border colour, darker on a light theme and lighter on a dark one, its dots clear of the edge.
 - **Partial redraw costs less**: comparing a frame with the last one is linear (about 0.4 ms for 10,000 boxes, was 2 ms or more), and a drag image no longer makes every frame whole.
 
-## [0.28.0] - 2026-11-09
+## [0.28.0] - 2026-11-09 14:47
 
 ### Changed
 
 - **Up and Down in the composer go through the prompts of the session shown only**: another session's prompts no longer come in, and a new session has no history. The file `history.jsonl` is no longer read or written; you can delete it.
 - **The site links to gui_toolkit at gt.sacha.house.**
 
-## [0.27.0] - 2026-11-09
+## [0.27.0] - 2026-11-09 14:32
 
 ### Added
 
@@ -697,25 +697,25 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
   Everforest, Aero and Bootstrap. The toolkit's own widgets (its fields, separators, segmented controls) take the machined
   look too. Nothing else changes: opencode's colours move to a theme as before, and themes.txt reads as before.
 
-## [0.26.0] - 2026-11-09
+## [0.26.0] - 2026-11-09 14:05
 
 ### Changed
 
 - **Each frame repaints only what changed** (gui_toolkit 0.118.0, automatic partial redraw): while an agent writes, a frame draws about 0.2 % of the window's pixels, a hover or a scroll a few percent. A dialog over a blurred backdrop is still drawn whole.
 
-## [0.25.2] - 2026-11-09
+## [0.25.2] - 2026-11-09 13:40
 
 ### Fixed
 
 - **A light line no longer stays under the title bar when the theme goes dark** (or the other way): what each frame is cleared to followed the theme the window opened with, and showed where nothing is drawn, under the title bar's groove.
 
-## [0.25.1] - 2026-11-09
+## [0.25.1] - 2026-11-09 11:32
 
 ### Fixed
 
 - **A search at the bottom of a conversation stays there**: under the last match (the view past it), the current match is the nearest above, not the conversation's first, which took the view all the way to the top. A test that passed or failed by the speed of that glide now always passes.
 
-## [0.25.0] - 2026-11-09
+## [0.25.0] - 2026-11-09 11:02
 
 ### Added
 
@@ -725,13 +725,13 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **A table wider than its place scrolls sideways** in its frame, its columns at their natural width (no wider than 28 em: their words wrap past it); they were squeezed until a word broke letter by letter. A fade on the side that hides columns and a bar under the table say it scrolls; the bar takes a press or a drag, Shift+wheel and a sideways wheel scroll it, and an up-and-down wheel over it still scrolls the conversation (gui_toolkit 0.115.0).
 
-## [0.24.10] - 2026-11-09
+## [0.24.10] - 2026-11-09 10:17
 
 ### Changed
 
 - **The tray of what runs ("details") is each session's**: open in a session where it was left open, closed in the others; it was one for all.
 
-## [0.24.9] - 2026-11-09
+## [0.24.9] - 2026-11-09 10:00
 
 ### Changed
 
@@ -741,21 +741,21 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **A prompt sent no longer comes back as a draft at the next start**: the composer's text goes to disk whenever it changes, not only when a key changes it (sending empties it without a key).
 
-## [0.24.8] - 2026-11-09
+## [0.24.8] - 2026-11-09 09:42
 
 ### Changed
 
 - **The find bar is one box**: the field, its count and its buttons in a single well, its focus ring around all of it. It was a field inside a plate, whose rounded edge showed beside the field on the left.
 - **A sub-agent's card holds its prompt and its result as they are**, under their titles: each was a box of its own inside the card (and the result's code blocks a third one inside that).
 
-## [0.24.7] - 2026-11-09
+## [0.24.7] - 2026-11-09 09:23
 
 ### Fixed
 
 - **A session that is over has the same lamp as the others, without its light**: it was a pip, a dab of colour in a hole, which looked like another thing altogether.
 - **A table's rows alternate in every theme**: every other row is tinted with the theme's text, faintly (it was white at 1 %, which no light theme showed), and the rows stand off the table's rim, rounded a little, instead of covering it on the left and the right.
 
-## [0.24.6] - 2026-11-09
+## [0.24.6] - 2026-11-09 08:54
 
 ### Added
 
@@ -768,20 +768,20 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **The viewer is exactly as large as its picture**: no black around it, and a press anywhere outside the picture closes it.
 
-## [0.24.5] - 2026-11-09
+## [0.24.5] - 2026-11-09 07:00
 
 ### Fixed
 
 - **A session's lamp is one lamp**, the same wherever it shows (the sidebar, the home page, the line over the composer): lit, glowing a little, only its colour telling the state (green, orange, red). The green one pulsed, dimming to half and back, so it looked duller than the orange beside it; and those pages no longer redraw at every frame for it.
 - **A pulsing lamp elsewhere (a tool's state) stays lit**: only its halo breathes.
 
-## [0.24.4] - 2026-11-09
+## [0.24.4] - 2026-11-09 03:08
 
 ### Changed
 
 - **A session's lamp is a traffic light**, the same in every theme: green and pulsing while it works, orange and steady while only its commands run on in the background, red and pulsing while it waits for you (a permission, a question). The line over the composer says it the same way. They took the theme's accent, blue and yellow, which were hard to tell apart.
 
-## [0.24.3] - 2026-11-09
+## [0.24.3] - 2026-11-09 02:50
 
 ### Added
 
@@ -801,14 +801,14 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **An accent button's label in the light versions** takes, of the theme's darkest and brightest colours, the one that stands out on its accent: in nine themes, OpenCode's among them, it read at a contrast of 2.2 to 2.9.
 
-## [0.24.2] - 2026-11-09
+## [0.24.2] - 2026-11-09 02:30
 
 ### Changed
 
 - **The composer's bar**: the paperclip comes first, before the agent and the model, and the three are quiet buttons (their text pale, lit under the pointer); a button whose picker is open stays lit while it is.
 - **Push to the background** is a link on the line over the composer ("push to background"), while a command holds the turn; it was a button in the composer's bar.
 
-## [0.24.1] - 2026-11-09
+## [0.24.1] - 2026-11-09 02:12
 
 ### Added
 
@@ -818,19 +818,19 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **A long option of an agent's question goes on several lines** inside its button; it ran out of the button.
 
-## [0.24.0] - 2026-11-09
+## [0.24.0] - 2026-11-09 01:29
 
 ### Fixed
 
 - **The window on Linux moves and resizes**: dragging the title bar moves it, its edges and corners resize it (with the resize cursor), a double click on the title bar maximizes or restores it, a right click opens the compositor's window menu. Where the system draws no frame around it, it has a 1-pixel outline. (gui_toolkit 0.108.0)
 
-## [0.23.1] - 2026-11-09
+## [0.23.1] - 2026-11-09 01:20
 
 ### Fixed
 
 - **The line over the composer counts the session's commands only**: the tray showed the session's, but the line still counted every command of its folder (0.23.0).
 
-## [0.23.0] - 2026-11-09
+## [0.23.0] - 2026-11-09 00:44
 
 ### Added
 
@@ -841,7 +841,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **The Preview panel on Linux**: asked for (Ctrl+Shift+B, the palette), it says there is none on Linux and that agents can use your own browser with OpenCode Browse; a click opens its page. It said that the WebView2 runtime was missing.
 - **The activity tray is the session's**: it showed every shell command of the session's folder, those of other sessions too; it shows those of the session and its sub-agents (each command says its session in `metadata.sessionID`).
 
-## [0.22.0] - 2026-11-09
+## [0.22.0] - 2026-11-09 00:22
 
 ### Added
 
@@ -863,14 +863,14 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **`occtools logo [--out folder] [--hint 0|1|2]`** draws the logo and the icon (`assets/logo*.png`, `opencode-native.ico`) on Windows and Linux, with the toolkit's paint package, in place of tools/make_logo.ps1 (GDI+, Windows only), which is gone. The same files, names and sizes; the committed ones stay (the new drawing differs from them by antialiasing only).
 - **occtools runs commands and downloads with the toolkit's `toolbox` package** (`gt:toolbox`, shared with gui_toolkit's tk and Wren's tools): running a command, capturing its output, `env_with`, the SHA-256 of bytes and files. Zig is a pinned download (curl with retries, the file removed when its SHA-256 is wrong). tools/occtools/run.odin keeps only `run`, the shorthand that shows each command before it runs. The commands and their output are the same.
 
-## [0.20.0] - 2026-11-08
+## [0.20.0] - 2026-11-08 17:42
 
 ### Added
 
 - **Search in the settings**: a field above the pages; what is typed shows the matching settings of every client page (name, title, description; a page's title shows all of it), under their page's title, their controls live. Choosing a page ends the search. (gui_toolkit 0.100.0's `config.Search`)
 - **Allow all permissions** (Settings > Behaviour, `permission.allow_all`, off by default): every permission a session asks is allowed once, at once, with no card, toast or flash; turned on, it allows those that wait too. What the server's rules deny stays denied.
 
-## [0.19.1] - 2026-11-08
+## [0.19.1] - 2026-11-08 17:22
 
 ### Changed
 
@@ -880,14 +880,14 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **Linux: the windows say they are opencode native.** Their Wayland app_id and X11 WM_CLASS are `opencode-native`, the name of the menu entry, where they said "gui_toolkit": a task bar shows the program's icon and name. (gui_toolkit 0.99.0)
 
-## [0.19.0] - 2026-11-08
+## [0.19.0] - 2026-11-08 15:34
 
 ### Added
 
 - **Updates on Linux**: an installed copy checks, downloads and puts in place a new version as on Windows (signed manifests `update-linux-x64-<channel>.json`; the release has the program alone beside its archive).
 - **NixOS**: `flake.nix` packages the release (`nix profile install github:sachahjkl/opencode_native`), with its menu entry and its icon; the libraries it opens are in its RUNPATH. On NixOS, Setup advises that package, and still makes a classic install on request: it says which libraries nix-ld lacks for it. A Nix package never updates itself.
 
-## [0.18.4] - 2026-11-07
+## [0.18.4] - 2026-11-07 22:39
 
 ### Fixed
 
@@ -895,25 +895,25 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **Find with a needle of thousands of matches** no longer leaves hundreds of MB behind: the text outside the clip makes nothing to draw, and the buffers go back down after a peak. (gui_toolkit 0.98.0)
 - **The wheel's click (autoscroll) goes up from the bottom of a conversation**: its first steps, less than a pixel a frame, were put back at the bottom the view was following, and the conversation's column read the rounding of its rows as a move of the content: the view stayed there, or broke free in a jump. (gui_toolkit 0.98.1)
 
-## [0.18.3] - 2026-11-07
+## [0.18.3] - 2026-11-07 21:43
 
 ### Fixed
 
 - **Find in a long conversation no longer freezes the window**: the messages not on screen are read a slice at each frame, not all in one, and the bar says how far it is (what was found so far and the percentage read) until it knows the count. (gui_toolkit 0.97.0)
 
-## [0.18.2] - 2026-11-07
+## [0.18.2] - 2026-11-07 21:01
 
 ### Changed
 
 - **A session's mark is its project's logo** in the sidebar, as above the conversation, when the project has one; its letter else.
 
-## [0.18.1] - 2026-11-07
+## [0.18.1] - 2026-11-07 16:07
 
 ### Fixed
 
 - **The session shown, in a light theme,** is on the sidebar's own ground a step darker, its hue and chroma kept: a pale accent read as another colour (Gruvbox's orange as pink), and a neutral of less colour than the sidebar's yellow as blue.
 
-## [0.18.0] - 2026-11-07
+## [0.18.0] - 2026-11-07 15:34
 
 ### Added
 
@@ -935,7 +935,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **The composer's buttons stay within it:** with a run going and "Send now", or a long model's name, the hint, then the send button's word, step aside when the toolbar has no room.
 - **A long session's todo list shows** even when its last update is pages back: the older pages are read for it alone.
 
-## [0.17.8] - 2026-11-07
+## [0.17.8] - 2026-11-07 14:38
 
 ### Added
 
@@ -952,7 +952,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **The sidebar's handle lets go of its colour** once dragged: it kept the keyboard's focus, and showed it as if a key had brought it there.
 
-## [0.17.7] - 2026-11-07
+## [0.17.7] - 2026-11-07 13:49
 
 ### Added
 
@@ -970,14 +970,14 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **Tabs show as space.** Code and tools' output indented with tabs showed a missing glyph per tab.
 - **The frame rate choice shows its words.** In the advanced settings, "Screen" and "Uncapped" were cut; the choice goes under its description when it is too wide beside it.
 
-## [0.17.6] - 2026-11-07
+## [0.17.6] - 2026-11-07 12:30
 
 ### Changed
 
 - The main window and the windows of their own are framed by the toolkit's own window (gui_toolkit 0.92.0): one way to pace, build and show a frame for all of them. Nothing changes on screen.
 - The browser page steps aside only while a tab or a border of the dock is really held, as the press says, not as a flag remembered it.
 
-## [0.17.5] - 2026-11-07
+## [0.17.5] - 2026-11-07 10:32
 
 ### Added
 
@@ -1006,13 +1006,13 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - Windows of their own now take the main window's density, rounding, fonts and scroll bars, and their tooltips, hidden bars and clicks no longer wait for the next movement of the mouse.
 - Leaving a server closes the Delete and Rename dialogs, whose session was that server's.
 
-## [0.17.4] - 2026-11-07
+## [0.17.4] - 2026-11-07 06:28
 
 ### Changed
 
 - The Terminal runs on libghostty-vt 1.0, the first stable version of Ghostty's terminal library, built with Zig 0.17.
 
-## [0.17.3] - 2026-11-06
+## [0.17.3] - 2026-11-06 22:39
 
 ### Added
 
@@ -1029,14 +1029,14 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - The panel's window follows the session shown, with an empty panel for a session that has no browser.
 - A key held in the page counts once.
 
-## [0.17.2] - 2026-11-06
+## [0.17.2] - 2026-11-06 21:34
 
 ### Fixed
 
 - The Preview in a window of its own shows the page again: 0.17.1 left it black, behind the window's surface (gui_toolkit 0.90.0).
 - A shell in a window of its own no longer flickers as the window is resized: it is told its size once the size has rested, and what it paints then shows whole.
 
-## [0.17.1] - 2026-11-06
+## [0.17.1] - 2026-11-06 21:16
 
 ### Fixed
 
@@ -1048,7 +1048,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - The site's address is [ocn.froment.software](https://ocn.froment.software); the old one leads there.
 - `tools/occtools` does the rest of the project's machinery: `build`, `package`, `update`, `shots` and `site`, the same on Windows and Linux. The PowerShell, shell and Node scripts they replace are gone.
 
-## [0.17.0] - 2026-11-06
+## [0.17.0] - 2026-11-06 19:21
 
 ### Added
 
@@ -1058,20 +1058,20 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - The text of a diff's full view can be selected with the pointer: in a dialog, a press went to the dialog.
 
-## [0.16.0] - 2026-11-06
+## [0.16.0] - 2026-11-06 18:04
 
 ### Added
 
 - A diff in a window of its own, the whole of it: stacked, or old and new side by side, the choice kept. "Full view" and "… N more lines" under a diff open it, as does each file of "What this session changed"; Copy takes the diff. Twenty thousand lines scroll as lightly as twenty.
 - `tools/occtools`, the project's machinery in one program: `check`, `live` (the real program on the real server, failures made to happen, no delay waited out), `clean`, `measure`, `film`, `ship`.
 
-## [0.15.1] - 2026-11-06
+## [0.15.1] - 2026-11-06 13:52
 
 ### Changed
 
 - On gui_toolkit 0.86.0, its state machines made explicit: what the window, the pointer, the clipboard and the fonts do in the corners of their lives.
 
-## [0.15.0] - 2026-11-06
+## [0.15.0] - 2026-11-06 11:59
 
 ### Added
 
@@ -1095,7 +1095,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **The corners of a floating panel are round**: its content covered them.
 - The status bar says requests in flight once they last, not for the instant of each one.
 
-## [0.14.0] - 2026-11-06
+## [0.14.0] - 2026-11-06 10:06
 
 ### Changed
 
@@ -1120,7 +1120,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - Diffs keep lines that start with `--` or `++`. Back goes nowhere it should not. Find keeps its match when older messages arrive.
 - Preview: a view that failed can be tried again, and agents are told why. Checking for updates works again after one was found, and after changing channel. Uninstalling the running copy says it will go, and it does.
 
-## [0.13.0] - 2026-11-05
+## [0.13.0] - 2026-11-05 21:13
 
 ### Added
 
@@ -1131,7 +1131,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - **Text is smooth again below 150 %**: 0.12.3 took away its smoothing across its rows, which left it hard and stepped.
 
-## [0.12.3] - 2026-11-05
+## [0.12.3] - 2026-11-05 18:52
 
 ### Fixed
 
@@ -1142,7 +1142,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 - The home page says it is an independent project right under its name, where it is seen.
 
-## [0.12.2] - 2026-11-05
+## [0.12.2] - 2026-11-05 18:17
 
 ### Changed
 
@@ -1154,7 +1154,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - **Opening or closing a panel keeps your place** in the conversation.
 - **The bottom of a conversation stays put while a run works**: the throbber's line no longer jumps at each step.
 
-## [0.12.1] - 2026-11-05
+## [0.12.1] - 2026-11-05 17:46
 
 ### Changed
 
@@ -1163,7 +1163,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
   the server's own. What you set there stays, a `false` too. Settings, Advanced turns this off.
 - What a server no longer offers leaves the interface: its command, its entry in the menus.
 
-## [0.12.0] - 2026-11-05
+## [0.12.0] - 2026-11-05 14:46
 
 ### Added
 
@@ -1178,7 +1178,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 - The dock shows only the panels that are open.
 - Building needs nothing more: Zig and Ghostty, pinned, are fetched into `build/vt` the first time.
 
-## [0.11.9] - 2026-11-05
+## [0.11.9] - 2026-11-05 14:16
 
 ### Added
 
@@ -1191,7 +1191,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
 
 Schedules and artifacts are experimental on the server: where its configuration leaves them off, the dialogs say which option turns them on.
 
-## [0.11.8] - 2026-11-05
+## [0.11.8] - 2026-11-05 14:04
 
 ### Added
 
@@ -1202,7 +1202,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
   brings its models.
 - A key goes from its masked field to the server and is forgotten; of the credentials, only which is active is read.
 
-## [0.11.7] - 2026-11-05
+## [0.11.7] - 2026-11-05 13:53
 
 ### Added
 
@@ -1212,7 +1212,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - **Browse the files** (Ctrl+P): the folders of the session, a search, a file to read, its path to copy, Mention in the prompt. A file
   that is no text says so, a long one shows its beginning and says how much.
 
-## [0.11.6] - 2026-11-05
+## [0.11.6] - 2026-11-05 13:38
 
 ### Added
 
@@ -1229,7 +1229,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 
 - A diff from git no longer shows its `diff --git` and `index` lines.
 
-## [0.11.5] - 2026-11-05
+## [0.11.5] - 2026-11-05 13:13
 
 ### Added
 
@@ -1243,7 +1243,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - A sub-agent's question comes up in the conversation of its parent.
 - What a session waits for stays known when another one is opened.
 
-## [0.11.4] - 2026-11-05
+## [0.11.4] - 2026-11-05 12:04
 
 ### Added
 
@@ -1257,7 +1257,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 
 - gui_toolkit 0.83.0.
 
-## [0.11.3] - 2026-11-05
+## [0.11.3] - 2026-11-05 11:07
 
 ### Changed
 
@@ -1272,7 +1272,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - **What was sent during a run that is interrupted goes next.** It stayed in the server's inbox until the next prompt, and went glued to
   it: it looked lost. It now starts a run at once, in the order it was sent.
 
-## [0.11.2] - 2026-11-05
+## [0.11.2] - 2026-11-05 09:17
 
 ### Changed
 
@@ -1281,7 +1281,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
   an edge or a corner to resize them, double click it to go back; the size is kept from one run to the next (`layout.dialogs`).
 - In a narrow Settings dialog the list of pages shows its icons alone. Keyboard shortcuts scrolls.
 
-## [0.11.1] - 2026-11-05
+## [0.11.1] - 2026-11-05 08:28
 
 ### Changed
 
@@ -1301,7 +1301,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 
 - A long jump up (a match of Find, Home) no longer ends at the bottom when the first page arrives on the way.
 
-## [0.11.0] - 2026-11-05
+## [0.11.0] - 2026-11-05 06:08
 
 ### Added
 
@@ -1347,7 +1347,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - What follows the pointer without a button held (a row lit in a menu) came late on a variable refresh screen that Windows reports
   at 60 Hz: such frames now run at the screen's top rate (16.7 to 6 ms between two frames on a 180 Hz screen).
 
-## [0.10.0] - 2026-11-03
+## [0.10.0] - 2026-11-03 18:54
 
 ### Added
 
@@ -1364,7 +1364,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - **A faster start**: the graphics device is made while the rest starts, the fonts load meanwhile (first frame 200 -> 183 ms).
   `--frames=N` says how long the first frame took.
 
-## [0.9.0] - 2026-11-01
+## [0.9.0] - 2026-11-01 13:56
 
 ### Added
 
@@ -1378,7 +1378,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 
 - gui_toolkit 0.61.0.
 
-## [0.8.2] - 2026-11-01
+## [0.8.2] - 2026-11-01 12:36
 
 ### Changed
 
@@ -1389,7 +1389,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - **Command line arguments keep every character on Windows**: `--search=Łódź` arrived as `L�dz`, and paths and passwords
   outside the system's code page were damaged the same way.
 
-## [0.8.1] - 2026-11-01
+## [0.8.1] - 2026-11-01 11:51
 
 ### Changed
 
@@ -1402,7 +1402,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - **Find is legible**: the letters of a match are dark, on stronger backgrounds (contrast about 9 on the current match, 7 on
   the others, against 1.8 and 2.9 for code).
 
-## [0.8.0] - 2026-11-01
+## [0.8.0] - 2026-11-01 11:12
 
 ### Added
 
@@ -1420,7 +1420,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 
 - **Answers keep an even line height**: inline code no longer pushes its line apart.
 
-## [0.7.0] - 2026-11-01
+## [0.7.0] - 2026-11-01 09:05
 
 ### Added
 
@@ -1440,7 +1440,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 
 - **The join of the sidebar, its splitter and the bars**: one carved line, from the title bar down through the status bar, no doubled borders or gaps.
 
-## [0.6.0] - 2026-10-31
+## [0.6.0] - 2026-10-31 22:17
 
 ### Changed
 
@@ -1471,21 +1471,21 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - **Linux, from gui_toolkit 0.58**: copy and paste and drag and drop on X11, input during an animation on Wayland, key repeat. A
   resize no longer stretches the window, and the sizes of thin lines follow the scale.
 
-## [0.5.6] - 2026-10-31
+## [0.5.6] - 2026-10-31 12:19
 
 ### Fixed
 
 - **Closing Chrome's DevTools** could leave the program on freed memory: its edits could stay, and it could hang. Only with
   `TOOLKIT_DEVTOOLS=<port>` (gui_toolkit 0.57.1).
 
-## [0.5.5] - 2026-10-31
+## [0.5.5] - 2026-10-31 10:05
 
 ### Added
 
 - **Chrome's DevTools on the window**, with `TOOLKIT_DEVTOOLS=<port>`: the interface's boxes in Elements, their colours and sizes
   edited live, what a screen reader gets for each (gui_toolkit 0.57).
 
-## [0.5.4] - 2026-10-31
+## [0.5.4] - 2026-10-31 08:57
 
 ### Added
 
@@ -1505,7 +1505,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - **The scroll bar jumped up and down at the bottom of a conversation**, without end, after coming back to a session: events
   that draw nothing changed the conversation's height at every frame (gui_toolkit 0.56.2).
 
-## [0.5.3] - 2026-10-30
+## [0.5.3] - 2026-10-30 20:44
 
 ### Added
 
@@ -1518,7 +1518,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - **A screenshot over the DevTools Protocol** took two seconds and froze the window; 66 ms now, measured on a window of
   2310x1505 (gui_toolkit 0.56.1).
 
-## [0.5.2] - 2026-10-30
+## [0.5.2] - 2026-10-30 19:00
 
 ### Added
 
@@ -1537,7 +1537,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - **Screen readers**: the accent colours, sliders and switches of the settings, their reset buttons and the sidebar's
   splitter had no name; the colours and the splitter were not announced at all.
 
-## [0.5.1] - 2026-10-30
+## [0.5.1] - 2026-10-30 12:21
 
 ### Fixed
 
@@ -1546,7 +1546,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
   pointer over the sessions of a long conversation drew about 21 frames a second; 60 now, measured.
 - **The dialogs' close cross** sits clear of the scroll bar along a scrolling dialog's right edge.
 
-## [0.5.0] - 2026-10-30
+## [0.5.0] - 2026-10-30 09:55
 
 ### Added
 
@@ -1562,7 +1562,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - **Fields show their edge** when they are not focused: a lit rim around the composer, the searches and the dialogs'
   fields, which the accent replaces under the focus.
 
-## [0.4.3] - 2026-10-30
+## [0.4.3] - 2026-10-30 08:34
 
 ### Fixed
 
@@ -1577,7 +1577,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 
 - `--add-server` opens that dialog at start.
 
-## [0.4.2] - 2026-10-30
+## [0.4.2] - 2026-10-30 08:20
 
 ### Added
 
@@ -1588,7 +1588,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 
 - **The segmented choices** (Settings): the selected label and the others sit on the same line (gui_toolkit 0.52.0).
 
-## [0.4.1] - 2026-10-30
+## [0.4.1] - 2026-10-30 07:33
 
 ### Added
 
@@ -1600,7 +1600,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - **The icons are Lucide everywhere**, embedded in the program: Windows no longer depends on Segoe Fluent Icons, and the
   icons look the same on every system.
 
-## [0.4.0] - 2026-10-29
+## [0.4.0] - 2026-10-29 22:46
 
 ### Added
 
@@ -1634,7 +1634,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - Dialogs hid the window behind them (an opaque backdrop): it shows through now, blurred and darkened.
 - Setup: once installed, four buttons overflowed the dialog; what is left is Close and Open installed copy.
 
-## [0.3.0] - 2026-10-29
+## [0.3.0] - 2026-10-29 17:46
 
 ### Added
 
@@ -1658,7 +1658,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - CI: actions/checkout v7, actions/cache v6, actions/upload-artifact v7 (Node 24); the MSVC environment is set by a
   step of the setup action (vcvars64 through vswhere) instead of ilammy/msvc-dev-cmd, whose releases still run on Node 20.
 
-## [0.2.0] - 2026-10-29
+## [0.2.0] - 2026-10-29 17:03
 
 ### Added
 

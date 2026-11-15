@@ -56,6 +56,7 @@ App :: struct {
 	picker:         Picker,            // the pickers of the composer (agent, model) (picker.odin)
 	activity:       Activity,          // what runs behind the conversation (activity.odin)
 	palette:        Palette,           // Ctrl+K: the toolkit's palette and ocn's sources (palette.odin)
+	changelog:      prefs_page.Changelog,   // What's new: CHANGELOG.md on a page of the settings, said once after an update
 	jump:           Jump,              // Ctrl+Alt+G: Jump to message, a chooser of the session's prompts (jump.odin)
 	term_zooms:     store.Kept,        // each shell's zoom, by its id (terminal.odin)
 	session_zooms:  store.Kept,        // each session's conversation zoom, by its id (commands.odin content_zoom)
@@ -249,8 +250,6 @@ main_window_adopt :: proc(app: ^App) {
 @(private = "file")
 main_dragging :: proc(h: ^host.Host) -> bool {
 	app := (^App)(h.user)
-	app.pacer.choices.target_hz = app.prefs.target_hz
-	app.pacer.cadence.uncapped = app.prefs.uncapped
 	moving := ui.now_ms() - app.cx.pointer_ms < POINTER_MOVING_MS || app.cx.gliding   // (a panel that opens: read as closely)
 	return ui.active_key() != 0 || moving
 }
@@ -563,6 +562,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	draw.init(&app.dc, &app.r, &app.fonts)
 	logo_load(app)
 	theme_setup(&app.theme)
+	app.changelog.english = CHANGELOG   // (the settings' What's new page, a test's app too)
 	ui.init(&app.state, &app.fonts, &app.theme)
 	app.state.icon_font = app.icons   // (Lucide: the menus' icons are its characters)
 	prefs_init(app, prefs_file)   // (after ui.init: it sets the zoom, the density, the rounding and the palette)
@@ -662,6 +662,10 @@ main :: proc() {
 	}
 
 	updates_start(app)   // (a server or none: this program's own updates)
+	// (after an update, once: a message that stays opens the settings at What's new)
+	prefs_page.changelog_after_update(&app.changelog, &app.cfg_prefs, APP_VERSION, &app.announcer, proc(user: rawptr) {
+		settings_open_on((^App)(user), prefs_page.CHANGELOG_PAGE)
+	}, app)
 	// (the install read on a task: the installed copy cleans what an update left; OPENCODE_NATIVE_NO_SETUP: never offered)
 	prefs_page.install_offer(&app.install, &app.state, offer = opts.command != .Setup && os.get_env("OPENCODE_NATIVE_NO_SETUP", context.temp_allocator) == "")
 	// what the line asks to see at start

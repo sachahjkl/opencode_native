@@ -1917,18 +1917,6 @@ fr I/S
 en The frame rate and what a frame costs, in the status bar.
 fr Les images par seconde et le coût d'une image, dans la barre d'état.
 
-en Frame rate
-fr Images par seconde
-
-en The most frames a second, when there is something to draw (nothing moving, nothing is drawn): what the screen takes, a number, or no limit. Above the screen's rate it shows the newest of them: not smoother, but quicker to answer, for more power. What you type and click is read at once whatever this says.
-fr Le maximum d'images par seconde quand il y a quelque chose à dessiner (si rien ne bouge, rien n'est dessiné) : ce que prend l'écran, un nombre, ou sans limite. Au-delà de la fréquence de l'écran, il affiche la plus récente : pas plus fluide, mais plus réactif, pour plus de consommation. Ce que vous tapez et cliquez est lu tout de suite, quel que soit ce réglage.
-
-en Screen
-fr Écran
-
-en Uncapped
-fr Sans limite
-
 en Conversation
 fr Conversation
 
