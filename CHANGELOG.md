@@ -4,6 +4,14 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.60.0] - 2026-11-15 17:55
+
+### Added
+- **Answer from What you missed**: a waiting permission or question is answered right in its card (Allow once, Always, Reject, or the question's choices), without going to its session.
+
+### Fixed
+- **What you missed: its arrows off the edges**: the Previous and Next arrows under the cards no longer touch the panel's edges.
+
 ## [0.59.2] - 2026-11-15 16:55
 
 ### Fixed
@@ -1712,6 +1720,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.60.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.60.0
 [0.59.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.59.2
 [0.59.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.59.1
 [0.59.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.59.0
