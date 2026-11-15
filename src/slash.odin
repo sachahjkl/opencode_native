@@ -3,6 +3,7 @@
 // Escape closes it for this word. Enter on a name typed in full sends it, as before (slash_send).
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:strings"
 import "gt:ui"
@@ -125,7 +126,7 @@ slash_list :: proc(app: ^App, em: f32) {
 
 slash_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 	list := make([dynamic]Slash, context.temp_allocator)
-	for it in jarr(v, "data") { append(&list, Slash{strings.clone(jstr(it, "name")), strings.clone(jstr(it, "description"))}) }
+	for it in tk_json.array(v, "data") { append(&list, Slash{strings.clone(tk_json.text(it, "name")), strings.clone(tk_json.text(it, "description"))}) }
 	slash_load(app, list[:])
 	outgoing_catalog(app)
 }

@@ -4,6 +4,7 @@
 // first one another device can reach (not a loopback address: a tunnel, a network address), and how long the code lasts.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -57,7 +58,7 @@ server_urls_clear :: proc(app: ^App) {
 	clear(&app.server_urls)
 }
 
-pair_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { pair_load(app, jstr(v, "code"), jnum(v, "expires_in")) }
+pair_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { pair_load(app, tk_json.text(v, "code"), tk_json.number(v, "expires_in")) }
 
 pair_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
 	pair_failed(app, message)
@@ -66,9 +67,9 @@ pair_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (to
 
 // The server's version and the addresses it is reached at.
 info_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
-	delete(app.server_version); app.server_version = strings.clone(jstr(v, "version"))
+	delete(app.server_version); app.server_version = strings.clone(tk_json.text(v, "version"))
 	server_urls_clear(app)
-	for u in jarr(v, "urls") { if s, ok := u.(json.String); ok && s != "" { append(&app.server_urls, strings.clone(string(s))) } }
+	for u in tk_json.array(v, "urls") { if s, ok := u.(json.String); ok && s != "" { append(&app.server_urls, strings.clone(string(s))) } }
 }
 
 // The link that redeems `code` at the server's address `url` (temp memory).

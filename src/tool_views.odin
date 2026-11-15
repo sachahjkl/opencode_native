@@ -3,6 +3,7 @@
 // a command and what it printed, a checklist. The rest shows its input as keys and values, never as raw JSON.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -242,7 +243,7 @@ value_text :: proc(v: json.Value) -> string {
 	case json.Boolean: return x ? "yes" : "no"
 	case json.Null:    return "—"
 	}
-	return jtext(v)
+	return tk_json.to_text(v, "  ")
 }
 
 // The input as keys and values, in one well: a long value under its key, at the place of the short ones' values' start. (No well in

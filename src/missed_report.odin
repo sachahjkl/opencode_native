@@ -8,6 +8,7 @@
 // failed is not asked again by the view: Try again asks a failed one.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:strings"
@@ -141,12 +142,12 @@ missed_report_load :: proc(app: ^App, sid: string, v: json.Value) {
 // What the run did, from a page of its session's messages, the newest first: the run is what follows the newest prompt.
 missed_report_read :: proc(r: ^Missed_Report, v: json.Value) {
 	missed_report_empty(r)
-	items := jarr(v, "data")
+	items := tk_json.array(v, "data")
 	start := len(items)   // the newest prompt (none in the page: all of it is the run)
 	for it, i in items {
-		switch jstr(it, "type") {
-		case "user":  r.request = strings.clone(jstr(it, "text"))
-		case "shell": r.request = strings.concatenate({"$ ", jstr(it, "command")})
+		switch tk_json.text(it, "type") {
+		case "user":  r.request = strings.clone(tk_json.text(it, "text"))
+		case "shell": r.request = strings.concatenate({"$ ", tk_json.text(it, "command")})
 		case:         continue
 		}
 		start = i
@@ -154,11 +155,11 @@ missed_report_read :: proc(r: ^Missed_Report, v: json.Value) {
 	}
 	// the answer: the newest message of the agent that says something
 	answer: for it in items[:start] {
-		if jstr(it, "type") != "assistant" { continue }
+		if tk_json.text(it, "type") != "assistant" { continue }
 		b := strings.builder_make(context.temp_allocator)
-		for c in jarr(it, "content") {
-			if jstr(c, "type") != "text" { continue }
-			t := strings.trim_space(jstr(c, "text"))
+		for c in tk_json.array(it, "content") {
+			if tk_json.text(c, "type") != "text" { continue }
+			t := strings.trim_space(tk_json.text(c, "text"))
 			if t == "" { continue }
 			if strings.builder_len(b) > 0 { strings.write_string(&b, "\n\n") }
 			strings.write_string(&b, t)
@@ -170,12 +171,12 @@ missed_report_read :: proc(r: ^Missed_Report, v: json.Value) {
 	}
 	// the tools, in the order they ran: the files they wrote, the last todo list
 	#reverse for it in items[:start] {
-		if jstr(it, "type") != "assistant" { continue }
-		for c in jarr(it, "content") {
-			if jstr(c, "type") != "tool" { continue }
+		if tk_json.text(it, "type") != "assistant" { continue }
+		for c in tk_json.array(it, "content") {
+			if tk_json.text(c, "type") != "tool" { continue }
 			r.tools += 1
-			p := Part{tool_name = jstr(c, "name")}
-			tool_set_input(&p, jget(c, "state", "input"), context.temp_allocator)
+			p := Part{tool_name = tk_json.text(c, "name")}
+			tool_set_input(&p, tk_json.get(c, "state", "input"), context.temp_allocator)
 			if p.has_todos {
 				for t in r.todos { delete(t.content); delete(t.status) }
 				clear(&r.todos)
@@ -184,10 +185,10 @@ missed_report_read :: proc(r: ^Missed_Report, v: json.Value) {
 			if tool_kind(p.tool_name) != .Edit { continue }
 			if p.file_path != "" { missed_report_file(r, p.file_path); continue }
 			// (a patch names its files in what the server says of it)
-			for f in jarr(c, "state", "metadata", "files") {
-				path := jstr(f, "filePath")
-				if path == "" { path = jstr(f, "relativePath") }
-				if path == "" { path = jstr(f, "path") }
+			for f in tk_json.array(c, "state", "metadata", "files") {
+				path := tk_json.text(f, "filePath")
+				if path == "" { path = tk_json.text(f, "relativePath") }
+				if path == "" { path = tk_json.text(f, "path") }
 				if path != "" { missed_report_file(r, path) }
 			}
 		}

@@ -7,6 +7,8 @@ package ocn
 //
 //   odin test src -collection:gt=ext/gui_toolkit/src -o:speed -define:OCN_BENCH=true -define:ODIN_TEST_THREADS=1
 
+import prefs_page "gt:prefs_page"
+import tk_json "gt:json"
 import "base:runtime"
 import "core:encoding/json"
 import "core:fmt"
@@ -110,19 +112,19 @@ bench_page :: proc() -> string {
 		t := BENCH_EPOCH_MS + f64(turn) * BENCH_STEP_MS
 		item(&b, &n, fmt.tprintf(`{{"id":"msg_%d_i","type":"idle","outcome":"succeeded","time":{{"created":%f}}}}`, turn, t + 3))
 		parts := strings.builder_make(context.temp_allocator)
-		fmt.sbprintf(&parts, `{{"type":"reasoning","text":%s}}`, jquote(fmt.tprintf("Thinking about step %d: what the user asked, what the code does, what to measure first.", turn)))
+		fmt.sbprintf(&parts, `{{"type":"reasoning","text":%s}}`, tk_json.quote(fmt.tprintf("Thinking about step %d: what the user asked, what the code does, what to measure first.", turn)))
 		for k in 0 ..< BENCH_TOOLS {
 			out := strings.repeat(BENCH_OUTPUT, 10, context.temp_allocator)
 			fmt.sbprintf(&parts, `,{{"type":"tool","id":"call_%d_%d","name":"read","state":{{"status":"completed","input":{{"filePath":"src/file_%d.odin"}},"content":[{{"type":"text","text":%s}}]}},"time":{{"created":%f,"completed":%f}}}}`,
-				turn, k, k, jquote(out), t + 1, t + 2)
+				turn, k, k, tk_json.quote(out), t + 1, t + 2)
 		}
-		fmt.sbprintf(&parts, `,{{"type":"text","text":%s}}`, jquote(BENCH_ANSWER))
+		fmt.sbprintf(&parts, `,{{"type":"text","text":%s}}`, tk_json.quote(BENCH_ANSWER))
 		if turn == BENCH_TURNS - 1 {   // (a tool of no known kind, its input a long value and a short one)
-			fmt.sbprintf(&parts, `,{{"type":"tool","id":"call_x","name":"execute","state":{{"status":"completed","input":{{"code":%s,"session":"main"}},"content":[{{"type":"text","text":"{{\"connected\":true}}"}}]}},"time":{{"created":%f,"completed":%f}}}}`, jquote("const s = await tools.browse.status();\nlet p; try { p = await tools.browse.files.read('x.json') }\ncatch (e) { p = 'ERR ' + String(e.message) }\nreturn { connected: s.status.connected, p };"), t + 1, t + 2)
+			fmt.sbprintf(&parts, `,{{"type":"tool","id":"call_x","name":"execute","state":{{"status":"completed","input":{{"code":%s,"session":"main"}},"content":[{{"type":"text","text":"{{\"connected\":true}}"}}]}},"time":{{"created":%f,"completed":%f}}}}`, tk_json.quote("const s = await tools.browse.status();\nlet p; try { p = await tools.browse.files.read('x.json') }\ncatch (e) { p = 'ERR ' + String(e.message) }\nreturn { connected: s.status.connected, p };"), t + 1, t + 2)
 		}
 		item(&b, &n, fmt.tprintf(`{{"id":"msg_%d_a","type":"assistant","agent":"build","model":{{"id":"claude-model","providerID":"anthropic"}},"finish":"stop","cost":0.01,"tokens":{{"input":1200,"output":800,"reasoning":50,"cache":{{"read":9000}}}},"time":{{"created":%f,"completed":%f}},"content":[%s]}}`,
 			turn, t + 1, t + 2, strings.to_string(parts)))
-		item(&b, &n, fmt.tprintf(`{{"id":"msg_%d_u","type":"user","text":%s,"time":{{"created":%f}}}}`, turn, jquote(fmt.tprintf("Step %d: look at the lazy column and tell me what it costs.", turn)), t))
+		item(&b, &n, fmt.tprintf(`{{"id":"msg_%d_u","type":"user","text":%s,"time":{{"created":%f}}}}`, turn, tk_json.quote(fmt.tprintf("Step %d: look at the lazy column and tell me what it costs.", turn)), t))
 	}
 	strings.write_string(&b, `],"cursor":{"next":""}}`)
 	return strings.to_string(b)
@@ -1223,9 +1225,9 @@ long_parts_page :: proc() -> string {
 	fmt.sbprintf(&b, `{{"id":"lp_3_a","type":"assistant","agent":"build","model":{{"id":"m","providerID":"p"}},"finish":"stop","time":{{"created":%f,"completed":%f}},"content":[{{"type":"text","text":"Done."}}]}},`, t + 40, t + 41)
 	fmt.sbprintf(&b, `{{"id":"lp_3_u","type":"user","text":"And then?","time":{{"created":%f}}}},`, t + 30)
 	fmt.sbprintf(&b, `{{"id":"lp_2_a","type":"assistant","agent":"build","model":{{"id":"m","providerID":"p"}},"finish":"stop","time":{{"created":%f,"completed":%f}},"content":[{{"type":"reasoning","text":%s}},{{"type":"tool","id":"call_sh","name":"shell","state":{{"status":"completed","input":{{"command":"make all"}},"content":[{{"type":"text","text":%s}}]}},"time":{{"created":%f,"completed":%f}}}},{{"type":"text","text":"It built."}}]}},`,
-		t + 20, t + 25, jquote(long), jquote(long), t + 21, t + 22)
+		t + 20, t + 25, tk_json.quote(long), tk_json.quote(long), t + 21, t + 22)
 	fmt.sbprintf(&b, `{{"id":"lp_2_u","type":"user","text":"Build it.","time":{{"created":%f}}}},`, t + 10)
-	fmt.sbprintf(&b, `{{"id":"lp_1_a","type":"assistant","agent":"build","model":{{"id":"m","providerID":"p"}},"finish":"stop","time":{{"created":%f,"completed":%f}},"content":[{{"type":"text","text":%s}}]}},`, t + 5, t + 6, jquote(strings.repeat("A paragraph above, to have something to scroll back to. ", 80, context.temp_allocator)))
+	fmt.sbprintf(&b, `{{"id":"lp_1_a","type":"assistant","agent":"build","model":{{"id":"m","providerID":"p"}},"finish":"stop","time":{{"created":%f,"completed":%f}},"content":[{{"type":"text","text":%s}}]}},`, t + 5, t + 6, tk_json.quote(strings.repeat("A paragraph above, to have something to scroll back to. ", 80, context.temp_allocator)))
 	fmt.sbprintf(&b, `{{"id":"lp_1_u","type":"user","text":"Hello.","time":{{"created":%f}}}}`, t)
 	strings.write_string(&b, `],"cursor":{"next":""}}`)
 	return strings.to_string(b)
@@ -1270,7 +1272,7 @@ seven_thoughts_page :: proc() -> string {
 	for k in 0 ..< 7 {
 		if k > 0 { strings.write_byte(&parts, ',') }
 		fmt.sbprintf(&parts, `{{"type":"reasoning","text":%s}},{{"type":"tool","id":"call_%d","name":"shell","state":{{"status":"completed","input":{{"command":"cat docs/%d.md"}},"content":[{{"type":"text","text":"ok"}}]}},"time":{{"created":%f,"completed":%f}}}}`,
-			jquote(strings.to_string(long)), k, k, t + 21, t + 22)
+			tk_json.quote(strings.to_string(long)), k, k, t + 21, t + 22)
 	}
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintf(&b, `{{"data":[`)
@@ -1322,7 +1324,7 @@ a_thought_opened_while_the_run_goes_on_stays :: proc(t: ^testing.T) {
 @(private = "file")
 stream_delta :: proc(app: ^App, i: int) {
 	text := i % BENCH_PARAGRAPH_DELTAS == 0 ? fmt.tprintf("\n\n%s", BENCH_DELTA) : BENCH_DELTA
-	bench_event(app, fmt.tprintf(`{{"type":"session.text.delta","data":{{"sessionID":"%s","assistantMessageID":"live_a","ordinal":0,"delta":%s}}}}`, app.chat.id, jquote(text)))
+	bench_event(app, fmt.tprintf(`{{"type":"session.text.delta","data":{{"sessionID":"%s","assistantMessageID":"live_a","ordinal":0,"delta":%s}}}}`, app.chat.id, tk_json.quote(text)))
 }
 
 // What the reader reads, read up in the conversation: `name` exactly at `y` on the screen, and the view moved by no glide.
@@ -1413,7 +1415,7 @@ what_is_read_stays_while_the_answer_streams :: proc(t: ^testing.T) {
 		bench_event(app, fmt.tprintf(`{{"type":"session.tool.called","data":{{"sessionID":"%s","assistantMessageID":"live_a","id":"call_live","input":{{"filePath":"src/live.odin"}}}}}}`, c.id))
 		session.frames(s, 1)
 		if !read_stays(t, app, s, name, y, "tool called", 0) { return }
-		bench_event(app, fmt.tprintf(`{{"type":"session.tool.success","data":{{"sessionID":"%s","assistantMessageID":"live_a","id":"call_live","content":[{{"type":"text","text":%s}}]}}}}`, c.id, jquote(strings.repeat(BENCH_OUTPUT, 30, context.temp_allocator))))
+		bench_event(app, fmt.tprintf(`{{"type":"session.tool.success","data":{{"sessionID":"%s","assistantMessageID":"live_a","id":"call_live","content":[{{"type":"text","text":%s}}]}}}}`, c.id, tk_json.quote(strings.repeat(BENCH_OUTPUT, 30, context.temp_allocator))))
 		for i in 0 ..< 3 {
 			session.frames(s, 1)
 			if !read_stays(t, app, s, name, y, "tool done", i) { return }
@@ -1449,7 +1451,7 @@ a_paused_goal_says_why :: proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
 		reason := "The session failed: You've hit your 5-hour limit, which resets at 11:00. Upgrade your plan or wait for the limit to reset before you resume the goal, which keeps its rounds."
-		v, err := json.parse_string(fmt.tprintf(`{{"objective":"Booted OS with a REPL","status":"paused","reason":%s,"rounds":3,"maxRounds":50}}`, jquote(reason)), allocator = context.temp_allocator)
+		v, err := json.parse_string(fmt.tprintf(`{{"objective":"Booted OS with a REPL","status":"paused","reason":%s,"rounds":3,"maxRounds":50}}`, tk_json.quote(reason)), allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
 		goal_set(app, app.chat.id, v)
 		chat_scroll_event(app, Scroll_Signal.Snap)
@@ -1461,7 +1463,7 @@ a_paused_goal_says_why :: proc(t: ^testing.T) {
 		testing.expect(t, why.rect.min.y >= line.rect.max.y - 0.5 && why.rect.max.y <= strip.rect.min.y, "the reason under its line, over the strip")
 		testing.expect(t, why.rect.max.y - why.rect.min.y > em * 1.5, "all of it, on more than one line")
 		testing.expect(t, strings.contains(why.text, "keeps its rounds"), "to its end")
-		active, _ := json.parse_string(fmt.tprintf(`{{"objective":"Booted OS with a REPL","status":"active","reason":%s}}`, jquote(reason)), allocator = context.temp_allocator)
+		active, _ := json.parse_string(fmt.tprintf(`{{"objective":"Booted OS with a REPL","status":"active","reason":%s}}`, tk_json.quote(reason)), allocator = context.temp_allocator)
 		goal_set(app, app.chat.id, active)
 		session.frames(s, 2)
 		testing.expect(t, session.find(s, "goal_reason") == nil, "it goes when the goal goes on")
@@ -1727,7 +1729,7 @@ the_window_opens_where_it_was :: proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, _ := bench_app(t)
 		platform.set_placement(app.win, {{-1700, 120, 1400, 900}, false})   // (the monitor on the left)
-		app.cx.placement_ms = -PLACEMENT_CHECK_MS   // (looked at long ago)
+		app.cx.placement.checked_ms = -prefs_page.PLACEMENT_CHECK_MS   // (looked at long ago)
 		placement_track(app)
 		testing.expect_value(t, config.string_of(&app.cfg_prefs, "window.placement"), "-1700 120 1400 900")
 		// another start: the window opens elsewhere, the placement kept puts it back
@@ -1736,14 +1738,14 @@ the_window_opens_where_it_was :: proc(t: ^testing.T) {
 		testing.expect_value(t, platform.get_placement(app.win), platform.Placement{{-1700, 120, 1400, 900}, false})
 		// maximized there (as by its title bar: set_placement on Windows keeps it for show_window)
 		platform.toggle_maximize(app.win)
-		app.cx.placement_ms = -PLACEMENT_CHECK_MS   // (looked at long ago)
+		app.cx.placement.checked_ms = -prefs_page.PLACEMENT_CHECK_MS   // (looked at long ago)
 		placement_track(app)
 		testing.expect_value(t, config.string_of(&app.cfg_prefs, "window.placement"), "-1700 120 1400 900 maximized")
 		// unchanged: nothing written again
-		app.cx.placement_ms = -PLACEMENT_CHECK_MS   // (looked at long ago)
-		before := app.cx.placement_seen
+		app.cx.placement.checked_ms = -prefs_page.PLACEMENT_CHECK_MS   // (looked at long ago)
+		before := app.cx.placement.seen
 		placement_track(app)
-		testing.expect(t, app.cx.placement_seen == before, "the same: kept as it was")
+		testing.expect(t, app.cx.placement.seen == before, "the same: kept as it was")
 	})
 }
 
@@ -1753,7 +1755,7 @@ the_window_opens_where_it_was :: proc(t: ^testing.T) {
 mermaid_page :: proc() -> string {
 	t := BENCH_EPOCH_MS
 	answer :: proc(id, text: string, at: f64) -> string {
-		return fmt.tprintf(`{{"id":"%s","type":"assistant","agent":"build","model":{{"id":"m","providerID":"p"}},"finish":"stop","time":{{"created":%f,"completed":%f}},"content":[{{"type":"text","text":%s}}]}}`, id, at, at + 1, jquote(text))
+		return fmt.tprintf(`{{"id":"%s","type":"assistant","agent":"build","model":{{"id":"m","providerID":"p"}},"finish":"stop","time":{{"created":%f,"completed":%f}},"content":[{{"type":"text","text":%s}}]}}`, id, at, at + 1, tk_json.quote(text))
 	}
 	b := strings.builder_make(context.temp_allocator)
 	fmt.sbprintf(&b, `{{"data":[%s,%s,%s,`, answer("mm_3", "Still writing:\n\n```mermaid\nflowchart LR\n  X --> Y\n", t + 30), answer("mm_2", "Not one:\n\n```mermaid\nthis is no diagram\n```\n", t + 20), answer("mm_1", "Here:\n\n```mermaid\nflowchart LR\n  A[Open the session] --> B{Busy?}\n  B -->|yes| C[Steer]\n  B -->|no| D[Send]\n```\n", t + 10))

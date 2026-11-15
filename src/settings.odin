@@ -3,6 +3,7 @@
 // its MCP servers, its saved permissions, its usage, its providers, agents, skills, commands, its configuration files).
 package ocn
 
+import tk_json "gt:json"
 import "base:runtime"
 
 import "core:encoding/json"
@@ -88,7 +89,6 @@ PREF_DEFS := [?]config.Def{
 	{name = "session.provider", description = "The provider of that model.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "session.variant", description = "How hard that model thinks (one of its variants; empty: its default).", kind = .String, default = {s = ""}, hidden = true},
 	{name = "browser.tools", title = i18n.later("Tools"), description = i18n.later("Let the agents drive the Preview panel (open pages, read them, click, run scripts): the browser tools, while this window is open."), kind = .Bool, default = {b = true}},
-	{name = "window.placement", description = "Where the window was (platform.placement_text): it opens there again.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "general.start", title = i18n.later("Start"), description = i18n.later("What the window opens on: the home page, or the session it showed when it closed (the latest one if it showed none yet)."), kind = .String, default = {s = "last"}, choices = {"home", "last"}, choice_labels = {i18n.later("Home"), i18n.later("Last")}},
 	{name = "advanced.experimental", title = i18n.later("Experimental"), description = i18n.later("Turn on the experimental options of a server on this computer, in its configuration file. What you set there yourself stays."), kind = .Bool, default = {b = true}},
 	{name = "advanced.fps", title = i18n.later("FPS"), description = i18n.later("The frame rate and what a frame costs, in the status bar."), kind = .Bool, default = {b = false}},
@@ -336,16 +336,16 @@ session_title_of :: proc(app: ^App, sid: string) -> string {
 
 // What a permission asks, in a line: the server's message, else its action and what it is on.
 permission_words :: proc(req: json.Value) -> string {
-	if m := strings.trim_space(jstr(req, "message")); m != "" { return first_line(m) }
-	what := jstr(req, "action")
-	if res := jarr(req, "resources"); len(res) > 0 { if r, ok := res[0].(json.String); ok { what = fmt.tprintf("%s %s", what, string(r)) } }
+	if m := strings.trim_space(tk_json.text(req, "message")); m != "" { return first_line(m) }
+	what := tk_json.text(req, "action")
+	if res := tk_json.array(req, "resources"); len(res) > 0 { if r, ok := res[0].(json.String); ok { what = fmt.tprintf("%s %s", what, string(r)) } }
 	return what
 }
 
 // What a form asks, in a line: its title, else its first field's.
 form_words :: proc(form: json.Value) -> string {
-	if t := strings.trim_space(jstr(form, "title")); t != "" { return first_line(t) }
-	if f := jarr(form, "fields"); len(f) > 0 { return first_line(jstr(f[0], "title")) }
+	if t := strings.trim_space(tk_json.text(form, "title")); t != "" { return first_line(t) }
+	if f := tk_json.array(form, "fields"); len(f) > 0 { return first_line(tk_json.text(f[0], "title")) }
 	return ""
 }
 
@@ -512,56 +512,56 @@ server_facts_answer :: proc(app: ^App, kind: Req_Kind, v: json.Value) {
 	fact := Fact.Cfg
 	for k in Fact { if FACT_READS[k].kind == kind { fact = k } }
 	a := fact_clear(f, fact)
-	data := jget(v, "data")
-	list := jarr(v, "data")
+	data := tk_json.get(v, "data")
+	list := tk_json.array(v, "data")
 	if data == nil { if arr, ok := v.(json.Array); ok { list = arr } }
 	#partial switch kind {
 	case .Cfg:
 		arr, _ := v.(json.Array)
 		if arr == nil { arr = list }
 		for doc in arr {
-			if sh := jstr(doc, "info", "shell"); sh != "" { f.shell = strings.clone(sh, a) }
-			path := jstr(doc, "path")
+			if sh := tk_json.text(doc, "info", "shell"); sh != "" { f.shell = strings.clone(sh, a) }
+			path := tk_json.text(doc, "path")
 			if path == "" { continue }
 			keys := make([dynamic]string, a)
-			if obj, ok := jget(doc, "info").(json.Object); ok { for k in obj { append(&keys, strings.clone(k, a)) } }
+			if obj, ok := tk_json.get(doc, "info").(json.Object); ok { for k in obj { append(&keys, strings.clone(k, a)) } }
 			append(&f.files, Config_File{path = strings.clone(path, a), keys = keys[:]})
 		}
 	case .Shells:
-		for it in list { append(&f.shells, Shell_Info{strings.clone(jstr(it, "name"), a), strings.clone(jstr(it, "path"), a), jbool(it, "acceptable")}) }
+		for it in list { append(&f.shells, Shell_Info{strings.clone(tk_json.text(it, "name"), a), strings.clone(tk_json.text(it, "path"), a), tk_json.boolean(it, "acceptable")}) }
 	case .Mcp:
 		for it in list {
-			st := jstr(it, "status", "status")
-			if st == "" { st = jstr(it, "status") }
+			st := tk_json.text(it, "status", "status")
+			if st == "" { st = tk_json.text(it, "status") }
 			status := st == "connected" ? Mcp_Status.Connected : st == "failed" ? Mcp_Status.Failed : Mcp_Status.Other
-			append(&f.mcp, Mcp_Server{name = strings.clone(jstr(it, "name"), a), status = status, word = strings.clone(st, a), error = strings.clone(jstr(it, "status", "error"), a)})
+			append(&f.mcp, Mcp_Server{name = strings.clone(tk_json.text(it, "name"), a), status = status, word = strings.clone(st, a), error = strings.clone(tk_json.text(it, "status", "error"), a)})
 		}
 	case .Saved:
 		for it in list {
 			append(&f.saved, Saved_Perm{
-				id = strings.clone(jstr(it, "id"), a), action = strings.clone(jstr(it, "action"), a), resource = strings.clone(jstr(it, "resource"), a),
-				effect = strings.clone(jstr(it, "effect"), a), project = strings.clone(jstr(it, "projectID"), a),
+				id = strings.clone(tk_json.text(it, "id"), a), action = strings.clone(tk_json.text(it, "action"), a), resource = strings.clone(tk_json.text(it, "resource"), a),
+				effect = strings.clone(tk_json.text(it, "effect"), a), project = strings.clone(tk_json.text(it, "projectID"), a),
 			})
 		}
 	case .Usage:
-		f.workspace = strings.clone(jstr(data, "workspace", "name"), a)
-		f.usage_url = strings.clone(jstr(data, "workspace", "usageURL"), a)
-		if goo, ok := jget(data, "go").(json.Object); ok {
+		f.workspace = strings.clone(tk_json.text(data, "workspace", "name"), a)
+		f.usage_url = strings.clone(tk_json.text(data, "workspace", "usageURL"), a)
+		if goo, ok := tk_json.get(data, "go").(json.Object); ok {
 			for name in ([]string{"rolling", "weekly", "monthly"}) {
 				w := goo[name] or_else nil
 				if w == nil { continue }
-				append(&f.limits, Limit{name, jnum(w, "percent"), jbool(w, "limited"), jnum(w, "resetsAt")})
+				append(&f.limits, Limit{name, tk_json.number(w, "percent"), tk_json.boolean(w, "limited"), tk_json.number(w, "resetsAt")})
 			}
 		}
-		for b in jarr(data, "budgets") {
-			append(&f.budgets, Budget{strings.clone(jstr(b, "scope"), a), jnum(b, "limit"), jnum(b, "spent"), jnum(b, "resetsAt")})
+		for b in tk_json.array(data, "budgets") {
+			append(&f.budgets, Budget{strings.clone(tk_json.text(b, "scope"), a), tk_json.number(b, "limit"), tk_json.number(b, "spent"), tk_json.number(b, "resetsAt")})
 		}
 	case .Providers:
-		for it in list { append(&f.providers, Named{strings.clone(jstr(it, "name"), a), strings.clone(jstr(it, "id"), a)}) }
+		for it in list { append(&f.providers, Named{strings.clone(tk_json.text(it, "name"), a), strings.clone(tk_json.text(it, "id"), a)}) }
 	case .Skills:
-		for it in list { append(&f.skills, Named{strings.clone(jstr(it, "name"), a), strings.clone(first_line(jstr(it, "description")), a)}) }
+		for it in list { append(&f.skills, Named{strings.clone(tk_json.text(it, "name"), a), strings.clone(first_line(tk_json.text(it, "description")), a)}) }
 	case .Commands:
-		for it in list { append(&f.commands, Named{strings.clone(jstr(it, "name"), a), strings.clone(first_line(jstr(it, "description")), a)}) }
+		for it in list { append(&f.commands, Named{strings.clone(tk_json.text(it, "name"), a), strings.clone(first_line(tk_json.text(it, "description")), a)}) }
 	}
 }
 
@@ -594,7 +594,7 @@ mcp_done :: proc(app: ^App, name: string) {
 // Shown as set at once; `was` comes back if the server says no, and what it says then is read.
 shell_set :: proc(app: ^App, s: Shell_Info) {
 	f := &app.facts
-	request(app, .Shell_Set, "PATCH", "/api/experimental/config", fmt.tprintf(`{{"shell":%s}}`, jquote(s.path)), tag = f.shell)
+	request(app, .Shell_Set, "PATCH", "/api/experimental/config", fmt.tprintf(`{{"shell":%s}}`, tk_json.quote(s.path)), tag = f.shell)
 	f.shell = strings.clone(s.path, virtual.arena_allocator(&f.arenas[.Cfg]))
 }
 

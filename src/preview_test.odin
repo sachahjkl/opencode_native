@@ -3,6 +3,7 @@ package ocn
 // A browser per session, of one tab or several, on a host that keeps what it is asked instead of asking a web view (Web_Host): which view, which address, shown
 // or not. No window, no real page, nothing waited for: what a view says is said by the test, through what a real one calls.
 
+import tk_json "gt:json"
 import "base:runtime"
 import "core:fmt"
 import "core:strings"
@@ -136,9 +137,9 @@ answers :: proc(l: ^Browser_Link) -> string {
 // A call of an agent of `session`, as the server sends it. ("": one that names none.)
 @(private = "file")
 agent_call :: proc(app: ^App, l: ^Browser_Link, id: int, name, session: string, url := "http://x", tab := "", more := "") {
-	meta := session != "" ? fmt.tprintf(`,"_meta":{{%s:%s}}`, jquote(BROWSER_SESSION_META), jquote(session)) : ""
-	which := tab != "" ? fmt.tprintf(`,"tabID":%s`, jquote(tab)) : ""
-	browser_message(app, {l, 1}, fmt.tprintf(`{{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{{"name":%s,"arguments":{{"url":%s%s%s}}%s}}}}`, id, jquote(name), jquote(url), which, more, meta))
+	meta := session != "" ? fmt.tprintf(`,"_meta":{{%s:%s}}`, tk_json.quote(BROWSER_SESSION_META), tk_json.quote(session)) : ""
+	which := tab != "" ? fmt.tprintf(`,"tabID":%s`, tk_json.quote(tab)) : ""
+	browser_message(app, {l, 1}, fmt.tprintf(`{{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{{"name":%s,"arguments":{{"url":%s%s%s}}%s}}}}`, id, tk_json.quote(name), tk_json.quote(url), which, more, meta))
 }
 
 ////////////////////////////////

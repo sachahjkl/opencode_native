@@ -15,6 +15,7 @@
 // as Escape then Enter would.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -102,11 +103,11 @@ item_free :: proc(it: Queue_Item) { delete(it.id); delete(it.text); delete(it.pa
 // An item as the list, an event or a prompt's answer gives it: its type, its delivery, its payload.
 @(private = "file")
 item_of :: proc(id: string, v: json.Value, born: Seq) -> Queue_Item {
-	payload := jget(v, "payload")
+	payload := tk_json.get(v, "payload")
 	data, _ := json.marshal(payload, allocator = context.temp_allocator)
 	return {
-		id = strings.clone(id), text = strings.clone(jstr(payload, "text")), payload = strings.clone(string(data)),
-		delivery = delivery_of(jstr(v, "delivery")), files = len(jarr(payload, "files")), skills = len(jarr(payload, "skills")) > 0, born = born,
+		id = strings.clone(id), text = strings.clone(tk_json.text(payload, "text")), payload = strings.clone(string(data)),
+		delivery = delivery_of(tk_json.text(v, "delivery")), files = len(tk_json.array(payload, "files")), skills = len(tk_json.array(payload, "skills")) > 0, born = born,
 	}
 }
 
@@ -120,11 +121,11 @@ queue_add :: proc(app: ^App, id: string, v: json.Value, born: Seq) {
 
 // The answer to a prompt: the server has it. Should the stream be late or down, the list is right all the same.
 queue_prompt_answered :: proc(app: ^App, session: string, v: json.Value) {
-	item := jget(v, "data")
-	if session != app.chat.id || jstr(item, "type") != "user" { return }
-	if !app.chat.busy && delivery_of(jstr(item, "delivery")) == .Steer { return }   // (it goes at once)
-	if queue_shown_as_sent(app, jstr(item, "id")) { return }
-	queue_add(app, jstr(item, "id"), item, queue_tick(app))
+	item := tk_json.get(v, "data")
+	if session != app.chat.id || tk_json.text(item, "type") != "user" { return }
+	if !app.chat.busy && delivery_of(tk_json.text(item, "delivery")) == .Steer { return }   // (it goes at once)
+	if queue_shown_as_sent(app, tk_json.text(item, "id")) { return }
+	queue_add(app, tk_json.text(item, "id"), item, queue_tick(app))
 }
 
 // It left the list: delivered, cancelled, here or elsewhere.
@@ -161,18 +162,18 @@ queue_load :: proc(app: ^App, session: string, v: json.Value, asked_at: Seq) {
 	q := &app.cx.queue
 	if session != q.session { return }
 	next := make([dynamic]Queue_Item, 0, max(len(q.items), 4))
-	for it in jarr(v, "data") {
-		id := jstr(it, "id")
-		if id == "" || jstr(it, "type") != "user" { continue }
+	for it in tk_json.array(v, "data") {
+		id := tk_json.text(it, "id")
+		if id == "" || tk_json.text(it, "type") != "user" { continue }
 		if g := gone_find(&q.gone, id); g != nil && newer(g.at, asked_at) { continue }
 		if old := queue_find(app, id); old != nil {
-			if !newer(old.changed, asked_at) { old.delivery = delivery_of(jstr(it, "delivery")) }
+			if !newer(old.changed, asked_at) { old.delivery = delivery_of(tk_json.text(it, "delivery")) }
 			append(&next, old^)
 			old.id = ""   // (it moved)
 			continue
 		}
 		// (sent while nothing ran, on its way to the run that takes it: it shows already)
-		if delivery_of(jstr(it, "delivery")) == .Steer && queue_shown_as_sent(app, id) { continue }
+		if delivery_of(tk_json.text(it, "delivery")) == .Steer && queue_shown_as_sent(app, id) { continue }
 		append(&next, item_of(id, it, 0))
 	}
 	for &old in q.items {
@@ -208,34 +209,34 @@ queue_forget :: proc(app: ^App) { queue_switch(app) }
 // uri. A skill goes by its id. Out of the inbox it has to be said again.
 prompt_of_payload :: proc(v: json.Value) -> string {
 	b := strings.builder_make(context.temp_allocator)
-	fmt.sbprintf(&b, `{{"text":%s`, jquote(jstr(v, "text")))
+	fmt.sbprintf(&b, `{{"text":%s`, tk_json.quote(tk_json.text(v, "text")))
 	marshalled :: proc(v: json.Value) -> string {
 		data, _ := json.marshal(v, allocator = context.temp_allocator)
 		return string(data)
 	}
-	if files := jarr(v, "files"); len(files) > 0 {
+	if files := tk_json.array(v, "files"); len(files) > 0 {
 		strings.write_string(&b, `,"files":[`)
 		for f, i in files {
 			if i > 0 { strings.write_byte(&b, ',') }
-			fmt.sbprintf(&b, `{{"uri":%s`, jquote(payload_file_uri(f)))
-			if name := jstr(f, "name"); name != "" { fmt.sbprintf(&b, `,"name":%s`, jquote(name)) }
-			if m := jget(f, "mention"); m != nil { fmt.sbprintf(&b, `,"mention":%s`, marshalled(m)) }
+			fmt.sbprintf(&b, `{{"uri":%s`, tk_json.quote(payload_file_uri(f)))
+			if name := tk_json.text(f, "name"); name != "" { fmt.sbprintf(&b, `,"name":%s`, tk_json.quote(name)) }
+			if m := tk_json.get(f, "mention"); m != nil { fmt.sbprintf(&b, `,"mention":%s`, marshalled(m)) }
 			strings.write_byte(&b, '}')
 		}
 		strings.write_byte(&b, ']')
 	}
-	if agents := jget(v, "agents"); len(jarr(v, "agents")) > 0 { fmt.sbprintf(&b, `,"agents":%s`, marshalled(agents)) }
-	if skills := jarr(v, "skills"); len(skills) > 0 {
+	if agents := tk_json.get(v, "agents"); len(tk_json.array(v, "agents")) > 0 { fmt.sbprintf(&b, `,"agents":%s`, marshalled(agents)) }
+	if skills := tk_json.array(v, "skills"); len(skills) > 0 {
 		strings.write_string(&b, `,"skills":[`)
 		for s, i in skills {
 			if i > 0 { strings.write_byte(&b, ',') }
-			fmt.sbprintf(&b, `{{"id":%s`, jquote(jstr(s, "id")))
-			if m := jget(s, "mention"); m != nil { fmt.sbprintf(&b, `,"mention":%s`, marshalled(m)) }
+			fmt.sbprintf(&b, `{{"id":%s`, tk_json.quote(tk_json.text(s, "id")))
+			if m := tk_json.get(s, "mention"); m != nil { fmt.sbprintf(&b, `,"mention":%s`, marshalled(m)) }
 			strings.write_byte(&b, '}')
 		}
 		strings.write_byte(&b, ']')
 	}
-	if meta := jget(v, "metadata"); meta != nil { fmt.sbprintf(&b, `,"metadata":%s`, marshalled(meta)) }
+	if meta := tk_json.get(v, "metadata"); meta != nil { fmt.sbprintf(&b, `,"metadata":%s`, marshalled(meta)) }
 	strings.write_byte(&b, '}')
 	return strings.to_string(b)
 }
@@ -243,9 +244,9 @@ prompt_of_payload :: proc(v: json.Value) -> string {
 // Where a file of a payload can be read from again: what it came from, else its data.
 @(private = "file")
 payload_file_uri :: proc(f: json.Value) -> string {
-	if u := jstr(f, "uri"); u != "" { return u }
-	if jstr(f, "source", "type") == "uri" { if u := jstr(f, "source", "uri"); u != "" { return u } }
-	return fmt.tprintf("data:%s;base64,%s", jstr(f, "mime"), jstr(f, "data"))
+	if u := tk_json.text(f, "uri"); u != "" { return u }
+	if tk_json.text(f, "source", "type") == "uri" { if u := tk_json.text(f, "source", "uri"); u != "" { return u } }
+	return fmt.tprintf("data:%s;base64,%s", tk_json.text(f, "mime"), tk_json.text(f, "data"))
 }
 
 ////////////////////////////////
@@ -506,12 +507,12 @@ inbox_resume :: proc(app: ^App, id: string) {
 inbox_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 	newest: json.Value
 	last: f64
-	for item in jarr(v, "data") {
-		if jstr(item, "type") != "user" || delivery_of(jstr(item, "delivery")) == .Queue { continue }
-		if t := jnum(item, "time", "created"); t >= last { last, newest = t, item }
+	for item in tk_json.array(v, "data") {
+		if tk_json.text(item, "type") != "user" || delivery_of(tk_json.text(item, "delivery")) == .Queue { continue }
+		if t := tk_json.number(item, "time", "created"); t >= last { last, newest = t, item }
 	}
 	if newest == nil { return }
-	request(app, .Inbox_Take, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", r.tag, jstr(newest, "id")), prompt_of_payload(jget(newest, "payload")), r.tag)
+	request(app, .Inbox_Take, "DELETE", fmt.tprintf("/api/session/%s/inbox/%s", r.tag, tk_json.text(newest, "id")), prompt_of_payload(tk_json.get(newest, "payload")), r.tag)
 }
 
 // (a server without one: nothing to say)

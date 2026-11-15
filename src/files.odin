@@ -3,6 +3,7 @@
 // inlines; the text keeps its `@path`, and the server is told where it stands in it.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -157,15 +158,15 @@ mention_load :: proc(app: ^App, v: json.Value) {
 	m.sel = sel
 	_ = virtual.arena_init_growing(&m.arena)
 	a := virtual.arena_allocator(&m.arena)
-	m.dir = strings.clone(jstr(v, "location", "directory"))
+	m.dir = strings.clone(tk_json.text(v, "location", "directory"))
 	for h in ui.rank(m.query, app.agents[:], proc(ag: ^Agent_Info, _: rawptr) -> ui.Rank_Entry { return {label = ag.id, skip = ag.mode != "subagent"} }, match = ui.rank_fuzzy) {
 		ag := &app.agents[h.index]
 		append(&m.hits, Mention_Hit{.Agent, strings.clone(ag.id, a), strings.clone(ag.description, a)})
 	}
-	for it in jarr(v, "data") {
+	for it in tk_json.array(v, "data") {
 		if len(m.hits) == MENTION_ROWS { break }
-		if jstr(it, "type") != "file" { continue }
-		p := path_clean(jstr(it, "path"))
+		if tk_json.text(it, "type") != "file" { continue }
+		p := path_clean(tk_json.text(it, "path"))
 		append(&m.hits, Mention_Hit{.File, strings.clone(p, a), ""})
 	}
 	m.sel = clamp(m.sel, 0, max(len(m.hits) - 1, 0))
@@ -278,7 +279,7 @@ mention_json :: proc(m: ^Mention, text: string) -> (mention: string, ok: bool) {
 	at := strings.index(text, m.text)
 	if at < 0 { return }
 	start := utf16_len(text[:at])
-	return fmt.tprintf(`{{"start":%d,"end":%d,"text":%s}}`, start, start + utf16_len(m.text), jquote(m.text)), true
+	return fmt.tprintf(`{{"start":%d,"end":%d,"text":%s}}`, start, start + utf16_len(m.text), tk_json.quote(m.text)), true
 }
 
 mentions_clear :: proc(app: ^App) {

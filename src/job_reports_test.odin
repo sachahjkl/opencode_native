@@ -1,5 +1,6 @@
 package ocn
 
+import tk_json "gt:json"
 import "base:runtime"
 import "core:encoding/json"
 import "core:fmt"
@@ -112,7 +113,7 @@ job_reports_show_folded_and_open_on_a_click :: proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
 		text := "<shell id=\"sh_1\" state=\"completed\" command=\"make all\">line one\nline two</shell>\n<subagent sessionID=\"ses_2\" state=\"completed\" description=\"Read the docs\">The **report**.</subagent>"
-		page := fmt.tprintf(`{{"data":[{{"id":"msg_j","type":"synthetic","text":%s,"time":{{"created":1}}}}],"cursor":{{"next":""}}}}`, jquote(text))
+		page := fmt.tprintf(`{{"data":[{{"id":"msg_j","type":"synthetic","text":%s,"time":{{"created":1}}}}],"cursor":{{"next":""}}}}`, tk_json.quote(text))
 		v, err := json.parse_string(page, allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
 		chat_load(app, v, false)
@@ -162,7 +163,7 @@ copy_on_a_job_report_copies_what_it_shows :: proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
 		text := "<shell id=\"sh_1\" state=\"completed\" command=\"make all\">line one\nline two</shell>"
-		page := fmt.tprintf(`{{"data":[{{"id":"msg_j","type":"synthetic","text":%s,"time":{{"created":1}}}}],"cursor":{{"next":""}}}}`, jquote(text))
+		page := fmt.tprintf(`{{"data":[{{"id":"msg_j","type":"synthetic","text":%s,"time":{{"created":1}}}}],"cursor":{{"next":""}}}}`, tk_json.quote(text))
 		v, err := json.parse_string(page, allocator = context.temp_allocator)
 		testing.expect(t, err == nil)
 		chat_load(app, v, false)

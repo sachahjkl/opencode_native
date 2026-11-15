@@ -309,7 +309,7 @@ diagram_view :: proc(view: ^ui.View, app: ^App) {
 						svg.draw_doc(dc, dd.doc, dst.min, (dst.max.x - dst.min.x) / max(dd.doc.view[2], 1), {regular = the_app.font, bold = bold})
 					}, dd, {buttons = true, grow = true, wheel_pans = true})
 					if v.focus { ui.set_focus(r.box.key); v.focus = false }
-					if ui.mouse_pressed(.Right) && ui.pointer_on(r.box) && !app.ctx_menu.taken { ctx_open(app, .Diagram, msg = v.code) }
+					if ui.context_take(r.box) { ctx_open(app, .Diagram, msg = v.code) }
 				}
 				ui.spacer(ui.px(pad))
 			}

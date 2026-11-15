@@ -3,6 +3,7 @@
 // it, so it must not go unseen: a sub-agent's shows in the conversation of its parent, and the sidebar lights the session that waits.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -58,7 +59,7 @@ json_text :: proc(v: json.Value) -> string {
 
 @(private = "file")
 json_number :: proc(v: json.Value, key: string) -> Maybe(f64) {
-	#partial switch x in jget(v, key) {
+	#partial switch x in tk_json.get(v, key) {
 	case json.Integer: return f64(x)
 	case json.Float:   return f64(x)
 	}
@@ -66,9 +67,9 @@ json_number :: proc(v: json.Value, key: string) -> Maybe(f64) {
 }
 
 form_add :: proc(app: ^App, v: json.Value) {
-	id := jstr(v, "id")
+	id := tk_json.text(v, "id")
 	if id == "" || form_find(app, id) != nil || waits_were_answered(app, id) { return }
-	f := form_new(id, jstr(v, "sessionID"), jstr(v, "title"), jstr(v, "metadata", "kind") == "question", jarr(v, "fields"))
+	f := form_new(id, tk_json.text(v, "sessionID"), tk_json.text(v, "title"), tk_json.text(v, "metadata", "kind") == "question", tk_json.array(v, "fields"))
 	f.born = app.cx.stream_seq
 	append(&app.cx.forms, f)
 	marks_changed(app)
@@ -82,7 +83,7 @@ forms_replace :: proc(app: ^App, session: string, list: json.Array, asked_at: Se
 		f := forms[i]
 		if f.session != session || f.sending || newer(f.born, asked_at) { continue }
 		listed := false
-		for it in list { if jstr(it, "id") == f.id { listed = true; break } }
+		for it in list { if tk_json.text(it, "id") == f.id { listed = true; break } }
 		if !listed { form_remove(app, f.id) }
 	}
 	for it in list { form_add(app, it) }
@@ -98,20 +99,20 @@ form_new :: proc(id, session, title: string, question: bool, list: json.Array) -
 	f.fields = make([]Form_Field, len(list), a)
 	for it, i in list {
 		fd := &f.fields[i]
-		fd.key, fd.title, fd.description = strings.clone(jstr(it, "key"), a), strings.clone(jstr(it, "title"), a), strings.clone(jstr(it, "description"), a)
-		fd.kind, fd.placeholder, fd.url = strings.clone(jstr(it, "type"), a), strings.clone(jstr(it, "placeholder"), a), strings.clone(jstr(it, "url"), a)
-		fd.required, fd.custom, fd.hidden = jbool(it, "required"), jbool(it, "custom"), jbool(it, "hidden")
+		fd.key, fd.title, fd.description = strings.clone(tk_json.text(it, "key"), a), strings.clone(tk_json.text(it, "title"), a), strings.clone(tk_json.text(it, "description"), a)
+		fd.kind, fd.placeholder, fd.url = strings.clone(tk_json.text(it, "type"), a), strings.clone(tk_json.text(it, "placeholder"), a), strings.clone(tk_json.text(it, "url"), a)
+		fd.required, fd.custom, fd.hidden = tk_json.boolean(it, "required"), tk_json.boolean(it, "custom"), tk_json.boolean(it, "hidden")
 		fd.min, fd.max = json_number(it, "minimum"), json_number(it, "maximum")
 		fd.choice = -1
-		opts := jarr(it, "options")
+		opts := tk_json.array(it, "options")
 		fd.options = make([]Form_Option, len(opts), a)
-		for o, k in opts { fd.options[k] = {strings.clone(jstr(o, "value"), a), strings.clone(jstr(o, "label"), a), strings.clone(jstr(o, "description"), a)} }
+		for o, k in opts { fd.options[k] = {strings.clone(tk_json.text(o, "value"), a), strings.clone(tk_json.text(o, "label"), a), strings.clone(tk_json.text(o, "description"), a)} }
 		fd.picks = make([]bool, len(opts), a)
-		conds := jarr(it, "when")
+		conds := tk_json.array(it, "when")
 		fd.shown_if = make([]Form_When, len(conds), a)
-		for c, k in conds { fd.shown_if[k] = {strings.clone(jstr(c, "key"), a), strings.clone(jstr(c, "op"), a), strings.clone(json_text(jget(c, "value")), a)} }
+		for c, k in conds { fd.shown_if[k] = {strings.clone(tk_json.text(c, "key"), a), strings.clone(tk_json.text(c, "op"), a), strings.clone(json_text(tk_json.get(c, "value")), a)} }
 		// what it starts with
-		def := jget(it, "default")
+		def := tk_json.get(it, "default")
 		#partial switch x in def {
 		case json.Boolean: fd.on = x
 		case json.Array:
@@ -230,7 +231,7 @@ form_answer :: proc(f: ^Form_Req) -> (body, problem: string, at: int) {
 	put :: proc(b: ^strings.Builder, first: ^bool, key, raw: string) {
 		if !first^ { strings.write_byte(b, ',') }
 		first^ = false
-		fmt.sbprintf(b, "%s:%s", jquote(key), raw)
+		fmt.sbprintf(b, "%s:%s", tk_json.quote(key), raw)
 	}
 	for &fd in f.fields {
 		if !field_shown(f, &fd) { continue }
@@ -259,12 +260,12 @@ form_answer :: proc(f: ^Form_Req) -> (body, problem: string, at: int) {
 			for o, k in fd.options {
 				if !fd.picks[k] { continue }
 				if n > 0 { strings.write_byte(&l, ',') }
-				strings.write_string(&l, jquote(o.value))
+				strings.write_string(&l, tk_json.quote(o.value))
 				n += 1
 			}
 			if own := field_value(&fd); own != "" {
 				if n > 0 { strings.write_byte(&l, ',') }
-				strings.write_string(&l, jquote(own))
+				strings.write_string(&l, tk_json.quote(own))
 				n += 1
 			}
 			strings.write_byte(&l, ']')
@@ -276,7 +277,7 @@ form_answer :: proc(f: ^Form_Req) -> (body, problem: string, at: int) {
 				if must { return "", fmt.tprintf(i18n.tr("Answer: %s"), name), page }
 				continue
 			}
-			put(&b, &first, fd.key, jquote(s))
+			put(&b, &first, fd.key, tk_json.quote(s))
 		}
 	}
 	strings.write_string(&b, "}}")
@@ -524,7 +525,7 @@ form_line :: proc(fd: ^Form_Field, em: f32, placeholder: string, done: ^bool) {
 ////////////////////////////////
 // What the answers to its requests do (net.odin REQ_FACTS)
 
-forms_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { forms_replace(app, r.tag, jarr(v, "data"), r.asked_at) }
+forms_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { forms_replace(app, r.tag, tk_json.array(v, "data"), r.asked_at) }
 
 // A reply or a dismissal (the tag: the form).
 form_answer_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {

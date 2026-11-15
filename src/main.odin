@@ -4,12 +4,12 @@
 // Without arguments it finds this computer's opencode server (~/.local/state/opencode/service.json, else ~/.config/opencode/service.json).
 package ocn
 
+import store "gt:store"
 import "core:fmt"
 import tasks "gt:tasks"
 import "core:mem/virtual"
 import "core:math"
 import "core:os"
-import "core:strings"
 import "core:time"
 import prefs_page "gt:prefs_page"
 import "gt:config"
@@ -56,8 +56,8 @@ App :: struct {
 	picker:         Picker,            // the pickers of the composer (agent, model) (picker.odin)
 	activity:       Activity,          // what runs behind the conversation (activity.odin)
 	palette:        Palette,           // Ctrl+K: the toolkit's palette and ocn's sources (palette.odin)
-	term_zooms:     Kept_Zooms,        // each shell's zoom, by its id (terminal.odin)
-	session_zooms:  Kept_Zooms,        // each session's conversation zoom, by its id (commands.odin content_zoom)
+	term_zooms:     store.Kept,        // each shell's zoom, by its id (terminal.odin)
+	session_zooms:  store.Kept,        // each session's conversation zoom, by its id (commands.odin content_zoom)
 	stores:         Stores,            // what it remembers beside the preferences, written on workers (stores.odin)
 	throbber:       Throbber,          // what says a run goes on (throbber.odin)
 	preview:        Preview,           // the page beside the conversation (preview.odin)
@@ -189,8 +189,7 @@ App_Context :: struct {
 	slash:          [dynamic]Slash,    // the server's commands
 	have_slash:     bool,
 	diagrams:       map[u64]Diagram,   // the Mermaid diagrams laid out (diagrams.odin)
-	placement_seen: string,   // the window's placement as last kept (window.placement), and when it was looked at
-	placement_ms:   f64,
+	placement:      prefs_page.Placement_Keeper,   // the window's place, the toolkit's window.placement
 	// What is made from the sessions is kept until one of these moves. Here, not in Server_Known: a count that started over with
 	// another server could meet the one a cache was made at.
 	sessions_ver:   u64,               // the list of sessions (sessions_changed)
@@ -290,7 +289,6 @@ main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
 		if e.kind == .Mouse_Move || e.kind == .Scroll { app.cx.pointer_ms = ui.now_ms() }
 		if e.kind == .Scroll || e.kind == .Key_Press { chat_scroll_event(app, Scroll_Signal.Restore_End) }   // (the reader goes elsewhere: the view is theirs)
 		attach_drop_event(app, e)
-		composer_paste_event(app, e)
 		notify_event(app, e)
 		// the side buttons of the mouse, as in a browser
 		if e.kind == .Mouse_Press && !overlay_open(app) {
@@ -570,7 +568,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	prefs_page.install_init(&app.install, &app.cfg_prefs, setup_options())
 	licence_init(app)
 	term_zooms_load(app)
-	zooms_load(&app.session_zooms, &app.stores.session_zooms, CONTENT_ZOOM_MIN, CONTENT_ZOOM_MAX)
+	store.kept_load(&app.session_zooms, &app.stores.session_zooms, f64(CONTENT_ZOOM_MIN), f64(CONTENT_ZOOM_MAX))
 	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
 	tasks.start(&app.cx.chores, {threads = CHORES_WORKERS})
 }
@@ -700,25 +698,12 @@ main :: proc() {
 // maximized comes back.)
 placement_restore :: proc(app: ^App) {
 	if app.cli.size != nil { return }
-	p, ok := platform.placement_parse(config.string_of(&app.cfg_prefs, "window.placement"))
-	if !ok { return }
-	platform.set_placement(app.win, p)
+	if !prefs_page.placement_restore(&app.cx.placement, &app.cfg_prefs, app.win) { return }
 	if !app.cli.no_fixed_surface { render.set_fixed_surface(&app.r, platform.monitor_size(app.win)) }
-	app.cx.placement_seen = strings.clone(platform.placement_text(p))
 }
 
-// Where the window is, kept when it changes (looked at every PLACEMENT_CHECK_MS): an update's restart, a crash or a close all
-// find it saved. Not while minimized: get_placement says where it comes back to, but nothing moved.
+// Where the window is, kept when it changes (the toolkit's window.placement, looked at every PLACEMENT_CHECK_MS): an
+// update's restart, a crash or a close all find it saved. (It runs in the main loop, after show_window.)
 placement_track :: proc(app: ^App) {
-	now := ui.now_ms()
-	// (it runs in the main loop, after show_window: the window is on screen)
-	if now - app.cx.placement_ms < PLACEMENT_CHECK_MS || app.win == nil || platform.is_minimized(app.win) { return }
-	app.cx.placement_ms = now
-	text := platform.placement_text(platform.get_placement(app.win))
-	if text == app.cx.placement_seen { return }
-	delete(app.cx.placement_seen)
-	app.cx.placement_seen = strings.clone(text)
-	pref_set(app, "window.placement", text)
+	if prefs_page.placement_track(&app.cx.placement, &app.cfg_prefs, app.win, ui.now_ms()) { prefs_refresh(app) }
 }
-
-PLACEMENT_CHECK_MS :: 2000

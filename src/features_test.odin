@@ -3,6 +3,7 @@ package ocn
 // What the newer parts decide by themselves, without a window: a diff, the end of a command's output, an address, the links
 // of a text, the history's steps.
 
+import tk_json "gt:json"
 import "base:runtime"
 import "core:encoding/json"
 import "core:mem/virtual"
@@ -518,7 +519,7 @@ the_experimental_options_find_their_place :: proc(t: ^testing.T) {
 		out := config_with_experimental(text, {"schedules"})
 		v, bad := json.parse_string(out, .JSON5, allocator = context.temp_allocator)
 		testing.expect_value(t, bad, json.Error.None)
-		on, _ := jget(v, "experimental", "schedules").(json.Boolean)
+		on, _ := tk_json.get(v, "experimental", "schedules").(json.Boolean)
 		testing.expect(t, bool(on), text)
 	}
 	check(t, "{\n  \"a\": 1\n}\n")

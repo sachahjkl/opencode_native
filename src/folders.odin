@@ -3,6 +3,7 @@
 // own through the source below when it is elsewhere (GET /api/fs/list with an absolute path, GET /api/fs/read for the preview).
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:path/filepath"
@@ -72,7 +73,7 @@ folder_chosen :: proc(app: ^App, purpose: Folder_Purpose, session, path: string)
 		app.chat.new_dir = strings.clone(path, app.chat.alloc)
 		app.composer.focus_next = true
 	case .Move_Session:
-		request(app, .Session_Moved, "POST", fmt.tprintf("/api/session/%s/move", session), fmt.tprintf(`{{"directory":%s}}`, jquote(path)), session)
+		request(app, .Session_Moved, "POST", fmt.tprintf("/api/session/%s/move", session), fmt.tprintf(`{{"directory":%s}}`, tk_json.quote(path)), session)
 	}
 }
 
@@ -185,11 +186,11 @@ server_files_forget :: proc(app: ^App) {
 server_files_list_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 	f := &app.server_files
 	if !server_files_answers(&f.list, r) { return }
-	items := jarr(v, "data")
+	items := tk_json.array(v, "data")
 	entries := make([]ui.File_Entry, len(items), context.temp_allocator)
 	for it, i in items {
-		p, _ := strings.replace_all(jstr(it, "path"), `\`, "/", context.temp_allocator)
-		entries[i] = {name = filepath.base(strings.trim_right(p, "/")), kind = jstr(it, "type") == "directory" ? .Folder : .File, size = -1}
+		p, _ := strings.replace_all(tk_json.text(it, "path"), `\`, "/", context.temp_allocator)
+		entries[i] = {name = filepath.base(strings.trim_right(p, "/")), kind = tk_json.text(it, "type") == "directory" ? .Folder : .File, size = -1}
 	}
 	ui.file_reply_listed(f.list.reply, entries)
 }
@@ -215,11 +216,11 @@ server_file_read_on_fail :: proc(app: ^App, r: ^Request, failure: Failure, messa
 server_files_find_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 	f := &app.server_files
 	if !server_files_answers(&f.find, r) { return }
-	entries := make([dynamic]ui.File_Entry, 0, len(jarr(v, "data")), context.temp_allocator)
-	for it in jarr(v, "data") {
-		p := path_clean(jstr(it, "path"))
+	entries := make([dynamic]ui.File_Entry, 0, len(tk_json.array(v, "data")), context.temp_allocator)
+	for it in tk_json.array(v, "data") {
+		p := path_clean(tk_json.text(it, "path"))
 		if !strings.has_prefix(p, f.found_in) || len(p) == len(f.found_in) { continue }
-		append(&entries, ui.File_Entry{name = p[len(f.found_in):], kind = jstr(it, "type") == "directory" ? .Folder : .File, size = -1})
+		append(&entries, ui.File_Entry{name = p[len(f.found_in):], kind = tk_json.text(it, "type") == "directory" ? .Folder : .File, size = -1})
 	}
 	ui.file_reply_found(f.find.reply, entries[:])
 }

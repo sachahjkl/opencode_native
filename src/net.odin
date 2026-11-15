@@ -3,6 +3,7 @@
 // begin_build, and wakes the window.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import tasks "gt:tasks"
 import "core:fmt"
@@ -14,8 +15,6 @@ import "core:mem"
 import "core:mem/virtual"
 import "core:sync"
 import "core:time"
-import "core:unicode/utf8"
-import "gt:ascii"
 import "gt:platform"
 import "gt:ui"
 import remote "gt:remote"
@@ -47,10 +46,10 @@ discover_server :: proc(url := "", password := "") -> Server_Config {
 	// the running service
 	if data, err := os.read_entire_file(opencode_file(.State, "service.json"), context.temp_allocator); err == nil {
 		if v, jerr := json.parse_string(string(data), parse_integers = true, allocator = context.temp_allocator); jerr == nil {
-			if host, port, ok := split_url(jstr(v, "url")); ok {
+			if host, port, ok := split_url(tk_json.text(v, "url")); ok {
 				cfg.host, cfg.port, found = host, port, true
-				cfg.tls = strings.has_prefix(jstr(v, "url"), "https://")
-				cfg.password = jstr(v, "password")
+				cfg.tls = strings.has_prefix(tk_json.text(v, "url"), "https://")
+				cfg.password = tk_json.text(v, "password")
 			}
 		}
 	}
@@ -58,10 +57,10 @@ discover_server :: proc(url := "", password := "") -> Server_Config {
 	if data, err := os.read_entire_file(opencode_file(.Config, "service.json"), context.temp_allocator); err == nil {
 		if v, jerr := json.parse_string(string(data), parse_integers = true, allocator = context.temp_allocator); jerr == nil {
 			if !found {
-				if p := jnum(v, "port"); p > 0 { cfg.port = u16(p) }
-				if h := jstr(v, "hostname"); h != "" { cfg.host = h }
+				if p := tk_json.number(v, "port"); p > 0 { cfg.port = u16(p) }
+				if h := tk_json.text(v, "hostname"); h != "" { cfg.host = h }
 			}
-			if cfg.password == "" { cfg.password = jstr(v, "password") }
+			if cfg.password == "" { cfg.password = tk_json.text(v, "password") }
 		}
 	}
 	// a server listening everywhere is reached here
@@ -104,105 +103,6 @@ url_is_here :: proc(url: string) -> bool {
 	}
 	cut := strings.index_any(rest, ":/")
 	return host_is_here(cut < 0 ? rest : rest[:cut])
-}
-
-////////////////////////////////
-// JSON helpers (paths of object keys; a missing key gives the zero value)
-
-jget :: proc(v: json.Value, keys: ..string) -> json.Value {
-	cur := v
-	for k in keys {
-		obj, ok := cur.(json.Object)
-		if !ok { return nil }
-		cur = obj[k] or_else nil
-	}
-	return cur
-}
-
-jstr :: proc(v: json.Value, keys: ..string) -> string {
-	#partial switch x in jget(v, ..keys) {
-	case json.String: return string(x)
-	}
-	return ""
-}
-
-jnum :: proc(v: json.Value, keys: ..string) -> f64 {
-	#partial switch x in jget(v, ..keys) {
-	case json.Float:   return f64(x)
-	case json.Integer: return f64(x)
-	}
-	return 0
-}
-
-jbool :: proc(v: json.Value, keys: ..string) -> bool {
-	#partial switch x in jget(v, ..keys) {
-	case json.Boolean: return bool(x)
-	}
-	return false
-}
-
-jarr :: proc(v: json.Value, keys: ..string) -> json.Array {
-	#partial switch x in jget(v, ..keys) {
-	case json.Array: return x
-	}
-	return nil
-}
-
-JQUOTE_SPARE_BYTES :: 8   // the quotes and a few escapes before the builder grows
-
-// A JSON string literal (quotes included).
-jquote :: proc(s: string, allocator := context.temp_allocator) -> string {
-	b := strings.builder_make(0, len(s) + JQUOTE_SPARE_BYTES, allocator)
-	jquote_into(&b, s)
-	return strings.to_string(b)
-}
-
-// jquote, written to `b`. What needs nothing is copied a run at a time (an attached file's data URL is megabytes of it): the
-// next byte to escape, or past ASCII, is found 16 bytes at a time (ascii.index_any_byte). A byte that is no UTF-8 goes as
-// U+FFFD, as it always went.
-jquote_into :: proc(b: ^strings.Builder, s: string) {
-	strings.write_byte(b, '"')
-	rest := s
-	for len(rest) > 0 {
-		k := ascii.index_any_byte(rest, "\"\\", below = 0x20, non_ascii = true)
-		if k < 0 { strings.write_string(b, rest); break }
-		strings.write_string(b, rest[:k])
-		rest = rest[k:]
-		if rest[0] >= 0x80 {
-			// (runes past ASCII: the run copied whole, but for a byte that is no UTF-8)
-			run := 0
-			for run < len(rest) && rest[run] >= 0x80 {
-				r, w := utf8.decode_rune_in_string(rest[run:])
-				if r == utf8.RUNE_ERROR && w == 1 {
-					strings.write_string(b, rest[:run])
-					strings.write_string(b, "\uFFFD")
-					rest, run = rest[run + 1:], 0
-					continue
-				}
-				run += w
-			}
-			strings.write_string(b, rest[:run])
-			rest = rest[run:]
-			continue
-		}
-		switch c := rest[0]; c {
-		case '"':  strings.write_string(b, `\"`)
-		case '\\': strings.write_string(b, `\\`)
-		case '\n': strings.write_string(b, `\n`)
-		case '\r': strings.write_string(b, `\r`)
-		case '\t': strings.write_string(b, `\t`)
-		case:       fmt.sbprintf(b, `\u%04x`, int(c))
-		}
-		rest = rest[1:]
-	}
-	strings.write_byte(b, '"')
-}
-
-// Indented JSON text of a value (tool inputs shown to the user).
-jtext :: proc(v: json.Value, allocator := context.temp_allocator) -> string {
-	data, err := json.marshal(v, {pretty = true, use_spaces = true, spaces = 2}, allocator)
-	if err != nil { return "" }
-	return string(data)
 }
 
 // A query string value.
@@ -594,7 +494,7 @@ req_outlived :: proc(app: ^App, r: ^Request) -> bool {
 @(private = "file")
 refusal_text :: proc(r: ^Request) -> string {
 	v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if msg := jstr(v, "message"); msg != "" { return msg }
+	if msg := tk_json.text(v, "message"); msg != "" { return msg }
 	if r.resp != "" { return r.resp[:min(len(r.resp), ERROR_EXCERPT_BYTES)] }
 	return fmt.tprintf(i18n.tr("status %d"), r.status)
 }
@@ -721,7 +621,7 @@ interrupt_session :: proc(app: ^App, id: string) {
 reply_permission :: proc(app: ^App, p: ^Permission, decision: string) {
 	if p.replying { return }
 	p.replying = true
-	request(app, .Permission_Reply, "POST", fmt.tprintf("/api/session/%s/permission/%s/reply", p.session, p.id), fmt.tprintf(`{{"decision":%s}}`, jquote(decision)), p.id)
+	request(app, .Permission_Reply, "POST", fmt.tprintf("/api/session/%s/permission/%s/reply", p.session, p.id), fmt.tprintf(`{{"decision":%s}}`, tk_json.quote(decision)), p.id)
 }
 
 switch_model :: proc(app: ^App, session, model, provider, variant: string) {
@@ -729,11 +629,11 @@ switch_model :: proc(app: ^App, session, model, provider, variant: string) {
 }
 
 switch_agent :: proc(app: ^App, session, agent: string) {
-	request(app, .Session_Choice, "POST", fmt.tprintf("/api/session/%s/agent", session), fmt.tprintf(`{{"agent":%s}}`, jquote(agent)), session)
+	request(app, .Session_Choice, "POST", fmt.tprintf("/api/session/%s/agent", session), fmt.tprintf(`{{"agent":%s}}`, tk_json.quote(agent)), session)
 }
 
 rename_session :: proc(app: ^App, session, title: string) {
-	request(app, .Action, "PATCH", fmt.tprintf("/api/session/%s", session), fmt.tprintf(`{{"title":%s}}`, jquote(title)), session)
+	request(app, .Action, "PATCH", fmt.tprintf("/api/session/%s", session), fmt.tprintf(`{{"title":%s}}`, tk_json.quote(title)), session)
 }
 
 delete_session :: proc(app: ^App, session: string) {

@@ -3,6 +3,7 @@
 // client shows the same (project.updated).
 package ocn
 
+import tk_json "gt:json"
 import "base:runtime"
 
 import "core:encoding/base64"
@@ -22,7 +23,7 @@ PROJECT_ICON_SIDE :: 256
 
 // The PATCH that puts `override` on a project's icon ("": none).
 project_icon_body :: proc(override: string) -> string {
-	return fmt.tprintf(`{{"icon":{{"override":%s}}}}`, jquote(override))
+	return fmt.tprintf(`{{"icon":{{"override":%s}}}}`, tk_json.quote(override))
 }
 
 // The system's dialog, then the image on the project.

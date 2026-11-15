@@ -5,6 +5,7 @@
 // read from it, nothing else is ever copied here.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -110,30 +111,30 @@ integrations_load :: proc(app: ^App, v: json.Value) {
 	integrations_free(n)
 	_ = virtual.arena_init_growing(&n.arena)
 	a := virtual.arena_allocator(&n.arena)
-	list := jarr(v, "data")
+	list := tk_json.array(v, "data")
 	for pass in 0 ..< 2 {
 		for it in list {
-			if (len(jarr(it, "connections")) > 0) != (pass == 0) { continue }
-			one := Integration{id = strings.clone(jstr(it, "id"), a), name = strings.clone(jstr(it, "name"), a)}
+			if (len(tk_json.array(it, "connections")) > 0) != (pass == 0) { continue }
+			one := Integration{id = strings.clone(tk_json.text(it, "id"), a), name = strings.clone(tk_json.text(it, "name"), a)}
 			methods := make([dynamic]Int_Method, a)
-			for m in jarr(it, "methods") {
-				kind, known := method_kind(jstr(m, "type"))
+			for m in tk_json.array(it, "methods") {
+				kind, known := method_kind(tk_json.text(m, "type"))
 				if !known { continue }
-				im := Int_Method{kind = kind, id = strings.clone(jstr(m, "id"), a), label = strings.clone(jstr(m, "label"), a)}
-				words := jarr(m, kind == .Env ? "names" : "command")
+				im := Int_Method{kind = kind, id = strings.clone(tk_json.text(m, "id"), a), label = strings.clone(tk_json.text(m, "label"), a)}
+				words := tk_json.array(m, kind == .Env ? "names" : "command")
 				im.names = make([]string, len(words), a)
 				for w, k in words { s, _ := w.(json.String); im.names[k] = strings.clone(string(s), a) }
-				if fields := jarr(m, "form"); len(fields) > 0 { im.form = form_new("", "", "", false, fields) }
+				if fields := tk_json.array(m, "form"); len(fields) > 0 { im.form = form_new("", "", "", false, fields) }
 				append(&methods, im)
 			}
 			one.methods = methods[:]
-			conns := jarr(it, "connections")
+			conns := tk_json.array(it, "connections")
 			one.connections = make([]Connection, len(conns), a)
 			for c, k in conns {
-				env := jstr(c, "type") == "env"
+				env := tk_json.text(c, "type") == "env"
 				one.connections[k] = {
-					credential = !env, id = strings.clone(jstr(c, "id"), a), label = strings.clone(jstr(c, env ? "name" : "label"), a), method = strings.clone(jstr(c, "method"), a),
-					needs_auth = jstr(c, "status", "status") == "needs_auth", message = strings.clone(jstr(c, "status", "message"), a), url = strings.clone(jstr(c, "status", "url"), a),
+					credential = !env, id = strings.clone(tk_json.text(c, "id"), a), label = strings.clone(tk_json.text(c, env ? "name" : "label"), a), method = strings.clone(tk_json.text(c, "method"), a),
+					needs_auth = tk_json.text(c, "status", "status") == "needs_auth", message = strings.clone(tk_json.text(c, "status", "message"), a), url = strings.clone(tk_json.text(c, "status", "url"), a),
 				}
 			}
 			append(&n.list, one)
@@ -146,9 +147,9 @@ integrations_load :: proc(app: ^App, v: json.Value) {
 // Which account of each integration is in use: the only thing read from this list.
 credentials_load :: proc(app: ^App, v: json.Value) {
 	n := &app.cx.integrations
-	for c in jarr(v, "data") {
-		active, _ := jget(c, "active").(json.Boolean)
-		id := jstr(c, "id")
+	for c in tk_json.array(v, "data") {
+		active, _ := tk_json.get(c, "active").(json.Boolean)
+		id := tk_json.text(c, "id")
 		for it in n.list { for &k in it.connections { if k.id == id { k.active = bool(active) } } }
 	}
 }
@@ -239,7 +240,7 @@ connect_extra :: proc(form: ^Form_Req, label: string) -> (extra, problem: string
 		answer = body[1:len(body) - 1]
 	}
 	trimmed := strings.trim_space(label)
-	return trimmed != "" ? fmt.tprintf(`%s,"label":%s`, answer, jquote(trimmed)) : answer, ""
+	return trimmed != "" ? fmt.tprintf(`%s,"label":%s`, answer, tk_json.quote(trimmed)) : answer, ""
 }
 
 // (`method`: `m`'s place in the integration.)
@@ -255,18 +256,18 @@ connect_send :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int) {
 	remote.begin(&n.sending)
 	switch m.kind {
 	case .Key:
-		request(app, .Connected, "POST", fmt.tprintf("%s/key", base), fmt.tprintf(`{{"key":%s,%s}}`, jquote(key), extra), reading = &n.sending)
+		request(app, .Connected, "POST", fmt.tprintf("%s/key", base), fmt.tprintf(`{{"key":%s,%s}}`, tk_json.quote(key), extra), reading = &n.sending)
 		ui.line_edit_set(&n.key, "")
 	case .External:
-		request(app, .Connected, "POST", fmt.tprintf("%s/external", base), fmt.tprintf(`{{"methodID":%s,%s}}`, jquote(m.id), extra), reading = &n.sending)
+		request(app, .Connected, "POST", fmt.tprintf("%s/external", base), fmt.tprintf(`{{"methodID":%s,%s}}`, tk_json.quote(m.id), extra), reading = &n.sending)
 	case .Oauth:
 		kind = "oauth"
-		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/oauth", base), fmt.tprintf(`{{"methodID":%s,%s}}`, jquote(m.id), extra), reading = &n.sending)
+		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/oauth", base), fmt.tprintf(`{{"methodID":%s,%s}}`, tk_json.quote(m.id), extra), reading = &n.sending)
 	case .Command:
 		kind = "command"
 		trimmed := strings.trim_space(ui.line_edit_string(&n.label))
-		label := trimmed != "" ? fmt.tprintf(`,"label":%s`, jquote(trimmed)) : ""
-		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/command", base), fmt.tprintf(`{{"methodID":%s%s}}`, jquote(m.id), label), reading = &n.sending)
+		label := trimmed != "" ? fmt.tprintf(`,"label":%s`, tk_json.quote(trimmed)) : ""
+		request(app, .Connect_Begin, "POST", fmt.tprintf("%s/command", base), fmt.tprintf(`{{"methodID":%s%s}}`, tk_json.quote(m.id), label), reading = &n.sending)
 	case .Env:
 		remote.reset(&n.sending)
 		return
@@ -301,9 +302,9 @@ connect_begun :: proc(app: ^App, v: json.Value) {
 	n := &app.cx.integrations
 	s, sending := n.step.(Connect_Sending)
 	if !sending { return }
-	attempt := jstr(v, "data", "attemptID")
+	attempt := tk_json.text(v, "data", "attemptID")
 	if attempt == "" { connect_failed(app, i18n.tr("The server did not say how to go on")); return }
-	w := Connect_Waiting{attempt = strings.clone(attempt), url = strings.clone(jstr(v, "data", "url")), instructions = strings.clone(jstr(v, "data", "instructions")), kind = s.kind, by_code = jstr(v, "data", "mode") == "code"}
+	w := Connect_Waiting{attempt = strings.clone(attempt), url = strings.clone(tk_json.text(v, "data", "url")), instructions = strings.clone(tk_json.text(v, "data", "instructions")), kind = s.kind, by_code = tk_json.text(v, "data", "mode") == "code"}
 	n.step = w
 	if w.url != "" { ui.open(w.url, .Url) }
 	if !w.by_code { connect_poll(app) }
@@ -314,17 +315,17 @@ connect_status :: proc(app: ^App, v: json.Value) {
 	w, waiting := &n.step.(Connect_Waiting)
 	if !waiting { return }
 	w.misses = 0
-	switch jstr(v, "data", "status") {
+	switch tk_json.text(v, "data", "status") {
 	case "complete": connect_done(app)
 	case "failed":
-		msg := jstr(v, "data", "message")
+		msg := tk_json.text(v, "data", "message")
 		set_text(&n.failed, msg != "" ? msg : i18n.tr("It did not work"))
 		connect_reset(app)
 	case "expired":
 		set_text(&n.failed, i18n.tr("It took too long: the attempt expired"))
 		connect_reset(app)
 	case:
-		if msg := jstr(v, "data", "message"); msg != "" { set_text(&w.instructions, msg) }
+		if msg := tk_json.text(v, "data", "message"); msg != "" { set_text(&w.instructions, msg) }
 		connect_poll(app)
 	}
 }
@@ -377,7 +378,7 @@ connect_finish :: proc(app: ^App) {
 	set_text(&n.failed, "")
 	n.step = Connect_Finishing{wait = w}
 	remote.begin(&n.sending)
-	request(app, .Connected, "POST", fmt.tprintf("%s/complete", attempt_path(n, w)), fmt.tprintf(`{{"code":%s}}`, jquote(code)), reading = &n.sending)
+	request(app, .Connected, "POST", fmt.tprintf("%s/complete", attempt_path(n, w)), fmt.tprintf(`{{"code":%s}}`, tk_json.quote(code)), reading = &n.sending)
 }
 
 // A login left open when the settings close would wait for nothing.
@@ -508,7 +509,7 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 			res := line("###int_rename", &n.rename, i18n.tr("A name"), em)
 			ui.set_focus(res.box.key)
 			if res.committed {
-				request(app, .Credential_Done, "PATCH", fmt.tprintf("/api/credential/%s", url_escape(c.id)), fmt.tprintf(`{{"label":%s}}`, jquote(strings.trim_space(ui.line_edit_string(&n.rename)))))
+				request(app, .Credential_Done, "PATCH", fmt.tprintf("/api/credential/%s", url_escape(c.id)), fmt.tprintf(`{{"label":%s}}`, tk_json.quote(strings.trim_space(ui.line_edit_string(&n.rename)))))
 				set_text(&n.renaming, "")
 			}
 			if res.cancelled { set_text(&n.renaming, "") }
@@ -658,7 +659,7 @@ connect_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> 
 connect_begin_on_left :: proc(app: ^App, r: ^Request) {
 	if !r.ok || r.status >= 400 { return }
 	v, _ := json.parse_string(r.resp, parse_integers = true, allocator = context.temp_allocator)
-	if id := jstr(v, "data", "attemptID"); id != "" { request(app, .Action, "DELETE", fmt.tprintf("%s/%s", r.path, url_escape(id)), conn = r.conn) }
+	if id := tk_json.text(v, "data", "attemptID"); id != "" { request(app, .Action, "DELETE", fmt.tprintf("%s/%s", r.path, url_escape(id)), conn = r.conn) }
 }
 
 connect_status_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { connect_status(app, v) }

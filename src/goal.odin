@@ -5,6 +5,7 @@
 // rpc.opencode.goal.changed.
 package ocn
 
+import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -30,7 +31,7 @@ goal_read :: proc(app: ^App) {
 	if id == "" || flying(app, .Goal, id) { return }
 	q := location_query(chat_dir(app))
 	path := q != "" ? fmt.tprintf("/api/rpc/opencode.goal/get?%s", q) : "/api/rpc/opencode.goal/get"
-	request(app, .Goal, "POST", path, fmt.tprintf(`{{"input":{{"sessionID":%s}}}}`, jquote(id)), tag = id)
+	request(app, .Goal, "POST", path, fmt.tprintf(`{{"input":{{"sessionID":%s}}}}`, tk_json.quote(id)), tag = id)
 }
 
 // What the server said of a session's goal (null: none). Another session's is not this one's.
@@ -41,13 +42,13 @@ goal_set :: proc(app: ^App, session: string, v: json.Value) {
 		c.goal, c.has_goal = {}, false
 		return
 	}
-	g := Goal{objective = strings.clone(jstr(v, "objective"), c.alloc), reason = strings.clone(jstr(v, "reason"), c.alloc)}
-	switch jstr(v, "status") {
+	g := Goal{objective = strings.clone(tk_json.text(v, "objective"), c.alloc), reason = strings.clone(tk_json.text(v, "reason"), c.alloc)}
+	switch tk_json.text(v, "status") {
 	case "paused":   g.status = .Paused
 	case "complete": g.status = .Complete
 	case:            g.status = .Active
 	}
-	g.rounds, g.max_rounds = int(jnum(v, "rounds")), int(jnum(v, "maxRounds"))
+	g.rounds, g.max_rounds = int(tk_json.number(v, "rounds")), int(tk_json.number(v, "maxRounds"))
 	c.goal, c.has_goal = g, g.objective != ""
 }
 
@@ -172,4 +173,4 @@ looks_iso :: proc(s: string) -> bool {
 ////////////////////////////////
 // What the answers to its requests do (net.odin REQ_FACTS)
 
-goal_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { goal_set(app, r.tag, jget(v, "output")) }
+goal_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) { goal_set(app, r.tag, tk_json.get(v, "output")) }
