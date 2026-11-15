@@ -2804,7 +2804,16 @@ a_wait_is_answered_from_its_card :: proc(t: ^testing.T) {
 		command_run(app, command_find("view.notices"))
 		session.frames(s, 4)
 		testing.expect_value(t, card_count(s), "1 / 1")
-		testing.expect(t, session.find_text(s, "bash git push") != nil, "what is asked")
+		// the conversation's own card, in the card: answered from here
+		perm := session.find(s, "perm_p1")
+		if !testing.expect(t, perm != nil, "the permission's card, to answer it here") { return }
+		testing.expect(t, session.find_text(s, "git push") != nil, "what is asked")
+		once := session.find(s, "once", within = perm)
+		if testing.expect(t, once != nil, "Allow once") {
+			session.click(s, "once")
+			session.frames(s, 2)
+			testing.expect(t, app.permissions[0].replying, "its answer is on its way")
+		}
 		settle := session.find(s, "card_settle")
 		if testing.expect(t, settle != nil, "the card's act") { testing.expect(t, session.find_text(s, "Answer") != nil, "Answer") }
 		session.click(s, "card_settle")

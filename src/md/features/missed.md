@@ -19,3 +19,7 @@ modifiers (`item_selection_click`); the list's keys are the toolkit's.
 - **Escape on several entries keeps the cursor's alone; on one, it closes the view**: the toolkit's rule, the list's
   own (its `cancelled` closes the view).
 - **The cards do not select.** They show one entry at a time; A acknowledges the card shown.
+- **A wait is answered in its card.** While the server still asks it, a permission's or a question's card holds the
+  conversation's own card (`permission_card`, `form_card`), so it is answered without going to its session. The answer
+  acknowledges it, as any answer does (`missed_sync`: a wait gone from the server's lists). Answer, the card's act, still
+  opens the session. A copy of those cards for the view was refused: two cards that answer the same request would drift.

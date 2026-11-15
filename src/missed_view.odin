@@ -543,8 +543,11 @@ missed_card :: proc(app: ^App, r: ^Missed_Row, now: f64, em: f32) -> (retry: boo
 			ui.spacer(ui.px(em * 0.5))
 			switch Missed_Kind(e.kind) {
 			case .Permission, .Question:
-				section_label("as", i18n.tr("ASKED"), em)
-				missed_para("as_t", e.text, hex(HEX_TEXT), em)
+				// (still waiting: answered here, with the conversation's own card; its answer acknowledges it, missed_sync)
+				if !missed_answer_card(app, e, em) {
+					section_label("as", i18n.tr("ASKED"), em)
+					missed_para("as_t", e.text, hex(HEX_TEXT), em)
+				}
 			case .Shell:
 				section_label("cm", i18n.tr("COMMAND"), em)
 				missed_para("cm_t", fmt.tprintf("$ %s", e.text), hex(HEX_TEXT_SOFT), em, mono = true)
@@ -558,6 +561,22 @@ missed_card :: proc(app: ^App, r: ^Missed_Row, now: f64, em: f32) -> (retry: boo
 		ui.spacer(ui.px(pad))
 	}
 	return
+}
+
+// The card that answers a wait, the conversation's (permission_card, form_card), while the server still asks it. False:
+// answered or gone (its words alone are shown).
+@(private = "file")
+missed_answer_card :: proc(app: ^App, e: ^notices.Entry, em: f32) -> bool {
+	if e.state == .Acknowledged { return false }
+	id, _, mine := missed_key_parts(app, e.key)
+	if !mine { return false }
+	// (a few at most: what waits on this server)
+	if Missed_Kind(e.kind) == .Permission {
+		for &p in app.permissions { if p.id == id { permission_card(app, &p, em); return true } }
+	} else {
+		for f in app.cx.forms { if f.id == id { form_card(app, f, 1, em); return true } }
+	}
+	return false
 }
 
 // The report of a run, whole: the request, the answer as Markdown, the files, the todo list. True: Try again.
