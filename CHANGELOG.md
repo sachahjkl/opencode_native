@@ -4,6 +4,22 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.63.0] - 2026-11-15 22:45
+
+### Added
+- **Your own keys and aliases**: in the palette, Ctrl+Enter on a command sets its key and Alt+Enter makes what you typed its alias; the help, the menus and the palette show the keys in effect, and Settings has a Keys page to reset them. Ctrl+F, Ctrl+T, Ctrl+W, Alt+F4 and the conversation zoom keys show in the palette again.
+- **/btw: an aside in a panel**: `/btw <question>` forks the session shown into a panel at the right and asks the question there, while the conversation stays shown and keeps running. The panel is a conversation like the main one, with the same composer; "Open in the main view" shows it on the left, and closing it leaves the fork in the sidebar.
+
+### Changed
+- **One spacing scale**: wells, cards and lists keep the same insets everywhere: a tool's input and output, a sub-agent's facts, the server's facts, the free-limit panel, the permission and question cards, the tray and the dialogs. The MCP servers in the settings are one list. The setup is signed by its vendor, with a link to its site.
+- **Files in the Froment Software folder**: the settings, servers, drafts, licence and logs move once to ~/.config/FromentSoftware/OpencodeNative (Windows: %APPDATA%\FromentSoftware\OpencodeNative) and the matching state folder; a new install goes to ~/.local/opt/FromentSoftware/OpencodeNative (Windows: Programs\FromentSoftware\OpencodeNative). The program names itself Opencode Native.
+- **The system connects to the server**: requests, the event stream and the sockets go through WinHTTP on Windows and libcurl on Linux, with the system's proxy and certificates. On Linux, libcurl is needed at run time. A stopped connection ends within a second.
+- **Images use the toolkit's picture cache**: an image that cannot be shown says why in plain words, and the status bar no longer counts image decodes as requests.
+- **Saved server passwords need to be entered again**: passwords are now sealed by the shared store of the toolkit (Windows DPAPI, the Secret Service on Linux) in a new format. Open each saved server that had a password and enter it again. On Linux, the old keyring item labelled "opencode native: <server>" is no longer used and can be deleted.
+
+### Removed
+- **Repair of installs from Setup 0.20.0 and earlier**: such an install shows as left over; install again.
+
 ## [0.62.0] - 2026-11-15 20:59
 
 ### Added
@@ -1735,6 +1751,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.63.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.63.0
 [0.62.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.62.0
 [0.61.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.61.0
 [0.60.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.60.0
