@@ -355,7 +355,7 @@ renaming_at :: proc(app: ^App, id: string, at: Rename_At) -> bool {
 rename_in_place :: proc(app: ^App, em, font_size, height: f32, fit := false) {
 	r := &app.rename
 	r.shown = true
-	pad := math.round(em * RENAME_PAD_EM)
+	pad := math.round(em * ui.SPACE_2)
 	w := ui.fill()
 	if fit { w = ui.px(math.round(ui.text_width(app.font, font_size, ui.line_edit_string(&r.field)) + 2 * pad + em * RENAME_ROOM_EM), 0) }
 	ui.next({width = w, height = ui.px(height), cross = .Center, radius = 5 * ui.scale()})

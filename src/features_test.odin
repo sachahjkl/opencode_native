@@ -9,6 +9,7 @@ import "core:encoding/json"
 import "core:mem/virtual"
 import "core:strings"
 import "core:testing"
+import "gt:png"
 import "gt:ui"
 
 @(test)
@@ -558,6 +559,18 @@ the_logo_takes_the_accent :: proc(t: ^testing.T) {
 	testing.expect_value(t, px[8], 0x12)
 	testing.expect(t, px[12] < 0x2c, "half of a soft pixel: between its grey and the accent")
 	testing.expect_value(t, px[15], 100)
+}
+
+// The setup is signed by its vendor (its mark and its site) and says once that the project is not OpenCode's: the
+// identity's description says it, so no note under the version repeats it.
+@(test)
+the_setup_is_signed_and_says_it_once :: proc(t: ^testing.T) {
+	o := setup_options()
+	testing.expect_value(t, o.vendor_url, "https://froment.software")
+	testing.expect_value(t, o.note, "")
+	testing.expect(t, strings.contains(o.identity.description, "Not affiliated"), "the description says it")
+	_, w, h, ok := png.decode(APP_PUBLISHER_MARK, context.temp_allocator)
+	testing.expect(t, ok && w > 0 && h > 0, "the vendor's mark is a picture")
 }
 
 // What a file goes as: an image or a PDF by its extension, text when it is UTF-8 without a NUL, else nothing (its path).

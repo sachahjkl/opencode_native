@@ -60,29 +60,29 @@ dock :: proc(app: ^App, pane: ^Chat_Pane, em: f32, side, col: f32) {
 permission_card :: proc(app: ^App, p: ^Permission, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if plate(fmt.tprintf("###perm_%s", p.id), top = HEX_PERM_TOP, bottom = HEX_PERM_BOTTOM, radius = CARD_RADIUS, shadow = 8, rim = 0.1, border = ui.with_alpha(hex(HEX_YELLOW), 0.55)) {
-		ui.spacer(ui.px(em * 0.7))
+		ui.space(ui.CARD_PAD)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###r") {
-			ui.spacer(ui.px(em))
+			ui.space(ui.CARD_PAD)
 			glyph(lucide.SHIELD, hex(HEX_YELLOW), math.round(em * ICON_LARGE), em * 1.6)
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.ICON_GAP)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
 				text("a", fmt.tprintf(i18n.tr("Permission requested: %s"), p.action), hex(HEX_YELLOW), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
 				detail := p.message != "" ? p.message : strings.join(p.resources, ", ", context.temp_allocator)
 				text("d", detail, hex(HEX_PERM_DETAIL), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.4)}, ui.fill())
 			}
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.CONTROL_GAP)
 			if ui.button("once", i18n.tr("Allow once"), lucide.CHECK, {intent = .Success, disabled = p.replying}).clicked { reply_permission(app, p, "once") }
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.CONTROL_GAP)
 			if ui.button("always", i18n.tr("Always"), o = {intent = .Success, disabled = p.replying}).clicked { reply_permission(app, p, "always") }
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.CONTROL_GAP)
 			if ui.button("reject", i18n.tr("Reject"), lucide.X, {intent = .Danger, disabled = p.replying}).clicked { reply_permission(app, p, "reject") }
-			ui.spacer(ui.px(em))
+			ui.space(ui.CARD_PAD)
 		}
-		ui.spacer(ui.px(em * 0.7))
+		ui.space(ui.CARD_PAD)
 	}
-	ui.spacer(ui.px(em * 0.7))
+	ui.space(ui.ITEM_GAP)
 }
 
 COMPOSER_MAX_LINES   :: 12

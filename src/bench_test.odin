@@ -10,6 +10,7 @@ package ocn
 import prefs_page "gt:prefs_page"
 import tk_json "gt:json"
 import "base:runtime"
+import "core:encoding/base64"
 import "core:encoding/json"
 import "core:fmt"
 import "core:math"
@@ -32,6 +33,7 @@ import "gt:term"
 import "gt:ui"
 import lucide "gt:lucide"
 import notices "gt:notices"
+import remote "gt:remote"
 import session "gt:testkit/session"
 import "gt:testkit/unwatched"
 
@@ -326,6 +328,15 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		app.prefs.expand_tools = true
 		session.frames(s, 6)
 		testing.expect(t, session.find(s, "iv0") != nil && session.find(s, "sr_kv1") != nil, "the input's long value and its short one")
+		// (what the well holds sits the toolkit's inset from its edges: ui.INNER_PAD, not rows padded by hand)
+		if key := session.find(s, "ik0"); key != nil && key.parent != nil && key.parent.parent != nil && key.parent.parent.parent != nil {
+			w := key.parent.parent.parent   // (the well: its padded line, its body, then the key's row)
+			inset := math.round(w.font_size * ui.INNER_PAD)
+			testing.expectf(t, abs(key.rect.min.x - w.rect.min.x - inset) <= 1.5 && abs(key.rect.min.y - w.rect.min.y - inset) <= 1.5,
+				"the first key %v from the well's corner, its inset %v", key.rect.min - w.rect.min, inset)
+		} else {
+			testing.fail_now(t, "the input's well and its first key")
+		}
 		app.prefs.expand_tools = false
 		chat_scroll_event(pane, Scroll_Signal.Snap)
 		session.frames(s, 6)
@@ -3084,6 +3095,26 @@ escape_in_a_font_picker_closes_the_picker_alone :: proc(t: ^testing.T) {
 	})
 }
 
+// The MCP servers are one list: a card of rows (the toolkit's list card), not a card per server with gaps between.
+@(test)
+the_mcp_servers_are_one_list_card :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		settings_open_on(app, "mcp")
+		// (the bench has no server: its reading fails, then the page is given two servers as read)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return remote.failed(&the_app.facts.reads[.Mcp]) }, "the reading, over")
+		f := &app.facts
+		append(&f.mcp, Mcp_Server{name = strings.clone("a"), status = .Connected}, Mcp_Server{name = strings.clone("b"), status = .Failed})
+		remote.settle(&f.reads[.Mcp], .Ready, "")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "mcp1") != nil }, "the second server's row")
+		list, a, b := session.find(s, "mcp"), session.find(s, "mcp0"), session.find(s, "mcp1")
+		if !testing.expect(t, list != nil && a != nil && b != nil, "the list and its rows") { return }
+		testing.expect(t, b.rect.min.y - a.rect.max.y < 4, "the rows touch: a hairline parts them, no gap")
+		testing.expect(t, a.rect.min.y > list.rect.min.y && b.rect.max.y < list.rect.max.y, "both inside the one card")
+	})
+}
+
 // A shell floated out of the dock is a window with its header at the top and its grid filling the rest.
 @(test)
 a_floating_shell_shows_its_grid :: proc(t: ^testing.T) {
@@ -3107,5 +3138,34 @@ a_floating_shell_shows_its_grid :: proc(t: ^testing.T) {
 		if !testing.expect(t, frame != nil && grid != nil, "its body and its grid") { return }
 		testing.expectf(t, grid.rect.max.y - grid.rect.min.y > 0.6 * (frame.rect.max.y - frame.rect.min.y), "the grid fills the body: grid %v, body %v", grid.rect, frame.rect)
 		// (in a window of its own: the toolkit's views_test.a_panel_of_tabs_fills_its_window; the bench has no windows)
+	})
+}
+
+// An image held as text (base64, a data URL) becomes a picture through the cache's prepare, on its chores; text that is
+// no base64 fails as no picture file, its thumbnail says so.
+@(test)
+a_picture_held_as_text_is_decoded_by_the_cache :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		W, H :: 120, 60
+		pixels := make([]u8, W * H * 4, context.temp_allocator)
+		for i in 0 ..< W * H { pixels[i * 4 + 1], pixels[i * 4 + 3] = 160, 255 }
+		b64, _ := base64.encode(png.encode(pixels, W, H, .Fast, context.temp_allocator), allocator = context.temp_allocator)
+		url := strings.concatenate({"data:image/png;base64,", b64}, context.temp_allocator)
+		refs := [3]Image_Ref{image_ref(b64, .Base64, "image/png", ""), image_ref(url, .Data_Url, "image/png", ""), image_ref("not base64 ***", .Base64, "image/png", "")}
+		Ctx :: struct { app: ^App, refs: ^[3]Image_Ref }
+		ctx := Ctx{app, &refs}
+		settled :: proc(s: ^session.Session, c: ^Ctx) -> bool {
+			for r in c.refs { if p := picture(c.app, r, 0); p == nil || p.state == .Pending { return false } }
+			return true
+		}
+		session.wait_until(s, &ctx, settled, "the three pictures settled")
+		for r, i in refs[:2] {
+			p := picture(app, r, 0)
+			testing.expectf(t, p != nil && p.state == .Ready && p.size == {W, H}, "%d: ready at its size: %v", i, p^)
+		}
+		bad := picture(app, refs[2], 0)
+		testing.expect(t, bad != nil && bad.state == .Failed && bad.why == .Unknown_Format, "what is no base64 is no picture")
 	})
 }

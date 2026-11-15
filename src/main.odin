@@ -576,6 +576,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	views_start(app, views_path(prefs_file))   // (ui.init selected the state: the sidebar's owner)
 	palette_start(app)   // (after the preferences: the settings source reads them)
 	prefs_page.install_init(&app.install, &app.cfg_prefs, setup_options())
+	app.install.vendor_mark, _ = setup.logo_make(&app.r, APP_PUBLISHER_MARK)   // (the setup's "By" line, as the site's foot)
 	licence_init(app)
 	zooms_load(app)
 	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)

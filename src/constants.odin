@@ -35,7 +35,6 @@ STATS_METER_EM      :: 22     // ... this wide, a smaller bar
 STATS_METER_W_EM    :: 4
 STATS_STACK_EM      :: 18     // ... under this, a value goes under its key, and a part of the context loses its share
 STATS_KEY_SHARE     :: 0.38   // of the panel, at most: a key, beside its value
-STATS_NARROW_PAD_EM :: 0.7
 STATS_KEY_W_EM      :: 11
 FIGURE_W_EM         :: 6.2    // a column of the figures: they line up when they wrap
 FIGURE_H_EM         :: 2.1
@@ -65,7 +64,6 @@ ACT_FIRST_H_EM     :: 14      // its height before it was ever measured
 ACT_LINE_CHARS     :: 220
 TODO_MARK_H_EM :: 1.75   // an item's mark, centred on the first line of its text
 TRAY_RADIUS :: 10
-TRAY_PAD_EM :: 1.0   // what is in the tray, from its edges
 HEX_ACT_ROW_SELECTED :: 0x151515ff
 HEX_ACT_WELL         :: 0x0a0a0aff
 
@@ -247,8 +245,6 @@ CHANGES_DIFF_LINES :: 400   // of a file, before the rest is counted
 FORM_BODY_H_EM     :: 20     // the most what a form asks takes, then it scrolls
 FORM_BODY_WINDOW   :: 0.45   // and of the height of the window
 FORM_LINE_EM       :: 2.2    // a line of it (form_height: what it would take)
-FORM_FIELD_GAP_EM  :: 0.95
-FORM_OPTION_GAP_EM :: 0.25
 
 NAV_HISTORY_MAX :: 100   // places remembered for Back and Forward
 NAV_RESTORE_STILL      :: 3     // frames it stays there before it is left alone
@@ -261,10 +257,7 @@ POINTER_MOVING_MS :: 80                         // since the last move or notch:
 FPS_SMOOTH   :: 0.08           // the status bar's rate: how fast it follows
 FPS_RESTED_S :: 0.05           // a longer gap between two frames: the loop rested
 
-SEGMENT_PAD_EM :: 1.0   // the room around the longest label of a segmented choice (settings.odin pref_choice)
 WIDE_CHOICE_SHARE :: 0.45   // past this share of its line, a segmented choice goes under its words (settings.odin pref_choice)
-INPUT_PAD_EM :: 0.8   // a tool's input in its well: where its keys start, and a long value's text (tool_views.odin input_view)
-RENAME_PAD_EM :: 0.5   // a title edited in place: its words from the field's edge (context_menus.odin rename_in_place)
 RENAME_ROOM_EM :: 3   // a title edited in place, beside others: room to type after its words (context_menus.odin rename_in_place)
 TERM_MENU_EM :: 14   // a shell's menu, its width (terminal.odin term_menu)
 OUTPUT_PROMPT      :: "\x1b[2m$\x1b[0m "    // before a command's first line at the head of its output (output_view.odin output_view_echo)

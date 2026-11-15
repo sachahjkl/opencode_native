@@ -846,7 +846,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 		ui.spacer(ui.px(em * 0.3))
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###l1") {
-			ui.spacer(ui.px(em * TRAY_PAD_EM))
+			ui.space(ui.CARD_PAD)
 			state_mark("###st", r.state, size = em * 0.8)
 			ui.spacer(ui.px(em * 0.4))
 			text("n", r.name, running ? hex(HEX_WEAK) : hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
@@ -897,7 +897,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 			for l, k in lines {
 				ui.next({width = ui.fill(), height = ui.px(line_h), axis = .X, cross = .Center})
 				if ui.row(.Center, id = fmt.tprintf("###o%d", k)) {
-					ui.spacer(ui.px(em * (TRAY_PAD_EM + 1.2)))
+					ui.spacer(ui.px(math.round(em * (ui.CARD_PAD + 1.2))))   // (under the row's title: the inset, its mark and the gap)
 					text("x", ellipsize(l, ACT_LINE_CHARS), hex(k == len(lines) - 1 && running ? HEX_TEXT_SOFT : HEX_TOOL_OUTPUT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 					ui.spacer(ui.px(em * 0.5))
 				}
@@ -911,7 +911,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 todo_row :: proc(app: ^App, t: Todo, k: int, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = fmt.tprintf("###td%d", k)) {
-		ui.spacer(ui.px(em * TRAY_PAD_EM))
+		ui.space(ui.CARD_PAD)
 		ui.next({width = ui.px(em * 1.2), height = ui.px(math.round(em * TODO_MARK_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###m") {
 			switch t.status {
@@ -941,7 +941,7 @@ activity_todos :: proc(app: ^App, em: f32) {
 	for t in a.todos { if todo_active(t) { active += 1 } }
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.7)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###td_head") {
-		ui.spacer(ui.px(em * TRAY_PAD_EM))
+		ui.space(ui.CARD_PAD)
 		caption_title("h", i18n.tr("TODO"), fmt.tprintf("%d/%d", done, len(a.todos)), em, hex(HEX_GREEN))
 		ui.spacer(ui.fill())
 		labels := [3]string{i18n.tr("All"), fmt.tprintf(i18n.tr("Active %d"), active), fmt.tprintf(i18n.tr("Done %d"), len(a.todos) - active)}   // (Todo_Filter's order)
@@ -951,7 +951,7 @@ activity_todos :: proc(app: ^App, em: f32) {
 			ui.a11y({name = i18n.tr("Which todos show")})
 			if ui.segmented("###td_filter", labels[:], &sel, look = .Text) { a.todo_filter = Todo_Filter(sel) }
 		}
-		ui.spacer(ui.px(em * TRAY_PAD_EM))
+		ui.space(ui.CARD_PAD)
 	}
 	ui.spacer(ui.px(em * 0.2))
 	shown := 0
@@ -960,7 +960,7 @@ activity_todos :: proc(app: ^App, em: f32) {
 	if shown == 0 {
 		ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###td_none") {
-			ui.spacer(ui.px(em * TRAY_PAD_EM))
+			ui.space(ui.CARD_PAD)
 			text("n", a.todo_filter == .Active ? i18n.tr("Nothing left to do.") : i18n.tr("Nothing done yet."), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		}
 	}
@@ -977,18 +977,18 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 	for r in rows { if sub_live(r.state) { running += 1 } }
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###act_head") {
-		ui.spacer(ui.px(em * TRAY_PAD_EM))
+		ui.space(ui.CARD_PAD)
 		caption_title("h", i18n.tr("ACTIVITY"), fmt.tprintf(i18n.tr("%d running"), running), em, hex(HEX_CYAN))
 		ui.spacer(ui.fill())
 		if pane.conversation.column_w > em * ACT_KEYS_MIN_EM { text("k", i18n.tr("↑↓ move   Enter open   Del stop   "), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
 		if hint_action("###act_close", i18n.tr("Esc close"), em, app.mono) { activity_close(app) }
-		ui.spacer(ui.px(em * TRAY_PAD_EM))
+		ui.space(ui.CARD_PAD)
 	}
 	ui.spacer(ui.px(em * 0.2))
 	if len(rows) == 0 {
 		ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###act_none") {
-			ui.spacer(ui.px(em * TRAY_PAD_EM))
+			ui.space(ui.CARD_PAD)
 			text("n", i18n.tr("Nothing runs in the background of this session."), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		}
 	}

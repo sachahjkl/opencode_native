@@ -84,15 +84,31 @@ image_bytes :: proc(ref: Image_Ref, allocator := context.allocator) -> (data: []
 }
 
 // The picture of `ref` in the toolkit's cache, for a place whose longest side is `need` frame pixels (0: the whole image, for
-// the viewer); nil: no image. Its bytes are made only when the cache does not hold that size: its base64 is not decoded at
-// each frame.
+// the viewer); nil: no image. Its text goes as it is: the cache's chores turn base64 into the file (pictures' prepare), so
+// the interface's thread never decodes it, and the cache copies it only at a miss.
 picture :: proc(app: ^App, ref: Image_Ref, need: f32) -> ^pictures.Picture {
 	if ref.key == 0 || ref.data == "" { return nil }
-	if p := pictures.get(&app.pictures, ref.key, nil, need); p != nil { return p }
-	h := runtime.heap_allocator()
-	data, owned := image_bytes(ref, h)
-	defer if owned { delete(data, h) }
-	return pictures.get(&app.pictures, ref.key, data, need)
+	data := transmute([]u8)ref.data
+	switch ref.encoding {
+	case .Bytes:    return pictures.get(&app.pictures, ref.key, data, need)
+	case .Base64:   return pictures.get(&app.pictures, ref.key, data, need, image_file_of_base64)
+	case .Data_Url: return pictures.get(&app.pictures, ref.key, data, need, image_file_of_data_url)
+	}
+	return nil
+}
+
+// pictures' prepare, on its chores: the file of a base64 text, or of a data URL; text that is no base64 is no picture.
+// (only a file of `allocator`: the cache frees what prepare gives, never the text it gave)
+@(private = "file")
+image_file_of_base64 :: proc(data: []u8, allocator: runtime.Allocator) -> ([]u8, bool) {
+	file, owned := image_bytes({data = string(data), encoding = .Base64}, allocator)
+	return owned ? file : nil, owned
+}
+
+@(private = "file")
+image_file_of_data_url :: proc(data: []u8, allocator: runtime.Allocator) -> ([]u8, bool) {
+	file, owned := image_bytes({data = string(data), encoding = .Data_Url}, allocator)
+	return owned ? file : nil, owned
 }
 
 // What a picture that cannot be shown says of itself.

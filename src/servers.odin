@@ -597,13 +597,12 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 	em := ui.font_size()
 	ui.view_title(v, e.index >= 0 ? i18n.tr("Edit the server") : i18n.tr("Add a server"))
 	{
-		pad :: proc(em: f32) { ui.spacer(ui.px(em * DIALOG_MARGIN_EM)) }
 		ui.spacer(ui.px(em * 0.9))
 		field :: proc(id, label, hint: string, f: ^ui.Line_Edit, em: f32, secret := false, reveal: ^bool = nil) -> ui.Edit_Result {
 			res: ui.Edit_Result
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = id) {
-				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+				ui.space(ui.PAGE_MARGIN)
 				text("k", label, hex(HEX_WEAK), ui.Style_Mod{font_size = math.round(em * FS_NOTE), height = ui.px(em * 1.5)}, ui.px(em * 6))
 				ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 				if ui.well("###w", .X) {
@@ -612,7 +611,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 						res = ui.line_edit("###e", f, {placeholder = hint, kind = secret ? .Secret : .Plain, reveal = reveal})
 					}
 				}
-				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+				ui.space(ui.PAGE_MARGIN)
 			}
 			ui.spacer(ui.px(em * 0.5))
 			return res
@@ -625,7 +624,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 			if ui.row() {
 				ui.spacer(ui.px(em * 7.4))
 				text("h", i18n.tr("the server's OPENCODE_SERVER_PASSWORD, as user opencode"), hex(HEX_FAINT), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.3)}, ui.fill())
-				ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+				ui.space(ui.PAGE_MARGIN)
 			}
 			if note := password_note(app); note != "" {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -633,7 +632,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 					ui.spacer(ui.px(em * 7.4))
 					ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 					if ui.column() { info_line(app, "###note", note, em, hex(HEX_YELLOW)) }
-					ui.spacer(ui.px(em * DIALOG_MARGIN_EM))
+					ui.space(ui.PAGE_MARGIN)
 				}
 			}
 		}
@@ -646,7 +645,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 		save := r1.committed || r2.committed || r3.committed
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center) {
-			pad(em)
+			ui.space(ui.PAGE_MARGIN)
 			if e.index >= 0 {
 				if ui.button("rm", i18n.tr("Remove"), lucide.TRASH_2, {intent = .Danger}).clicked {
 					server_remove(app, e.index)
@@ -656,9 +655,9 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 			ui.spacer(ui.fill())
 			if taken { text("tk", i18n.tr("That name is taken"), hex(HEX_RED), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
 			if ui.button("cancel", i18n.tr("Cancel")).clicked { ui.view_end(v, ui.VIEW_CANCELLED) }
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.CONTROL_GAP)
 			if ui.button("ok", ui.text_shown(e.index >= 0 ? i18n.tr("Save and connect") : i18n.tr("Add and connect")), lucide.CHECK, {intent = .Success, disabled = !valid}).clicked { save = true }
-			pad(em)
+			ui.space(ui.PAGE_MARGIN)
 		}
 		if save && valid {
 			s := Server{name = strings.clone(name), url = strings.clone(server_normalize(url)), password = strings.clone(ui.line_edit_string(&e.password))}

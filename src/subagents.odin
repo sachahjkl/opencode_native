@@ -19,11 +19,9 @@ HEX_CARD_RESULT      :: 0xd8d8d8ff
 HEX_RETURNED_TEXT    :: 0xcfcfcfff
 HEX_SUB_TOGGLE_HOT   :: 0x161616ff
 
-// A card's first line, in font sizes: its padding, its mark, the gap after it; the lines under it start under the name.
-CARD_PAD_EM      :: 0.8
+// A card's first line, in font sizes: its inset, its mark, the gap after it; the lines under it start under the name.
 CARD_MARK_EM     :: 0.9
-CARD_MARK_GAP_EM :: 0.45
-CARD_INDENT_EM   :: CARD_PAD_EM + CARD_MARK_EM + CARD_MARK_GAP_EM
+CARD_INDENT_EM   :: ui.CARD_PAD + CARD_MARK_EM + ui.ICON_GAP
 SEEK_ANCHOR_EM     :: 7      // --seek-subagent: how far down the view it lands
 PROMPT_LINES_MAX   :: 18
 FINISHED_SHOWN     :: 40     // in the menu of the sub-agents
@@ -531,9 +529,9 @@ card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: b
 	ui.spacer(ui.px(em * (tight ? 0.2 : 0.45)))
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###l1") {
-		ui.spacer(ui.px(em * CARD_PAD_EM))
+		ui.space(ui.CARD_PAD)
 		state_mark("###st", v.state, size = em * CARD_MARK_EM)
-		ui.spacer(ui.px(em * CARD_MARK_GAP_EM))
+		ui.space(ui.ICON_GAP)
 		text("ag", name, hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.px(em * 0.6))
 		text("ds", desc, hex(HEX_TEXT), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
@@ -581,7 +579,7 @@ state_when :: proc(st: Sub_State, started, end: f64) -> string {
 card_body :: proc(app: ^App, pane: ^Chat_Pane, v: ^Sub_View, p: ^Part, pid: string, running: bool, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###body") {
-		ui.spacer(ui.px(em * CARD_PAD_EM))
+		ui.space(ui.CARD_PAD)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column() {
 			if v.session != nil {
@@ -591,7 +589,7 @@ card_body :: proc(app: ^App, pane: ^Chat_Pane, v: ^Sub_View, p: ^Part, pid: stri
 			if v.prompt != "" {
 				section_label("pr", i18n.tr("PROMPT"), em)
 				body, extra := mono_cut_kept(&p.prompt_well.cut, v.prompt, PROMPT_LINES_MAX)   // (the card is its frame: no box of its own inside it)
-				mono_text(body, extra, em, 0, hex(HEX_TEXT_SOFT), flush = true, kept = &p.prompt_well.runs, kept_in = pane.chat.alloc)
+				mono_text(body, extra, em, hex(HEX_TEXT_SOFT), kept = &p.prompt_well.runs, kept_in = pane.chat.alloc)
 				ui.spacer(ui.px(em * 0.6))
 			}
 			if v.result != "" {
@@ -608,7 +606,7 @@ card_body :: proc(app: ^App, pane: ^Chat_Pane, v: ^Sub_View, p: ^Part, pid: stri
 			}
 			ui.spacer(ui.px(em * 0.7))
 		}
-		ui.spacer(ui.px(em * CARD_PAD_EM))
+		ui.space(ui.CARD_PAD)
 	}
 }
 
@@ -648,11 +646,10 @@ sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 	s := v.session
 	section_label("fa", i18n.tr("SESSION"), em)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if ui.well("###facts") {
-		ui.spacer(ui.px(em * 0.45))
+	if ui.well("###facts", pad = ui.INNER_PAD) {
 		row :: proc(id, k, val: string, em: f32, col := Color{}) {
 			if ui.style({font_size = math.round(em * FS_CAPTION)}) {
-				ui.stat_row(id, k, val, {height = em * 1.4, key_width = em * 7, value_color = col.a > 0 ? col : hex(HEX_TEXT_SOFT), selectable = true, inset = [2]f32{0.8 / FS_CAPTION, 0}})
+				ui.stat_row(id, k, val, {height = em * 1.4, key_width = em * 7, value_color = col.a > 0 ? col : hex(HEX_TEXT_SOFT), selectable = true, inset = [2]f32{0, 0}})
 			}
 		}
 		row("###f1", i18n.tr("session"), s.id, em)
@@ -665,7 +662,6 @@ sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
 		row("###f6", i18n.tr("tokens"), fmt.tprintf(i18n.tr("in %s · out %s · reasoning %s · cache read %s · cache write %s"), kfmt(s.tokens_in), kfmt(s.tokens_out), kfmt(s.reasoning), kfmt(s.cache_read), kfmt(s.cache_write)), em)
 		if s.cost > 0 { row("###f7", i18n.tr("cost"), dollars(s.cost, 4), em) }
 		if v.has_live && v.live.steps + v.live.tools > 0 { row("###f8", i18n.tr("seen live"), fmt.tprintf(i18n.tr("%d steps · %d tool calls"), v.live.steps, v.live.tools), em) }
-		ui.spacer(ui.px(em * 0.45))
 	}
 }
 
@@ -688,9 +684,9 @@ subagent_result :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 		hs := ui.signal(hb)
 		if hs.clicked { part_toggle(app, pane, m.id, hb) }
 		if ui.parent(hb) {
-			ui.spacer(ui.px(em * CARD_PAD_EM))
+			ui.space(ui.CARD_PAD)
 			state_mark("###st", st, size = em * CARD_MARK_EM)
-			ui.spacer(ui.px(em * CARD_MARK_GAP_EM))
+			ui.space(ui.ICON_GAP)
 			text("ag", v.agent != "" ? v.agent : i18n.tr("sub-agent"), hex(HEX_WEAK), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.px(em * 0.4))
 			word := m.sub_running ? i18n.tr("reported, its work runs on") : st == .Done ? i18n.tr("returned") : sub_state_label(st)

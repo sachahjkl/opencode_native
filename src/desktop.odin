@@ -29,6 +29,8 @@ APP_NAME      :: "opencode native"
 // (said wherever this program presents itself: their README asks it of a project with "opencode" in its name, and it is the truth)
 APP_NOT_THEIRS := i18n.later("An independent project: not built by the OpenCode team, and not affiliated with them.")
 APP_PUBLISHER :: "Froment Software"
+APP_PUBLISHER_URL :: "https://froment.software"   // (the setup's "By" line opens it)
+APP_PUBLISHER_MARK :: #load("../site/img/froment-software-64.png")
 
 APP_SLUG       :: "opencode-native"   // the .desktop file, the icon, the windows' class, the executable
 INSTALL_FOLDER :: "opencode-native"   // the install folder's name (Windows: not the toolkit's default, which is APP_NAME)
@@ -71,7 +73,8 @@ nix_package :: proc() -> bool { return desktop.in_nix_store(process.executable_p
 setup_options :: proc() -> setup.Setup_Options {
 	return setup.Setup_Options{
 		identity = identity(), version = APP_VERSION, install_folder = INSTALL_FOLDER, icons = desktop_icons(),
-		note = i18n.tr(APP_NOT_THEIRS), prepare = setup_prepare,
+		// (no note: the identity's description already says the project is not the OpenCode team's)
+		vendor_url = APP_PUBLISHER_URL, prepare = setup_prepare,
 		running = instance_running, quit = instance_quit,   // (--status, --quit: the single instance, single_instance.odin)
 		// (the dialog in opencode's look: its blurred backdrop, behind it as a dialog only)
 		backdrop = view_backdrop,

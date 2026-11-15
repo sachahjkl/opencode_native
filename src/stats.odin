@@ -489,7 +489,7 @@ stats_panel :: proc(app: ^App, em: f32) {
 	if ui.column(flags = {.Draw_Background}, id = "###st") {
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###stats_scroll") {
-			pad := em * (app.stats.width > em * STATS_STACK_EM ? DIALOG_MARGIN_EM : STATS_NARROW_PAD_EM)
+			pad := math.round(em * (app.stats.width > em * STATS_STACK_EM ? ui.PAGE_MARGIN : ui.SPACE_3))
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row() {
 				ui.spacer(ui.px(pad))

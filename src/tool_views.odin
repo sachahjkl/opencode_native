@@ -237,30 +237,27 @@ todo_view :: proc(app: ^App, p: ^Part, em: f32) -> bool {
 input_view :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 	if !p.input_object { mono_well("###input", p.input, em, TOOL_INPUT_LINES_MAX); return }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if ui.well("###input") {
-		ui.spacer(ui.px(em * 0.4))
+	if ui.well("###input", pad = ui.INNER_PAD) {
 		for &f, i in p.fields {
 			k, s := f.key, f.value
 			if f.long {
-				if i > 0 { ui.spacer(ui.px(em * 0.3)) }
+				if i > 0 { ui.space(ui.SPACE_1) }
 				ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 				if ui.row(.Center, id = fmt.tprintf("###ik%d", i)) {
-					ui.spacer(ui.px(em * INPUT_PAD_EM))
 					text("l", k, hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 				}
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column(id = fmt.tprintf("###iv%d", i)) {
 					body, extra := mono_cut_kept(&f.well.cut, s, TOOL_INPUT_LINES_MAX)
-					mono_text(body, extra, em, INPUT_PAD_EM, flush = true, kept = &f.well.runs, kept_in = pane.chat.alloc)
+					mono_text(body, extra, em, kept = &f.well.runs, kept_in = pane.chat.alloc)
 				}
-				if i + 1 < len(p.fields) { ui.spacer(ui.px(em * 0.3)) }
+				if i + 1 < len(p.fields) { ui.space(ui.SPACE_1) }
 			} else {
 				if ui.style({font_size = math.round(em * FS_SMALL)}) {
-					ui.stat_row(fmt.tprintf("kv%d", i), k, s, {height = em * 1.4, key_width = em * 7, label_size = math.round(em * FS_CAPTION), value_color = hex(HEX_TEXT_SOFT), selectable = true, inset = [2]f32{INPUT_PAD_EM / FS_SMALL, 0}})
+					ui.stat_row(fmt.tprintf("kv%d", i), k, s, {height = em * 1.4, key_width = em * 7, label_size = math.round(em * FS_CAPTION), value_color = hex(HEX_TEXT_SOFT), selectable = true, inset = [2]f32{0, 0}})
 				}
 			}
 		}
-		ui.spacer(ui.px(em * 0.4))
 	}
 	ui.spacer(ui.px(em * 0.5))
 }

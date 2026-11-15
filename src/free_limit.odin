@@ -61,13 +61,11 @@ free_limit_panel :: proc(app: ^App, em: f32) {
 	left := app.free_limit.reset_ms - now_epoch_ms()
 	ui.wake_within(built_state(app), max(1, int(math.ceil(min(left, f64(max(i32)))))))   // (it goes by itself)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y, radius = 11 * ui.scale()})
-	if ui.well("###free_limit", .Y) {
-		ui.spacer(ui.px(em * 0.7))
+	if ui.well("###free_limit", .Y, pad = ui.INNER_PAD) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###fl_top") {
-			ui.spacer(ui.px(em * 0.9))
 			glyph(lucide.CIRCLE_GAUGE, hex(HEX_YELLOW), math.round(em * ICON_SMALL), em * 1.3)
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.ICON_GAP)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column(id = "###fl_words") {
 				text("t", i18n.tr("Free limit reached"), hex(HEX_BRIGHT), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.5)}, ui.fill())
@@ -79,17 +77,14 @@ free_limit_panel :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), fg = hex(HEX_WEAK), text_pad = 0})
 				ui.paragraph(fmt.tprintf("%s###fl_reset", ui.text_shown(said)))
 			}
-			ui.spacer(ui.px(em * 0.9))
 		}
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.LINE_GAP)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###fl_acts") {
 			ui.spacer(ui.fill())
 			if ui.button("fl_go", i18n.tr("Subscribe to Go · $10/mo"), o = {face = .Ghost}).clicked { ui.open(FREE_LIMIT_GO_URL, .Url) }
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.CONTROL_GAP)
 			if ui.button("fl_connect", i18n.tr("Connect provider"), lucide.PLUG, {intent = .Primary}).clicked { settings_open_on(app, "connections") }
-			ui.spacer(ui.px(em * 0.8))
 		}
-		ui.spacer(ui.px(em * 0.7))
 	}
 }

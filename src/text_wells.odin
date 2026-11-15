@@ -107,19 +107,16 @@ Well_Kept :: struct {
 mono_well :: proc(id: string, s: string, em: f32, max_lines: int, color := Color{}, kept: ^Well_Kept = nil, kept_in := mem.Allocator{}) {
 	body, extra := mono_cut_kept(kept != nil ? &kept.cut : nil, s, max_lines)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
-	if ui.well(id) {
-		ui.spacer(ui.px(em * 0.5))
-		mono_text(body, extra, em, 0.75, color, kept = kept != nil ? &kept.runs : nil, kept_in = kept_in)
-		ui.spacer(ui.px(em * 0.5))
+	if ui.well(id, pad = ui.INNER_PAD) {
+		mono_text(body, extra, em, color, kept = kept != nil ? &kept.runs : nil, kept_in = kept_in)
 	}
 }
 
-// What mono_well holds, for a well that holds more: `body` (already cut), the lines left out, `pad` em on each side (`flush`: the text's own,
-// none). `kept`: its runs, kept with the text (in `kept_in`).
-mono_text :: proc(body: string, extra: int, em, pad: f32, color := Color{}, flush := false, kept: ^Link_Runs = nil, kept_in := mem.Allocator{}) {
+// What mono_well holds, for a well that holds more: `body` (already cut), the lines left out. Its text starts at its box's
+// edge: the well's inset (or the key above it) is the only room before it. `kept`: its runs, kept with the text (in `kept_in`).
+mono_text :: proc(body: string, extra: int, em: f32, color := Color{}, kept: ^Link_Runs = nil, kept_in := mem.Allocator{}) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###r") {
-		ui.spacer(ui.px(em * pad))
 		style := ui.Rich_Style{font = the_app.mono, color = color.a > 0 ? color : hex(HEX_TOOL_OUTPUT)}
 		runs: []ui.Rich_Run
 		if kept != nil {
@@ -129,16 +126,12 @@ mono_text :: proc(body: string, extra: int, em, pad: f32, color := Color{}, flus
 			ui.rich_links(body, style, &list)
 			runs = list[:]
 		}
-		m := ui.Style_Mod{width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}}
-		if flush { m.text_pad = 0 }   // (its text starts at the pad, as a key above it)
-		ui.next(m)
+		ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}, text_pad = 0})
 		link_clicked(ui.rich_paragraph("###t", runs))
-		ui.spacer(ui.px(em * pad))
 	}
 	if extra > 0 {
 		ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###more") {
-			ui.spacer(ui.px(em * pad))
 			text("m", fmt.tprintf(i18n.tr(extra, "… %d more lines", "… %d more lines"), extra), hex(HEX_FAINT), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
 		}
 	}

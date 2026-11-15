@@ -756,7 +756,7 @@ queue_row :: proc(app: ^App, pane: ^Chat_Pane, it: ^Queue_Item, n: int, em: f32)
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * QUEUE_ROW_H_EM)), axis = .X, cross = .Center})
 	ui.a11y({role = .Group, name = fmt.tprintf(i18n.tr("Pending message %d: %s"), n, ellipsize(it.text, QUEUE_NAME_CHARS))})
 	if ui.row(.Center, id = fmt.tprintf("###q_%s", id)) {
-		ui.spacer(ui.px(em * TRAY_PAD_EM))
+		ui.space(ui.CARD_PAD)
 		text("n", it.delivery == .Queue ? fmt.tprintf("%d", n) : "›", hex(HEX_FAINT), note, ui.px(em * QUEUE_MARK_W_EM))
 		line := preview_text(it.text)
 		if line == "" { line = i18n.tr("(no text)") }
@@ -779,7 +779,7 @@ queue_row :: proc(app: ^App, pane: ^Chat_Pane, it: ^Queue_Item, n: int, em: f32)
 			if it.delivery == .Steer && queue_action("###now", i18n.tr("Send now"), lucide.SEND_HORIZONAL, wide, em) { queue_send_now(app, pane, id) }
 			if queue_action("###rm", i18n.tr("Remove"), lucide.X, wide, em, .Danger) { queue_remove(app, pane, id) }
 		}
-		ui.spacer(ui.px(em * TRAY_PAD_EM))
+		ui.space(ui.CARD_PAD)
 	}
 }
 
@@ -810,12 +810,12 @@ queue_list :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	if ui.parent(box) {
 		ui.next({width = ui.fill(), height = ui.px(head_h), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###q_head") {
-			ui.spacer(ui.px(em * TRAY_PAD_EM))
+			ui.space(ui.CARD_PAD)
 			text("h", fmt.tprintf(i18n.tr("PENDING  %d"), n), hex(HEX_FAINT), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 			ui.spacer(ui.px(em * 0.9))
 			// (the row cuts what has no room: what matters comes first)
 			text("w", pane.chat.busy ? i18n.tr("not sent yet  ·  queued ones go when the turn ends") : i18n.tr("not sent  ·  the run stopped, these wait"), hex(HEX_FAINT), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
-			ui.spacer(ui.px(em * TRAY_PAD_EM))
+			ui.space(ui.CARD_PAD)
 		}
 		ui.next({width = ui.fill(), height = ui.px(list_h)})
 		if ui.scroll_y("###q_scroll") {

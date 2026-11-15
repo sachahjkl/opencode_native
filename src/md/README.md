@@ -37,3 +37,7 @@ purpose, the decisions, what was refused.
   lost and why.
 - [features/server-passwords.md](features/server-passwords.md): the servers' passwords sealed with `gt:secrets`; the
   field kept per server, the one forget after the seals, a password in clear where no store answers.
+- [features/spacing.md](features/spacing.md): the toolkit's spacing scale in the cards, lists and wells; what keeps
+  its own size and why.
+- [features/setup.md](features/setup.md): gt:setup's screen with ocn's content (identity, logo, vendor); no note,
+  no screen of its own.

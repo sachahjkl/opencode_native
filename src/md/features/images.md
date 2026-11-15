@@ -12,11 +12,11 @@ bytes an image is and how it is shown.
 - **The server's text stays text.** An image arrives as base64 or as a data URL. `Image_Ref` keeps that text, not its
   bytes: most images of a long session are never shown, and decoding them all at read time costs the same work for
   nothing.
-- **The bytes are made at a miss only.** `picture` asks the cache with no bytes first. Only when the cache does not hold
-  that size does it decode the base64 and give the bytes, which the cache copies. A thumbnail shown for minutes decodes
-  its base64 once.
-- **Text that is no base64 goes to the cache as it is.** The cache then fails it as no picture file, and the thumbnail
-  says so. No second failure path.
+- **The base64 is decoded on the cache's chores.** `picture` gives the cache the text and a `prepare` of its encoding
+  (base64 or data URL); the cache copies the text at a miss only and makes the file on its worker before the decode. A
+  screenshot of several MiB costs the interface's thread nothing, and a thumbnail shown for minutes decodes once.
+- **Text that is no base64 is no picture.** Its prepare refuses it, and the cache fails it as `Unknown_Format`: the
+  thumbnail says so. No second failure path.
 - **`frame` runs before the builds** (the main host's `before_input`): the views' windows are built inside the main
   frame, so one call a frame covers them.
 - **The viewer asks for the whole picture** (`need_px` 0, mipmapped) at each build. It holds `Image_Ref`, never a
@@ -28,9 +28,5 @@ bytes an image is and how it is shown.
 
 - **ocn's own cache** (its eviction, its decode queue, its texture bookkeeping): a copy of `gt:pictures` with its own
   bugs.
-
-## Open point
-
-- The base64 of a miss is decoded on the interface's thread, in the frame that first shows that size (a few
-  milliseconds for a screenshot of several MiB). `gt:pictures` has no way to run a transform of the bytes on its
-  worker; when it has one, the base64 moves there.
+- **The base64 decoded at a miss on the interface's thread**, before the cache had `prepare`: a few milliseconds a
+  screenshot, in a frame.
