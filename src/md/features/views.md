@@ -70,6 +70,15 @@ over it (`ui.view_occluders`), while a dialog's scrim dims its window, a menu or
 
 ## The image viewer
 
-As a dialog it hugs its picture: its size is asked at each build (`ui.view_size`), from the share of the window the
-person chose (`conversation.image_viewer_size`) and its header's height. Its grips set that share, kept when they are
-let go, for the next pictures too. Docked, floating or in a window of its own, the picture fits the room it is given.
+As a dialog it opens around its picture: its size is asked at each build (`ui.view_size`), from the share of the window
+the person chose (`conversation.image_viewer_size`), its header's height and its border. In every presentation the
+picture's area is all the body leaves above the bar, and the picture fits it (`ui.preview`, which clips it to the area).
+
+- **The size the person gives it with its grips is kept.** The toolkit keeps a dialog's resized size until the size
+  asked changes. The viewer stops asking once the person resizes it (`Image_Viewer.grown`). The share saved is what
+  the picture takes when it fits the area of that size, for the next pictures.
+- **Refused: the picture's own box, sized from the share.** Its box kept its height when the person made the dialog
+  taller, and ran past the dialog's edge when the share made it wider than the dialog: the two sizes disagreed as soon
+  as the share reached its most and the person kept dragging.
+- **A new picture is a new opening.** The record of a viewer still open keeps the person's size; the first build after
+  `image_view_open` asks for the kind's size once, so the asked size changes and the person's size goes.

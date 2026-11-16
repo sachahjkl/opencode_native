@@ -103,7 +103,8 @@ dialogs_register :: proc(app: ^App) {
 	sized(vs, OUTPUT_VIEW, output_view_view, i18n.later("Output"), lucide.SQUARE_TERMINAL, {96, 56}, {44, 20})
 	sized(vs, MISSED_VIEW, missed_view, i18n.later("What you missed"), lucide.BELL, {60, 42}, {36, 18})
 	sized(vs, DIAGRAM_VIEW, diagram_view, i18n.later("Mermaid diagram"), lucide.GIT_FORK, {80, 52}, {26, 14})
-	// (as a dialog it hugs its picture at each build: ui.view_size; its grips set the share of the window it takes)
+	// (as a dialog it opens around its picture: ui.view_size; the size its grips give it is kept, and sets the share of the window
+	// the next pictures take)
 	ui.view_register(vs, IMAGE_VIEW, image_view, ui.View_Options{title = i18n.later("Image"), icon = lucide.IMAGE, width_em = 72, height_em = 50,
 		min_width_em = VIEWER_MIN_W_EM, resizable = true, backdrop = view_backdrop})
 	ui.view_register(vs, SCHEDULES_VIEW, schedules_view, ui.View_Options{title = i18n.later("Schedules of this session"), icon = lucide.HISTORY,

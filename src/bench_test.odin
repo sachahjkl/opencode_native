@@ -1065,12 +1065,13 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		if view == nil || panel == nil { return }
 		em := ui.font_size()
 		pad, bar := math.round(em * VIEWER_PAD_EM), math.round(em * VIEWER_BAR_EM)
+		border := max(1, math.round(ui.scale()))   // (the dialog's, inside its size)
 		vs := view.rect.max - view.rect.min
 		ps := panel.rect.max - panel.rect.min
 		testing.expect_value(t, vs, [2]f32{W, H} * ui.scale())   // (the window has room: its pixels)
 		head := session.get(s, "view_header")   // (the view's header: the dialog's top)
-		testing.expect_value(t, ps.y, vs.y + pad + bar + head.rect.max.y - head.rect.min.y)
-		testing.expect_value(t, ps.x, max(vs.x + 2 * pad, math.round(em * VIEWER_MIN_W_EM)))
+		testing.expect_value(t, ps.y, vs.y + pad + bar + head.rect.max.y - head.rect.min.y + 2 * border)
+		testing.expect_value(t, ps.x, max(vs.x + 2 * pad + 2 * border, math.round(em * VIEWER_MIN_W_EM)))
 		// a press on the picture keeps it; zoomed out, a press beside the picture closes it
 		session.click_at(s, view.rect.min + 5)
 		testing.expect(t, ui.view_is_open(&app.program_views, IMAGE_VIEW), "a press on the picture")
@@ -1079,16 +1080,17 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		// (the other corner: a second press where the first was would be a double click, which zooms)
 		session.click_at(s, view.rect.max - 5)
 		testing.expect(t, !ui.view_is_open(&app.program_views, IMAGE_VIEW), "a press beside the picture closes it")
-		// its corner, outward: the picture grows past its pixels, as far as the pointer goes, and the size is kept (a share of the room)
+		// its corner, outward in the picture's shape: the picture grows past its pixels, as far as the pointer goes, and the size is
+		// kept (a share of the room). (The dialog keeps the size the person gives it: the picture fits the area it leaves)
 		open(s, app, ref)
 		view, panel = session.find(s, "view"), session.find(s, "modal_view_image")
 		before := view.rect.max - view.rect.min
 		testing.expect_value(t, before, [2]f32{W, H} * ui.scale())
 		corner := panel.rect.max - 3
 		session.press(s, corner)
-		session.move(s, corner + {25, 0})
-		session.move(s, corner + {50, 0})
-		session.release(s, corner + {50, 0})
+		session.move(s, corner + {25, 12.5})
+		session.move(s, corner + {50, 25})
+		session.release(s, corner + {50, 25})
 		session.frames(s, 2)
 		view = session.find(s, "view")
 		after := view.rect.max - view.rect.min
@@ -1096,7 +1098,8 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		testing.expectf(t, abs(after.x / after.y - 2) < 0.02, "its shape kept: %v", after)
 		room := app.state.window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
 		head = session.get(s, "view_header")
-		full := viewer_frame({W, H}, room, {2 * pad, pad + bar + head.rect.max.y - head.rect.min.y}, ui.scale(), 1, math.round(em * VIEWER_MIN_W_EM)).full
+		chrome := [2]f32{2 * pad + 2 * border, pad + bar + head.rect.max.y - head.rect.min.y + 2 * border}
+		full := viewer_frame({W, H}, room, chrome, ui.scale(), 1, math.round(em * VIEWER_MIN_W_EM)).full
 		kept := config.float_of(&app.cfg_prefs, "conversation.image_viewer_size")
 		testing.expectf(t, abs(kept - f64(after.x / full.x)) < 0.01, "kept as a share of the room: %v", kept)
 		// opened again: a picture that fits opens at its pixels, whatever the share kept
@@ -1122,6 +1125,76 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		session.event(s, {kind = .Key_Press, key = .Escape})
 		session.frames(s, 3)
 		testing.expect(t, !ui.view_is_open(&app.program_views, IMAGE_VIEW), "Escape closes it")
+	})
+}
+
+// The viewer made taller than its picture by its corner: the picture's area takes all the dialog gives it above the bar (it kept its
+// old height, the bar in the middle of the dialog, an empty band under it, and the picture's box ran past the dialog's right edge),
+// a zoomed picture draws inside its area only, and Fit fits the area as it is now.
+@(test)
+the_viewer_s_area_fills_the_dialog_the_person_sized :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		W, H :: 400, 200
+		pixels := make([]u8, W * H * 4, context.temp_allocator)
+		for i in 0 ..< W * H { pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 2], pixels[i * 4 + 3] = u8(i % W), 120, u8(i / W), 255 }
+		file := png.encode(pixels, W, H, .Fast, context.allocator)
+		image_view_open(app, image_ref(string(file), .Bytes, "image/png", "picture.png"))
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "view") != nil }, "the picture decoded")
+		session.frames(s, 3)
+		// (down to the window's edge: more than the picture's shape lets it take, as the person's drag was)
+		corner := session.get(s, "modal_view_image").rect.max - 3
+		bottom := app.state.window_size.y - 4
+		session.press(s, corner)
+		session.move(s, {corner.x + 10, (corner.y + bottom) / 2})
+		session.move(s, {corner.x + 20, bottom - 2})
+		session.move(s, {corner.x + 20, bottom})
+		session.release(s, {corner.x + 20, bottom})
+		session.frames(s, 3)
+		panel, well, view := session.get(s, "modal_view_image"), session.get(s, "view_well"), session.get(s, "view")
+		head := session.get(s, "view_header")
+		em := ui.font_size()
+		pad, bar := math.round(em * VIEWER_PAD_EM), math.round(em * VIEWER_BAR_EM)
+		border := max(1, math.round(ui.scale()))
+		testing.expectf(t, panel.rect.max.y - panel.rect.min.y > H * ui.scale() + 250, "the dialog taller: %v", panel.rect)
+		// the area: the whole body above the bar, inside the dialog
+		testing.expect_value(t, well.rect.min, [2]f32{panel.rect.min.x + border + pad, head.rect.max.y + pad})
+		testing.expect_value(t, well.rect.max, [2]f32{panel.rect.max.x - border - pad, panel.rect.max.y - border - bar})
+		testing.expect_value(t, view.rect, well.rect)
+		// zoomed in: nothing of the picture outside its area (around it, the frame is what it was at the zoom 1)
+		img := session.capture(s)
+		fitted := make([]u8, len(img.rgba), context.temp_allocator)
+		copy(fitted, img.rgba)
+		app.viewer.view.zoom = 4
+		session.frames(s, 3)
+		session.save_png(s, "viewer_zoomed.png")
+		zoomed := session.capture(s)
+		lo := [2]int{int(well.rect.min.x), int(well.rect.min.y)}
+		hi := [2]int{int(well.rect.max.x), int(well.rect.max.y)}
+		changed: int
+		// (the rows of the area, and 3 rows under it: the bar's text is lower, its zoom in percent changes)
+		for y in max(0, lo.y - int(pad)) ..< min(img.height, hi.y + 3) {
+			for x in 0 ..< img.width {
+				if x >= lo.x && x < hi.x && y >= lo.y && y < hi.y { continue }
+				a := session.pixel(session.Image{fitted, img.width, img.height}, x, y)
+				if !session.near(a, session.pixel(zoomed, x, y), 8) { changed += 1 }
+			}
+		}
+		testing.expectf(t, changed == 0, "the zoomed picture drew %d pixels outside its area", changed)
+		testing.expect(t, session.count_other(zoomed, lo + 2, hi - 2, session.pixel(zoomed, lo.x + 2, lo.y + 2), 8) > 0, "the picture in its area")
+		// Fit: the picture as wide as the area (taller than the picture's shape), in its middle
+		session.click(s, "zoom_fit")
+		session.frames(s, 3)
+		testing.expect_value(t, app.viewer.view.zoom, 1)
+		session.save_png(s, "viewer_after_resize.png")
+		fit := session.capture(s)
+		mid := (lo + hi) / 2
+		side, top := session.pixel(fit, lo.x + 2, mid.y), session.pixel(fit, mid.x, lo.y + 2)
+		testing.expectf(t, abs(int(side[1]) - 120) <= 12, "the picture's left edge on the area's: %v", side)
+		testing.expectf(t, abs(int(top[1]) - 120) > 12, "the area's top above the picture: %v", top)
+		shown := f32(hi.x - lo.x) * f32(H) / f32(W)
+		testing.expectf(t, shown < f32(hi.y - lo.y) - 8, "the area taller than the picture fitted: %v of %v", shown, hi.y - lo.y)
 	})
 }
 

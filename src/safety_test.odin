@@ -145,24 +145,21 @@ the_viewer_hugs_the_picture :: proc(t: ^testing.T) {
 	testing.expect_value(t, f.picture, [2]f32{237, 118})    // (no smaller than VIEWER_SCALE_MIN)
 	f = viewer_frame({40, 40}, {200, 900}, chrome, 1, 1, 300)
 	testing.expect_value(t, f.panel, [2]f32{200, 98})       // never wider than the room
-	// a small picture opens at its pixels; once the person drags the grips, it takes the size asked, up to the room
+	// a small picture opens at its pixels, whatever the share
 	f = viewer_frame({100, 50}, room, chrome, 1, 1, 300)
 	testing.expect_value(t, f.picture, [2]f32{100, 50})
-	f = viewer_frame({100, 50}, room, chrome, 1, 1, 300, grown = true)
-	testing.expect_value(t, f.picture, [2]f32{1184, 592})
-	f = viewer_frame({100, 50}, room, chrome, 1, 0.5, 300, grown = true)
-	testing.expect_value(t, f.picture, [2]f32{592, 296})
 }
 
+// The share kept from the dialog the person sized: what the picture takes when it fits the area their size leaves.
 @(test)
 a_grip_of_the_viewer_sets_its_scale :: proc(t: ^testing.T) {
 	near :: proc(a, b: f32) -> bool { return abs(a - b) < 1e-5 }
 	full := [2]f32{1000, 500}
-	testing.expect(t, near(viewer_scale_of({100, 0}, full, 0.5), 0.6), "an edge to the right")
-	testing.expect(t, near(viewer_scale_of({0, -100}, full, 0.5), 0.3), "the bottom edge up")
-	testing.expect(t, near(viewer_scale_of({100, 60}, full, 0.5), 0.6), "a corner: the side that moved most")
-	testing.expect(t, near(viewer_scale_of({-2000, 0}, full, 0.5), VIEWER_SCALE_MIN), "no smaller than its least")
-	testing.expect(t, near(viewer_scale_of({2000, 0}, full, 0.5), 1), "no larger than the room")
+	testing.expect(t, near(viewer_scale_of({600, 300}, full), 0.6), "an area of the picture's shape")
+	testing.expect(t, near(viewer_scale_of({600, 900}, full), 0.6), "taller than the picture: its width holds it")
+	testing.expect(t, near(viewer_scale_of({900, 150}, full), 0.3), "wider than the picture: its height holds it")
+	testing.expect(t, near(viewer_scale_of({10, 10}, full), VIEWER_SCALE_MIN), "no smaller than its least")
+	testing.expect(t, near(viewer_scale_of({3000, 3000}, full), 1), "no larger than the room")
 }
 
 @(test)
