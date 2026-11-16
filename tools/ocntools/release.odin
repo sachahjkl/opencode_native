@@ -82,9 +82,11 @@ release_publish :: proc(tag, folder: string) -> cli.Exit {
 	if os.write_entire_file(fmt.tprintf("%s/SHA256SUMS.txt", folder), strings.to_string(sums)) != nil { return .Failed }
 	fmt.print(strings.to_string(sums))
 
+	// (the licences of what the programs hold, beside them: the Windows program is one file, with no archive to carry them)
+	if os.copy_file(fmt.tprintf("%s/%s", folder, toolbox.NOTICES_FILE), toolbox.NOTICES_FILE) != nil { fmt.eprintfln("release: no %s", toolbox.NOTICES_FILE); return .Failed }
 	files := make([dynamic]string, context.temp_allocator)
 	append(&files, ..programs[:])
-	append(&files, "SHA256SUMS.txt")
+	append(&files, "SHA256SUMS.txt", toolbox.NOTICES_FILE)
 	append(&files, ..manifests[:])
 	in_folder := toolbox.Run_Options{dir = folder, echo = true}
 	if _, code := toolbox.capture({"gh", "release", "view", tag}); code == 0 {

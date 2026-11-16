@@ -88,13 +88,9 @@ package_linux :: proc(version: string) -> bool {
 	if os.copy_file(inside, program) != nil { return false }
 	if !run("chmod", "+x", inside) { return false }   // (what is copied here is bytes: it must stay a program in the archive)
 
-	licences := make([dynamic]string, context.temp_allocator)
-	files_under("assets/fonts", &licences)
-	append(&licences, "assets/GHOSTTY-LICENSE.txt", "LICENSE")
-	for f in licences {
-		if !strings.has_suffix(f, "LICENSE.txt") && f != "LICENSE" { continue }
-		base := f[strings.last_index_any(f, "/\\") + 1:]
-		if os.copy_file(fmt.tprintf("%s/%s", stage, base), f) != nil { fmt.eprintfln("package: no %s", f); return false }
+	// (the program's licence, and every other work's in one file: the notices command writes it, the check keeps it current)
+	for f in ([]string{"LICENSE", toolbox.NOTICES_FILE}) {
+		if os.copy_file(fmt.tprintf("%s/%s", stage, f), f) != nil { fmt.eprintfln("package: no %s", f); return false }
 	}
 	readme := fmt.tprintf(LINUX_README, version)
 	if os.write_entire_file(fmt.tprintf("%s/README.txt", stage), transmute([]byte)readme) != nil { return false }

@@ -21,6 +21,19 @@ OCN_PROJECT :: toolbox.Project{
 	title = "Opencode Native", publisher = "Froment Software",
 	description = "A native desktop client for the opencode server. Not built by the OpenCode team, and not affiliated with them.",
 	copyright = "Copyright (c) 2026 Sacha Froment (Froment Software)",
+	// (THIRD-PARTY-NOTICES: the program's own Rust library, which links the toolkit's webp and mermaid crates and, on
+	// Windows, WebView2's; the terminal's emulation and the fonts it embeds)
+	crates = {"native/ocn_native/Cargo.toml"},
+	works = {
+		{name = "libghostty-vt (the terminal's emulation)", licence = "MIT", file = "assets/GHOSTTY-LICENSE.txt"},
+		{name = "Hanken Grotesk (the interface font)", licence = "OFL-1.1", file = "assets/fonts/HANKEN-GROTESK-LICENSE.txt"},
+		{name = "Newsreader (the reading font)", licence = "OFL-1.1", file = "assets/fonts/NEWSREADER-LICENSE.txt"},
+		{name = "DM Mono (a monospace font)", licence = "OFL-1.1", file = "assets/fonts/DM-MONO-LICENSE.txt"},
+		{name = "Fira Mono (the terminal's font)", licence = "OFL-1.1", file = "assets/fonts/FIRA-MONO-LICENSE.txt"},
+		// (the webview2-com crates' packages ship no licence file: their repository's, github.com/wravery/webview2-rs)
+		{name = "webview2-com", licence = "MIT", file = "assets/licences/webview2-rs-LICENSE.txt", crate = "webview2-com"},
+		{name = "webview2-com-sys", licence = "MIT", file = "assets/licences/webview2-rs-LICENSE.txt", crate = "webview2-com-sys"},
+	},
 }
 
 // The licence's commands (licence, paddle): its development pair is the toolkit's, public on purpose.
@@ -61,7 +74,7 @@ main :: proc() {
 	commands := make([dynamic]toolbox.Command)
 	own := COMMANDS
 	append(&commands, ..own[:])
-	append(&commands, tk_changelog.command(OCN_PROJECT), lic[0], lic[1], toolbox.i18n_command({dirs = {"src"}, folder = "i18n"}))
+	append(&commands, tk_changelog.command(OCN_PROJECT), lic[0], lic[1], toolbox.i18n_command({dirs = {"src"}, folder = "i18n"}), toolbox.notices_command(OCN_PROJECT))
 	// (a copy of the tree with no .git, which wsl_build builds from, has the mark too: the root is found by it)
 	toolbox.tool_main("ocntools", commands[:], toolbox.ROOT_MARK_DEFAULT)
 }
