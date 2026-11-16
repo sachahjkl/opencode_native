@@ -23,7 +23,8 @@ purpose, the decisions, what was refused.
 - [features/session-links.md](features/session-links.md): a session's id in a message is a link that opens it, with
   Back.
 - [features/chat-panes.md](features/chat-panes.md): conversation panes, the main view one of them; /btw forks the
-  session into a panel on the right with the same composer.
+  session into a panel on the right with the same composer; its menus in its window of its own; one draft for a
+  session in both panes.
 - [features/jump.md](features/jump.md): Jump to message (Ctrl+Alt+G): a chooser over the session's prompts; why a
   palette of its own.
 - [features/queue-first.md](features/queue-first.md): Alt+Enter queues a prompt first while a run works; the inbox

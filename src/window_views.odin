@@ -141,10 +141,17 @@ views_answers :: proc(app: ^App) {
 	rename_answer(app)
 }
 
-// Whether something holds the window's keys: a dialog of the main window (the palettes are views), one of its menus, the
-// file dialog. What reads the keyboard behind them asks here.
+// Whether something holds the window's keys: a dialog (the palettes are views), a menu of the window being built (a view's
+// window of its own has its own menus: one open in the main window does not stop a right click there), the file dialog. What
+// reads the keyboard behind them asks here.
 overlay_open :: proc(app: ^App) -> bool {
-	return ui.views_hold_keys(&app.program_views) || len(app.state.menus) > 0 || ui.file_dialog_shown(&app.state)
+	return ui.views_hold_keys(&app.program_views) || len(built_state(app).menus) > 0 || ui.file_dialog_shown(&app.state)
+}
+
+// The State `pane` is built in: the panel's window of its own when it has one, else the main window's.
+pane_window :: proc(app: ^App, pane: ^Chat_Pane) -> ^ui.State {
+	if pane != main_pane(app) && pane == btw_pane(app) { return view_state(app, BTW_VIEW) }
+	return &app.state
 }
 
 // The keyboard is in a view that floats, is docked beside the conversation or is in a window of its own, the sidebar apart

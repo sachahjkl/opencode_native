@@ -8,11 +8,6 @@
 
 ## Next
 
-- **/btw in a window of its own.** When the aside's panel floats in its own window, a right-click there shows no menu,
-  because the menu is built in the main window; it must open in the window the press was in
-  ([chat-panes.md](src/md/features/chat-panes.md)).
-- **One session in both panes.** When the main view and the aside show the same session, their drafts overwrite each
-  other on close; one draft per session must survive whichever pane closes first.
 - **The pictures of the documentation, again.** The README's and the site's pictures still show the old model picker and
   the colours before the theme. `ocntools shots` needs the demo sessions on the local server; make them reproducible
   so the pictures can be made again on any machine.

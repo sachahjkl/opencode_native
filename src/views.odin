@@ -39,7 +39,7 @@ build_ui :: proc(app: ^App) {
 	setup_frame(app, em)
 	integrations_watch(app)
 	image_view_wait(app)
-	context_menu(app, em)
+	window_overlays(app, em)
 	// (under the header: a message at the top does not cover it)
 	ui.set_toast_area({{0, em * TOAST_TOP_EM}, app.state.window_size})
 	// (last: what is open and a field that has it took Escape before it gets here)

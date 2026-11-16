@@ -63,7 +63,7 @@ Everything that read `app.chat` or `app.composer` reads the pane it is given.
 - **Requests**: `request(..., pane = p)`; none named is the main view's (the sidebar, the commands, the palette name no
   pane). An answer finds its pane by `req_pane`. Jobs on threads and dialogs keep the pane too (an attachment, the file
   browser): the pane's slot is stable.
-- **What is keyed by session or part stays in `App`**: the drafts (`App.drafts`), the parts opened (`App.expanded`: a part's
+- **What is keyed by session or part stays in `App`**: the drafts (`App.drafts`, see "One session in both panes"), the parts opened (`App.expanded`: a part's
   id names one part of one session; the stats panel uses it too). The restore clock of a way back is the pane's view state.
 - **The main view's own features keep `main_pane`**: the history (Back, Forward), the sidebar, the commands, the palette,
   the title bar, the activity tray, the statistics, "What you missed", `open_chat` and the home page's folder. They act
@@ -90,10 +90,55 @@ Everything that read `app.chat` or `app.composer` reads the pane it is given.
   own menu act on that pane. A selection's quote goes to the pane under the pointer when it was made.
 - **A dropped file** goes to the composer of the pane under the pointer (`pane_at`); in a window of its own the panel
   has no drop (the main window's drop only).
+- **A right click in the panel's window of its own** opens its menu there (see "The panel in a window of its own").
 - **What was global and is the pane's**: the throbber's word (two runs would flip one board between their words), the
   Mermaid width (the column of the pane that builds it: `md_config` carries the pane), the "Latest" pill's animation.
 - **The session deleted** closes the panel that shows it; a server switch closes it too (its session is the old
   server's).
+
+## The panel in a window of its own
+
+A window of its own has its own `ui.State`: its own menus, popovers, tooltips, selection and boxes. A menu opened in
+one State and built in another is never shown: the program's menus were noted where the press was and built at the
+end of the main window's build, so a right click in the panel's window showed nothing.
+
+- **A menu or a popover opens and is built in the window the press was in.** `pane_window` is the State a pane is
+  built in: the panel's window when the panel has one, else the main window. `built_state` is the State being built.
+- **What each window builds last** (`window_overlays`: the context menu and the quote chip): the main window's build
+  ends with it; the panel's build ends with it too, but only in a window of its own (docked or floating, the panel
+  is part of the main window's build, and a menu built twice in one build is two menus).
+- **The context menu** records the window it opened in (`Ctx_Menu.window`). Each window's build builds it only there;
+  in another window the toolkit closes a menu that is not built (`menu_prune`). The selection its Quote reads is that
+  window's.
+- **The quote chip** follows the last window pressed in: a selection is made with a press, and each window keeps its
+  own selection, so a chip that went to the window with a selection would jump between two windows at each frame.
+- **The model and agent chooser** (a palette, a view of the window it opens over) opens in the build of the window of
+  the pane that asked: `chooser_build` runs at the top of the main window's build and at the top of the panel's
+  build in its own window, and opens it only where `pane_window` of the chooser's pane is the State being built.
+- **Tooltips** were already per window: `ui.tooltip` is built where it is asked.
+- **`overlay_open` and `pane_at`** read the window being built: a menu of the main window does not stop a right click
+  in the panel's window, and the pane under the pointer is found among that window's boxes.
+- **Refused: one overlay pass per view.** Other views can have a window of their own (the diagram viewer has a
+  right click too). The toolkit gives no hook at the end of a view window's build, so ocn calls `window_overlays` from
+  the one view that needs it now. The toolkit must offer that hook (or build each window's program overlays itself);
+  the other views then get it without a copy.
+
+## One session in both panes: one draft
+
+The main view and the panel can show the same session. Each composer keeps its own text while it shows the session:
+two panes on one session are two places to write, each with its caret and its undo. A text shared live would move one
+person's caret under the other's typing, and the toolkit's undo would undo the other pane's edits.
+
+- **A session shown keeps its whole draft in its composers.** `App.drafts` holds only the sessions that no pane shows.
+- **A pane that leaves a session** another pane still shows gives its text, its attachments and its mentions to that
+  pane's composer: after its text, a blank line between them, the caret kept. Nothing waits hidden in `App.drafts` for
+  a session in view. The last pane to leave puts everything in `App.drafts`, as one pane always did.
+- **A pane that comes to a session already shown** starts with an empty composer: the draft is in the other pane.
+- **Something that comes for a session** after its pane moved on (an attachment read on a thread) goes to another
+  pane that shows it, else to the draft.
+- **On disk** (`drafts.json`), a session's text is the texts of its panes joined, as they would be if each left.
+- **Refused: the last pane to close wins.** The draft was overwritten: the panel closed with its text, then the main
+  view left the session with its own (or with none: the draft was dropped), and the panel's text was gone.
 
 ## Layer 3 decisions: /btw
 

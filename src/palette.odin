@@ -172,11 +172,12 @@ chooser_shows :: proc(app: ^App, kind: Chooser_Kind) -> bool {
 	return ui.palette_is_open(&p.chooser) && ui.palette_has(&p.chooser, src)
 }
 
-// At each build of the main window: opened or closed as asked, its choice taken for the pane that opened it.
-@(private = "file")
+// At the top of each build of the main window, and of a pane's view in a window of its own: opened or closed as asked, its choice
+// taken for the pane that opened it. It opens in the window of that pane (a palette is a view over the window it opens in), so
+// the build of that window opens it.
 chooser_build :: proc(app: ^App) {
 	p := &app.palette
-	if src := p.chooser_due; src != nil {
+	if src := p.chooser_due; src != nil && pane_window(app, &app.panes[p.chooser_pane]) == built_state(app) {
 		p.chooser_due = nil
 		ui.palette_remove(&p.chooser, src == &p.chooser_models ? &p.chooser_agents : &p.chooser_models)
 		ui.palette_add(&p.chooser, src)

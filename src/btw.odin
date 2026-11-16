@@ -99,6 +99,12 @@ btw_view :: proc(v: ^ui.View, app: ^App) {
 	pane := btw_pane(app)
 	if pane == nil { ui.view_end(v, 0); return }
 	em := ui.font_size()
+	// (in a window of its own the panel is that window's whole build: what the main window's build opens and builds over its
+	// panes, at its top and at its end, this one does for its pane. Docked or floating, it is part of the main window's build,
+	// which does it once.)
+	own_window := built_state(app) != &app.state
+	if own_window { chooser_build(app) }
+	defer if own_window { window_overlays(app, em) }
 	title := i18n.tr("Aside")
 	if s := find_session(app, pane.chat.id); s != nil && s.title != "" { title = s.title } else if pane.chat.have_self && pane.chat.self.title != "" { title = pane.chat.self.title }
 	ui.view_title(v, title)

@@ -26,6 +26,9 @@ Ctx_Target :: struct {
 // The menu of a right click: what it is about (which block took the press: ui.context_take).
 Ctx_Menu :: struct {
 	target: Ctx_Target,
+	// the window it opened in: a menu is its window's State's, and is built only there (window_overlays). Compared, never read:
+	// that window may have closed since.
+	window: ^ui.State,
 }
 
 // The chip at the end of a selection (quote_chip).
@@ -33,8 +36,17 @@ Quote_Chip :: struct {
 	open:         bool,
 	at:           Rect,
 	kept:         string,   // what it quotes (owned)
-	serial, done: u64,      // which selection, and the last one quoted
+	serial, done: u64,      // which selection, and the last one quoted (of `window`'s: each window counts its own)
 	pane:         int,      // the slot of the pane under the pointer when the selection was made: its composer quotes it
+	// the window it shows in: the last one pressed in (nil: the main window). Compared, never read.
+	window:       ^ui.State,
+}
+
+// What each window builds last, over all it holds: the menu of a right click and the quote chip. The main window's build ends
+// with it, and so does the build of a pane's view in a window of its own (src/md/features/chat-panes.md): what is opened in a
+// window is built in that window.
+window_overlays :: proc(app: ^App, em: f32) {
+	context_menu(app, em)
 }
 
 // A right press on `b` opens the menu of `kind`: on it with nothing drawn over it there (ui.pointer_on: the composer over the
@@ -50,6 +62,7 @@ ctx_open :: proc(app: ^App, kind: Ctx_Kind, msg := "", part := 0, image := Image
 	delete(app.ctx_menu.target.msg)
 	image_ref_delete(&app.ctx_menu.target.image)
 	app.ctx_menu.target = {kind = kind, msg = strings.clone(msg), part = part, image = image_ref_clone(image), pane = pane_index(app, pane != nil ? pane : main_pane(app))}
+	app.ctx_menu.window = built_state(app)
 	ui.menu_open(CTX_MENU_KEY, ui.mouse_pos())
 }
 
@@ -58,6 +71,12 @@ ctx_open :: proc(app: ^App, kind: Ctx_Kind, msg := "", part := 0, image := Image
 ctx_pane :: proc(app: ^App) -> ^Chat_Pane {
 	i := app.ctx_menu.target.pane
 	return pane_is_shown(app, i) ? &app.panes[i] : main_pane(app)
+}
+
+// The window the menu was opened in (none noted: the main one).
+@(private = "file")
+ctx_window :: proc(app: ^App) -> ^ui.State {
+	return app.ctx_menu.window != nil ? app.ctx_menu.window : &app.state
 }
 
 @(private = "file")
@@ -130,8 +149,9 @@ first_url :: proc(s: string) -> string {
 
 @(private = "file")
 message_menu :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message) {
-	if ui.has_selection(&app.state) {
-		sel := ui.selected_text(&app.state, context.temp_allocator)
+	// (the selection of the window the menu is built in: each window has its own)
+	if s := built_state(app); ui.has_selection(s) {
+		sel := ui.selected_text(s, context.temp_allocator)
 		if ui.menu_item(i18n.tr("Quote"), "", icon = lucide.QUOTE).clicked { quote_text(app, pane, sel, false) }
 		if ui.menu_item(i18n.tr("Quote with a comment"), command_shortcut(app, "session.quote"), icon = lucide.MESSAGE_SQUARE_QUOTE).clicked { quote_text(app, pane, sel, true) }
 		if ui.menu_item(i18n.tr("Copy the selection"), "Ctrl+C", icon = lucide.COPY).clicked { copied(sel, i18n.tr("Selection copied")) }
@@ -192,10 +212,13 @@ tool_menu :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, p: ^Part) {
 	fork_item(app, pane, m)
 }
 
-// At the end of the build, for what a right press noted.
+// At the end of a window's build (window_overlays), for what a right press noted in that window. (Another window's builds build
+// nothing: the toolkit closes a menu its window stops building, which is what a press in another window means.)
+@(private = "file")
 context_menu :: proc(app: ^App, em: f32) {
 	pane := ctx_pane(app)
 	quote_chip(app, em)
+	if built_state(app) != ctx_window(app) { return }
 	key := CTX_MENU_KEY
 	// (the composer's is a text field's: the toolkit's, on its area)
 	if app.ctx_menu.target.kind == .Composer {
@@ -271,8 +294,15 @@ quote_place :: proc(q: ^Quote_Chip, serial: u64, pointer: Vec2) -> (new_selectio
 
 // Where a selection ends: what can be done with it, at hand. The press on it may take the selection away: the text was kept.
 quote_chip :: proc(app: ^App, em: f32) {
-	s := &app.state
+	s := built_state(app)
 	q := &app.quote
+	// (one chip, in the last window pressed in: a selection is made with a press, and each window keeps its own, so a chip that
+	// went to whichever window has one would jump between two at each frame)
+	if ui.mouse_pressed(.Left) && q.window != s && !(q.window == nil && s == &app.state) {
+		q.window, q.open = s, false
+		q.serial, q.done = max(u64), max(u64)   // (another window's numbers: none of them is this window's)
+	}
+	if s != (q.window != nil ? q.window : &app.state) { return }
 	id := "###quote_chip"
 	on_chip := false
 	if r, ok := ui.popover_rect(id); ok && q.open { on_chip = draw.rect_contains(r, ui.mouse_pos()) }

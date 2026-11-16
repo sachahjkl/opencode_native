@@ -43,12 +43,17 @@ drafts_json :: proc(app: ^App) -> string {
 		n^ += 1
 	}
 	for id, d in app.drafts { if !pane_shows_draft(app, id) { put(&b, &n, id, d.text) } }
-	// (a session in two panes: the first one's text, as a key is said once)
+	// (a session in two panes: a key is said once, with the texts of both joined, as they are when one pane leaves)
 	for &pane, i in app.panes {
 		if !pane_is_shown(app, i) { continue }
 		first := true
 		for &other, j in app.panes[:i] { if pane_is_shown(app, j) && other.chat.id == pane.chat.id { first = false } }
-		if first { put(&b, &n, pane.chat.id, ui.text_edit_string(&pane.composer.area)) }
+		if !first { continue }
+		text := ui.text_edit_string(&pane.composer.area)
+		for &other, j in app.panes[i + 1:] {
+			if pane_is_shown(app, i + 1 + j) && other.chat.id == pane.chat.id { text = drafts_join(text, ui.text_edit_string(&other.composer.area), context.temp_allocator) }
+		}
+		put(&b, &n, pane.chat.id, text)
 	}
 	strings.write_byte(&b, '}')
 	return strings.to_string(b)
@@ -96,26 +101,76 @@ Draft :: struct {
 	mentions:    [dynamic]Mention,
 }
 
-// Before the session shown changes: what the composer holds goes to its session's draft, and the composer is empty.
+// Before the session shown changes: what the composer holds goes to its session's draft, and the composer is empty. The draft of
+// a session that another pane still shows is in that pane's composer (src/md/features/chat-panes.md, "One session in both panes"):
+// the text goes there, after its own.
 draft_leave :: proc(app: ^App, pane: ^Chat_Pane) {
 	if queue_editing(app, pane) { queue_edit_end(app, pane, .Cancel) }   // (the inbox's prompt goes back: the composer gets its own text)
 	history_leave(app, pane, true)
 	c := &pane.composer
 	text := ui.text_edit_string(&pane.composer.area)
-	if strings.trim_space(text) == "" && len(c.attachments) == 0 && len(c.mentions.chosen) == 0 { draft_drop(app, pane.chat.id); return }
+	empty := strings.trim_space(text) == "" && len(c.attachments) == 0 && len(c.mentions.chosen) == 0
+	if other := pane_also_showing(app, pane); other != nil {
+		if !empty {
+			oc := &other.composer
+			composer_append(&oc.area, text)
+			append(&oc.attachments, ..c.attachments[:])
+			append(&oc.mentions.chosen, ..c.mentions.chosen[:])
+			clear(&c.attachments)
+			clear(&c.mentions.chosen)
+			drafts_save_soon(app)
+		}
+		ui.text_edit_set(&pane.composer.area, "")
+		return
+	}
+	if empty { draft_drop(app, pane.chat.id); return }
 	d, known := &app.drafts[pane.chat.id]
 	if !known {
 		app.drafts[strings.clone(pane.chat.id)] = {}
 		d = &app.drafts[pane.chat.id]
 	}
-	draft_free(d)
-	d.text = strings.clone(text)
+	// (joined, not replaced: nothing that waits there is lost, whatever put it there)
+	joined := drafts_join(d.text, text)
+	delete(d.text)
+	d.text = joined
 	append(&d.attachments, ..c.attachments[:])
 	clear(&c.attachments)
 	append(&d.mentions, ..c.mentions.chosen[:])
 	clear(&c.mentions.chosen)
 	ui.text_edit_set(&pane.composer.area, "")
 	drafts_save_soon(app)
+}
+
+// Another shown pane on the session `pane` shows, or nil.
+@(private = "file")
+pane_also_showing :: proc(app: ^App, pane: ^Chat_Pane, chat := "") -> ^Chat_Pane {
+	id := chat != "" ? chat : pane.chat.id
+	for &other, i in app.panes {
+		if &other != pane && pane_is_shown(app, i) && other.chat.id == id { return &other }
+	}
+	return nil
+}
+
+// Two texts of one session as one: a blank line between them; one alone when the other is empty or the same.
+drafts_join :: proc(a, b: string, allocator := context.allocator) -> string {
+	ta, tb := strings.trim_space(a), strings.trim_space(b)
+	switch {
+	case tb == "" || ta == tb: return strings.clone(a, allocator)
+	case ta == "":             return strings.clone(b, allocator)
+	}
+	return strings.concatenate({strings.trim_right_space(a), "\n\n", b}, allocator)
+}
+
+// `text` after what a composer holds, its caret and its selection where they were: the person may be typing in it. (Its undo
+// starts over, as for a prompt that comes back: the steps before would take the text away again.)
+@(private = "file")
+composer_append :: proc(area: ^ui.Text_Edit, text: string) {
+	had := ui.text_edit_string(area)
+	if strings.trim_space(had) == "" { ui.text_edit_set(area, text); return }
+	keep := len(strings.trim_right_space(had))
+	cursor, mark := min(area.cursor, keep), min(area.mark, keep)
+	ui.text_edit_set(area, drafts_join(had, text, context.temp_allocator))
+	area.cursor, area.mark = cursor, mark
 }
 
 // After it changed: the session's draft, if it has one, is in the composer again.
@@ -132,8 +187,13 @@ draft_enter :: proc(app: ^App, pane: ^Chat_Pane) {
 }
 
 // What came for the composer of session `chat` in `pane` (an attachment read on its thread, a file's path for the text): in
-// that composer while the pane still shows that session, else in the session's draft, which a composer gets when it shows it again.
+// that composer while the pane still shows that session, else in another pane's that shows it (its draft is there), else in the
+// session's draft, which a composer gets when it shows it again.
 composer_take :: proc(app: ^App, pane: ^Chat_Pane, chat: string, a: Maybe(Attachment), text: string) {
+	pane := pane
+	if chat != pane.chat.id {
+		if other := pane_also_showing(app, pane, chat); other != nil { pane = other }
+	}
 	c := &pane.composer
 	if chat == pane.chat.id {
 		if x, ok := a.?; ok { append(&c.attachments, x) }

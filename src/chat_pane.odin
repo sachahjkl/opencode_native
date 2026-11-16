@@ -106,12 +106,14 @@ keys_pane :: proc(app: ^App) -> ^Chat_Pane {
 	return main_pane(app)
 }
 
-// The pane whose column is under `pos` in the main window (its last layout), else the main view.
+// The pane whose column is under `pos` in the window being built (its last layout; outside a build, the main window), else the
+// main view. (A pane in another window has no box in this one's State.)
 pane_at :: proc(app: ^App, pos: [2]f32) -> ^Chat_Pane {
+	s := built_state(app)
 	for &pane, i in app.panes {
 		if i == MAIN_PANE || !pane.shown || pane.conversation.root == 0 { continue }
-		b := app.state.boxes[pane.conversation.root] or_else nil
-		if b != nil && ui.box_current(&app.state, b) && draw.rect_contains(b.rect, pos) { return &pane }
+		b := s.boxes[pane.conversation.root] or_else nil
+		if b != nil && ui.box_current(s, b) && draw.rect_contains(b.rect, pos) { return &pane }
 	}
 	return main_pane(app)
 }
