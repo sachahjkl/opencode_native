@@ -668,9 +668,9 @@ STREAM_RETRY_S :: 2   // between two connections of the event stream
 Stream_Run :: struct { conn: ^Conn, up: bool }
 
 // Reads the stream until it ends; its status (0: the server was not reached).
-stream_run :: proc(c: ^Conn) -> (status: int) {
+stream_run :: proc(c: ^Conn) -> (status: int, err: tk_http.Error) {
 	run := Stream_Run{conn = c}
-	status = http_events(&c.http, "/api/event", &c.stop, proc(user: rawptr, ev: tk_http.Event) -> tk_http.Keep_Going {
+	status, err = http_events(&c.http, "/api/event", &c.stop, proc(user: rawptr, ev: tk_http.Event) -> tk_http.Keep_Going {
 		run := (^Stream_Run)(user)
 		c := run.conn
 		if !run.up {
@@ -685,11 +685,25 @@ stream_run :: proc(c: ^Conn) -> (status: int) {
 	return
 }
 
+// Whether a stream that ended says something the log has not said yet: a failure (no answer, a refusal) other than the
+// last one. A stream that ended well (the server closed it) says nothing.
+stream_reason_new :: proc(status: int, err: tk_http.Error, said_status: int, said_err: tk_http.Error) -> bool {
+	failed := err != .None || status >= 400
+	return failed && (status != said_status || err != said_err)
+}
+
 events_thread :: proc(data: rawptr) {
 	c := (^Conn)(data)
+	// (the stream retries every few seconds: a reason is logged when it changes, not at each try, and a request waits for
+	// the stream, so without this line a link that never comes up leaves the log empty)
+	said_status, said_err := 0, tk_http.Error.None
 	for !conn_stopped(c) {
-		st := stream_run(c)
+		st, err := stream_run(c)
 		if conn_stopped(c) { break }
+		if stream_reason_new(st, err, said_status, said_err) {
+			log.warnf("event stream: %s (status %d)", tk_http.error_text(err), st)
+		}
+		said_status, said_err = st, err
 		ui.post(&c.app.state, proc(data: rawptr, word: u64) { if data == the_app.conn { stream_down(the_app, int(word)) } }, c, u64(st))
 		time.sleep(STREAM_RETRY_S * time.Second)
 	}

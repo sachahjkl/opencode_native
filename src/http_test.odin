@@ -115,7 +115,8 @@ the_stream_is_up_at_its_first_event :: proc(t: ^testing.T) {
 	refused := one_answer_start(t, "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
 	c.http = http_init(fmt.tprintf("http://127.0.0.1:%d", refused.port), "opencode", "pw")
 	app.link = .Retrying
-	testing.expect_value(t, stream_run(c), 401)
+	refused_status, _ := stream_run(c)
+	testing.expect_value(t, refused_status, 401)
 	bench_drain(app)
 	testing.expect_value(t, app.link, Conn_State.Retrying)
 	testing.expect(t, strings.contains(refused.head, "Authorization: Basic "), "the password goes with it")
@@ -124,10 +125,21 @@ the_stream_is_up_at_its_first_event :: proc(t: ^testing.T) {
 
 	up := one_answer_start(t, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n: hi\n\ndata: {\"type\":\"server.connected\",\"properties\":{}}\n\n")
 	c.http = http_init(fmt.tprintf("http://127.0.0.1:%d", up.port), "opencode", "")
-	testing.expect_value(t, stream_run(c), 200)
+	up_status, _ := stream_run(c)
+	testing.expect_value(t, up_status, 200)
 	bench_drain(app)
 	testing.expect_value(t, app.link, Conn_State.Online)
 	one_answer_end(up)
 	http_destroy(&c.http)
 	free_all(context.temp_allocator)
+}
+
+// A stream that cannot start says why in the log once per reason: a link that never comes up (no libcurl, a refusal)
+// left the log empty, since the requests wait for the stream.
+@(test)
+a_failing_stream_says_why_once :: proc(t: ^testing.T) {
+	testing.expect(t, stream_reason_new(0, .No_Client, 0, .None), "the first failure")
+	testing.expect(t, !stream_reason_new(0, .No_Client, 0, .No_Client), "the same again: nothing")
+	testing.expect(t, stream_reason_new(401, .None, 0, .No_Client), "another reason")
+	testing.expect(t, !stream_reason_new(200, .None, 0, .No_Client), "a stream that ended well")
 }

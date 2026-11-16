@@ -107,7 +107,8 @@
       fontconfig
       freetype
       dbus
-      curl
+      # (its library is in `out`: getLib of curl gives its first output, `bin`, which has no lib folder)
+      curl.out
     ];
 
     # APP_VERSION of src/setup.odin
@@ -140,6 +141,14 @@
       # the libraries it opens with dlopen go in its RUNPATH: no LD_LIBRARY_PATH, which the shells of its terminals would
       # inherit. The Vulkan driver is the system's (/run/opengl-driver).
       runtimeDependencies = runtime;
+      # each folder of that RUNPATH holds libraries: a dependency whose library is in another output (curl's) gave a
+      # folder that does not exist, and the client found no libcurl, so no request left (0.63.0 to 0.64.0)
+      doInstallCheck = true;
+      installCheckPhase = ''
+        for d in ${lib.concatMapStringsSep " " (p: "${lib.getLib p}/lib") runtime}; do
+          ls "$d"/*.so* > /dev/null 2>&1 || { echo "no library in $d"; exit 1; }
+        done
+      '';
       dontStrip = true;
       # Odin links a foreign library as -l:<absolute path> with -L/, which the purity check of the linker wrapper drops
       NIX_ENFORCE_PURITY = 0;

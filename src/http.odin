@@ -81,9 +81,8 @@ http_stream_of :: proc(h: ^Http) -> tk_http.Request {
 
 // Reads the event stream at `path` until it ends, `on_event` says .Stop or `stop` is asked. Returns the status of its
 // response (0: the server was not reached).
-http_events :: proc(h: ^Http, path: string, stop: ^tk_http.Stop, on_event: tk_http.Event_Proc, user: rawptr) -> (status: int) {
-	st, _ := tk_http.events(strings.concatenate({h.base, path}, context.temp_allocator), http_stream_of(h), on_event, user, stop)
-	return st
+http_events :: proc(h: ^Http, path: string, stop: ^tk_http.Stop, on_event: tk_http.Event_Proc, user: rawptr) -> (status: int, err: tk_http.Error) {
+	return tk_http.events(strings.concatenate({h.base, path}, context.temp_allocator), http_stream_of(h), on_event, user, stop)
 }
 
 // A socket at `path` on the server (ws:// or wss://, as the server's scheme); nil: none.
