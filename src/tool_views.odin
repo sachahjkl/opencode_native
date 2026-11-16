@@ -83,12 +83,12 @@ diff_view :: proc(app: ^App, id: string, d: diff.Parsed, patch: string, em: f32,
 	if len(lines) == 0 { return }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.well(id) {
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		o := diff_options(app, em, title)
 		o.max_bytes = TOOL_LINE_CHARS
 		diff.lines_view("###lines", lines[:min(len(lines), max_lines)], d.numbered, o)
 		if diff_more(len(lines) - min(len(lines), max_lines), em) { diff_full_open(app, title, patch) }
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 	}
 }
 
@@ -97,7 +97,7 @@ more_lines :: proc(n: int, em: f32) {
 	if n <= 0 { return }
 	ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###more") {
-		ui.spacer(ui.px(em * 0.75))
+		ui.space(ui.SPACE_3)
 		text("m", fmt.tprintf(i18n.tr(n, "… %d more lines", "… %d more lines"), n), ui.theme_color("faint text"), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_SMALL)})
 	}
 }
@@ -109,10 +109,10 @@ diff_more :: proc(n: int, em: f32) -> (clicked: bool) {
 	b := ui.build_box({.Clickable}, "###more")
 	sig := ui.signal(b)
 	if ui.parent(b) {
-		ui.spacer(ui.px(em * 0.75))
+		ui.space(ui.SPACE_3)
 		col := sig.hovering ? ui.theme_color("text") : ui.theme_color("faint text")
 		fs := math.round(em * FS_SMALL)
-		if n > 0 { text("m", fmt.tprintf(i18n.tr(n, "… %d more lines", "… %d more lines"), n), col, ui.Style_Mod{font = the_app.mono, font_size = fs}); ui.spacer(ui.px(em * 0.8)) }
+		if n > 0 { text("m", fmt.tprintf(i18n.tr(n, "… %d more lines", "… %d more lines"), n), col, ui.Style_Mod{font = the_app.mono, font_size = fs}); ui.space(ui.SPACE_3) }
 		text("f", i18n.tr("Full view"), col, ui.Style_Mod{font_size = fs})
 	}
 	return sig.clicked
@@ -126,7 +126,7 @@ code_row :: proc(app: ^App, no: int, s: string, k: int, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.3)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###cl%d", k)) {
 		gutter("n", no, em)
-		ui.spacer(ui.px(em * 0.7))
+		ui.space(ui.SPACE_3)
 		text("t", line_shown(s), ui.theme_color("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), flags = {.Selectable}}, ui.fill())
 	}
 }
@@ -147,7 +147,7 @@ numbered_line :: proc(l: string) -> (no: int, rest: string, ok: bool) {
 read_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut: ^Text_Cut) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.well(id) {
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		known := text_cut_known(cut, output, max_lines, .Read)
 		rest := output
 		k := 0
@@ -165,7 +165,7 @@ read_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut: ^
 		}
 		if known { left = cut.extra } else { text_cut_keep(cut, output, max_lines, .Read, len(output), left) }
 		more_lines(left, em)
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 	}
 }
 
@@ -184,7 +184,7 @@ read_lines_in :: proc(output: string) -> bool {
 search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut: ^Text_Cut) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.well(id) {
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		known := text_cut_known(cut, output, max_lines, .Search)
 		rest := output
 		k, left := 0, 0
@@ -202,7 +202,7 @@ search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut:
 			}
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.4)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###sf%d", k)) {
-				ui.spacer(ui.px(em * 0.75))
+				ui.space(ui.SPACE_3)
 				is_file := strings.has_suffix(t, ":") || strings.contains_any(t, "\\/")
 				text("f", strings.trim_suffix(t, ":"), is_file ? ui.theme_color("soft text") : ui.theme_color("faint text"), ui.Style_Mod{font = is_file ? app.mono_bold : app.mono, font_size = math.round(em * FS_SMALL), flags = {.Selectable}}, ui.fill())
 			}
@@ -210,7 +210,7 @@ search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut:
 		}
 		if known { left = cut.extra } else { text_cut_keep(cut, output, max_lines, .Search, len(output), left) }
 		more_lines(left, em)
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 	}
 }
 
@@ -222,14 +222,14 @@ search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut:
 command_view :: proc(app: ^App, pane: ^Chat_Pane, id: string, p: ^Part, em: f32) {
 	if p.command_line == "" { return }
 	mono_well(id, p.command_line, em, TOOL_INPUT_LINES_MAX, ui.theme_color("soft text"), &p.command_well, pane.chat.alloc)
-	ui.spacer(ui.px(em * 0.35))
+	ui.space(ui.SPACE_1)
 }
 
 @(private = "file")
 todo_view :: proc(app: ^App, p: ^Part, em: f32) -> bool {
 	if !p.has_todos { return false }
 	for t, k in p.todos { todo_row(app, t, k, em) }
-	ui.spacer(ui.px(em * 0.3))
+	ui.space(ui.SPACE_1)
 	return true
 }
 
@@ -240,7 +240,7 @@ input_view :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 	if p.freeform {
 		// (one text: the tool's name says what it is, its key alone adds nothing)
 		mono_well("###input", p.fields[0].value, em, TOOL_INPUT_LINES_MAX, kept = &p.fields[0].well, kept_in = pane.chat.alloc)
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		return
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
@@ -266,7 +266,7 @@ input_view :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 			}
 		}
 	}
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.SPACE_2)
 }
 
 // What a call that edits names: its file, as the arguments say.
@@ -287,7 +287,7 @@ tool_body :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 	case .Edit:
 		if patch := part_patch(p, pane.chat.alloc); patch != "" {
 			diff_view(app, "###diff", p.diff, patch, em, lines, tool_diff_title(p))
-			if failed { ui.spacer(ui.px(em * 0.4)); output(app, pane, p, em, lines) }
+			if failed { ui.space(ui.SPACE_2); output(app, pane, p, em, lines) }
 			return
 		}
 	case .Read:
@@ -314,7 +314,7 @@ tool_body :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 	} else if t, long := input_stream_shown(&p.stream); long && p.status == .Pending {
 		// (before the call: its one text as it streams, by the rule its input will follow: freeform-tools.md)
 		mono_well("###input", t, em, TOOL_INPUT_LINES_MAX, kept = &p.stream_well, kept_in = pane.chat.alloc)
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 	output(app, pane, p, em, lines)
 }

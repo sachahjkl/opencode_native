@@ -243,12 +243,12 @@ completion_list :: proc(app: ^App, id: string, rows: []Completion_Row, sel: int,
 			row.custom_user = d
 			if ui.signal(row).clicked { clicked = k }
 			if ui.parent(row) {
-				ui.spacer(ui.px(em * 0.9))
+				ui.space(ui.SPACE_4)
 				glyph(r.icon, ui.theme_color("faint text"), math.round(em * ICON_SMALL), em * 1.1)
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 				text("n", r.label, ui.theme_color("text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 				if r.detail != "" {
-					ui.spacer(ui.px(em * 0.8))
+					ui.space(ui.SPACE_3)
 					text("d", ellipsize(r.detail, MENTION_DETAIL_CHARS), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)})
 				}
 			}

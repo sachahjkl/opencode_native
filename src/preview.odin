@@ -320,12 +320,12 @@ preview_strip :: proc(app: ^App, p: ^Preview, em: f32) {
 			if sig.middle_clicked { p.due_close = t }
 			if ui.parent(b) {
 				col := in_front ? ui.theme_color("bright text") : sig.hovering ? ui.theme_color("soft text") : ui.theme_color("weak text")
-				ui.spacer(ui.px(em * 0.6))
+				ui.space(ui.SPACE_2)
 				text("t", ellipsize(title, PREVIEW_TAB_TITLE_MOST), col, ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 				ui.a11y({role = .Button, name = i18n.tr("Close this tab")})
 				ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM * 0.75)), height = ui.px(math.round(em * GLYPH_BUTTON_EM * 0.75))})
 				if ui.button("pv_tab_x", icon = lucide.X).clicked { p.due_close = t }
-				ui.spacer(ui.px(em * 0.25))
+				ui.space(ui.SPACE_1)
 			}
 		}
 	}
@@ -362,7 +362,7 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 	h := math.round(em * 2.4)
 	ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###pv_bar") {
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		size := math.round(em * GLYPH_BUTTON_EM)
 		ui.next({width = ui.px(size), height = ui.px(size)})
 		if ui.button("pv_back", icon = lucide.ARROW_LEFT).clicked { web_act(t, .Back) }
@@ -370,10 +370,10 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 		if ui.button("pv_fwd", icon = lucide.CHEVRON_RIGHT).clicked { web_act(t, .Forward) }
 		ui.next({width = ui.px(size), height = ui.px(size)})
 		if ui.button("pv_reload", icon = preview_loading(t) ? lucide.X : lucide.REFRESH_CW).clicked { web_act(t, preview_loading(t) ? .Stop : .Reload) }
-		ui.spacer(ui.px(em * 0.35))
+		ui.space(ui.SPACE_1)
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), axis = .X, cross = .Center})
 		if ui.well("###pv_addr", .X) {
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 			if ui.tags("bare") {
 				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3, font = app.mono, font_size = math.round(em * FS_SMALL)})
 				res := ui.line_edit("###pv_url", &t.field, {placeholder = i18n.tr("localhost:3000 or an address")})
@@ -383,22 +383,22 @@ preview_bar :: proc(app: ^App, t: ^Preview_Tab, em: f32) {
 			}
 			// (a remote server's loopback address, opened at its host: said where the address is read)
 			if mapped := preview_mapped_shown(app, t); mapped != "" {
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 				ui.next({width = ui.text_size(em * 0.4), height = ui.px(math.round(em * 1.3)), font_size = math.round(em * FS_CAPTION), radius = math.round(em * 0.3), bg = ui.with_alpha(ui.hue(.Accent), 0.16), fg = ui.hue(.Accent)})
 				b := ui.build_box({.Draw_Text, .Draw_Background, .No_Text_Trunc}, fmt.tprintf("%s###pv_mapped", i18n.tr("on the server")))
 				if ui.hovered_for(ui.signal(b)) {
 					if ui.tooltip() { ui.tooltip_text(fmt.tprintf(i18n.tr("%s is the server's machine: opened at its address"), mapped)) }
 				}
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 			}
 		}
-		ui.spacer(ui.px(em * 0.35))
+		ui.space(ui.SPACE_1)
 		ui.a11y({role = .Button, name = i18n.tr("New browser tab")})
 		ui.next({width = ui.px(size), height = ui.px(size)})
 		if ui.button("pv_new", icon = lucide.PLUS).clicked { p.due_new = true }
 		ui.next({width = ui.px(size), height = ui.px(size)})
 		if ui.button("pv_out", icon = lucide.GLOBE).clicked && t.url != "" { ui.open(t.url, .Url) }
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.CONTROL_GAP)
 	}
 	edge_line("###pv_edge")
 }
@@ -442,7 +442,7 @@ preview_view :: proc(v: ^ui.View, app: ^App) {
 				ui.spacer(ui.fill())
 				text("m", msg, ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 				if failed {
-					ui.spacer(ui.px(em * 0.5))
+					ui.space(ui.SPACE_2)
 					if ui.button("pv_again", i18n.tr("Try again"), lucide.REFRESH_CW, {height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { web_start(app, t) }
 				}
 				ui.spacer(ui.fill())

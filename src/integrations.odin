@@ -393,12 +393,12 @@ line :: proc(id: string, f: ^ui.Line_Edit, hint: string, em: f32, secret := fals
 	res: ui.Edit_Result
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
 	if ui.well(fmt.tprintf("%s_w", id), .X) {
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 			res = ui.line_edit(id, f, {placeholder = hint, kind = secret ? .Secret : .Plain, reveal = reveal})
 		}
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 	return res
 }
@@ -410,20 +410,20 @@ page_connections :: proc(app: ^App, em: f32) {
 	if connect_idle(n) && !read_shown(app, "###int_read", &n.read, em, integrations_ask) { return }
 	if remote.failed(&n.active) {
 		read_shown(app, "###int_active", &n.active, em, integrations_ask)   // (which is in use is not known: no row can say)
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 	}
 	if n.failed != "" {
 		info_line(app, "###int_failed", n.failed, em, ui.hue(.Red))
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 	}
 	if it := integration_find(n, n.shown); it != nil {
 		integration_page(app, it, em)
 		return
 	}
 	info_line(app, "###int_say", i18n.tr("The accounts the server signs in with: what you connect here gives you its models."), em)
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.SPACE_2)
 	line("###int_find", &n.search, i18n.tr("Find an integration"), em)
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.SPACE_2)
 	word := strings.trim_space(ui.line_edit_string(&n.search))
 	shown, hidden := 0, 0
 	for &it in n.list {
@@ -451,11 +451,11 @@ integration_row :: proc(app: ^App, it: ^Integration, k: int, em: f32) {
 	if ui.parent(row) {
 		connected := len(it.connections) > 0
 		glyph(connected ? lucide.CHECK : lucide.PLUG, connected ? ui.hue(.Green) : ui.theme_color("faint text"), math.round(em * ICON_SMALL), em * 1.2)
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		text("n", it.name, ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 		if connected {
 			text("c", fmt.tprintf(i18n.tr(len(it.connections), "%d connected", "%d connected"), len(it.connections)), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)})
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 		}
 		glyph(lucide.CHEVRON_RIGHT, ui.theme_color("faint text"), math.round(em * ICON_SMALL), em)
 	}
@@ -473,7 +473,7 @@ integration_page :: proc(app: ^App, it: ^Integration, em: f32) {
 	}
 	section(app, strings.to_upper(it.name, context.temp_allocator), em)
 	for &c, i in it.connections { connection_row(app, &c, i, em) }
-	if len(it.connections) > 0 { ui.spacer(ui.px(em * 0.6)) }
+	if len(it.connections) > 0 { ui.space(ui.SPACE_2) }
 	fill :: proc(app: ^App, it: ^Integration, method: int, em: f32) {
 		if method < len(it.methods) { connect_fill(app, it, &it.methods[method], method, em) }
 	}
@@ -488,7 +488,7 @@ integration_page :: proc(app: ^App, it: ^Integration, em: f32) {
 				n.step = Connect_Fill{i}
 				set_text(&n.failed, "")
 			}
-			ui.spacer(ui.px(em * 0.25))
+			ui.space(ui.SPACE_1)
 		}
 	case Connect_Fill:    fill(app, it, s.method, em)
 	case Connect_Sending: fill(app, it, s.method, em)
@@ -505,7 +505,7 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 	if ui.row(.Center, id = fmt.tprintf("###intc%d", i)) {
 		lamp := c.needs_auth ? ui.hue(.Yellow) : c.active ? ui.hue(.Green) : ui.theme_color("faint text")
 		glyph(c.needs_auth ? lucide.ALERT_TRIANGLE : lucide.CHECK, lamp, math.round(em * ICON_SMALL), em * 1.2)
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		if c.id == n.renaming && c.credential {
 			res := line("###int_rename", &n.rename, i18n.tr("A name"), em)
 			ui.set_focus(res.box.key)
@@ -521,23 +521,23 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 		if c.credential && c.id != n.renaming {
 			if c.id == n.removing {
 				text("q", i18n.tr("Remove it?"), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)})
-				ui.spacer(ui.px(em * 0.4))
+				ui.space(ui.SPACE_2)
 				if ui.button("int_yes", i18n.tr("Remove"), lucide.TRASH_2, {intent = .Danger, height = small}).clicked {
 					request(app, .Credential_Done, "DELETE", fmt.tprintf("/api/credential/%s", tk_http.component_encode(c.id, context.temp_allocator)))
 					set_text(&n.removing, "")
 				}
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 				if ui.button("int_no", i18n.tr("Keep"), o = {height = small}).clicked { set_text(&n.removing, "") }
 			} else {
 				if !c.active && ui.button("int_use", i18n.tr("Use"), o = {intent = .Success, height = small}).clicked {
 					request(app, .Credential_Done, "POST", fmt.tprintf("/api/credential/%s/activate", tk_http.component_encode(c.id, context.temp_allocator)))
 				}
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 				if ui.button("int_ren", i18n.tr("Rename"), lucide.PENCIL, {face = .Ghost, height = small}).clicked {
 					set_text(&n.renaming, c.id)
 					ui.line_edit_set(&n.rename, c.label)
 				}
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 				if ui.button("int_rem", i18n.tr("Remove"), lucide.TRASH_2, {intent = .Danger, face = .Ghost, height = small}).clicked { set_text(&n.removing, c.id) }
 			}
 		}
@@ -546,7 +546,7 @@ connection_row :: proc(app: ^App, c: ^Connection, i: int, em: f32) {
 		info_line(app, fmt.tprintf("###intm%d", i), c.message != "" ? c.message : i18n.tr("It must sign in again."), em, ui.hue(.Yellow))
 		if c.url != "" && ui.button(fmt.tprintf("into%d", i), i18n.tr("Open"), lucide.GLOBE, {height = small}).clicked { ui.open(c.url, .Url) }
 	}
-	ui.spacer(ui.px(em * 0.25))
+	ui.space(ui.SPACE_1)
 }
 
 @(private = "file")
@@ -556,7 +556,7 @@ connect_fill :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int, e
 	section(app, strings.to_upper(method_title(m), context.temp_allocator), em)
 	if m.kind == .Command {
 		info_line(app, "###int_cmd", fmt.tprintf(i18n.tr("The server will run: %s"), strings.join(m.names, " ", context.temp_allocator)), em)
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 	}
 	if m.form != nil {
 		for &fd, i in m.form.fields {
@@ -569,15 +569,15 @@ connect_fill :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int, e
 				done := false
 				form_field(app, &fd, em, &done)
 			}
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 		}
 	}
 	if m.kind == .Key {
 		if line("###int_key", &n.key, i18n.tr("The key"), em, secret = true, reveal = &n.key_shown).committed { go = true }
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 	}
 	if line("###int_label", &n.label, i18n.tr("A name for it (optional)"), em).committed { go = true }
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.SPACE_2)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###int_foot") {
 		ui.spacer(ui.fill())
@@ -586,7 +586,7 @@ connect_fill :: proc(app: ^App, it: ^Integration, m: ^Int_Method, method: int, e
 			connect_cancel(app)
 			return
 		}
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		_, sending := n.step.(Connect_Sending)
 		if ui.button("int_go", ui.text_shown(sending ? i18n.tr("Connecting…") : m.kind == .Oauth ? i18n.tr("Continue in the browser") : i18n.tr("Connect")), lucide.CHECK, {intent = .Success, disabled = sending}).clicked { go = true }
 	}
@@ -605,23 +605,23 @@ connect_wait :: proc(app: ^App, em: f32) {
 	section(app, w.by_code ? i18n.tr("PASTE THE CODE") : i18n.tr("WAITING"), em)
 	ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Text_Wrap, .Selectable}, fg = ui.theme_color("text"), text_pad = 0})
 	ui.paragraph(fmt.tprintf("%s###int_say", label_safe(w.instructions != "" ? w.instructions : i18n.tr("It goes on in the browser."))))
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.SPACE_2)
 	if remote.failed(&n.poll) {
 		info_line(app, "###int_lost", i18n.tr("The server no longer says how this goes. It may still end: try again, or cancel it."), em, ui.hue(.Yellow))
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		read_shown(app, "###int_poll", &n.poll, em, connect_poll_again)
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 	finish := false
 	if w.by_code {
 		if line("###int_code", &n.code, i18n.tr("The code"), em).committed { finish = true }
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###int_wfoot") {
 		if w.url != "" && ui.button("int_open", i18n.tr("Open again"), lucide.GLOBE).clicked { ui.open(w.url, .Url) }
 		if w.instructions != "" {
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 			if ui.button("int_copy", i18n.tr("Copy"), lucide.COPY).clicked { clip_set(w.instructions) }
 		}
 		ui.spacer(ui.fill())
@@ -631,7 +631,7 @@ connect_wait :: proc(app: ^App, em: f32) {
 			return
 		}
 		if w.by_code {
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 			if ui.button("int_finish", ui.text_shown(finishing ? i18n.tr("Finishing…") : i18n.tr("Finish")), lucide.CHECK, {intent = .Success, disabled = finishing}).clicked { finish = true }
 		}
 	}

@@ -166,7 +166,7 @@ go_bottom_pill :: proc(app: ^App, pane: ^Chat_Pane, sb, main: ^ui.Box, avail, em
 	if ui.parent(b) {
 		ui.spacer(ui.fill())
 		glyph(lucide.CHEVRON_DOWN, ui.with_alpha(ui.theme_color("soft text"), t), math.round(em * ICON_SMALL))
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		text("t", i18n.tr("Latest"), ui.with_alpha(ui.theme_color("soft text"), t), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.fill())
 	}
@@ -202,7 +202,7 @@ chat_keys :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) -> (moved: 
 messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	pane.chat.view_box = nil
 	c := &pane.chat
-	ui.spacer(ui.px(em * 1.2))
+	ui.space(ui.SPACE_4)
 	subagent_banner(app, pane, em)
 	// Scrolling up reads the pages before this one by itself (load_older): this row is what is seen when it gets here first.
 	if c.older != "" {
@@ -211,12 +211,12 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			ui.spacer(ui.fill())
 			if c.loading_older {
 				scanner("###older_bar", ui.hue(.Accent), math.round(em * 5), math.round(em * 0.9))
-				ui.spacer(ui.px(em * 0.7))
+				ui.space(ui.SPACE_3)
 			}
 			if ui.tags("weak") { text("older_t", c.older_failed > 0 ? i18n.tr("Earlier messages could not be read: scroll to try again") : i18n.tr("Loading earlier messages…"), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
 			ui.spacer(ui.fill())
 		}
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 	}
 	view := chat_view(app, pane)
 	if view == .Loading && len(c.messages) == 0 {
@@ -283,7 +283,7 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		line := math.round(em * WORKING_LINE_EM)
 		ui.next({width = ui.fill(), height = ui.px(line), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###working") {
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 			throbber(app, pane, "###wl", ui.hue(.Accent), math.round(em * 7), math.round(em * 0.9), em)
 			ui.spacer(ui.fill())
 			if hint_action("###stop_hint", i18n.tr("Esc twice to stop"), em, intent = .Danger) { interrupt_session(app, c.id) }
@@ -299,7 +299,7 @@ chat_failed :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	r := &pane.read
 	ui.next({width = ui.fill(), flags = {.Text_Wrap}, text_align = .Center})
 	if ui.tags("weak") { ui.paragraph(fmt.tprintf("%s###read_failed", label_safe(fmt.tprintf(i18n.tr("The conversation could not be read: %s"), r.message != "" ? r.message : i18n.tr("no answer"))))) }
-	ui.spacer(ui.px(em * 0.7))
+	ui.space(ui.SPACE_3)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###read_retry") {
 		ui.spacer(ui.fill())
@@ -352,10 +352,10 @@ note_line :: proc(app: ^App, m: ^Message, em: f32, icon: string, s: string) {
 	ui.next({width = ui.fill(), height = ui.px(em * 1.9), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###n_%s", m.id)) {
 		glyph(icon, ui.theme_color("faint text"), math.round(em * ICON_SMALL))
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		text("t", s, ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 	}
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.SPACE_2)
 }
 
 // What the session changed (its model, its agent, its folder), across the conversation as the end of a turn is: what it was, what it is.
@@ -370,20 +370,20 @@ switch_line :: proc(app: ^App, m: ^Message, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###sw_%s", m.id)) {
 		groove(across = true)
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		glyph(icon, ui.theme_color("faint text"), math.round(em * ICON_SMALL))
-		ui.spacer(ui.px(em * 0.35))
+		ui.space(ui.SPACE_1)
 		text("w", word, ui.theme_color("faint text"), small)
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		if m.previous != "" && m.previous != m.text {
 			text("p", m.previous, ui.theme_color("faint text"), small)
 			text("arrow", "  →  ", ui.theme_color("faint text"), small)
 		}
 		text("n", m.text, ui.theme_color("weak text"), small)
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		groove(across = true)
 	}
-	ui.spacer(ui.px(em * 0.8))
+	ui.space(ui.SPACE_3)
 }
 
 turn_end :: proc(app: ^App, m: ^Message, em: f32) {
@@ -391,43 +391,43 @@ turn_end :: proc(app: ^App, m: ^Message, em: f32) {
 	if ui.row(.Center, id = fmt.tprintf("###e_%s", m.id)) {
 		groove(across = true)
 		if m.finish != "" && m.finish != "succeeded" {
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			col := m.finish == "interrupted" ? ui.hue(.Yellow) : ui.hue(.Red)
 			text("o", m.finish, col, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			groove(across = true)
 		}
 	}
-	ui.spacer(ui.px(em * 0.8))
+	ui.space(ui.SPACE_3)
 }
 
 USER_IMAGE_W_PX :: 320
 USER_IMAGE_H_PX :: 220
 
 user_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
-	ui.spacer(ui.px(em * 0.4))
+	ui.space(ui.SPACE_2)
 	look := ui.Plate_Look{top = between("button background", "border", 0.33), bottom = between("card background", "button background", 0.5), rim = 0.09, shadow = 8}
 	if ui.card("", id = fmt.tprintf("###u_%s", m.id), o = {radius = CARD_RADIUS, look = look}) {
 		prompt_rail_focus(app, pane, m, ui.card_box())
 		ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###who") {
 			glyph(lucide.USER, ui.hue(.Accent), math.round(em * ICON_SMALL), em * 1.1)
-			ui.spacer(ui.px(em * 0.2))
+			ui.space(ui.SPACE_1)
 			text("you", i18n.tr("You"), ui.hue(.Accent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			ui.spacer(ui.fill())
 			text("at", clock_text(m.created, app.prefs.clock24), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
-		ui.spacer(ui.px(em * 0.35))
+		ui.space(ui.SPACE_1)
 		runs := link_runs(&m.text_runs, m.text, {color = ui.theme_color("text")}, pane.chat.alloc)
 		ui.next({width = ui.fill(), flags = {.Selectable}})
 		link_clicked(ui.rich_paragraph("###text", runs))
 		if len(m.images) > 0 {
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			sc := ui.scale()
 			image_strip(app, "###imgs", m.images[:], USER_IMAGE_W_PX * sc, USER_IMAGE_H_PX * sc)
 		}
 	}
-	ui.spacer(ui.px(em * 1.1))
+	ui.space(ui.SPACE_4)
 }
 
 agent_color :: proc(agent: string) -> Color {
@@ -478,7 +478,7 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 			}
 			rb.custom_user = wd
 			if m.streaming { animate(app) }
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 			name := m.agent != "" ? m.agent : "assistant"
 			text("ag", strings.to_upper(name[:1], context.temp_allocator), agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			text("ag2", name[1:], agent_color(m.agent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
@@ -489,7 +489,7 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 			ui.spacer(ui.fill())
 			text("at", clock_text(m.created, app.prefs.clock24), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		}
 		for &p, i in m.parts {
 			pid := fmt.tprintf("%s_%d", m.id, i)
@@ -497,7 +497,7 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 			case .Text:
 				if len(p.text) > 0 {
 					markdown.view(md_doc(&pane.chat, pid), pid, string(p.text[:]), md_config(app, ui.theme_color("text"), pane))
-					ui.spacer(ui.px(em * 0.6))
+					ui.space(ui.SPACE_2)
 				}
 			case .Reasoning: reasoning_part(app, pane, &p, pid, em)
 			case .Tool:
@@ -519,5 +519,5 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 		}
 	}
 	// a step that goes on in the next one stays close to it (the rail runs on when both meet on a tool call)
-	if next == nil { ui.spacer(ui.px(em * 0.9)) }
+	if next == nil { ui.space(ui.SPACE_4) }
 }

@@ -73,35 +73,35 @@ goal_strip :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	ui.a11y({role = .Group, name = i18n.tr("Goal")})
 	if ui.row(.Center, id = "###goal_strip") {
 		note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		switch g.status {
 		case .Active:   lamp("###gl", ui.hue(.Yellow), 1, pulse = true, size = em * CARD_MARK_EM)
 		case .Paused:   lamp("###gl", ui.theme_color("faint text"), 1, size = em * CARD_MARK_EM)
 		case .Complete: glyph(lucide.CHECK, ui.hue(.Green), math.round(em * ICON_SMALL))
 		}
-		ui.spacer(ui.px(em * 0.35))
+		ui.space(ui.SPACE_1)
 		word := g.status == .Active ? i18n.tr("goal") : g.status == .Paused ? i18n.tr("goal paused") : i18n.tr("goal met")
 		text("w", word, ui.theme_color("weak text"), note)
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		text("o", g.objective, ui.theme_color("soft text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		if g.max_rounds > 0 {
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			text("r", fmt.tprintf(i18n.tr("round %d/%d"), g.rounds, g.max_rounds), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
-		ui.spacer(ui.px(em * 1.0))
+		ui.space(ui.SPACE_4)
 		switch g.status {
 		case .Active:   if hint_action("###g_pause", "pause", em, app.mono, lucide.SQUARE) { goal_command(app, pane, "pause") }
 		case .Paused:   if hint_action("###g_resume", "resume", em, app.mono, lucide.SEND_HORIZONAL) { goal_command(app, pane, "resume") }
 		case .Complete:
 		}
-		ui.spacer(ui.px(em * 0.9))
+		ui.space(ui.SPACE_4)
 		if hint_action("###g_change", "change", em, app.mono, lucide.PENCIL) {
 			ui.text_edit_set(&pane.composer.area, fmt.tprintf("/goal %s", g.objective))
 			pane.composer.focus_next = true
 		}
-		ui.spacer(ui.px(em * 0.9))
+		ui.space(ui.SPACE_4)
 		if hint_action("###g_clear", "clear", em, app.mono, lucide.X, .Danger) { goal_command(app, pane, "clear") }
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 }
 
@@ -117,24 +117,24 @@ goal_reason_line :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###goal_why") {
 		groove(across = true)
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		lamp("###gwl", ui.theme_color("faint text"), 1, size = em * CARD_MARK_EM)
-		ui.spacer(ui.px(em * 0.35))
+		ui.space(ui.SPACE_1)
 		text("w", i18n.tr("goal paused"), ui.theme_color("weak text"), small)
 		if resets > 0 {
 			text("when", reset_text(resets, now_epoch_ms(), app.prefs.clock24), ui.theme_color("faint text"), small)
 			if !over { ui.wake_within(&app.state, GOAL_RESET_TICK_MS) }   // (the time left, minute after minute)
 		}
 		if over {
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 			if hint_action("###gw_resume", "resume", em, app.mono, lucide.SEND_HORIZONAL) { goal_command(app, pane, "resume") }
 		}
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		groove(across = true)
 	}
 	ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Text_Wrap}, fg = over ? ui.theme_color("faint text") : ui.theme_color("weak text"), text_pad = 0, text_align = .Center})
 	ui.paragraph(fmt.tprintf("%s###goal_reason", label_safe(why)))
-	ui.spacer(ui.px(em * 1.2))
+	ui.space(ui.SPACE_4)
 }
 
 GOAL_RESET_TICK_MS :: 30_000

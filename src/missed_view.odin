@@ -159,13 +159,13 @@ missed_view :: proc(v: ^ui.View, app: ^App) {
 			mode := cards ? 0 : 1
 			ui.next({height = ui.px(small)})
 			if ui.segmented("###mi_mode", modes[:], &mode) { act = mode == 0 ? .Cards : .List }
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			ui.a11y({role = .Button, name = i18n.tr("Acknowledged")})
 			if ui.button("mi_hist", i18n.tr("Acknowledged"), lucide.HISTORY, {face = m.history ? .Toggled : .Raised, height = small, lit = m.history}).clicked { m.history = !m.history }
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.CONTROL_GAP)
 			if ui.button("mi_all", i18n.tr("Acknowledge all"), lucide.CHECK, {intent = .Success, height = small}).clicked { act = .Acknowledge_All }
 		}
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		body: Missed_Act
 		at: int
 		if cards { body, at = missed_cards(app, em) } else { body, at = missed_list(app, em) }
@@ -284,9 +284,9 @@ missed_foot :: proc(app: ^App, keys: string, em: f32) {
 	edge_line("###mi_foot_rule")
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###mi_foot") {
-		ui.spacer(ui.px(em * 1))
+		ui.space(ui.SPACE_4)
 		text("h", keys, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
-		ui.spacer(ui.px(em * 1))
+		ui.space(ui.SPACE_4)
 	}
 }
 
@@ -369,14 +369,14 @@ missed_header :: proc(app: ^App, r: ^Missed_Row, k: int, h, em: f32) -> (acknowl
 	ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center})
 	b := ui.build_box({}, ui.vlist_row_name(k))
 	if ui.parent(b) {
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		if s != nil {
 			session_badge(app, s, math.round(em * SESSION_BADGE_EM), em)
-			ui.spacer(ui.px(em * 0.55))
+			ui.space(ui.ICON_GAP)
 		}
 		text("t", missed_title(s, r.root), ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
 		if s != nil && s.directory != "" {
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			text("d", base_name(s.directory), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)}, ui.fill())
 		} else {
 			ui.spacer(ui.fill())
@@ -385,7 +385,7 @@ missed_header :: proc(app: ^App, r: ^Missed_Row, k: int, h, em: f32) -> (acknowl
 			ui.a11y({role = .Button, name = i18n.tr("Acknowledge the session")})
 			acknowledge = ui.button("ack_g", i18n.tr("Acknowledge"), lucide.CHECK, {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true}).clicked
 		}
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 	}
 	return
 }
@@ -433,26 +433,26 @@ missed_entry_row :: proc(app: ^App, r: ^Missed_Row, k: int, selected, cursor: bo
 		acked := e.state == .Acknowledged
 		ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###line") {
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			ui.a11y({role = .Button, name = open ? i18n.tr("Fold") : i18n.tr("Unfold")})
 			chevron = ui.button("chev", icon = open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, o = {face = .Ghost, height = small, quiet = true}).clicked
-			ui.spacer(ui.px(em * 0.2))
+			ui.space(ui.SPACE_1)
 			missed_mark(e, em)
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			ink := acked ? ui.theme_color("faint text") : e.state == .New ? ui.theme_color("bright text") : ui.theme_color("text")
 			text("w", missed_words(e), ink, ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			text("x", e.text, ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			text("a", age_text(now, f64(e.at)), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			if missed_is_wait(e) && !acked {
 				button = ui.button("answer", i18n.tr("Answer"), lucide.ARROW_RIGHT, {intent = .Primary, height = small, quiet = true}).clicked
 			} else if !acked {
 				ui.a11y({role = .Button, name = i18n.tr("Acknowledge")})
 				button = ui.button("ack", icon = lucide.CHECK, o = {face = .Ghost, height = small, quiet = true}).clicked
 			}
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 		}
 		if open {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -460,9 +460,9 @@ missed_entry_row :: proc(app: ^App, r: ^Missed_Row, k: int, selected, cursor: bo
 				ui.spacer(ui.px(em * 3.4))
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column(id = "###brief") { retry = missed_brief(app, e, em) }
-				ui.spacer(ui.px(em * 1.2))
+				ui.space(ui.SPACE_4)
 			}
-			ui.spacer(ui.px(em * 0.7))
+			ui.space(ui.SPACE_3)
 		}
 	}
 	return
@@ -509,22 +509,22 @@ missed_brief :: proc(app: ^App, e: ^notices.Entry, em: f32) -> (retry: bool) {
 missed_card :: proc(app: ^App, r: ^Missed_Row, now: f64, em: f32) -> (retry: bool) {
 	e := r.entry
 	s := find_session(app, r.root)
-	pad := math.round(em * 1.4)
+	pad := math.round(em * ui.PAGE_MARGIN)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###mi_card") {
 		ui.spacer(ui.px(pad))
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column(id = "###body") {
-			ui.spacer(ui.px(em * 0.9))
+			ui.space(ui.SPACE_4)
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###who") {
 				if s != nil {
 					session_badge(app, s, math.round(em * SESSION_BADGE_EM), em)
-					ui.spacer(ui.px(em * 0.6))
+					ui.space(ui.ICON_GAP)
 				}
 				text("t", missed_title(s, r.root), ui.theme_color("bright text"), ui.Style_Mod{font_size = math.round(em * FS_HEADING)})
 				if s != nil && s.directory != "" {
-					ui.spacer(ui.px(em * 0.7))
+					ui.space(ui.SPACE_3)
 					text("d", base_name(s.directory), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)}, ui.fill())
 				} else {
 					ui.spacer(ui.fill())
@@ -534,15 +534,15 @@ missed_card :: proc(app: ^App, r: ^Missed_Row, now: f64, em: f32) -> (retry: boo
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.8)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###what") {
 				missed_mark(e, em)
-				ui.spacer(ui.px(em * 0.5))
+				ui.space(ui.SPACE_2)
 				text("w", missed_words(e), e.state == .Acknowledged ? ui.theme_color("faint text") : ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
 				kind := Missed_Kind(e.kind)
 				if e.text != "" && (kind == .Sub || kind == .Scheduled) {
-					ui.spacer(ui.px(em * 0.6))
+					ui.space(ui.SPACE_2)
 					text("x", e.text, ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
 				}
 			}
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			switch Missed_Kind(e.kind) {
 			case .Permission, .Question:
 				// (still waiting: answered here, with the conversation's own card; its answer acknowledges it, missed_sync)
@@ -558,7 +558,7 @@ missed_card :: proc(app: ^App, r: ^Missed_Row, now: f64, em: f32) -> (retry: boo
 			case .End, .Sub, .Scheduled:
 				retry = missed_report_card(app, missed_report_find(app, missed_report_session(app, e)), em)
 			}
-			ui.spacer(ui.px(em * 1.2))
+			ui.space(ui.SPACE_4)
 		}
 		ui.spacer(ui.px(pad))
 	}
@@ -589,7 +589,7 @@ missed_report_card :: proc(app: ^App, rep: ^Missed_Report, em: f32) -> (retry: b
 	if rep.request != "" {
 		section_label("rq", i18n.tr("REQUEST"), em)
 		missed_para("rq_t", rep.request_card, ui.theme_color("soft text"), em)
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 	}
 	note := rep.tools > 0 ? fmt.tprintf(i18n.tr(rep.tools, "%d tool call", "%d tool calls"), rep.tools) : ""
 	ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
@@ -603,7 +603,7 @@ missed_report_card :: proc(app: ^App, rep: ^Missed_Report, em: f32) -> (retry: b
 		missed_faint("na", i18n.tr("No answer"), em)
 	}
 	if len(rep.files) > 0 {
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###sl_fl") { caption_title("l", i18n.tr("FILES"), fmt.tprintf("%d", len(rep.files)), em) }
 		for f, k in rep.files {
@@ -615,13 +615,13 @@ missed_report_card :: proc(app: ^App, rep: ^Missed_Report, em: f32) -> (retry: b
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.45)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###f%d", k)) {
 				glyph(lucide.FILE, ui.theme_color("faint text"), math.round(em * ICON_SMALL), em * 1.2)
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 				text("p", f, ui.theme_color("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 			}
 		}
 	}
 	if len(rep.todos) > 0 {
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		section_label("td", i18n.tr("TODO"), em)
 		for t, k in rep.todos { todo_row(app, t, k, em) }
 	}
@@ -654,7 +654,7 @@ missed_shell_tail :: proc(app: ^App, e: ^notices.Entry, em: f32) {
 		if out[at] == '\n' { lines += 1 }
 	}
 	if lines == MISSED_TAIL_LINES { at += 1 }
-	ui.spacer(ui.px(em * 0.4))
+	ui.space(ui.SPACE_2)
 	section_label("ou", i18n.tr("OUTPUT"), em)
 	missed_para("ou_t", out[at:], ui.theme_color("soft text"), em, mono = true)
 }
@@ -678,7 +678,7 @@ missed_failed :: proc(em: f32) -> (retry: bool) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###failed") {
 		text("t", i18n.tr("Could not be read"), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		retry = ui.button("mi_retry", i18n.tr("Try again"), lucide.REFRESH_CW, {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM)}).clicked
 		ui.spacer(ui.fill())
 	}

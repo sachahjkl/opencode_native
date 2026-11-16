@@ -226,7 +226,7 @@ image_strip :: proc(app: ^App, id: string, refs: []Image_Ref, max_w, max_h: f32)
 	if len(refs) == 0 { return }
 	em := ui.font_size()
 	ui.next({width = ui.fill(), height = ui.children_sum()})
-	if ui.flow({em * 0.5, em * 0.5}, id) {
+	if ui.flow({em * ui.SPACE_2, em * ui.SPACE_2}, id) {
 		for ref, i in refs { image_thumb(app, fmt.tprintf("###img%d", i), ref, max_w, max_h) }
 	}
 }
@@ -362,10 +362,10 @@ Image_Viewer :: struct {
 @(private = "file")
 image_viewer_wait :: proc(app: ^App, em: f32) {
 	animate(app)
-	ui.spacer(ui.px(em))
+	ui.space(ui.SPACE_4)
 	ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
 	if ui.tags("weak") { ui.label(fmt.tprintf("%s###view_wait", i18n.tr("Opening the image…"))) }
-	ui.spacer(ui.px(em))
+	ui.space(ui.SPACE_4)
 }
 
 image_view :: proc(v: ^ui.View, app: ^App) {
@@ -445,23 +445,23 @@ image_view :: proc(v: ^ui.View, app: ^App) {
 			}
 			ui.next({width = ui.fill(), height = ui.px(bar), axis = .X, cross = .Center})
 			if ui.row(.Center) {
-				ui.spacer(ui.px(em))
+				ui.space(ui.SPACE_4)
 				text("n", ellipsize(name, IMAGE_NAME_CHARS), ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
-				ui.spacer(ui.px(em * 0.6))
+				ui.space(ui.SPACE_2)
 				zoom := fit * app.viewer.view.zoom / sc * 100
 				dims := fmt.tprintf("%d × %d  ·  %s", int(source.x), int(source.y), i18n.percent(f64(zoom) / 100))
 				text("d", dims, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
-				ui.spacer(ui.px(em * 0.8))
+				ui.space(ui.SPACE_3)
 				bh := math.round(em * BUTTON_SMALL_H_EM)
 				most := max(1, VIEW_NATIVE_MAX * sc / fit)   // (as ui.preview's: its zoom_max over what fits)
 				if ui.button("zoom_out", "−", o = {height = bh}).clicked { ui.preview_zoom_to(&app.viewer.view, app.viewer.view.zoom / ui.PREVIEW_ZOOM_STEP, ui.PREVIEW_ZOOM_MIN, most, {}) }
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 				if ui.button("zoom_in", "+", o = {height = bh}).clicked { ui.preview_zoom_to(&app.viewer.view, app.viewer.view.zoom * ui.PREVIEW_ZOOM_STEP, ui.PREVIEW_ZOOM_MIN, most, {}) }
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 				if ui.button("zoom_fit", i18n.tr("Fit"), o = {height = bh}).clicked { ui.preview_reset(&app.viewer.view) }
-				ui.spacer(ui.px(em * 0.8))
+				ui.space(ui.SPACE_3)
 				if ui.button("close", i18n.tr("Close"), lucide.X, {height = bh}).clicked { ui.view_end(v, ui.VIEW_CANCELLED) }
-				ui.spacer(ui.px(em))
+				ui.space(ui.SPACE_4)
 			}
 		}
 	}

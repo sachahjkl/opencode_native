@@ -109,9 +109,9 @@ code_block :: proc(id: string, lang: string, code: string, mono: Face_Id, table 
 		if !table {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###hdr") {
-				ui.spacer(ui.px(em * 0.7))
+				ui.space(ui.SPACE_3)
 				glyph(lucide.CODE, ui.theme_color("faint text"), math.round(em * ICON_SMALL), em)
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 				text("lang", lang != "" ? lang : "text", ui.theme_color("faint text"), ui.Style_Mod{font = mono, font_size = math.round(em * FS_SMALL)})
 				ui.spacer(ui.fill())
 				ui.next({width = ui.px(math.round(em * 1.6)), height = ui.px(math.round(em * 1.6))})
@@ -119,19 +119,19 @@ code_block :: proc(id: string, lang: string, code: string, mono: Face_Id, table 
 					platform.set_clipboard(the_app.win, code)
 					ui.announce(&the_app.announcer, .Good, i18n.tr("Copied"))
 				}
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 			}
 			ui.next({width = ui.fill(), height = ui.px(2)})
 			ui.build_box({}, "")
 		}
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###body") {
-			ui.spacer(ui.px(em * 0.9))
+			ui.space(ui.SPACE_4)
 			plain := [1]ui.Rich_Run{{text = code, style = {font = mono, color = ui.theme_color(table ? "text" : "soft text")}}}
 			ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}})
 			ui.rich_paragraph("###code", len(runs) > 0 ? runs : plain[:], version = version)
-			ui.spacer(ui.px(em * 0.9))
+			ui.space(ui.SPACE_4)
 		}
-		ui.spacer(ui.px(em * 0.7))
+		ui.space(ui.SPACE_3)
 	}
 }

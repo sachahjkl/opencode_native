@@ -129,5 +129,5 @@ update_pill :: proc(app: ^App, em: f32) {
 	case: return
 	}
 	ui.next({height = ui.px(math.round(em * PILL_H_EM))})
-	if prefs_page.update_badge(app.updater, proc(user: rawptr) { app_restart((^App)(user)) }, app) != nil { ui.spacer(ui.px(em * 0.6)) }
+	if prefs_page.update_badge(app.updater, proc(user: rawptr) { app_restart((^App)(user)) }, app) != nil { ui.space(ui.SPACE_2) }
 }

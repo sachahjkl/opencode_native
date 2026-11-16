@@ -367,16 +367,16 @@ inbox_header :: proc(app: ^App, sec: ^Side_Section, folded: bool, em: f32) {
 	hs := ui.signal(hdr)
 	if hs.clicked { app.sidebar.folded[sec.key] = !folded }
 	if ui.parent(hdr) {
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		glyph(folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, ui.theme_color("faint text"), math.round(em * ICON_TINY), em * 0.9)
-		ui.spacer(ui.px(em * 0.2))
+		ui.space(ui.SPACE_1)
 		text("n", strings.to_upper(i18n.tr(sec.title), context.temp_allocator), hs.hovering ? ui.theme_color("text") : ui.theme_color("weak text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		text("c", fmt.tprintf("%d", len(sec.items)), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.fill())
 		if sec.unseen {
 			if hint_action("###seen_all", i18n.tr("Mark as seen"), em) { section_seen(app, sec) }
-			ui.spacer(ui.px(em * 0.9))
+			ui.space(ui.SPACE_4)
 		}
 	}
 }

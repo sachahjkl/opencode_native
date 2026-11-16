@@ -326,21 +326,21 @@ attachments_row :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	if len(refs) > 0 {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###att_imgs") {
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() { image_strip(app, "###att", refs[:], ATTACH_THUMB_W_PX * sc, ATTACH_THUMB_H_PX * sc) }
 		}
-		ui.spacer(ui.px(em * 0.25))
+		ui.space(ui.SPACE_1)
 	}
-	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.4, em * 0.3}})
+	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * ui.SPACE_2, em * ui.SPACE_1}})
 	gone := -1
-	if ui.flow({em * 0.4, em * 0.3}, "###att_names") {
+	if ui.flow({em * ui.SPACE_2, em * ui.SPACE_1}, "###att_names") {
 		for a, i in pane.composer.attachments {
 			ui.next({width = ui.children_sum(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###att%d", i)) {
-				ui.spacer(ui.px(em * 0.8))
+				ui.space(ui.SPACE_3)
 				text("n", fmt.tprintf("%s  %s", a.name, kfmt(f64(a.size))), ui.theme_color("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-				ui.spacer(ui.px(em * 0.2))
+				ui.space(ui.SPACE_1)
 				ui.next({width = ui.px(math.round(em * 1.3)), height = ui.px(math.round(em * 1.3))})
 				if ui.button("x", icon = lucide.X).clicked { gone = i }
 			}

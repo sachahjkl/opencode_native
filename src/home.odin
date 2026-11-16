@@ -30,19 +30,19 @@ home_session :: proc(app: ^App, s: ^Session_Info, em, now: f64, busy: bool) {
 		app.sidebar.menu_session = strings.clone(s.id)
 	}
 	if ui.parent(b) {
-		ui.spacer(ui.px(e * 0.6))
+		ui.space(ui.SPACE_2)
 		if busy {
 			session_lamp("###l", LAMP_WORKING, e)
 		} else if !logo_of(app, "###lg", project_logo(app, s.project), math.round(e * 1.25)) {
 			glyph(lucide.MESSAGE_SQUARE, ui.theme_color("faint text"), math.round(e * ICON_SMALL), e * 1.25)
 		}
-		ui.spacer(ui.px(e * 0.55))
+		ui.space(ui.SPACE_2)
 		text("t", s.title != "" ? s.title : i18n.tr("Untitled"), ui.theme_color("soft text"), ui.Style_Mod{font_size = math.round(e * FS_LABEL)}, ui.fill())
-		ui.spacer(ui.px(e * 0.5))
+		ui.space(ui.SPACE_2)
 		text("d", base_name(s.directory), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(e * FS_CAPTION)})
-		ui.spacer(ui.px(e * 0.8))
+		ui.space(ui.SPACE_3)
 		text("a", age_text(now, s.updated), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(e * FS_CAPTION)})
-		ui.spacer(ui.px(e * 0.6))
+		ui.space(ui.SPACE_2)
 	}
 }
 
@@ -92,7 +92,7 @@ home :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		big := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_WORDMARK * 0.8)}
 		text("l1", "open", ui.theme_color("faint text"), big)
 		text("l2", "code", ui.theme_color("text"), big)
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		text("l3", "native", ui.hue(.Accent), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_WORDMARK * 0.8)})
 		ui.spacer(ui.fill())
 	}
@@ -102,14 +102,14 @@ home :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		info_line(app, "###h_link", fmt.tprintf(refused ? i18n.tr("%s refused the password") : i18n.tr("Connecting to %s…"), server_base(app)), em, refused ? ui.hue(.Red) : ui.hue(.Yellow))
 	}
 	info_line(app, "###h_not_theirs", i18n.tr(APP_NOT_THEIRS), em, ui.theme_color("faint text"))
-	ui.spacer(ui.px(em * 0.8))
+	ui.space(ui.SPACE_3)
 
 	// where a new session starts
 	section_label("h_start", i18n.tr("START IN"), em)
 	folders := home_folders(app)
 	if pane.chat.new_dir == "" && len(folders) > 0 { pane.chat.new_dir = strings.clone(folders[0], pane.chat.alloc) }
-	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.45, em * 0.45}})
-	if ui.flow({em * 0.45, em * 0.45}, "###h_folders") {
+	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * ui.SPACE_2, em * ui.SPACE_2}})
+	if ui.flow({em * ui.SPACE_2, em * ui.SPACE_2}, "###h_folders") {
 		for d, i in folders {
 			sig := ui.button(fmt.tprintf("hf%d", i), ui.text_shown(base_name(d)), lucide.FOLDER, {face = d == pane.chat.new_dir ? .Toggled : .Raised, height = math.round(em * BUTTON_COMPACT_H_EM)})
 			if sig.clicked {
@@ -122,14 +122,14 @@ home :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		}
 		if ui.button("hf_other", i18n.tr("Other folder…"), lucide.PLUS, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { folder_choose(app, .New_Session) }
 	}
-	ui.spacer(ui.px(em * 1.1))
+	ui.space(ui.SPACE_4)
 
 	// what runs now, whatever the session
 	lists := home_lists(app)
 	if lists.running_count > 0 {
 		section_label("h_run", fmt.tprintf(i18n.tr("RUNNING NOW  %d"), lists.running_count), em)
 		for i in lists.running { home_session(app, &app.sessions[i], f64(em), now, true) }
-		ui.spacer(ui.px(em * 1))
+		ui.space(ui.SPACE_4)
 	}
 
 	if app.sessions_loaded {
@@ -139,17 +139,17 @@ home :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###h_none") { text("n", i18n.tr("No session yet: ask anything below."), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}) }
 		}
-		ui.spacer(ui.px(em * 1.1))
+		ui.space(ui.SPACE_4)
 	}
 
 	// what is worth knowing first
 	ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###h_keys") {
 		if hint_action("###hk1", i18n.tr("Ctrl+K  everything"), em, app.mono) { palette_show(app) }
-		ui.spacer(ui.px(em * 1.6))
+		ui.space(ui.SPACE_6)
 		if hint_action("###hk2", i18n.tr("Ctrl+Shift+B  preview"), em, app.mono) { command_run(app, command_find("view.preview")) }
-		ui.spacer(ui.px(em * 1.6))
+		ui.space(ui.SPACE_6)
 		if hint_action("###hk3", i18n.tr("F1  shortcuts"), em, app.mono) { command_run(app, command_find("app.help")) }
 	}
-	ui.spacer(ui.px(em * 2))
+	ui.space(ui.PAGE_MARGIN)
 }

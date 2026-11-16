@@ -320,10 +320,10 @@ quote_chip :: proc(app: ^App, em: f32) {
 	if ui.popover(id, q.at, math.round(em * QUOTE_CHIP_W_EM), .Above, align_right = false) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.3)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###qr") {
-			ui.spacer(ui.px(em * 0.35))
+			ui.space(ui.SPACE_1)
 			quoted := ui.button("q1", i18n.tr("Quote"), o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM)}).clicked
 			commented := ui.button("q2", i18n.tr("Comment"), o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM)}).clicked
-			ui.spacer(ui.px(em * 0.35))
+			ui.space(ui.SPACE_1)
 			if quoted || commented {
 				quote_text(app, quote_pane(app), q.kept, commented)
 				q.done = q.serial

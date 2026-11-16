@@ -735,10 +735,10 @@ queue_first_withdraw_on_fail :: proc(app: ^App, r: ^Request, failure: Failure, m
 @(private = "file")
 queue_action :: proc(id, label, icon: string, wide: bool, em: f32, intent := ui.Intent.Neutral) -> bool {
 	if wide {
-		ui.spacer(ui.px(em * 0.7))
+		ui.space(ui.SPACE_3)
 		return hint_action(id, label, em, the_app.mono, intent = intent)
 	}
-	ui.spacer(ui.px(em * 0.15))
+	ui.space(ui.SPACE_1)
 	ui.a11y({role = .Button, name = label})
 	ink := Color{}
 	if intent != .Neutral { _, ink, _ = intent_colors(intent) }
@@ -762,16 +762,16 @@ queue_row :: proc(app: ^App, pane: ^Chat_Pane, it: ^Queue_Item, n: int, em: f32)
 		if line == "" { line = i18n.tr("(no text)") }
 		text("t", ellipsize(line, QUEUE_LINE_CHARS), busy ? ui.theme_color("faint text") : ui.theme_color("soft text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		if it.files > 0 {
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			text("f", fmt.tprintf(i18n.tr(it.files, "%d file", "%d files"), it.files), ui.theme_color("faint text"), note)
 		}
 		wide := pane.conversation.column_w > em * QUEUE_WORDS_MIN_EM
 		switch {
 		case editing:
-			ui.spacer(ui.px(em * 0.7))
+			ui.space(ui.SPACE_3)
 			text("e", "editing", ui.hue(.Accent), note)
 		case busy:
-			ui.spacer(ui.px(em * 0.7))
+			ui.space(ui.SPACE_3)
 			text("b", it.act == .Sending ? i18n.tr("sending…") : it.act == .Removing ? i18n.tr("removing…") : i18n.tr("changing…"), ui.theme_color("faint text"), note)
 		case:
 			if !it.skills && queue_action("###edit", i18n.tr("Edit"), lucide.PENCIL, wide, em) { queue_edit(app, pane, id) }
@@ -793,10 +793,10 @@ queue_list :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		if q.read.state == .Failed {   // (a server without an inbox refuses: that has nothing to say)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###q_failed") {
-				ui.spacer(ui.px(em * 0.5))
+				ui.space(ui.SPACE_2)
 				if hint_action("###q_again", i18n.tr("What waits for this session could not be read  ·  Try again"), em, app.mono) { queue_read(app, pane) }
 			}
-			ui.spacer(ui.px(em * 0.25))
+			ui.space(ui.SPACE_1)
 		}
 		return
 	}
@@ -812,7 +812,7 @@ queue_list :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		if ui.row(.Center, id = "###q_head") {
 			ui.space(ui.CARD_PAD)
 			text("h", fmt.tprintf(i18n.tr("PENDING  %d"), n), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
-			ui.spacer(ui.px(em * 0.9))
+			ui.space(ui.SPACE_4)
 			// (the row cuts what has no room: what matters comes first)
 			text("w", pane.chat.busy ? i18n.tr("not sent yet  ·  queued ones go when the turn ends") : i18n.tr("not sent  ·  the run stopped, these wait"), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			ui.space(ui.CARD_PAD)
@@ -834,7 +834,7 @@ queue_list :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			}
 		}
 	}
-	ui.spacer(ui.px(em * 0.45))
+	ui.space(ui.SPACE_2)
 }
 
 // In the composer, over what is written: what Enter will do is not what it usually does.
@@ -844,17 +844,17 @@ queue_edit_banner :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * QUEUE_ROW_H_EM)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###q_banner") {
-		ui.spacer(ui.px(em * 0.85))
+		ui.space(ui.SPACE_3)
 		glyph(lucide.PENCIL, ui.hue(.Accent), math.round(em * ICON_SMALL), em * 1.1)
-		ui.spacer(ui.px(em * 0.25))
+		ui.space(ui.SPACE_1)
 		text("t", i18n.tr("Editing a pending message"), ui.hue(.Accent), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		if len(q.items) > 1 && q.items[len(q.items) - 1].id != q.edit.id && pane.conversation.column_w > em * QUEUE_WORDS_MIN_EM {
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			text("o", i18n.tr("it goes back last"), ui.theme_color("faint text"), note)
 		}
 		ui.spacer(ui.fill())
 		if hint_action("###q_cancel", i18n.tr("Esc  cancel"), em, app.mono) { queue_edit_end(app, pane, .Cancel) }
-		ui.spacer(ui.px(em * 0.85))
+		ui.space(ui.SPACE_3)
 	}
 }
 

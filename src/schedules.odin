@@ -196,7 +196,7 @@ field_line :: proc(id: string, f: ^ui.Line_Edit, hint: string, em: f32, label :=
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 	if ui.well(fmt.tprintf("%s_w", id), .X) {
 		if label != "" {
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			text("l", label, ui.theme_color("weak text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
 		}
 		if ui.tags("bare") {
@@ -205,7 +205,7 @@ field_line :: proc(id: string, f: ^ui.Line_Edit, hint: string, em: f32, label :=
 		}
 		if unit != "" {
 			text("u", unit, ui.theme_color("faint text"), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)})
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 		}
 	}
 	return res
@@ -221,7 +221,7 @@ schedules_view :: proc(v: ^ui.View, app: ^App) {
 	win := v.presentation == .Panel ? ui.view_room(v) + 2 * margin : built_state(app).window_size
 	w := min(math.round(em * SCHEDULES_W_EM), win.x - 2 * margin)
 	{
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		// (what it held at the last build: this one is not laid out yet. The title and the gaps are what the window keeps.)
 		held := em * SCHEDULES_FIRST_H_EM
 		if b := ui.prev_box("###sc_body"); b != nil && b.view_bounds.y > 0 { held = b.view_bounds.y }
@@ -236,7 +236,7 @@ schedules_view :: proc(v: ^ui.View, app: ^App) {
 				if ui.column(id = "###sc_col") {
 					if read_shown(app, "###sc_read", &s.read, em, schedules_ask) {
 						schedule_form(app, w - 2 * math.round(em * ui.PAGE_MARGIN), em)
-						ui.spacer(ui.px(em * 0.8))
+						ui.space(ui.SPACE_3)
 						if len(s.list) == 0 {
 							info_line(app, "###sc_none", i18n.tr("Nothing is planned yet."), em)
 						} else {
@@ -249,7 +249,7 @@ schedules_view :: proc(v: ^ui.View, app: ^App) {
 				ui.space(ui.PAGE_MARGIN)
 			}
 		}
-		ui.spacer(ui.px(em * 0.9))
+		ui.space(ui.SPACE_4)
 	}
 }
 
@@ -285,15 +285,15 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, w, em: f32) {
 			text("n", first_line(it.name != "" ? it.name : it.prompt), ui.theme_color(it.status == .Done ? "weak text" : "text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL), height = ui.px(em * 1.4)}, ui.fill())
 			text("d", schedule_detail(it), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.15)}, ui.fill())
 		}
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		text("x", schedule_next(it, now), ui.theme_color(it.status == .Active ? "soft text" : "faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		if it.id == s.removing {
 			if ui.button("sc_yes", i18n.tr("Delete"), lucide.TRASH_2, {intent = .Danger, height = small}).clicked {
 				request(app, .Schedule_Done, "DELETE", fmt.tprintf("/api/experimental/schedule/%s", tk_http.component_encode(it.id, context.temp_allocator)))
 				set_text(&s.removing, "")
 			}
-			ui.spacer(ui.px(em * 0.3))
+			ui.space(ui.SPACE_1)
 			if ui.button("sc_no", i18n.tr("Keep"), o = {height = small}).clicked { set_text(&s.removing, "") }
 		} else {
 			if it.status == .Active || it.status == .Paused {
@@ -301,7 +301,7 @@ schedule_row :: proc(app: ^App, it: ^Schedule, i: int, now: f64, w, em: f32) {
 				if ui.button("sc_pause", ui.text_shown(pause ? i18n.tr("Pause") : i18n.tr("Resume")), o = {height = small}).clicked {
 					request(app, .Schedule_Done, "POST", fmt.tprintf("/api/experimental/schedule/%s/%s", tk_http.component_encode(it.id, context.temp_allocator), pause ? "pause" : "resume"), "{}")
 				}
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 			}
 			ui.a11y({role = .Button, name = i18n.tr("Delete")})
 			if ui.button("sc_del", ui.text_shown(words ? i18n.tr("Delete") : ""), lucide.TRASH_2, {intent = .Danger, face = .Ghost, height = small}).clicked { set_text(&s.removing, it.id) }
@@ -318,7 +318,7 @@ schedule_form :: proc(app: ^App, w, em: f32) {
 	res := field_line("###sc_prompt", &s.prompt, i18n.tr("what the session does when it wakes"), em, label = i18n.tr("Ask"))
 	if s.fresh { ui.set_focus(res.box.key); s.fresh = false }
 	if res.committed { go = true }
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.SPACE_2)
 	one_row := w >= em * SCHEDULES_ONE_ROW_EM
 	modes :: proc(s: ^Schedules, width: ui.Size, em: f32) {
 		labels: [len(When_Mode)]string
@@ -330,21 +330,21 @@ schedule_form :: proc(app: ^App, w, em: f32) {
 	if !one_row {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###sc_modes") { modes(s, ui.fill(), em) }
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###sc_when") {
 		if one_row {
 			modes(s, ui.px(math.round(em * SCHEDULES_MODES_W_EM)), em)
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 		}
 		if field_line("###sc_value", &s.value, WHEN_MODES[s.mode].hint, em, unit = i18n.tr(WHEN_MODES[s.mode].unit)).committed { go = true }
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		making := s.making.state == .Loading
 		if ui.button("sc_go", ui.text_shown(making ? i18n.tr("Planning…") : i18n.tr("Plan it")), lucide.CHECK, {intent = .Success, height = math.round(em * FIELD_H_EM), disabled = making}).clicked { go = true }
 	}
 	if s.problem != "" || remote.failed(&s.making) {
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		info_line(app, "###sc_failed", s.problem != "" ? s.problem : s.making.message, em, ui.hue(.Red))
 	}
 	if go { schedule_submit(app) }
@@ -477,7 +477,7 @@ chat_artifacts_between :: proc(app: ^App, pane: ^Chat_Pane, from, to: f64) -> []
 
 // An artifact's card: what it is, its name; a click shows it (the artifacts of the folder, it chosen).
 artifact_card :: proc(app: ^App, a: Chat_Artifact, em: f32) {
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.SPACE_2)
 	ui.next({width = ui.fill(), height = ui.children_sum(), cursor = .Hand})
 	if ui.well(fmt.tprintf("###art_%s", a.id), flags = {.Clickable}) {
 		card := ui.parent_box()
@@ -485,14 +485,14 @@ artifact_card :: proc(app: ^App, a: Chat_Artifact, em: f32) {
 		show := ui.signal(card).clicked
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * ARTIFACT_CARD_H_EM)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###line") {
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 			glyph(lucide.APP_WINDOW, ui.hue(.Accent), math.round(em * ICON_REGULAR), em * 1.4)
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.ICON_GAP)
 			text("k", i18n.tr("Artifact"), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			text("n", ellipsize(a.title != "" ? a.title : a.id, ARTIFACT_TITLE_CHARS), ui.theme_color("bright text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			if ui.button("show", i18n.tr("Show"), lucide.EYE, {height = math.round(em * BUTTON_SMALL_H_EM)}).clicked { show = true }
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.CONTROL_GAP)
 		}
 		if show {
 			artifacts_open(app)
@@ -606,7 +606,7 @@ artifacts_view :: proc(v: ^ui.View, app: ^App) {
 	a := &app.cx.artifacts
 	em := ui.font_size()
 	{
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 		if ui.row(id = "###ar_body") {
 			ui.space(ui.PAGE_MARGIN)
@@ -621,18 +621,18 @@ artifacts_view :: proc(v: ^ui.View, app: ^App) {
 						if ui.signal(row).clicked { artifact_show(app, it.id) }
 						if ui.parent(row) {
 							glyph(lucide.FILE, ui.theme_color(it.id == a.shown ? "bright text" : "faint text"), math.round(em * ICON_SMALL), em * 1.1)
-							ui.spacer(ui.px(em * 0.3))
+							ui.space(ui.SPACE_1)
 							text("n", it.title, ui.theme_color(it.id == a.shown ? "bright text" : "text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 						}
 					}
 				}
 			}
-			ui.spacer(ui.px(em))
+			ui.space(ui.SPACE_4)
 			ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 			if ui.column(id = "###ar_right") { artifact_right(app, em) }
 			ui.space(ui.PAGE_MARGIN)
 		}
-		ui.spacer(ui.px(em * 0.9))
+		ui.space(ui.SPACE_4)
 	}
 }
 
@@ -656,28 +656,28 @@ artifact_right :: proc(app: ^App, em: f32) {
 				remote.reset(&a.file_read)
 				return
 			}
-			ui.spacer(ui.px(em * 0.3))
+			ui.space(ui.SPACE_1)
 			if ui.button("ar_no", i18n.tr("Keep"), o = {height = small}).clicked { set_text(&a.removing, "") }
 		} else {
 			ui.a11y({role = .Button, name = i18n.tr("Open in the browser")})
 			if ui.button("ar_open", ui.text_shown(words ? i18n.tr("Open in the browser") : ""), lucide.GLOBE, {intent = .Primary, height = small, disabled = !artifact_can_open(a, it)}).clicked { artifact_view(a, it) }
-			ui.spacer(ui.px(em * 0.3))
+			ui.space(ui.SPACE_1)
 			ui.a11y({role = .Button, name = i18n.tr("Delete")})
 			if ui.button("ar_del", ui.text_shown(words ? i18n.tr("Delete") : ""), lucide.TRASH_2, {intent = .Danger, face = .Ghost, height = small}).clicked { set_text(&a.removing, it.id) }
 		}
 	}
-	ui.spacer(ui.px(em * 0.4))
+	ui.space(ui.SPACE_2)
 	if !read_shown(app, "###ar_file", &a.file_read, em, artifact_read) { return }
 	if len(a.files) == 0 { info_line(app, "###ar_empty", i18n.tr("No text in this artifact."), em); return }
 	if len(a.files) > 1 {
 		// (they wrap: on one row the last ones went past the edge)
-		ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.3, em * 0.3}})
-		if ui.flow({em * 0.3, em * 0.3}, "###ar_files") {
+		ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * ui.SPACE_1, em * ui.SPACE_1}})
+		if ui.flow({em * ui.SPACE_1, em * ui.SPACE_1}, "###ar_files") {
 			for f, i in a.files {
 				if ui.button(fmt.tprintf("arf%d", i), ui.text_shown(label_safe(f.path)), o = {face = a.file == i ? .Toggled : .Raised, height = small}).clicked { a.file = i; a.version += 1 }
 			}
 		}
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 	}
 	f := a.files[clamp(a.file, 0, len(a.files) - 1)]
 	shown, is_text := file_text(f.content)
@@ -768,7 +768,7 @@ page_plugins :: proc(app: ^App, em: f32) {
 		if it.kind == "builtin" { continue }
 		plugin_row(app, &it, i, em)
 	}
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.SPACE_2)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###pl_bar") {
 		small := math.round(em * BUTTON_COMPACT_H_EM)
@@ -777,11 +777,11 @@ page_plugins :: proc(app: ^App, em: f32) {
 			remote.begin(&p.check)
 			request(app, .Plugins_Check, "POST", "/api/plugin/check", "{}", reading = &p.check)
 		}
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		if ui.button("pl_built", ui.text_shown(fmt.tprintf(p.builtin ? i18n.tr("Hide the %d built in") : i18n.tr("Show the %d built in"), built)), o = {face = .Ghost, height = small}).clicked { p.builtin = !p.builtin }
 	}
 	if !p.builtin { return }
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.SPACE_2)
 	for &it, i in p.list {
 		if it.kind == "builtin" { plugin_row(app, &it, i, em) }
 	}
@@ -793,14 +793,14 @@ plugin_row :: proc(app: ^App, it: ^Plugin, i: int, em: f32) {
 	if ui.row(.Center, id = fmt.tprintf("###plr%d", i)) {
 		color := it.failed ? ui.hue(.Red) : it.outdated ? ui.hue(.Yellow) : ui.theme_color("faint text")
 		glyph(it.failed ? lucide.ALERT_TRIANGLE : lucide.PLUG, color, math.round(em * ICON_SMALL), em * 1.2)
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		name := it.id != "" ? it.id : it.target != "" ? it.target : it.kind
 		text("n", name, ui.theme_color("text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.6)}, ui.fill())
 		detail := it.features
 		if it.version != "" { detail = fmt.tprintf("%s  %s", it.version, detail) }
 		text("d", detail, ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.6)})
 		if it.outdated && it.target != "" {
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 			if ui.button("pl_up", ui.text_shown(it.updating ? i18n.tr("Updating…") : i18n.tr("Update")), o = {intent = .Success, height = math.round(em * BUTTON_SMALL_H_EM), disabled = it.updating}).clicked {
 				request(app, .Plugin_Update, "POST", "/api/plugin/update", fmt.tprintf(`{{"targets":[%s]}}`, tk_json.quote(it.target)))
 				it.updating = true
@@ -808,7 +808,7 @@ plugin_row :: proc(app: ^App, it: ^Plugin, i: int, em: f32) {
 		}
 	}
 	if it.failed { info_line(app, fmt.tprintf("###ple%d", i), it.error, em, ui.hue(.Red)) }
-	ui.spacer(ui.px(em * 0.15))
+	ui.space(ui.SPACE_1)
 }
 
 ////////////////////////////////

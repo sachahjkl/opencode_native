@@ -376,7 +376,7 @@ form_tabs :: proc(f: ^Form_Req, pages: []int, em: f32) {
 		// each tab as wide as its title, onto a next line when they do not fit (shared out equally, a long title ran over the
 		// next tab)
 		ui.next({width = ui.fill()})
-		if ui.flow({em * 0.25, em * 0.25}, "###tabs_flow") {
+		if ui.flow({em * ui.SPACE_1, em * ui.SPACE_1}, "###tabs_flow") {
 			for p, k in pages {
 				fd := &f.fields[p]
 				name := fd.title != "" ? fd.title : fmt.tprintf(i18n.tr("Question %d"), k + 1)
@@ -423,7 +423,7 @@ form_page :: proc(app: ^App, f: ^Form_Req, pages: []int, reviewing, wizard: bool
 				name := fd.title != "" ? fd.title : fd.description != "" ? fd.description : fmt.tprintf(i18n.tr("Question %d"), k + 1)
 				if ui.button(fmt.tprintf("form_rv%d", k), ui.text_shown(label_safe(fmt.tprintf("%s:  %s", name, a != "" ? a : i18n.tr("no answer")))), o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_H_EM), left = true}).clicked { f.page = k }
 			}
-			ui.spacer(ui.px(em * 0.15))
+			ui.space(ui.SPACE_1)
 		}
 		return
 	}
@@ -463,7 +463,7 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 		for o, k in fd.options {
 			ui.next({width = ui.fill()})
 			ui.checkbox(fmt.tprintf("###form_o%d", k), label_safe(option_label(o)), &fd.picks[k], wrap = true)
-			ui.spacer(ui.px(em * 0.15))
+			ui.space(ui.SPACE_1)
 		}
 		if fd.custom { form_line(fd, em, i18n.tr("Something else"), done) }
 	case:
@@ -485,12 +485,12 @@ form_field :: proc(app: ^App, fd: ^Form_Field, em: f32, done: ^bool) {
 form_line :: proc(fd: ^Form_Field, em: f32, placeholder: string, done: ^bool) {
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * 2)), axis = .X, cross = .Center})
 	if ui.well("###lw", .X) {
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		if ui.tags("bare") {
 			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 			if ui.line_edit("###form_line", &fd.text, {placeholder = placeholder}).committed { done^ = true }
 		}
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 	if ui.line_edit_string(&fd.text) != "" { fd.choice = -1 }   // (one's own words instead of an option)
 }

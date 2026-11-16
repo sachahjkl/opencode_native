@@ -56,21 +56,21 @@ escape_stop_banner :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	h := math.round(em * QUEUE_ROW_H_EM)
 	ui.next({width = ui.fill(), height = ui.px(h), axis = .X})
 	if ui.row(id = "###stop_armed") {
-		ui.spacer(ui.px(em * 0.45))
+		ui.space(ui.SPACE_2)
 		// (tinted: it must catch the eye of one who pressed Escape by habit)
 		ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center, bg = ui.with_alpha(red, ESCAPE_STOP_TINT), radius = math.round(em * 0.4 * corners())})
 		if ui.row(.Center, flags = {.Draw_Background}, id = "###tint") {
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 			glyph(lucide.OCTAGON_X, red, math.round(em * ICON_SMALL), em * 1.1)
-			ui.spacer(ui.px(em * 0.25))
+			ui.space(ui.SPACE_1)
 			text("t", i18n.tr("Press Esc again to stop the run"), red, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
 			ui.spacer(ui.fill())
 			if hint_action("###stop_now", i18n.tr("Stop now"), em, app.mono, intent = .Danger) {
 				escape_stop_clear(app)
 				interrupt_session(app, pane.chat.id)
 			}
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 		}
-		ui.spacer(ui.px(em * 0.45))
+		ui.space(ui.SPACE_2)
 	}
 }

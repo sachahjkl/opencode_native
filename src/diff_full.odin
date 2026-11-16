@@ -49,21 +49,21 @@ diff_full_view :: proc(v: ^ui.View, d: ^Diff_Full) {
 	{
 		if ui.view_header_tools(v) {
 			text("a", fmt.tprintf("+%d", d.doc.added), ui.hue(.Green), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			text("d", fmt.tprintf("-%d", d.doc.removed), ui.hue(.Red), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL), height = ui.px(em * 2)})
-			ui.spacer(ui.px(em))
+			ui.space(ui.SPACE_4)
 			if ui.button("df_copy", i18n.tr("Copy")).clicked {
 				clip_set(d.doc.patch)
 				ui.announce(&app.announcer, .Good, i18n.tr("Diff copied"))
 			}
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			sel := int(app.prefs.diff_layout)
 			labels := []string{i18n.tr("Stacked"), i18n.tr("Split")}
 			ui.next({width = ui.px(em * 12), height = ui.px(em * 2)})
 			if ui.segmented("###df_mode", labels, &sel) { pref_set(app, "conversation.diff_layout", diff_layout_name(diff.Layout(sel))) }
 		}
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		diff.view("###df_list", &d.doc, app.prefs.diff_layout, diff_options(app, em, d.title))
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 	}
 }

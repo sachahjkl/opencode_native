@@ -322,30 +322,30 @@ output_view_bar :: proc(app: ^App, v: ^Output_View, em: f32) {
 	bar := ui.build_box({}, "###out_bar")
 	bar.custom = output_bar_draw
 	if ui.parent(bar) {
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		state_mark("###st", output_view_state(v), size = em * 0.7)
-		ui.spacer(ui.px(em * 0.45))
+		ui.space(ui.ICON_GAP)
 		text("s", word, color, note)
 		if dur := duration_text(v.started, v.ended > 0 ? v.ended : (running ? now_epoch_ms() : 0)); dur != "" {
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			text("e", dur, ui.theme_color("faint text"), note)
 		}
-		ui.spacer(ui.px(em * 1.1))
+		ui.space(ui.SPACE_4)
 		switch {
 		case v.lost:     text("m", i18n.tr("The server no longer has this command."), ui.theme_color("weak text"), note, ui.fill())
 		case v.seen_end: text("m", i18n.tr("Finished: nothing more will come."), ui.theme_color("soft text"), note, ui.fill())
 		case v.dropped:  text("m", i18n.tr("The server kept the end of it."), ui.theme_color("faint text"), note, ui.fill())
 		case:            ui.spacer(ui.fill())   // (the command is at the head of the grid)
 		}
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		h := math.round(em * BUTTON_SMALL_H_EM)
 		if ui.button("out_copy", i18n.tr("Copy"), lucide.COPY, {face = .Ghost, height = h, quiet = true, disabled = len(v.raw) == 0}).clicked {
 			clip_set(plain_output(string(v.raw[:])))
 			ui.announce(&app.announcer, .Good, i18n.tr("Output copied"))
 		}
-		ui.spacer(ui.px(em * 0.2))
+		ui.space(ui.SPACE_1)
 		if ui.button("out_close", i18n.tr("Close"), o = {face = v.seen_end ? .Raised : .Ghost, height = h, quiet = !v.seen_end}).clicked { output_view_close(app, v) }
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.CONTROL_GAP)
 	}
 }
 
@@ -356,7 +356,7 @@ output_view_view :: proc(view: ^ui.View, v: ^Output_View) {
 	em := ui.font_size()
 	ui.view_title(view, ellipsize(first_line(v.command), OUTPUT_TITLE_CHARS))
 	if !v.over { animate(app) }
-	inset := view.presentation == .Dialog || view.presentation == .Internal ? math.round(em * 0.55) : 0
+	inset := view.presentation == .Dialog || view.presentation == .Internal ? math.round(em * ui.SPACE_2) : 0
 	ui.spacer(ui.px(inset))
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
 	if ui.row(id = "###out_body") {

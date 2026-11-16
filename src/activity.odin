@@ -771,39 +771,39 @@ activity_strip :: proc(app: ^App, em: f32) {
 	if sig.clicked { activity_toggle(app) }
 	if ui.parent(b) {
 		note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		if running {   // (the sidebar's lamps: green while it works, orange when only commands run on)
 			working := pane.chat.busy || agents > 0
 			session_lamp("###l", working ? LAMP_WORKING : LAMP_BACKGROUND, em)
-			ui.spacer(ui.px(em * 0.35))
+			ui.space(ui.SPACE_1)
 		}
 		if agents > 0 {
 			text("a", fmt.tprintf(i18n.tr(agents, "%d agent", "%d agents"), agents), ui.theme_color("soft text"), note)
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 		}
 		if shells > 0 {
 			glyph(lucide.SQUARE_TERMINAL, ui.theme_color("weak text"), math.round(em * ICON_SMALL))
-			ui.spacer(ui.px(em * 0.25))
+			ui.space(ui.SPACE_1)
 			text("s", fmt.tprintf(i18n.tr(shells, "%d command", "%d commands"), shells), ui.theme_color("soft text"), note)
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 		}
 		if open_todos {
 			glyph(lucide.LIST, ui.theme_color("weak text"), math.round(em * ICON_SMALL))
-			ui.spacer(ui.px(em * 0.25))
+			ui.space(ui.SPACE_1)
 			text("t", fmt.tprintf("%d/%d", done, len(a.todos)), ui.theme_color("soft text"), note)
-			ui.spacer(ui.px(em * 0.45))
+			ui.space(ui.SPACE_2)
 			if doing != "" { text("d", doing, ui.theme_color("weak text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill()) }
 		}
-		if !open_todos || doing == "" { ui.spacer(ui.fill()) } else { ui.spacer(ui.px(em * 0.8)) }
+		if !open_todos || doing == "" { ui.spacer(ui.fill()) } else { ui.space(ui.SPACE_3) }
 		// (a command that holds the turn: it can go on in the background while the session does)
 		if foreground_command(app) {
 			if hint_action("###bg", i18n.tr("push to background"), em, app.mono, lucide.SEND_TO_BACK) { background_session(app, pane.chat.id) }
-			ui.spacer(ui.px(em * 1.2))
+			ui.space(ui.SPACE_4)
 		}
 		text("k", a.open ? i18n.tr("Esc  close") : i18n.tr("↓  details"), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
-	ui.spacer(ui.px(em * 0.25))
+	ui.space(ui.SPACE_1)
 }
 
 ////////////////////////////////
@@ -843,24 +843,24 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 	if sig.hovering && a.mouse_moved { a.sel = i; a.by_keys = false }
 	if sig.clicked { a.sel = i; row_act(app, r) }
 	if ui.parent(b) {
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.5)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###l1") {
 			ui.space(ui.CARD_PAD)
 			state_mark("###st", r.state, size = em * 0.8)
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.ICON_GAP)
 			text("n", r.name, running ? ui.theme_color("weak text") : ui.theme_color("faint text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			text("t", r.title, running ? ui.theme_color("text") : ui.theme_color("weak text"), ui.Style_Mod{font = r.kind == .Agent ? app.font : app.mono, font_size = math.round(em * (r.kind == .Agent ? FS_LABEL : FS_SMALL))}, ui.fill())
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			if r.what != "" {
 				text("w", ellipsize(r.what, CHIP_ACTIVITY_CHARS), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-				ui.spacer(ui.px(em * 0.5))
+				ui.space(ui.SPACE_2)
 			}
 			end := r.ended > 0 ? r.ended : (running ? now : 0)
 			if dur := state_when(r.state, r.started, end); dur != "" {
 				text("d", dur, sub_state_ink(r.state), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-				ui.spacer(ui.px(em * 0.4))
+				ui.space(ui.SPACE_2)
 			}
 			if selected || sig.hovering {
 				if running && (r.kind == .Shell || r.kind == .Tool) {
@@ -868,12 +868,12 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 					if r.kind == .Shell { j := job_find(a, r.id); session = j != nil && !j.background ? j.session : "" }
 					if session != "" {
 						if ui.button("bg", i18n.tr("Background"), o = {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true}).clicked { background_session(app, session) }
-						ui.spacer(ui.px(em * 0.2))
+						ui.space(ui.SPACE_1)
 					}
 				}
 				if running {
 					if ui.button("stop", i18n.tr("Stop"), o = {intent = .Danger, face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true}).clicked { row_stop(app, r) }
-					ui.spacer(ui.px(em * 0.2))
+					ui.space(ui.SPACE_1)
 				}
 				if r.kind == .Agent && ui.button("open", i18n.tr("Open"), o = {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true}).clicked { row_act(app, r) }
 				if r.kind != .Agent && ui.button("inspect", i18n.tr("Inspect"), o = {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM * 0.82), quiet = true}).clicked { row_inspect(app, r) }
@@ -881,7 +881,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 					clip_set(plain_output(r.preview))
 					ui.announce(&app.announcer, .Good, i18n.tr("Output copied"))
 				}
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 			}
 		}
 		// The pointer only lights a row: under a pointer that passes, rows that open would move what it is going to. The keys
@@ -899,11 +899,11 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 				if ui.row(.Center, id = fmt.tprintf("###o%d", k)) {
 					ui.spacer(ui.px(math.round(em * (ui.CARD_PAD + 1.2))))   // (under the row's title: the inset, its mark and the gap)
 					text("x", ellipsize(l, ACT_LINE_CHARS), ui.theme_color("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
-					ui.spacer(ui.px(em * 0.5))
+					ui.space(ui.SPACE_2)
 				}
 			}
 		}
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 	}
 }
 
@@ -922,15 +922,15 @@ todo_row :: proc(app: ^App, t: Todo, k: int, em: f32) {
 			case: glyph(lucide.CHEVRON_RIGHT, ui.theme_color("faint text"), math.round(em * ICON_TINY), em * 1.1)
 			}
 		}
-		ui.spacer(ui.px(em * 0.25))
+		ui.space(ui.SPACE_1)
 		col := t.status == "in_progress" ? ui.theme_color("text") : t.status == "pending" ? ui.theme_color("soft text") : ui.theme_color("faint text")
 		runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
 		ui.rich_links(t.content, {color = col}, &runs)
 		ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}})
 		link_clicked(ui.rich_paragraph("###c", runs[:]))
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 	}
-	ui.spacer(ui.px(em * 0.15))
+	ui.space(ui.SPACE_1)
 }
 
 @(private = "file")
@@ -953,7 +953,7 @@ activity_todos :: proc(app: ^App, em: f32) {
 		}
 		ui.space(ui.CARD_PAD)
 	}
-	ui.spacer(ui.px(em * 0.2))
+	ui.space(ui.SPACE_1)
 	shown := 0
 	if a.todo_filter != .Done { for t, k in a.todos { if todo_active(t) { todo_row(app, t, k, em); shown += 1 } } }   // (what remains first)
 	if a.todo_filter != .Active { for t, k in a.todos { if !todo_active(t) { todo_row(app, t, k, em); shown += 1 } } }
@@ -984,7 +984,7 @@ activity_list :: proc(app: ^App, sb: ^ui.Box, em: f32) {
 		if hint_action("###act_close", i18n.tr("Esc close"), em, app.mono) { activity_close(app) }
 		ui.space(ui.CARD_PAD)
 	}
-	ui.spacer(ui.px(em * 0.2))
+	ui.space(ui.SPACE_1)
 	if len(rows) == 0 {
 		ui.next({width = ui.fill(), height = ui.px(em * 2), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###act_none") {
@@ -1027,7 +1027,7 @@ activity_tray :: proc(app: ^App, em: f32) {
 	mouse := ui.mouse_pos()
 	a.mouse_moved = abs(mouse.x - a.mouse.x) + abs(mouse.y - a.mouse.y) > 0.5
 	a.mouse = mouse
-	ui.spacer(ui.px(em * 0.45 * min(h / max(full, 1), 1)))
+	ui.spacer(ui.px(em * ui.SPACE_2 * min(h / max(full, 1), 1)))
 	ui.next({width = ui.fill(), height = ui.px(math.round(h)), axis = .Y})
 	if ui.column(flags = {.Clip}, id = "###act_clip") {
 		ui.next({width = ui.fill(), height = ui.px(full), axis = .Y})
@@ -1041,7 +1041,7 @@ activity_tray :: proc(app: ^App, em: f32) {
 				if ui.column(id = "###act_body") {
 					body := ui.parent_box()
 					if body.size.y > 0 { a.height = body.size.y + 2 * px1() }
-					ui.spacer(ui.px(em * 0.4))
+					ui.space(ui.SPACE_2)
 					has_todos := len(a.todos) > 0
 					if has_todos && pane.conversation.column_w > em * ACT_COLUMNS_MIN_EM {
 						// side by side: what runs, and the list beside it, whole
@@ -1056,7 +1056,7 @@ activity_tray :: proc(app: ^App, em: f32) {
 						if has_todos { activity_todos(app, em) }
 						activity_list(app, sb, em)
 					}
-					ui.spacer(ui.px(em * 0.4))
+					ui.space(ui.SPACE_2)
 				}
 			}
 		}

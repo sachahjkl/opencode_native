@@ -34,48 +34,47 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 sidebar :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = ui.theme_color("bar background"), radius = 0})   // (square: its rounded corner notched the bar's edge; as wide as its view)
 	if ui.column(flags = {.Draw_Background}, id = "###sidebar") {
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		server_tabs(app, em)
-		ui.spacer(ui.px(em * 0.6))
-		pad_row :: proc(em: f32) { ui.spacer(ui.px(em * 0.75)) }
+		ui.space(ui.SPACE_2)
 		// new session + refresh
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###side_top") {
-			pad_row(em)
+			ui.space(ui.SPACE_3)
 			// (each names the palette's command it does: Shift+Enter on it in the palette shows the button)
 			nsig := ui.button("new", i18n.tr("New session"), lucide.PLUS, {intent = .Primary, width = ui.fill()})
 			ui.act_name(nsig.box, "command:session.new")
 			if nsig.clicked { new_session(app) }
-			ui.spacer(ui.px(em * 0.45))
+			ui.space(ui.SPACE_2)
 			rsig := ui.button("refresh", icon = lucide.REFRESH_CW, o = {face = .Raised})
 			ui.act_name(rsig.box, "command:app.refresh")
 			if rsig.clicked { refresh_sessions(app) }
-			pad_row(em)
+			ui.space(ui.SPACE_3)
 		}
-		ui.spacer(ui.px(em * 0.7))
+		ui.space(ui.SPACE_3)
 		// search well
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###side_search") {
-			pad_row(em)
+			ui.space(ui.SPACE_3)
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * FIELD_H_EM)), axis = .X, cross = .Center})
 			if ui.well("###search_well", .X) {
-				ui.spacer(ui.px(em * 0.5))
+				ui.space(ui.SPACE_2)
 				glyph(lucide.SEARCH, ui.theme_color("faint text"), math.round(em * ICON_SMALL))
 				if ui.tags("bare") {
 					ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
 					ui.line_edit("###search", &app.sidebar.search, {placeholder = i18n.tr("Search sessions"), clearable = true})
 				}
 			}
-			pad_row(em)
+			ui.space(ui.SPACE_3)
 		}
-		ui.spacer(ui.px(em * 0.45))
+		ui.space(ui.SPACE_2)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###side_modes") {
-			pad_row(em)
+			ui.space(ui.SPACE_3)
 			sidebar_mode_switch(app, em)
-			pad_row(em)
+			ui.space(ui.SPACE_3)
 		}
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		ui.next({width = ui.fill(), height = ui.px(GROOVE_BOX_PX)})
 		groove("###sg")
 
@@ -90,7 +89,7 @@ sidebar :: proc(app: ^App, em: f32) {
 sessions_list :: proc(app: ^App, em: f32) {
 	pane := main_pane(app)
 	if !app.sessions_loaded {
-		ui.spacer(ui.px(em))
+		ui.space(ui.SPACE_4)
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
 		if ui.tags("weak") { ui.label(online(app) ? i18n.tr("Loading…") : i18n.tr("Connecting…")) }
 		return
@@ -99,7 +98,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 	kids := app.sidebar.kept.kids   // (the sub-agents of each session, listed under it unless the list is flat)
 	mode := app.prefs.sidebar_mode
 	now := now_epoch_ms()
-	ui.spacer(ui.px(em * 0.4))
+	ui.space(ui.SPACE_2)
 	// Only the rows near the view are built (the toolkit's lazy column, as the conversation's): a header or a session
 	// each, the others stand as their height. Hundreds of sessions were built and drawn at every frame.
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
@@ -109,7 +108,7 @@ sessions_list :: proc(app: ^App, em: f32) {
 		for &sec in sections {
 			folded := app.sidebar.folded[sec.key] or_else sec.shut
 			if ui.lazy_item(lz, sec.lazy_id) {
-				if gap { ui.spacer(ui.px(em * 0.5)) }
+				if gap { ui.space(ui.SPACE_2) }
 				if sec.title != "" { inbox_header(app, &sec, folded, em) } else { group_header(app, &sec, folded, em) }
 			}
 			gap = !folded
@@ -122,13 +121,13 @@ sessions_list :: proc(app: ^App, em: f32) {
 			}
 		}
 	}
-	ui.spacer(ui.px(em))
+	ui.space(ui.SPACE_4)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###side_settings") {
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		if glyph_label_button(app, "###open_settings", i18n.tr("Settings"), em).clicked { settings_open(app) }
 	}
-	ui.spacer(ui.px(em))
+	ui.space(ui.SPACE_4)
 	session_menu(app, em)
 	project_menu(app, em)
 }
@@ -149,15 +148,15 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 		ui.menu_open("project_menu", ui.mouse_pos(), hdr.key)
 	}
 	if ui.parent(hdr) {
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		glyph(folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, ui.theme_color("faint text"), math.round(em * ICON_TINY), em * 0.9)
 		// the project's logo, else a folder
 		logo := len(gr.items) > 0 ? project_logo(app, app.sessions[gr.items[0]].project) : nil
 		if !logo_of(app, "###glogo", logo, math.round(em * 1.25)) { glyph(lucide.FOLDER, ui.hue(.Accent), math.round(em * ICON_REGULAR)) }
-		ui.spacer(ui.px(em * 0.35))
+		ui.space(ui.SPACE_1)
 		name := gr.dir != "" ? base_name(gr.dir) : i18n.tr("(no folder)")
 		text("n", strings.to_upper(name, context.temp_allocator), hs.hovering ? ui.theme_color("text") : ui.theme_color("weak text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		text("c", fmt.tprintf("%d", len(gr.items)), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.spacer(ui.fill())
 		// "+": always there (built only while the header was hovered, it vanished as soon as the pointer moved onto
@@ -170,7 +169,7 @@ group_header :: proc(app: ^App, gr: ^Side_Section, folded: bool, em: f32) {
 			delete(pane.chat.new_dir, pane.chat.alloc)
 			pane.chat.new_dir = strings.clone(gr.dir, pane.chat.alloc)
 		}
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 }
 
@@ -203,7 +202,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 	sub_list := false
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * (project ? SIDE_INBOX_ROW_EM : depth > 0 ? 2.0 : 2.3))), axis = .X, cross = .Center})
 	if ui.row(.Center, id = fmt.tprintf("###r_%s", s.id)) {
-		ui.spacer(ui.px(em * (0.5 + 1.1 * f32(depth))))
+		ui.spacer(ui.px(em * (ui.SPACE_2 + 1.1 * f32(depth))))   // (1.1: a level of the tree, under its parent's badge)
 		ui.next({width = ui.fill(), height = ui.pct(1), axis = .X, cross = .Center})
 		b := ui.build_box({.Clickable, .Focusable}, "###item")
 		d := ui.frame_new(Item_Draw)
@@ -225,10 +224,10 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			app.sidebar.menu_session = strings.clone(s.id)
 		}
 		if ui.parent(b) {
-			ui.spacer(ui.px(em * (s.parent != "" && depth == 0 ? 1.6 : 0.95)))
+			ui.spacer(ui.px(em * (s.parent != "" && depth == 0 ? 1.6 : ui.SPACE_4)))   // (1.6: a sub-agent's row lines up under its parent's title)
 			if depth == 0 {
 				session_badge(app, s, math.round(em * (project ? SESSION_BADGE_INBOX_EM : SESSION_BADGE_EM)), em)
-				ui.spacer(ui.px(em * 0.55))
+				ui.space(ui.ICON_GAP)
 			}
 			busy := app.busy[s.id] or_else false
 			if depth > 0 {
@@ -236,22 +235,22 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				st, _ := state_of_word(s.outcome)
 				if busy { st = .Running }
 				state_mark("###st", st, size = em * 0.75)
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 				text("ag", s.agent, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
-				ui.spacer(ui.px(em * 0.35))
+				ui.space(ui.SPACE_1)
 			} else if session_waits(app, s.id) {   // (a run that cannot go on without the person)
 				session_lamp("###waits", LAMP_WAITS, em)
-				ui.spacer(ui.px(em * 0.35))
+				ui.space(ui.SPACE_1)
 			} else if busy {
 				session_lamp("###busy", LAMP_WORKING, em)
-				ui.spacer(ui.px(em * 0.35))
+				ui.space(ui.SPACE_1)
 			} else if session_in_background(app, s.id) {   // (at rest, its commands still running: steady)
 				session_lamp("###bg", LAMP_BACKGROUND, em)
-				ui.spacer(ui.px(em * 0.35))
+				ui.space(ui.SPACE_1)
 			} else if session_unseen(app, s) {   // (over and not seen: how it ended, the lamp without its light)
 				st, _ := state_of_word(s.outcome)
 				session_lamp_off("###unseen", sub_state_color(st), em)
-				ui.spacer(ui.px(em * 0.35))
+				ui.space(ui.SPACE_1)
 			}
 			title := s.title != "" ? s.title : i18n.tr("Untitled")
 			// a sub-agent: lit while it runs, dimmed once it is done
@@ -277,17 +276,17 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			} else {
 				text_found("t", title, ui.line_edit_string(&app.sidebar.search), tcol, title_style, ui.fill())
 			}
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 			if len(kids) > 0 {
 				running := 0
 				for k in kids { if app.busy[app.sessions[k].id] or_else false { running += 1 } }
 				sub_list = sub_toggle(app, s.id, len(kids), running, em)
-				ui.spacer(ui.px(em * 0.35))
+				ui.space(ui.SPACE_1)
 			}
 			text("a", age_text(now, s.updated), quiet, ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-			ui.spacer(ui.px(em * 0.7))
+			ui.space(ui.SPACE_3)
 		}
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 	}
 	if sub_list {
 		LIMIT :: 30

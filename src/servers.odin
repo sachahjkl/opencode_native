@@ -475,19 +475,19 @@ server_tabs :: proc(app: ^App, em: f32) {
 	h := math.round(em * SERVER_TABS_H_EM)
 	ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###srv_tabs") {
-		ui.spacer(ui.px(em * 0.75))
+		ui.space(ui.SPACE_3)
 		// (as wide as its tabs; it gives way first, and scrolls, when the row has less room: "+" stays in view after it)
 		if ui.strip("###srv_strip", {fade = SERVER_TABS_FADE_EM}) {
 			ui.a11y_default(ui.parent_box(), {role = .Tab_List, orientation = .X, name = i18n.tr("Servers")})
 			for s, i in app.servers {
-				if i > 0 { ui.spacer(ui.px(em * 0.25)) }
+				if i > 0 { ui.space(ui.SPACE_1) }
 				// (the connected one in view when it changes, and in the strip's first frame)
 				if b := server_tab(app, s, i, h, em); i == app.server { ui.strip_reveal(b) }
 			}
 		}
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		if ui.button("srv_add", icon = lucide.PLUS, o = {tip = i18n.tr("Add a server…"), height = h - 2 * math.round(em * 0.15)}).clicked { server_edit_open(app, -1) }
-		ui.spacer(ui.px(em * 0.75))
+		ui.space(ui.SPACE_3)
 	}
 	server_menu(app, SERVER_MENU_KEY, em)
 }
@@ -519,16 +519,16 @@ server_tab :: proc(app: ^App, s: Server, i: int, h, em: f32) -> ^ui.Box {
 	sig := ui.signal(b)
 	ui.a11y_default(b, {role = .Tab, name = name, selected = current, position = i + 1, set_size = len(app.servers), description = s.url})
 	if ui.parent(b) {
-		ui.spacer(ui.px(em * 0.55))
+		ui.space(ui.SPACE_2)
 		if current { link_lamp(app, "###srv_lamp", em * 0.8) } else { pip("###srv_lamp", ui.theme_color("faint text"), em * 0.8) }
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.ICON_GAP)
 		col := current ? ui.theme_color("bright text") : sig.hovering ? ui.theme_color("text") : ui.theme_color("weak text")
 		text("n", ellipsize(name, SERVER_TAB_CHARS), col, ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
 		if current {
-			ui.spacer(ui.px(em * 0.3))
+			ui.space(ui.SPACE_1)
 			glyph(lucide.CHEVRON_DOWN, ui.theme_color("faint text"), math.round(em * ICON_TINY), em * 0.9)
 		}
-		ui.spacer(ui.px(em * 0.55))
+		ui.space(ui.SPACE_2)
 	}
 	switch {
 	case sig.right_clicked:      ui.menu_open(SERVER_MENU_KEY, ui.mouse_pos(), b.key)
@@ -592,7 +592,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 	em := ui.font_size()
 	ui.view_title(v, e.index >= 0 ? i18n.tr("Edit the server") : i18n.tr("Add a server"))
 	{
-		ui.spacer(ui.px(em * 0.9))
+		ui.space(ui.SPACE_4)
 		field :: proc(id, label, hint: string, f: ^ui.Line_Edit, em: f32, secret := false, reveal: ^bool = nil) -> ui.Edit_Result {
 			res: ui.Edit_Result
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
@@ -608,7 +608,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 				}
 				ui.space(ui.PAGE_MARGIN)
 			}
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			return res
 		}
 		r1 := field("###fn", i18n.tr("Name"), i18n.tr("Work laptop"), &e.name, em)
@@ -631,7 +631,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 				}
 			}
 		}
-		ui.spacer(ui.px(em * 1.1))
+		ui.space(ui.SPACE_4)
 		name := strings.trim_space(ui.line_edit_string(&e.name))
 		url := strings.trim_space(ui.line_edit_string(&e.url))
 		taken := false
@@ -648,7 +648,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 				}
 			}
 			ui.spacer(ui.fill())
-			if taken { text("tk", i18n.tr("That name is taken"), ui.hue(.Red), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.spacer(ui.px(em * 0.6)) }
+			if taken { text("tk", i18n.tr("That name is taken"), ui.hue(.Red), ui.Style_Mod{font_size = math.round(em * FS_SMALL), height = ui.px(em * 1.5)}); ui.space(ui.SPACE_2) }
 			if ui.button("cancel", i18n.tr("Cancel")).clicked { ui.view_end(v, ui.VIEW_CANCELLED) }
 			ui.space(ui.CONTROL_GAP)
 			if ui.button("ok", ui.text_shown(e.index >= 0 ? i18n.tr("Save and connect") : i18n.tr("Add and connect")), lucide.CHECK, {intent = .Success, disabled = !valid}).clicked { save = true }
@@ -673,7 +673,7 @@ server_view :: proc(v: ^ui.View, app: ^App) {
 			ui.view_end(v, ui.VIEW_CANCELLED)
 			server_connect(app, i)
 		}
-		ui.spacer(ui.px(em * 1.2))
+		ui.space(ui.SPACE_4)
 	}
 }
 

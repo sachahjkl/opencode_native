@@ -86,15 +86,15 @@ pair_reachable :: proc(urls: []string) -> string {
 // (its title is the view's header)
 pair_view :: proc(v: ^ui.View, app: ^App) {
 	em := ui.font_size()
-	ui.spacer(ui.px(em))
+	ui.space(ui.SPACE_4)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###pair") {
-		ui.spacer(ui.px(em * 1.4))
+		ui.space(ui.SPACE_6)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column() { pair_body(app, v, em) }
-		ui.spacer(ui.px(em * 1.4))
+		ui.space(ui.SPACE_6)
 	}
-	ui.spacer(ui.px(em))
+	ui.space(ui.SPACE_4)
 }
 
 // Closed, whichever way: the code goes (it works once, and only for the server it came from).
@@ -117,7 +117,7 @@ pair_body :: proc(app: ^App, v: ^ui.View, em: f32) {
 	note := ui.Style_Mod{font_size = math.round(em * FS_NOTE)}
 	if p.failed != "" {
 		pair_note("###f", p.failed, ui.hue(.Red), soft)
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		if ui.button("pair_retry", i18n.tr("Try again"), lucide.REFRESH_CW).clicked { pair_new_code(app) }
 		return
 	}
@@ -137,17 +137,17 @@ pair_body :: proc(app: ^App, v: ^ui.View, em: f32) {
 			ui.qr_code("###pair_qr", pair_link(reach, p.code), math.round(em * PAIR_QR_EM))
 			ui.spacer(ui.fill())
 		}
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		pair_note("###s", i18n.tr("Scan it with the device's camera, or open one of these links on it. A link works once."), ui.theme_color("soft text"), note)
 	} else if left > 0 {
 		pair_note("###s", i18n.tr("Open one of these links on the device. A link works once."), ui.theme_color("soft text"), note)
 	}
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.SPACE_2)
 	if left > 0 {
 		for u, i in urls {
 			pair_link_row(app, fmt.tprintf("###pl%d", i), url_is_here(u) ? i18n.tr("This computer") : i18n.tr("Link"), pair_link(u, p.code), em)
 		}
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		mins, secs := int(left) / 60, int(left) % 60
 		pair_note("###x", fmt.tprintf(i18n.tr("The code expires in %d:%02d."), mins, secs), ui.theme_color("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.wake_within(built_state(app), PAIR_TICK_MS)
@@ -155,15 +155,15 @@ pair_body :: proc(app: ^App, v: ^ui.View, em: f32) {
 		pair_note("###x", i18n.tr("This code expired."), ui.theme_color("weak text"), soft)
 	}
 	if reach == "" {
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		pair_note("###h", fmt.tprintf(i18n.tr("The server can be reached from this computer only. To pair another device, run `%s`."), PAIR_HOSTNAME_HINT), ui.theme_color("weak text"), note)
 	}
-	ui.spacer(ui.px(em * 0.8))
+	ui.space(ui.SPACE_3)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###pair_buttons") {
 		ui.spacer(ui.fill())
 		if ui.button("pair_new", i18n.tr("New code"), lucide.REFRESH_CW).clicked { pair_new_code(app) }
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.CONTROL_GAP)
 		if ui.button("pair_close", i18n.tr("Close"), lucide.X).clicked { ui.view_end(v, ui.VIEW_CANCELLED) }
 	}
 }
@@ -188,7 +188,7 @@ pair_link_row :: proc(app: ^App, id, what, link: string, em: f32) {
 		ui.rich_links(link, {font = app.mono}, &runs)
 		ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Selectable}})
 		link_clicked(ui.rich_paragraph("###l", runs[:], max_lines = 1))
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		if ui.button("c", i18n.tr("Copy"), o = {height = math.round(em * BUTTON_SMALL_H_EM)}).clicked {
 			clip_set(link)
 			ui.announce(&app.announcer, .Good, i18n.tr("Link copied"))

@@ -472,7 +472,7 @@ subagent_card :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string, em: f3
 		card_head(app, pane, &v, part_id, open, running, em)
 		if open { card_body(app, pane, &v, p, pid, running, em) }
 	}
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.SPACE_2)
 }
 
 // The session of a sub-agent call whose own the server has not said yet: it says it when the call ends, so a running card could not
@@ -526,16 +526,16 @@ card_lines :: proc(app: ^App, v: ^Sub_View, name, desc: string, open, running: b
 		state_mark("###st", v.state, size = em * CARD_MARK_EM)
 		ui.space(ui.ICON_GAP)
 		text("ag", name, ui.theme_color("weak text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		text("ds", desc, ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		if what := state_when(v.state, v.started, end); what != "" {
 			text("du", what, sub_state_ink(v.state), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 		}
 		if v.id != "" {
 			if ui.button("open", i18n.tr("Open"), o = {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true}).clicked { drill_down(app, v.id) }
-			ui.spacer(ui.px(em * 0.2))
+			ui.space(ui.SPACE_1)
 		}
 		glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, ui.theme_color("faint text"), math.round(em * ICON_TINY), em * 1.1)
 	}
@@ -573,13 +573,13 @@ card_body :: proc(app: ^App, pane: ^Chat_Pane, v: ^Sub_View, p: ^Part, pid: stri
 		if ui.column() {
 			if v.session != nil {
 				sub_facts(app, v, em)
-				ui.spacer(ui.px(em * 0.5))
+				ui.space(ui.SPACE_2)
 			}
 			if v.prompt != "" {
 				section_label("pr", i18n.tr("PROMPT"), em)
 				body, extra := mono_cut_kept(&p.prompt_well.cut, v.prompt, PROMPT_LINES_MAX)   // (the card is its frame: no box of its own inside it)
 				mono_text(body, extra, em, ui.theme_color("soft text"), kept = &p.prompt_well.runs, kept_in = pane.chat.alloc)
-				ui.spacer(ui.px(em * 0.6))
+				ui.space(ui.SPACE_2)
 			}
 			if v.result != "" {
 				section_label("re", v.state == .Failed ? i18n.tr("ERROR") : i18n.tr("RESULT"), em)
@@ -588,7 +588,7 @@ card_body :: proc(app: ^App, pane: ^Chat_Pane, v: ^Sub_View, p: ^Part, pid: stri
 					id := fmt.tprintf("%s_res", pid)
 					markdown.view(md_doc(&pane.chat, id), id, v.result, md_config(app, ui.theme_color("soft text"), pane), math.round(em * FS_LABEL))
 				}
-				ui.spacer(ui.px(em * 0.4))
+				ui.space(ui.SPACE_2)
 			} else if running {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.6), axis = .X, cross = .Center})
 				if ui.row(.Center) { text("w", i18n.tr("No result yet: it is still working."), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill()) }
@@ -675,36 +675,36 @@ subagent_result :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 			state_mark("###st", st, size = em * CARD_MARK_EM)
 			ui.space(ui.ICON_GAP)
 			text("ag", v.agent != "" ? v.agent : i18n.tr("sub-agent"), ui.theme_color("weak text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 			word := m.sub_running ? i18n.tr("reported, its work runs on") : st == .Done ? i18n.tr("returned") : sub_state_label(st)
 			text("w", word, sub_state_ink(st), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			desc := m.sub_desc != "" ? m.sub_desc : v.desc
 			text("d", desc, ui.theme_color("weak text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			text("at", clock_text(m.created, app.prefs.clock24), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			if m.sub_child != "" {
 				if ui.button("open", i18n.tr("Open"), o = {face = .Ghost, height = math.round(em * BUTTON_SMALL_H_EM), quiet = true}).clicked { drill_down(app, m.sub_child) }
-				ui.spacer(ui.px(em * 0.2))
+				ui.space(ui.SPACE_1)
 			}
 			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, ui.theme_color("faint text"), math.round(em * ICON_TINY), em * 1.1)
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.ICON_GAP)
 		}
 		if open && m.text != "" {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if rail_row(fmt.tprintf("###srb_%s", m.id), ui.with_alpha(ui.theme_color("weak text"), 0.4)) {
-				ui.spacer(ui.px(em * 1.0))
+				ui.space(ui.SPACE_4)
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column() {
-					ui.spacer(ui.px(em * 0.3))
+					ui.space(ui.SPACE_1)
 					id := fmt.tprintf("%s_sr", m.id)
 					markdown.view(md_doc(&pane.chat, id), id, m.text, md_config(app, ui.theme_color("soft text"), pane), math.round(em * FS_LABEL))
-					ui.spacer(ui.px(em * 0.3))
+					ui.space(ui.SPACE_1)
 				}
 			}
 		}
 	}
-	ui.spacer(ui.px(em * 0.5))
+	ui.space(ui.SPACE_2)
 }
 
 ////////////////////////////////
@@ -715,7 +715,7 @@ subagent_banner :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	if !c.have_self || c.self.parent == "" { return }
 	s := &c.self
 	st := sub_view(app, pane, s.id).state
-	ui.spacer(ui.px(em * 0.4))
+	ui.space(ui.SPACE_2)
 	if ui.card("", id = "###sub_banner", o = calm_card()) {
 		if bx := ui.parent_box(); app.seek_subagent && !chat_anchored(pane) && bx.rect.max.y > 0 && c.loaded {
 			app.seek_subagent = false   // --seek-subagent (tests): bring the banner into view
@@ -724,18 +724,18 @@ subagent_banner :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###r1") {
 			glyph(lucide.BOT, ui.theme_color("faint text"), math.round(em * ICON_LARGE), em * 1.8)
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.ICON_GAP)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 			if ui.column() {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 				if ui.row(.Center) {
 					text("k", i18n.tr("SUB-AGENT"), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
-					ui.spacer(ui.px(em * 0.5))
+					ui.space(ui.SPACE_2)
 					text("a", s.agent, ui.theme_color("text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 					if st != .Unknown {
-						ui.spacer(ui.px(em * 0.5))
+						ui.space(ui.SPACE_2)
 						state_mark("###l", st, size = em * 0.75)
-						ui.spacer(ui.px(em * 0.25))
+						ui.space(ui.SPACE_1)
 						text("s", sub_state_label(st), sub_state_ink(st), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 					}
 					ui.spacer(ui.fill())
@@ -746,11 +746,11 @@ subagent_banner :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 				facts := s.cost > 0 ? fmt.tprintf(i18n.tr("started %s · %s · %s in · %s out · %s"), clock_text(s.created, app.prefs.clock24), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out), dollars(s.cost)) : fmt.tprintf(i18n.tr("started %s · %s · %s in · %s out"), clock_text(s.created, app.prefs.clock24), duration_text(s.created, end), kfmt(s.tokens_in + s.cache_read), kfmt(s.tokens_out))
 				text("f", facts, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.3)}, ui.fill())
 			}
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			if ui.button("back", i18n.tr("Return to main session"), lucide.ARROW_LEFT).clicked { go_back(app) }
 		}
 	}
-	ui.spacer(ui.px(em * 1.0))
+	ui.space(ui.SPACE_4)
 }
 
 ////////////////////////////////
@@ -807,9 +807,9 @@ subagents_button :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	if len(active) > 0 {
 		animate(app)
 		lamp("###sub_lamp", ui.hue(.Yellow), 1, pulse = true, size = em * 1.0)
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		sig = ui.button("subs", ui.text_shown(fmt.tprintf(i18n.tr("%d active"), len(active))), lucide.BOT, {height = math.round(em * BUTTON_COMPACT_H_EM)})
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		text("of", fmt.tprintf("/ %d", len(c.children)), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 	} else {
 		sig = glyph_label_button(app, "###subs", fmt.tprintf(i18n.tr(len(c.children), "%d past sub-agents", "%d past sub-agents"), len(c.children)), em)
@@ -854,11 +854,11 @@ glyph_label_button :: proc(app: ^App, id, label: string, em: f32) -> ui.Signal {
 	}
 	sig := ui.signal(b)
 	if ui.parent(b) {
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		glyph(lucide.BOT, ui.theme_color("faint text"), math.round(em * ICON_REGULAR))
-		ui.spacer(ui.px(em * 0.2))
+		ui.space(ui.SPACE_1)
 		text("t", label, sig.hovering ? ui.theme_color("text") : ui.theme_color("weak text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 	}
 	return sig
 }
@@ -870,8 +870,8 @@ active_strip :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	if len(active) == 0 { return }
 	animate(app)
 	now := now_epoch_ms()
-	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * 0.5, em * 0.5}})
-	if ui.flow({em * 0.5, em * 0.5}, "###active_strip") {
+	ui.next({width = ui.fill(), height = ui.children_sum(), gap = {em * ui.SPACE_2, em * ui.SPACE_2}})
+	if ui.flow({em * ui.SPACE_2, em * ui.SPACE_2}, "###active_strip") {
 		for s in active {
 			v := sub_view(app, pane, s.id)
 			ui.next({width = ui.children_sum(), height = ui.px(math.round(em * BUTTON_COMPACT_H_EM)), axis = .X, cross = .Center})
@@ -882,21 +882,21 @@ active_strip :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			sig := ui.signal(b)
 			if sig.clicked { drill_down(app, s.id) }
 			if ui.parent(b) {
-				ui.spacer(ui.px(em * 0.55))
+				ui.space(ui.SPACE_2)
 				lamp("###l", ui.hue(.Yellow), 1, pulse = true, size = em * CARD_MARK_EM)
-				ui.spacer(ui.px(em * 0.35))
+				ui.space(ui.SPACE_1)
 				text("a", s.agent, ui.theme_color("weak text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
-				ui.spacer(ui.px(em * 0.45))
+				ui.space(ui.SPACE_2)
 				text("t", ellipsize(s.title, CHIP_TITLE_CHARS), ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_NOTE)})
-				ui.spacer(ui.px(em * 0.5))
+				ui.space(ui.SPACE_2)
 				what := duration_text(s.created, now)
 				if v.has_live && v.live.activity != "" { what = fmt.tprintf("%s · %s", ellipsize(v.live.activity, CHIP_ACTIVITY_CHARS), what) }
 				text("w", what, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-				ui.spacer(ui.px(em * 0.6))
+				ui.space(ui.SPACE_2)
 			}
 		}
 	}
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.SPACE_2)
 }
 
 ////////////////////////////////
@@ -920,12 +920,12 @@ sub_toggle :: proc(app: ^App, id: string, n: int, running: int, em: f32) -> bool
 	sig := ui.signal(b)
 	if sig.clicked { app.sidebar.sub_open[k] = !open }
 	if ui.parent(b) {
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		if running > 0 {
 			// the running ones, loud: a pulsing lamp and their count; the total quietly after
 			lamp("###l", ui.hue(.Yellow), 1, pulse = true, size = em * 0.7)
 			animate(the_app)
-			ui.spacer(ui.px(em * 0.2))
+			ui.space(ui.SPACE_1)
 			text("r", fmt.tprintf("%d", running), ui.hue(.Yellow), ui.Style_Mod{font = the_app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 			text("n", fmt.tprintf("/%d", n), ui.theme_color("faint text"), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)})
 		} else {
@@ -933,7 +933,7 @@ sub_toggle :: proc(app: ^App, id: string, n: int, running: int, em: f32) -> bool
 			text("n", fmt.tprintf("%d", n), ui.theme_color("faint text"), ui.Style_Mod{font = the_app.mono, font_size = math.round(em * FS_CAPTION)})
 		}
 		glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, ui.theme_color("faint text"), math.round(em * ICON_TINY), em * 0.9)
-		ui.spacer(ui.px(em * 0.2))
+		ui.space(ui.SPACE_1)
 	}
 	return open
 }

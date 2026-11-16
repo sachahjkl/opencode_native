@@ -480,7 +480,7 @@ changes_view :: proc(view: ^ui.View, app: ^App) {
 			}
 			ui.space(ui.PAGE_MARGIN)
 		}
-		ui.spacer(ui.px(em * 0.5))
+		ui.space(ui.SPACE_2)
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###ch_list") {
 			for &f, i in c.files {
@@ -494,44 +494,44 @@ changes_view :: proc(view: ^ui.View, app: ^App) {
 						if ui.signal(head).clicked { f.open = !f.open }
 						if ui.parent(head) {
 							glyph(f.open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, ui.theme_color("faint text"), math.round(em * ICON_SMALL))
-							ui.spacer(ui.px(em * 0.3))
+							ui.space(ui.SPACE_1)
 							text("n", f.file, ui.theme_color("text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 							if f.status != "" && f.status != "modified" {
 								text("s", f.status, ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)})
-								ui.spacer(ui.px(em * 0.6))
+								ui.space(ui.SPACE_2)
 							}
 							if f.patch != "" {
 								ui.next({width = ui.text_size(0), height = ui.px(em * 1.4), font_size = math.round(em * FS_CAPTION), fg = ui.theme_color("faint text"), cursor = .Hand, text_pad = 0})
 								full := ui.build_box({.Clickable, .Draw_Text}, fmt.tprintf("%s###ff", i18n.tr("Full view")))
 								if ui.signal(full).clicked { diff_full_open(app, f.file, f.patch); f.open = !f.open }   // (the head's click is undone: this one was not for it)
-								ui.spacer(ui.px(em * 0.8))
+								ui.space(ui.SPACE_3)
 							}
 							text("a", fmt.tprintf("+%d", f.additions), ui.hue(.Green), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-							ui.spacer(ui.px(em * 0.4))
+							ui.space(ui.SPACE_2)
 							text("d", fmt.tprintf("-%d", f.deletions), ui.hue(.Red), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 						}
 						if f.open {
 							diff_view(app, "###fd", f.diff, f.patch, em, CHANGES_DIFF_LINES, f.file)
 							if f.more { text("m", i18n.tr("The server gave only the beginning of this file."), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)}, ui.fill()) }
 						}
-						ui.spacer(ui.px(em * 0.4))
+						ui.space(ui.SPACE_2)
 					}
 					ui.space(ui.PAGE_MARGIN)
 				}
 			}
 		}
 		if !viewing {
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###ch_foot") {
 				ui.spacer(ui.fill())
 				if ui.button("ch_cancel", i18n.tr("Cancel")).clicked { ui.view_end(view, ui.VIEW_CANCELLED) }
-				ui.spacer(ui.px(em * 0.5))
+				ui.space(ui.CONTROL_GAP)
 				if ui.button("ch_go", i18n.tr("Go back"), lucide.UNDO_2, {intent = .Danger, disabled = staging}).clicked { revert_commit(app) }
 				ui.space(ui.PAGE_MARGIN)
 			}
 		}
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 	}
 }
 

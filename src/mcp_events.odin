@@ -110,5 +110,5 @@ mcp_wake_note :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 	note_line(app, m, em, lucide.PLUG, line)
 	if m.mcp_data == "" { return }
 	mono_well(fmt.tprintf("###mcpd_%s", m.id), m.mcp_data, em, TOOL_INPUT_LINES_MAX, kept = &m.mcp_well, kept_in = pane.chat.alloc)
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.SPACE_2)
 }

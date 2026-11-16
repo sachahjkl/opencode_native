@@ -143,12 +143,12 @@ mermaid_block :: proc(app: ^App, pane: ^Chat_Pane, id, code: string, closed: boo
 	if ui.well(id) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###hdr") {
-			ui.spacer(ui.px(em * 0.7))
+			ui.space(ui.SPACE_3)
 			glyph(lucide.GIT_FORK, ui.theme_color("faint text"), math.round(em * ICON_SMALL), em)
-			ui.spacer(ui.px(em * 0.3))
+			ui.space(ui.SPACE_1)
 			text("lang", "mermaid", ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 			if d != nil && d.why != "" {
-				ui.spacer(ui.px(em * 0.6))
+				ui.space(ui.SPACE_2)
 				text("why", fmt.tprintf(i18n.tr("not a diagram: %s"), first_line(d.why)), ui.hue(.Yellow), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
 			} else {
 				ui.spacer(ui.fill())
@@ -172,7 +172,7 @@ mermaid_block :: proc(app: ^App, pane: ^Chat_Pane, id, code: string, closed: boo
 			if ui.button("copy", icon = lucide.COPY).clicked {
 				if ok { ctx_open(app, .Diagram, msg = code) } else { clip_set(code); ui.announce(&app.announcer, .Good, i18n.tr("Copied")) }
 			}
-			ui.spacer(ui.px(em * 0.3))
+			ui.space(ui.SPACE_1)
 		}
 		ui.next({width = ui.fill(), height = ui.px(2)})
 		ui.build_box({}, "")
@@ -181,14 +181,14 @@ mermaid_block :: proc(app: ^App, pane: ^Chat_Pane, id, code: string, closed: boo
 		} else {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if ui.row(id = "###body") {
-				ui.spacer(ui.px(em * 0.9))
+				ui.space(ui.SPACE_4)
 				runs := [1]ui.Rich_Run{{text = code, style = {font = app.mono, color = ui.theme_color("soft text")}}}
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_NOTE), flags = {.Selectable}})
 				ui.rich_paragraph("###code", runs[:], version = version)
-				ui.spacer(ui.px(em * 0.9))
+				ui.space(ui.SPACE_4)
 			}
 		}
-		ui.spacer(ui.px(em * 0.7))
+		ui.space(ui.SPACE_3)
 	}
 }
 
@@ -199,7 +199,7 @@ Diagram_Draw :: struct { doc: ^svg.Document, scale: f32 }
 // it in the viewer; a right click, its menu.
 @(private = "file")
 diagram_box :: proc(app: ^App, pane: ^Chat_Pane, doc: ^svg.Document, code: string, em: f32) {
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.SPACE_2)
 	avail := max(pane.conversation.column_w - em * 1.8, em * 8)
 	scale := min(em / DIAGRAM_FONT_PX, avail / max(doc.view[2], 1))
 	sz := svg.size(doc, scale)
@@ -292,7 +292,7 @@ diagram_view :: proc(view: ^ui.View, app: ^App) {
 		if ui.view_header_tools(view) {
 			if waiting {
 				text("dv_wait", i18n.tr("Laying out…"), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)})
-				ui.spacer(ui.px(em * 0.6))
+				ui.space(ui.SPACE_2)
 			}
 			if v.own != .Text {
 				// (the menu's order is the enum's, from .Top_Down)

@@ -1152,7 +1152,7 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 	words := t.link == .Closed ? i18n.tr("This shell ended.") : t.given_up ? i18n.tr("The connection to this shell was lost.") : i18n.tr("The connection to this shell was lost: trying again…")
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * TERM_BANNER_H_EM)), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###term_banner") {
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		text("w", words, t.link == .Closed ? ui.theme_color("weak text") : ui.hue(.Yellow), ui.Style_Mod{font_size = math.round(em * FS_NOTE)}, ui.fill())
 		h := math.round(em * BUTTON_COMPACT_H_EM)
 		if t.link == .Closed {
@@ -1160,9 +1160,9 @@ term_banner :: proc(app: ^App, t: ^Term, em: f32) {
 		} else if t.given_up {
 			if ui.button("term_again", i18n.tr("Reconnect"), lucide.REFRESH_CW, {height = h}).clicked { term_reconnect(app, t) }
 		}
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 		if ui.button("term_close", i18n.tr("Close"), lucide.X, {face = .Ghost, height = h}).clicked { s.close_due = t }
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.CONTROL_GAP)
 	}
 }
 
@@ -1241,15 +1241,15 @@ term_menu :: proc(app: ^App, t: ^Term) {
 // What stands where the shells go while there is no shell: the reading of the list or of the new shell, and how it ended.
 terminal_waiting :: proc(app: ^App, em: f32) {
 	s := &app.cx.terms
-	ui.spacer(ui.px(em * 0.8))
+	ui.space(ui.SPACE_3)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###term_wait") {
-		ui.spacer(ui.px(em))
+		ui.space(ui.SPACE_4)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column() {
 			if read_shown(app, "###term_read", &s.read, em, terminals_ask) { read_shown(app, "###term_made", &s.made, em, term_create) }
 		}
-		ui.spacer(ui.px(em))
+		ui.space(ui.SPACE_4)
 	}
 }
 

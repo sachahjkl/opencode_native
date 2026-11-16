@@ -751,19 +751,19 @@ settings_page_foot :: proc(user: rawptr, category: string, em: f32) {
 	app := (^App)(user)
 	switch category {
 	case "advanced":
-		ui.spacer(ui.px(em * 0.6))
+		ui.space(ui.SPACE_2)
 		info_line(app, "###adv_about", fmt.tprintf(i18n.tr("%s %s, a client of the OpenCode server. %s"), APP_TITLE, APP_VERSION, i18n.tr(APP_NOT_THEIRS)), em)
-		ui.spacer(ui.px(em * 0.7))
+		ui.space(ui.SPACE_3)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###adv_b") {
 			if ui.button("adv_dir", i18n.tr("Open the settings folder"), lucide.FOLDER).clicked { ui.open(filepath.dir(prefs_path())) }
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.CONTROL_GAP)
 			if ui.button("adv_lic", ui.text_shown(app.settings.show_licence ? i18n.tr("Hide the terminal's licence") : i18n.tr("The terminal's licence")), o = {face = .Ghost}).clicked { app.settings.show_licence = !app.settings.show_licence }
 		}
 		if app.settings.show_licence {
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			info_line(app, "###adv_lic_say", i18n.tr("The terminal's emulation is Ghostty's, through libghostty-vt."), em)
-			ui.spacer(ui.px(em * 0.3))
+			ui.space(ui.SPACE_1)
 			code_block("###adv_lic_text", "text", GHOSTTY_LICENSE, app.mono, version = 1)
 		}
 	}
@@ -795,7 +795,7 @@ fact :: proc(id, k, v: string, em: f32, col := Color{}) {
 }
 
 section :: proc(app: ^App, s: string, em: f32) {
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.SPACE_2)
 	section_label(fmt.tprintf("sec_%s", s), s, em)
 }
 
@@ -828,17 +828,17 @@ page_server :: proc(app: ^App, em: f32) {
 	}
 	section(app, i18n.tr("SHELL"), em)
 	info_line(app, "###shh", i18n.tr("The shell of the terminal and of the agents' tools (written to the configuration's \"shell\"); also in the server's menu."), em)
-	ui.spacer(ui.px(em * 0.4))
+	ui.space(ui.SPACE_2)
 	if read_shown(app, "###sh_read", &f.reads[.Shells], em, server_facts_load) {
 		row :: proc(app: ^App, id: string, label, path: string, on: bool, em: f32) -> bool {
 			clicked := false
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * SETTINGS_ROW_H_EM)), axis = .X, cross = .Center})
 			if ui.row(.Center, id = fmt.tprintf("###%s", id)) {
 				clicked = ui.button(fmt.tprintf("%sb", id), ui.text_shown(label), lucide.SQUARE_TERMINAL, {face = on ? .Toggled : .Raised, height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked
-				ui.spacer(ui.px(em * 0.7))
+				ui.space(ui.SPACE_3)
 				text("p", path, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 			}
-			ui.spacer(ui.px(em * 0.25))
+			ui.space(ui.SPACE_1)
 			return clicked
 		}
 		if row(app, "sh_auto", i18n.tr("Auto (Default)"), i18n.tr("the server picks one"), f.shell == "", em) && f.shell != "" { shell_set(app, {}) }
@@ -860,11 +860,11 @@ page_server :: proc(app: ^App, em: f32) {
 			// (only this computer's server speaks of this computer's files)
 			if app.servers[app.server].local && config_file_shaped(c.path) && os.is_file(c.path) {
 				if ui.button("open", i18n.tr("Open"), lucide.FILE, {height = math.round(em * BUTTON_SMALL_H_EM)}).clicked { ui.open(c.path) }
-				ui.spacer(ui.px(em * 0.3))
+				ui.space(ui.SPACE_1)
 				if ui.button("dir", icon = lucide.FOLDER, o = {face = .Raised, height = math.round(em * BUTTON_SMALL_H_EM)}).clicked { ui.open(filepath.dir(c.path)) }
 			}
 		}
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 	}
 	if len(f.files) == 0 { info_line(app, "###nocf", i18n.tr("No configuration file (the defaults apply)."), em, ui.theme_color("faint text")) }
 }
@@ -938,7 +938,7 @@ page_usage :: proc(app: ^App, em: f32) {
 			text("n", l.name, ui.theme_color("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.px(em * 6))
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 0.7))})
 			ui.progress("###bar", f32(l.percent / 100))
-			ui.spacer(ui.px(em * 0.7))
+			ui.space(ui.SPACE_3)
 			col := l.limited ? ui.hue(.Red) : l.percent >= USAGE_WARN_PERCENT ? ui.hue(.Yellow) : ui.theme_color("weak text")
 			text("p", i18n.percent(f64(l.percent) / 100), col, ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 3.5))
 			text("r", l.resets > now ? fmt.tprintf(i18n.tr("resets in %s"), duration_text(now, l.resets)) : "", ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
@@ -952,7 +952,7 @@ page_usage :: proc(app: ^App, em: f32) {
 			t := b.limit > 0 ? f32(b.spent / b.limit) : 0
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 0.7))})
 			ui.progress("###bar", t)
-			ui.spacer(ui.px(em * 0.7))
+			ui.space(ui.SPACE_3)
 			text("p", fmt.tprintf("%s / %s", dollars(b.spent), dollars(b.limit, 0)), t >= BUDGET_WARN_SHARE ? ui.hue(.Yellow) : ui.hue(.Green), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)}, ui.px(em * 8))
 			text("r", b.resets > now ? fmt.tprintf(i18n.tr("resets in %s"), duration_text(now, b.resets)) : "", ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.px(em * 9))
 		}
@@ -987,7 +987,7 @@ saved_revoke_done :: proc(app: ^App, id: string) {
 page_permissions :: proc(app: ^App, em: f32) {
 	f := &app.facts
 	info_line(app, "###ph", i18n.tr("Answers given with “Always”: the server applies them without asking again. Revoke one to be asked next time."), em)
-	ui.spacer(ui.px(em * 0.6))
+	ui.space(ui.SPACE_2)
 	if read_shown(app, "###sp_read", &f.reads[.Saved], em, server_facts_load) {
 		if len(f.saved) == 0 { info_line(app, "###none", i18n.tr("No saved permission."), em, ui.theme_color("faint text")) }
 		for &s, i in f.saved {
@@ -995,9 +995,9 @@ page_permissions :: proc(app: ^App, em: f32) {
 			if ui.row(.Center, id = fmt.tprintf("###sp%d", i)) {
 				col := s.effect == "deny" ? ui.hue(.Red) : s.effect == "allow" ? ui.hue(.Green) : ui.hue(.Yellow)
 				ui.pill("e", s.effect != "" ? s.effect : "?", "", col, {mono = true})
-				ui.spacer(ui.px(em * 0.5))
+				ui.space(ui.SPACE_2)
 				text("a", s.action, ui.theme_color("text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_NOTE)})
-				ui.spacer(ui.px(em * 0.5))
+				ui.space(ui.SPACE_2)
 				text("r", s.resource, ui.theme_color("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}, ui.fill())
 				if ui.button("rv", i18n.tr("Revoke"), lucide.TRASH_2, {intent = .Danger, height = math.round(em * BUTTON_SMALL_H_EM), disabled = saved_revoking(f, s.id)}).clicked { saved_revoke(app, s.id) }
 			}
@@ -1006,7 +1006,7 @@ page_permissions :: proc(app: ^App, em: f32) {
 	section(app, i18n.tr("RULES OF THE AGENTS"), em)
 	for a in app.agents {
 		info_line(app, fmt.tprintf("###ag_%s", a.id), fmt.tprintf("%s (%s): %s", a.name != "" ? a.name : a.id, a.mode, first_line(a.description)), em)
-		ui.spacer(ui.px(em * 0.3))
+		ui.space(ui.SPACE_1)
 	}
 }
 
@@ -1022,7 +1022,7 @@ page_catalog :: proc(app: ^App, em: f32) {
 				ui.next({width = ui.fill(), font_size = math.round(em * FS_SMALL), flags = {.Text_Wrap}, fg = ui.theme_color("weak text"), text_pad = 0})
 				ui.paragraph(fmt.tprintf("%s###d", label_safe(it.detail)))
 			}
-			ui.spacer(ui.px(em * 0.25))
+			ui.space(ui.SPACE_1)
 		}
 	}
 	list(app, i18n.tr("PROVIDERS"), f.providers[:], em, &f.reads[.Providers])

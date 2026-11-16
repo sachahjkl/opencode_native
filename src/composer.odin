@@ -47,7 +47,7 @@ dock :: proc(app: ^App, pane: ^Chat_Pane, em: f32, side, col: f32) {
 			// (the free usage used up and nothing paid: nothing the composer sends could run)
 			if free_limit_active(app) { free_limit_panel(app, em) } else { composer(app, pane, em) }
 			if is_main { activity_tray(app, em) }
-			ui.spacer(ui.px(em * 1.1))
+			ui.space(ui.SPACE_4)
 		}
 	}
 }
@@ -105,7 +105,7 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		// (its menu on all of it, the bar of its buttons and around the text too, after what is in it: an image keeps its own)
 		card := ui.parent_box()
 		defer ctx_check(app, card, .Composer, pane = pane)
-		ui.spacer(ui.px(em * 0.45))
+		ui.space(ui.SPACE_2)
 		escape_stop_banner(app, pane, em)
 		queue_edit_banner(app, pane, em)
 		mention_list(app, pane, em)
@@ -113,7 +113,7 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		attachments_row(app, pane, em)
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 		if ui.row(id = "###edrow") {
-			ui.spacer(ui.px(em * 0.35))
+			ui.space(ui.SPACE_1)
 			if ui.tags("bare") {
 				// Up and Down go through the history where they have nothing to move (the caret on the first line; going
 				// through it, always); Down on the last line opens the tray of what runs. (Down moves the caret to the end
@@ -159,13 +159,13 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 				if is_main && res.changed { activity_close(app) }   // (typing: what is written is what matters now)
 				drafts_track(app, pane)   // (kept on disk a moment after it changes, however: typed, sent, put back)
 			}
-			ui.spacer(ui.px(em * 0.35))
+			ui.space(ui.SPACE_1)
 		}
 		// toolbar
 		fit := composer_fit(app, pane, em)
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###tools") {
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			// what goes with the prompt, then who answers it and with what
 			ui.a11y({role = .Button, name = i18n.tr("Attach files")})
 			att := ui.button("attach", icon = lucide.PAPERCLIP, o = {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true})
@@ -208,11 +208,11 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 					text("hint", app.prefs.ctrl_enter ? i18n.tr("Ctrl+Enter  send   ·   Enter  new line") : i18n.tr("Enter  send   ·   Shift+Enter  new line"), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				}
 			}
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 			composer_panels(app, em, named)
 			if pane.chat.busy {
 				if ui.button("stop2", icon = lucide.SQUARE, o = {intent = .Danger, face = .Raised, width = ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), height = math.round(em * BUTTON_H_EM)}).clicked { interrupt_session(app, pane.chat.id) }
-				ui.spacer(ui.px(em * 0.4))
+				ui.space(ui.CONTROL_GAP)
 			}
 			empty := len(strings.trim_space(ui.text_edit_string(&pane.composer.area))) == 0 && len(pane.composer.attachments) == 0
 			// (what it does, while that is not what it usually does)
@@ -229,7 +229,7 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			if pane.conversation.column_w <= em * QUEUE_WORDS_MIN_EM || fit >= 2 { send_label = "" }   // (narrow, its glyph says it: the toolbar has no room)
 			send_w: ui.Size = send_label == "" ? ui.px(math.round(em * COMPOSER_BUTTON_W_EM)) : {}
 			if ui.button("send", ui.text_shown(send_label), send_icon, {intent = send_intent, width = send_w, height = math.round(em * BUTTON_H_EM), disabled = empty || !online(app) || held}).clicked { submit = true }
-			ui.spacer(ui.px(em * 0.55))
+			ui.space(ui.CONTROL_GAP)
 		}
 	}
 	if submit { submit_prompt(app, pane, other, first) }
@@ -268,7 +268,7 @@ composer_panels :: proc(app: ^App, em: f32, named: bool) {
 		ui.act_name(sig.box, act)
 		if sig.clicked { command_run(app, command_find(command)) }
 		if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(tip) } }
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 	}
 	if preview_available() { panel(app, "preview_btn", lucide.GLOBE, i18n.tr("Preview panel"), i18n.tr("Preview panel  (Ctrl+Shift+B)"), "view.preview", named ? "command:view.preview" : "", app.preview.open, size, em) }
 	panel(app, "terminal_btn", lucide.SQUARE_TERMINAL, i18n.tr("Terminal"), i18n.tr("Terminal  (Ctrl+Shift+T)"), "view.terminal", named ? "command:view.terminal" : "", app.cx.terms.open, size, em)

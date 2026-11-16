@@ -113,7 +113,7 @@ title_bar :: proc(app: ^App, em: f32) {
 		b.custom = caption_draw   // (the finish's title bar: in the edged one the accent fading out, its words light: ui.caption_ink)
 		b.custom_user = d
 		ink := ui.caption_ink
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		ui.next({width = ui.px(math.round(h * 0.78)), height = ui.px(math.round(h * 0.78)), fg = ink(ui.theme_color("weak text"))})
 		msig := ui.button("appmenu", icon = lucide.MENU)
 		menu_key := "app_menu"
@@ -131,7 +131,7 @@ title_bar :: proc(app: ^App, em: f32) {
 		// (each button names the palette's command it runs: Shift+Enter on that command in the palette shows the button)
 		nav_button(app, "nav_back", lucide.ARROW_LEFT, i18n.tr("Back  (Alt+Left)"), "command:nav.back", -1, math.round(h * 0.78))
 		nav_button(app, "nav_fwd", lucide.ARROW_RIGHT, i18n.tr("Forward  (Alt+Right)"), "command:nav.forward", 1, math.round(h * 0.78))
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		// the logo and the wordmark ("open" dim, "code" bright, "native" in the accent, in the mono face) go home, as on any site
 		ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .X, cross = .Center, cursor = .Hand})
 		ui.a11y({role = .Button, name = i18n.tr("Home")})
@@ -140,20 +140,20 @@ title_bar :: proc(app: ^App, em: f32) {
 		ui.act_name(home_link, "command:nav.home")
 		if ui.parent(home_link) {
 			logo_box(app, "###tlogo", math.round(h * 0.6))
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			mono := ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_HEADING)}
 			text("w1", "open", ink(hsig.hovering ? ui.theme_color("text") : ui.theme_color("weak text")), mono)
 			text("w2", "code", ink(hsig.hovering ? ui.theme_color("bright text") : ui.theme_color("text")), mono)
-			ui.spacer(ui.px(em * 0.45))
+			ui.space(ui.SPACE_2)
 			text("w3", "native", ink(ui.hue(.Accent)), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_HEADING)})
 		}
 		if hsig.clicked { command_run(app, command_find("nav.home")) }
 		if ui.hovered_for(hsig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Home  (Ctrl+H)")) } }
-		side_line(app, "###tg", b.last, em * 0.9)
-		ui.spacer(ui.px(em * 1.3))
+		side_line(app, "###tg", b.last, math.round(em * ui.SPACE_3))   // (SPACE_4 pushed the line past a sidebar of its default width)
+		ui.space(ui.SPACE_6)
 		if !app.servers[app.server].local {   // another computer's server: its name first
 			glyph(lucide.GLOBE, ink(ui.hue(.Cyan)), math.round(em * ICON_SMALL))
-			ui.spacer(ui.px(em * 0.3))
+			ui.space(ui.SPACE_1)
 			text("srv", i18n.tr(server_name(app)), ink(ui.hue(.Cyan)), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			if pane.chat.id != "" { text("srvsep", "  /  ", ink(ui.theme_color("faint text")), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}) }
 		}
@@ -161,7 +161,7 @@ title_bar :: proc(app: ^App, em: f32) {
 		if s == nil && pane.chat.have_self { s = &pane.chat.self }
 		if s != nil {
 			// the project's logo before its folder
-			if logo_of(app, "###tproj", project_logo(app, s.project), math.round(h * 0.55)) { ui.spacer(ui.px(em * 0.45)) }
+			if logo_of(app, "###tproj", project_logo(app, s.project), math.round(h * 0.55)) { ui.space(ui.SPACE_2) }
 			text("dir", base_name(s.directory), ink(ui.theme_color("weak text")), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
 			text("sep", "  /  ", ink(ui.theme_color("faint text")), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
 			text("ttl", ellipsize(s.title, TITLE_BAR_TITLE_CHARS), ink(ui.theme_color("text")), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
@@ -169,12 +169,12 @@ title_bar :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.fill())
 		}
 		if pane.chat.busy {
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 			throbber(app, pane, "###tscan", ui.hue(.Accent), math.round(em * 3), math.round(em * 0.75), em)
-			ui.spacer(ui.px(em))
+			ui.space(ui.SPACE_4)
 		}
 		missed_bell(app, math.round(h * 0.78), em)
-		ui.spacer(ui.px(em * 0.4))
+		ui.space(ui.SPACE_2)
 		_, _ = ui.window_buttons()
 	}
 	// the bar's lower edge: a carved line
@@ -218,15 +218,15 @@ chat_header :: proc(app: ^App, em: f32) {
 		d^ = {between("bar background", "card background", 0.5), between("background", "bar background", 0.5), false}
 		b.custom = bar_draw
 		b.custom_user = d
-		ui.spacer(ui.px(em * 1.3))
+		ui.space(ui.SPACE_6)
 		s := find_session(app, pane.chat.id)
 		if s == nil && pane.chat.have_self { s = &pane.chat.self }   // (a sub-agent, or an old session: not in the sidebar's list)
 		if back := back_target(app); back != "" {
 			// the way back up: to the session drilled down from, or the parent
 			if ui.button("back", icon = lucide.ARROW_LEFT, o = {face = .Raised, width = ui.px(math.round(em * BUTTON_H_EM)), height = math.round(em * BUTTON_H_EM)}).clicked { go_back(app) }
-			ui.spacer(ui.px(em * 0.7))
+			ui.space(ui.SPACE_3)
 		}
-		if logo_of(app, "###hlogo", project_logo(app, chat_project(app)), math.round(em * 2.3)) { ui.spacer(ui.px(em * 0.7)) }
+		if logo_of(app, "###hlogo", project_logo(app, chat_project(app)), math.round(em * 2.3)) { ui.space(ui.SPACE_3) }
 		ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
 		if ui.column(id = "###titles") {
 			ui.spacer(ui.fill())
@@ -261,7 +261,7 @@ chat_header :: proc(app: ^App, em: f32) {
 					// (the session's id, as opencode 2.3.0 lets it be found: muted beside the title, while the pointer is on the
 					// header; a click copies it. Never there otherwise: it is not something one reads)
 					if s != nil && ui.pointer_on(b) {
-						ui.spacer(ui.px(em * 0.6))
+						ui.space(ui.SPACE_2)
 						if session_id_copy_hint(app, s.id, em) { session_id_copy(app, s.id) }
 					}
 				}
@@ -276,7 +276,7 @@ chat_header :: proc(app: ^App, em: f32) {
 		thin := pane.conversation.width > 0 && pane.conversation.width < em * HEADER_FIGURES_MIN_EM
 		if !editing && len(c.children) > 0 && !(thin && len(active_children(app, pane)) == 0) {
 			subagents_button(app, pane, em)
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 		}
 		// (narrow, between panels: the title first, the figures are in the statistics)
 		narrow := editing || thin
@@ -284,19 +284,19 @@ chat_header :: proc(app: ^App, em: f32) {
 			tok := pill_button("###tok", fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, lucide.ZAP)
 			ui.act_name(tok.box, "command:session.stats")
 			if tok.clicked { stats_toggle(app) }
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 		}
 		if !narrow && c.cost > 0 {
 			if pill_button("###cost", dollars(c.cost), ui.hue(.Green)).clicked { stats_toggle(app) }
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 		}
 		if c.busy {
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.SPACE_2)
 			stop := ui.button("stop", i18n.tr("Stop"), lucide.SQUARE, {intent = .Danger, height = math.round(em * BUTTON_COMPACT_H_EM)})
 			ui.act_name(stop.box, "command:session.stop")
 			if stop.clicked { interrupt_session(app, c.id) }
 		}
-		ui.spacer(ui.px(em * 1.2))
+		ui.space(ui.SPACE_4)
 	}
 	edge_line("###hdredge")
 }
@@ -327,27 +327,27 @@ status_bar :: proc(app: ^App, em: f32) {
 		b.custom = bar_draw
 		b.custom_user = d
 		small := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}
-		ui.spacer(ui.px(em * 0.8))
+		ui.space(ui.SPACE_3)
 		// the link to the server: its state and its address (the server is chosen in the sidebar's tabs: server_tabs)
 		ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###link") {
 			link_lamp(app, "###online", em * 0.8)
-			ui.spacer(ui.px(em * 0.4))
+			ui.space(ui.ICON_GAP)
 			// (a server switch: the words that change morph in place, ui.morph_label)
 			morph_text("st", link_word(app), online(app) ? ui.theme_color("weak text") : link_color(app), small)
 			if base := server_base(app); base != "" {
-				ui.spacer(ui.px(em * 0.6))
+				ui.space(ui.SPACE_2)
 				morph_text("base", base, ui.theme_color("faint text"), small)
 			}
 		}
-		side_line(app, "###sg_status", b.last, em * 0.8)
+		side_line(app, "###sg_status", b.last, math.round(em * ui.SPACE_3))
 		// the versions: the server's, and this program's (names of products: not translated)
-		ui.spacer(ui.px(em * 1.3))
+		ui.space(ui.SPACE_6)
 		status_said_follow(app)
 		said := &app.chrome.said
 		if said.version != "" {
 			morph_text("v", fmt.tprintf("OpenCode %s", said.version), ui.theme_color("faint text"), small)
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 		}
 		text("ocn_v", APP_TITLE + " " + APP_VERSION, ui.theme_color("faint text"), small)
 		ui.spacer(ui.fill())
@@ -356,24 +356,24 @@ status_bar :: proc(app: ^App, em: f32) {
 		if pend == 0 { app.chrome.pending_since = 0 } else if app.chrome.pending_since == 0 { app.chrome.pending_since = ui.now_ms() }
 		if pend > 0 && ui.now_ms() - app.chrome.pending_since >= PENDING_SHOW_MS {
 			text("p", fmt.tprintf(i18n.tr(pend, "%d request", "%d requests"), pend), ui.theme_color("faint text"), small)
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 		}
 		if said.running > 0 {
 			morph_text("b", fmt.tprintf(i18n.tr("%d running"), said.running), ui.hue(.Accent), small)
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 		}
 		// (no count before a server's first list: never a "0 sessions" that is no server's)
 		if said.counted {
 			morph_text("n", fmt.tprintf(i18n.tr(said.sessions, "%d sessions", "%d sessions"), said.sessions), ui.theme_color("faint text"), small)
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 		}
 		if app.prefs.show_fps {
 			fps := app.chrome.frame_ms > 0 ? 1000 / app.chrome.frame_ms : 0
 			text("fps", i18n.decimal_marks(fmt.tprintf(i18n.tr("%3.0f fps  %.1f ms"), fps, app.chrome.work_ms)), ui.theme_color("faint text"), small)
-			ui.spacer(ui.px(em * 0.8))
+			ui.space(ui.SPACE_3)
 			if n := app.cx.unreadable.count; n > 0 {   // (unreadable.odin: the log says what they were)
 				text("unr", fmt.tprintf(i18n.tr(n, "%d unreadable", "%d unreadable"), n), ui.hue(.Yellow), small)
-				ui.spacer(ui.px(em * 0.8))
+				ui.space(ui.SPACE_3)
 			}
 		}
 	}

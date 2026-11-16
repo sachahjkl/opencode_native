@@ -252,9 +252,9 @@ jobs_text :: proc(jobs: []Job_Report) -> string {
 job_reports :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 	for &r, k in m.jobs {
 		job_card(app, pane, m, &r, k, em)
-		ui.spacer(ui.px(em * 0.15))
+		ui.space(ui.SPACE_1)
 	}
-	ui.spacer(ui.px(em * 0.35))
+	ui.space(ui.SPACE_1)
 }
 
 // What a card's header says first: what ended, and how.
@@ -307,7 +307,7 @@ job_card :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, r: ^Job_Report, k: in
 			state_mark("###st", r.state, size = em * CARD_MARK_EM)
 			ui.space(ui.ICON_GAP)
 			text("w", job_title(r), sub_state_ink(r.state), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
-			ui.spacer(ui.px(em * 0.6))
+			ui.space(ui.SPACE_2)
 			switch r.kind {
 			case .Shell:
 				line := first_line(r.command)
@@ -317,22 +317,22 @@ job_card :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, r: ^Job_Report, k: in
 				text("d", r.description, ui.theme_color("weak text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
 			}
 			text("at", clock_text(m.created, app.prefs.clock24), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.SPACE_2)
 			glyph(open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, ui.theme_color("faint text"), math.round(em * ICON_TINY), em * 1.1)
-			ui.spacer(ui.px(em * 0.5))
+			ui.space(ui.ICON_GAP)
 		}
 		if open {
 			ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 			if rail_row(fmt.tprintf("###jobb_%s_%d", m.id, k), ui.with_alpha(ui.theme_color("weak text"), 0.4)) {
-				ui.spacer(ui.px(em * 1.0))
+				ui.space(ui.SPACE_4)
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 				if ui.column() {
-					ui.spacer(ui.px(em * 0.3))
+					ui.space(ui.SPACE_1)
 					switch r.kind {
 					case .Shell:
 						if r.command != "" {
 							mono_well("###command", fmt.tprintf("$ %s", r.command), em, JOB_OUTPUT_LINES, ui.theme_color("soft text"), &r.command_well, pane.chat.alloc)
-							ui.spacer(ui.px(em * 0.3))
+							ui.space(ui.SPACE_1)
 						}
 						out := r.body != "" ? r.body : i18n.tr("(no output)")
 						mono_well("###output", out, em, JOB_OUTPUT_LINES, ui.theme_color("soft text"), &r.body_well, pane.chat.alloc)
@@ -344,7 +344,7 @@ job_card :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, r: ^Job_Report, k: in
 							markdown.view(md_doc(&pane.chat, id), id, r.body, md_config(app, ui.theme_color("soft text"), pane), math.round(em * FS_LABEL))
 						}
 					}
-					ui.spacer(ui.px(em * 0.3))
+					ui.space(ui.SPACE_1)
 				}
 			}
 		}
