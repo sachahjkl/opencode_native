@@ -4,6 +4,14 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.68.0] - 2026-11-16 17:52
+
+### Added
+- **The sidebar as a rail**: minimise the sidebar (its Minimise, or a window too narrow for it) and it keeps a narrow column of the sessions' marks, each with its lamp, in the list's order. A card beside a mark gives its title, project, folder, state, what waits for you and its last activity; a click opens the session, Up and Down move along the marks. New session, Search (the palette's sessions) and the server stay at its top.
+
+### Fixed
+- **A selection dragged above the conversation scrolls it.** Held over the session header, it scrolls the conversation up and grows, as it does at the bottom. A copy of a selection across many messages puts a blank line between two messages, and the conversation stays fast while that selection stands.
+
 ## [0.67.2] - 2026-11-16 17:07
 
 ### Fixed
@@ -1827,6 +1835,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.68.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.68.0
 [0.67.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.67.2
 [0.67.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.67.1
 [0.67.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.67.0
