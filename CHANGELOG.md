@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.67.2] - 2026-11-16 17:07
+
+### Fixed
+- **Restart after an update works again**: on Windows, the restart that ends an update started nothing, so the program closed and stayed closed; it now starts the new version from its install place.
+
 ## [0.67.1] - 2026-11-16 16:10
 
 ### Fixed
@@ -1822,6 +1827,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.67.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.67.2
 [0.67.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.67.1
 [0.67.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.67.0
 [0.66.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.66.1
