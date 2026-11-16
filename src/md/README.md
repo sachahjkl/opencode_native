@@ -33,6 +33,8 @@ purpose, the decisions, what was refused.
   command line to the window that runs; `--quit` ends it as Quit does; the starts that stay on their own.
 - [features/images.md](features/images.md): the images and logos over the toolkit's picture cache; which bytes an
   image is; base64 decoded at a miss only.
+- [features/diagrams.md](features/diagrams.md): Mermaid diagrams: the layouts on the interface's thread and off it;
+  the viewer's four directions, remembered per diagram for the program's run; why not a preference.
 - [features/palette.md](features/palette.md): the toolkit's palette with ocn's sources; the shared prefixes; what was
   lost and why.
 - [features/server-passwords.md](features/server-passwords.md): the servers' passwords sealed with `gt:secrets`; the

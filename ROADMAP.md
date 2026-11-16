@@ -31,8 +31,6 @@
   (Linux, -o:speed): every glyph of every row is emitted again each frame. Keep a row's draw list
   while the row does not change. The bench (OCN_BENCH) also has two checks that fail on Linux: the middle wheel's
   "gone up" and app.find.index.
-- **A choice of layouts for a Mermaid diagram.** In the diagram's viewer: top to bottom, left to right, and the other
-  placements gt:mermaid offers.
 - **Preview a remote file outside the session's folder.** Today the Files dialog previews and searches a remote server
   only inside the session's folder, because /api/fs/read reads only inside a location; reopen this if the server reads an
   absolute path or offers a read without a location.

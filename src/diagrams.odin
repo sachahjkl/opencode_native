@@ -126,6 +126,8 @@ diagrams_free :: proc(app: ^App) {
 	for _, &d in app.cx.diagrams { svg.destroy(&d.doc); delete(d.why) }
 	delete(app.cx.diagrams)
 	app.cx.diagrams = nil
+	delete(app.diagram_view.chosen)
+	app.diagram_view.chosen = nil
 }
 
 // A ```mermaid block: its diagram, or its text (the header's button; still being written; not a diagram). `pane`: the one it
@@ -233,15 +235,30 @@ Diagram_Viewer :: struct {
 	shown:     u64,                 // the layout shown (diagram_key): a new one fits the view again
 	preview:   ui.Preview,
 	focus:     bool,                // it opened: the view takes the keyboard
+	// The direction chosen for a diagram, by the hash of its text (diagram_text_key), for the program's run: a diagram's
+	// best direction is its shape's, so it is neither a preference nor a session's (src/md/features/diagrams.md).
+	chosen:    map[u64]mermaid.Direction,
 }
 
-// The viewer, on the diagram of `code` (as the theme has it now), as its text lays it out.
+// The key of a diagram's text in Diagram_Viewer.chosen: the same text in any conversation, in either theme.
+diagram_text_key :: proc(code: string) -> u64 { return hash.fnv64a(transmute([]u8)code) }
+
+// The viewer, on the diagram of `code` (as the theme has it now), in the direction chosen for it before, else as its text
+// lays it out.
 diagram_view_open :: proc(app: ^App, code: string) {
 	v := &app.diagram_view
 	delete(v.code)
-	v^ = {code = strings.clone(code), own = mermaid.direction_of(code), focus = true}
+	chosen := v.chosen
+	v^ = {code = strings.clone(code), own = mermaid.direction_of(code), direction = chosen[diagram_text_key(code)] or_else .Text, focus = true, chosen = chosen}
 	ui.preview_reset(&v.preview)
 	ui.view_open(&app.program_views, DIAGRAM_VIEW, app)
+}
+
+// The viewer's diagram laid out in `d` from now on, and when it opens again; its text's own direction forgets the choice.
+diagram_view_choose :: proc(v: ^Diagram_Viewer, d: mermaid.Direction) {
+	v.direction = d == v.own ? .Text : d
+	k := diagram_text_key(v.code)
+	if v.direction == .Text { delete_key(&v.chosen, k) } else { v.chosen[k] = v.direction }
 }
 
 // The layout of the viewer's diagram that is shown: the one chosen once it is laid out, the one shown before meanwhile
@@ -283,10 +300,7 @@ diagram_view :: proc(view: ^ui.View, app: ^App) {
 				want := v.direction == .Text ? v.own : v.direction
 				sel := int(want) - int(mermaid.Direction.Top_Down)
 				ui.a11y({name = i18n.tr("Direction")})
-				if ui.dropdown("###dv_direction", words[:], &sel) {
-					chosen := mermaid.Direction(sel + int(mermaid.Direction.Top_Down))
-					v.direction = chosen == v.own ? .Text : chosen
-				}
+				if ui.dropdown("###dv_direction", words[:], &sel) { diagram_view_choose(v, mermaid.Direction(sel + int(mermaid.Direction.Top_Down))) }
 			}
 		}
 		pad := math.round(em * VIEWER_PAD_EM)

@@ -1912,6 +1912,53 @@ a_diagram_is_zoomed_moved_and_laid_out_in_the_viewer :: proc(t: ^testing.T) {
 	})
 }
 
+// The direction chosen in the viewer's list is the diagram's: it opens again in it, another diagram opens as its text says,
+// and the text's own direction forgets the choice.
+@(test)
+a_diagram_opens_again_in_the_direction_chosen_for_it :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		pane := main_pane(app)
+		defer diagrams_free(app)
+		v, err := json.parse_string(mermaid_page(), allocator = context.temp_allocator)
+		testing.expect(t, err == nil)
+		chat_load(app, pane, v, false)
+		chat_scroll_event(pane, Scroll_Signal.Snap)
+		session.wait_idle(s)
+		if !testing.expect(t, session.find(s, "diagram") != nil, "drawn") { return }
+		session.click(s, "diagram")
+		session.wait_idle(s)
+		dv := &app.diagram_view
+		testing.expect_value(t, dv.own, mermaid.Direction.Left_Right)
+		session.click(s, "dv_direction")
+		session.frames(s, 2)
+		session.click_text(s, "Top to bottom")
+		session.frames(s, 2)
+		testing.expect_value(t, dv.direction, mermaid.Direction.Top_Down)
+		session.event(s, {kind = .Key_Press, key = .Escape})
+		session.frames(s, 3)
+		if !testing.expect(t, !ui.view_is_open(&app.program_views, DIAGRAM_VIEW), "Escape closes it") { return }
+
+		diagram_view_open(app, "flowchart LR\n  P --> Q --> R\n")
+		session.frames(s, 2)
+		testing.expect_value(t, dv.direction, mermaid.Direction.Text)
+		session.event(s, {kind = .Key_Press, key = .Escape})
+		session.frames(s, 3)
+
+		session.click(s, "diagram")
+		session.wait_until(s, proc(s: ^session.Session) -> bool {
+			app := the_app
+			return app.diagram_view.shown == diagram_key(app.diagram_view.code, !app.cx.theme.light, .Top_Down)
+		}, "opened again from top to bottom")
+		testing.expect_value(t, dv.direction, mermaid.Direction.Top_Down)
+
+		diagram_view_choose(dv, .Left_Right)
+		testing.expect_value(t, dv.direction, mermaid.Direction.Text)
+		testing.expect_value(t, len(dv.chosen), 0)
+	})
+}
+
 // A row is square: the ground of the session shown reaches the corners of its row (a rounded one left the sidebar's colour
 // there).
 @(test)
