@@ -4,6 +4,14 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.67.0] - 2026-11-16 14:52
+
+### Changed
+- **Even spacing everywhere**: the gaps between icons, words, buttons and rows all come from one spacing scale, so neighbouring parts line up; most move by a pixel or two, and the home page ends a little closer under its shortcuts.
+
+### Fixed
+- **The quote chip follows the text**: the Quote and Comment chip over a selection in the conversation now scrolls with the selected text, hides while that text is out of view and comes back with it; its two buttons show their icons.
+
 ## [0.66.1] - 2026-11-16 13:30
 
 ### Fixed
@@ -1809,6 +1817,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.67.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.67.0
 [0.66.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.66.1
 [0.66.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.66.0
 [0.65.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.65.0
