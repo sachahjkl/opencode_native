@@ -8,6 +8,9 @@
 
 ## Next
 
+- **The sidebar as a rail.** Minimised, the sidebar shows the sessions' marks only, each one's title, project, activity
+  and state in a rich tooltip on hover, and gives the conversation its width. It waits on the toolkit's minimise of a
+  side zone that builds its view narrow ([sidebar-rail.md](src/md/features/sidebar-rail.md)).
 - **The pictures of the documentation, again.** The README's and the site's pictures still show the old model picker and
   the colours before the theme. `ocntools shots` needs the demo sessions on the local server; make them reproducible
   so the pictures can be made again on any machine.

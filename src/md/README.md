@@ -30,6 +30,8 @@ purpose, the decisions, what was refused.
 - [features/queue-first.md](features/queue-first.md): Alt+Enter queues a prompt first while a run works; the inbox
   re-admitted in order, admit before cancel, the reorder's state machine.
 - [features/escape-stop.md](features/escape-stop.md): Escape stops a run in two presses; the banner in the composer.
+- [features/sidebar-rail.md](features/sidebar-rail.md): the sidebar minimised to a rail of the sessions' marks, their
+  details in a rich tooltip; the toolkit's minimise of a side zone, no fold of ocn's own.
 - [features/single-instance.md](features/single-instance.md): one window per person: a second start hands its
   command line to the window that runs; `--quit` ends it as Quit does; the starts that stay on their own.
 - [features/images.md](features/images.md): the images and logos over the toolkit's picture cache; which bytes an
