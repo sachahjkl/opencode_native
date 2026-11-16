@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.67.1] - 2026-11-16 16:10
+
+### Fixed
+- **A selection dragged to the conversation's edge scrolls it**: held at its bottom edge or past it, or at its top edge, the view scrolls and the selection grows with what comes in, over as many screens as you hold it; the selection no longer ends when the message it started in scrolls far away, and a copy has every message it spans.
+
 ## [0.67.0] - 2026-11-16 14:52
 
 ### Changed
@@ -1817,6 +1822,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.67.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.67.1
 [0.67.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.67.0
 [0.66.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.66.1
 [0.66.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.66.0
