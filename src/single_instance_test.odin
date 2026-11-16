@@ -3,9 +3,11 @@ package ocn
 import "base:runtime"
 import "core:fmt"
 import "core:path/filepath"
+import "core:strings"
 import "core:testing"
 import "core:time"
 import instance "gt:instance"
+import process "gt:process"
 import "gt:ui"
 import session "gt:testkit/session"
 import "gt:testkit/unwatched"
@@ -23,6 +25,23 @@ a_quit_message_runs_quit :: proc(t: ^testing.T) {
 		instance_message(app, transmute([]u8)string(instance.MESSAGE_QUIT))
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return (^App)(s.user).quit }, "Quit run by --quit")
 		testing.expect_value(t, app.launch_after, "")
+	})
+}
+
+// Restart starts the place the program started from, held to main's end: read at Restart, the name was the frame's
+// temp memory (gone by then), and after an update on Windows it named the running file moved aside (<exe>.old).
+@(test)
+restart_starts_the_place_it_started_from :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		started := strings.clone(process.executable_path(), context.temp_allocator)
+		testing.expect(t, app.exe != "" && app.exe == started, "the place, read at the start")
+		app_restart(app)
+		session.frames(s, 4)   // (each frame frees its temp memory)
+		testing.expect_value(t, app.launch_after, started)
+		testing.expect(t, raw_data(app.launch_after) == raw_data(app.exe), "held by the app, not a frame")
+		app.quit, app.launch_after = false, ""
 	})
 }
 

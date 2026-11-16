@@ -39,5 +39,8 @@ toolkit's (`gt:instance`, `setup.Setup_Options.running` and `quit`; gui_toolkit'
   the install's launch start the new copy only at the very end, once the name is free: started earlier, the new copy
   hands its start to this window, which then ends, and nothing runs. A copy that cannot be started is then said only in
   the log: the window is gone.
+- Restart starts `App.exe`, the program's place read once at the start and kept: an update on Windows moves the running
+  file aside (`<exe>.old`), after which the system names the moved file, and a name read in a frame's temp memory is gone
+  by main's end. Both made the restart after an update start nothing (0.62 to 0.67.1).
 - An owner that does not answer (`Unresponsive`) leaves the second start on its own, with a line in its log: a window
   more is better than a start that shows nothing.

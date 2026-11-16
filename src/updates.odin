@@ -11,7 +11,6 @@ import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:strings"
-import process "gt:process"
 import prefs_page "gt:prefs_page"
 import setup "gt:setup"
 import "gt:ui"
@@ -36,7 +35,7 @@ updates_start :: proc(app: ^App) {
 	folder, channel := prefs_page.update_source(&app.cfg_prefs)
 	app.updater = update.updater_start({
 		product = ocn_update.PRODUCT, folder = folder, channels = UPDATE_CHANNELS[:], channel = channel, current = APP_VERSION,
-		exe = process.executable_path(), user_agent = fmt.tprintf("opencode-native/%s", APP_VERSION),
+		exe = app.exe, user_agent = fmt.tprintf("opencode-native/%s", APP_VERSION),
 		// (the updater's thread: its news comes to the interface's thread, which reads the state there)
 		news = proc(user: rawptr) { _ = ui.post(&(^App)(user).state, on_update_news, user) }, user = app,
 	})
@@ -75,21 +74,28 @@ updates_follow :: proc(app: ^App) {
 // The installed copy: its manifest and its system's record take the new version (desktop_updated), on a task: they are
 // files and, on Windows, the registry.
 @(private = "file")
+Installed_Job :: struct { exe, version: string }
+
+// (the place the program started from: the running file is <exe>.old by now on Windows, and the record names the place)
+@(private = "file")
 installed_record :: proc(app: ^App, version: string) {
-	v := new(string, runtime.heap_allocator())
-	v^ = strings.clone(version, runtime.heap_allocator())
+	h := runtime.heap_allocator()
+	j := new(Installed_Job, h)
+	j^ = {exe = strings.clone(app.exe, h), version = strings.clone(version, h)}
 	ui.task(&app.state, proc(data: rawptr) {
-		defer version_free(data)
-		v := (^string)(data)
-		if ok, why := desktop_updated(process.executable_path(), v^); !ok { log.errorf("the update is in place, but %s", why) }
-	}, nil, v, version_free)
+		defer installed_free(data)
+		j := (^Installed_Job)(data)
+		if ok, why := desktop_updated(j.exe, j.version); !ok { log.errorf("the update is in place, but %s", why) }
+	}, nil, j, installed_free)
 }
 
 @(private = "file")
-version_free :: proc(data: rawptr) {
-	v := (^string)(data)
-	delete(v^, runtime.heap_allocator())
-	free(v, runtime.heap_allocator())
+installed_free :: proc(data: rawptr) {
+	h := runtime.heap_allocator()
+	j := (^Installed_Job)(data)
+	delete(j.exe, h)
+	delete(j.version, h)
+	free(j, h)
 }
 
 // "Check for updates" (the palette): its answer is said whatever it is.
@@ -110,7 +116,9 @@ update_phase :: proc(app: ^App) -> update.Phase {
 // put there). The new one starts at main's very end, once the single instance is let go: started before, it would hand its
 // start to this window, which then ends (src/md/features/single-instance.md).
 app_restart :: proc(app: ^App) {
-	app.launch_after = process.executable_path()
+	// (app.exe, not the system's name of the running file: after an update that is <exe>.old, and a name read in the
+	// frame's temp memory would be gone by main's end)
+	app.launch_after = app.exe
 	app.quit = true
 }
 

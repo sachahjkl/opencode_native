@@ -4,6 +4,7 @@
 // Without arguments it finds this computer's opencode server (~/.local/state/opencode/service.json, else ~/.config/opencode/service.json).
 package ocn
 
+import "base:runtime"
 import "core:fmt"
 import tasks "gt:tasks"
 import "core:mem/virtual"
@@ -121,6 +122,9 @@ App :: struct {
 	install:          prefs_page.Install,   // the install: its offer, its dialog, the settings' Installation page (setup.odin)
 	crash_bar:        crash_bar.Bar,        // the last session's crash, said in a bar under the title bar
 	quit:             bool,
+	// the program's file as it started (heap): an update moves the running file aside (<exe>.old on Windows), after which the
+	// system names the moved one; the updater, the install's record and Restart need the place, which holds the new copy
+	exe:              string,
 	launch_after:     string,   // Restart: the file started at main's very end, once the single instance is let go ("": none)
 	frame_times:      Frame_Times,   // the last frame's steps
 }
@@ -565,6 +569,7 @@ ANIMATION_WAIT_MS    :: 16    // the longest sleep while something pulses (33 ma
 // preferences (read from `prefs_file`; "": the defaults), the queue of what the threads post. A test makes the same on an
 // offscreen window.
 app_init :: proc(app: ^App, prefs_file: string) {
+	app.exe = process.executable_path(runtime.heap_allocator())   // (before any update can move it aside)
 	draw.init(&app.dc, &app.r, &app.fonts)
 	logo_load(app)
 	theme_setup(&app.theme)
@@ -724,6 +729,7 @@ main :: proc() {
 	crash_bar.destroy(&app.crash_bar)
 	prefs_page.install_launch(&app.install)   // (the window is gone: the installed copy the install's dialog opened starts)
 	app_launch_after(app)
+	delete(app.exe, runtime.heap_allocator())
 	log_stop(logger)
 	os.exit(0)
 }
