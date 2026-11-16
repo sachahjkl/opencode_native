@@ -111,12 +111,13 @@ site_changelog :: proc(site, out: string, _: rawptr) -> bool {
 	return tk_site.build_changelog(site, out, {changes = SITE_CHANGES, version_mark = VERSION_MARK, downloads = SITE_DOWNLOADS[:], meta = site_meta()})
 }
 
-// The shop's six pages (pricing, thanks, terms, refunds, privacy, imprint), made with the others (Meta.shop): "Coming soon"
-// until Paddle's client token, the price id and the licence Worker are set here (docs/licence.md of the toolkit, "What the
-// maintainer does at the end").
+// The shop's six pages (pricing, thanks, terms, refunds, privacy, imprint), made with the others (Meta.shop). The price is
+// Paddle's live one (ocntools paddle -apply), sold through the toolkit's licence Worker deployed for this product
+// (licence-worker/products/opencode-native.jsonc); the client token is the vendor's, public: it is in the page.
 SITE_SHOP :: tk_site.Shop{
 	name = "opencode native", icon = "../img/logo.png", product_title = "Opencode Native User License",
-	price = "15&nbsp;&euro;", price_note = "", environment = "sandbox", edition = "supporter", price_id = "",
+	price = "15&nbsp;&euro;", price_note = "", environment = "production", client_token = "live_94fe083b50757639ed26ec5ca77",
+	edition = "supporter", price_id = "pri_01m7j7jmmbdppeqcdjsnwfzr8q", worker = "https://opencode-native-licence.sacha-42a.workers.dev",
 	thanks = "https://ocn.froment.software/thanks/", help = "https://github.com/sachahjkl/opencode_native/issues/new",
 	register = "Open the file with opencode native, or paste the key in <em>Settings &rsaquo; Advanced &rsaquo; Licence</em>.",
 	extension = ".ocnlicence", repository = "https://github.com/sachahjkl/opencode_native", seller = SELLER,
