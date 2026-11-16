@@ -36,13 +36,18 @@ Apply these to every task, before you write code:
 - Platform code goes in files with a system suffix (`*_windows.odin`, `*_linux.odin`).
 - A preference is a `config.Def` in `src/settings.odin`, with its control on a settings page.
 - Tests with a window (testkit/session) run one at a time: `-define:ODIN_TEST_THREADS=1`.
-- `CHANGELOG.md` is never edited by hand: a change a user can see is one fragment in `changelog.d/` (its README says the
-  format), written by `ocntools changelog new <type> <text>` in the same commit. `ocntools prepare <version>` assembles the
-  fragments into the version's section and writes the version; `ship` then publishes it.
 - `ext/gui_toolkit` points only to tagged commits that are pushed to its own repository.
 - Automation is a command of `tools/ocntools`, never a shell, batch, PowerShell, Python or Node script.
 - Comments and commit messages are in English. Comments say why.
 - Commits: author and committer `sachahjkl <sacha@sacha.house>`, no attribution trailer, no session link.
+
+## Changelog
+
+- `CHANGELOG.md` follows Keep a Changelog and semantic versioning. It is never edited by hand.
+- A change a user can see is one fragment in `changelog.d/` (its README says the format), written by
+  `ocntools changelog new <type> <text>` in the same commit as the change.
+- `ocntools prepare <version>` assembles the fragments into the version's section and writes the version; `ship` then
+  publishes it. `ocntools check` checks the fragments and the file.
 
 ## Intent
 
