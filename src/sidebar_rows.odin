@@ -42,9 +42,14 @@ sidebar :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###side_top") {
 			pad_row(em)
-			if ui.button("new", i18n.tr("New session"), lucide.PLUS, {intent = .Primary, width = ui.fill()}).clicked { new_session(app) }
+			// (each names the palette's command it does: Shift+Enter on it in the palette shows the button)
+			nsig := ui.button("new", i18n.tr("New session"), lucide.PLUS, {intent = .Primary, width = ui.fill()})
+			ui.act_name(nsig.box, "command:session.new")
+			if nsig.clicked { new_session(app) }
 			ui.spacer(ui.px(em * 0.45))
-			if ui.button("refresh", icon = lucide.REFRESH_CW, o = {face = .Raised}).clicked { refresh_sessions(app) }
+			rsig := ui.button("refresh", icon = lucide.REFRESH_CW, o = {face = .Raised})
+			ui.act_name(rsig.box, "command:app.refresh")
+			if rsig.clicked { refresh_sessions(app) }
 			pad_row(em)
 		}
 		ui.spacer(ui.px(em * 0.7))

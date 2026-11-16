@@ -56,6 +56,9 @@ views_start :: proc(app: ^App, path: string) {
 	ui.set_views(&app.state, vs)
 	// (one backend for every window: a view's window is a Host on the program's renderer, made after the main window's frames)
 	ui.views_set_windows(vs, host.view_windows(&app.gfx))
+	// (a menu or a chip opened in a view's window is that window's State's: built at the end of each such window's build,
+	// as the main window's build ends with it; chat-panes.md)
+	ui.views_set_window_end(vs, proc(user: rawptr, _: ^ui.View) { window_overlays((^App)(user), ui.font_size()) }, app)
 	ui.view_register(vs, SIDEBAR_VIEW, sidebar_pane, ui.View_Options{title = i18n.later("Sessions"), icon = lucide.MENU,
 		home = .Panel, home_place = {edge = .Left}, extent_em = SIDEBAR_EM, width_em = SIDEBAR_EM, min_width_em = SIDEBAR_MIN_EM})
 	panels_register(app)

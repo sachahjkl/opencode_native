@@ -119,22 +119,25 @@ title_bar :: proc(app: ^App, em: f32) {
 		menu_key := "app_menu"
 		if msig.clicked { ui.menu_open(menu_key, msig.box.rect, msig.box.key) }
 		app_menu(app, menu_key, em)
-		nav_button :: proc(app: ^App, id, icon, tip: string, d: int, size: f32) {
+		nav_button :: proc(app: ^App, id, icon, tip, act: string, d: int, size: f32) {
 			can := nav_can(app, d)
 			ui.a11y({role = .Button, name = tip})
 			ui.next({width = ui.px(size), height = ui.px(size), fg = ui.caption_ink(can ? ui.theme_color("weak text") : ui.theme_color("faint text"))})
 			sig := ui.button(id, icon = icon)
+			ui.act_name(sig.box, act)
 			if sig.clicked { nav_step(app, d) }
 			if can && ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(tip) } }
 		}
-		nav_button(app, "nav_back", lucide.ARROW_LEFT, i18n.tr("Back  (Alt+Left)"), -1, math.round(h * 0.78))
-		nav_button(app, "nav_fwd", lucide.ARROW_RIGHT, i18n.tr("Forward  (Alt+Right)"), 1, math.round(h * 0.78))
+		// (each button names the palette's command it runs: Shift+Enter on that command in the palette shows the button)
+		nav_button(app, "nav_back", lucide.ARROW_LEFT, i18n.tr("Back  (Alt+Left)"), "command:nav.back", -1, math.round(h * 0.78))
+		nav_button(app, "nav_fwd", lucide.ARROW_RIGHT, i18n.tr("Forward  (Alt+Right)"), "command:nav.forward", 1, math.round(h * 0.78))
 		ui.spacer(ui.px(em * 0.4))
 		// the logo and the wordmark ("open" dim, "code" bright, "native" in the accent, in the mono face) go home, as on any site
 		ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .X, cross = .Center, cursor = .Hand})
 		ui.a11y({role = .Button, name = i18n.tr("Home")})
 		home_link := ui.build_box({.Clickable}, "###home_link")
 		hsig := ui.signal(home_link)
+		ui.act_name(home_link, "command:nav.home")
 		if ui.parent(home_link) {
 			logo_box(app, "###tlogo", math.round(h * 0.6))
 			ui.spacer(ui.px(em * 0.5))
@@ -250,6 +253,7 @@ chat_header :: proc(app: ^App, em: f32) {
 			} else {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 				tb := ui.build_box(s != nil ? {.Clickable} : {}, "###title_b")
+				if s != nil { ui.act_name(tb, "command:session.rename") }   // (a double click renames it in place)
 				if s != nil && ui.signal(tb).double_clicked { rename_inline(app, s.id, .Header) }
 				if ui.parent(tb) {
 					// (as wide as its words, shrinking first: the id goes right after it)
@@ -277,7 +281,9 @@ chat_header :: proc(app: ^App, em: f32) {
 		// (narrow, between panels: the title first, the figures are in the statistics)
 		narrow := editing || thin
 		if !narrow && c.tokens_in + c.tokens_out > 0 {
-			if pill_button("###tok", fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, lucide.ZAP).clicked { stats_toggle(app) }
+			tok := pill_button("###tok", fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(c.tokens_in + c.cache_read), kfmt(c.tokens_out)), {}, lucide.ZAP)
+			ui.act_name(tok.box, "command:session.stats")
+			if tok.clicked { stats_toggle(app) }
 			ui.spacer(ui.px(em * 0.4))
 		}
 		if !narrow && c.cost > 0 {
@@ -286,7 +292,9 @@ chat_header :: proc(app: ^App, em: f32) {
 		}
 		if c.busy {
 			ui.spacer(ui.px(em * 0.4))
-			if ui.button("stop", i18n.tr("Stop"), lucide.SQUARE, {intent = .Danger, height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { interrupt_session(app, c.id) }
+			stop := ui.button("stop", i18n.tr("Stop"), lucide.SQUARE, {intent = .Danger, height = math.round(em * BUTTON_COMPACT_H_EM)})
+			ui.act_name(stop.box, "command:session.stop")
+			if stop.clicked { interrupt_session(app, c.id) }
 		}
 		ui.spacer(ui.px(em * 1.2))
 	}

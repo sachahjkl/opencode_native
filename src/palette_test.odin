@@ -282,6 +282,61 @@ a_session_command_shows_its_session :: proc(t: ^testing.T) {
 @(private = "file")
 command_index_of :: proc(c: ^Command) -> int { return int((uintptr(c) - uintptr(&COMMANDS[0])) / size_of(Command)) }
 
+// Rename the session in the palette: Enter opens its form, the new title is typed there, and Enter renames the session
+// shown, with no dialog over the window (src/md/features/palette.md).
+@(test)
+the_palette_renames_the_session_in_its_form :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		bench_clear(app)
+		palette_up(s, app)
+		palette_type(s, app, ">rename the session")
+		row := palette_row_of(app, &app.palette.pal.commands.source, "session.rename")
+		if !testing.expect(t, row >= 0, "the command") { return }
+		app.palette.pal.sel = row
+		session.key(s, .Return)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.palette_run_level(&(^App)(s.user).palette.pal) == .Form }, "its form")
+		testing.expect(t, !ui.view_is_open(&app.program_views, RENAME_VIEW), "no dialog")
+		session.type_text(s, "  A new title ")
+		session.key(s, .Return)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return bench_count(.Action) > 0 }, "the session renamed")
+		sent := bench_take(t, .Action)
+		testing.expect_value(t, sent.method, "PATCH")
+		testing.expect_value(t, sent.path, fmt.tprintf("/api/session/%s", BENCH_CHAT_ID))
+		testing.expect_value(t, sent.body, `{"title":"A new title"}`)
+		testing.expect(t, !palette_shown(app), "the palette closed")
+		testing.expect(t, !ui.view_is_open(&app.program_views, RENAME_VIEW), "no dialog after it either")
+	})
+}
+
+// The buttons that run a palette command name it, so Shift+Enter on the command goes to them; a command on the main
+// view is the main composer's, not the panel's.
+@(test)
+the_buttons_name_their_commands :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		session.frames(s, 2)
+		for id in ([]string{"nav.back", "nav.forward", "nav.home", "view.notices", "session.rename", "composer.attach", "view.terminal", "session.new", "app.refresh"}) {
+			testing.expectf(t, ui.act_shown(fmt.tprintf("command:%s", id)), "%s: its button named", id)
+		}
+		// Shift+Enter on New session: the sidebar's button lit
+		palette_up(s, app)
+		palette_type(s, app, ">new session")
+		row := palette_row_of(app, &app.palette.pal.commands.source, "session.new")
+		if !testing.expect(t, row >= 0, "the command") { return }
+		app.palette.pal.sel = row
+		session.key(s, .Return, {.Shift})
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return s.state.act_light.key != 0 }, "lit")
+		lit := s.state.boxes[s.state.act_light.key] or_else nil
+		testing.expect(t, lit != nil && lit.name == "new", "the sidebar's New session")
+		testing.expect(t, !palette_shown(app), "the palette closed")
+	})
+}
+
 // Every setting the palette lists (not a hidden one) is on a page of the settings (SETTINGS_PAGES), where
 // prefs_page.show finds it; a hidden one is on none.
 @(test)

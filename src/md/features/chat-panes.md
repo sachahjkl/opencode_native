@@ -105,8 +105,9 @@ end of the main window's build, so a right click in the panel's window showed no
 - **A menu or a popover opens and is built in the window the press was in.** `pane_window` is the State a pane is
   built in: the panel's window when the panel has one, else the main window. `built_state` is the State being built.
 - **What each window builds last** (`window_overlays`: the context menu and the quote chip): the main window's build
-  ends with it; the panel's build ends with it too, but only in a window of its own (docked or floating, the panel
-  is part of the main window's build, and a menu built twice in one build is two menus).
+  ends with it; each view's window ends with it through the toolkit's hook (`ui.views_set_window_end`, set once beside
+  the windows' backend). A view's build never calls it: docked or floating, the view is part of the main window's
+  build, and a menu built twice in one build is two menus.
 - **The context menu** records the window it opened in (`Ctx_Menu.window`). Each window's build builds it only there;
   in another window the toolkit closes a menu that is not built (`menu_prune`). The selection its Quote reads is that
   window's.
@@ -119,9 +120,8 @@ end of the main window's build, so a right click in the panel's window showed no
 - **`overlay_open` and `pane_at`** read the window being built: a menu of the main window does not stop a right click
   in the panel's window, and the pane under the pointer is found among that window's boxes.
 - **Refused: one overlay pass per view.** Other views can have a window of their own (the diagram viewer has a
-  right click too). The toolkit gives no hook at the end of a view window's build, so ocn calls `window_overlays` from
-  the one view that needs it now. The toolkit must offer that hook (or build each window's program overlays itself);
-  the other views then get it without a copy.
+  right click too). A call in each view's build is a copy per view, and a view that forgets it has no menus in its
+  window: the one hook covers every view's window.
 
 ## One session in both panes: one draft
 

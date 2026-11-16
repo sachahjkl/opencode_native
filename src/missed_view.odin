@@ -85,6 +85,7 @@ missed_bell :: proc(app: ^App, size, em: f32) {
 	ui.a11y({role = .Button, name = i18n.tr("What you missed")})
 	ui.next({width = ui.px(size), height = ui.px(size), fg = ui.caption_ink(ui.theme_color(n > 0 ? "weak text" : "faint text"))})
 	sig := ui.button("bell", icon = lucide.BELL)
+	ui.act_name(sig.box, "command:view.notices")
 	if app.prefs.notices_badge { ui.badge(sig.box, n) }
 	if sig.clicked { command_run(app, command_find("view.notices")) }
 	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("What you missed  (Ctrl+Shift+N)")) } }

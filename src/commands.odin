@@ -4,6 +4,7 @@
 package ocn
 
 import "core:fmt"
+import "gt:config"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
 import lucide "gt:lucide"
@@ -25,6 +26,16 @@ Command :: struct {
 	// .Window: the window's (the keys, the settings, quit; the palette's is the toolkit's): its key works in every page, whatever has the
 	// keyboard, over a view shown as a dialog too (the settings are one): the toolkit takes it from wherever the focus is
 	scope:   ui.Command_Scope,
+	// what it takes in the palette: the palette's form asks for them, and `take` gets their values instead of `run` (its key and
+	// its menu lines still call `run`, which asks in its own way; src/md/features/palette.md)
+	arguments: []config.Def,
+	take:      proc(app: ^App, values: []string),
+}
+
+// Rename the session's argument: its new title.
+RENAME_ARGUMENTS := [?]config.Def{
+	// (empty: a default is read as the form opens, so one that followed the title would be freed under an open form)
+	{name = "title", title = i18n.later("Title"), description = i18n.later("The session's new title."), kind = .String, default = {s = ""}},
 }
 
 @(private = "file") has_session :: proc(app: ^App) -> bool { return main_pane(app).chat.id != "" }
@@ -62,7 +73,8 @@ COMMANDS := [?]Command{
 	{id = "session.quote", title = i18n.later("Quote what is selected"), tags = "reply cite selection", group = i18n.later("Session"), icon = lucide.PENCIL, keys = {{.Q, {.Ctrl}}}, run = quote_selection, enabled = proc(app: ^App) -> bool { return ui.has_selection(&app.state) }},
 	{id = "session.find", title = i18n.later("Find in the conversation"), tags = "search look locate", group = i18n.later("Session"), icon = lucide.SEARCH, keys = {{.F, {.Ctrl}}}, run = proc(app: ^App) { find_open(app, main_pane(app)) }, enabled = can_find},
 	{id = "session.stats", title = i18n.later("Show or hide the Statistics panel"), tags = "stats tokens cost usage numbers", group = i18n.later("Session"), icon = lucide.GAUGE, keys = {{.I, {.Ctrl}}}, run = stats_toggle, enabled = has_session, checked = proc(app: ^App) -> bool { return app.stats.open }},
-	{id = "session.rename", title = i18n.later("Rename the session…"), tags = "title name", group = i18n.later("Session"), icon = lucide.PENCIL, keys = {{.F2, {}}}, run = proc(app: ^App) { rename_open(app, main_pane(app).chat.id) }, enabled = has_session},
+	{id = "session.rename", title = i18n.later("Rename the session…"), tags = "title name", group = i18n.later("Session"), icon = lucide.PENCIL, keys = {{.F2, {}}}, run = proc(app: ^App) { rename_open(app, main_pane(app).chat.id) }, enabled = has_session,
+		arguments = RENAME_ARGUMENTS[:], take = proc(app: ^App, values: []string) { if len(values) == 1 { rename_to(app, main_pane(app).chat.id, values[0]) } }},
 	{id = "session.jump", title = i18n.later("Jump to message…"), tags = "prompt find go earlier history search", group = i18n.later("Session"), icon = lucide.MESSAGE_SQUARE_TEXT, keys = {{.G, {.Ctrl, .Alt}}}, run = jump_show, enabled = has_session},
 	{id = "session.copy_id", title = i18n.later("Copy the session ID"), tags = "identifier ses clipboard", group = i18n.later("Session"), icon = lucide.HASH, run = proc(app: ^App) { session_id_copy(app, main_pane(app).chat.id) }, enabled = has_session},
 	{id = "session.fork", title = i18n.later("Fork the session"), tags = "branch copy duplicate split", group = i18n.later("Session"), icon = lucide.COPY, run = proc(app: ^App) { fork_session(app, main_pane(app).chat.id, "") }, enabled = has_session},

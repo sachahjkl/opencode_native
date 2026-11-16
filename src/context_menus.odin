@@ -43,8 +43,8 @@ Quote_Chip :: struct {
 }
 
 // What each window builds last, over all it holds: the menu of a right click and the quote chip. The main window's build ends
-// with it, and so does the build of a pane's view in a window of its own (src/md/features/chat-panes.md): what is opened in a
-// window is built in that window.
+// with it, and so does the build of each view's window, through the toolkit's window end (views_start; src/md/features/
+// chat-panes.md): what is opened in a window is built in that window.
 window_overlays :: proc(app: ^App, em: f32) {
 	context_menu(app, em)
 }
@@ -419,12 +419,17 @@ rename_answer :: proc(app: ^App) {
 @(private = "file")
 rename_commit :: proc(app: ^App) {
 	r := &app.rename
-	t := strings.trim_space(ui.line_edit_string(&r.field))
 	ui.view_close(&app.program_views, RENAME_VIEW)
 	r.at = .None
-	if t == "" { return }
-	if s := find_session(app, r.id); s != nil && s.title == t { return }   // (nothing changed: nothing to ask)
-	rename_session(app, r.id, t)
+	rename_to(app, r.id, ui.line_edit_string(&r.field))
+}
+
+// Session `id` titled `title` (trimmed): from the dialog, the title edited in place, or the palette's form.
+rename_to :: proc(app: ^App, id, title: string) {
+	t := strings.trim_space(title)
+	if id == "" || t == "" { return }
+	if s := find_session(app, id); s != nil && s.title == t { return }   // (nothing changed: nothing to ask)
+	rename_session(app, id, t)
 	refresh_soon(app)
 }
 

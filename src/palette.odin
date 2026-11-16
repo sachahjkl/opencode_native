@@ -71,7 +71,8 @@ palette_start :: proc(app: ^App) {
 	palette_commands_give(app)
 	prefs_page.palette_settings_add(&p.pal, &p.settings, &app.cfg_prefs, &app.settings.prefs,
 		proc(user: rawptr) -> prefs_page.Page_Options { return settings_options((^App)(user)) },
-		proc(user: rawptr) { settings_open((^App)(user)) },   // (the setting chosen is already alone on its page)
+		// (Shift+Enter on a setting: the source has put its page in front; Enter changes it in the palette, the run mode)
+		proc(user: rawptr) { settings_open((^App)(user)) },
 		app)
 	p.server = {
 		name = "server_command", title = i18n.later("Server commands"), prefix = .Commands, plain = true, remember = true,
@@ -205,7 +206,8 @@ palette_table_keep :: proc(app: ^App) {
 			// (in English: the palette says them in the language in use, and finds them by their English too)
 			// (a command with a state on or off is a switch: its row has the mark, and choosing it keeps the palette)
 			// (its id: the usage memory's key, and the keymap's for the person's own key)
-			table[i] = {id = c.id, label = c.title, group = c.group, icon = c.icon, tags = strings.fields(c.tags, a), keys = c.keys, scope = c.scope, toggle = c.checked != nil}
+			// (its arguments: the palette's form asks for them, palette_run gives them to `take`)
+			table[i] = {id = c.id, label = c.title, group = c.group, icon = c.icon, tags = strings.fields(c.tags, a), keys = c.keys, scope = c.scope, toggle = c.checked != nil, arguments = c.arguments}
 		}
 		p.table = table
 		// (before the first commands_keys: a person's key on an id not known yet takes no chord)
@@ -267,7 +269,10 @@ palette_run :: proc(app: ^App, c: ui.Palette_Choice) {
 	p := &app.palette
 	if _, is := ui.palette_chosen_command(&p.pal, c); is {
 		// (by its id: the table may have been made again since it was ranked)
-		if cmd := command_find(c.id); cmd != nil { command_run(app, cmd) }
+		cmd := command_find(c.id)
+		if cmd == nil { return }
+		// (a command with arguments chosen through its form: their values, not `run`'s own way of asking)
+		if cmd.take != nil && c.arguments != nil { cmd.take(app, c.arguments) } else { command_run(app, cmd) }
 		return
 	}
 	if c.source == &p.server {

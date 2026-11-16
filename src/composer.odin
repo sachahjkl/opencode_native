@@ -169,6 +169,10 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			// what goes with the prompt, then who answers it and with what
 			ui.a11y({role = .Button, name = i18n.tr("Attach files")})
 			att := ui.button("attach", icon = lucide.PAPERCLIP, o = {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true})
+			// (the palette's commands act on the main view: only its composer's buttons are theirs, and a name stated twice goes to
+			// the last one built)
+			named := pane == main_pane(app)
+			if named { ui.act_name(att.box, "command:composer.attach") }
 			if att.clicked { attach_pick(app, pane) }
 			if ui.hovered_for(att) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Attach files: images, PDF, text  (or paste, or drop them here)")) } }
 			agent := shown_agent(app, pane)
@@ -205,7 +209,7 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 				}
 			}
 			ui.spacer(ui.px(em * 0.8))
-			composer_panels(app, em)
+			composer_panels(app, em, named)
 			if pane.chat.busy {
 				if ui.button("stop2", icon = lucide.SQUARE, o = {intent = .Danger, face = .Raised, width = ui.px(math.round(em * COMPOSER_BUTTON_W_EM)), height = math.round(em * BUTTON_H_EM)}).clicked { interrupt_session(app, pane.chat.id) }
 				ui.spacer(ui.px(em * 0.4))
@@ -254,19 +258,20 @@ composer_fit :: proc(app: ^App, pane: ^Chat_Pane, em: f32) -> int {
 
 // The browser and the shells, lit while they are open.
 @(private = "file")
-composer_panels :: proc(app: ^App, em: f32) {
+composer_panels :: proc(app: ^App, em: f32, named: bool) {
 	size := math.round(em * BUTTON_H_EM)
-	panel :: proc(app: ^App, id, icon, name, tip, command: string, lit: bool, size, em: f32) {
+	panel :: proc(app: ^App, id, icon, name, tip, command, act: string, lit: bool, size, em: f32) {
 		ui.a11y({role = .Button, name = name})
 		ui.next({width = ui.px(size), height = ui.px(size)})
 		if lit { ui.next({width = ui.px(size), height = ui.px(size), fg = ui.hue(.Accent)}) }
 		sig := ui.button(id, icon = icon)
+		ui.act_name(sig.box, act)
 		if sig.clicked { command_run(app, command_find(command)) }
 		if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(tip) } }
 		ui.spacer(ui.px(em * 0.4))
 	}
-	if preview_available() { panel(app, "preview_btn", lucide.GLOBE, i18n.tr("Preview panel"), i18n.tr("Preview panel  (Ctrl+Shift+B)"), "view.preview", app.preview.open, size, em) }
-	panel(app, "terminal_btn", lucide.SQUARE_TERMINAL, i18n.tr("Terminal"), i18n.tr("Terminal  (Ctrl+Shift+T)"), "view.terminal", app.cx.terms.open, size, em)
+	if preview_available() { panel(app, "preview_btn", lucide.GLOBE, i18n.tr("Preview panel"), i18n.tr("Preview panel  (Ctrl+Shift+B)"), "view.preview", named ? "command:view.preview" : "", app.preview.open, size, em) }
+	panel(app, "terminal_btn", lucide.SQUARE_TERMINAL, i18n.tr("Terminal"), i18n.tr("Terminal  (Ctrl+Shift+T)"), "view.terminal", named ? "command:view.terminal" : "", app.cx.terms.open, size, em)
 }
 
 // The reader picks one, in the chooser of the composer's button or under `#` in the palette: the session shown takes it, and it stands until that session's end.

@@ -227,6 +227,12 @@ en+ %d unreadable
 fr %d illisible
 fr+ %d illisibles
 
+en Title
+fr Titre
+
+en The session's new title.
+fr Le nouveau titre de la session.
+
 en Keyboard shortcuts
 fr Raccourcis clavier
 
@@ -601,9 +607,6 @@ fr Commenter
 
 en Rename the session
 fr Renommer la session
-
-en Title
-fr Titre
 
 en Rename
 fr Renommer

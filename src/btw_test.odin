@@ -7,7 +7,6 @@ import "base:runtime"
 import "core:fmt"
 import "core:strings"
 import "core:testing"
-import "gt:platform"
 import "gt:ui"
 import session "gt:testkit/session"
 import "gt:testkit/unwatched"
@@ -248,118 +247,57 @@ drafts_join_two_texts :: proc(t: ^testing.T) {
 	testing.expect_value(t, join("same", "same "), "same")
 }
 
-// A test's backend of the views' windows: one offscreen window whose State the test builds (aside_frame). (session.view_windows
-// serves an application of the testkit's, and host.view_windows refuses an offscreen owner: the bench's App is neither.)
-@(private = "file")
-Aside_Window :: struct {
-	app:    ^App,
-	state:  ui.State,
-	win:    ^platform.Window,
-	opened: bool,   // the step asked for it and it was given
-	closed: bool,
-}
-
-@(private = "file")
-aside_windows :: proc(w: ^Aside_Window) -> ui.View_Windows {
-	return {
-		open = proc(user: rawptr, ask: ui.View_Window_Ask) -> (^ui.State, ^platform.Window, rawptr) {
-			w := (^Aside_Window)(user)
-			if w.opened { return nil, nil, nil }   // (one window: the panel's)
-			w.opened = true
-			return &w.state, w.win, w
-		},
-		show = proc(user: rawptr, handle: rawptr) {
-			w := (^Aside_Window)(handle)
-			platform.set_offscreen_active(w.app.win, false)
-			platform.set_offscreen_active(w.win, true)
-		},
-		hide = proc(user: rawptr, handle: rawptr) {},
-		close = proc(user: rawptr, handle: rawptr) { (^Aside_Window)(handle).closed = true },
-		no_positions = true,
-		user = w,
-	}
-}
-
-// A frame of the program (its build, then the step of its views' windows), then one of the panel's window.
-@(private = "file")
-aside_frame :: proc(user: rawptr) {
-	w := (^Aside_Window)(user)
-	frame(w.app)
-	if !w.opened || w.closed { return }
-	events := platform.poll_events(w.win, false)
-	size := ui.Vec2{f32(w.win.size.x), f32(w.win.size.y)}
-	ui.begin_build(&w.state, build_params(w.app, w.win, size, events, f32(session.FRAME_MS / 1000)))
-	ui.views_window_build()
-	ui.end_build()
-	ui.use(&w.app.state)
-}
-
 // The panel in a window of its own (chat-panes.md, "The panel in a window of its own"): a right click on its message opens the
 // message's menu in that window, the composer's model button opens the chooser over that window, and a tooltip shows there. (The
-// menu was opened in the panel's window and built in the main one's: nothing showed.)
+// menu was opened in the panel's window and built in the main one's: nothing showed.) The window is the program's own backend's
+// (host.view_windows, offscreen as the bench's window), so its overlays come from the program's window end, as in the program.
 @(test)
 the_panels_window_has_its_own_menus :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
 		app.conn = bench_conn(app)
-		w := new(Aside_Window)
-		w.app = app
-		w.win = platform.open_window_offscreen("aside", {700, 800})
-		ui.init(&w.state, &app.fonts, &app.theme)
-		w.state.icon_font = app.icons
-		ui.keymap_use(&w.state, &app.keymap)
-		ui.use(&app.state)
-		// (its State is the backend's to end, as a host's close does; ui.view_close of a view in its own window forgets the view
-		// before the step that would close its window, so the window is ended here, whichever way it went)
-		testing.cleanup(t, proc(p: rawptr) {
-			w := (^Aside_Window)(p)
-			ui.destroy(&w.state)
-			platform.destroy_window(w.win)
-			free(w)
-		}, w)
 		defer { bench_clear(app); app.conn = nil }
-		ui.views_set_windows(&app.program_views, aside_windows(w))
-		// (the panel's window drives both: one clock for the two States)
-		sw := session.attach(t, {win = w.win, state = &w.state, user = w, frame = aside_frame, allocator = context.allocator})
-		ui.set_clock(&app.state, &sw.clock)
 
 		bench_clear(app)   // (what earlier tests left unanswered on this thread: the panel's page is the one to answer)
 		_ = btw_open(app, "ses_3")
-		session.wait_until(sw, proc(s: ^session.Session) -> bool { return bench_count(.Messages) > 0 }, "the panel's page asked")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return bench_count(.Messages) > 0 }, "the panel's page asked")
 		page := bench_take(t, .Messages)
 		testing.expect_value(t, page.tag, "ses_3")
 		bench_answer(app, page, 200, btw_page("ses_3", "the aside"))
 		ui.view_present(&app.program_views, BTW_VIEW, .External)
-		session.wait_until(sw, proc(s: ^session.Session) -> bool {
-			w := (^Aside_Window)(s.user)
-			return ui.view_window_state(&w.app.program_views, BTW_VIEW) == &w.state && session.find(s, "msg_ses_3_u") != nil && session.find(s, "model") != nil
-		}, "the panel in its window, its message and its composer")
+		session.wait_until(s, proc(s: ^session.Session) -> bool {
+			w := session.view_window(s, &(^App)(s.user).program_views, BTW_VIEW)
+			// (active: the window takes the activation when it shows, and a press before that is the main window's)
+			return w != nil && w.win.active && session.find(w, "msg_ses_3_u") != nil && session.find(w, "model") != nil
+		}, "the panel in its window, shown, its message and its composer")
+		sw := session.view_window(s, &app.program_views, BTW_VIEW)
 		testing.expect(t, session.find(s, "msg_ses_3_u") == nil, "not in the main window")
 
 		session.click(sw, "msg_ses_3_u", .Right)
 		session.frames(sw, 2)
-		testing.expect_value(t, len(w.state.menus), 1)   // (one not built is closed at the end of the build)
+		testing.expect_value(t, len(sw.state.menus), 1)   // (one not built is closed at the end of the build)
 		testing.expect_value(t, len(app.state.menus), 0)
 		testing.expect_value(t, app.ctx_menu.target.kind, Ctx_Kind.Message)
 		testing.expect_value(t, app.ctx_menu.target.pane, app.btw)
 		session.key(sw, .Escape)
-		testing.expect_value(t, len(w.state.menus), 0)
+		testing.expect_value(t, len(sw.state.menus), 0)
 
 		session.click(sw, "model")
-		session.wait_until(sw, proc(s: ^session.Session) -> bool { return chooser_shows((^App)((^Aside_Window)(s.user).app), .Models) && session.find(s, "palette_list") != nil }, "the chooser in the panel's window")
+		session.wait_until(sw, proc(s: ^session.Session) -> bool { return chooser_shows((^App)(s.parent.user), .Models) && session.find(s, "palette_list") != nil }, "the chooser in the panel's window")
 		testing.expect_value(t, app.palette.chooser_pane, app.btw)
 		testing.expect(t, session.find(s, "palette_list") == nil, "not over the main window")
 		session.key(sw, .Escape)
-		session.wait_until(sw, proc(s: ^session.Session) -> bool { return !ui.palette_is_open(&(^App)((^Aside_Window)(s.user).app).palette.chooser) }, "the chooser closed")
+		session.wait_until(sw, proc(s: ^session.Session) -> bool { return !ui.palette_is_open(&(^App)(s.parent.user).palette.chooser) }, "the chooser closed")
 
 		session.hover(sw, "btw_main")
 		session.advance(sw, 1500)
 		testing.expect(t, session.find(sw, "tooltip") != nil, "its tooltip in the panel's window")
 
+		// (view_close of a view in its own window closes the window at the next step)
 		btw_close(app)
-		session.frames(sw, 2)
-		ui.set_clock(&app.state, &s.clock)
+		session.frames(s, 2)
+		testing.expect(t, session.view_window(s, &app.program_views, BTW_VIEW) == nil, "the panel's window closed")
 	})
 }
 

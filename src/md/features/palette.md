@@ -13,7 +13,7 @@ its prefixes, its keys and its look are the toolkit's: `ext/gui_toolkit/src/md/f
 | `>` | `server` ("Server commands") | the server's commands (`app.cx.slash`), group "Server" | `/name ` in the composer |
 | `@` | `sessions` | the root sessions | `open_root` |
 | `#` | `models`, `agents` | the models under their provider, their context size beside them; the agents but the sub-agents | `choose_model`, `choose_agent` |
-| `:` | `prefs_page.palette_settings_add` on `cfg_prefs` | the settings the pages show | the toolkit: a switch flips and the palette stays; another opens the settings on it |
+| `:` | `prefs_page.palette_settings_add` on `cfg_prefs` | the settings the pages show, each with its value | the toolkit: a switch flips and the palette stays; another unfolds its control under its row (the run mode); Shift+Enter opens the settings on it |
 
 `/` is empty: it is the Paths prefix of the shared table (the session's files, searched by the server), a later step.
 
@@ -64,6 +64,22 @@ one mark, one choice (`choice_take`) for both places.
 - **A session's command says the session it acts on** ("Session · <title>", `Palette_Commands_Options.details`): the
   session shown. The details are made again, with a new version, when the session shown or its title changes (one
   lookup per build while the palette is open).
+- **A command can take values** (`Command.arguments`, given to the table as `ui.Command.arguments`): the palette opens
+  its form, and the values come with the choice to `Command.take`. Its key and its menu lines still call `run`, which
+  asks in its own way. Rename the session is one: in the palette its new title is typed in the form, not in the
+  rename dialog over the palette's place; F2 and the sidebar's menu still open the dialog, and a double click on a
+  title still edits it in place. The title argument starts empty: its default is read when the form opens, and a
+  default that followed the session's title would be a string freed under an open form when the title changes. The
+  row's detail already says the title.
+- **Shift+Enter goes to the button.** A button that runs a palette command names it (`ui.act_name(box,
+  "command:<id>")`): the title bar's Back, Forward, Home and bell; the header's title, figures and Stop; the main
+  composer's attach, Preview and Terminal buttons; the sidebar's New session and Refresh. Only the main view's composer
+  names its buttons: a command acts on the main view, and a name stated twice goes to the last one built.
+- **Refused: a "Set the model" command with a closed list** (`Palette_Commands_Options.choices`). `#` lists the same
+  models, the one in use marked, and chooses on Enter: the command would be a second way to the same list, one step
+  longer (Enter on the command, then the list).
+- **`palette_chosen` runs before the program's content** (`palette_build` at the top of `build_ui`): the run mode's
+  writes are made there, so a page shows a value in the frame the palette changed it.
 
 ## What was lost, and why
 
