@@ -7,6 +7,11 @@ does HTTP, TLS and the proxy: WinHTTP on Windows, libcurl on Linux. The toolkit'
 
 ## Decisions
 
+- **This computer's server is found where opencode writes it, on every system.** opencode (2.3.0,
+  `@opencode/util` `global-roots.ts`) keeps the XDG layout on Windows too: `$XDG_STATE_HOME`, else
+  `%USERPROFILE%\.local\state`, then `opencode\service.json`; the same for the configuration. `opencode_dir` follows that
+  rule. The toolkit's standard folders (`%APPDATA%`, `%LOCALAPPDATA%`) are not the server's: a service started with
+  `XDG_STATE_HOME` set was not found.
 - **No HTTP of its own.** ocn had a Rust copy (ureq, tungstenite, rustls). It was removed: the native library keeps only
   what the toolkit has no Odin equivalent for (the toolkit's Rust crates, the WebView2 on Windows).
 - **The credentials are computed once.** `Http` holds the base address and the `Authorization` header (Basic, user
