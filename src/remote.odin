@@ -30,6 +30,7 @@ read_words :: proc(app: ^App, x: ^remote.Remote) -> (words: string, intent: ui.I
 // `ask` is what Try again runs.
 read_shown :: proc(app: ^App, id: string, x: ^remote.Remote, em: f32, ask: proc(app: ^App)) -> bool {
 	if remote.shows(x) { return true }
+	if read_pending(app, x) { app.reads_waiting = true }
 	words, intent, again := read_words(app, x)
 	info_line(app, id, words, em, intent == .Neutral ? ui.theme_color("weak text") : ui.hue(ui.intent_hue(intent)))
 	if again {
@@ -37,6 +38,24 @@ read_shown :: proc(app: ^App, id: string, x: ^remote.Remote, em: f32, ask: proc(
 		if ui.button(fmt.tprintf("%s_again", id), i18n.tr("Try again"), lucide.REFRESH_CW, {height = math.round(em * BUTTON_COMPACT_H_EM)}).clicked { ask(app) }
 	}
 	return false
+}
+
+// It has nothing to show and its answer is on its way: asked, or about to be asked of a server that is there. (A refusal,
+// a failure or no server is an answer: what it says is all there is.)
+read_pending :: proc(app: ^App, x: ^remote.Remote) -> bool {
+	return !remote.shows(x) && (x.state == .Loading || (x.state == .Idle && online(app)))
+}
+
+// At the top of a view's build that shows readings (read_shown): while one of them waits for its answer, its dialog stays
+// unseen (ui.view_not_ready, 100 ms at most from its opening). It opens with what was read, at its size, not with
+// "Reading…" that a moment later grows into the answer. Once shown, a reading again says "Reading…" in place.
+@(deferred_in = dialog_reads_end)
+dialog_reads :: proc(app: ^App, v: ^ui.View) { app.reads_waiting = false }
+
+@(private = "file")
+dialog_reads_end :: proc(app: ^App, v: ^ui.View) {
+	if app.reads_waiting { ui.view_not_ready(v) }
+	app.reads_waiting = false
 }
 
 // What was in it goes, and it starts over. (Destroying an arena that is zero does nothing, and an arena destroyed can be destroyed again.)

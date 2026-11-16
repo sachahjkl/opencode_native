@@ -114,6 +114,8 @@ App :: struct {
 	prefs_writer:     config.User_Writer,   // writes them off the loop, once a round when they changed (main_after_frame)
 	prefs:            Prefs,          // their plain values
 	facts:            Server_Facts,   // what the server said for the settings pages
+	// a view being built drew a reading whose answer is on its way (read_shown): its dialog waits for it (dialog_reads)
+	reads_waiting:    bool,
 	mcp_events:       [dynamic]Mcp_Event,   // the MCP servers' last events, oldest first (mcp_events.odin)
 	seek_subagent:    bool,   // --seek-subagent (tests): scroll to the first sub-agent card
 	logo:             Logo,

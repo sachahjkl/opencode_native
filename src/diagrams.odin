@@ -290,6 +290,8 @@ diagram_view :: proc(view: ^ui.View, app: ^App) {
 	dark := !app.cx.theme.light
 	d, key, waiting := diagram_view_shown(app, v, dark)
 	if d == nil || d.why != "" { ui.view_end(view, ui.VIEW_CANCELLED); return }
+	// (opened in a direction chosen before: it shows in it, not in its text's for a moment; once shown, "Laying out…" says it)
+	if waiting { ui.view_not_ready(view) }
 	if key != v.shown {
 		v.shown = key
 		ui.preview_reset(&v.preview)   // (another shape: it fits again)

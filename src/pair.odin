@@ -122,6 +122,8 @@ pair_body :: proc(app: ^App, v: ^ui.View, em: f32) {
 		return
 	}
 	if p.code == "" {
+		// (as tall as what it holds: it opens at the QR code's size, not at this line's that the code then pushes down)
+		ui.view_not_ready(v)
 		pair_note("###w", i18n.tr("Asking the server for a code…"), ui.theme_color("weak text"), soft)
 		animate(app)
 		return

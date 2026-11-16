@@ -68,6 +68,34 @@ panel closed, it goes back to the main window first (`preview_home`). It is plac
 (`frame`: `preview_after_frames`), where its panel was laid out. It steps aside while a floating view or a dialog is
 over it (`ui.view_occluders`), while a dialog's scrim dims its window, a menu or the file browser is open there.
 
+## A dialog opens with its answer
+
+A dialog whose content comes from the server or a worker calls `ui.view_not_ready` while that answer is on its way. Its
+dialog stays unseen for 100 ms at most, then shows what it holds. It opens with what was read and at its size.
+Otherwise it shows "Reading…" and grows or swaps a moment later.
+
+- **One signal for every reading.** `read_shown` notes a reading still on its way (`read_pending`). A view that shows
+  readings calls `dialog_reads(app, v)` at the top of its build. The settings, the schedules, the artifacts, What this
+  session changed, and the Statistics put in a dialog use it. Refused: a check per page of what it reads. The pages are
+  the toolkit's callbacks with no view, and a list kept apart from `read_shown` goes stale.
+- **The others say it themselves.** These dialogs call `view_not_ready` directly:
+  - Pairing waits for its code.
+  - What you missed waits for the report of the card shown.
+  - The diagram viewer waits for a layout in the direction chosen before.
+  - The image viewer waits for its picture and for the build after it asks for its size. `ui.view_size` takes effect in
+    the next build, and a dialog of a known size shows in its first build.
+- **What a person starts keeps its own state.** Go back's "Reading…" while the server writes the files back, a
+  direction chosen in the open viewer, Try again: the dialog is shown already, and the words say what goes on.
+- **Not the shells.** A shell's view is a panel by default, and making a shell is the server starting a process. Its
+  "Making a shell…" is what a person waits for.
+
+## A dialog summoned by a key
+
+Every view that a command's own key opens has `View_Options.quick` (70 ms fade): the settings, What you missed, the
+Statistics, the shells, the Preview, the sidebar. It acts only when the view is a dialog. The toolkit's palettes (the
+commands, Jump to message, the composer's chooser) have it already. The keys sheet (F1), the rename question (F2) and the
+file browser (Ctrl+P) are the toolkit's views, which have no `quick` yet.
+
 ## The image viewer
 
 As a dialog it opens around its picture: its size is asked at each build (`ui.view_size`), from the share of the window

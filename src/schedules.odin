@@ -215,6 +215,8 @@ field_line :: proc(id: string, f: ^ui.Line_Edit, hint: string, em: f32, label :=
 // size. (A small thing: no sizes to choose.)
 schedules_view :: proc(v: ^ui.View, app: ^App) {
 	s := &app.cx.schedules
+	// (as tall as what it holds: it opens at the size of the list read, not of "Reading…")
+	dialog_reads(app, v)
 	em := ui.font_size()
 	margin := em * ui.MODAL_MARGIN_EM
 	// (docked: the room of its place; else as tall as what it holds, up to its window's: its own size would hold it)
@@ -604,6 +606,7 @@ artifact_write_free :: proc(data: rawptr) {
 
 artifacts_view :: proc(v: ^ui.View, app: ^App) {
 	a := &app.cx.artifacts
+	dialog_reads(app, v)
 	em := ui.font_size()
 	{
 		ui.space(ui.SPACE_2)

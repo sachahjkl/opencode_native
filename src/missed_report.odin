@@ -91,6 +91,9 @@ missed_report_put :: proc(app: ^App, sid: string) {
 	missed_report_ask(app, sid)
 }
 
+// It has nothing to show yet: not asked (nil, or its server was left), or on its way. Its place says "Reading…".
+missed_report_waits :: proc(r: ^Missed_Report) -> bool { return r == nil || r.state == .Unread || r.state == .Reading }
+
 // The view needs the report of `sid`: asked when it has none to show and none is on its way. True: asked.
 missed_report_want :: proc(app: ^App, sid: string) -> bool {
 	if sid == "" { return false }

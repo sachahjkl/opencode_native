@@ -1198,6 +1198,106 @@ the_viewer_s_area_fills_the_dialog_the_person_sized :: proc(t: ^testing.T) {
 	})
 }
 
+// How much of view `id`'s dialog shows in the last frame: 0 unseen (or not built), 1 whole.
+@(private = "file")
+dialog_shown :: proc(s: ^session.Session, id: string) -> f32 {
+	b := session.find(s, fmt.tprintf("modal_view_%s", id))
+	return b != nil ? 1 - b.transparency : 0
+}
+
+// A frame whose clock does not move: a dialog's wait for its answer (100 ms of the interface's time at most) cannot end
+// in it, whatever a chore or the test takes to answer.
+@(private = "file")
+frame_still :: proc(s: ^session.Session) {
+	s.clock -= session.FRAME_MS
+	session.frame(s)
+}
+
+// The frames until view `id`'s dialog first shows (a wall-clock bound): its panel's rect in that frame.
+@(private = "file")
+first_shown :: proc(t: ^testing.T, s: ^session.Session, id: string, still := true) -> ui.Rect {
+	start := time.tick_now()
+	for dialog_shown(s, id) == 0 {
+		if still { frame_still(s) } else { session.frame(s) }
+		if time.tick_since(start) > 30 * time.Second { testing.fail_now(t, "the dialog never showed") }
+	}
+	return session.get(s, fmt.tprintf("modal_view_%s", id)).rect
+}
+
+// The viewer shows in the frame its picture is there, around it: never with "Opening the image…" at the kind's size, nor at
+// that size for one frame before the hug. (A dialog of a known size shows in its first build: the viewer's asks for its
+// size in a build, which is the next build's.) Opened again on a picture decoded already, the same.
+@(test)
+the_viewer_shows_at_once_around_its_picture :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		W, H :: 400, 200
+		pixels := make([]u8, W * H * 4, context.temp_allocator)
+		for i in 0 ..< W * H { pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 2], pixels[i * 4 + 3] = u8(i % W), 120, u8(i / W), 255 }
+		file := png.encode(pixels, W, H, .Fast, context.allocator)
+		ref := image_ref(string(file), .Bytes, "image/png", "picture.png")
+		for opening in 0 ..< 2 {
+			image_view_open(app, ref)
+			first := first_shown(t, s, IMAGE_VIEW)
+			testing.expectf(t, session.find(s, "view") != nil, "opening %d: the picture in the first frame shown", opening)
+			testing.expectf(t, session.find(s, "view_wait") == nil, "opening %d: no \"Opening the image…\" shown", opening)
+			session.frames(s, 3)
+			settled := session.get(s, "modal_view_image").rect
+			testing.expectf(t, first == settled, "opening %d: shown at its size: %v, then %v", opening, first, settled)
+			ui.view_close(&app.program_views, IMAGE_VIEW)
+			session.frames(s, 2)
+		}
+	})
+}
+
+// The schedules' dialog, as tall as what it holds, waits for the server's list: no frame shows "Reading…" before it, and
+// the first frame shown has the list, at the size it keeps.
+@(test)
+the_schedules_show_with_their_list :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		// (its requests kept: answers_test.odin; none an earlier test left on this thread)
+		clear(&bench_sent)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		schedules_open(app, BENCH_CHAT_ID)
+		for _ in 0 ..< 8 {
+			frame_still(s)
+			testing.expectf(t, dialog_shown(s, SCHEDULES_VIEW) == 0, "unseen while the list is read: %v", dialog_shown(s, SCHEDULES_VIEW))
+		}
+		bench_answer(app, bench_take(t, .Schedules), 200, `{"data":[{"id":"x","name":"n","status":"active"},{"id":"y","status":"paused"}]}`)
+		first := first_shown(t, s, SCHEDULES_VIEW)
+		testing.expect(t, session.find_text(s, "PLANNED (2)") != nil, "the list in the first frame shown")
+		session.frames(s, 3)
+		settled := session.get(s, fmt.tprintf("modal_view_%s", SCHEDULES_VIEW)).rect
+		testing.expectf(t, first == settled, "shown at its size: %v, then %v", first, settled)
+	})
+}
+
+// The settings, summoned by their key, fade in over the palette's 70 ms, not a dialog's 120 ms (View_Options.quick).
+@(test)
+the_settings_fade_in_quickly :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		ui.set_animations(&app.state, .On)
+		session.frames(s, 2)
+		session.event(s, {kind = .Key_Press, key = .Comma, mods = {.Ctrl}})
+		_ = first_shown(t, s, SETTINGS_VIEW, still = false)
+		from := s.clock
+		start := time.tick_now()
+		for dialog_shown(s, SETTINGS_VIEW) < 1 {
+			session.frame(s)
+			if time.tick_since(start) > 30 * time.Second { testing.fail_now(t, "the fade never ended") }
+		}
+		// (the frame that shows it moves the fade by its own length: whole a frame or less before 70 ms)
+		took := s.clock - from + session.FRAME_MS
+		testing.expectf(t, took >= 70 && took < 70 + session.FRAME_MS, "the fade took %v ms", took)
+	})
+}
+
 // A question's long options and the review's long answers stay in the card: they go on to the next lines (they ran past its edge).
 @(test)
 a_form_s_long_lines_stay_in_its_card :: proc(t: ^testing.T) {

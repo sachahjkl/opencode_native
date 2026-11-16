@@ -59,7 +59,9 @@ views_start :: proc(app: ^App, path: string) {
 	// (a menu or a chip opened in a view's window is that window's State's: built at the end of each such window's build,
 	// as the main window's build ends with it; chat-panes.md)
 	ui.views_set_window_end(vs, proc(user: rawptr, _: ^ui.View) { window_overlays((^App)(user), ui.font_size()) }, app)
-	ui.view_register(vs, SIDEBAR_VIEW, sidebar_pane, ui.View_Options{title = i18n.later("Sessions"), icon = lucide.MENU,
+	// (`quick` on every view a command's key opens (Ctrl+B here): summoned by a key, put in a dialog, it fades in at the
+	// palette's pace)
+	ui.view_register(vs, SIDEBAR_VIEW, sidebar_pane, ui.View_Options{title = i18n.later("Sessions"), icon = lucide.MENU, quick = true,
 		home = .Panel, home_place = {edge = .Left}, extent_em = SIDEBAR_EM, width_em = SIDEBAR_EM, min_width_em = SIDEBAR_MIN_EM,
 		// (its zone minimised keeps this column, and builds it as the rail: sidebar_pane)
 		rail_em = SIDEBAR_RAIL_EM})
@@ -73,11 +75,11 @@ views_start :: proc(app: ^App, path: string) {
 @(private = "file")
 panels_register :: proc(app: ^App) {
 	vs := &app.program_views
-	ui.view_register(vs, PREVIEW_VIEW, preview_view, ui.View_Options{title = i18n.later("Preview"), icon = lucide.GLOBE,
+	ui.view_register(vs, PREVIEW_VIEW, preview_view, ui.View_Options{title = i18n.later("Preview"), icon = lucide.GLOBE, quick = true,
 		home = .Panel, home_place = {edge = .Right}, extent_em = PREVIEW_EM, width_em = PREVIEW_EM, min_width_em = PANEL_MIN_EM,
 		// (its page is a child window of the system's: its window of its own has one, and the page follows the view)
 		under_children = true, moved = preview_moved})
-	ui.view_register(vs, STATS_VIEW, stats_view, ui.View_Options{title = i18n.later("Statistics"), icon = lucide.GAUGE,
+	ui.view_register(vs, STATS_VIEW, stats_view, ui.View_Options{title = i18n.later("Statistics"), icon = lucide.GAUGE, quick = true,
 		home = .Panel, home_place = {edge = .Right}, extent_em = PREVIEW_EM, width_em = PREVIEW_EM, min_width_em = PANEL_MIN_EM})
 	// (/btw's fork: its tab, shown with the panel alone, says its title; its strip has "Open in the main view": btw.odin)
 	ui.view_register(vs, BTW_VIEW, btw_view, ui.View_Options{title = i18n.later("Aside"), icon = lucide.MESSAGE_CIRCLE,
@@ -85,7 +87,7 @@ panels_register :: proc(app: ^App) {
 		tabs_always = true})
 	// (the shells' strip shows with one shell too: its tab says which, its "+" makes another, as a terminal's does. Its
 	// label is translated once here: the language is read before (prefs_init))
-	ui.view_register(vs, TERMINAL_VIEW, terminal_view, ui.View_Options{title = i18n.later("Terminal"), icon = lucide.SQUARE_TERMINAL,
+	ui.view_register(vs, TERMINAL_VIEW, terminal_view, ui.View_Options{title = i18n.later("Terminal"), icon = lucide.SQUARE_TERMINAL, quick = true,
 		home = .Panel, home_place = {edge = .Bottom}, extent_em = TERMINAL_EM, width_em = 60, height_em = 30, min_width_em = PANEL_MIN_EM,
 		tabs_always = true, new_tab = proc(data: rawptr) { term_create((^App)(data)) }, new_tab_label = i18n.tr("New terminal")})
 }
@@ -94,16 +96,17 @@ panels_register :: proc(app: ^App) {
 @(private = "file")
 dialogs_register :: proc(app: ^App) {
 	vs := &app.program_views
-	sized :: proc(vs: ^ui.Views, id: string, build: $B, title, icon: string, size, least: [2]f32) {
+	// (`quick`: a command's key opens it, as SIDEBAR_VIEW's)
+	sized :: proc(vs: ^ui.Views, id: string, build: $B, title, icon: string, size, least: [2]f32, quick := false) {
 		ui.view_register(vs, id, build, ui.View_Options{title = title, icon = icon, width_em = size.x, height_em = size.y,
-			min_width_em = least.x, min_height_em = least.y, resizable = true, backdrop = view_backdrop})
+			min_width_em = least.x, min_height_em = least.y, resizable = true, backdrop = view_backdrop, quick = quick})
 	}
-	sized(vs, SETTINGS_VIEW, settings_view, i18n.later("Settings"), lucide.SLIDERS_HORIZONTAL, {62, 44}, {40, 24})
+	sized(vs, SETTINGS_VIEW, settings_view, i18n.later("Settings"), lucide.SLIDERS_HORIZONTAL, {62, 44}, {40, 24}, quick = true)
 	sized(vs, CHANGES_VIEW, changes_view, i18n.later("What this session changed"), lucide.FILE, {62, 46}, {34, 20})
 	sized(vs, ARTIFACTS_VIEW, artifacts_view, i18n.later("Artifacts of this folder"), lucide.FILE, {70, 46}, {44, 22})
 	sized(vs, DIFF_VIEW, diff_full_view, i18n.later("Diff"), lucide.FILE, {130, 80}, {50, 24})
 	sized(vs, OUTPUT_VIEW, output_view_view, i18n.later("Output"), lucide.SQUARE_TERMINAL, {96, 56}, {44, 20})
-	sized(vs, MISSED_VIEW, missed_view, i18n.later("What you missed"), lucide.BELL, {60, 42}, {36, 18})
+	sized(vs, MISSED_VIEW, missed_view, i18n.later("What you missed"), lucide.BELL, {60, 42}, {36, 18}, quick = true)
 	sized(vs, DIAGRAM_VIEW, diagram_view, i18n.later("Mermaid diagram"), lucide.GIT_FORK, {80, 52}, {26, 14})
 	// (as a dialog it opens around its picture: ui.view_size; the size its grips give it is kept, and sets the share of the window
 	// the next pictures take)

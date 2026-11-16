@@ -171,6 +171,9 @@ missed_view :: proc(v: ^ui.View, app: ^App) {
 		if cards { body, at = missed_cards(app, em) } else { body, at = missed_list(app, em) }
 		if act == .None { act, act_row = body, at }   // (the header's buttons first)
 	}
+	// (the card opens with its run's report, not with "Reading…" that the report then pushes down; the list's rows are
+	// the log's, there already)
+	if cards && missed_card_waits(app) { ui.view_not_ready(v) }
 	// (after the rows: acknowledging changes the log, and the rows hold its entries)
 	missed_act(app, act, act_row)
 }
@@ -271,6 +274,16 @@ missed_cards :: proc(app: ^App, em: f32) -> (act: Missed_Act, act_row: int) {
 	}
 	missed_foot(app, i18n.tr("Enter open    ← → move    A acknowledge    Shift+A the session    Ctrl+Shift+A all"), em)
 	return
+}
+
+// The card shown waits for its run's report from the server.
+@(private = "file")
+missed_card_waits :: proc(app: ^App) -> bool {
+	m := &app.missed
+	if len(m.cards_rows) == 0 || app.conn == nil { return false }
+	e := m.rows[m.cards_rows[clamp(m.cards.at, 0, len(m.cards_rows) - 1)]].entry
+	sid := e != nil ? missed_report_session(app, e) : ""
+	return sid != "" && missed_report_waits(missed_report_find(app, sid))
 }
 
 @(private = "file")
@@ -479,7 +492,7 @@ missed_brief :: proc(app: ^App, e: ^notices.Entry, em: f32) -> (retry: bool) {
 		missed_shell_exit(app, e, em)
 	case .End, .Sub, .Scheduled:
 		rep := missed_report_find(app, missed_report_session(app, e))
-		if rep == nil || rep.state == .Unread || rep.state == .Reading { missed_faint("rd", i18n.tr("Reading…"), em); return }
+		if missed_report_waits(rep) { missed_faint("rd", i18n.tr("Reading…"), em); return }
 		if rep.state == .Failed { return missed_failed(em) }
 		if rep.request_head != "" {
 			section_label("rq", i18n.tr("REQUEST"), em)
@@ -584,7 +597,7 @@ missed_answer_card :: proc(app: ^App, e: ^notices.Entry, em: f32) -> bool {
 // The report of a run, whole: the request, the answer as Markdown, the files, the todo list. True: Try again.
 @(private = "file")
 missed_report_card :: proc(app: ^App, rep: ^Missed_Report, em: f32) -> (retry: bool) {
-	if rep == nil || rep.state == .Unread || rep.state == .Reading { missed_faint("rd", i18n.tr("Reading…"), em); return }
+	if missed_report_waits(rep) { missed_faint("rd", i18n.tr("Reading…"), em); return }
 	if rep.state == .Failed { return missed_failed(em) }
 	if rep.request != "" {
 		section_label("rq", i18n.tr("REQUEST"), em)

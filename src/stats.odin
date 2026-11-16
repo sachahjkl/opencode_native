@@ -137,6 +137,7 @@ stats_toggle :: proc(app: ^App) {
 
 // The panel's view: it follows the session shown, at the width it is given.
 stats_view :: proc(v: ^ui.View, app: ^App) {
+	dialog_reads(app, v)   // (put in a dialog: it opens with the totals; docked, nothing waits)
 	app.stats.built = true
 	app.stats.width = ui.view_room(v).x
 	stats_panel(app, ui.font_size())

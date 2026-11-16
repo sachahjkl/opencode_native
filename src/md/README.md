@@ -11,7 +11,8 @@ purpose, the decisions, what was refused.
 - [features/selection-scroll.md](features/selection-scroll.md): a selection dragged to the conversation's edge scrolls
   it: a selecting drag lets go of the bottom; the messages are the selection's rows, a copy reads those not built.
 - [features/views.md](features/views.md): the dialogs and the panels as views; the program's state as the truth of what
-  is open; a shell's input in a window of its own; the Preview's page across windows.
+  is open; a dialog that opens with its answer, or fast when a key summons it; a shell's input in a window of its own;
+  the Preview's page across windows.
 - [features/missed.md](features/missed.md): several entries of What you missed selected and acknowledged at once.
 - [features/job-reports.md](features/job-reports.md): the harness's reports of ended background jobs, read as cards.
 - [features/background-subagents.md](features/background-subagents.md): sub-agents run in the background (opencode

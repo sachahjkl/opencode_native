@@ -739,6 +739,8 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 }
 
 settings_view :: proc(v: ^ui.View, app: ^App) {
+	// (a server's page opens with what the server said: settings_open asked for it)
+	dialog_reads(app, v)
 	// one sidebar for every page: the toolkit's page holds the client's preferences and the server's pages alike
 	ui.next({width = ui.fill(), height = ui.fill()})
 	prefs_page.build(&app.settings.prefs, &app.cfg_prefs, settings_options(app))

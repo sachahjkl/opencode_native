@@ -465,6 +465,8 @@ changes_follow :: proc(app: ^App) {
 
 changes_view :: proc(view: ^ui.View, app: ^App) {
 	c := &app.cx.changes
+	// (the files read; Go back's "Reading…" while the server writes them back is the person's own act: it shows)
+	dialog_reads(app, view)
 	em := ui.font_size()
 	v, viewing := c.state.(Changes_Viewing)
 	_, staging := c.state.(Changes_Staging)
