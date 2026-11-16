@@ -233,6 +233,9 @@ fr Titre
 en The session's new title.
 fr Le nouveau titre de la session.
 
+en Model
+fr Modèle
+
 en Keyboard shortcuts
 fr Raccourcis clavier
 
@@ -307,6 +310,9 @@ fr Afficher ou masquer le panneau des statistiques
 
 en Rename the session…
 fr Renommer la session…
+
+en Set the model…
+fr Choisir le modèle…
 
 en Jump to message…
 fr Aller à un message…
@@ -1284,9 +1290,6 @@ fr Session · %s
 
 en Server
 fr Serveur
-
-en Models
-fr Modèles
 
 en Agents
 fr Agents
@@ -2318,6 +2321,9 @@ fr+ … et %d outils de plus
 
 en No tool call in the loaded messages.
 fr Aucun appel d'outil dans les messages chargés.
+
+en Models
+fr Modèles
 
 en %s out
 fr %s en sortie

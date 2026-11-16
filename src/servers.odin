@@ -486,7 +486,9 @@ server_tabs :: proc(app: ^App, em: f32) {
 			}
 		}
 		ui.space(ui.SPACE_1)
-		if ui.button("srv_add", icon = lucide.PLUS, o = {tip = i18n.tr("Add a server…"), height = h - 2 * math.round(em * 0.15)}).clicked { server_edit_open(app, -1) }
+		add := ui.button("srv_add", icon = lucide.PLUS, o = {tip = i18n.tr("Add a server…"), height = h - 2 * math.round(em * 0.15)})
+		ui.act_name(add.box, "command:app.add_server")
+		if add.clicked { server_edit_open(app, -1) }
 		ui.space(ui.SPACE_3)
 	}
 	server_menu(app, SERVER_MENU_KEY, em)

@@ -116,9 +116,10 @@ end of the main window's build, so a right click in the panel's window showed no
   In a conversation it holds to the message the selection ended in (its lazy item, and the pointer's offset in it), not
   to the screen: it scrolls with the text, hides while that point is out of the view, and comes back with it. The
   toolkit gives no rect of the selection itself, and a message is one rect test per message built.
-- **The model and agent chooser** (a palette, a view of the window it opens over) opens in the build of the window of
-  the pane that asked: `chooser_build` runs at the top of the main window's build and at the top of the panel's
-  build in its own window, and opens it only where `pane_window` of the chooser's pane is the State being built.
+- **Set the model's form and the agent chooser** (palettes, views of the window they open over) open in the build of
+  the window of the pane that asked: `palette_choose` and `chooser_build` run at the top of the main window's build
+  and at the top of the panel's build in its own window, and open only where `pane_window` of the asking pane is the
+  State being built. The form sets that pane's model (palette.md, "The composer's buttons").
 - **Tooltips** were already per window: `ui.tooltip` is built where it is asked.
 - **`overlay_open` and `pane_at`** read the window being built: a menu of the main window does not stop a right click
   in the panel's window, and the pane under the pointer is found among that window's boxes.

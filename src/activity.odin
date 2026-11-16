@@ -768,6 +768,7 @@ activity_strip :: proc(app: ^App, em: f32) {
 	b := ui.build_box({.Clickable, .Focusable, .Draw_Background, .Draw_Hot_Effects}, "###act_strip")
 	ui.pop_tags()
 	sig := ui.signal(b)
+	ui.act_name(b, "command:session.activity")
 	if sig.clicked { activity_toggle(app) }
 	if ui.parent(b) {
 		note := ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)}

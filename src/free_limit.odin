@@ -84,7 +84,9 @@ free_limit_panel :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.fill())
 			if ui.button("fl_go", i18n.tr("Subscribe to Go · $10/mo"), o = {face = .Ghost}).clicked { ui.open(FREE_LIMIT_GO_URL, .Url) }
 			ui.space(ui.CONTROL_GAP)
-			if ui.button("fl_connect", i18n.tr("Connect provider"), lucide.PLUG, {intent = .Primary}).clicked { settings_open_on(app, "connections") }
+			connect := ui.button("fl_connect", i18n.tr("Connect provider"), lucide.PLUG, {intent = .Primary})
+			ui.act_name(connect.box, "command:app.connections")
+			if connect.clicked { settings_open_on(app, "connections") }
 		}
 	}
 }

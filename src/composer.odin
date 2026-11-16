@@ -179,13 +179,15 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			if agent == "" { agent = "build" }
 			// (the narrowest toolbar: the agent and the variant by their glyphs, their names in the tips)
 			composer_tool_pad(em)
-			asig := ui.button("agent", ui.text_shown(fit >= 3 ? "" : agent), lucide.BOT, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = chooser_shows(app, .Agents), tip = fit >= 3 ? agent : ""})
-			if asig.clicked { chooser_toggle(app, pane, .Agents) }
+			asig := ui.button("agent", ui.text_shown(fit >= 3 ? "" : agent), lucide.BOT, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = chooser_shows(app), tip = fit >= 3 ? agent : ""})
+			if asig.clicked { chooser_toggle(app, pane) }
 			model, _ := shown_model(app, pane)
 			if model == "" { model = i18n.tr("default model") }
 			composer_tool_pad(em)
-			msig := ui.button("model", ui.text_shown(model), lucide.CPU, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = chooser_shows(app, .Models)})
-			if msig.clicked { chooser_toggle(app, pane, .Models) }
+			msig := ui.button("model", ui.text_shown(model), lucide.CPU, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = model_form_shows(app, pane)})
+			if named { ui.act_name(msig.box, "command:session.set_model") }
+			// (Set the model's form, for this pane: a panel's composer sets its own session's model)
+			if msig.clicked { model_form_open(app, pane) }
 			variant_button(app, pane, em, fit >= 3)
 			if pane.chat.id != "" { approval_button(app, pane, em) }   // (a session's: a new one has none yet)
 			ui.spacer(ui.fill())

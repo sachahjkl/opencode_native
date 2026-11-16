@@ -30,12 +30,34 @@ Command :: struct {
 	// its menu lines still call `run`, which asks in its own way; src/md/features/palette.md)
 	arguments: []config.Def,
 	take:      proc(app: ^App, values: []string),
+	// the value argument `argument` starts with when its form opens (temp: the form copies it): the value in use, so
+	// the form edits it. Not ok: its Def.default
+	initial:   proc(app: ^App, argument: string) -> (value: string, ok: bool),
+	// the closed list a String argument takes, its labels (English or a name) and values (temp: read once when the
+	// step opens, the palette keeps a copy); nil: a free field
+	choices:   proc(app: ^App, argument: string) -> (labels, values: []string),
 }
 
-// Rename the session's argument: its new title.
+// Rename the session's argument: its new title (starting on the title in use).
 RENAME_ARGUMENTS := [?]config.Def{
-	// (empty: a default is read as the form opens, so one that followed the title would be freed under an open form)
-	{name = "title", title = i18n.later("Title"), description = i18n.later("The session's new title."), kind = .String, default = {s = ""}},
+	{name = "title", title = i18n.later("Title"), description = i18n.later("The session's new title."), kind = .String},
+}
+
+// Set the model's argument: the model, `provider/id`, one of those the server lists (model_choices).
+MODEL_ARGUMENTS := [?]config.Def{
+	{name = "model", title = i18n.later("Model"), kind = .String},
+}
+
+@(private = "file")
+rename_initial :: proc(app: ^App, _: string) -> (string, bool) {
+	s := find_session(app, main_pane(app).chat.id)
+	return s != nil ? s.title : "", s != nil
+}
+
+@(private = "file")
+model_initial :: proc(app: ^App, _: string) -> (string, bool) {
+	model, provider := shown_model(app, model_pane(app))
+	return model_key(provider, model), model != ""
 }
 
 @(private = "file") has_session :: proc(app: ^App) -> bool { return main_pane(app).chat.id != "" }
@@ -74,7 +96,11 @@ COMMANDS := [?]Command{
 	{id = "session.find", title = i18n.later("Find in the conversation"), tags = "search look locate", group = i18n.later("Session"), icon = lucide.SEARCH, keys = {{.F, {.Ctrl}}}, run = proc(app: ^App) { find_open(app, main_pane(app)) }, enabled = can_find},
 	{id = "session.stats", title = i18n.later("Show or hide the Statistics panel"), tags = "stats tokens cost usage numbers", group = i18n.later("Session"), icon = lucide.GAUGE, keys = {{.I, {.Ctrl}}}, run = stats_toggle, enabled = has_session, checked = proc(app: ^App) -> bool { return app.stats.open }},
 	{id = "session.rename", title = i18n.later("Rename the session…"), tags = "title name", group = i18n.later("Session"), icon = lucide.PENCIL, keys = {{.F2, {}}}, run = proc(app: ^App) { rename_open(app, main_pane(app).chat.id) }, enabled = has_session,
-		arguments = RENAME_ARGUMENTS[:], take = proc(app: ^App, values: []string) { if len(values) == 1 { rename_to(app, main_pane(app).chat.id, values[0]) } }},
+		arguments = RENAME_ARGUMENTS[:], initial = rename_initial, take = proc(app: ^App, values: []string) { if len(values) == 1 { rename_to(app, main_pane(app).chat.id, values[0]) } }},
+	// (its key and its menu line open its form, as the composer's model button does; it sets the model of model_pane)
+	{id = "session.set_model", title = i18n.later("Set the model…"), tags = "llm provider switch change", group = i18n.later("Session"), icon = lucide.CPU, run = proc(app: ^App) { model_form_open(app, main_pane(app)) }, enabled = proc(app: ^App) -> bool { return len(app.models) > 0 },
+		arguments = MODEL_ARGUMENTS[:], initial = model_initial, choices = proc(app: ^App, _: string) -> (labels, values: []string) { return model_choices(app) },
+		take = proc(app: ^App, values: []string) { if len(values) == 1 { model_choose(app, model_pane(app), values[0]) } }},
 	{id = "session.jump", title = i18n.later("Jump to message…"), tags = "prompt find go earlier history search", group = i18n.later("Session"), icon = lucide.MESSAGE_SQUARE_TEXT, keys = {{.G, {.Ctrl, .Alt}}}, run = jump_show, enabled = has_session},
 	{id = "session.copy_id", title = i18n.later("Copy the session ID"), tags = "identifier ses clipboard", group = i18n.later("Session"), icon = lucide.HASH, run = proc(app: ^App) { session_id_copy(app, main_pane(app).chat.id) }, enabled = has_session},
 	{id = "session.fork", title = i18n.later("Fork the session"), tags = "branch copy duplicate split", group = i18n.later("Session"), icon = lucide.COPY, run = proc(app: ^App) { fork_session(app, main_pane(app).chat.id, "") }, enabled = has_session},

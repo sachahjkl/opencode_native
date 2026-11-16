@@ -248,7 +248,8 @@ drafts_join_two_texts :: proc(t: ^testing.T) {
 }
 
 // The panel in a window of its own (chat-panes.md, "The panel in a window of its own"): a right click on its message opens the
-// message's menu in that window, the composer's model button opens the chooser over that window, and a tooltip shows there. (The
+// message's menu in that window, the composer's model button opens Set the model's form over that window for the panel's
+// session, and a tooltip shows there. (The
 // menu was opened in the panel's window and built in the main one's: nothing showed.) The window is the program's own backend's
 // (host.view_windows, offscreen as the bench's window), so its overlays come from the program's window end, as in the program.
 @(test)
@@ -283,12 +284,24 @@ the_panels_window_has_its_own_menus :: proc(t: ^testing.T) {
 		session.key(sw, .Escape)
 		testing.expect_value(t, len(sw.state.menus), 0)
 
+		// (the panel's model button: Set the model's form over the panel's window, for the panel's session)
+		append(&app.models, Model_Info{id = strings.clone("swift"), provider = strings.clone("zeta"), name = strings.clone("Swift")},
+			Model_Info{id = strings.clone("steady"), provider = strings.clone("omega"), name = strings.clone("Steady")})
+		app.cx.catalog_version += 1
+		main_model, main_provider := shown_model(app, main_pane(app))
 		session.click(sw, "model")
-		session.wait_until(sw, proc(s: ^session.Session) -> bool { return chooser_shows((^App)(s.parent.user), .Models) && session.find(s, "palette_list") != nil }, "the chooser in the panel's window")
-		testing.expect_value(t, app.palette.chooser_pane, app.btw)
-		testing.expect(t, session.find(s, "palette_list") == nil, "not over the main window")
-		session.key(sw, .Escape)
-		session.wait_until(sw, proc(s: ^session.Session) -> bool { return !ui.palette_is_open(&(^App)(s.parent.user).palette.chooser) }, "the chooser closed")
+		session.wait_until(sw, proc(s: ^session.Session) -> bool {
+			app := (^App)(s.parent.user)
+			return model_form_shows(app, &app.panes[app.btw]) && app.palette.pal.owner == s.state
+		}, "Set the model's form in the panel's window")
+		session.type_text(sw, "omega")
+		session.frames(sw, 3)
+		session.key(sw, .Return)
+		session.wait_until(sw, proc(s: ^session.Session) -> bool { return !palette_shown((^App)(s.parent.user)) }, "the form closed by its choice")
+		model, provider := shown_model(app, &app.panes[app.btw])
+		testing.expect(t, model == "steady" && provider == "omega", "the panel's model set")
+		model, provider = shown_model(app, main_pane(app))
+		testing.expect(t, model == main_model && provider == main_provider, "the main view's model kept")
 
 		session.hover(sw, "btw_main")
 		session.advance(sw, 1500)

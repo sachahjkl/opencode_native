@@ -125,7 +125,9 @@ sessions_list :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
 	if ui.row(id = "###side_settings") {
 		ui.space(ui.SPACE_2)
-		if glyph_label_button(app, "###open_settings", i18n.tr("Settings"), em).clicked { settings_open(app) }
+		ssig := glyph_label_button(app, "###open_settings", i18n.tr("Settings"), em)
+		ui.act_name(ssig.box, "command:app.settings")
+		if ssig.clicked { settings_open(app) }
 	}
 	ui.space(ui.SPACE_4)
 	session_menu(app, em)
