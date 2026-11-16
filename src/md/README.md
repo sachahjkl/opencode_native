@@ -8,6 +8,8 @@ purpose, the decisions, what was refused.
 
 ## File Index
 
+- [features/selection-scroll.md](features/selection-scroll.md): a selection dragged to the conversation's edge scrolls
+  it: a selecting drag lets go of the bottom; the messages a selection spans stay built.
 - [features/views.md](features/views.md): the dialogs and the panels as views; the program's state as the truth of what
   is open; a shell's input in a window of its own; the Preview's page across windows.
 - [features/missed.md](features/missed.md): several entries of What you missed selected and acknowledged at once.

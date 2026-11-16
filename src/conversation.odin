@@ -248,16 +248,35 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		if restore { ui.lazy_pin(lz, fmt.tprintf("###msg_%s", back), back_dy) }
 		top_seen := false   // the first message under the top of the view, for Back and Forward (subagents.odin nav_mark)
 		prompt_rail_begin(app, pane)
+		// The messages a selection of text spans are built whatever (Chat_View_State.selected): a selection whose boxes are not
+		// built ends, and a copy reads the boxes built. A drag that scrolls the view (the toolkit's drag autoscroll) took its
+		// first message out of the column, and the selection went. While the button is held on text, what the view shows is
+		// added to the span.
+		st := built_state(app)
+		span := &pane.view.selected
+		if !ui.has_selection(st) && !pane.view.left_down { span^ = {} }
+		widen := pane.view.left_down && st.active_key[.Left] == 0
+		hashed := widen || span.first != 0
+		inside := false
+		first_i, last_i, seen_lo, seen_hi := -1, -1, -1, -1
 		for &m, i in c.messages {
 			// (by its id: a page read before it does not change what it is, its height is still known)
 			if m.id != "" && m.lazy_id == "" { m.lazy_id = fmt.aprintf("###msg_%s", m.id, allocator = c.alloc) }   // (once: this is every message, at every build)
-			id := m.id != "" ? m.lazy_id : fmt.tprintf("###msg_end%d", len(c.messages) - i)
+			id := message_lazy_id(c, i)
 			held := m.id != "" && (m.id == back || m.id == keep)
+			k := hashed ? ui.key_from_string(0, id) : 0
+			if k != 0 && k == span.first { inside, first_i = true, i }
+			spanned := inside
+			if k != 0 && k == span.last { inside, last_i = false, i }
 			if m.kind == .User { prompt_rail_place(app, pane, lz.y) }   // (where it starts: built or not)
-			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || held) {
+			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || held || spanned) {
 				item := ui.parent_box()
 				// (one rect test per message built: the chip of a selection ended here holds to this message as it scrolls)
 				if draw.rect_contains(item.rect, ui.mouse_pos()) { pane.conversation.pointer_item = item.key }
+				if sb := lz.scroll; widen && sb != nil && item.rect.max.y > sb.rect.min.y && item.rect.min.y < sb.rect.max.y {
+					if seen_lo < 0 { seen_lo = i }
+					seen_hi = i
+				}
 				if sb := lz.scroll; sb != nil {
 					if !top_seen && m.id != "" && item.rect.max.y > sb.rect.min.y {
 						top_seen = true
@@ -271,6 +290,11 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 				to := i + 1 < len(c.messages) ? c.messages[i + 1].created : max(f64)
 				for a in chat_artifacts_between(app, pane, from, to) { artifact_card(app, a, em) }
 			}
+		}
+		if seen_lo >= 0 {
+			lo := first_i >= 0 ? min(first_i, seen_lo) : seen_lo
+			hi := last_i >= 0 ? max(last_i, seen_hi) : seen_hi
+			span^ = {ui.key_from_string(0, message_lazy_id(c, lo)), ui.key_from_string(0, message_lazy_id(c, hi))}
 		}
 		if restore {
 			// (what the first layouts say of the heights around it is not what the next ones find: it stays a few builds)
@@ -295,6 +319,13 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		foot -= line
 	}
 	ui.spacer(ui.px(foot))
+}
+
+// The id of the `i`th message's lazy item (its lazy_id is made by `messages` first).
+@(private = "file")
+message_lazy_id :: proc(c: ^Chat, i: int) -> string {
+	m := &c.messages[i]
+	return m.id != "" ? m.lazy_id : fmt.tprintf("###msg_end%d", len(c.messages) - i)
 }
 
 // The first page was not read: why, and the way to try again.

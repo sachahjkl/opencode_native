@@ -41,6 +41,14 @@ Chat_View_State :: struct {
 	// its scroll target at the end of the last build, a measure and no state: a hand that moved it up since lets go of the bottom
 	chat_target:  f32,
 	restore_due:  ui.Deferred,   // a way back that gets nowhere is given up on (scroll.odin chat_scroll_due)
+	left_down:    bool,          // the left button is held in its window (chat_selecting), from its presses and releases
+	selecting:    bool,          // a selecting drag holds the pointer in this build (chat_scroll_place, for chat_scroll_settle)
+	selected:     Selected_Span, // the messages a selection of text spans: built whatever (conversation.odin messages)
+}
+
+// The first and the last message a selection spans, by the hash of their lazy items' ids (ui.key_from_string(0, id)); 0: none.
+Selected_Span :: struct {
+	first, last: ui.Key,
 }
 
 main_pane :: proc(app: ^App) -> ^Chat_Pane { return &app.panes[MAIN_PANE] }

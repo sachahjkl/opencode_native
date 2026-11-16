@@ -171,7 +171,9 @@ chat_scroll_place :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) {
 	// (the wheel's click scrolls it by steps of a pixel a frame or less: under any slack, each one counts)
 	// (the window it is built in: the panel may have one of its own)
 	st := built_state(app)
-	auto := ui.autoscroll_running(st)
+	// (a selection dragged past an edge scrolls it too, by the toolkit's drag autoscroll: steps as small as the wheel's click's)
+	pane.view.selecting = chat_selecting(st, pane)
+	auto := ui.autoscroll_running(st) || pane.view.selecting
 	slack := auto ? AUTOSCROLL_SLACK_PX : BOTTOM_SLACK_PX * ui.scale()
 	by_hand := chat_keys(app, pane, sb, em) || st.scroll_delta != {} || ui.active_key() != 0 || auto
 	if scrollbar_held(app, sb) { chat_scroll_event(pane, Scroll_Signal.Restore_End) }   // (as the wheel and the keys do: main_input)
@@ -199,9 +201,28 @@ chat_scroll_place :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) {
 chat_scroll_settle :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box) {
 	if sb == nil { return }
 	limit := ui.view_limit(sb)
-	at_bottom := sb.view_target.y >= limit - (ui.autoscroll_running(built_state(app)) ? AUTOSCROLL_SLACK_PX : BOTTOM_SLACK_PX * ui.scale())
+	at_bottom := sb.view_target.y >= limit - (ui.autoscroll_running(built_state(app)) || pane.view.selecting ? AUTOSCROLL_SLACK_PX : BOTTOM_SLACK_PX * ui.scale())
 	// (with following off, only the first moments of a conversation just opened follow its bottom)
 	follow := (app.prefs.follow || ui.now_ms() - pane.view.opened_ms < OPENED_FOLLOW_MS) && pane.chat.id != ""
 	chat_scroll_event(pane, at_bottom && follow ? Scroll_Signal.At_Bottom : Scroll_Signal.Off_Bottom)
 	pane.view.chat_target = sb.view_target.y
+}
+
+// Whether a selection of text is being dragged in the window `st`: the left button held on no clickable box (a press on text
+// gives the selection the drag, active_key 0), and text selected. The toolkit says no more of its selecting drag: its
+// presses and releases tell when the button is held (a release lost outside the window comes as one too).
+@(private = "file")
+chat_selecting :: proc(st: ^ui.State, pane: ^Chat_Pane) -> bool {
+	for e in st.mouse_events {
+		if e.button != .Left { continue }
+		#partial switch e.kind {
+		case .Mouse_Press:
+			pane.view.left_down = true
+			// (a press on text starts another selection: the span starts again from what the view shows. A press on a button
+			// keeps it: a Copy button reads the selection on its release)
+			if st.active_key[.Left] == 0 { pane.view.selected = {} }
+		case .Mouse_Release: pane.view.left_down = false
+		}
+	}
+	return pane.view.left_down && st.active_key[.Left] == 0 && ui.has_selection(st)
 }

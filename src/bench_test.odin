@@ -3380,3 +3380,56 @@ the_quote_chip_holds_to_its_selection :: proc(t: ^testing.T) {
 		session.save_png(s, "quote_chip.png")
 	})
 }
+
+// A selection dragged to an edge of the conversation scrolls it, as in any program with text: held there, the view moves on
+// frame after frame, and the selection's moving end follows onto what scrolls in.
+// - Up from the bottom, in the band inside the top edge: the view follows the bottom, and following put the view back at the
+//   bottom at each build, under the drag's steps of a pixel or two.
+// - Down past the bottom edge, fast, over two screens: the message the selection started in leaves the view, and the lazy
+//   column stopped building it; the selection ended with its boxes. It stays, and a copy has every message it spans.
+@(test)
+a_selection_dragged_to_the_edge_scrolls_the_conversation :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		session.wait_idle(s)
+		HOLD :: 150   // frames held at the edge: about 2.5 s
+		Hold :: struct {
+			up:          bool,
+			at:          f32,   // where the pointer is held: from the view's top edge (up), from its bottom edge (down)
+			least_px:    f32,   // the view moves at least this much
+			least_chars: int,   // the selection grows by at least this much
+		}
+		hold :: proc(t: ^testing.T, app: ^App, s: ^session.Session, h: Hold) {
+			sb := session.get(s, "chat")
+			text := middle_paragraph(sb, sb)
+			if !testing.expect(t, text != nil, "a paragraph in the middle of the view") { return }
+			from := [2]f32{text.rect.min.x + 4, text.rect.min.y + 6}
+			to := [2]f32{from.x + 40, h.up ? sb.rect.min.y + h.at : sb.rect.max.y + h.at}
+			session.press(s, from)
+			session.move(s, {from.x + 40, from.y})   // (past the slop: a selection)
+			was := sb.view_target.y
+			session.move(s, to)
+			first := len(ui.selected_text(&app.state, context.temp_allocator))
+			for _ in 0 ..< HOLD { session.frame(s) }
+			now := session.get(s, "chat").view_target.y
+			moved := h.up ? was - now : now - was
+			testing.expectf(t, moved > h.least_px, "up %v: the view scrolled over %v px while held: %v to %v", h.up, h.least_px, was, now)
+			testing.expectf(t, ui.has_selection(&app.state), "up %v: the selection held", h.up)
+			grown := len(ui.selected_text(&app.state, context.temp_allocator))
+			testing.expectf(t, grown > first + h.least_chars, "up %v: the selection grew with what scrolled in: %d to %d", h.up, first, grown)
+			session.release(s, to)
+			session.wait_idle(s)
+			testing.expectf(t, len(ui.selected_text(&app.state, context.temp_allocator)) >= grown, "up %v: released, the selection keeps what it spans", h.up)
+		}
+		// (2 px inside the top: in the band, about 70 px/s; the text under the conversation's header is no part of it)
+		hold(t, app, s, {up = true, at = 2, least_px = 80, least_chars = 20})
+		// (down from a place up the conversation: a few screens of the wheel)
+		for _ in 0 ..< 3 {
+			session.wheel(s, session.center(session.get(s, "chat")), {0, -8})
+			session.wait_idle(s)
+		}
+		screen := session.get(s, "chat").rect.max.y - session.get(s, "chat").rect.min.y
+		hold(t, app, s, {up = false, at = 150, least_px = screen * 2, least_chars = 2000})
+	})
+}
