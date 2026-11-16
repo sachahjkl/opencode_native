@@ -630,26 +630,48 @@ sub_totals :: proc(v: ^Sub_View) -> (tin, tout, cost: f64) {
 
 // A table of what its session says: session id, started, idle, outcome, tokens in detail.
 sub_facts :: proc(app: ^App, v: ^Sub_View, em: f32) {
-	s := v.session
 	section_label("fa", i18n.tr("SESSION"), em)
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.well("###facts", pad = ui.INNER_PAD) {
-		row :: proc(id, k, val: string, em: f32, col := Color{}) {
+		for f in sub_fact_rows(app, v) {
 			if ui.style({font_size = math.round(em * FS_CAPTION)}) {
-				ui.stat_row(id, k, val, {height = em * 1.4, key_width = em * 7, value_color = col.a > 0 ? col : ui.theme_color("soft text"), selectable = true, inset = [2]f32{0, 0}})
+				ui.stat_row(f.id, f.key, f.value, {height = em * 1.4, key_width = em * 7, value_color = ui.theme_color("soft text"), selectable = true, inset = [2]f32{0, 0}})
 			}
 		}
-		row("###f1", i18n.tr("session"), s.id, em)
-		row("###f2", i18n.tr("title"), s.title, em)
-		row("###f3", i18n.tr("started"), fmt.tprintf(i18n.tr("%s  (%s ago)"), clock_text(s.created, app.prefs.clock24), duration_text(s.created, now_epoch_ms())), em)
-		if s.idle > 0 { row("###f4", i18n.tr("finished"), fmt.tprintf(i18n.tr("%s  after %s"), clock_text(s.idle, app.prefs.clock24), duration_text(s.created, s.idle)), em) }
-		if s.outcome != "" {
-			row("###f5", i18n.tr("outcome"), s.outcome, em)
-		}
-		row("###f6", i18n.tr("tokens"), fmt.tprintf(i18n.tr("in %s · out %s · reasoning %s · cache read %s · cache write %s"), kfmt(s.tokens_in), kfmt(s.tokens_out), kfmt(s.reasoning), kfmt(s.cache_read), kfmt(s.cache_write)), em)
-		if s.cost > 0 { row("###f7", i18n.tr("cost"), dollars(s.cost, 4), em) }
-		if v.has_live && v.live.steps + v.live.tools > 0 { row("###f8", i18n.tr("seen live"), fmt.tprintf(i18n.tr("%d steps · %d tool calls"), v.live.steps, v.live.tools), em) }
 	}
+}
+
+@(private = "file")
+Sub_Fact :: struct { id, key, value: string }
+
+// The rows of sub_facts (and of their copy: subagent_card_text).
+@(private = "file")
+sub_fact_rows :: proc(app: ^App, v: ^Sub_View) -> []Sub_Fact {
+	s := v.session
+	out := make([dynamic]Sub_Fact, context.temp_allocator)
+	append(&out, Sub_Fact{"###f1", i18n.tr("session"), s.id})
+	append(&out, Sub_Fact{"###f2", i18n.tr("title"), s.title})
+	append(&out, Sub_Fact{"###f3", i18n.tr("started"), fmt.tprintf(i18n.tr("%s  (%s ago)"), clock_text(s.created, app.prefs.clock24), duration_text(s.created, now_epoch_ms()))})
+	if s.idle > 0 { append(&out, Sub_Fact{"###f4", i18n.tr("finished"), fmt.tprintf(i18n.tr("%s  after %s"), clock_text(s.idle, app.prefs.clock24), duration_text(s.created, s.idle))}) }
+	if s.outcome != "" { append(&out, Sub_Fact{"###f5", i18n.tr("outcome"), s.outcome}) }
+	append(&out, Sub_Fact{"###f6", i18n.tr("tokens"), fmt.tprintf(i18n.tr("in %s · out %s · reasoning %s · cache read %s · cache write %s"), kfmt(s.tokens_in), kfmt(s.tokens_out), kfmt(s.reasoning), kfmt(s.cache_read), kfmt(s.cache_write))})
+	if s.cost > 0 { append(&out, Sub_Fact{"###f7", i18n.tr("cost"), dollars(s.cost, 4)}) }
+	if v.has_live && v.live.steps + v.live.tools > 0 { append(&out, Sub_Fact{"###f8", i18n.tr("seen live"), fmt.tprintf(i18n.tr("%d steps · %d tool calls"), v.live.steps, v.live.tools)}) }
+	return out[:]
+}
+
+// subagent_card's selectable boxes as a copy reads them (message_text): open, its session's facts, its prompt, its result.
+subagent_card_text :: proc(t: ^Copy_Text, app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string) {
+	if !part_open(app, p.tool_id != "" ? p.tool_id : pid) { return }
+	v := sub_view(app, pane, p.sub_session != "" ? p.sub_session : sub_session_guess(&pane.chat, p), p)
+	if v.session != nil {
+		for f in sub_fact_rows(app, &v) {
+			copy_box(t, ui.display_part(f.key))
+			copy_box(t, ui.display_part(f.value))
+		}
+	}
+	if v.prompt != "" { mono_well_text(t, v.prompt, PROMPT_LINES_MAX) }
+	if v.result != "" { md_text(t, app, fmt.tprintf("%s_res", pid), v.result) }
 }
 
 ////////////////////////////////

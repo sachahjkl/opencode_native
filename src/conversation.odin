@@ -2,6 +2,7 @@
 // message by kind (the reader's, the agent's steps, the lines between turns).
 package ocn
 
+import "base:runtime"
 import "core:fmt"
 import "core:math"
 import "core:strings"
@@ -234,7 +235,10 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	// goes before what follows.)
 	{
 		// (Find is the main view's: the toolkit has one find per window, and asking its sweep starts it)
-		lz := ui.lazy_begin(all = pane.chat.loading, sweep = pane == main_pane(app) ? ui.find_sweep() : {})
+		// (the messages are the selection's rows: the toolkit builds the two that hold its ends wherever they are, and a copy
+		// reads the ones between that are not built by message_text. A message is a block: a blank line before it)
+		lz := ui.lazy_begin(all = pane.chat.loading, sweep = pane == main_pane(app) ? ui.find_sweep() : {},
+			rows = ui.Text_Rows{count = len(c.messages), text = message_text, user = pane, gap = "\n\n"})
 		// (a view going back to where it was: the column keeps it on its message, however the heights around it settle. A page read
 		// above: the message the view holds is built whatever, frame moves the view by as much as the page pushed it down. Copied:
 		// a click in this build changes the state that owns them)
@@ -248,35 +252,17 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		if restore { ui.lazy_pin(lz, fmt.tprintf("###msg_%s", back), back_dy) }
 		top_seen := false   // the first message under the top of the view, for Back and Forward (subagents.odin nav_mark)
 		prompt_rail_begin(app, pane)
-		// The messages a selection of text spans are built whatever (Chat_View_State.selected): a selection whose boxes are not
-		// built ends, and a copy reads the boxes built. A drag that scrolls the view (the toolkit's drag autoscroll) took its
-		// first message out of the column, and the selection went. While the button is held on text, what the view shows is
-		// added to the span.
-		st := built_state(app)
-		span := &pane.view.selected
-		if !ui.has_selection(st) && !pane.view.left_down { span^ = {} }
-		widen := pane.view.left_down && st.active_key[.Left] == 0
-		hashed := widen || span.first != 0
-		inside := false
-		first_i, last_i, seen_lo, seen_hi := -1, -1, -1, -1
 		for &m, i in c.messages {
 			// (by its id: a page read before it does not change what it is, its height is still known)
 			if m.id != "" && m.lazy_id == "" { m.lazy_id = fmt.aprintf("###msg_%s", m.id, allocator = c.alloc) }   // (once: this is every message, at every build)
 			id := message_lazy_id(c, i)
 			held := m.id != "" && (m.id == back || m.id == keep)
-			k := hashed ? ui.key_from_string(0, id) : 0
-			if k != 0 && k == span.first { inside, first_i = true, i }
-			spanned := inside
-			if k != 0 && k == span.last { inside, last_i = false, i }
 			if m.kind == .User { prompt_rail_place(app, pane, lz.y) }   // (where it starts: built or not)
-			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || held || spanned) {
+			// (every message has its item, in its order: the item is the selection's row, message_text's `i`)
+			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || held) {
 				item := ui.parent_box()
 				// (one rect test per message built: the chip of a selection ended here holds to this message as it scrolls)
 				if draw.rect_contains(item.rect, ui.mouse_pos()) { pane.conversation.pointer_item = item.key }
-				if sb := lz.scroll; widen && sb != nil && item.rect.max.y > sb.rect.min.y && item.rect.min.y < sb.rect.max.y {
-					if seen_lo < 0 { seen_lo = i }
-					seen_hi = i
-				}
 				if sb := lz.scroll; sb != nil {
 					if !top_seen && m.id != "" && item.rect.max.y > sb.rect.min.y {
 						top_seen = true
@@ -284,17 +270,13 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 					}
 				}
 				message(app, pane, &m, i, em)
+				message_block(item)
 				ctx_check(app, ui.parent_box(), .Message, m.id, pane = pane)
 				// (what was made while this message was the last: up to the next one; before the first message, at the first)
 				from := i == 0 ? 0 : m.created
 				to := i + 1 < len(c.messages) ? c.messages[i + 1].created : max(f64)
 				for a in chat_artifacts_between(app, pane, from, to) { artifact_card(app, a, em) }
 			}
-		}
-		if seen_lo >= 0 {
-			lo := first_i >= 0 ? min(first_i, seen_lo) : seen_lo
-			hi := last_i >= 0 ? max(last_i, seen_hi) : seen_hi
-			span^ = {ui.key_from_string(0, message_lazy_id(c, lo)), ui.key_from_string(0, message_lazy_id(c, hi))}
 		}
 		if restore {
 			// (what the first layouts say of the heights around it is not what the next ones find: it stays a few builds)
@@ -360,6 +342,68 @@ message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, i: int, em: f32) {
 	case .Switch:      switch_line(app, m, em)
 	case .Other:
 	}
+}
+
+// A message is a block of the conversation: a copy puts a blank line before its first selectable box, whatever that box is
+// (a prompt's paragraph, a reasoning, a table's cell). The messages a copy reads and does not build (message_text) come after
+// the same blank line (the rows' gap): built or not, a copy is the same text.
+@(private = "file")
+message_block :: proc(item: ^ui.Box) {
+	first :: proc(b: ^ui.Box) -> ^ui.Box {
+		for c := b.first; c != nil; c = c.next {
+			if .Selectable in c.flags { return c }
+			if f := first(c); f != nil { return f }
+		}
+		return nil
+	}
+	if b := first(item); b != nil { b.flags += {.Selection_Block} }
+}
+
+// What a copy reads of boxes not built: their texts in their order, joined as the toolkit joins selectable boxes (a line
+// break; a blank line before a block). Nothing before the first: the rows' gap goes there.
+Copy_Text :: struct {
+	b:     strings.Builder,
+	boxes: int,
+}
+
+copy_box :: proc(t: ^Copy_Text, s: string, block := false) {
+	if t.boxes > 0 { strings.write_string(&t.b, block ? "\n\n" : "\n") }
+	strings.write_string(&t.b, s)
+	t.boxes += 1
+}
+
+// Message `i` of the pane `user` as its boxes give it to a copy (ui.Text_Rows.text): the message a selection spans and the
+// lazy column did not build. Each part follows the selectable boxes its view builds, in the same state (open or folded, the
+// preferences); ok false: it builds none.
+message_text :: proc(user: rawptr, i: int, allocator: runtime.Allocator) -> (string, bool) {
+	pane := (^Chat_Pane)(user)
+	c := &pane.chat
+	if i < 0 || i >= len(c.messages) { return "", false }   // (another conversation since the build)
+	app := the_app
+	t := Copy_Text{b = strings.builder_make(allocator)}
+	m := &c.messages[i]
+	#partial switch m.kind {
+	case .User: copy_box(&t, m.text)
+	case .Assistant:
+		for &p, k in m.parts {
+			pid := fmt.tprintf("%s_%d", m.id, k)
+			switch p.kind {
+			case .Text:      if len(p.text) > 0 { md_text(&t, app, pid, string(p.text[:])) }
+			case .Reasoning: if app.prefs.reasoning != "hidden" && part_open(app, pid, app.prefs.reasoning == "expanded") { copy_box(&t, string(p.text[:])) }
+			case .Tool:      if plain_tool(&p) { tool_part_text(&t, app, pane, &p, pid) } else { subagent_card_text(&t, app, pane, &p, pid) }
+			}
+		}
+	case .Synthetic:
+		if m.sub_child != "" {
+			if part_open(app, m.id) && m.text != "" { md_text(&t, app, fmt.tprintf("%s_sr", m.id), m.text) }
+		} else if m.mcp_event != "" {
+			if m.mcp_data != "" { mono_well_text(&t, m.mcp_data, TOOL_INPUT_LINES_MAX) }
+		} else if len(m.jobs) > 0 {
+			job_reports_text(&t, app, m)
+		}
+	}
+	if t.boxes == 0 { strings.builder_destroy(&t.b); return "", false }
+	return strings.to_string(t.b), true
 }
 
 // The first line of Markdown that says something, as text: a preview shows no marks (headings, quotes, lists, emphasis).

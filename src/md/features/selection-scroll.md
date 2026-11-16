@@ -1,10 +1,11 @@
 # A selection dragged to the conversation's edge
 
 A person who drags a selection of text to the top or the bottom of the conversation and holds it there sees the
-conversation scroll, and the selection grow with what scrolls in. The toolkit does the scroll
-(`ext/gui_toolkit/src/md/features/drag-autoscroll.md`): the selection marks its drag, and the nearest scroll view moves.
-The conversation has two states of its own that stopped it. The code is in `src/scroll.odin` (`chat_selecting`) and
-`src/conversation.odin` (`messages`).
+conversation scroll, and the selection grow with what scrolls in. A copy then has every message the selection spans.
+The toolkit does the scroll and keeps the selection (`ext/gui_toolkit/src/md/features/drag-autoscroll.md`, and
+`text-selection.md`, "Rows built only in view"). The conversation has one state of its own that stopped it, and it gives
+the toolkit its messages as rows. The code is in `src/scroll.odin` (`chat_selecting`) and `src/conversation.odin`
+(`messages`, `message_text`).
 
 ## Following the bottom
 
@@ -16,24 +17,40 @@ The toolkit says nothing of its selecting drag. `chat_selecting` reads it from t
 (its presses and releases, kept in the pane's view), no clickable box that holds the press (`active_key`), and text
 selected. A press on a scroll bar or a column handle has a box, and keeps the old slack.
 
-## The messages a selection spans
+## Past the top edge
 
-The lazy column builds only the messages near the view. A selection whose first box is not built ends (the toolkit),
-and a copy reads only the boxes built. A drag over two screens took the message it started in out of the column.
+The session's header, above the conversation, is selectable text (the project's folder). Past the top edge, the moving
+end went there, out of the conversation, and nothing scrolled. The toolkit now keeps the moving end inside the scroll
+view around the anchor while that view can still scroll toward the pointer (`sel_drag_view`). The conversation does
+nothing for it.
 
-`Chat_View_State.selected` keeps the first and the last message the selection spans, by the hash of their items' ids.
-Those messages, and every one between them, are built whatever. While the button is held on text, each message the view
-shows is added to the span. The span is dropped when no selection stays and the button is up, and a press on text starts
-it again. A press on a button keeps it: a Copy button reads the selection on its release.
+## The messages are the selection's rows
 
-Refused: building every message while a selection stands. A selection of one line in a long conversation would cost
-what a find costs, at every frame.
+The lazy column builds only the messages near the view. `messages` declares them to the selection (`lazy_begin`'s
+`rows`): row `i` is message `i`, and each message has its lazy item, in its order. The toolkit builds the two messages
+that hold the selection's ends wherever they are. A copy reads each message between that is not built with
+`message_text`.
+
+- **The same text, built or not.** `message_text` follows the selectable boxes that each part's view builds, in the
+  same state: a part open or folded, the preferences (reasoning, tools open), a diagram or its text. Each view has its
+  text twin beside it (`md_text`, `tool_part_text`, `tool_body_text`, `subagent_card_text`, `job_reports_text`,
+  `mono_well_text`), joined as the toolkit joins boxes (`Copy_Text`). Markdown is read again into a doc in temp
+  memory: the views' docs and runs stay as their builds left them. A change to a view changes its twin; the test
+  `a_copy_across_messages_not_built_is_their_text` compares a copy across messages not built with the copy of every
+  message built.
+- **A message is a block.** The rows' gap is "\n\n". The first selectable box of each message built takes
+  `.Selection_Block` (`message_block`), so a copy puts the same blank line before a message built. Without it, a
+  prompt after an answer was a line apart when built and a blank line apart when read.
+- **`user` is the pane.** It stays where it is (`App.panes`), and the toolkit reads it after the build. A row past the
+  messages (another conversation since the build) has no text.
+- **Rows by index.** The toolkit keeps an end's row by its index. A page of older messages read while a selection
+  stands (a drag held at the top reads it) puts messages above it: the toolkit then holds the wrong message, and an end
+  whose message is out of view is not built, so the selection ends. The toolkit has no way yet to shift the rows.
+
+Refused: building every message the selection spans (this file's first answer, `Chat_View_State.selected`). A drag
+over a long conversation built thousands of messages at each frame.
 
 ## Left to the toolkit
 
-- Past the top edge of the main view, the moving end goes to the session's header (the project's folder), which is
-  selectable text on the same surface. The marked box is then outside the conversation, and nothing scrolls. In the band
-  inside the edge it scrolls. The toolkit's `sel_nearest` must keep the moving end inside the scroll view around the
-  anchor while that view can still scroll toward the pointer.
-- The full diff (`gt:diff` `view`) and What you missed (`ui.vlist`) build only their rows in view: a selection there
-  ends when its first row leaves.
+- The full diff (`gt:diff` `view`) declares its rows already. What you missed (`ui.vlist`) builds only its rows in
+  view: a selection there ends when its first row leaves.

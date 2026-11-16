@@ -134,6 +134,12 @@ mono_text :: proc(body: string, extra: int, em: f32, color := Color{}, kept: ^Li
 	}
 }
 
+// mono_well's text as a copy reads it (message_text): its one paragraph, what is shown of `s`.
+mono_well_text :: proc(t: ^Copy_Text, s: string, max_lines: int) {
+	body, _ := mono_cut(s, max_lines)
+	copy_box(t, body)
+}
+
 // `s` cut to `max_lines` lines and MONO_WELL_MAX_BYTES: what is shown, and how many lines are left out.
 mono_cut :: proc(s: string, max_lines: int) -> (body: string, extra: int) {
 	body = s

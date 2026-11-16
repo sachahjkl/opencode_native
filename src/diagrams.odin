@@ -135,9 +135,7 @@ diagrams_free :: proc(app: ^App) {
 mermaid_block :: proc(app: ^App, pane: ^Chat_Pane, id, code: string, closed: bool, version: u64) {
 	em := ui.font_size()
 	k := hash.fnv64a(transmute([]u8)id)
-	as_text := app.expanded[k] or_else false
-	d: ^Diagram
-	if closed && !as_text { d = diagram_of(app, code, !app.cx.theme.light) }
+	d, as_text := mermaid_diagram(app, id, code, closed)
 	ok := d != nil && d.why == ""
 	ui.next({width = ui.fill(), height = ui.children_sum()})
 	if ui.well(id) {
@@ -190,6 +188,14 @@ mermaid_block :: proc(app: ^App, pane: ^Chat_Pane, id, code: string, closed: boo
 		}
 		ui.space(ui.SPACE_3)
 	}
+}
+
+// What a ```mermaid block of box id `id` shows: its diagram (nil: none, its text is shown), and whether its header's button
+// asked for its text.
+mermaid_diagram :: proc(app: ^App, id, code: string, closed: bool) -> (d: ^Diagram, as_text: bool) {
+	as_text = app.expanded[hash.fnv64a(transmute([]u8)id)] or_else false
+	if closed && !as_text { d = diagram_of(app, code, !app.cx.theme.light) }
+	return
 }
 
 @(private = "file")

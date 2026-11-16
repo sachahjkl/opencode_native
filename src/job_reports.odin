@@ -257,6 +257,22 @@ job_reports :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 	ui.space(ui.SPACE_1)
 }
 
+// job_reports' selectable boxes as a copy reads them (message_text): each card open, its command and its output, or the
+// sub-agent's report.
+job_reports_text :: proc(t: ^Copy_Text, app: ^App, m: ^Message) {
+	for &r, k in m.jobs {
+		key := fmt.tprintf("%s_job%d", m.id, k)
+		if !part_open(app, key) { continue }
+		switch r.kind {
+		case .Shell:
+			if r.command != "" { mono_well_text(t, fmt.tprintf("$ %s", r.command), JOB_OUTPUT_LINES) }
+			mono_well_text(t, r.body != "" ? r.body : i18n.tr("(no output)"), JOB_OUTPUT_LINES)
+		case .Subagent:
+			if r.body != "" { md_text(t, app, key, r.body) }
+		}
+	}
+}
+
 // What a card's header says first: what ended, and how.
 job_title :: proc(r: ^Job_Report) -> string {
 	switch r.kind {

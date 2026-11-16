@@ -216,11 +216,7 @@ chat_selecting :: proc(st: ^ui.State, pane: ^Chat_Pane) -> bool {
 	for e in st.mouse_events {
 		if e.button != .Left { continue }
 		#partial switch e.kind {
-		case .Mouse_Press:
-			pane.view.left_down = true
-			// (a press on text starts another selection: the span starts again from what the view shows. A press on a button
-			// keeps it: a Copy button reads the selection on its release)
-			if st.active_key[.Left] == 0 { pane.view.selected = {} }
+		case .Mouse_Press:   pane.view.left_down = true
 		case .Mouse_Release: pane.view.left_down = false
 		}
 	}

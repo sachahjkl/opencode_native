@@ -71,6 +71,51 @@ md_table_copy :: proc(user: rawptr, t: ^markdown.Table, source: []string, size: 
 	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(i18n.tr("Copy the table (pastes as a table)")) } }
 }
 
+// The boxes markdown.view builds of `src` under `id` with md_config, as a copy reads them (message_text): each block's text
+// without its marks (no rule, no list marker), a table cell by cell, a code block or a mermaid one's text unless its
+// diagram shows. A doc of its own in temp memory: the views' docs and their runs stay as their builds left them.
+md_text :: proc(t: ^Copy_Text, app: ^App, id, src: string) {
+	d := markdown.Doc{alloc = context.temp_allocator}
+	markdown.read(&d, src)
+	item :: proc(k: markdown.Block_Kind) -> bool { return k == .Bullet || k == .Number }
+	inline :: proc(s: string) -> string {
+		runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
+		markdown.inline_runs(s, {}, &runs)
+		return ui.rich_text(runs[:])
+	}
+	for n in 0 ..< len(d.blocks) {
+		kind := d.blocks[n].kind
+		switch kind {
+		case .Rule:
+		case .Code:
+			code := markdown.block_text(&d, n)
+			if d.blocks[n].lang == "mermaid" {
+				dg, _ := mermaid_diagram(app, fmt.tprintf("###%s_b%d", id, n), code, d.blocks[n].closed)
+				if dg != nil && dg.why == "" { continue }   // (a diagram: no text)
+			}
+			copy_box(t, code)
+		case .Table:
+			// (markdown's table_of: the cells of each line, the line of dashes under the first one left out)
+			rows := make([dynamic][]string, context.temp_allocator)
+			for l in markdown.block_lines(&d, n) {
+				cells := strings.split(strings.trim_suffix(strings.trim_prefix(strings.trim_space(l), "|"), "|"), "|", context.temp_allocator)
+				for &c in cells { c = strings.trim_space(c) }
+				sep := len(cells) > 0
+				for c in cells { if strings.trim(c, ":- ") != "" || c == "" { sep = false } }
+				if sep && len(rows) == 1 { continue }
+				append(&rows, cells)
+			}
+			cols := 0
+			for r in rows { cols = max(cols, len(r)) }
+			for r in rows {
+				for ci in 0 ..< cols { copy_box(t, inline(ci < len(r) ? r[ci] : "")) }
+			}
+		case .Heading, .Para, .Quote, .Bullet, .Number:
+			copy_box(t, inline(markdown.block_text(&d, n)), block = !(item(kind) && n > 0 && item(d.blocks[n - 1].kind)))
+		}
+	}
+}
+
 link_clicked :: proc(res: ui.Rich_Result) {
 	if res.link_clicked >= 0 { link_open(res.link) }
 }

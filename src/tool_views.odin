@@ -92,6 +92,28 @@ diff_view :: proc(app: ^App, id: string, d: diff.Parsed, patch: string, em: f32,
 	}
 }
 
+// diff_view's lines as a copy reads them (message_text): each line as diff.lines_view shows it (cut, tabs opened; an
+// empty line a space), the marks between hunks none.
+diff_view_text :: proc(t: ^Copy_Text, d: diff.Parsed, max_lines: int) {
+	for l in d.lines[:min(len(d.lines), max_lines)] {
+		if l.kind == .Gap { continue }
+		s := l.text
+		cut := len(s) > TOOL_LINE_CHARS
+		if cut {
+			end := TOOL_LINE_CHARS
+			for end > 0 && s[end] & 0xC0 == 0x80 { end -= 1 }
+			s = s[:end]
+		}
+		if s == "" { copy_box(t, " "); continue }
+		s, _ = strings.replace_all(s, "\t", TOOL_TAB, context.temp_allocator)
+		copy_box(t, cut ? strings.concatenate({s, "…"}, context.temp_allocator) : s)
+	}
+}
+
+// A selectable `text` box's text, as a copy reads it.
+@(private = "file")
+text_box :: proc(t: ^Copy_Text, s: string) { copy_box(t, ui.display_part(label_safe(s))) }
+
 @(private = "file")
 more_lines :: proc(n: int, em: f32) {
 	if n <= 0 { return }
@@ -169,6 +191,19 @@ read_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut: ^
 	}
 }
 
+@(private = "file")
+read_view_text :: proc(t: ^Copy_Text, output: string, max_lines: int) {
+	rest := output
+	k := 0
+	for l in strings.split_lines_iterator(&rest) {
+		_, s, ok := numbered_line(l)
+		if !ok { continue }
+		if k == max_lines { break }
+		text_box(t, line_shown(s))
+		k += 1
+	}
+}
+
 // Whether `output` reads as lines of a file (a tool of another name may print anything).
 read_lines_in :: proc(output: string) -> bool {
 	rest := output
@@ -211,6 +246,22 @@ search_view :: proc(app: ^App, id, output: string, em: f32, max_lines: int, cut:
 		if known { left = cut.extra } else { text_cut_keep(cut, output, max_lines, .Search, len(output), left) }
 		more_lines(left, em)
 		ui.space(ui.SPACE_2)
+	}
+}
+
+@(private = "file")
+search_view_text :: proc(t: ^Copy_Text, output: string, max_lines: int) {
+	rest := output
+	k := 0
+	for l in strings.split_lines_iterator(&rest) {
+		s := strings.trim_space(l)
+		if s == "" { continue }
+		if k == max_lines { break }
+		k += 1
+		if strings.has_prefix(s, "Line ") {
+			if _, line, ok := numbered_line(s[len("Line "):]); ok { text_box(t, line_shown(strings.trim_space(line))); continue }
+		}
+		text_box(t, strings.trim_suffix(s, ":"))
 	}
 }
 
@@ -269,6 +320,21 @@ input_view :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 	ui.space(ui.SPACE_2)
 }
 
+@(private = "file")
+input_view_text :: proc(t: ^Copy_Text, p: ^Part) {
+	if !p.input_object { mono_well_text(t, p.input, TOOL_INPUT_LINES_MAX); return }
+	if p.freeform { mono_well_text(t, p.fields[0].value, TOOL_INPUT_LINES_MAX); return }
+	for f in p.fields {
+		if f.long {
+			mono_well_text(t, f.value, TOOL_INPUT_LINES_MAX)
+		} else {
+			// (a stat_row: its key, its value)
+			copy_box(t, ui.display_part(f.key))
+			copy_box(t, ui.display_part(f.value))
+		}
+	}
+}
+
 // What a call that edits names: its file, as the arguments say.
 tool_diff_title :: proc(p: ^Part) -> string {
 	if p.subject != "" { return p.subject }
@@ -317,4 +383,39 @@ tool_body :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 		ui.space(ui.SPACE_2)
 	}
 	output(app, pane, p, em, lines)
+}
+
+// tool_body's selectable boxes as a copy reads them (message_text), view by view.
+tool_body_text :: proc(t: ^Copy_Text, app: ^App, pane: ^Chat_Pane, p: ^Part) {
+	failed := p.status == .Error
+	lines := app.prefs.tool_lines
+	output :: proc(t: ^Copy_Text, p: ^Part, lines: int) { if p.output != "" { mono_well_text(t, p.output, lines) } }
+	switch tool_kind(p.tool_name) {
+	case .Edit:
+		if part_patch(p, pane.chat.alloc) != "" {
+			diff_view_text(t, p.diff, lines)
+			if failed { output(t, p, lines) }
+			return
+		}
+	case .Read:
+		if !failed && p.output_numbered { read_view_text(t, p.output, lines); return }
+	case .Search:
+		if !failed && p.output != "" { search_view_text(t, p.output, lines); return }
+	case .Shell:
+		if p.command_line != "" { mono_well_text(t, p.command_line, TOOL_INPUT_LINES_MAX) }
+		output(t, p, lines)
+		return
+	case .Todo:
+		if p.has_todos {
+			for td in p.todos { copy_box(t, td.content) }
+			return
+		}
+	case .Other:
+	}
+	if p.input != "" {
+		input_view_text(t, p)
+	} else if s, long := input_stream_shown(&p.stream); long && p.status == .Pending {
+		mono_well_text(t, s, TOOL_INPUT_LINES_MAX)
+	}
+	output(t, p, lines)
 }

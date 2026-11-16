@@ -1005,6 +1005,9 @@ fr Finalisation…
 en Finish
 fr Terminer
 
+en (no output)
+fr (aucune sortie)
+
 en Command finished
 fr Commande terminée
 
@@ -1037,9 +1040,6 @@ fr Sous-agent en cours
 
 en Sub-agent ended (%s)
 fr Sous-agent terminé (%s)
-
-en (no output)
-fr (aucune sortie)
 
 en (no report)
 fr (aucun rapport)

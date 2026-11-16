@@ -3308,6 +3308,74 @@ a_picture_held_as_text_is_decoded_by_the_cache :: proc(t: ^testing.T) {
 	})
 }
 
+// A selection across messages far apart, the ones between not built (the lazy column builds the two that hold its ends):
+// a copy is the same text as the copy of every message built. The messages between are read from the conversation's data
+// (message_text), each part as its boxes show it: the reasoning and the tool calls open, Markdown with a list, code, a table.
+@(test)
+a_copy_across_messages_not_built_is_their_text :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		app.prefs.reasoning, app.prefs.expand_tools = "expanded", true
+		session.wait_idle(s)
+		// (up a few messages: the drag down has them to go through)
+		for _ in 0 ..< 20 {
+			session.wheel(s, session.center(session.get(s, "chat")), {0, -8})
+			session.wait_idle(s)
+		}
+		sb := session.get(s, "chat")
+		// (the open tool calls' outputs are most of the view: text that starts in its upper middle, whatever its height)
+		starts_mid :: proc(sb, b: ^ui.Box) -> ^ui.Box {
+			if .Clickable in b.flags { return nil }
+			h := sb.rect.max.y - sb.rect.min.y
+			if .Selectable in b.flags && b.rect.max.x - b.rect.min.x > 200 && b.rect.min.y > sb.rect.min.y + h * 0.2 && b.rect.min.y < sb.rect.min.y + h * 0.6 { return b }
+			for c := b.first; c != nil; c = c.next { if p := starts_mid(sb, c); p != nil { return p } }
+			return nil
+		}
+		text := starts_mid(sb, sb)
+		if !testing.expect(t, text != nil, "text in the middle of the view") { return }
+		from := [2]f32{text.rect.min.x + 4, text.rect.min.y + 6}
+		to := [2]f32{from.x + 40, sb.rect.max.y + 150}
+		session.press(s, from)
+		session.move(s, {from.x + 40, from.y})   // (past the slop: a selection)
+		session.move(s, to)
+		for _ in 0 ..< 600 { session.frame(s) }
+		session.release(s, to)
+		session.wait_idle(s)
+		if !testing.expect(t, ui.has_selection(&app.state), "a selection") { return }
+
+		// the messages built: around the two ends of the selection, and not those between
+		pane := main_pane(app)
+		built :: proc(s: ^session.Session, m: ^Message) -> bool { return session.find(s, fmt.tprintf("msg_%s", m.id)) != nil }
+		lo, hi, unbuilt := -1, -1, 0
+		for &m, i in pane.chat.messages {
+			if !built(s, &m) { continue }
+			if lo < 0 { lo = i }
+			hi = i
+		}
+		for i in max(lo, 0) ..= hi { if !built(s, &pane.chat.messages[i]) { unbuilt += 1 } }
+		testing.expectf(t, unbuilt > 2, "messages between the ends not built: %d (built from %d to %d)", unbuilt, lo, hi)
+		copied := strings.clone(ui.selected_text(&app.state, context.temp_allocator))
+		defer delete(copied)
+
+		// every message built (as while the conversation loads): the copy of their boxes
+		pane.chat.loading = true
+		session.frame(s)
+		whole := ui.selected_text(&app.state, context.temp_allocator)
+		unbuilt = 0
+		for i in max(lo, 0) ..= hi { if !built(s, &pane.chat.messages[i]) { unbuilt += 1 } }
+		pane.chat.loading = false
+		testing.expect_value(t, unbuilt, 0)
+		testing.expectf(t, len(whole) > 5000, "a copy of many messages: %d bytes", len(whole))
+		if copied != whole {
+			at := 0
+			for at < min(len(copied), len(whole)) && copied[at] == whole[at] { at += 1 }
+			testing.expectf(t, false, "the copy (%d bytes) is not the messages' text (%d bytes): from byte %d,\nread: %q\nbuilt: %q", len(copied), len(whole), at,
+				copied[max(at - 80, 0):min(at + 80, len(copied))], whole[max(at - 80, 0):min(at + 80, len(whole))])
+		}
+	})
+}
+
 // A paragraph of the conversation in the middle of its view, in no clickable box (a press there selects at once).
 @(private = "file")
 middle_paragraph :: proc(sb, b: ^ui.Box) -> ^ui.Box {
@@ -3383,8 +3451,9 @@ the_quote_chip_holds_to_its_selection :: proc(t: ^testing.T) {
 
 // A selection dragged to an edge of the conversation scrolls it, as in any program with text: held there, the view moves on
 // frame after frame, and the selection's moving end follows onto what scrolls in.
-// - Up from the bottom, in the band inside the top edge: the view follows the bottom, and following put the view back at the
-//   bottom at each build, under the drag's steps of a pixel or two.
+// - Up from the bottom, 150 px past the top edge (over the session's header): the view follows the bottom, and following put
+//   the view back at the bottom at each build, under the drag's steps of a pixel or two; and the moving end went to the
+//   header's text, out of the conversation, so nothing scrolled.
 // - Down past the bottom edge, fast, over two screens: the message the selection started in leaves the view, and the lazy
 //   column stopped building it; the selection ended with its boxes. It stays, and a copy has every message it spans.
 @(test)
@@ -3422,8 +3491,8 @@ a_selection_dragged_to_the_edge_scrolls_the_conversation :: proc(t: ^testing.T) 
 			session.wait_idle(s)
 			testing.expectf(t, len(ui.selected_text(&app.state, context.temp_allocator)) >= grown, "up %v: released, the selection keeps what it spans", h.up)
 		}
-		// (2 px inside the top: in the band, about 70 px/s; the text under the conversation's header is no part of it)
-		hold(t, app, s, {up = true, at = 2, least_px = 80, least_chars = 20})
+		// (150 px above the top: over the session's header, whose folder is selectable text too)
+		hold(t, app, s, {up = true, at = -150, least_px = 80, least_chars = 20})
 		// (down from a place up the conversation: a few screens of the wheel)
 		for _ in 0 ..< 3 {
 			session.wheel(s, session.center(session.get(s, "chat")), {0, -8})

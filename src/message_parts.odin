@@ -186,6 +186,20 @@ tool_part :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string, em: f32, a
 	if !below { ui.space(ui.SPACE_2) }
 }
 
+// tool_part's selectable boxes as a copy reads them (message_text): its body open; folded, a diff or an error.
+tool_part_text :: proc(t: ^Copy_Text, app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string) {
+	open := part_open(app, p.tool_id != "" ? p.tool_id : pid, app.prefs.expand_tools)
+	edits := tool_kind(p.tool_name) == .Edit
+	if edits { _ = part_patch(p, pane.chat.alloc) }
+	if open {
+		tool_body_text(t, app, pane, p)
+	} else if edits && p.status != .Error && p.patch != "" {
+		diff_view_text(t, p.diff, DIFF_FOLDED_LINES)
+	} else if p.status == .Error && p.output != "" {
+		mono_well_text(t, p.output, TOOL_ERROR_LINES_FOLDED)
+	}
+}
+
 reasoning_part :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string, em: f32) {
 	if app.prefs.reasoning == "hidden" { return }
 	open := part_open(app, pid, app.prefs.reasoning == "expanded")
