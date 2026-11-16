@@ -60,7 +60,9 @@ views_start :: proc(app: ^App, path: string) {
 	// as the main window's build ends with it; chat-panes.md)
 	ui.views_set_window_end(vs, proc(user: rawptr, _: ^ui.View) { window_overlays((^App)(user), ui.font_size()) }, app)
 	ui.view_register(vs, SIDEBAR_VIEW, sidebar_pane, ui.View_Options{title = i18n.later("Sessions"), icon = lucide.MENU,
-		home = .Panel, home_place = {edge = .Left}, extent_em = SIDEBAR_EM, width_em = SIDEBAR_EM, min_width_em = SIDEBAR_MIN_EM})
+		home = .Panel, home_place = {edge = .Left}, extent_em = SIDEBAR_EM, width_em = SIDEBAR_EM, min_width_em = SIDEBAR_MIN_EM,
+		// (its zone minimised keeps this column, and builds it as the rail: sidebar_pane)
+		rail_em = SIDEBAR_RAIL_EM})
 	panels_register(app)
 	dialogs_register(app)
 	_ = ui.view_restore(vs, SIDEBAR_VIEW, app, first_start_open = true, owner = &app.state)
@@ -186,10 +188,10 @@ built_state :: proc(app: ^App) -> ^ui.State {
 }
 
 // The sidebar: the sessions, the search, the servers. Docked at the window's left, the bars' line goes on from its
-// zone's handle (chrome.odin side_line).
+// zone's handle (chrome.odin side_line). Its zone minimised (its Minimise, or a window too narrow): the rail.
 @(private = "file")
 sidebar_pane :: proc(v: ^ui.View, app: ^App) {
-	sidebar(app, ui.font_size())
+	if v.rail { sidebar_rail(app, ui.font_size()) } else { sidebar(app, ui.font_size()) }
 }
 
 // Ctrl+B: the sidebar shows or goes, wherever the user put it.

@@ -242,6 +242,7 @@ Sidebar :: struct {
 	sub_open:     map[u64]bool,   // sessions whose sub-agents are listed under them
 	hold:         Side_Hold,      // the order, under the pointer
 	kept:         Side_Kept,      // the rows and sections
+	rail:         Side_Rail,      // the keyboard among the marks, while minimised (sidebar_rail.odin)
 	menu_session: string,         // the session the context menu is about (owned)
 	menu_project: string,         // the project the project menu is about (owned)
 	delete_id:    string,         // the session the dialog that deletes it is about

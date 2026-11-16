@@ -2092,11 +2092,46 @@ fr Marquer comme vu
 en Search sessions
 fr Rechercher une session
 
-en Loading…
-fr Chargement…
-
 en (no folder)
 fr (pas de dossier)
+
+en Active just now
+fr Active à l'instant
+
+en Last active %s ago
+fr Dernière activité il y a %s
+
+en Asks: %s
+fr Demande : %s
+
+en Waits on a form: %s
+fr Attend un formulaire : %s
+
+en Asks permission: %s
+fr Demande une autorisation : %s
+
+en Runs
+fr En cours
+
+en Its commands run in the background
+fr Ses commandes tournent en arrière-plan
+
+en Failed, not seen yet
+fr Échouée, pas encore vue
+
+en Stopped, not seen yet
+fr Arrêtée, pas encore vue
+
+en Finished, not seen yet
+fr Terminée, pas encore vue
+
+en %d sub-agent runs
+en+ %d sub-agents run
+fr %d sous-agent en cours
+fr+ %d sous-agents en cours
+
+en Loading…
+fr Chargement…
 
 en … %d more: open the session and use its sub-agents menu
 en+ … %d more: open the session and use its sub-agents menu

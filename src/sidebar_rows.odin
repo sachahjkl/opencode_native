@@ -196,6 +196,33 @@ session_badge_index :: proc(id: string) -> int {
 	return int(h % u32(len(ui.Hue)))
 }
 
+// What a session's lamp says, in the order one wins over another: what waits for the person first. The row and the
+// rail's mark light the same lamp from it, the rail's tooltip says it in words.
+Session_Light :: enum u8 { Rest, Unseen, Background, Running, Waits }
+
+session_light :: proc(app: ^App, s: ^Session_Info) -> Session_Light {
+	switch {
+	case session_waits(app, s.id):           return .Waits        // (a run that cannot go on without the person)
+	case app.busy[s.id] or_else false:       return .Running
+	case session_in_background(app, s.id):   return .Background   // (at rest, its commands still running: steady)
+	case session_unseen(app, s):             return .Unseen       // (over and not seen)
+	}
+	return .Rest
+}
+
+// The lamp of a light; an unseen end is how it ended, the lamp without its light.
+session_light_lamp :: proc(s: ^Session_Info, light: Session_Light, em: f32) {
+	switch light {
+	case .Waits:      session_lamp("###waits", LAMP_WAITS, em)
+	case .Running:    session_lamp("###busy", LAMP_WORKING, em)
+	case .Background: session_lamp("###bg", LAMP_BACKGROUND, em)
+	case .Unseen:
+		st, _ := state_of_word(s.outcome)
+		session_lamp_off("###unseen", sub_state_color(st), em)
+	case .Rest:
+	}
+}
+
 session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0, kids: []int = nil, project := false) {
 	pane := main_pane(app)
 	selected := s.id == pane.chat.id
@@ -238,18 +265,8 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				ui.space(ui.SPACE_1)
 				text("ag", s.agent, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 				ui.space(ui.SPACE_1)
-			} else if session_waits(app, s.id) {   // (a run that cannot go on without the person)
-				session_lamp("###waits", LAMP_WAITS, em)
-				ui.space(ui.SPACE_1)
-			} else if busy {
-				session_lamp("###busy", LAMP_WORKING, em)
-				ui.space(ui.SPACE_1)
-			} else if session_in_background(app, s.id) {   // (at rest, its commands still running: steady)
-				session_lamp("###bg", LAMP_BACKGROUND, em)
-				ui.space(ui.SPACE_1)
-			} else if session_unseen(app, s) {   // (over and not seen: how it ended, the lamp without its light)
-				st, _ := state_of_word(s.outcome)
-				session_lamp_off("###unseen", sub_state_color(st), em)
+			} else if light := session_light(app, s); light != .Rest {
+				session_light_lamp(s, light, em)
 				ui.space(ui.SPACE_1)
 			}
 			title := s.title != "" ? s.title : i18n.tr("Untitled")

@@ -85,6 +85,7 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
 - **Find in the conversation** (Ctrl+F): every match of the text shown lit, the current one brighter and scrolled into
   view; Enter or F3 for the next, Shift+Enter or Shift+F3 for the previous, Escape to close.
 - **An inbox in the sidebar**: what waits for you first, then what finished and you have not seen, what runs, the rest. The grouping by project is one click away.
+  Minimised (or in a narrow window), the sidebar is a rail of the sessions' marks with their lamps; a card beside a mark says the rest.
 - **What you missed** (the bell of the title bar, Ctrl+Shift+N): runs that ended, questions and permissions that wait, commands in
   the background, scheduled runs and sub-agents that ended, by session, kept across restarts. Each one has its report: the request,
   the agent's last answer, the files it touched, its todo list. One card at a time (← and → go through them), or a list whose rows
@@ -205,7 +206,7 @@ every step is a command of `tools/ocntools` (`help` lists them; `AGENTS.md`). Th
 | `src/model.odin` | sessions, messages, parts and projects; events applied as they stream |
 | `src/views.odin` | the window's layout: its parts, the conversation the views go around, the application menu |
 | `src/window_views.odin` | the views (gui_toolkit's): every dialog and panel declared, where the user put each, their answers |
-| `src/chrome.odin`, `src/sidebar_rows.odin` | the title bar, the conversation's header, the status bar; the sidebar's rows and menus |
+| `src/chrome.odin`, `src/sidebar_rows.odin`, `src/sidebar_rail.odin` | the title bar, the conversation's header, the status bar; the sidebar's rows and menus; its rail, minimised |
 | `src/conversation.odin`, `src/message_parts.odin`, `src/text_wells.odin` | the conversation, its messages, the tool timeline and reasoning, text in wells |
 | `src/composer.odin` | the dock and the composer |
 | `src/markdown.odin` | Markdown, shown by the toolkit's `markdown` package: ocn's faces, colours, links and code blocks |
