@@ -3307,3 +3307,76 @@ a_picture_held_as_text_is_decoded_by_the_cache :: proc(t: ^testing.T) {
 		testing.expect(t, bad != nil && bad.state == .Failed && bad.why == .Unknown_Format, "what is no base64 is no picture")
 	})
 }
+
+// A paragraph of the conversation in the middle of its view, in no clickable box (a press there selects at once).
+@(private = "file")
+middle_paragraph :: proc(sb, b: ^ui.Box) -> ^ui.Box {
+	if .Clickable in b.flags { return nil }
+	h := sb.rect.max.y - sb.rect.min.y
+	if .Selectable in b.flags && b.rect.max.x - b.rect.min.x > 200 && b.rect.min.y > sb.rect.min.y + h * 0.3 && b.rect.max.y < sb.rect.min.y + h * 0.65 { return b }
+	for c := b.first; c != nil; c = c.next { if p := middle_paragraph(sb, c); p != nil { return p } }
+	return nil
+}
+
+// The chip over a selection in the conversation shows its two acts with their glyphs, and holds to the text as the conversation
+// scrolls: it moves by as much as the text, hides when the text leaves the view, and comes back where it was with it. (It stayed
+// where the pointer had ended the selection, on the screen, over whatever scrolled under it.)
+@(test)
+the_quote_chip_holds_to_its_selection :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		session.wait_idle(s)
+		sb := session.get(s, "chat")
+		text := middle_paragraph(sb, sb)
+		if !testing.expect(t, text != nil, "a paragraph in the middle of the view") { return }
+		key := text.key
+		y := text.rect.min.y + 6   // (in its first line)
+		to := [2]f32{text.rect.min.x + 160, y}
+		session.drag(s, {text.rect.min.x + 4, y}, to)
+		session.wait_idle(s)
+		testing.expect(t, ui.has_selection(&app.state), "text selected")
+		chip := session.find(s, "quote_chip")
+		if !testing.expect(t, chip != nil, "the chip over the selection") { return }
+		Act :: struct { name, icon: string }
+		for a in ([]Act{{"q1", lucide.QUOTE}, {"q2", lucide.MESSAGE_SQUARE_QUOTE}}) {
+			b := session.find(s, a.name, within = chip)
+			glyph := b != nil ? session.find(s, "ico", within = b) : nil
+			testing.expectf(t, glyph != nil && glyph.text == a.icon, "%s: its glyph", a.name)
+		}
+		chip_y, text_y := chip.rect.min.y, text.rect.min.y
+		top_of :: proc(app: ^App, key: ui.Key) -> f32 { return app.state.boxes[key].rect.min.y }
+
+		// a notch of the wheel: the text moves down under the chip, and the chip with it
+		mid := session.center(sb)
+		session.wheel(s, mid, {0, -1})   // (up: the view toward the start)
+		session.wait_idle(s)
+		moved := top_of(app, key) - text_y
+		testing.expectf(t, moved > 1, "scrolled: the text moved by %v", moved)
+		chip = session.find(s, "quote_chip")
+		if !testing.expect(t, chip != nil, "the chip, still in view") { return }
+		testing.expectf(t, abs(chip.rect.min.y - chip_y - moved) <= 1, "the chip moved as the text: %v, the text %v", chip.rect.min.y - chip_y, moved)
+
+		// on, until the end of the selection is under the view: the chip goes; the selection stays
+		notches := 1
+		for notches < 40 && session.find(s, "quote_chip") != nil {
+			session.wheel(s, mid, {0, -1})
+			session.wait_idle(s)
+			notches += 1
+		}
+		testing.expect(t, session.find(s, "quote_chip") == nil, "scrolled out: no chip")
+		testing.expect(t, ui.has_selection(&app.state), "the selection stays")
+		testing.expectf(t, to.y + top_of(app, key) - text_y > sb.rect.max.y, "the selection's end is under the view (%v, the view ends at %v)", to.y + top_of(app, key) - text_y, sb.rect.max.y)
+
+		// back to the bottom: the chip comes back where it was, over its text
+		for _ in 0 ..< notches + 2 {
+			session.wheel(s, mid, {0, 1})
+			session.wait_idle(s)
+		}
+		testing.expectf(t, abs(top_of(app, key) - text_y) <= 1, "the text back where it was: %v, was %v", top_of(app, key), text_y)
+		chip = session.find(s, "quote_chip")
+		if !testing.expect(t, chip != nil, "scrolled back: the chip") { return }
+		testing.expectf(t, abs(chip.rect.min.y - chip_y) <= 1, "the chip back where it was: %v, was %v", chip.rect.min.y, chip_y)
+		session.save_png(s, "quote_chip.png")
+	})
+}

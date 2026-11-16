@@ -23,6 +23,7 @@ Conversation :: struct {
 	layout_win_w:     f32,            // ... the window's width then
 	prompt_rail:      Prompt_Rail,    // the marks of the prompts on its scroll bar (prompt_rail.odin)
 	root:             ui.Key,         // its column's box, at its last build (pane_at: what is under the pointer)
+	pointer_item:     ui.Key,         // the message's lazy item under the pointer in this build, 0: none (the quote chip's anchor)
 }
 
 ////////////////////////////////
@@ -47,6 +48,7 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32, avail: f32) {
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = ui.theme_color("background"), radius = 0})
 	if ui.column(flags = {.Draw_Background}, id = "###main") {
 		pane.conversation.root = ui.parent_box().key
+		pane.conversation.pointer_item = 0
 		sc := ui.scale()
 		avail := avail
 		if avail <= 0 { avail = AVAIL_FALLBACK_PX * sc }
@@ -254,6 +256,8 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			if m.kind == .User { prompt_rail_place(app, pane, lz.y) }   // (where it starts: built or not)
 			if ui.lazy_item(lz, id, always = i == len(c.messages) - 1 || held) {
 				item := ui.parent_box()
+				// (one rect test per message built: the chip of a selection ended here holds to this message as it scrolls)
+				if draw.rect_contains(item.rect, ui.mouse_pos()) { pane.conversation.pointer_item = item.key }
 				if sb := lz.scroll; sb != nil {
 					if !top_seen && m.id != "" && item.rect.max.y > sb.rect.min.y {
 						top_seen = true

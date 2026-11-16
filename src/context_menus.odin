@@ -34,7 +34,12 @@ Ctx_Menu :: struct {
 // The chip at the end of a selection (quote_chip).
 Quote_Chip :: struct {
 	open:         bool,
-	at:           Rect,
+	at:           Rect,     // where the pointer ended the selection, on screen then (quote_place)
+	// The message's lazy item the selection ended in (0: not in a conversation) and `at` from its top-left: the chip holds to
+	// the text as the conversation scrolls, not to the screen (quote_anchor).
+	item:         ui.Key,
+	off:          Vec2,
+	shown:        Rect,     // where the last build put it (it moved: one more build puts it where the last layout says)
 	kept:         string,   // what it quotes (owned)
 	serial, done: u64,      // which selection, and the last one quoted (of `window`'s: each window counts its own)
 	pane:         int,      // the slot of the pane under the pointer when the selection was made: its composer quotes it
@@ -289,7 +294,26 @@ quote_place :: proc(q: ^Quote_Chip, serial: u64, pointer: Vec2) -> (new_selectio
 	if serial == q.serial { return false }
 	q.serial = serial
 	q.at = {pointer, pointer + 1}
+	q.item = 0
 	return true
+}
+
+// Where the chip stands in this build of `s`, and whether it shows. Outside a conversation: where the selection was made (nothing
+// scrolls it). In one: as far from its message's top-left as when it was made, from that box's last layout, and only while that
+// point is in the conversation's view: scrolled out, it hides; back in, it comes back. (A message the lazy column no longer
+// builds takes its selection with it: the toolkit drops a selection whose boxes are gone.)
+quote_anchor :: proc(q: ^Quote_Chip, s: ^ui.State) -> (at: Rect, shown: bool) {
+	if q.item == 0 { return q.at, true }
+	b := s.boxes[q.item] or_else nil
+	// (not built in this build, or new in it: no layout says where it is)
+	if !ui.box_current(s, b) || b.size.y <= 0 { return {}, false }
+	p := b.rect.min + q.off
+	for v := b.parent; v != nil; v = v.parent {
+		if .View_Scroll_Y not_in v.flags { continue }
+		if p.y < v.rect.min.y || p.y > v.rect.max.y { return {}, false }
+		break
+	}
+	return {p, p + 1}, true
 }
 
 // Where a selection ends: what can be done with it, at hand. The press on it may take the selection away: the text was kept.
@@ -313,16 +337,25 @@ quote_chip :: proc(app: ^App, em: f32) {
 		if quote_place(q, serial, ui.mouse_pos()) {
 			delete(q.kept)
 			q.kept = ui.selected_text(s)
-			q.pane = pane_index(app, pane_at(app, ui.mouse_pos()))
+			pane := pane_at(app, ui.mouse_pos())
+			q.pane = pane_index(app, pane)
+			if b := s.boxes[pane.conversation.pointer_item] or_else nil; ui.box_current(s, b) {
+				q.item, q.off = b.key, ui.mouse_pos() - b.rect.min
+			}
 		}
 	}
 	if !q.open { return }
-	if ui.popover(id, q.at, math.round(em * QUOTE_CHIP_W_EM), .Above, align_right = false) {
+	at, shown := quote_anchor(q, s)
+	// (its anchor is the last layout's: a scroll moves it one build late, and the build after the last move puts it right)
+	if at != q.shown { app.settle = max(app.settle, FRAMES_AFTER_INPUT) }
+	q.shown = at
+	if !shown { return }
+	if ui.popover(id, at, math.round(em * QUOTE_CHIP_W_EM), .Above, align_right = false) {
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.3)), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###qr") {
 			ui.space(ui.SPACE_1)
-			quoted := ui.button("q1", i18n.tr("Quote"), o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM)}).clicked
-			commented := ui.button("q2", i18n.tr("Comment"), o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM)}).clicked
+			quoted := ui.button("q1", i18n.tr("Quote"), lucide.QUOTE, o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM)}).clicked
+			commented := ui.button("q2", i18n.tr("Comment"), lucide.MESSAGE_SQUARE_QUOTE, o = {face = .Ghost, width = ui.fill(), height = math.round(em * BUTTON_SMALL_H_EM)}).clicked
 			ui.space(ui.SPACE_1)
 			if quoted || commented {
 				quote_text(app, quote_pane(app), q.kept, commented)

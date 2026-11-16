@@ -113,6 +113,9 @@ end of the main window's build, so a right click in the panel's window showed no
   window's.
 - **The quote chip** follows the last window pressed in: a selection is made with a press, and each window keeps its
   own selection, so a chip that went to the window with a selection would jump between two windows at each frame.
+  In a conversation it holds to the message the selection ended in (its lazy item, and the pointer's offset in it), not
+  to the screen: it scrolls with the text, hides while that point is out of the view, and comes back with it. The
+  toolkit gives no rect of the selection itself, and a message is one rect test per message built.
 - **The model and agent chooser** (a palette, a view of the window it opens over) opens in the build of the window of
   the pane that asked: `chooser_build` runs at the top of the main window's build and at the top of the panel's
   build in its own window, and opens it only where `pane_window` of the chooser's pane is the State being built.
