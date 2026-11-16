@@ -167,7 +167,6 @@ bench_app :: proc(t: ^testing.T) -> (app: ^App, s: ^session.Session) {
 	testing.expect(t, render.init_offscreen(&app.r, app.win.size, warp = !OCN_BENCH))
 	app_init(app, "")
 	main_window_adopt(app)
-	app.last_tick = time.tick_now()
 	app.opened_first = true
 	pane.chat.id = strings.clone(BENCH_CHAT_ID, pane.chat.alloc)
 	v, err := json.parse_string(bench_sessions(), allocator = context.temp_allocator)
@@ -284,6 +283,19 @@ bench_frame :: proc(s: ^session.Session, c: ^Bench_Case) {
 	append(&c.gpu, f64(render.gpu_ms(&app.r)))
 	c.builds += app.frame_times.builds
 	c.boxes = ui.boxes_built(&app.state)
+}
+
+// The first turn of the conversation that shows at the view's top: its prompt or its answer reaches into the view. -1: none.
+@(private = "file")
+bench_top_turn :: proc(s: ^session.Session) -> int {
+	chat := session.get(s, "chat")
+	for turn in 0 ..< BENCH_TURNS {
+		for kind in ([]string{"u", "a"}) {
+			b := session.find(s, fmt.tprintf("msg_msg_%d_%s", turn, kind))
+			if b != nil && b.rect.max.y > chat.rect.min.y && b.rect.min.y < chat.rect.max.y { return turn }
+		}
+	}
+	return -1
 }
 
 // The `i`th character of `s` (ASCII), round again past its end.
@@ -542,6 +554,8 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 
 		// find: every message built, the needle typed a character a frame
+		top_turn := bench_top_turn(s)
+		testing.expect(t, top_turn >= 0, "a turn at the view's top")
 		find_open(app, pane)
 		session.frames(s, 2)
 		finding := Bench_Case{name = "find"}
@@ -561,12 +575,14 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		session.frames(s, 3)
 		found := ui.find_count()
 		testing.expect(t, found > 1, "the sweep read the whole conversation")
-		// (searched from where the reader is, a few screens over the bottom, the wheel's: the first match under the view's top, in
-		// view, not the conversation's first, a conversation away. Which one it is depends on where the wheel stopped, which the
-		// lazy column's estimates of the messages above once moved under the reader)
+		// (searched from where the reader is, where the wheel stopped (a few screens over the bottom, half the conversation up with
+		// OCN_BENCH's frames): the first match under the view's top, in view, not the conversation's first, a conversation away.
+		// A turn has BENCH_FIND three times (its prompt, a paragraph, the table): the match is of the turn at the top or the
+		// next one. The lazy column's estimates of the messages above once moved the view under the reader)
 		{
 			chat := session.get(s, "chat")
-			testing.expectf(t, pane.find.index > found / 2, "a match near the view: %d of %d", pane.find.index, found)
+			turn := pane.find.index / 3
+			testing.expectf(t, turn == top_turn || turn == top_turn + 1, "a match of the turn at the view's top (%d): %d of %d, of turn %d", top_turn, pane.find.index, found, turn)
 			shown := false
 			for m in ui.find_matches() {
 				if m.index == pane.find.index { shown = m.rect.max.y > chat.rect.min.y && m.rect.min.y < chat.rect.max.y }   // (window coordinates)
@@ -694,7 +710,7 @@ older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session)
 	session.wheel(s, session.center(sb), {0, -200})
 	session.frames(s, 1)
 	sb = session.get(s, "chat")
-	testing.expect(t, sb.view_target.y == 0 && sb.view_anim[1].active, "on its way to the top, stopped there")
+	testing.expectf(t, sb.view_target.y == 0 && sb.view_anim[1].active, "on its way to the top, stopped there: its target %v, at %v, moving %v", sb.view_target.y, sb.view_off.y, sb.view_anim[1].active)
 	film_slow_stop(app)
 	if testing.expect_value(t, bench_count(.Older), 1) {
 		post_answer(app, bench_take(t, .Older), older_page(3000, 60, ""))
@@ -2490,7 +2506,8 @@ the_palettes_search_is_a_menus_search_band :: proc(t: ^testing.T) {
 		ui.menu_open("app_menu", ui.Vec2{900, 300})
 		session.frames(s, 3)
 		session.event(s, {kind = .Text, text = 's'})
-		session.frames(s, 3)
+		// (the colours read once they rest: the frames move them by the test's clock, not by the time a frame takes)
+		session.wait_idle(s)
 		// (the toolkit's palette: its band and its list by their names)
 		top, band, list := session.find(s, "palette_top"), session.find(s, "menu_search"), session.find(s, "palette_list")
 		if !testing.expect(t, top != nil && band != nil && list != nil, "the palette's strip, the menu's band, the list") { return }

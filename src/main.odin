@@ -121,7 +121,6 @@ App :: struct {
 	crash_bar:        crash_bar.Bar,        // the last session's crash, said in a bar under the title bar
 	quit:             bool,
 	launch_after:     string,   // Restart: the file started at main's very end, once the single instance is let go ("": none)
-	last_tick:        time.Tick,
 	frame_times:      Frame_Times,   // the last frame's steps
 }
 
@@ -246,8 +245,6 @@ main_dragging :: proc(h: ^host.Host) -> bool {
 }
 
 FRAMES_AFTER_INPUT :: 3        // still drawn after an event, and at start: what it set off settles
-DT_MIN_S           :: 0.0005
-DT_MAX_S           :: 0.1      // after a long stall the animations go on, they do not jump
 ANCHOR_BUILDS_MAX  :: 4        // builds spent on keeping a part header in place
 SNAP_BUILDS_MAX    :: 4        // builds spent on reaching the bottom of a page just read, while what they build moves it
 
@@ -294,14 +291,12 @@ main_input :: proc(h: ^host.Host, read: []platform.Event) -> []platform.Event {
 	return events
 }
 
-// The builds of a frame. (Its own dt: the film's slow motion has one, and the status bar's rate is read from it.)
+// The builds of a frame. Its dt is the host's, of the interface's clock: the film's slowed one, a test's, one refresh after a
+// rest. (A dt of the system's clock moved a test's animations by the time its frames took, not by the frames it made.)
 @(private = "file")
-main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, _: f32) {
+main_builds :: proc(h: ^host.Host, size: draw.Vec2, events: []platform.Event, dt: f32) {
 	app := (^App)(h.user)
-	now := time.tick_now()
-	dt := film_slow_dt(app, clamp(f32(time.duration_seconds(time.tick_diff(app.last_tick, now))), DT_MIN_S, DT_MAX_S))
-	app.last_tick = now
-	if dt < FPS_RESTED_S { app.chrome.frame_ms += (dt * 1000 - app.chrome.frame_ms) * FPS_SMOOTH }   // (a rest is no frame rate)
+	if !h.rested && dt < FPS_RESTED_S { app.chrome.frame_ms += (dt * 1000 - app.chrome.frame_ms) * FPS_SMOOTH }   // (a rest is no frame rate)
 	app.frame_times = {}
 	t_build := time.tick_now()
 	main_build(app, size, events, dt)
@@ -671,7 +666,6 @@ main :: proc() {
 	prefs_page.standard_apply(&app.cfg_prefs, &app.state, {partial_redraw = &app.window.partial_redraw, faces = own_text_faces(app)})
 	crash_bar.init(&app.crash_bar, crashed)
 	delete(crashed)
-	app.last_tick = time.tick_now()
 	app.settle = FRAMES_AFTER_INPUT
 
 	// the event stream: its first connection loads everything (stream_up)
