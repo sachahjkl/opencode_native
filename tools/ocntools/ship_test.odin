@@ -37,6 +37,17 @@ a_run_is_the_one_of_this_commit :: proc(t: ^testing.T) {
 	testing.expect_value(t, run_of_sha("not json", "bbb"), i64(0))
 }
 
+// A commit whose CI passed is not run again; a run that failed, was cancelled or still runs is no green run.
+@(test)
+a_green_run_of_this_commit_is_not_run_again :: proc(t: ^testing.T) {
+	list := `[{"databaseId":9,"headSha":"bbb","conclusion":""},{"databaseId":8,"headSha":"bbb","conclusion":"success"},{"databaseId":7,"headSha":"aaa","conclusion":"failure"}]`
+	testing.expect(t, green_run_of_sha(list, "bbb"), "a success of bbb, beside a run that goes on")
+	testing.expect(t, !green_run_of_sha(list, "aaa"), "a failure")
+	testing.expect(t, !green_run_of_sha(`[{"databaseId":9,"headSha":"ccc","conclusion":"cancelled"}]`, "ccc"), "cancelled")
+	testing.expect(t, !green_run_of_sha(list, "ddd"), "no run")
+	testing.expect(t, !green_run_of_sha("not json", "bbb"), "no answer")
+}
+
 @(test)
 a_manifest_says_its_version :: proc(t: ^testing.T) {
 	testing.expect_value(t, manifest_version(`{"channel":"stable","version":"0.15.1","size":3}`), "0.15.1")

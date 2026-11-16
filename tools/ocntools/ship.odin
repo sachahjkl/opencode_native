@@ -56,6 +56,21 @@ run_of_sha :: proc(list, sha: string) -> i64 {
 	return 0
 }
 
+// Whether `gh run list --json databaseId,headSha,conclusion` holds a green run of `sha`: a ship started again after it
+// stopped (a lost shell, the tag's step) does not run the same commit's CI a second time.
+green_run_of_sha :: proc(list, sha: string) -> bool {
+	Entry :: struct {
+		headSha:    string,
+		conclusion: string,
+	}
+	entries: []Entry
+	if json.unmarshal(transmute([]byte)list, &entries, allocator = context.temp_allocator) != nil { return false }
+	for e in entries {
+		if e.headSha == sha && e.conclusion == "success" { return true }
+	}
+	return false
+}
+
 // The version in a manifest of an update.
 manifest_version :: proc(text: string) -> string {
 	Manifest :: struct {
@@ -158,9 +173,14 @@ run_ship :: proc(args: []string) -> cli.Exit {
 	if dry { fmt.println("ship: ready, nothing done"); return .Done }
 
 	if !run("git", "push", "-q", "-u", "origin", branch) { return stop("the branch was not pushed") }
-	if !run("gh", "workflow", "run", "ci.yml", "--ref", branch) { return stop("CI did not start") }
-	ci := find_run("ci.yml", sha)
-	if ci == "" || !watch(ci) { return stop("CI is not green: no tag, master untouched") }
+	runs, _ := toolbox.capture({"gh", "run", "list", "--workflow", "ci.yml", "--commit", sha, "--json", "databaseId,headSha,conclusion"})
+	if green_run_of_sha(runs, sha) {
+		fmt.printfln("ship: CI is already green for %s", sha[:7])
+	} else {
+		if !run("gh", "workflow", "run", "ci.yml", "--ref", branch) { return stop("CI did not start") }
+		ci := find_run("ci.yml", sha)
+		if ci == "" || !watch(ci) { return stop("CI is not green: no tag, master untouched") }
+	}
 
 	if !run("git", "fetch", "-q", "origin") { return stop("no answer from origin") }
 	now, _ := toolbox.capture({"git", "rev-parse", "origin/master"})
