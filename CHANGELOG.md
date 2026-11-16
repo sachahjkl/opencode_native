@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.69.0] - 2026-11-16 18:49
+
+### Added
+- **Set the model from the command palette**: "Set the model" lists the models the server offers, the one in use selected; type to filter, Enter sets it. The composer's model button opens the same list, for its own conversation (an aside's button sets the aside's model); Escape closes it. "Rename the session" starts from the current title. The models are no longer listed under #.
+
 ## [0.68.0] - 2026-11-16 17:52
 
 ### Added
@@ -1835,6 +1840,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.69.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.69.0
 [0.68.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.68.0
 [0.67.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.67.2
 [0.67.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.67.1
