@@ -4,6 +4,7 @@ package ocn
 
 import "base:runtime"
 import "core:fmt"
+import "core:hash"
 import "core:math"
 import "core:strings"
 import "gt:draw"
@@ -238,7 +239,7 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		// (the messages are the selection's rows: the toolkit builds the two that hold its ends wherever they are, and a copy
 		// reads the ones between that are not built by message_text. A message is a block: a blank line before it)
 		lz := ui.lazy_begin(all = pane.chat.loading, sweep = pane == main_pane(app) ? ui.find_sweep() : {},
-			rows = ui.Text_Rows{count = len(c.messages), text = message_text, user = pane, gap = "\n\n"})
+			rows = ui.Text_Rows{count = len(c.messages), text = message_text, id = message_row_id, user = pane, gap = "\n\n"})
 		// (a view going back to where it was: the column keeps it on its message, however the heights around it settle. A page read
 		// above: the message the view holds is built whatever, frame moves the view by as much as the page pushed it down. Copied:
 		// a click in this build changes the state that owns them)
@@ -370,6 +371,14 @@ copy_box :: proc(t: ^Copy_Text, s: string, block := false) {
 	if t.boxes > 0 { strings.write_string(&t.b, block ? "\n\n" : "\n") }
 	strings.write_string(&t.b, s)
 	t.boxes += 1
+}
+
+// Message `i`'s identity (ui.Text_Rows.id): its id hashed. A page of older messages loaded above a selection shifts the
+// indexes, and the selection's ends find their messages again by this.
+message_row_id :: proc(user: rawptr, i: int) -> u64 {
+	c := &(^Chat_Pane)(user).chat
+	if i < 0 || i >= len(c.messages) { return 0 }
+	return hash.fnv64a(transmute([]u8)c.messages[i].id)
 }
 
 // Message `i` of the pane `user` as its boxes give it to a copy (ui.Text_Rows.text): the message a selection spans and the

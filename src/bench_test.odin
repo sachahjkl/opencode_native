@@ -3376,6 +3376,44 @@ a_copy_across_messages_not_built_is_their_text :: proc(t: ^testing.T) {
 	})
 }
 
+// A page of older messages loaded above a selection shifts every message's index: the selection stays, with its text
+// (its ends follow their messages by id, ui.Text_Rows.id; by index they named other messages and the selection ended).
+@(test)
+an_older_page_keeps_the_selection :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		session.wait_idle(s)
+		pane := main_pane(app)
+		c := &pane.chat
+		app.conn = bench_conn(app)   // (requests are kept: answers_test.odin)
+		clear(&bench_sent)
+		c.older = strings.clone("cursor", c.alloc)
+		pane.view.chat_scroll = Scroll_Free{}
+		sb := session.get(s, "chat")
+		sb.view_off.y, sb.view_target.y = 0, 0
+		sb.view_anim[1] = {}
+		session.frames(s, 3)
+		testing.expect_value(t, bench_count(.Older), 1)
+
+		sb = session.get(s, "chat")
+		text := middle_paragraph(sb, sb)
+		if !testing.expect(t, text != nil, "a paragraph in the middle of the view") { return }
+		y := text.rect.min.y + 6
+		session.drag(s, {text.rect.min.x + 4, y}, {text.rect.min.x + 160, y})
+		session.wait_idle(s)
+		if !testing.expect(t, ui.has_selection(&app.state), "a selection") { return }
+		before := strings.clone(ui.selected_text(&app.state, context.temp_allocator))
+		defer delete(before)
+
+		post_answer(app, bench_take(t, .Older), older_page(1000, 60, "more"))
+		session.frames(s, 6)
+		testing.expect_value(t, len(c.messages), 3 * BENCH_TURNS + 60)
+		if !testing.expect(t, ui.has_selection(&app.state), "the selection stays") { return }
+		testing.expect_value(t, ui.selected_text(&app.state, context.temp_allocator), before)
+	})
+}
+
 // A paragraph of the conversation in the middle of its view, in no clickable box (a press there selects at once).
 @(private = "file")
 middle_paragraph :: proc(sb, b: ^ui.Box) -> ^ui.Box {

@@ -43,9 +43,9 @@ that hold the selection's ends wherever they are. A copy reads each message betw
   prompt after an answer was a line apart when built and a blank line apart when read.
 - **`user` is the pane.** It stays where it is (`App.panes`), and the toolkit reads it after the build. A row past the
   messages (another conversation since the build) has no text.
-- **Rows by index.** The toolkit keeps an end's row by its index. A page of older messages read while a selection
-  stands (a drag held at the top reads it) puts messages above it: the toolkit then holds the wrong message, and an end
-  whose message is out of view is not built, so the selection ends. The toolkit has no way yet to shift the rows.
+- **Rows by id.** A page of older messages read while a selection stands (a drag held at the top reads it) shifts
+  every index. Each end keeps its row's identity (`Text_Rows.id`: the message's id hashed, `message_row_id`) and the
+  toolkit finds the row again. By index alone, the ends named other messages and the selection ended.
 
 Refused: building every message the selection spans (this file's first answer, `Chat_View_State.selected`). A drag
 over a long conversation built thousands of messages at each frame.
