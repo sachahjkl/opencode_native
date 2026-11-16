@@ -4,6 +4,20 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.64.1] - 2026-11-16 07:26
+
+### Added
+- **A step's speed**: the Statistics panel says, under each model, the time to its first token and how many tokens a second it writes; the usage line at the end of an answer says the same of that step. The Time section's output pace, which counted the tools' time, is gone.
+- **MCP events**: with opencode 2.3.0's experimental MCP events, the MCP servers page lists each server's last events under it (type, data, age), and a session woken by an event shows the server, the event and its data instead of the note to the model.
+
+### Changed
+- **Freeform tool input as text**: a tool call whose input is one long text (opencode's execute and patch) shows that text as it is, without its key, and shows it as the model writes it. A call still streaming no longer shows a quoted JSON string.
+- **A diagram keeps its direction**: the Mermaid viewer opens a diagram again in the direction you chose for it (top to bottom, left to right, bottom to top or right to left) until the program quits. Another diagram opens as its text says.
+
+### Fixed
+- **Connects again when installed with Nix**: since 0.63.0 the Nix package could not find libcurl, so no request reached any server; a link that cannot come up now says why in the log.
+- **Movements start smoothly after a pause**: the first frame after the window rested moved a scroll or an animation by up to a tenth of a second at once; it moves it by one refresh now, as every other frame.
+
 ## [0.64.0] - 2026-11-15 23:55
 
 ### Changed
@@ -1767,6 +1781,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.64.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.64.1
 [0.64.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.64.0
 [0.63.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.63.1
 [0.63.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.63.0
