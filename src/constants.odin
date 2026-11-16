@@ -18,6 +18,13 @@ QUEUE_NAME_CHARS   :: 60    // ... for a screen reader
 QUEUE_GONE_MAX     :: 64    // items remembered as gone (a late list must not bring them back)
 
 ////////////////////////////////
+// MCP events (mcp_events.odin)
+
+MCP_EVENTS_KEPT      :: 60    // in all, the oldest dropped: the page shows the last ones of each server
+MCP_EVENTS_SHOWN     :: 3     // under a server, the newest first
+MCP_EVENT_DATA_CHARS :: 160   // of an event's data, on its line
+
+////////////////////////////////
 // The statistics panel (stats.odin)
 
 CONTEXT_DEBOUNCE_MS :: 400    // a step ended: its context is read a little after, once
@@ -27,6 +34,7 @@ CTX_BAR_PARTS       :: 6      // parts of the bar, the largest; the others are o
 CTX_ITEMS_SHOWN     :: 12     // of a part, unfolded
 CTX_OPEN_LINES      :: 40     // of an item, opened
 CTX_ITEM_CHARS      :: 90     // of its name
+STEP_WRITE_MIN_MS   :: 50     // a step wrote for less: no speed (a few tokens in one chunk give an absurd rate)
 CTX_SHADE_FIRST     :: 0.95   // the bar: the accent, fainter from part to part
 CTX_SHADE_STEP      :: 0.14
 CTX_SHADE_LAST      :: 0.2

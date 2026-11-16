@@ -113,6 +113,7 @@ App :: struct {
 	prefs_writer:     config.User_Writer,   // writes them off the loop, once a round when they changed (main_after_frame)
 	prefs:            Prefs,          // their plain values
 	facts:            Server_Facts,   // what the server said for the settings pages
+	mcp_events:       [dynamic]Mcp_Event,   // the MCP servers' last events, oldest first (mcp_events.odin)
 	seek_subagent:    bool,   // --seek-subagent (tests): scroll to the first sub-agent card
 	logo:             Logo,
 	pictures:         pictures.Cache,   // the textures of the images, by Image_Ref.key and size (images.odin)

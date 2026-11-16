@@ -909,6 +909,7 @@ page_mcp :: proc(app: ^App, em: f32) {
 					info_line(app, "###err", m.error, em, ui.theme_color("bad text"))
 				}
 			}
+			mcp_server_events(app, m.name, em)
 		}
 	} }
 }
