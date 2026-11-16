@@ -22,7 +22,46 @@ import remote "gt:remote"
 import i18n "gt:i18n"
 
 Tool_Count :: struct { name: string, calls, failed: int, p50: f64 }
-Model_Count :: struct { name: string, steps: int, tokens_in, tokens_out, cost: f64 }
+// (timed, latency_ms, written, write_ms: the steps that say their first token, and their sums: step-speed.md)
+Model_Count :: struct { name: string, steps: int, tokens_in, tokens_out, cost: f64, timed: int, latency_ms, written, write_ms: f64 }
+
+// A step's latency (first token − start) and writing speed ((output + reasoning) / (end of writing − first token)), kept in the
+// message when what they come from changes: the end of writing is `streamed`, else `completed`, which waits for the tools.
+step_speed_set :: proc(m: ^Message) {
+	m.latency_ms, m.write_rate = 0, 0
+	if m.first_token <= 0 || m.created <= 0 || m.first_token < m.created { return }
+	m.latency_ms = m.first_token - m.created
+	end := m.streamed > 0 ? m.streamed : m.completed
+	if written := step_written(m); end - m.first_token >= STEP_WRITE_MIN_MS && written > 0 {
+		m.write_rate = written / ((end - m.first_token) / MS_PER_S)
+	}
+}
+
+// The tokens a step wrote: its output, and its reasoning, which the server counts apart.
+@(private = "file")
+step_written :: proc(m: ^Message) -> f64 { return m.tokens_out + m.reasoning }
+
+// "0.8 s first token · 92 tokens/s", or what of it is known ("": nothing).
+speed_text :: proc(latency_ms, rate: f64) -> string {
+	lat := latency_ms > 0 ? fmt.tprintf(i18n.tr("%s first token"), seconds_text(latency_ms)) : ""
+	speed := rate > 0 ? fmt.tprintf(i18n.tr("%.0f tokens/s"), rate) : ""
+	if lat != "" && speed != "" { return fmt.tprintf("%s · %s", lat, speed) }
+	return lat != "" ? lat : speed
+}
+
+// A model's mean latency and its writing speed over the steps that say them (0: not known).
+model_speed :: proc(m: Model_Count) -> (latency_ms, rate: f64) {
+	if m.timed > 0 { latency_ms = m.latency_ms / f64(m.timed) }
+	if m.write_ms > 0 { rate = m.written / (m.write_ms / MS_PER_S) }
+	return
+}
+
+// A short wait in seconds, with a tenth under ten.
+@(private = "file")
+seconds_text :: proc(ms: f64) -> string {
+	s := ms / MS_PER_S
+	return s < 10 ? fmt.tprintf("%.1f s", s) : fmt.tprintf("%.0f s", s)
+}
 
 Project_Stats :: struct {
 	arena:      virtual.Arena,
@@ -272,7 +311,7 @@ stats_load :: proc(app: ^App, v: json.Value) {
 	}
 	ps.models = make([dynamic]Model_Count, a)
 	for m in tk_json.array(d, "models") {
-		append(&ps.models, Model_Count{strings.clone(tk_json.text(m, "model", "id"), a), int(tk_json.number(m, "steps")), tk_json.number(m, "tokens", "input") + tk_json.number(m, "tokens", "cache", "read"), tk_json.number(m, "tokens", "output"), tk_json.number(m, "cost")})
+		append(&ps.models, Model_Count{name = strings.clone(tk_json.text(m, "model", "id"), a), steps = int(tk_json.number(m, "steps")), tokens_in = tk_json.number(m, "tokens", "input") + tk_json.number(m, "tokens", "cache", "read"), tokens_out = tk_json.number(m, "tokens", "output"), cost = tk_json.number(m, "cost")})
 	}
 }
 
@@ -327,11 +366,16 @@ local_stats_of :: proc(c: ^Chat, a: mem.Allocator) -> (l: Local_Stats) {
 			l.out_tokens += m.tokens_out
 			if m.tokens_in + m.cache_read > 0 { l.last_context = m.tokens_in + m.cache_read; l.last_model = m.model }
 			name := m.model != "" ? m.model : "?"
-			found := false
-			for &mc in l.models {
-				if mc.name == name { mc.steps += 1; mc.tokens_in += m.tokens_in + m.cache_read; mc.tokens_out += m.tokens_out; mc.cost += m.cost; found = true; break }
+			mc: ^Model_Count
+			for &o in l.models { if o.name == name { mc = &o; break } }
+			if mc == nil {
+				append(&l.models, Model_Count{name = name})
+				mc = &l.models[len(l.models) - 1]
 			}
-			if !found { append(&l.models, Model_Count{name, 1, m.tokens_in + m.cache_read, m.tokens_out, m.cost}) }
+			mc.steps += 1; mc.tokens_in += m.tokens_in + m.cache_read; mc.tokens_out += m.tokens_out; mc.cost += m.cost
+			if m.latency_ms > 0 { mc.timed += 1; mc.latency_ms += m.latency_ms }
+			// (the speed is the whole's: tokens over time summed, so a long step weighs as much as it wrote)
+			if m.write_rate > 0 { w := step_written(&m); mc.written += w; mc.write_ms += w / m.write_rate * MS_PER_S }
 			for &p in m.parts {
 				if p.kind != .Tool { continue }
 				l.calls += 1
@@ -758,7 +802,6 @@ stats_time :: proc(c: ^Chat, s: ^Session_Info, l: ^Local_Stats, now: f64, clock2
 	}
 	if l.active_ms > 0 {
 		kv("###d3", i18n.tr("model at work"), fmt.tprintf(i18n.tr("%s over %d steps (%s a step)"), duration_text(DURATION_ORIGIN_MS, l.active_ms), l.steps, duration_text(DURATION_ORIGIN_MS, l.active_ms / f64(max(l.steps, 1)))), em)
-		if l.out_tokens > 0 { kv("###d4", i18n.tr("output pace"), fmt.tprintf(i18n.tr("%.0f tokens / s"), l.out_tokens / (l.active_ms / MS_PER_S)), em) }
 	}
 	kv("###d5", i18n.tr("loaded"), c.older != "" ? fmt.tprintf(i18n.tr("%d messages · %d prompts · %d steps (earlier ones not loaded)"), l.msgs, l.prompts, l.steps) : fmt.tprintf(i18n.tr("%d messages · %d prompts · %d steps"), l.msgs, l.prompts, l.steps), em)
 }
@@ -779,6 +822,14 @@ stats_rankings :: proc(app: ^App, l: ^Local_Stats, em: f32) {
 		max_m := l.models[0].steps
 		for m, i in l.models {
 			rank_row(fmt.tprintf("###ml%d", i), m.name, m.steps, max_m, 0, fmt.tprintf(i18n.tr("%s out"), kfmt(m.tokens_out)), em, ui.theme_color("weak text"))
+			if s := speed_text(model_speed(m)); s != "" {
+				// (under its row: the model is named once)
+				ui.next({width = ui.fill(), height = ui.px(em * 1.25), axis = .X, cross = .Center})
+				if ui.row(.Center, id = fmt.tprintf("###ms%d", i)) {
+					ui.spacer(ui.px(em * 0.6))
+					text("s", s, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+				}
+			}
 		}
 	}
 }

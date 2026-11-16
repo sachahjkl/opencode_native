@@ -1062,6 +1062,12 @@ fr Copier le tableau (se colle en tableau)
 en Link not opened: %s
 fr Lien non ouvert : %s
 
+en earlier events skipped
+fr événements précédents sautés
+
+en %s ago
+fr il y a %s
+
 en in background
 fr en arrière-plan
 
@@ -2148,6 +2154,12 @@ fr « %s » et ses messages seront supprimés du serveur.
 en Ask something aside: a fork of this session, in a panel
 fr Poser une question en aparté : une bifurcation de cette session, dans un panneau
 
+en %s first token
+fr premier jeton en %s
+
+en %.0f tokens/s
+fr %.0f jetons/s
+
 en Your prompts
 fr Vos invites
 
@@ -2249,12 +2261,6 @@ fr modèle au travail
 en %s over %d steps (%s a step)
 fr %s sur %d étapes (%s par étape)
 
-en output pace
-fr débit de sortie
-
-en %.0f tokens / s
-fr %.0f jetons / s
-
 en loaded
 fr chargés
 
@@ -2319,9 +2325,6 @@ fr %d  (série de %d)
 
 en since
 fr depuis
-
-en %s ago
-fr il y a %s
 
 en tool calls
 fr appels d'outils

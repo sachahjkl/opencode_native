@@ -318,7 +318,7 @@ message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, i: int, em: f32) {
 		next := i + 1 < len(c.messages) ? &c.messages[i + 1] : nil
 		assistant_message(app, pane, m, em, continues(prev, m), next != nil && continues(m, next) ? next : nil, prev)
 	case .Synthetic:
-		if m.sub_child != "" { subagent_result(app, pane, m, em) } else if len(m.jobs) > 0 { job_reports(app, pane, m, em) } else { note_line(app, m, em, lucide.ZAP, m.text != "" ? first_line(m.text) : i18n.tr("synthetic message")) }
+		if m.sub_child != "" { subagent_result(app, pane, m, em) } else if m.mcp_event != "" { mcp_wake_note(app, pane, m, em) } else if len(m.jobs) > 0 { job_reports(app, pane, m, em) } else { note_line(app, m, em, lucide.ZAP, m.text != "" ? first_line(m.text) : i18n.tr("synthetic message")) }
 	case .Shell:       note_line(app, m, em, lucide.SQUARE_TERMINAL, fmt.tprintf("$ %s", m.text))
 	case .Compaction:  note_line(app, m, em, lucide.LIST, i18n.tr("Conversation compacted"))
 	case .Idle:        if i < len(c.messages) - 1 { turn_end(app, m, em) }
@@ -512,7 +512,9 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 		if app.prefs.usage && !m.streaming && m.tokens_out > 0 && m.finish == "stop" {
 			ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###foot") {
-				text("tk", m.cost > 0 ? fmt.tprintf(i18n.tr("%s in · %s out · %s"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), dollars(m.cost, 3)) : fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out)), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				usage := m.cost > 0 ? fmt.tprintf(i18n.tr("%s in · %s out · %s"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), dollars(m.cost, 3)) : fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out))
+				if s := speed_text(m.latency_ms, m.write_rate); s != "" { usage = fmt.tprintf("%s · %s", usage, s) }   // (kept in the message: step_speed_set)
+				text("tk", usage, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			}
 		}
 	}

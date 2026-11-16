@@ -23,10 +23,6 @@
 
 ## Later
 
-- **MCP events, freeform tools, a step's first token (opencode 2.3.0, experimental).** The stream can carry
-  `experimental.mcp.event`, a model can take freeform tool input, and a step says when its first token came
-  (`time.firstToken`). opencode 2.3.0's own clients show none of them yet: show them once one does, or once a step's
-  speed (from its first token) is wanted in the statistics.
 - **A shell that costs less per frame.** An open command view costs 4.3 to 5.0 ms a frame against 1.2 ms without it
   (Linux, -o:speed): every glyph of every row is emitted again each frame. Keep a row's draw list
   while the row does not change. The bench (OCN_BENCH) also has two checks that fail on Linux: the middle wheel's

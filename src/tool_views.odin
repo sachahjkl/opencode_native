@@ -1,6 +1,7 @@
 // What a tool call shows when it is open, by what the tool does: a diff for what edits a file (the server's own patch, else
 // one made here with gt:diff from the call's input), the lines of a file with their numbers, matches under their file,
-// a command and what it printed, a checklist. The rest shows its input as keys and values, never as raw JSON.
+// a command and what it printed, a checklist. The rest shows its input as keys and values, never as raw JSON; an input of one
+// long text (a freeform tool's) shows that text as it is, streamed before the call.
 package ocn
 
 import "core:fmt"
@@ -236,6 +237,12 @@ todo_view :: proc(app: ^App, p: ^Part, em: f32) -> bool {
 // the well: one edge beside another reads as unfinished.)
 input_view :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 	if !p.input_object { mono_well("###input", p.input, em, TOOL_INPUT_LINES_MAX); return }
+	if p.freeform {
+		// (one text: the tool's name says what it is, its key alone adds nothing)
+		mono_well("###input", p.fields[0].value, em, TOOL_INPUT_LINES_MAX, kept = &p.fields[0].well, kept_in = pane.chat.alloc)
+		ui.spacer(ui.px(em * 0.5))
+		return
+	}
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.well("###input", pad = ui.INNER_PAD) {
 		for &f, i in p.fields {
@@ -302,6 +309,12 @@ tool_body :: proc(app: ^App, pane: ^Chat_Pane, p: ^Part, em: f32) {
 		if todo_view(app, p, em) { return }
 	case .Other:
 	}
-	if p.input != "" { input_view(app, pane, p, em) }
+	if p.input != "" {
+		input_view(app, pane, p, em)
+	} else if t, long := input_stream_shown(&p.stream); long && p.status == .Pending {
+		// (before the call: its one text as it streams, by the rule its input will follow: freeform-tools.md)
+		mono_well("###input", t, em, TOOL_INPUT_LINES_MAX, kept = &p.stream_well, kept_in = pane.chat.alloc)
+		ui.spacer(ui.px(em * 0.5))
+	}
 	output(app, pane, p, em, lines)
 }

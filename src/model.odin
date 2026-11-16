@@ -62,6 +62,9 @@ Part :: struct {
 	has_content:  bool,
 	fields:       []Input_Field,   // all of the input as keys and values, by key (input_object: it is an object)
 	input_object: bool,
+	freeform:     bool,            // the input is one field of long text: fields[0] shows as it is, no key (freeform-tools.md)
+	stream:       Input_Stream,    // the input's fragments as they came, before the call (tool_input.odin)
+	stream_well:  Well_Kept,       // what the well made of the streamed text
 	output:    string,        // (set by tool_set_output: what is read of it goes with it)
 	output_numbered: bool,    // it reads as lines of a file (read_view)
 	moved_shell: string,      // the server's command the output says the call went on as ("... (shell ID: sh_...)")
@@ -103,6 +106,9 @@ Message :: struct {
 	kind:      Msg_Kind,
 	created:   f64,
 	completed: f64,
+	// a step: when its first token came, when the provider's response ended (0: not said), and what step_speed_set made of them
+	first_token, streamed: f64,
+	latency_ms, write_rate: f64,   // first token − start; tokens written a second (0: not known)
 	agent, model, provider, finish: string,
 	variant:   string,        // how hard the model thought ("": its default)
 	text:      string,        // user, synthetic, shell; a switch: what it is now ("opus · high", a folder)
@@ -119,6 +125,10 @@ Message :: struct {
 	sub_running: bool,   // its tag's state is "running": the child went idle while its own background work runs on
 	// synthetic: the harness's reports of background jobs that ended, when its text is only those (job_reports.odin)
 	jobs:      []Job_Report,
+	// synthetic: an MCP server's event that woke the session (metadata.source "mcp.event" with an eventID; mcp_events.odin)
+	mcp_server, mcp_event, mcp_data: string,
+	mcp_skipped: bool,         // events before it were skipped
+	mcp_well:    Well_Kept,
 	images:    [dynamic]Image_Ref,   // attached to a user's prompt
 	from_page: bool,                 // read from a page (what the stream builds is only pieces)
 	touched:   Seq,                  // the stream's clock when it last changed it (a page asked before that is older: chat_load)
@@ -731,13 +741,20 @@ message_keep_newer :: proc(m, old: ^Message) {
 		if np == nil {
 			append(&m.parts, op)
 		} else if op.kind == .Tool {
-			if rank(op.status) > rank(np.status) { np^ = op }
+			if rank(op.status) > rank(np.status) {
+				np^ = op
+			} else if rank(op.status) == 0 && rank(np.status) == 0 && len(op.stream.text) > len(np.stream.text) {
+				np.stream, np.stream_well = op.stream, op.stream_well   // (the deltas came further than the page's input)
+			}
 		} else if len(op.text) > len(np.text) || (op.done && len(op.text) == len(np.text)) {
 			np.text, np.done = op.text, op.done
 		}
 	}
 	m.touched = old.touched
 	m.streaming = m.streaming && old.streaming
+	if m.first_token == 0 { m.first_token = old.first_token }
+	if m.streamed == 0 { m.streamed = old.streamed }
+	step_speed_set(m)
 }
 
 // `m`, read from a page, is what the server says of `it` now: only an assistant's message changes, until it is completed.
@@ -771,6 +788,9 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 		m.tokens_out = tk_json.number(it, "tokens", "output")
 		m.reasoning = tk_json.number(it, "tokens", "reasoning")
 		m.cache_read = tk_json.number(it, "tokens", "cache", "read")
+		m.first_token = tk_json.number(it, "time", "firstToken")
+		m.streamed = tk_json.number(it, "time", "streamed")
+		step_speed_set(&m)
 		m.streaming = m.completed == 0
 		ord := [Part_Kind]int{}
 		for p in tk_json.array(it, "content") {
@@ -795,7 +815,11 @@ message_from_json :: proc(it: json.Value, a: mem.Allocator) -> Message {
 				case "error":     part.status = .Error
 				case:             part.status = .Unknown   // (it says nothing of a run: it must not animate)
 				}
-				tool_set_input(&part, tk_json.get(st, "input"), a)
+				if raw, is := tk_json.get(st, "input").(json.String); is {
+					input_stream_add(&part.stream, string(raw), a)   // (still streaming: the JSON text so far, not an input)
+				} else {
+					tool_set_input(&part, tk_json.get(st, "input"), a)
+				}
 				tool_set_meta(&part, tk_json.get(st, "metadata"), a)
 				part.started_ms = tk_json.number(p, "time", "created")
 				part.ended_ms = tk_json.number(p, "time", "completed")
@@ -909,6 +933,8 @@ synthetic_set :: proc(m: ^Message, it: json.Value, a: mem.Allocator) {
 		// (metadata.state keeps the period's real status: only the tag says the child's own work still runs)
 		m.sub_running = subagent_tag_state(tk_json.text(it, "text")) == "running"
 		m.text = strings.clone(subagent_body(tk_json.text(it, "text")), a)
+	} else if tk_json.text(it, "metadata", "source") == "mcp.event" {
+		mcp_wake_set(m, it, a)
 	} else if jobs, ok := jobs_parse(m.text, a); ok {
 		m.jobs = jobs
 	}
@@ -967,18 +993,22 @@ tool_set_output :: proc(p: ^Part, output: string, a: mem.Allocator) {
 // never parses the input.
 tool_set_input :: proc(p: ^Part, input: json.Value, a: mem.Allocator) {
 	if input == nil { return }
+	if _, is := input.(json.String); is { return }   // (a call still streaming: the JSON text so far, read by its Input_Stream)
 	p.input = strings.clone(tk_json.to_text(input, "  "), a)
-	p.fields, p.input_object = nil, false
+	p.fields, p.input_object, p.freeform = nil, false, false
 	if obj, is := input.(json.Object); is {
 		p.input_object = true
 		p.fields = make([]Input_Field, len(obj), a)
 		i := 0
 		for k, v in obj {
 			s := tk_json.display(v)
-			p.fields[i] = {key = strings.clone(k, a), value = strings.clone(s, a), long = strings.index_byte(s, '\n') >= 0 || len(s) > TOOL_LINE_CHARS}
+			p.fields[i] = {key = strings.clone(k, a), value = strings.clone(s, a), long = text_long(s)}
 			i += 1
 		}
 		slice.sort_by(p.fields, proc(x, y: Input_Field) -> bool { return x.key < y.key })
+		if len(obj) == 1 {
+			for _, v in obj { _, text := v.(json.String); p.freeform = text && p.fields[0].long }
+		}
 	}
 	// The first of `keys` whose value is a string: the field's own text (a write's content is not copied again). Only a string
 	// counts: what an edit or a write made is made from it (part_patch).
@@ -1237,6 +1267,8 @@ apply_event :: proc(app: ^App, ev: json.Value) -> (visible: bool) {
 			}
 		}
 		refresh_soon(app)
+	case "experimental.mcp.event":   // (of a server, not of a session: the MCP servers page)
+		mcp_event_add(app, d, tk_json.number(ev, "created"))
 	case "artifact.updated":
 		artifacts_changed(app)
 	case "plugin.updated":
@@ -1340,7 +1372,18 @@ pane_event :: proc(app: ^App, pane: ^Chat_Pane, kind, sid: string, d, ev: json.V
 		m.variant = strings.clone(variant_of(d), a)
 		m.created = tk_json.number(d, "started")
 		m.streaming = true
+		// (a step started again under the same id: what the last try said of its time is not this one's)
+		m.first_token, m.streamed, m.completed = 0, 0, 0
+		step_speed_set(m)
 		c.model, c.provider, c.agent, c.variant = m.model, m.provider, m.agent, m.variant
+	case "session.step.first-token":
+		m := assistant(c, mid)
+		m.first_token = tk_json.number(ev, "created")
+		step_speed_set(m)
+	case "session.step.streamed":
+		m := assistant(c, mid)
+		m.streamed = tk_json.number(ev, "created")
+		step_speed_set(m)
 	case "session.text.started", "session.reasoning.started":
 		_ = text_part(c, assistant(c, mid), kind == "session.text.started" ? .Text : .Reasoning, int(tk_json.number(d, "ordinal")))
 	case "session.text.delta", "session.reasoning.delta":
@@ -1367,6 +1410,10 @@ pane_event :: proc(app: ^App, pane: ^Chat_Pane, kind, sid: string, d, ev: json.V
 		p := tool_part(c, assistant(c, mid), tk_json.text(d, "id"))
 		p.tool_name = strings.clone(tk_json.text(d, "name"), a)
 		p.status = .Pending
+	case "session.tool.input.delta":
+		input_stream_add(&tool_part(c, assistant(c, mid), tk_json.text(d, "id")).stream, tk_json.text(d, "delta"), a)
+	case "session.tool.input.ended":
+		input_stream_end(&tool_part(c, assistant(c, mid), tk_json.text(d, "id")).stream, tk_json.text(d, "text"), a)
 	case "session.tool.called":
 		p := tool_part(c, assistant(c, mid), tk_json.text(d, "id"))
 		had := p.sub_session
@@ -1408,6 +1455,8 @@ pane_event :: proc(app: ^App, pane: ^Chat_Pane, kind, sid: string, d, ev: json.V
 		m.tokens_out = tk_json.number(d, "tokens", "output")
 		m.reasoning = tk_json.number(d, "tokens", "reasoning")
 		m.cache_read = tk_json.number(d, "tokens", "cache", "read")
+		m.completed = tk_json.number(ev, "created")   // (the server's time.completed is this event's time)
+		step_speed_set(m)
 		stats_context_soon(app)
 	case "session.compaction.ended":
 		stats_context_soon(app)

@@ -340,7 +340,7 @@ server_connect_now :: proc(app: ^App, i: int) {
 // What holds something of a server. Every one is here: a new one does not compile until it says what it forgets, what it holds and every flag
 // that says something is on its way, since the answer will be dropped (answer) and could not lower it. A Remote is reset there too.
 Feature :: enum u8 {
-	View, Activity, Find, Waits, Permissions, Forms, Busy, Slash, Queue, Outgoing, Dialogs, Known, Facts, Stats, Changes, Integrations, Plugins,
+	View, Activity, Find, Waits, Permissions, Forms, Busy, Slash, Queue, Outgoing, Dialogs, Known, Facts, Mcp_Events, Stats, Changes, Integrations, Plugins,
 	Schedules, Artifacts, Server_Files, Mentions, Terminals, Outputs, Browser, Preview,
 }
 
@@ -358,6 +358,7 @@ Feature :: enum u8 {
 	.Dialogs      = server_dialogs_forget,
 	.Known        = server_known_end,
 	.Facts        = server_facts_forget,
+	.Mcp_Events   = mcp_events_forget,
 	.Stats        = stats_forget,
 	.Changes      = changes_forget,
 	.Integrations = integrations_forget,

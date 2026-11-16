@@ -49,5 +49,11 @@ purpose, the decisions, what was refused.
   (FromentSoftware/OpencodeNative), the earlier folders moved once; the title a person reads.
 - [features/colours.md](features/colours.md): the views draw with the theme chosen, by role and hue; OpenCode is one
   theme definition; the entries the toolkit's palette lacks.
+- [features/mcp-events.md](features/mcp-events.md): MCP events (opencode 2.3.0, experimental): the stream's on the
+  MCP servers page under their server; a session's wake-up as a note with its data.
+- [features/freeform-tools.md](features/freeform-tools.md): a tool input of one long text shows as text, streamed through
+  an explicit decoder of the input's JSON fragments.
+- [features/step-speed.md](features/step-speed.md): a step's latency and writing speed from `time.firstToken`, per model
+  in the Statistics panel and at the end of an answer.
 - [infrastructure/transport.md](infrastructure/transport.md): requests, the event stream and the sockets over the
   toolkit's gt:http; the limits, the stream up at its first event, why sockets send from their own thread.
