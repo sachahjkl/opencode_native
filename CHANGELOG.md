@@ -4,6 +4,21 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.66.0] - 2026-11-16 11:08
+
+### Added
+- **Settings and commands from the palette**: Enter on a setting changes it in the palette, its control under its row, and Escape puts its value back; Shift+Enter goes to where a setting or a command lives (its settings page, its button); Rename the session asks for the new title in the palette.
+
+### Fixed
+- **Menus in the diagram viewer's own window**: when the diagram viewer is in a window of its own, a right click there opens its menu in that window.
+- **Ctrl+K in every window**: Ctrl+K and Ctrl+Shift+P open the command palette over the window they are pressed in, the aside's or a diagram's own window too.
+- **Faster with a remote server**: requests to a server reuse the connections already open instead of a new connection and a new TLS handshake each.
+- **This computer's server connects on Windows**: the server on this computer is seen online as soon as it answers; its first event no longer waits for more to come.
+- **No crash when the window closes after What's new was shown**: on Windows, closing opencode native after it had shown what a new version brings no longer ends in a crash report.
+- **This computer's server found where XDG_STATE_HOME puts it, on Windows too**: an opencode service started with XDG_STATE_HOME or XDG_CONFIG_HOME set registers itself there on every system, and opencode native now looks there on Windows as well.
+- **One draft when both panes show a session**: when the main view and the aside show the same session, closing either one no longer loses the other's text: what one pane held goes to the other's composer, after its own text, and stays the session's draft when both are gone.
+- **Menus in the aside's own window**: when the /btw aside is in a window of its own, a right click there opens its menu in that window, and the model and agent chooser opens over it, not over the main window.
+
 ## [0.65.0] - 2026-11-16 08:25
 
 ### Added
@@ -1789,6 +1804,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.66.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.66.0
 [0.65.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.65.0
 [0.64.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.64.1
 [0.64.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.64.0
