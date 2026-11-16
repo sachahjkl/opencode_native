@@ -13,6 +13,7 @@ Film :: struct {
 	clock:    f64,         // what ui.now_ms says then
 	clock_at: f64,
 	begun:    time.Tick,
+	before:   ^f64,        // the clock it took the place of, given back when it stops (a test's: nil, the system's)
 }
 
 film_slow_start :: proc(app: ^App, n: f64) {
@@ -21,19 +22,19 @@ film_slow_start :: proc(app: ^App, n: f64) {
 	app.film.clock = ui.now_ms()
 	app.film.clock_at = app.film.clock
 	app.film.begun = time.tick_now()
+	app.film.before = app.state.clock
 	ui.set_clock(&app.state, &app.film.clock)
 }
 
-// The interface's time is the system's again.
+// The interface's time is what it was before: the system's, or a test's clock, which goes on from where it was.
 film_slow_stop :: proc(app: ^App) {
 	if app.film.slow <= 1 { return }
 	app.film.slow = 0
-	ui.set_clock(&app.state, nil)
+	ui.set_clock(&app.state, app.film.before)
+	app.film.before = nil
 }
 
 film_slow_tick :: proc(app: ^App) {
 	if app.film.slow <= 1 { return }
 	app.film.clock = app.film.clock_at + time.duration_milliseconds(time.tick_since(app.film.begun)) / app.film.slow
 }
-
-film_slow_dt :: proc(app: ^App, dt: f32) -> f32 { return app.film.slow > 1 ? dt / f32(app.film.slow) : dt }

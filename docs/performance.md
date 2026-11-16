@@ -44,6 +44,10 @@ each step comes from `render.set_gpu_profile`.
 
     odin build src -build-mode:test -collection:gt=ext/gui_toolkit/src -o:speed -debug -define:OCN_BENCH=true -define:OCN_PROFILE=true -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_NAMES=ocn.a_long_conversation_builds_what_is_seen -out:build/bench.exe
 
+Its movements go by the session's clock (16.7 ms a frame, the host's dt), not by the time a frame takes: a scroll travels as
+far in 300 frames on a fast machine as on a slow one. With 300 frames a case, the wheel's case leaves the view near the middle
+of the conversation, and the find's case starts from there. On Linux the sampler below is not built (it is Windows' API).
+
 An offscreen window has no frame slots: the bench's frames go back to back. Slept through 16 ms between frames, the same work measures
 about twice as long, its caches cold and the clock down: that is the machine, not the frame. On a real screen expect the higher number.
 
@@ -133,6 +137,18 @@ builds and draws): nothing to measure here; menus are denser and scroll (0.69.0)
 - **Truncation from one shaping** (`ui/draw_ui.odin` `truncate` in the toolkit: the clusters of one `font.shape` of the text
   instead of a `font.glyph` per character): idle 1.56 -> 1.07, stream 2.44 -> 1.53, type 2.49 -> 1.66, scroll 2.36 -> 1.70,
   search 2.60 -> 1.86 ms (5 runs alternated). A change of the toolkit: it comes with a release of it.
+- **A command's grid kept row by row** (2026-11, Linux, offscreen, `-o:speed`, gui_toolkit 0.286.1; `term/widget.odin` in the
+  toolkit): each row of the grid recorded once into a `draw.Picture` and replayed while the row and its look (the face, the
+  cell, the selection's colour, the grid's place within a pixel) stay. The pictures are kept by the row's cells, not by its
+  place: when the program prints a line, the emulation dirties every row, and each row finds the picture the row under it had
+  (298 rows recorded in 300 frames of `term_out`, not 49 a frame). The grid's draw alone, median of 300 frames, 3 runs
+  alternated: `term_rest` 0.21-0.22 -> 0.009-0.019 ms, `term_out` 0.66-0.72 -> 0.47-0.52 ms (what stays is the emulation's
+  rows read again, all of them at each line). The upload per frame falls from 0.9 to 0.5 MB, the same as `idle`. The whole
+  frame, 5 runs alternated on a busy machine: `term_rest` 6.10 (3.51-8.90) -> 3.79 (3.47-7.34), `term_out` 6.87 (4.85-9.96) ->
+  5.59 (3.96-9.00) ms. A change of the toolkit: it comes with a release of it.
+
+  The rest of what an open command view costs is not its glyphs: the dialog's blurred backdrop (a copy of 12 MB and two blur
+  passes, 1.0 to 1.2 ms of the GPU, which an offscreen frame waits for in its render step) and the dialog's build (+0.3 ms).
 - **Find** builds every message while its bar is open (the toolkit's find reads the text the layout placed): 45 to 60 ms a
   frame on 150 turns, two thirds of it building. Building only what is seen would need the matches counted from the messages'
   text and the match's message built whatever (`lazy_item(always)`): not done.

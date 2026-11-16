@@ -23,10 +23,9 @@
 
 ## Later
 
-- **A shell that costs less per frame.** An open command view costs 4.3 to 5.0 ms a frame against 1.2 ms without it
-  (Linux, -o:speed): every glyph of every row is emitted again each frame. Keep a row's draw list
-  while the row does not change. The bench (OCN_BENCH) also has two checks that fail on Linux: the middle wheel's
-  "gone up" and app.find.index.
+- **A shell that costs less per frame.** The grid draws every glyph of every row again at each frame: 0.22 ms at rest,
+  0.009 ms with each row kept as a picture while it does not change (docs/performance.md). It comes with the release of
+  gui_toolkit whose term widget does it.
 - **Preview a remote file outside the session's folder.** Today the Files dialog previews and searches a remote server
   only inside the session's folder, because /api/fs/read reads only inside a location; reopen this if the server reads an
   absolute path or offers a read without a location.
