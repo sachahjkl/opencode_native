@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.69.1] - 2026-11-16 22:10
+
+### Fixed
+- **Dialogs appear whole, at once**: the command palette, the settings, the schedules, the artifacts, the changes, pairing, the cards of What you missed and the diagram viewer wait a moment for what they read (100 ms at most) instead of opening on "Reading…" and then growing. The image viewer opens around its picture, not at a large size first. A dialog opened by its key (the settings, What you missed) fades in faster.
+
 ## [0.69.0] - 2026-11-16 18:49
 
 ### Added
@@ -1840,6 +1845,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.69.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.69.1
 [0.69.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.69.0
 [0.68.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.68.0
 [0.67.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.67.2
