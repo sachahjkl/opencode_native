@@ -4,6 +4,14 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.65.0] - 2026-11-16 08:25
+
+### Added
+- **Third-party notices**: each release carries THIRD-PARTY-NOTICES, the licences of every library and font the program holds, beside the programs and in the Linux archive.
+
+### Changed
+- **A lighter terminal, settings shown by what they are**: the terminal redraws only the rows that changed, so an open shell costs a fraction of what it did; the settings show each value by its nature: a font in a list of fonts, a colour in a colour picker, a size or a time with its unit.
+
 ## [0.64.1] - 2026-11-16 07:26
 
 ### Added
@@ -1781,6 +1789,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.65.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.65.0
 [0.64.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.64.1
 [0.64.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.64.0
 [0.63.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.63.1
