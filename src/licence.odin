@@ -14,11 +14,19 @@ LICENCE_PRICING_URL :: "https://ocn.froment.software/pricing/"
 // settings then show no Licence page).
 licence_init :: proc(app: ^App) {
 	if app.prefs_file == "" { return }
-	prefs_page.licence_init(&app.licence, &app.state, {
+	prefs_page.licence_init(&app.licence, &app.state, licence_options(app))
+}
+
+// The page's options; the licence card reads its logo (front and back) and its vendor (the back's line) from them.
+licence_options :: proc(app: ^App) -> prefs_page.Licence_Options {
+	return {
 		store = {product = product.LICENCE, path = pjoin({config_dir(), fmt.tprintf("licence%s", product.LICENCE.file_extension)}), accept_dev = ODIN_DEBUG},
 		name = APP_TITLE, pricing_url = LICENCE_PRICING_URL, owner = app.win,
-	})
+		logo = LOGO_PNG, vendor = LICENCE_VENDOR,
+	}
 }
+
+LICENCE_VENDOR :: "Froment Software"
 
 // The Licence page, when the store is open (nil: none, a test).
 licence_page :: proc(app: ^App) -> ^prefs_page.Licence { return app.licence.store != nil ? &app.licence : nil }
