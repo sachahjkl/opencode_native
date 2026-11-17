@@ -1048,7 +1048,8 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app, s := bench_app(t)
-		W, H :: 400, 200
+		// (wider than the bar needs: a narrower picture gets room on its sides, the_viewer_s_bar_fits_a_small_picture)
+		W, H :: 640, 320
 		pixels := make([]u8, W * H * 4, context.temp_allocator)
 		for i in 0 ..< W * H { pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 2], pixels[i * 4 + 3] = u8(i % W), 120, u8(i / W), 255 }
 		file := png.encode(pixels, W, H, .Fast, context.allocator)
@@ -1071,7 +1072,10 @@ the_viewer_hugs_its_picture_and_keeps_its_size :: proc(t: ^testing.T) {
 		testing.expect_value(t, vs, [2]f32{W, H} * ui.scale())   // (the window has room: its pixels)
 		head := session.get(s, "view_header")   // (the view's header: the dialog's top)
 		testing.expect_value(t, ps.y, vs.y + pad + bar + head.rect.max.y - head.rect.min.y + 2 * border)
-		testing.expect_value(t, ps.x, max(vs.x + 2 * pad + 2 * border, math.round(em * VIEWER_MIN_W_EM)))
+		// (no narrower than its bar, as laid out: every part as wide as it asks; nor than the grips' least)
+		bar_need := math.ceil(ui.natural_width(session.get(s, "view_bar")))
+		least := max(math.round(em * VIEWER_MIN_W_EM), bar_need + 2 * border)
+		testing.expect_value(t, ps.x, max(vs.x + 2 * pad + 2 * border, least))
 		// a press on the picture keeps it; zoomed out, a press beside the picture closes it
 		session.click_at(s, view.rect.min + 5)
 		testing.expect(t, ui.view_is_open(&app.program_views, IMAGE_VIEW), "a press on the picture")
@@ -1248,6 +1252,59 @@ the_viewer_shows_at_once_around_its_picture :: proc(t: ^testing.T) {
 			ui.view_close(&app.program_views, IMAGE_VIEW)
 			session.frames(s, 2)
 		}
+	})
+}
+
+// The viewer on a small picture (a paste of 253 × 62): its bar is the wider, and the dialog is as wide as the bar needs from its
+// first frame shown. Every button inside the dialog, the size whole ("Close" once ran past the dialog's right edge, when the
+// least width was a guess of what the bar needs). The name is the header's alone: the bar does not say it again. Made narrower
+// by its grips, the buttons still stay inside.
+@(test)
+the_viewer_s_bar_fits_a_small_picture :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		W, H :: 253, 62
+		pixels := make([]u8, W * H * 4, context.temp_allocator)
+		for i in 0 ..< W * H { pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 2], pixels[i * 4 + 3] = u8(i % W), 120, u8(i / W), 255 }
+		file := png.encode(pixels, W, H, .Fast, context.allocator)
+		image_view_open(app, image_ref(string(file), .Bytes, "image/png", "pasted-1-clipboard.png"))
+		dialog := first_shown(t, s, IMAGE_VIEW)
+		inside :: proc(t: ^testing.T, s: ^session.Session, dialog: ui.Rect, when_: string) {
+			for id in ([]string{"zoom_out", "zoom_in", "zoom_fit", "close"}) {
+				b := session.find(s, id)
+				if !testing.expectf(t, b != nil, "%s: the button %s", when_, id) { continue }
+				testing.expectf(t, b.rect.min.x >= dialog.min.x && b.rect.max.x <= dialog.max.x, "%s: %s at %v, inside the dialog %v", when_, id, b.rect, dialog)
+			}
+		}
+		inside(t, s, dialog, "the first frame shown")
+		// the name: in the header, not in the bar
+		NAME :: "pasted-1-clipboard.png"
+		says :: proc(b: ^ui.Box, text: string) -> bool {
+			if strings.contains(ui.box_text(b), text) { return true }
+			for c := b.first; c != nil; c = c.next { if says(c, text) { return true } }
+			return false
+		}
+		testing.expect(t, says(session.get(s, "view_header"), NAME), "the header says the name")
+		testing.expect(t, !says(session.get(s, "view_bar"), NAME), "the bar does not say it again")
+		dims := session.find(s, "view_dims")
+		if testing.expect(t, dims != nil, "the size") {
+			testing.expectf(t, dims.rect.max.x - dims.rect.min.x >= dims.text_dim.x, "the size shows whole: %v for %v", dims.rect, dims.text_dim.x)
+		}
+		// (its fade done: the picture as a person sees it)
+		start := time.tick_now()
+		for dialog_shown(s, IMAGE_VIEW) < 1 && time.tick_since(start) < 30 * time.Second { session.frame(s) }
+		session.save_png(s, "viewer-small.png")
+		// its left edge's grip, inward as far as it goes: the grips' least, the bar inside it still
+		edge := [2]f32{dialog.min.x + 2, (dialog.min.y + dialog.max.y) * 0.5}
+		session.press(s, edge)
+		session.move(s, edge + {200, 0})
+		session.move(s, edge + {400, 0})
+		session.release(s, edge + {400, 0})
+		session.frames(s, 2)
+		narrow := session.get(s, "modal_view_image").rect
+		testing.expectf(t, narrow.max.x - narrow.min.x < dialog.max.x - dialog.min.x, "made narrower: %v from %v", narrow, dialog)
+		inside(t, s, narrow, "made narrower")
 	})
 }
 

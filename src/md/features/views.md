@@ -108,5 +108,19 @@ picture's area is all the body leaves above the bar, and the picture fits it (`u
 - **Refused: the picture's own box, sized from the share.** Its box kept its height when the person made the dialog
   taller, and ran past the dialog's edge when the share made it wider than the dialog: the two sizes disagreed as soon
   as the share reached its most and the person kept dragging.
+- **The name is the header's, once.** The header shows the file name (`ui.view_title`). The bar does not repeat it:
+  it holds the size ("W × H · zoom") and −, +, Fit and Close. The picture's accessible name stays the file name.
+- **The dialog is as wide as its bar needs, measured.** The need is read from the last layout (`viewer_bar_need`):
+  every part as wide as it asks, plus the border. A picture narrower than that gets room on its sides. The size asked
+  changes while the measure settles, so the dialog stays unseen until it is right. `VIEWER_MIN_W_EM` is only the width
+  before a first layout and the grips' least.
+- **Refused: a constant for the bar's width.** 26 em was a guess. At some sizes of the interface it was too narrow,
+  and Close ran past the dialog's edge. Labels in another language need more again.
+- **The size text keeps the width of its widest zoom** (`VIEW_NATIVE_MAX`). Otherwise a zoom with one more digit
+  changes the need, and the dialog resizes under the person's zoom.
+- **Narrowed by the grips, the buttons stay inside.** The toolkit takes a resizable dialog's least width from its kind,
+  fixed at registration, so the grips can go under the bar's need. The empty space before the buttons gives way
+  first, then the size text, the only part of the bar that shrinks. The buttons stay whole, and the bar clips. A least
+  width per opening belongs in the toolkit.
 - **A new picture is a new opening.** The record of a viewer still open keeps the person's size; the first build after
   `image_view_open` asks for the kind's size once, so the asked size changes and the person's size goes.

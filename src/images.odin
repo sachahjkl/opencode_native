@@ -288,8 +288,8 @@ image_view_shown :: proc(app: ^App) -> bool { return ui.view_is_open(&app.progra
 
 IMAGE_NAME_CHARS :: 80
 VIEWER_PAD_EM    :: 0.5   // around the picture (the edges' grips are there)
-VIEWER_BAR_EM    :: 2.6   // the name, the size and the buttons, under the picture
-VIEWER_MIN_W_EM  :: 26    // what the bar needs: a small picture gets room on its sides
+VIEWER_BAR_EM    :: 2.6   // the size and the buttons, under the picture (the name is the header's)
+VIEWER_MIN_W_EM  :: 26    // the least its grips give it, and its width before a bar was laid out (viewer_bar_need measures the bar)
 VIEWER_SCALE_MIN :: 0.2   // the smallest viewer, of the most the window gives a picture (conversation.image_viewer_size)
 VIEW_NATIVE_MAX  :: 8     // times the image's pixels at the interface's scale (ui.preview's zoom_max)
 
@@ -319,6 +319,18 @@ viewer_frame :: proc(image, room, chrome: [2]f32, ui_scale, scale, min_w: f32) -
 // dialog the person sized): what the next pictures open at.
 viewer_scale_of :: proc(area, full: [2]f32) -> f32 {
 	return clamp(min(area.x / full.x, area.y / full.y), VIEWER_SCALE_MIN, 1)
+}
+
+// The width the viewer's bar needs, from its last layout (0: none yet): its parts as wide as they ask. Measured, not
+// guessed: a constant was too narrow at some sizes of the interface and in some languages, and "Close" ran past the
+// dialog's edge. Called where the view's body is built (its parent).
+@(private = "file")
+viewer_bar_need :: proc() -> f32 {
+	around := ui.prev_box("###view_around")
+	if around == nil { return 0 }
+	bar := ui.box_from_key(ui.key_from_string(around.key, "###view_bar"))
+	if bar == nil { return 0 }
+	return math.ceil(ui.natural_width(bar))
 }
 
 // Whether `p` (from the view's corner) misses the picture: `picture` its size, its centre `pan` from the view's, clipped by the view.
@@ -386,7 +398,6 @@ image_view :: proc(v: ^ui.View, app: ^App) {
 	source := [2]f32{f32(e.size.x), f32(e.size.y)}
 	pad, bar := math.round(em * VIEWER_PAD_EM), math.round(em * VIEWER_BAR_EM)
 	chrome := [2]f32{2 * pad, pad + bar}
-	min_w := math.round(em * VIEWER_MIN_W_EM)
 	if v.presentation == .Dialog {
 		// (the dialog hugs the picture: the share of the window the person chose, its pixels at most)
 		room := built_state(app).window_size - 2 * math.round(em * ui.MODAL_MARGIN_EM)
@@ -397,6 +408,10 @@ image_view :: proc(v: ^ui.View, app: ^App) {
 		// Not counted, the picture's area was that much smaller than the picture)
 		border := max(1, math.round(sc))
 		frame_chrome := chrome + {2 * border, head_h + 2 * border}
+		// (as wide as the bar needs, as the last layout measured it, across the whole body: the dialog stays unseen while
+		// the size asked changes, so the guess before the first layout is never shown)
+		min_w := math.round(em * VIEWER_MIN_W_EM)
+		if need := viewer_bar_need(); need > 0 { min_w = max(min_w, need + 2 * border) }
 		f := viewer_frame(source, room, frame_chrome, sc, app.prefs.viewer_scale, min_w)
 		asked := f.panel / em
 		// (a size the person gave it with its grips wins, as the toolkit keeps it: asking for the hug again would take it
@@ -455,14 +470,24 @@ image_view :: proc(v: ^ui.View, app: ^App) {
 				}
 				ui.spacer(ui.px(pad))
 			}
+			// (a stable key: viewer_bar_need reads its last layout. Clipped: past the grips' least, in a long language, nothing
+			// draws past the dialog's edge)
 			ui.next({width = ui.fill(), height = ui.px(bar), axis = .X, cross = .Center})
-			if ui.row(.Center) {
+			if ui.row(.Center, {.Clip}, "###view_bar") {
 				ui.space(ui.SPACE_4)
-				text("n", ellipsize(name, IMAGE_NAME_CHARS), ui.theme_color("text"), ui.Style_Mod{font_size = math.round(em * FS_LABEL)}, ui.fill())
-				ui.space(ui.SPACE_2)
+				// (no name: the header says it. The size is the bar's one part that gives way under the grips, after the
+				// empty space before the buttons: the buttons stay whole and inside)
 				zoom := fit * app.viewer.view.zoom / sc * 100
-				dims := fmt.tprintf("%d × %d  ·  %s", int(source.x), int(source.y), i18n.percent(f64(zoom) / 100))
-				text("d", dims, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+				dims_of :: proc(source: [2]f32, zoom: f32) -> string {
+					return fmt.tprintf("%d × %d  ·  %s", int(source.x), int(source.y), i18n.percent(f64(zoom) / 100))
+				}
+				dims := dims_of(source, zoom)
+				// (as wide as at its most zoom, VIEW_NATIVE_MAX times its pixels: a zoom of more digits changes neither the
+				// width the bar needs, which would resize the dialog under the person's zoom, nor where the buttons are)
+				dims_font := math.round(em * FS_SMALL)
+				dims_w := math.ceil(max(ui.text_width(app.mono, dims_font, dims_of(source, VIEW_NATIVE_MAX * 100)), ui.text_width(app.mono, dims_font, dims)))
+				text("view_dims", dims, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = dims_font}, ui.px(dims_w, 0))
+				ui.spacer(ui.fill())
 				ui.space(ui.SPACE_3)
 				bh := math.round(em * BUTTON_SMALL_H_EM)
 				most := max(1, VIEW_NATIVE_MAX * sc / fit)   // (as ui.preview's: its zoom_max over what fits)
