@@ -13,8 +13,10 @@ import toolbox "gt:toolbox"
 
 LOGO_DEFAULT_OUT :: "assets"
 LOGO_ICO :: "opencode-native.ico"
-// Supersampling: drawn at size * LOGO_SUPERSAMPLE, then scaled down.
+// Supersampling of the largest file: it is drawn at 512 * LOGO_SUPERSAMPLE, every other size at least that wide too, then
+// shrunk by the toolbox (write_logo).
 LOGO_SUPERSAMPLE :: 4
+LOGO_MASTER :: 512
 // The drawing's grid: LOGO_GRID x LOGO_GRID units.
 LOGO_GRID :: 64
 @(rodata) LOGO_FILE_SIZES := [?]int{256, 64, 32, 16}   // logo_<size>.png, besides logo.png (512)
@@ -50,20 +52,22 @@ run_logo :: proc(args: []string) -> cli.Exit {
 	}
 	// (the drawing is this program's; the files every program makes of its logo are the toolbox's)
 	why := toolbox.write_logo({
-		render = proc(size: int, user: rawptr) -> paint.Canvas { return draw_logo(size, (^int)(user)^) },
-		user = &hint, dir = out, master = 512, sizes = LOGO_FILE_SIZES[:], ico = fmt.tprintf("%s/%s", out, LOGO_ICO), project_image = true,
+		draw = proc(pixels, size: int, user: rawptr) -> paint.Canvas { return draw_logo(pixels, size, (^int)(user)^) },
+		user = &hint, draw_size = LOGO_MASTER * LOGO_SUPERSAMPLE, dir = out, master = LOGO_MASTER, sizes = LOGO_FILE_SIZES[:], ico = fmt.tprintf("%s/%s", out, LOGO_ICO), project_image = true,
 	})
 	if why != "" { fmt.eprintfln("logo: %s", why); return .Failed }
 	return .Done
 }
 
-// The logo at `size` pixels.
-draw_logo :: proc(size, hint: int) -> paint.Canvas {
-	S := f32(size * LOGO_SUPERSAMPLE)
-	big := paint.canvas_make(size * LOGO_SUPERSAMPLE, size * LOGO_SUPERSAMPLE)
-	defer paint.canvas_destroy(&big)
-	// (the committed pictures were GDI+'s: this puts the shapes where it put them)
-	big.transform = paint.translate(paint.IDENTITY, paint.GDIPLUS_OFFSET, paint.GDIPLUS_OFFSET)
+// The logo `pixels` wide, as it must read once shrunk to `size` pixels (the small ones drop the shadows).
+draw_logo :: proc(pixels, size, hint: int) -> paint.Canvas {
+	S := f32(pixels)
+	big := paint.canvas_make(pixels, pixels)
+	// one pixel of the file, in the drawing's pixels: the least width of a line
+	px := S / f32(max(size, 1))
+	// (the committed pictures were GDI+'s, drawn at LOGO_SUPERSAMPLE times their size: this puts the shapes where it put them)
+	offset := paint.GDIPLUS_OFFSET * px / LOGO_SUPERSAMPLE
+	big.transform = paint.translate(paint.IDENTITY, offset, offset)
 	detail := size >= 48 ? 2 : size >= 24 ? 1 : 0
 	u := S / LOGO_GRID
 
@@ -81,7 +85,7 @@ draw_logo :: proc(size, hint: int) -> paint.Canvas {
 		paint.round_rect(&rim, m + 1.2 * u, m + 1.2 * u, S - 2 * m - 2.4 * u, S - 2 * m - 2.4 * u, r - 1.2 * u)
 		paint.stroke(&big, rim, {width = 1.4 * u}, paint.linear({0, m}, {0, S * 0.7}, paint.hex(0xFFFFFF, 70), paint.hex(0xFFFFFF, 0), .Repeat))
 	}
-	paint.stroke(&big, tile, {width = max(1.6 * u, LOGO_SUPERSAMPLE)}, paint.solid(paint.hex(0x000000, 230)))
+	paint.stroke(&big, tile, {width = max(1.6 * u, px)}, paint.solid(paint.hex(0x000000, 230)))
 
 	// the mark: a bolt of brushed silver, lit from above, with a warm edge of the peach accent where it would catch the light of the tile
 	points: [len(LOGO_BOLT)][2]f32
@@ -109,7 +113,7 @@ draw_logo :: proc(size, hint: int) -> paint.Canvas {
 	paint.set_stops(&face, {{0, paint.hex(0xFFFFFF)}, {0.45, paint.hex(0xDCDCDC)}, {0.72, paint.hex(0xB4B4B4)}, {1, paint.hex(hint >= 2 ? LOGO_WARM_TIP : LOGO_COOL_TIP)}})
 	paint.fill(&big, bolt, face, .Even_Odd)
 	if detail >= 1 {
-		paint.stroke(&big, bolt, {width = max(0.7 * u, LOGO_SUPERSAMPLE)}, paint.solid(paint.hex(0x000000, 170)))
+		paint.stroke(&big, bolt, {width = max(0.7 * u, px)}, paint.solid(paint.hex(0x000000, 170)))
 	}
-	return paint.resize(big, size, size)
+	return big
 }

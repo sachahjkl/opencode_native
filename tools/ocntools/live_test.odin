@@ -1,8 +1,13 @@
 package ocntools
 
 import "base:runtime"
+import "core:fmt"
 import "core:net"
+import "core:os"
+import "core:strings"
 import "core:testing"
+import "core:time"
+import testkit "gt:testkit"
 
 @(test)
 a_response_with_chunks_or_without :: proc(t: ^testing.T) {
@@ -67,6 +72,26 @@ the_server_lists_in_two_shapes :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(ids_of(`{"data":[{"id":"a"},{"id":"b"}]}`)), 2)
 	testing.expect_value(t, len(ids_of(`[{"id":"a"}]`)), 1)
 	testing.expect_value(t, len(ids_of("not json")), 0)
+}
+
+// The agents' tools are offered on a thread of the program's own: what live waits for before a prompt is the line the
+// program logs, and its words are the program's (src/browser_mcp.odin). A line reworded there is a wait that never ends.
+@(test)
+the_program_says_when_its_tools_are_listed :: proc(t: ^testing.T) {
+	source := read_text("src/browser_mcp.odin")
+	testing.expect(t, strings.contains(source, `log.infof("` + TOOLS_LISTED + `%s", to.link.dir)`), "the program logs TOOLS_LISTED and the folder")
+}
+
+// What the program says is waited for in its log, under a bound: a line there ends the wait at once, none ends it at the bound.
+@(test)
+a_log_is_read_until_it_says_so :: proc(t: ^testing.T) {
+	log := fmt.tprintf("%s/program.log", testkit.temp_folder(t, "ocntools-log"))
+	testing.expect(t, os.write_entire_file(log, transmute([]byte)string("start\n" + TOOLS_LISTED + "/tmp/demo\n")) == nil)
+	begun := time.tick_now()
+	testing.expect(t, log_wait(log, TOOLS_LISTED + "/tmp/demo", time.Minute), "the line is there")
+	testing.expect(t, time.tick_since(begun) < time.Second, "found at once, not at the bound")
+	testing.expect(t, !log_wait(log, TOOLS_LISTED + "/tmp/other", NEVER_LIMIT), "another folder's is not")
+	testing.expect(t, !log_wait(fmt.tprintf("%s.none", log), "start", NEVER_LIMIT), "nor a log not written")
 }
 
 // The proxy on real sockets, nothing to wait for: a connection goes through, and drop ends it at once.

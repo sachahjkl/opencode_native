@@ -10,6 +10,7 @@ import "core:strings"
 import "core:time"
 import cdp "gt:cdp"
 import cli "gt:cli"
+import tk_json "gt:json"
 import toolbox "gt:toolbox"
 
 FILM_DIR        :: "build/film"
@@ -213,7 +214,7 @@ play_browser :: proc(s: ^Shot) {
 
 @(private = "file")
 click_text :: proc(s: ^Shot, label: string, after: time.Duration) {
-	cdp.call(s.dt, "Toolkit.click", fmt.tprintf(`{{"text":%s,"index":0,"count":1,"button":"left"}}`, cdp.quote(label)))
+	cdp.call(s.dt, "Toolkit.click", fmt.tprintf(`{{"text":%s,"index":0,"count":1,"button":"left"}}`, tk_json.quote(label)))
 	hold(s, after)
 }
 

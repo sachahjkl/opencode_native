@@ -15,41 +15,14 @@ package ocntools
 import "core:fmt"
 import "core:os"
 import "core:strings"
-import cdp "gt:cdp"
 import cli "gt:cli"
+import tk_json "gt:json"
 import toolbox "gt:toolbox"
 import tk_site "gt:site"
 
 SITE_DIR     :: "site"
 SITE_CHANGES :: "CHANGELOG.md"
 VERSION_MARK :: "{{version}}"
-
-// Where the site is published, what it is: the one place that says it.
-SITE_META :: tk_site.Meta{
-	url         = "https://ocn.froment.software/",
-	name        = "opencode native",
-	repository  = "https://github.com/sachahjkl/opencode_native",
-	tagline     = "An independent native client for the opencode server",
-	changes     = SITE_CHANGES,
-	card        = "img/card.png",
-	logo        = "img/logo.png",
-	logo_file   = "site/img/logo.png",
-	theme       = "#111111",
-	accent      = "#fab283",
-	author      = "Sacha Froment",
-	author_url  = "https://froment.software",
-	publisher   = "Froment Software",
-	ld_type     = "SoftwareApplication",
-	// On a domain of its own the site is what answers for /robots.txt and /favicon.ico. On github.io it is not.
-	root_domain = false,
-	card_title  = `<span>open</span>code <em>native</em>`,
-	card_size   = 132,
-	card_logo   = 168,
-	card_font   = `"Segoe UI Variable Display", "Segoe UI", sans-serif`,
-	publisher_logo = "img/froment-software-64.png",
-	licence     = "MIT",
-	footer_note = `Not affiliated with <a href="https://opencode.ai">OpenCode</a>`,
-}
 
 // The home page's download, one button per system the release builds for (the reader's shown; Windows when it is not known:
 // a Mac or a phone, whoever reads the page there installs it on a computer).
@@ -97,8 +70,15 @@ site_screenshots :: proc(out: string) -> bool {
 	return true
 }
 
+// Where the site is published, what it is: the one place that says it. The vendor's fields are the toolkit's.
 site_meta :: proc() -> tk_site.Meta {
-	m := SITE_META
+	m := tk_site.meta_default("opencode native", "https://ocn.froment.software/", "https://github.com/sachahjkl/opencode_native",
+		"An independent native client for the opencode server", "#111111", "#fab283", card = "img/card.png")
+	m.card_title = `<span>open</span>code <em>native</em>`
+	m.card_size = 132
+	m.card_logo = 168
+	m.card_font = `"Segoe UI Variable Display", "Segoe UI", sans-serif`
+	m.footer_note = `Not affiliated with <a href="https://opencode.ai">OpenCode</a>`
 	ld := SITE_LD
 	m.ld_fields = make([][2]string, len(ld), context.temp_allocator)
 	copy(m.ld_fields, ld[:])
@@ -120,26 +100,10 @@ SITE_SHOP :: tk_site.Shop{
 	edition = "supporter", price_id = "pri_01m7j7jmmbdppeqcdjsnwfzr8q", worker = "https://opencode-native-licence.sacha-42a.workers.dev",
 	thanks = "https://ocn.froment.software/thanks/", help = "https://github.com/sachahjkl/opencode_native/issues/new",
 	register = "Open the file with opencode native, or paste the key in <em>Settings &rsaquo; Advanced &rsaquo; Licence</em>.",
-	extension = ".ocnlicence", repository = "https://github.com/sachahjkl/opencode_native", seller = SELLER,
+	extension = ".ocnlicence", repository = "https://github.com/sachahjkl/opencode_native", seller = tk_site.SELLER_FROMENT,
 	code_licence = "MIT License", platform = "Windows 10 or 11, x64, and Linux, x64 (Vulkan). It works with an opencode server, on this computer or another.",
 	network = "opencode native connects to your opencode server, on this computer unless you give another address. It asks GitHub for a new release when you turned on the automatic updates in the settings, or when you ask for it there, and puts an update in place only if it is signed by Froment Software.",
 	stylesheet = "../style.css", home = "../", updated = "2026-11-13",
-}
-
-// The seller, as Wren's imprint names it: the same block in every program of Froment Software.
-SELLER :: tk_site.Seller{
-	name       = "Froment Software",
-	owner      = "Sacha Froment",
-	status     = "sole proprietor (<em>entrepreneur individuel</em>)",
-	address    = "7 Lieu-dit les Renardi&egrave;res, 72220 Marign&eacute;-Laill&eacute;, France",
-	email      = "contact@froment.software",
-	url        = "https://froment.software",
-	siren      = "131 941 718",
-	siret      = "131 941 718 00010",
-	ape        = "6201Z, computer programming",
-	registry   = "the French national register of companies (RNE)",
-	registered = "23 October 2026",
-	vat        = "not applicable, article 293 B of the French General Tax Code (<em>franchise en base de TVA</em>)",
 }
 
 run_site :: proc(args: []string) -> cli.Exit {
@@ -187,7 +151,7 @@ site_downloads :: proc(s: ^tk_site.Check) {
 	systems := SITE_SYSTEMS
 	for sys in systems {
 		tk_site.check_call(s, "Emulation.setUserAgentOverride", fmt.tprintf(`{{"userAgent":%s,"platform":%s,"userAgentMetadata":{{"platform":%s,"platformVersion":"","architecture":"x86","model":"","mobile":false}}}}`,
-			cdp.quote(sys.agent), cdp.quote(sys.platform), cdp.quote(sys.data)))
+			tk_json.quote(sys.agent), tk_json.quote(sys.platform), tk_json.quote(sys.data)))
 		if !tk_site.check_go(s, "index.html") { continue }
 		// (the button and the line shown: those with a box; the toolkit's markup, tk_site download.odin)
 		button :: `[...document.querySelectorAll('.hero [data-download-os]')].find((e) => e.getClientRects().length > 0)`
@@ -195,13 +159,13 @@ site_downloads :: proc(s: ^tk_site.Check) {
 		main :: button + `.querySelector('.get-main').textContent`
 		sub :: button + `.querySelector('.get-sub').textContent`
 		icons :: `[...document.querySelectorAll('.hero [data-download-os]')].filter((e) => e.getClientRects().length > 0 && e.querySelector('.get-icon svg')).map((e) => e.dataset.downloadOs).join(',')`
-		tk_site.check_expect(s, tk_site.check_true(s, fmt.tprintf(`%s.href.endsWith(%s) && %s === %s`, button, cdp.quote(sys.button), main, cdp.quote(sys.label))),
+		tk_site.check_expect(s, tk_site.check_true(s, fmt.tprintf(`%s.href.endsWith(%s) && %s === %s`, button, tk_json.quote(sys.button), main, tk_json.quote(sys.label))),
 			fmt.tprintf("index.html, %s: the button is %s, %q (%s, %s)", sys.name, sys.button, sys.label, tk_site.check_text(s, button + ".href"), tk_site.check_text(s, main)))
-		tk_site.check_expect(s, tk_site.check_true(s, fmt.tprintf(`%s.endsWith(%s) && /\d+\.\d+\.\d+/.test(%s)`, sub, cdp.quote(sys.sub), sub)),
+		tk_site.check_expect(s, tk_site.check_true(s, fmt.tprintf(`%s.endsWith(%s) && /\d+\.\d+\.\d+/.test(%s)`, sub, tk_json.quote(sys.sub), sub)),
 			fmt.tprintf("index.html, %s: under it %q (%s)", sys.name, sys.sub, tk_site.check_text(s, sub)))
-		tk_site.check_expect(s, tk_site.check_true(s, fmt.tprintf(`%s === %s`, icons, cdp.quote(sys.icon))),
+		tk_site.check_expect(s, tk_site.check_true(s, fmt.tprintf(`%s === %s`, icons, tk_json.quote(sys.icon))),
 			fmt.tprintf("index.html, %s: the logo %q (%s)", sys.name, sys.icon, tk_site.check_text(s, icons)))
-		tk_site.check_expect(s, tk_site.check_true(s, fmt.tprintf(`%s.href.endsWith(%s)`, other, cdp.quote(sys.other))),
+		tk_site.check_expect(s, tk_site.check_true(s, fmt.tprintf(`%s.href.endsWith(%s)`, other, tk_json.quote(sys.other))),
 			fmt.tprintf("index.html, %s: the small link is %s (%s)", sys.name, sys.other, tk_site.check_text(s, other + ".href")))
 	}
 	tk_site.check_call(s, "Emulation.setUserAgentOverride", `{"userAgent":""}`)   // (the browser's own again)

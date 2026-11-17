@@ -22,11 +22,12 @@ STEP_LIMIT      :: 20 * time.Second
 BACK_LIMIT      :: 15 * time.Second
 TURN_LIMIT      :: 60 * time.Second
 NEVER_LIMIT     :: 100 * time.Millisecond
-START_POLL      :: 2 * time.Millisecond    // (a start is measured: this must not be what it measures)
-POLL            :: 50 * time.Millisecond   // (what is looked at here, not in the window: a counter, the server's list)
+POLL            :: 50 * time.Millisecond   // (what is looked at here, not in the window: a counter, the server's list, a log)
 TURN_MESSAGES   :: 3
 BROWSER_TURN_LIMIT :: 150 * time.Second
-TOOLS_OFFERED   :: 3 * time.Second
+// What the program logs once the server listed the agents' tools of a folder (src/browser_mcp.odin), then the folder: the
+// socket that offers them opens on a thread of its own, and nothing in the window says it did.
+TOOLS_LISTED    :: "browser: tools listed for "
 
 Live :: struct {
 	exe, session, dir: string,
@@ -42,6 +43,7 @@ App :: struct {
 	log:      string,
 	settings: string,
 	started:  time.Time,
+	session:  toolbox.Program_Session,   // (Linux: the program on a desktop of its own, app_linux.odin)
 }
 
 @(private = "file")
@@ -157,46 +159,16 @@ live_setup :: proc(l: ^Live, args: []string) -> bool {
 	return true
 }
 
-@(private = "file")
-free_port :: proc() -> int {
-	sock, err := net.listen_tcp({address = net.IP4_Loopback, port = 0})
-	if err != nil { return 0 }
-	defer net.close(sock)
-	at, bound := net.bound_endpoint(sock)
-	return bound == nil ? at.port : 0
-}
-
-// A copy with nothing of the user's: its settings in a folder of its own. What it says goes to a file, kept.
+// A copy with nothing of the user's: its settings in a folder of its own. What it says goes to a file, kept. The start
+// itself is the system's (app_start: app_linux.odin, app_windows.odin).
 launch :: proc(l: ^Live, name: string, args: ..string) -> (app: App, ok: bool) {
-	port := free_port()
 	here, _ := os.get_working_directory(context.temp_allocator)
-	app.settings = fmt.tprintf("%s/%s/settings_%d", here, LIVE_DIR, port)
-	if !make_folder(app.settings) { return }
+	app.settings = fmt.tprintf("%s/%s/settings_%s", here, LIVE_DIR, name)
 	app.log = fmt.tprintf("%s/%s.log", LIVE_DIR, name)
-	log, err := os.open(app.log, os.O_WRONLY | os.O_CREATE | os.O_TRUNC | os.O_INHERITABLE, os.Permissions_Read_Write_All)   // (a child only writes to what it may inherit)
-	if err != nil { fmt.eprintfln("live: %s: %v", app.log, err); return }
-	defer os.close(log)
 	cmd := make([dynamic]string, context.temp_allocator)
 	append(&cmd, l.exe, "--size=1460x920", "--pref", "browser.tools=false", "--pref", "notify.finished=off")
 	append(&cmd, ..args)
-	env := toolbox.env_with({"APPDATA", "XDG_CONFIG_HOME", "TOOLKIT_DEVTOOLS", "OPENCODE_NATIVE_NO_SETUP"},
-		fmt.tprintf("APPDATA=%s", app.settings), fmt.tprintf("XDG_CONFIG_HOME=%s", app.settings), fmt.tprintf("TOOLKIT_DEVTOOLS=%d", port), "OPENCODE_NATIVE_NO_SETUP=1")
-	app.started = time.now()
-	p, start_err := os.process_start({command = cmd[:], env = env, stdout = log, stderr = log})
-	if start_err != nil { fmt.eprintfln("live: %s does not start: %v", l.exe, start_err); return }
-	app.process = p
-	begun := time.now()
-	for time.since(begun) < START_LIMIT {
-		if d, connected := cdp.connect(port); connected { app.dt = d; return app, true }
-		if state, _ := os.process_wait(p, 0); state.exited {
-			fmt.eprintfln("live: the program ended at the start, code %d: see %s", state.exit_code, app.log)
-			return
-		}
-		time.sleep(START_POLL)
-	}
-	fmt.eprintfln("live: no devtools on port %d, the program alive: see %s", port, app.log)
-	_ = os.process_kill(p)
-	return
+	return app, app_start(&app, cmd[:])
 }
 
 @(private = "file")
@@ -209,9 +181,18 @@ close_app :: proc(l: ^Live, app: ^App) {
 
 app_end :: proc(app: ^App) {
 	cdp.close(&app.dt)
-	_ = os.process_kill(app.process)
-	_, _ = os.process_wait(app.process, 5 * time.Second)
+	app_stop(app)
 	if app.settings != "" { _ = os.remove_all(app.settings) }   // (a program in WSL has its own, there)
+}
+
+// Until the program's output holds `text`, at most `limit`: what the program says of a thing the window does not show.
+log_wait :: proc(log, text: string, limit: time.Duration) -> bool {
+	deadline := time.tick_add(time.tick_now(), limit)
+	for {
+		if data, err := os.read_entire_file(log, context.temp_allocator); err == nil && strings.contains(string(data), text) { return true }
+		if time.tick_diff(time.tick_now(), deadline) <= 0 { return false }
+		time.sleep(POLL)
+	}
 }
 
 @(private = "file")
@@ -389,7 +370,7 @@ scenario_browser :: proc(l: ^Live) {
 	if !started { expect(l, false, "the program answers"); return }
 	dt := &app.dt
 	expect(l, cdp.wait_for(dt, "connected", STEP_LIMIT), "connected")
-	time.sleep(TOOLS_OFFERED)   // (the socket that offers the tools opens on a thread of its own: nothing says it did)
+	expect(l, log_wait(app.log, fmt.tprintf("%s%s", TOOLS_LISTED, l.dir), STEP_LIMIT), "the server listed the agents' tools")
 	cdp.key(dt, "ctrl+n")
 	expect(l, cdp.wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
 	public_model(dt)
@@ -453,7 +434,7 @@ scenario_folders :: proc(l: ^Live) {
 	dt := &app.dt
 	expect(l, cdp.wait_for(dt, "connected", STEP_LIMIT), "connected")
 	expect(l, cdp.wait_for(dt, "ocntools other folder", STEP_LIMIT), "the other folder's session is in the list")
-	time.sleep(TOOLS_OFFERED)
+	expect(l, log_wait(app.log, fmt.tprintf("%s%s", TOOLS_LISTED, l.dir), STEP_LIMIT), "the server listed the agents' tools")
 	cdp.key(dt, "ctrl+n")
 	expect(l, cdp.wait_name(dt, "composer", STEP_LIMIT), "a new session's composer")
 	public_model(dt)

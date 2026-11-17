@@ -26,9 +26,13 @@ import toolbox "gt:toolbox"
 
 SHOTS_EXE   :: "build/screenshots" + EXE
 SHOTS_DOCS  :: "docs/screenshots"
-WSL_PORT    :: 9391
 WSL_LIMIT   :: 60 * time.Second   // (WSL may fetch its libraries first)
 SHOT_LIMIT  :: 15 * time.Second
+// How long the picture must not change to be taken as done: under half a caret's blink (the toolkit's 530 ms), so a
+// field that has the keyboard does not keep a window from being still.
+SHOT_STILL  :: 400 * time.Millisecond
+// A shell's: its cursor does not blink, and it pauses longer as it starts and writes.
+SHELL_STILL :: time.Second
 SCROLL_TRIES :: 40
 SCROLL_NEAR :: 0.06   // near enough, as a part of the window's height
 SCROLL_STEP :: 120.0  // pixels a notch moves, about
@@ -62,8 +66,18 @@ step :: proc(s: ^Snap, done: bool) { s.ok = s.ok && done }
 @(private = "file")
 idle :: proc(s: ^Snap) {
 	if !s.ok { return }
-	_, done := cdp.call(s.dt, "Toolkit.waitIdle")
+	_, done := cdp.wait_idle(s.dt, SHOT_LIMIT)
 	step(s, done)
+}
+
+// What the box tree does not show and the window does not count as moving (a shell's grid, an icon decoded on a chore,
+// a request on its way): its picture, until it stops changing.
+@(private = "file")
+still :: proc(s: ^Snap, how_long: time.Duration) {
+	if !s.ok { return }
+	is_still, done := cdp.wait_still(s.dt, how_long, SHOT_LIMIT)
+	if done && !is_still { fmt.eprintfln("shots: the picture still changes after %v", SHOT_LIMIT) }
+	step(s, done && is_still)
 }
 
 @(private = "file")
@@ -74,10 +88,6 @@ typed :: proc(s: ^Snap, text: string) { if s.ok { step(s, cdp.type_text(s.dt, te
 
 @(private = "file")
 click :: proc(s: ^Snap, name: string) { if s.ok { step(s, cdp.click_name(s.dt, name)) } }
-
-// What ends by itself with nothing to read: an animation, a shell that answers. What a window can say is awaited, not this.
-@(private = "file")
-settle :: proc(s: ^Snap, how_long: time.Duration) { if s.ok { time.sleep(how_long) } }
 
 @(private = "file")
 mouse :: proc(s: ^Snap, kind: string, x, y: f64, press := false) {
@@ -178,7 +188,6 @@ ready_picker :: proc(s: ^Snap) {
 @(private = "file")
 ready_statistics :: proc(s: ^Snap) {
 	key(s, "ctrl+i")
-	settle(s, 900 * time.Millisecond)
 	idle(s)
 }
 
@@ -197,7 +206,6 @@ ready_palette :: proc(s: ^Snap) {
 ready_activity :: proc(s: ^Snap) {
 	any_model(s)
 	key(s, "ctrl+j")
-	settle(s, 700 * time.Millisecond)
 	idle(s)
 }
 
@@ -206,19 +214,19 @@ ready_activity :: proc(s: ^Snap) {
 ready_terminal :: proc(s: ^Snap) {
 	key(s, "ctrl+shift+t")
 	if s.ok { step(s, cdp.wait_name(s.dt, "term_box", SHOT_LIMIT)) }
-	settle(s, 3 * time.Second)
+	still(s, SHELL_STILL)   // (what the shell writes is in its grid, not in the tree: its picture says when it is done)
 	any_model(s)
 	click(s, "term_box")
 	typed(s, `Get-ChildItem | Select-Object Name, Length; Write-Host "ready" -ForegroundColor Green`)
 	key(s, "Enter")
-	settle(s, 2 * time.Second)   // (what the shell writes is in its grid, not in the tree: nothing here can be awaited)
+	still(s, SHELL_STILL)
 }
 
 // (the shell's tab, the only one that closes here; its request is on its way when the program ends)
 @(private = "file")
 after_terminal :: proc(s: ^Snap) {
 	click(s, "dock_close")
-	settle(s, 800 * time.Millisecond)
+	idle(s)
 }
 
 @(private = "file")
@@ -226,16 +234,17 @@ ready_mention :: proc(s: ^Snap) {
 	any_model(s)
 	click(s, "composer")
 	typed(s, "What does @cl")
-	settle(s, 900 * time.Millisecond)
+	idle(s)
 }
 
+// (the first row of the file list: there once the folder is read)
 @(private = "file")
 ready_files :: proc(s: ^Snap) {
 	any_model(s)
 	key(s, "ctrl+p")
-	settle(s, time.Second)
+	if s.ok { step(s, cdp.wait_name(s.dt, "flr0", SHOT_LIMIT)) }
 	click(s, "flr0")
-	settle(s, 900 * time.Millisecond)
+	idle(s)
 }
 
 @(private = "file")
@@ -246,16 +255,16 @@ ready_schedules :: proc(s: ^Snap) {
 	typed(s, "Schedules of this session")
 	idle(s)
 	key(s, "Enter")
-	settle(s, 900 * time.Millisecond)
+	idle(s)
 }
 
-// (searched: what shows is what the server can connect, not who is connected to what)
+// (searched: what shows is what the server can connect, not who is connected to what; their icons are decoded on a chore)
 @(private = "file")
 ready_connections :: proc(s: ^Snap) {
-	settle(s, 1500 * time.Millisecond)
+	still(s, SHOT_STILL)
 	click(s, "int_find")
 	typed(s, "open")
-	settle(s, 600 * time.Millisecond)
+	idle(s)
 }
 
 // (it looks at start)
@@ -368,18 +377,21 @@ start_linux :: proc(s: ^Shots, args: []string) -> (app: App, ok: bool) {
 	exe, _ := os.get_executable_path(context.temp_allocator)   // (this tool, for Windows: the relay in WSL runs it)
 	append(&cmd, ..wsl_ocntools("wsl_client", wsl_path(exe), program))
 	append(&cmd, ..args)
-	env := toolbox.env_with({"TOOLKIT_DEVTOOLS", "OC_PORT", "OC_PASSWORD", "WSLENV"}, fmt.tprintf("TOOLKIT_DEVTOOLS=%d", WSL_PORT), fmt.tprintf("OC_PORT=%d", s.live.server.port), fmt.tprintf("OC_PASSWORD=%s", s.live.password), "WSLENV=TOOLKIT_DEVTOOLS:OC_PORT:OC_PASSWORD")
+	// (a port free on Windows' 127.0.0.1, which WSL's localhost forwarding brings to the program's)
+	port, free := toolbox.free_port()
+	if !free { fmt.eprintln("shots: no free port for the DevTools server"); return }
+	env := toolbox.env_with({"TOOLKIT_DEVTOOLS", "OC_PORT", "OC_PASSWORD", "WSLENV"}, fmt.tprintf("TOOLKIT_DEVTOOLS=%d", port), fmt.tprintf("OC_PORT=%d", s.live.server.port), fmt.tprintf("OC_PASSWORD=%s", s.live.password), "WSLENV=TOOLKIT_DEVTOOLS:OC_PORT:OC_PASSWORD")
 	p, start_err := os.process_start({command = cmd[:], env = env, stdout = log, stderr = log})
 	if start_err != nil { fmt.eprintfln("shots: WSL does not start: %v", start_err); return }
 	app.process = p
-	begun := time.now()
-	for time.since(begun) < WSL_LIMIT {
-		if d, connected := cdp.connect(WSL_PORT); connected { app.dt = d; return app, true }
-		if state, _ := os.process_wait(p, 0); state.exited { fmt.eprintfln("shots: the program ended: see %s", app.log); return }
-		time.sleep(POLL)
+	dt, connected, ended := cdp.connect_wait(port, WSL_LIMIT, p)
+	if connected { app.dt = dt; return app, true }
+	if ended.exited {
+		fmt.eprintfln("shots: the program ended at the start, code %d: see %s", ended.exit_code, app.log)
+	} else {
+		fmt.eprintfln("shots: no answer on port %d", port)
+		_ = os.process_kill(p)
 	}
-	fmt.eprintfln("shots: no answer on port %d", WSL_PORT)
-	_ = os.process_kill(p)
 	return
 }
 
@@ -430,9 +442,8 @@ take :: proc(s: ^Shots, p: Picture) -> bool {
 		x, y := shot_at(dt, 0.5, 0.02)
 		mouse(&snap, "mouseMoved", f64(x), f64(y))
 	}
-	settle(&snap, 500 * time.Millisecond)   // (what hover lit goes out)
-	if p.linux { settle(&snap, 3 * time.Second) }   // (through the relay, the last requests are slower)
-	idle(&snap)
+	idle(&snap)   // (what hover lit goes out)
+	if p.linux { still(&snap, SHOT_STILL) }   // (through the relay, the last requests are slower)
 	if !snap.ok { fmt.eprintfln("shots: %s failed", p.name); return false }
 	if secret := leak_of(dt); secret != "" { fmt.eprintfln("shots: %s: \"%s\" would be in the picture", p.name, secret); return false }
 

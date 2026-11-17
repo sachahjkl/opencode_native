@@ -508,6 +508,8 @@ browser_message :: proc(app: ^App, to: Browser_To, text: string) {
 		reply(to, id, "{}")
 	case "tools/list":
 		reply(to, id, fmt.tprintf(`{{"tools":%s}}`, BROWSER_TOOLS))
+		// (the socket opens on a thread of its own: this line is what says the agents of the folder have the tools, ocntools live waits for it)
+		log.infof("browser: tools listed for %s", to.link.dir)
 	case "tools/call":
 		tool_call(app, to, id, tk_json.text(v, "params", "name"), tk_json.get(v, "params", "arguments"), tk_json.text(v, "params", "_meta", BROWSER_SESSION_META))
 	case:
