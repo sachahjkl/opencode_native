@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.71.1] - 2026-11-17 14:25
+
+### Fixed
+- **A click picks a model**: in Set the model's list, a click on a row sets that model, as Enter does.
+
 ## [0.71.0] - 2026-11-17 13:44
 
 ### Added
@@ -1876,6 +1881,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.71.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.71.1
 [0.71.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.71.0
 [0.70.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.70.1
 [0.70.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.70.0
