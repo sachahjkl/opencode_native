@@ -167,6 +167,21 @@ person's caret under the other's typing, and the toolkit's undo would undo the o
   `metadata.source` is `ocn.btw`: the display hides it, as the server keeps it apart. A delimiter in the prompt's text
   was refused: the text would carry the preamble into the history, the title generator and every other client.
 - **The keyboard stays** in the composer that sent `/btw`: the panel opens without the focus.
+- **The panel opens at once**, on the frame after Enter, not when the fork answers: the server copies the whole session,
+  and a long conversation kept the panel away for seconds with nothing shown. Until the fork exists the panel's pane
+  **waits for its fork** (`Chat_Pane.aside` the Outgoing, its session `""`): its tab already says `btw: <first words>`,
+  its body shows the person's text as their prompt with a quiet word (starting the session, then sending), its composer
+  takes text and sends nothing (`composer_held`, as a session that starts). The fork answered, the same pane enters the
+  fork's session (no close, no reopen; what was typed in it stays), and the prompt stays shown under the fork's
+  conversation until the session has it.
+- **A pane that waits for its fork shows no session**: `pane_is_shown` is false for it, so the events, the drafts, what
+  failed and the readings never take its empty id for the home page's. `pane_open` says that its slot holds it (a menu
+  opened in it, a quote).
+- **The fork fails**: the panel closes, `/btw ...` comes back to the composer it came from, said as before. Closed while
+  it waits (or failed), what was typed in the panel goes to the main composer: it has no session to keep it. Closed
+  while it waits, the aside goes on: the fork, titled and sent its prompt, stays a session of the sidebar.
+- **A second `/btw` while the first is forking**: the panel waits for the second. The first one's fork goes on without
+  it, a session of the sidebar.
 
 ## Layers
 

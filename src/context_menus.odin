@@ -76,7 +76,7 @@ ctx_open :: proc(app: ^App, kind: Ctx_Kind, msg := "", part := 0, image := Image
 @(private = "file")
 ctx_pane :: proc(app: ^App) -> ^Chat_Pane {
 	i := app.ctx_menu.target.pane
-	return pane_is_shown(app, i) ? &app.panes[i] : main_pane(app)
+	return pane_open(app, i) ? &app.panes[i] : main_pane(app)
 }
 
 // The window the menu was opened in (none noted: the main one).
@@ -285,7 +285,7 @@ quote_selection :: proc(app: ^App) {
 @(private = "file")
 quote_pane :: proc(app: ^App) -> ^Chat_Pane {
 	i := app.quote.pane
-	return pane_is_shown(app, i) ? &app.panes[i] : main_pane(app)
+	return pane_open(app, i) ? &app.panes[i] : main_pane(app)
 }
 
 // The chip of selection `serial`: a new one goes where the pointer ended it (true). One that comes back, a dialog that hid it closed,

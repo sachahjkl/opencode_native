@@ -85,7 +85,7 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32, avail: f32) {
 					ui.next({width = ui.px(col), height = ui.children_sum(), axis = .Y})
 					if ui.column(id = "###col") {
 						if ui.style({font_size = cem}) {
-							if pane.chat.id == "" { home(app, pane, cem) } else { messages(app, pane, cem) }
+							if pane_forking(pane) { btw_forking_body(app, pane, cem) } else if pane.chat.id == "" { home(app, pane, cem) } else { messages(app, pane, cem) }
 						}
 					}
 				}
@@ -229,7 +229,9 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		ui.space(ui.SPACE_2)
 	}
 	view := chat_view(app, pane)
-	if view == .Loading && len(c.messages) == 0 {
+	// (a /btw's prompt on its way shows instead: the panel that waited for its fork does not blink to "Loading")
+	pending, _ := btw_pending(app, pane)
+	if view == .Loading && len(c.messages) == 0 && pending == "" {
 		ui.next({width = ui.fill(), height = ui.px(em * 2), text_align = .Center})
 		if ui.tags("weak") { ui.label(fmt.tprintf("%s###loading", i18n.tr("Loading the conversation…"))) }
 	}
@@ -294,6 +296,7 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			host.host_settle(&app.window)
 		}
 	}
+	if pending != "" { btw_pending_prompt(app, pane, em) }
 	// The line of a run stands in the room the end of the conversation keeps anyway: the height is the same with it and without it, so
 	// the bottom does not move when a run starts or ends. (It came on top of that room, and took four lines for one word.)
 	goal_reason_line(app, pane, em)
@@ -540,10 +543,14 @@ turn_end :: proc(app: ^App, m: ^Message, em: f32) {
 USER_IMAGE_W_PX :: 320
 USER_IMAGE_H_PX :: 220
 
+// The plate of the person's prompt (a /btw's on its way has the same: btw_pending_prompt).
+user_card_look :: proc() -> ui.Plate_Look {
+	return {top = between("button background", "border", 0.33), bottom = between("card background", "button background", 0.5), rim = 0.09, shadow = 8}
+}
+
 user_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 	ui.space(ui.SPACE_2)
-	look := ui.Plate_Look{top = between("button background", "border", 0.33), bottom = between("card background", "button background", 0.5), rim = 0.09, shadow = 8}
-	if ui.card("", id = fmt.tprintf("###u_%s", m.id), o = {radius = CARD_RADIUS, look = look}) {
+	if ui.card("", id = fmt.tprintf("###u_%s", m.id), o = {radius = CARD_RADIUS, look = user_card_look()}) {
 		prompt_rail_focus(app, pane, m, ui.card_box())
 		ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
 		if ui.row(.Center, id = "###who") {

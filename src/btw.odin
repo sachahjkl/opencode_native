@@ -44,13 +44,70 @@ btw_start :: proc(app: ^App, pane: ^Chat_Pane, text: string) {
 
 // The panel shows session `id`, in its pane (made when none is shown), and opens. The keyboard stays where it is.
 btw_open :: proc(app: ^App, id: string) -> ^Chat_Pane {
+	pane := btw_panel_pane(app)
+	pane_show(app, pane, id)
+	ui.view_open(&app.program_views, BTW_VIEW, app)
+	return pane
+}
+
+// The panel opens now, waiting for the fork of /btw `out` asked from `from` (chat-panes.md, "The panel opens at once"): the server
+// copies the whole session, and nothing showed while it did. The keyboard stays where it is.
+btw_wait_fork :: proc(app: ^App, from: ^Chat_Pane, out: u64) {
+	pane := btw_panel_pane(app)
+	pane_wait_fork(app, pane, from, out)
+	ui.view_open(&app.program_views, BTW_VIEW, app)
+}
+
+// The pane the panel shows, made when none is.
+@(private = "file")
+btw_panel_pane :: proc(app: ^App) -> ^Chat_Pane {
 	pane := btw_pane(app)
 	if pane == nil { pane = pane_free(app) }
 	assert(pane != nil, "a pane for the panel")   // (PANES_MAX leaves room: only the panel takes one)
 	app.btw = pane_index(app, pane)
-	pane_show(app, pane, id)
-	ui.view_open(&app.program_views, BTW_VIEW, app)
 	return pane
+}
+
+// The /btw prompt on its way in `pane`, as the person's prompt shows, with where it is in place of its time. Not once its session
+// has it: its own message shows it then.
+btw_pending_prompt :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	prompt, word := btw_pending(app, pane)
+	if prompt == "" { return }
+	#reverse for &m in pane.chat.messages {
+		if m.kind != .User { continue }
+		if m.text == prompt { return }
+		break
+	}
+	ui.space(ui.SPACE_2)
+	if ui.card("", id = "###btw_pending", o = {radius = CARD_RADIUS, look = user_card_look()}) {
+		ui.next({width = ui.fill(), height = ui.px(em * 1.4), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###who") {
+			glyph(lucide.USER, ui.hue(.Accent), math.round(em * ICON_SMALL), em * 1.1)
+			ui.space(ui.SPACE_1)
+			text("you", i18n.tr("You"), ui.hue(.Accent), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			ui.spacer(ui.fill())
+			text("at", word, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+		}
+		ui.space(ui.SPACE_1)
+		ui.next({width = ui.fill(), flags = {.Selectable, .Text_Wrap}})
+		ui.paragraph(fmt.tprintf("%s###text", label_safe(prompt)))
+	}
+	ui.space(ui.SPACE_4)
+}
+
+// The panel waiting for its fork: the prompt on its way, nothing else.
+btw_forking_body :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
+	ui.space(ui.SPACE_4)
+	btw_pending_prompt(app, pane, em)
+}
+
+// The panel's title: the fork's; while its prompt is on its way, the title it is given (before the fork exists, and before its
+// session list or its PATCH says it: the server's own is "<parent> (fork #N)").
+btw_view_title :: proc(app: ^App, pane: ^Chat_Pane) -> string {
+	if text, _ := btw_pending(app, pane); text != "" { return btw_title(text) }
+	if s := find_session(app, pane.chat.id); s != nil && s.title != "" { return s.title }
+	if pane.chat.have_self && pane.chat.self.title != "" { return pane.chat.self.title }
+	return i18n.tr("Aside")
 }
 
 // The panel closes, and its pane with it; its session stays in the sidebar.
@@ -107,9 +164,7 @@ btw_view :: proc(v: ^ui.View, app: ^App) {
 		palette_choose(app)
 		chooser_build(app)
 	}
-	title := i18n.tr("Aside")
-	if s := find_session(app, pane.chat.id); s != nil && s.title != "" { title = s.title } else if pane.chat.have_self && pane.chat.self.title != "" { title = pane.chat.self.title }
-	ui.view_title(v, title)
+	ui.view_title(v, btw_view_title(app, pane))
 	if ui.view_header_tools(v) {
 		size := math.round(em * BUTTON_COMPACT_H_EM)
 		ui.a11y({role = .Button, name = i18n.tr("Open in the main view")})

@@ -16,7 +16,7 @@ PANES_MAX :: 4
 MAIN_PANE :: 0
 
 Chat_Pane :: struct {
-	shown:        bool,               // the slot holds a pane (MAIN_PANE always does: pane_is_shown)
+	shown:        bool,               // the slot holds a pane (MAIN_PANE always does: pane_open)
 	chat:         Chat,
 	view:         Chat_View_State,    // where it is read, and how it moves (one per session shown: chat_view_start starts it over)
 	conversation: Conversation,       // its column, its scroll box, its opened parts, its prompt rail (conversation.odin)
@@ -28,6 +28,9 @@ Chat_Pane :: struct {
 	// its conversation's zoom, keyed by the session shown in App.session_zooms (zooms_load sets the memory): the zoom keys
 	// act on it while the keyboard is in the pane, Ctrl+wheel while the pointer is over it
 	zone:         ui.Zoom_Zone,
+	// the /btw it shows the prompt of (its Outgoing's id, 0: none): with no session yet, the pane waits for its fork (pane_forking);
+	// then the prompt shows until its session has it (btw.odin)
+	aside:        u64,
 	// (atomic) moves when it shows another conversation (pane_marked): what the requests' workers read of it. Not Chat.gen itself:
 	// chat_reset writes it as a whole struct, which a worker cannot read while it is written.
 	mark:         u64,
@@ -46,7 +49,15 @@ Chat_View_State :: struct {
 
 main_pane :: proc(app: ^App) -> ^Chat_Pane { return &app.panes[MAIN_PANE] }
 
-pane_is_shown :: proc(app: ^App, i: int) -> bool { return i == MAIN_PANE || app.panes[i].shown }
+// Whether pane `i` shows a session (the main view's home page included). A pane that waits for its fork shows none: its empty id is
+// not the home page's, and what goes to a session shown (its events, its draft, what failed) must not land in it.
+pane_is_shown :: proc(app: ^App, i: int) -> bool { return pane_open(app, i) && !pane_forking(&app.panes[i]) }
+
+// Whether slot `i` holds a pane, shown or waiting for its fork.
+pane_open :: proc(app: ^App, i: int) -> bool { return i == MAIN_PANE || app.panes[i].shown }
+
+// It is the panel of a /btw whose fork is not made yet (chat-panes.md, "The panel opens at once").
+pane_forking :: proc(pane: ^Chat_Pane) -> bool { return pane.shown && pane.aside != 0 && pane.chat.id == "" }
 
 // The slot of a pane of this app (what a request carries: its worker reads the mark there).
 pane_index :: proc(app: ^App, pane: ^Chat_Pane) -> int {
@@ -80,10 +91,36 @@ pane_show :: proc(app: ^App, pane: ^Chat_Pane, sid: string) {
 	assert(pane != main_pane(app))
 	if pane.shown && pane.chat.id == sid { return }
 	id := strings.clone(sid, context.temp_allocator)   // (it may live in the arena chat_reset drops)
-	if pane.shown { draft_leave(app, pane) }
-	pane.shown = true
+	if pane.shown { pane_leave(app, pane) }
+	pane.shown, pane.aside = true, 0
 	pane_enter(app, pane, id)
 	pane_follow(app, pane)
+}
+
+// `pane` waits for the fork of /btw `out`, asked from `from`: shown, with no session. What it showed goes as when it is closed. Its
+// composer shows the agent and the model of `from`, which the fork will have (with no session, it would show the home page's).
+pane_wait_fork :: proc(app: ^App, pane, from: ^Chat_Pane, out: u64) {
+	assert(pane != main_pane(app))
+	agent := strings.clone(shown_agent(app, from), context.temp_allocator)
+	model, provider := shown_model(app, from)
+	model, provider = strings.clone(model, context.temp_allocator), strings.clone(provider, context.temp_allocator)
+	variant := strings.clone(shown_variant(app, from), context.temp_allocator)
+	if !pane_forking(pane) {
+		if pane.shown { pane_close(app, pane) }
+		chat_reset(&pane.chat)
+		pane_marked(pane)
+		chat_view_start(pane, ui.now_ms())
+	}
+	pane.shown, pane.aside = true, out
+	c := &pane.chat
+	c.chose_agent, c.chose_model, c.chose_provider, c.chose_variant = strings.clone(agent, c.alloc), strings.clone(model, c.alloc), strings.clone(provider, c.alloc), strings.clone(variant, c.alloc)
+}
+
+// What its composer holds, before it shows something else. Waiting for its fork it has no session to keep it in a draft: the main
+// composer takes it.
+@(private = "file")
+pane_leave :: proc(app: ^App, pane: ^Chat_Pane) {
+	if pane_forking(pane) { composer_give(app, pane, main_pane(app)) } else { draft_leave(app, pane) }
 }
 
 // It shows nothing any more: its composer's text waits in its session's draft, its slot is free, and what was asked for it
@@ -91,7 +128,8 @@ pane_show :: proc(app: ^App, pane: ^Chat_Pane, sid: string) {
 pane_close :: proc(app: ^App, pane: ^Chat_Pane) {
 	assert(pane != main_pane(app))
 	if !pane.shown { return }
-	draft_leave(app, pane)
+	pane_leave(app, pane)
+	pane.aside = 0
 	find_pane_closed(app, pane)
 	chat_reset(&pane.chat)
 	pane_marked(pane)

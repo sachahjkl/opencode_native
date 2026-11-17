@@ -208,7 +208,8 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			held := composer_held(app, pane)
 			if pane.conversation.column_w > em * COMPOSER_HINT_MIN_EM && fit < 1 {   // (room for it beside the agent and model buttons)
 				if held {
-					text("hint", attaching(app, pane) ? i18n.tr("reading the attachment…") : i18n.tr("starting the session…"), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+					// (a panel waiting for its fork says it on its prompt: btw_pending_prompt)
+					if !pane_forking(pane) { text("hint", attaching(app, pane) ? i18n.tr("reading the attachment…") : i18n.tr("starting the session…"), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}) }
 				} else if history_browsing(app, pane) {
 					text("hint", fmt.tprintf(i18n.tr("history %d/%d   ·   "), pane.composer.history.at, len(pane.composer.history.view)), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 					if hint_action("###hist_back", i18n.tr("Esc  back to your text"), em, app.mono) { history_leave(app, pane, true) }

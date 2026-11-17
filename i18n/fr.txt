@@ -164,6 +164,9 @@ fr Joindre des fichiers
 en This system has no file dialog
 fr Ce système n'a pas de boîte de dialogue de fichiers
 
+en You
+fr Vous
+
 en Aside
 fr Aparté
 
@@ -652,9 +655,6 @@ fr message synthétique
 
 en Conversation compacted
 fr Conversation compactée
-
-en You
-fr Vous
 
 en %s in · %s out · %s
 fr %s en entrée · %s en sortie · %s
@@ -1213,6 +1213,9 @@ fr Serveur injoignable (%s)
 en Unreadable answer (%s)
 fr Réponse illisible (%s)
 
+en sending…
+fr envoi…
+
 en That message was delivered meanwhile: what you wrote is in the composer
 fr Ce message a été remis entre-temps : ce que vous avez écrit est dans la zone de saisie
 
@@ -1361,9 +1364,6 @@ en %d file
 en+ %d files
 fr %d fichier
 fr+ %d fichiers
-
-en sending…
-fr envoi…
 
 en removing…
 fr suppression…

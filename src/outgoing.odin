@@ -45,7 +45,7 @@ Outgoing :: struct {
 
 // Starting a session from the composer shown, or reading a file for it: nothing more goes from it until that is done.
 composer_held :: proc(app: ^App, pane: ^Chat_Pane) -> bool {
-	if attaching(app, pane) { return true }
+	if attaching(app, pane) || pane_forking(pane) { return true }
 	for o in app.cx.outgoing {
 		if o.stage <= .Model && o.session == pane.chat.id { return true }
 	}
@@ -164,34 +164,64 @@ outgoing_composer :: proc(app: ^App, pane: ^Chat_Pane, text, directory: string, 
 	outgoing_send(app, o)
 }
 
-// `/btw <text>` from `pane`: the fork of its session (`before`: fork_before's message, "" all of it) is made, then shown in the
-// panel, its preamble sent, then the text (btw_forked, btw_aside_sent). Until the fork exists it is the composer's it came from:
-// what fails comes back there as it was typed.
+// `/btw <text>` from `pane`: the panel opens at once, waiting for the fork of its session (`before`: fork_before's message, "" all of
+// it); the fork made, the panel shows it, its preamble is sent, then the text (btw_forked, btw_aside_sent). Until the fork exists the
+// text is the composer's it came from: what fails comes back there as it was typed.
 outgoing_aside :: proc(app: ^App, pane: ^Chat_Pane, before, text: string) {
 	o := outgoing_new(app, pane, .Forking, pane.chat.id, strings.concatenate({"/btw ", text}, context.temp_allocator))
 	body := before != "" ? fmt.tprintf(`{{"before":%s}}`, tk_json.quote(before)) : "{}"
+	// (life .Server: the pane it was asked from may move on, or be the panel that waits for it; its answer is the Outgoing's)
 	request(app, .Btw_Fork, "POST", fmt.tprintf("/api/session/%s/fork", o.session), body, o.session, out = o.id, pane = pane)
+	btw_wait_fork(app, pane, o.id)
 }
 
-// The fork is made: from here the prompt is the fork's (its text without the command), and goes from the panel's pane.
+// The /btw prompt pane `pane` shows while it is not in its session yet, and the word of where it is ("": none to show).
+btw_pending :: proc(app: ^App, pane: ^Chat_Pane) -> (text, word: string) {
+	o := outgoing_find(app, pane.aside)
+	if o == nil { return }
+	#partial switch o.stage {
+	case .Forking:
+		_, rest, _ := slash_split(o.text)
+		return rest, i18n.tr("starting the session…")
+	case .Aside, .Sending:
+		if o.session != pane.chat.id { return }
+		return o.text, i18n.tr("sending…")
+	}
+	return
+}
+
+// The fork is made: from here the prompt is the fork's (its text without the command), and goes from the panel's pane, which enters
+// the fork's session in place (what was typed in it stays). The panel closed or given to another /btw meanwhile: it goes on from the
+// pane it was asked from, a session of the sidebar.
 btw_forked_on_ok :: proc(app: ^App, r: ^Request, v: json.Value) {
 	id := tk_json.text(v, "data", "id")
 	if id == "" { answer_failed(app, r, .Unreadable, i18n.tr("Unreadable answer")); return }
 	refresh_sessions(app)
 	o := outgoing_find(app, r.out)
-	if o == nil || o.stage != .Forking { return }
+	if o == nil || o.stage != .Forking {
+		// (given back meanwhile, its session deleted: the panel waiting for it has nothing more to wait for)
+		if pane := btw_pane(app); pane != nil && pane_forking(pane) && pane.aside == r.out { btw_close(app) }
+		return
+	}
 	_, text, _ := slash_split(o.text)
 	text = strings.clone(text)
 	delete(o.text)
 	delete(o.session)
 	o.text, o.session = text, strings.clone(id)
 	rename_session(app, id, btw_title(text))
-	pane := btw_open(app, id)
-	o.pane, o.stage = pane_index(app, pane), .Aside
-	request(app, .Btw_Aside, "POST", fmt.tprintf("/api/session/%s/synthetic", id), btw_preamble_body(), id, out = o.id, pane = pane)
+	o.stage = .Aside
+	if pane := btw_pane(app); pane != nil && pane_forking(pane) && pane.aside == o.id {
+		pane_enter(app, pane, id)
+		pane_follow(app, pane)
+		o.pane = pane_index(app, pane)
+	}
+	request(app, .Btw_Aside, "POST", fmt.tprintf("/api/session/%s/synthetic", id), btw_preamble_body(), id, out = o.id, pane = &app.panes[o.pane])
 }
 
+// The panel that waits for this fork closes first: the text comes back to the composer it came from, which it would not find in
+// a pane with no session.
 btw_forked_on_fail :: proc(app: ^App, r: ^Request, f: Failure, message: string) -> (told: bool) {
+	if pane := btw_pane(app); pane != nil && pane_forking(pane) && pane.aside == r.out { btw_close(app) }
 	outgoing_answered(app, r, false)
 	return false
 }

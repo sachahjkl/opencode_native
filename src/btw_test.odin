@@ -385,6 +385,70 @@ the_panels_composer_acts_on_the_fork :: proc(t: ^testing.T) {
 	})
 }
 
+// The design's test of "The panel opens at once" (chat-panes.md): the frame after Enter shows the panel, its title and the text on
+// its way, while the fork is still unanswered (the panel waited for the server's copy of the whole session, and nothing showed).
+// The fork's answer enters the same pane in its session, the prompt still shown, and the preamble then the prompt go. A fork
+// refused closes the panel, and /btw comes back to the main composer.
+@(test)
+btw_opens_its_panel_before_the_fork :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		main := main_pane(app)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		bench_clear(app)
+		main.composer.focus_next = true
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return main_pane((^App)(s.user)).composer.focused }, "the main composer focused")
+		session.type_text(s, "/btw hello")
+		session.key(s, .Return)
+		session.frames(s, 1)
+		fork := bench_take(t, .Btw_Fork)   // (held: the server is still copying the session)
+		testing.expect_value(t, fork.path, fmt.tprintf("/api/session/%s/fork", main.chat.id))
+		pane := btw_pane(app)
+		if !testing.expect(t, pane != nil && pane != main, "the panel at once") { return }
+		slot := app.btw
+		testing.expect(t, ui.view_is_open(&app.program_views, BTW_VIEW), "the panel's view open")
+		testing.expect(t, pane_forking(pane), "the panel waits for its fork")
+		testing.expect_value(t, btw_view_title(app, pane), "btw: hello")
+		root := app.state.boxes[pane.conversation.root] or_else nil
+		testing.expect(t, root != nil && session.find(s, "btw_pending", within = root) != nil, "the text on its way, in the panel")
+		testing.expect(t, root != nil && session.find(s, "composer", within = root) != nil, "the panel's composer")
+		testing.expect(t, main.composer.focused, "the main composer keeps the keyboard")
+		testing.expect_value(t, ui.text_edit_string(&main.composer.area), "")
+		testing.expect(t, !pane_shows(app, ""), "a pane waiting for its fork is not the home page")
+
+		bench_answer(app, fork, 200, `{"data":{"id":"ses_3"}}`)
+		testing.expect(t, btw_pane(app) == pane && app.btw == slot, "the same pane")
+		testing.expect_value(t, pane.chat.id, "ses_3")
+		session.frames(s, 1)
+		root = app.state.boxes[pane.conversation.root] or_else nil
+		testing.expect(t, root != nil && session.find(s, "btw_pending", within = root) != nil, "the prompt still shown while it goes")
+		testing.expect_value(t, btw_view_title(app, pane), "btw: hello")
+		aside := bench_take(t, .Btw_Aside)
+		testing.expect_value(t, aside.path, "/api/session/ses_3/synthetic")
+		bench_answer(app, aside, 200, `{"data":{}}`)
+		prompt := bench_take(t, .Prompt)
+		testing.expect_value(t, prompt.path, "/api/session/ses_3/prompt")
+		testing.expect_value(t, prompt.pane, slot)
+		bench_answer(app, prompt, 200, `{"data":{}}`)
+		btw_close(app)
+		session.frames(s, 2)
+
+		bench_clear(app)
+		session.type_text(s, "/btw hello")
+		session.key(s, .Return)
+		session.frames(s, 1)
+		fork = bench_take(t, .Btw_Fork)
+		testing.expect(t, btw_pane(app) != nil, "the panel at once, again")
+		bench_answer(app, fork, 500, `{"message":"no"}`)
+		session.frames(s, 2)
+		testing.expect(t, btw_pane(app) == nil, "a fork refused: the panel closed")
+		testing.expect(t, !ui.view_is_open(&app.program_views, BTW_VIEW), "its view closed")
+		testing.expect_value(t, ui.text_edit_string(&main.composer.area), "/btw hello")
+	})
+}
+
 // The panel stays in the window, however narrow the window gets, and each pane's column stays in its zone. A pane sizes its column from the width
 // it had, in pixels, and its composer's bar holds a model's name: counted as what the pane needs (the toolkit's least
 // width, ext/gui_toolkit/src/md/features/least-width.md), they held the panes at their width, and the panel went past

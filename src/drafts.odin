@@ -108,21 +108,9 @@ draft_leave :: proc(app: ^App, pane: ^Chat_Pane) {
 	if queue_editing(app, pane) { queue_edit_end(app, pane, .Cancel) }   // (the inbox's prompt goes back: the composer gets its own text)
 	history_leave(app, pane, true)
 	c := &pane.composer
+	if other := pane_also_showing(app, pane); other != nil { composer_give(app, pane, other); return }
 	text := ui.text_edit_string(&pane.composer.area)
 	empty := strings.trim_space(text) == "" && len(c.attachments) == 0 && len(c.mentions.chosen) == 0
-	if other := pane_also_showing(app, pane); other != nil {
-		if !empty {
-			oc := &other.composer
-			composer_append(&oc.area, text)
-			append(&oc.attachments, ..c.attachments[:])
-			append(&oc.mentions.chosen, ..c.mentions.chosen[:])
-			clear(&c.attachments)
-			clear(&c.mentions.chosen)
-			drafts_save_soon(app)
-		}
-		ui.text_edit_set(&pane.composer.area, "")
-		return
-	}
 	if empty { draft_drop(app, pane.chat.id); return }
 	d, known := &app.drafts[pane.chat.id]
 	if !known {
@@ -139,6 +127,22 @@ draft_leave :: proc(app: ^App, pane: ^Chat_Pane) {
 	clear(&c.mentions.chosen)
 	ui.text_edit_set(&pane.composer.area, "")
 	drafts_save_soon(app)
+}
+
+// What `pane`'s composer holds goes after what `to`'s holds, its caret kept: the person may be typing there. `pane`'s is empty.
+composer_give :: proc(app: ^App, pane, to: ^Chat_Pane) {
+	c := &pane.composer
+	text := ui.text_edit_string(&c.area)
+	if strings.trim_space(text) != "" || len(c.attachments) > 0 || len(c.mentions.chosen) > 0 {
+		oc := &to.composer
+		composer_append(&oc.area, text)
+		append(&oc.attachments, ..c.attachments[:])
+		append(&oc.mentions.chosen, ..c.mentions.chosen[:])
+		clear(&c.attachments)
+		clear(&c.mentions.chosen)
+		drafts_save_soon(app)
+	}
+	ui.text_edit_set(&c.area, "")
 }
 
 // Another shown pane on the session `pane` shows, or nil.
