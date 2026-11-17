@@ -67,5 +67,7 @@ a_tag_says_its_version_and_whether_it_is_a_beta :: proc(t: ^testing.T) {
 a_network_hiccup_is_tried_again :: proc(t: ^testing.T) {
 	testing.expect(t, network_hiccup("E: Failed to fetch http://x/y.deb  Temporary failure resolving 'azure.archive.ubuntu.com'"), "apt's mirror")
 	testing.expect(t, network_hiccup("curl: (22) The requested URL returned error: 503"), "a 5xx")
+	// (zig fetching a package of libghostty-vt: 0.73.0's Windows build stopped on it)
+	testing.expect(t, network_hiccup("pkg/highway\\build.zig.zon:9:20: error: HTTP response read failure: ConnectionResetByPeer"), "a connection reset")
 	testing.expect(t, !network_hiccup("src/main.odin(12:3) Error: Undeclared name: x"), "a build that fails")
 }
