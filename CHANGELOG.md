@@ -4,6 +4,16 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.70.0] - 2026-11-17 11:46
+
+### Changed
+- **Only the installed copy updates by itself**: with automatic updates on, a copy run from where it was unpacked waits for Check now, as in the other programs of Froment Software.
+
+### Fixed
+- **An exported session gets a file name that every system accepts**: a title such as "con", or one that ends with a dot, no longer suggests a name that Windows refuses.
+- **The /btw panel stays in the window**: beside a conversation, the panel no longer passed the right edge of the window, and it now gets narrower with the window.
+- **A session that was killed is said at the next start**: the bar under the title bar now also tells of a session ended by a kill or a power cut, not only of a crash.
+
 ## [0.69.2] - 2026-11-17 10:24
 
 ### Fixed
@@ -1851,6 +1861,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.70.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.70.0
 [0.69.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.69.2
 [0.69.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.69.1
 [0.69.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.69.0
