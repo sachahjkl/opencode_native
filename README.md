@@ -82,8 +82,10 @@ The address is `git+https://`, not `github:`: the build needs the gui_toolkit su
   Each server is a tab at the top of the sidebar: a click on a tab connects to its server, and the tab of the server in use opens
   its menu (switch, add, edit). Another computer's server is named in the title bar. The bottom left of the status bar shows the
   state of the link, the versions of OpenCode and of opencode native.
-- **Find in the conversation** (Ctrl+F): every match of the text shown lit, the current one brighter and scrolled into
-  view; Enter or F3 for the next, Shift+Enter or Shift+F3 for the previous, Escape to close.
+- **Find in the conversation** (Ctrl+F, or the magnifier above the prompt marks): every match counted, folded tool
+  outputs and messages far up included, lit, and marked on the scroll bar; the current one opened and scrolled into view.
+  Enter or F3 for the next, Shift+Enter or Shift+F3 for the previous, Escape to close. The scope "Prompts" searches your
+  prompts alone.
 - **An inbox in the sidebar**: what waits for you first, then what finished and you have not seen, what runs, the rest. The grouping by project is one click away.
   Minimised (or in a narrow window), the sidebar is a rail of the sessions' marks with their lamps; a card beside a mark says the rest.
 - **What you missed** (the bell of the title bar, Ctrl+Shift+N): runs that ended, questions and permissions that wait, commands in
