@@ -31,11 +31,24 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	}
 }
 
-sidebar :: proc(app: ^App, em: f32) {
+// The sidebar zone's fold button (the toolkit's Minimise or Restore, ui.view_fold_button), at the start of a row: its
+// centre on the rail's centre, so that it is the same pixel in the list and in the rail and stays under the pointer
+// that folds and unfolds. Its space before it is set from the button's own width once it is built (the toolkit's
+// size, never a copy of it here). False: the sidebar is in no side zone, no button.
+sidebar_fold :: proc(v: ^ui.View, em: f32) -> bool {
+	ui.next({width = ui.px(0), height = ui.px(0)})
+	lead := ui.build_box({}, "###fold_lead")
+	sig := ui.view_fold_button(v)
+	if sig.box == nil { return false }
+	lead.pref[.X] = ui.px(math.round((math.round(SIDEBAR_RAIL_EM * em) - sig.box.pref[.X].value) * 0.5))
+	return true
+}
+
+sidebar :: proc(app: ^App, v: ^ui.View, em: f32) {
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = ui.theme_color("bar background"), radius = 0})   // (square: its rounded corner notched the bar's edge; as wide as its view)
 	if ui.column(flags = {.Draw_Background}, id = "###sidebar") {
 		ui.space(ui.SPACE_2)
-		server_tabs(app, em)
+		server_tabs(app, v, em)
 		ui.space(ui.SPACE_2)
 		// new session + refresh
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X, cross = .Center})

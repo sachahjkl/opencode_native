@@ -194,7 +194,7 @@ built_state :: proc(app: ^App) -> ^ui.State {
 // zone's handle (chrome.odin side_line). Its zone minimised (its Minimise, or a window too narrow): the rail.
 @(private = "file")
 sidebar_pane :: proc(v: ^ui.View, app: ^App) {
-	if v.rail { sidebar_rail(app, ui.font_size()) } else { sidebar(app, ui.font_size()) }
+	if v.rail { sidebar_rail(app, v, ui.font_size()) } else { sidebar(app, v, ui.font_size()) }
 }
 
 // Ctrl+B: the sidebar shows or goes, wherever the user put it.

@@ -1,5 +1,5 @@
 // The sidebar minimised: its rail (src/md/features/sidebar-rail.md). The toolkit gives the sidebar's view a column
-// SIDEBAR_RAIL_EM wide under its zone's Restore and builds it with View.rail; this is what the sidebar builds there: New
+// SIDEBAR_RAIL_EM wide and builds it with View.rail; this is what the sidebar builds there: its zone's Restore, New
 // session, Search, the server's mark, then a mark per session of the list, its details in a card beside it.
 package ocn
 
@@ -27,12 +27,16 @@ Side_Rail :: struct {
 	want:    string,      // the mark that takes the keyboard once it is built (owned): a step to a mark not built yet
 }
 
-sidebar_rail :: proc(app: ^App, em: f32) {
+sidebar_rail :: proc(app: ^App, v: ^ui.View, em: f32) {
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, cross = .Center, bg = ui.theme_color("bar background"), radius = 0})
 	if ui.column(.Center, {.Draw_Background}, "###sidebar_rail") {
 		rail := ui.parent_box()
 		// (one tooltip at a time: the pointer's, on the rail; the keyboard's card only while the pointer is elsewhere)
 		keys_card := !draw.rect_contains(rail.rect, ui.mouse_pos())
+		// the zone's Restore, in a row built as the list's servers' row: the same pixel as the list's Minimise
+		ui.space(ui.SPACE_2)
+		ui.next({width = ui.fill(), height = ui.px(math.round(em * SERVER_TABS_H_EM)), axis = .X, cross = .Center})
+		if ui.row(.Center, id = "###rail_fold") { sidebar_fold(v, em) }
 		ui.space(ui.SPACE_1)
 		nsig := ui.button("rail_new", icon = lucide.PLUS, o = {intent = .Primary, tip = i18n.tr("New session")})
 		ui.act_name(nsig.box, "command:session.new")

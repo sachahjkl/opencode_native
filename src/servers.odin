@@ -470,12 +470,13 @@ SERVER_MENU_KEY :: "server_menu"
 // A tab per server, at the top of the sidebar. The one connected stands raised with the state of its link; a click on another
 // connects to it. A click on the one connected, or a right click on any, opens the menu of the servers; "+" adds one. Even a single
 // server has its tab: the choice is always in the same place. Too many for the width: the toolkit's strip, with an arrow
-// on each side that hides tabs and the content faded beyond it, no scroll bar.
-server_tabs :: proc(app: ^App, em: f32) {
+// on each side that hides tabs and the content faded beyond it, no scroll bar. The row starts with the sidebar's fold
+// button (`v`: the sidebar's view), where the rail has it too (sidebar-rail.md).
+server_tabs :: proc(app: ^App, v: ^ui.View, em: f32) {
 	h := math.round(em * SERVER_TABS_H_EM)
 	ui.next({width = ui.fill(), height = ui.px(h), axis = .X, cross = .Center})
 	if ui.row(.Center, id = "###srv_tabs") {
-		ui.space(ui.SPACE_3)
+		if sidebar_fold(v, em) { ui.space(ui.SPACE_1) } else { ui.space(ui.SPACE_3) }
 		// (as wide as its tabs; it gives way first, and scrolls, when the row has less room: "+" stays in view after it)
 		if ui.strip("###srv_strip", {fade = SERVER_TABS_FADE_EM}) {
 			ui.a11y_default(ui.parent_box(), {role = .Tab_List, orientation = .X, name = i18n.tr("Servers")})

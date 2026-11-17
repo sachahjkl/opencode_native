@@ -71,7 +71,8 @@ caption_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 // status bar: after what a bar puts over the zone (`last`, its last box), at least `gap` then the line; a bar with more
 // than the zone's width pushes it on. Its place is the handle's own (ui.view_dock_line), never a width of ocn's: the
 // spacer reads the last layout, the drawing this frame's, so the two are on one pixel column during a drag too.
-// No handle (nothing docked at the left, the zone minimised or maximised): the bar's own groove after the gap.
+// The zone's rail keeps its handle, so the line goes on from the rail too. No handle (nothing docked at the left, a
+// stack maximised): the bar's own groove after the gap.
 @(private = "file")
 side_line :: proc(app: ^App, id: string, last: ^ui.Box, gap: f32) {
 	vs := &app.program_views

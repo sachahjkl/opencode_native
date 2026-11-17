@@ -9,8 +9,15 @@ on hover. A person keeps their sessions in reach and gives the conversation the 
   `View_Options.rail_em = SIDEBAR_RAIL_EM` (3.5: an avatar, its lamp and the toolkit's insets). Its zone's Minimise, and
   the toolkit's fold when the window leaves the conversation less than `DOCK_MIN_EM`, keep that column and build the
   view in it with `View.rail`: `sidebar_pane` then builds `sidebar_rail` (`src/sidebar_rail.odin`) in place of the list.
-  The zone's Restore, at the column's top, is the toolkit's. No preference and no command of ocn's own fold it: one
-  gesture for every side panel of every program. Ctrl+B still shows or hides the sidebar, rail or list.
+  No preference and no command of ocn's own fold it: one gesture for every side panel of every program. Ctrl+B still
+  shows or hides the sidebar, rail or list. Pulling the rail's edge outward opens the list at the pointer (the
+  toolkit's handle, which the rail keeps; the title bar's line goes on from it in both forms, `view_dock_line`).
+- **The fold button: first in the servers' row, at the rail's top.** The toolkit draws no head row and no Restore for
+  a view with `rail_em`: the sidebar places the zone's fold button (`ui.view_fold_button`, `sidebar_fold`) itself. In
+  the list it is the first box of the servers' row, before the server's tab: [fold] [This computer ▾] [+]. In the rail
+  it is alone in a top row built as that row (same height, same space above). Its space before it puts its centre on
+  the rail's centre, so it is the same pixel in both forms (24, 60 at 1600×1000): it stays under the pointer that folds
+  and unfolds.
 - **What a row becomes.** Each session is its mark: the avatar (`session_badge`: its project's logo, else its title's
   letter in the colour its id picks) with its lamp over the avatar's bottom right corner, the ground of the session
   shown behind it (`item_draw`, the row's). A groove stands between two sections where the list has a header.
@@ -50,6 +57,11 @@ on hover. A person keeps their sessions in reach and gives the conversation the 
 - **One card at a time.** The toolkit has one tooltip per window. The pointer's card wins: the keyboard's shows only
   while the pointer is off the rail, which also keeps a button's own tooltip (New session, Search) alone.
 - **No fold of ocn's own.** A width threshold or a button in ocn would differ from every other panel's.
+- **The fold button in the servers' row (the user's choice, of mockups).** A row of its own for it (the toolkit's
+  head row) was an empty band across the sidebar, seen as a strange black line. Refused: the button at the row's end
+  (it jumps when the zone folds: the rail is narrower than the list); the button over the list's top corner (it lies
+  over the list's controls). The space before it is read from the toolkit's button once built, not copied from its
+  size: one size, the toolkit's.
 - **The card beside the mark, not the pointer.** Beside the pointer it covered the rail's own marks.
 - **No delay on the marks.** With `Feel.tooltip_delay_ms` (500 ms) the card came only once the pointer rested, and
   each move to the next mark started the wait again: a person who scans the rail saw no card at all. A mark has no
