@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.72.0] - 2026-11-17 18:22
+
+### Added
+- **Something engraved on the back of the licence card**: turn the card over and look at it from the right angle.
+
 ## [0.71.1] - 2026-11-17 14:25
 
 ### Fixed
@@ -1881,6 +1886,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.72.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.72.0
 [0.71.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.71.1
 [0.71.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.71.0
 [0.70.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.70.1
