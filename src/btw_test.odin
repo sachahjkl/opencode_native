@@ -303,6 +303,23 @@ the_panels_window_has_its_own_menus :: proc(t: ^testing.T) {
 		model, provider = shown_model(app, main_pane(app))
 		testing.expect(t, model == main_model && provider == main_provider, "the main view's model kept")
 
+		// (on List, the models' chooser over the panel's window, for the panel's session)
+		pref_set(app, "composer.model_picker", "list")
+		session.click(sw, "model")
+		session.wait_until(sw, proc(s: ^session.Session) -> bool {
+			app := (^App)(s.parent.user)
+			return chooser_shows(app, .Models) && app.palette.chooser_pane == app.btw && app.palette.chooser.owner == s.state
+		}, "the models' chooser in the panel's window")
+		session.type_text(sw, "zeta")
+		session.frames(sw, 3)
+		session.key(sw, .Return)
+		session.wait_until(sw, proc(s: ^session.Session) -> bool { return !ui.palette_is_open(&(^App)(s.parent.user).palette.chooser) }, "the chooser closed by its choice")
+		pref_set(app, "composer.model_picker", "form")
+		model, provider = shown_model(app, &app.panes[app.btw])
+		testing.expect(t, model == "swift" && provider == "zeta", "the panel's model set from the chooser")
+		model, provider = shown_model(app, main_pane(app))
+		testing.expect(t, model == main_model && provider == main_provider, "the main view's model kept")
+
 		session.hover(sw, "btw_main")
 		session.advance(sw, 1500)
 		testing.expect(t, session.find(sw, "tooltip") != nil, "its tooltip in the panel's window")

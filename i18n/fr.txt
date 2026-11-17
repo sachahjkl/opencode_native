@@ -1285,6 +1285,9 @@ fr Écrire
 en Sessions
 fr Sessions
 
+en Models
+fr Modèles
+
 en Session · %s
 fr Session · %s
 
@@ -1751,6 +1754,15 @@ fr Entrée
 
 en Ctrl+enter
 fr Ctrl+Entrée
+
+en Model picker
+fr Choix du modèle
+
+en What the composer's model button opens: the palette's Set the model form, or a list of the models with their context sizes.
+fr Ce qu'ouvre le bouton du modèle de la zone de saisie : le formulaire « Choisir le modèle » de la palette, ou une liste des modèles avec la taille de leur contexte.
+
+en Form
+fr Formulaire
 
 en Subagents
 fr Sous-agents
@@ -2306,9 +2318,6 @@ fr+ … et %d outils de plus
 
 en No tool call in the loaded messages.
 fr Aucun appel d'outil dans les messages chargés.
-
-en Models
-fr Modèles
 
 en %s out
 fr %s en sortie

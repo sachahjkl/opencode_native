@@ -264,6 +264,9 @@ SESSION_BADGE_ALPHA    :: 0.2    // its colour behind its letter
 THEME_CARD_W_EM   :: 12    // a theme's card: its width (on the line, in the grid)
 THEME_CARD_RADIUS :: 8     // its corners, logical px
 COMPOSER_FIT_SLACK_EM :: 3   // the composer's toolbar gives back what it left out once this much wider than where it went past (composer.odin composer_fit)
+COMPOSER_MODEL_MAX_EM    :: 16   // the model button's label, cut past this width (palette.md, "The composer's buttons")
+COMPOSER_MODEL_NARROW_EM :: 8    // ... once the toolbar has folded to its glyphs (composer_fit 3)
+MODEL_LABEL_CACHE_BYTES  :: 160  // a model's key and label kept for the button (composer.odin Model_Label_Cache); longer: made at each build
 THEMES_FILE  :: "themes.txt"   // the user's themes, beside the preferences (theme.odin)
 ITEM_HOVER_TINT    :: 0.05   // a row under the pointer: the text's
 TODO_SCAN_PAGES :: 10   // older pages read at most for a session's last todo list (activity.odin todos_scan_load)

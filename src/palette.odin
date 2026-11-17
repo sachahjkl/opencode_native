@@ -52,13 +52,18 @@ Palette :: struct {
 	due_typed: string,   // (owned) what its field starts with
 	due_close: bool,
 
-	// The composer's agent button: a chooser, a palette of one source (no prefix), made of the same read as `#`.
+	// The composer's agent button, and its model button on List (composer.model_picker): a chooser, a palette of one
+	// source (no prefix). Its one source is swapped at each opening: a chooser is a palette with exactly one source.
 	chooser:        ui.Command_Palette,
-	chooser_agents: ui.Palette_Source,
-	chooser_pane:   int,    // the pane whose composer opened it: its mark and its choice are that pane's
-	chooser_due:    bool,   // chooser_toggle: opened at the build of that pane's window
+	chooser_agents: ui.Palette_Source,   // the same read as `#`
+	chooser_models: ui.Palette_Source,   // model_choices' list, as Set the model's form
+	chooser_pane:   int,                 // the pane whose composer opened it: its marks and its choice are that pane's
+	chooser_due:    ^ui.Palette_Source,  // chooser_toggle: opened on it at the build of that pane's window (nil: none)
 	chooser_close:  bool,
 }
+
+// What a composer's button opens the chooser on.
+Chooser_Kind :: enum { Agents, Models }
 
 // Once, after app_init's views: the sources (the toolkit's settings source on cfg_prefs, ocn's own), and the commands'.
 palette_start :: proc(app: ^App) {
@@ -84,9 +89,12 @@ palette_start :: proc(app: ^App) {
 		user = app,
 	}
 	p.agents = agents_source(app, .Choose)
-	// (the chooser's: no prefix, listed with nothing typed)
+	// (the chooser's: no prefix, listed with nothing typed; added to the chooser when it opens)
 	p.chooser_agents = agents_source(app, .None)
-	ui.palette_add(&p.chooser, &p.chooser_agents)
+	p.chooser_models = {
+		name = "model", title = i18n.later("Models"), listed = true, enter = i18n.later("Use"), read = models_read,
+		mark = models_mark, poll = catalog_poll, user = app,
+	}
 	ui.palette_add(&p.pal, &p.server)
 	ui.palette_add(&p.pal, &p.sessions)
 	ui.palette_add(&p.pal, &p.agents)
@@ -189,30 +197,52 @@ model_pane :: proc(app: ^App) -> ^Chat_Pane {
 	return p.model_for != 0 ? &app.panes[p.model_for - 1] : main_pane(app)
 }
 
-// The composer's agent button: the chooser opened for `pane`, or closed when it shows already.
-chooser_toggle :: proc(app: ^App, pane: ^Chat_Pane) {
-	p := &app.palette
-	if chooser_shows(app) {
-		p.chooser_due, p.chooser_close = false, true
-		return
-	}
-	p.chooser_due, p.chooser_close, p.chooser_pane = true, false, pane_index(app, pane)
-	// (read again at each opening: a server that has just started lists its agents before its plugins add theirs, and
-	// a list read once at the connection would stay that one; the one read shows meanwhile)
-	if !flying(app, .Agents, "") { request(app, .Agents, "GET", "/api/agent") }
+// The composer's model button: what composer.model_picker says, for `pane` (palette.md, "The composer's buttons").
+model_picker_toggle :: proc(app: ^App, pane: ^Chat_Pane) {
+	if app.prefs.model_list { chooser_toggle(app, pane, .Models) } else { model_form_open(app, pane) }
 }
 
-// Whether the chooser is open (its button is lit).
-chooser_shows :: proc(app: ^App) -> bool { return ui.palette_is_open(&app.palette.chooser) }
+// Whether what the model button of `pane` opens is open (the button is lit).
+model_picker_shows :: proc(app: ^App, pane: ^Chat_Pane) -> bool {
+	if app.prefs.model_list { return chooser_shows(app, .Models) && pane_index(app, pane) == app.palette.chooser_pane }
+	return model_form_shows(app, pane)
+}
+
+// The composer's agent button, or its model button on List: the chooser opened on that list for `pane`, or closed
+// when it shows it already.
+chooser_toggle :: proc(app: ^App, pane: ^Chat_Pane, kind: Chooser_Kind) {
+	p := &app.palette
+	src := kind == .Agents ? &p.chooser_agents : &p.chooser_models
+	if chooser_shows(app, kind) {
+		p.chooser_due, p.chooser_close = nil, true
+		return
+	}
+	p.chooser_due, p.chooser_close, p.chooser_pane = src, false, pane_index(app, pane)
+	// (read again at each opening: a server that has just started lists its agents and models before its plugins add
+	// theirs, and a list read once at the connection would stay that one; the one read shows meanwhile)
+	switch kind {
+	case .Agents: if !flying(app, .Agents, "") { request(app, .Agents, "GET", "/api/agent") }
+	case .Models: if !flying(app, .Models, "") { request(app, .Models, "GET", "/api/model") }
+	}
+}
+
+// Whether the chooser is open on that list (its button is lit).
+chooser_shows :: proc(app: ^App, kind: Chooser_Kind) -> bool {
+	p := &app.palette
+	src := kind == .Agents ? &p.chooser_agents : &p.chooser_models
+	return ui.palette_is_open(&p.chooser) && ui.palette_has(&p.chooser, src)
+}
 
 // At the top of each build of the main window, and of a pane's view in a window of its own: opened or closed as asked,
 // its choice taken for the pane that opened it. It opens in the window of that pane (a palette is a view over the
 // window it opens in), so the build of that window opens it.
 chooser_build :: proc(app: ^App) {
 	p := &app.palette
-	if p.chooser_due && pane_window(app, &app.panes[p.chooser_pane]) == built_state(app) {
-		p.chooser_due = false
-		ui.palette_close(&p.chooser)   // (closed first: an opening starts from an empty field)
+	if src := p.chooser_due; src != nil && pane_window(app, &app.panes[p.chooser_pane]) == built_state(app) {
+		p.chooser_due = nil
+		ui.palette_remove(&p.chooser, src == &p.chooser_models ? &p.chooser_agents : &p.chooser_models)
+		ui.palette_add(&p.chooser, src)
+		ui.palette_close(&p.chooser)   // (closed first: an opening on the other list starts from an empty field)
 		ui.palette_open(&p.chooser)
 	} else if p.chooser_close {
 		p.chooser_close = false
@@ -283,11 +313,15 @@ model_choices :: proc(app: ^App) -> (labels, values: []string) {
 	labels = make([]string, len(app.models), context.temp_allocator)
 	values = make([]string, len(app.models), context.temp_allocator)
 	for m, i in app.models {
-		labels[i] = fmt.tprintf("%s/%s", m.provider, m.name != "" ? m.name : m.id)
+		labels[i] = model_label(m)
 		values[i] = model_key(m.provider, m.id)
 	}
 	return
 }
+
+// What a model is called wherever it shows (the form's list, the chooser, the composer's button): "provider/name",
+// the id for a model with no name (temp). The name alone is not enough: two providers serve models of one name.
+model_label :: proc(m: Model_Info) -> string { return fmt.tprintf("%s/%s", m.provider, m.name != "" ? m.name : m.id) }
 
 // The model `key` (model_key) set for `pane`; a key no model has: nothing.
 model_choose :: proc(app: ^App, pane: ^Chat_Pane, key: string) {
@@ -344,10 +378,13 @@ palette_run :: proc(app: ^App, c: ui.Palette_Choice) {
 	}
 }
 
-// An agent chosen, in `#` or in the chooser: `pane` takes it.
+// An agent chosen, in `#` or in the chooser, or a model in the chooser: `pane` takes it.
 @(private = "file")
 choice_take :: proc(app: ^App, pane: ^Chat_Pane, c: ui.Palette_Choice) {
-	if c.source.name == "agent" { choose_agent(app, pane, c.id) }
+	switch c.source.name {
+	case "agent": choose_agent(app, pane, c.id)
+	case "model": model_choose(app, pane, c.id)
+	}
 }
 
 ////////////////////////////////
@@ -437,7 +474,7 @@ sessions_lost :: proc(data: rawptr) {
 sessions_mark :: proc(src: ^ui.Palette_Source, id: string) -> bool { return id == main_pane((^App)(src.user)).chat.id }
 
 ////////////////////////////////
-// `#` The agents (and the model's key)
+// `#` The agents (and the model's key); the chooser's models
 
 // A model's id in the palette: its provider and its id.
 model_key :: proc(provider, id: string) -> string { return fmt.tprintf("%s/%s", provider, id) }
@@ -455,12 +492,35 @@ agents_source :: proc(app: ^App, prefix: ui.Palette_Prefix) -> ui.Palette_Source
 @(private = "file")
 catalog_poll :: proc(_: ^ui.Command_Palette, src: ^ui.Palette_Source) { src.version = (^App)(src.user).cx.catalog_version + 1 }
 
-// The pane a source's mark is about: the chooser's is the composer's that opened it; the palette's, the main view.
+// The pane a source's marks are about: the chooser's is the composer's that opened it; the palette's, the main view.
 @(private = "file")
 source_pane :: proc(src: ^ui.Palette_Source) -> ^Chat_Pane {
 	app := (^App)(src.user)
 	if src.prefix == .None { return &app.panes[app.palette.chooser_pane] }
 	return main_pane(app)
+}
+
+// The chooser's models: Set the model's list (model_choices: the same labels and values), each with its context size.
+@(private = "file")
+models_read :: proc(p: ^ui.Command_Palette, src: ^ui.Palette_Source, q: ui.Palette_Question) {
+	app := (^App)(src.user)
+	a: ui.Palette_Answer
+	al := ui.palette_answer_allocator(&a)
+	labels, values := model_choices(app)
+	a.items = make([]ui.Palette_Item, len(values), al)
+	for m, i in app.models {
+		size := ""
+		if m.ctx_len > 0 { size, _ = strings.replace(kfmt(m.ctx_len), ".0", "", 1, context.temp_allocator) }   // (1M, 128k)
+		a.items[i] = ui.palette_item_clone({id = values[i], title = labels[i], detail = size, icon = lucide.CPU}, al)
+	}
+	ui.palette_answer(q, &a)
+}
+
+// The model in use for the chooser's pane: the session's, or the one chosen for it.
+@(private = "file")
+models_mark :: proc(src: ^ui.Palette_Source, id: string) -> bool {
+	model, provider := shown_model((^App)(src.user), source_pane(src))
+	return model != "" && model_key(provider, model) == id
 }
 
 // The agents one can choose (a sub-agent is the server's to launch). No group: in `#` they are under the source's

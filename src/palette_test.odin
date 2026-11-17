@@ -234,7 +234,7 @@ the_composer_chooses_its_model_and_its_agent :: proc(t: ^testing.T) {
 		session.wait_until(s, closed, "closed by the choice")
 		model, provider = shown_model(app, pane)
 		testing.expect(t, model == "steady" && provider == "omega", "the composer's model")
-		chooser_toggle(app, pane)
+		chooser_toggle(app, pane, .Agents)
 		session.wait_until(s, settled, "the agents' chooser")
 		testing.expect(t, row_of(app, &p.chooser_agents, "build") >= 0 && row_of(app, &p.chooser_agents, "plan") >= 0, "the agents")
 		testing.expect(t, row_of(app, &p.chooser_agents, "explore") < 0, "not a sub-agent")
@@ -243,6 +243,94 @@ the_composer_chooses_its_model_and_its_agent :: proc(t: ^testing.T) {
 		for id in ([]string{"build", "plan"}) { testing.expect_value(t, p.chooser_agents.mark(&p.chooser_agents, id), id == in_use) }
 		session.key(s, .Escape)
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.palette_is_open(&(^App)(s.user).palette.chooser) }, "closed by Escape")
+	})
+}
+
+// The model button says the model as Set the model's list does, "provider/name" (the name alone was the button's).
+// A long one is cut in its middle and said whole in its tip, and the toolbar still folds within itself as the column
+// narrows: the send button stays inside it.
+@(test)
+the_model_button_says_provider_and_name :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		pane := main_pane(app)
+		append(&app.models, Model_Info{id = strings.clone("opus"), provider = strings.clone("claude-agent"), name = strings.clone("Opus 5.5")},
+			Model_Info{id = strings.clone("long"), provider = strings.clone("openrouter-enterprise"), name = strings.clone("Anthropic Claude Sonnet Extended Thinking Preview 2026")})
+		app.cx.catalog_version += 1
+		choose_model(app, pane, app.models[0])
+		session.frames(s, 3)
+		testing.expect(t, session.find_text(s, "claude-agent/Opus 5.5") != nil, "the button says provider/name")
+		testing.expect_value(t, composer_model_label(app, pane), "claude-agent/Opus 5.5")
+		choose_model(app, pane, app.models[1])
+		width := app.prefs.column_w
+		defer app.prefs.column_w = width
+		for w in ([]f32{900, 760, 640, 560, 500, 440, 380}) {
+			app.prefs.column_w = w
+			session.frames(s, 4)
+			tools, send, model := session.get(s, "tools"), session.get(s, "send"), session.get(s, "model")
+			testing.expectf(t, send.rect.max.x <= tools.rect.max.x + 0.5, "at %v, the send button within the toolbar: %v past %v", w, send.rect.max.x, tools.rect.max.x)
+			testing.expectf(t, model.rect.max.x <= tools.rect.max.x + 0.5, "at %v, the model button within the toolbar", w)
+		}
+		testing.expect(t, session.find_text(s, model_label(app.models[1])) == nil, "the long label cut")
+		session.hover(s, "model")
+		session.advance(s, 1500)
+		testing.expect(t, session.find(s, "tooltip") != nil && session.find_text(s, model_label(app.models[1])) != nil, "said whole in its tip")
+	})
+}
+
+// With composer.model_picker on List, the model button opens the models' chooser (not Set the model's form): the
+// models under their labels, the one in use marked; a click on a row sets it, and so does Enter on a row found by its
+// provider. The button is lit while the chooser shows.
+@(test)
+on_list_the_model_button_opens_the_chooser :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		pane := main_pane(app)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		pref_set(app, "composer.model_picker", "list")
+		defer pref_set(app, "composer.model_picker", "form")
+		testing.expect(t, app.prefs.model_list, "the preference read")
+		shown :: proc(s: ^session.Session) -> bool {
+			app := (^App)(s.user)
+			c := &app.palette.chooser
+			return chooser_shows(app, .Models) && ui.palette_ranked_for(c, ui.line_edit_string(&c.field)) && !ui.palette_busy(c)
+		}
+		closed :: proc(s: ^session.Session) -> bool { return !ui.palette_is_open(&(^App)(s.user).palette.chooser) }
+		append(&app.models, Model_Info{id = strings.clone("swift"), provider = strings.clone("zeta"), name = strings.clone("Swift")},
+			Model_Info{id = strings.clone("steady"), provider = strings.clone("omega"), name = strings.clone("Steady")})
+		app.cx.catalog_version += 1
+		choose_model(app, pane, app.models[0])
+		p := &app.palette
+		session.frames(s, 2)
+		// a click on a row
+		session.click(s, "model")
+		session.wait_until(s, shown, "the models' chooser")
+		testing.expect(t, !palette_shown(app), "not the form")
+		testing.expect(t, model_picker_shows(app, pane), "the button lit")
+		testing.expect(t, p.chooser_models.mark(&p.chooser_models, "zeta/swift") && !p.chooser_models.mark(&p.chooser_models, "omega/steady"), "the one in use marked")
+		row := session.find_text(s, "omega/Steady")
+		if !testing.expect(t, row != nil, "the models listed under their labels") { return }
+		session.click_at(s, session.center(row))
+		session.wait_until(s, closed, "closed by the click")
+		model, provider := shown_model(app, pane)
+		testing.expect(t, model == "steady" && provider == "omega", "the model clicked set")
+		// Enter on a row found by its provider
+		session.click(s, "model")
+		session.wait_until(s, shown, "the models' chooser")
+		session.type_text(s, "zeta")
+		session.wait_until(s, shown, "ranked")
+		session.key(s, .Return)
+		session.wait_until(s, closed, "closed by Enter")
+		model, provider = shown_model(app, pane)
+		testing.expect(t, model == "swift" && provider == "zeta", "the model found set")
+		// its button again: closed
+		session.click(s, "model")
+		session.wait_until(s, shown, "the models' chooser")
+		session.click(s, "model")
+		session.wait_until(s, closed, "closed by its button")
 	})
 }
 

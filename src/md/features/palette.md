@@ -19,7 +19,23 @@ its prefixes, its keys and its look are the toolkit's: `ext/gui_toolkit/src/md/f
 
 ## The composer's buttons
 
-**The model button opens Set the model's form** (`model_form_open`, then `ui.palette_open_form` in `palette_choose`):
+**The model button says the model as the lists say it**: "provider/name" (`model_label`, the one maker of a model's
+label: Set the model's list, the models' chooser and the button). The name alone was ambiguous: two providers serve
+models of one name. The label is long, so the button cuts it in its middle (`ui.elide` `.Middle`, the provider's start
+and the name's end show) past `COMPOSER_MODEL_MAX_EM`, and past `COMPOSER_MODEL_NARROW_EM` once the toolbar has folded
+to its glyphs (`composer_fit` 3); cut, its tip says it whole. A cap, not the room left: the toolbar folds by what went
+past its end, and a label sized to the room would never go past.
+
+**What the model button opens is a preference**, `composer.model_picker` (Behaviour page): **Form** (the default) or
+**List**. Both set the model of the composer's pane and read the same list (`model_choices`).
+
+- **Form: Set the model's form** — the palette's own way, the same as its command, its key and its menu line.
+- **List: the models' chooser** — the chooser of the agent button on the models (`Chooser_Kind.Models`). One step and
+  no command around it, the model in use marked and each model's context size beside it. It was the button's way until
+  the form replaced it; it came back as a choice because a list of models that opens on itself, with their sizes, is
+  quicker to read than the form's for a person who changes models often.
+
+Form opens Set the model's form (`model_form_open`, then `ui.palette_open_form` in `palette_choose`):
 the main palette, straight on the command's list of models, with no list of commands under it. Escape at it closes
 the palette; the button pressed again closes it too; it is lit while the form is open for its pane.
 
@@ -36,16 +52,23 @@ the palette; the button pressed again closes it too; it is lit while the form is
 - **The models are read again at each opening** (a server that has just started lists its plugins' later). The form
   reads its list when it opens: the answer shows at the next opening.
 
-**The agent button opens `Palette.chooser`**, a second `ui.Command_Palette` with one source and no prefix: the
-toolkit's chooser (no Recent, no hint row), as Jump to message. Its source, `chooser_agents`, is made by the same
-`agents_source` as `#`, with the prefix `.None`: one read, one mark, one choice (`choice_take`) for both places.
+**The agent button, and the model button on List, open `Palette.chooser`**, a second `ui.Command_Palette` with one
+source and no prefix: the toolkit's chooser (no Recent, no hint row), as Jump to message. Its agents' source,
+`chooser_agents`, is made by the same `agents_source` as `#`, with the prefix `.None`: one read, one mark, one choice
+(`choice_take`) for both places. Its models' source, `chooser_models`, is the chooser's alone; its rows are
+`model_choices`' labels and values, so the chooser and the form list the same models under the same words.
 
+- **One chooser, its source swapped.** A chooser is a palette with exactly one source. `chooser_build` removes the
+  other source and adds the one asked for, then opens the palette again from an empty field. Two palettes were refused:
+  two views, two states, for lists that never show together.
 - **The pane is the composer's.** `chooser_toggle` keeps the index of the pane whose button opened it
-  (`chooser_pane`). The chooser's mark and its choice are that pane's. The marks of `#` are the main view's.
+  (`chooser_pane`). The chooser's marks and its choice are that pane's: a panel's (`/btw`) button sets its own
+  session's model, on List as on Form. The marks of `#` are the main view's.
 - **Opened at the next build.** `chooser_toggle` notes the wish, as `palette_show` does; `chooser_build` runs after the
-  main palette and Jump to message. A button lit while its list is shown closes it.
-- **Read again at each opening.** The opening asks the server for its agents again. The answer bumps
-  `catalog_version`, which the source's `poll` follows.
+  main palette and Jump to message, and at the top of a panel's own window's build. A button lit while its list is
+  shown closes it.
+- **Read again at each opening.** The opening asks the server for its agents or its models again. The answer bumps
+  `catalog_version`, which the sources' `poll` follows.
 - **The agent marked without a choice is "build"**, the server's default, as the composer's button says.
 
 ## Decisions
@@ -88,9 +111,9 @@ toolkit's chooser (no Recent, no hint row), as Jump to message. Its source, `cho
   in use selected. The toolkit reads it once per argument when the form opens and copies it, so ocn keeps nothing.
 - **Set the model is a command with a closed list** (`Command.choices`, given as `Palette_Commands_Options.choices`):
   the models the server lists, "provider/name", the value `provider/id`. Enter sets the model of `model_pane`
-  (`model_choose`). It replaces the models of `#` and the composer's models chooser: one list. `model_choices` makes
-  the list in the temp allocator: the toolkit reads it once when the step opens and keeps a copy, so ocn keeps none.
-  Its key and its menu line (`run`) open its form, as the composer's button does.
+  (`model_choose`). It replaces the models of `#`: one list in the palette. `model_choices` makes the list in the temp
+  allocator: the toolkit reads it once when the step opens and keeps a copy, so ocn keeps none. Its key and its menu
+  line (`run`) open its form, whatever `composer.model_picker` says: the preference is the button's.
 - **Shift+Enter goes to the button.** A button that runs a palette command names it (`ui.act_name(box,
   "command:<id>")`): the title bar's Back, Forward, Home and bell; the header's title, figures and Stop; the main
   composer's attach, model, Preview and Terminal buttons and its activity strip; the sidebar's New session, Refresh
@@ -103,21 +126,21 @@ toolkit's chooser (no Recent, no hint row), as Jump to message. Its source, `cho
 ## What was lost, and why
 
 - **The six last sessions with nothing typed**: the toolkit lists Recent and the commands then; `@` lists the sessions.
-- **The composer's own picker** (`picker.odin`) went for the chooser, then the models' chooser for Set the model's
-  form. What the picker showed and they do not:
+- **The composer's own picker** (`picker.odin`) went for the chooser, and the form came beside it. What the picker
+  showed and they do not:
   - **A model's tooltip** (context, output, prices, inputs, tools, thinking, release, status). A row of the form's list
-    has its label only.
-  - **A model's context size and the provider headings.** The form's list is one level: "provider/name", found by
-    either.
-  - **The popover over the button.** The form opens where the palette opens, at the window's top centre.
+    has its label only; a row of the chooser, its label and its context size.
+  - **The provider headings.** Both lists are one level: "provider/name", found by either. A heading over rows that
+    start with its provider would say it twice.
+  - **The popover over the button.** The form and the chooser open where the palette opens, at the window's top centre.
   - **The agent's colour rail and its mode** ("all"). The row says the agent's description, as under `#`.
 
 ## Subtle points
 
 - A choice of a command is found again by its id (`command_find(c.id)`), not by `c.index`: the table can be made again
   between the ranking and the choice (a change of language).
-- The sessions source's mark is the session shown; the agents' is `shown_agent`. A source with the prefix `.None` is
-  the chooser's: its mark reads the pane `chooser_pane` (`source_pane`).
+- The sessions source's mark is the session shown; the agents' is `shown_agent`; the chooser's models', `shown_model`.
+  A source with the prefix `.None` is the chooser's: its marks read the pane `chooser_pane` (`source_pane`).
 - Set the model's first value is `shown_model` of `model_pane` (the session's, or the one chosen for it). `model_for`
   is set before `palette_open_form`, which reads the first value.
 - The toolkit's palette is a view of the toolkit (`ui.PALETTE_VIEW`); `overlay_open` sees it through

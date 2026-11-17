@@ -25,6 +25,17 @@ Composer :: struct {
 	attaching:   [dynamic]^Attach_Job,    // files being read and encoded for a composer, on threads (attach_done takes them out)
 	fork_prompt: string,                  // the prompt a fork left out, for the composer of the new session (owned)
 	drafts_seen: string,                  // the composer's text when drafts_track last looked (owned)
+	model_label: Model_Label_Cache,       // what the model button says (composer_model_label)
+}
+
+// The model button's label, found in the server's list when the model or the list changes, not at each frame. Fixed
+// buffers: nothing to free with the pane.
+Model_Label_Cache :: struct {
+	key:     [MODEL_LABEL_CACHE_BYTES]u8,   // model_key of the model it was made for
+	key_len: int,
+	text:    [MODEL_LABEL_CACHE_BYTES]u8,
+	text_len: int,
+	version: u64,                           // catalog_version it was made at
 }
 
 ////////////////////////////////
@@ -180,15 +191,17 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			if agent == "" { agent = "build" }
 			// (the narrowest toolbar: the agent and the variant by their glyphs, their names in the tips)
 			composer_tool_pad(em)
-			asig := ui.button("agent", ui.text_shown(fit >= 3 ? "" : agent), lucide.BOT, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = chooser_shows(app), tip = fit >= 3 ? agent : ""})
-			if asig.clicked { chooser_toggle(app, pane) }
-			model, _ := shown_model(app, pane)
+			asig := ui.button("agent", ui.text_shown(fit >= 3 ? "" : agent), lucide.BOT, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = chooser_shows(app, .Agents), tip = fit >= 3 ? agent : ""})
+			if asig.clicked { chooser_toggle(app, pane, .Agents) }
+			model := composer_model_label(app, pane)
 			if model == "" { model = i18n.tr("default model") }
+			// (cut in its middle past a cap: the provider's start and the name's end say which; narrower once folded)
+			shown := ui.elide(ui.top_style().font, ui.font_size(), model, math.round(em * (fit >= 3 ? COMPOSER_MODEL_NARROW_EM : COMPOSER_MODEL_MAX_EM)), .Middle)
 			composer_tool_pad(em)
-			msig := ui.button("model", ui.text_shown(model), lucide.CPU, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = model_form_shows(app, pane)})
+			msig := ui.button("model", ui.text_shown(shown), lucide.CPU, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = model_picker_shows(app, pane), tip = shown != model ? model : ""})
 			if named { ui.act_name(msig.box, "command:session.set_model") }
-			// (Set the model's form, for this pane: a panel's composer sets its own session's model)
-			if msig.clicked { model_form_open(app, pane) }
+			// (for this pane: a panel's composer sets its own session's model)
+			if msig.clicked { model_picker_toggle(app, pane) }
 			variant_button(app, pane, em, fit >= 3)
 			if pane.chat.id != "" { approval_button(app, pane, em) }   // (a session's: a new one has none yet)
 			ui.spacer(ui.fill())
@@ -257,6 +270,22 @@ composer_fit :: proc(app: ^App, pane: ^Chat_Pane, em: f32) -> int {
 	}
 	for f.level > 0 && w > f.at[f.level - 1] + em * COMPOSER_FIT_SLACK_EM { f.level -= 1 }
 	return f.level
+}
+
+// The label of the model shown for `pane` (model_label), "" with none; a model the server does not list (gone, or
+// before its list comes) says its provider and id. Looked up in the list only when the model or the list changed.
+composer_model_label :: proc(app: ^App, pane: ^Chat_Pane) -> string {
+	model, provider := shown_model(app, pane)
+	if model == "" { return "" }
+	c := &pane.composer.model_label
+	key := model_key(provider, model)
+	if c.version == app.cx.catalog_version + 1 && string(c.key[:c.key_len]) == key { return string(c.text[:c.text_len]) }
+	label := key
+	for m in app.models { if m.id == model && m.provider == provider { label = model_label(m); break } }
+	if len(key) <= len(c.key) && len(label) <= len(c.text) {
+		c.key_len, c.text_len, c.version = copy(c.key[:], key), copy(c.text[:], label), app.cx.catalog_version + 1
+	}
+	return label
 }
 
 // The browser and the shells, lit while they are open.

@@ -65,6 +65,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "conversation.image_viewer_size", title = i18n.later("Image viewer size"), description = i18n.later("The size of the image viewer, as a share of the most the window gives a picture. A picture opens no larger than its pixels; drag the viewer's edges or corners to make it larger or smaller."), kind = .Float, default = {f = 1}, bounded = true, min = VIEWER_SCALE_MIN, max = 1},
 	{name = "conversation.clock", title = i18n.later("Clock"), description = i18n.later("Times of messages in 24-hour or 12-hour form."), kind = .String, default = {s = "24h"}, choices = {"24h", "12h"}},
 	{name = "composer.send", title = i18n.later("Send"), description = i18n.later("The key that sends: Enter (Shift+Enter breaks the line) or Ctrl+Enter (Enter breaks the line)."), kind = .String, default = {s = "enter"}, choices = {"enter", "ctrl+enter"}, choice_labels = {i18n.later("Enter"), i18n.later("Ctrl+enter")}},
+	{name = "composer.model_picker", title = i18n.later("Model picker"), description = i18n.later("What the composer's model button opens: the palette's Set the model form, or a list of the models with their context sizes."), kind = .String, default = {s = "form"}, choices = {"form", "list"}, choice_labels = {i18n.later("Form"), i18n.later("List")}},
 	{name = "sidebar.subagents", title = i18n.later("Subagents"), description = i18n.later("Sub-agent sessions: under their parent, in the list with the others, or not shown."), kind = .String, default = {s = "nested"}, choices = {"nested", "flat", "hidden"}, choice_labels = {i18n.later("Nested"), i18n.later("Flat"), i18n.later("Not shown")}},   // ("Not shown", not the reasoning's "Hidden": in French these words agree with the sub-agents' sessions, a feminine plural)
 	{name = "sidebar.mode", title = i18n.later("Mode"), description = i18n.later("What the sidebar shows: what needs you first across projects (what waits for you, what finished and you have not seen, what runs, the rest), or sessions by project."), kind = .String, default = {s = "inbox"}, choices = {"inbox", "projects"}, choice_labels = {i18n.later("Inbox"), i18n.later("Projects")}},
 	{name = "notify.finished", title = i18n.later("Finished"), description = i18n.later("When a session that is not in front of you ends its run: nothing, a toast, a toast and the taskbar button flashing, or a notification of the system (a click on it opens the session)."), kind = .String, default = {s = "system"}, choices = {"off", "toast", "flash", "system"}, choice_labels = {i18n.later("Off"), i18n.later("Toast"), i18n.later("Flash"), i18n.later("System")}},
@@ -102,6 +103,7 @@ Prefs :: struct {
 	usage:        bool,
 	clock24:      bool,
 	ctrl_enter:   bool,
+	model_list:   bool,   // composer.model_picker: the model button opens the models' chooser (else Set the model's form)
 	steer_first:  bool,   // while a turn runs, Enter sends into it (conversation.while_running)
 	subagents:    string,
 	sidebar_mode: Sidebar_Mode,
@@ -201,6 +203,7 @@ prefs_refresh :: proc(app: ^App) {
 	s.usage = config.bool_of(p, "conversation.usage")
 	s.clock24 = config.string_of(p, "conversation.clock") == "24h"
 	s.ctrl_enter = config.string_of(p, "composer.send") == "ctrl+enter"
+	s.model_list = config.string_of(p, "composer.model_picker") == "list"
 	s.steer_first = config.string_of(p, "conversation.while_running") == "steer"
 	s.subagents = config.string_of(p, "sidebar.subagents")
 	s.sidebar_mode = sidebar_mode_of(config.string_of(p, "sidebar.mode"))
@@ -677,7 +680,7 @@ SETTINGS_PAGES := [?]prefs_page.Page_Info{
 	{category = "appearance", title = i18n.later("Appearance"), icon = lucide.PALETTE},
 	{category = "window", title = i18n.later("Window"), icon = lucide.APP_WINDOW},
 	{category = "conversation", title = i18n.later("Conversation"), icon = lucide.MESSAGE_SQUARE},
-	{category = "behaviour", title = i18n.later("Behaviour"), icon = lucide.BELL, names = {"composer.send", "sidebar.mode", "sidebar.subagents", "notify.finished", "permission.new_sessions", "notify.permission", "notices.view", "notices.badge", "notices.keep"}},
+	{category = "behaviour", title = i18n.later("Behaviour"), icon = lucide.BELL, names = {"composer.send", "composer.model_picker", "sidebar.mode", "sidebar.subagents", "notify.finished", "permission.new_sessions", "notify.permission", "notices.view", "notices.badge", "notices.keep"}},
 	{category = "scrolling", title = i18n.later("Scrolling"), icon = lucide.SCROLL},
 	{category = "input", title = i18n.later("Input"), icon = lucide.KEYBOARD},
 	{category = "keys", title = i18n.later("Keys"), icon = lucide.KEYBOARD},
