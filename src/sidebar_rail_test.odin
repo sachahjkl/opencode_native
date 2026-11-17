@@ -50,15 +50,16 @@ the_sidebar_minimised_is_a_rail_of_marks :: proc(t: ^testing.T) {
 		session.wait_idle(s)
 		testing.expect(t, session.find(s, "sidebar") != nil && session.find(s, "sidebar_rail") == nil, "the list at first")
 
-		zone := session.get(s, "view_zone_Left")
-		session.move(s, {zone.rect.min.x + 30, zone.rect.min.y + 2})
-		session.wait_box(s, "view_stack_min")
-		session.click(s, "view_stack_min")
+		// the list has its Minimise at rest, no hover needed, where the rail then has its Restore: one place for both
+		minimise := session.get(s, "view_rail_min").rect
+		session.click(s, "view_rail_min")
 		session.wait_box(s, "sidebar_rail")
 		session.wait_idle(s)   // (the lazy column learns the marks' heights)
 		testing.expect(t, session.find(s, "sidebar") == nil, "minimised: no list")
-		zone = session.get(s, "view_zone_Left")
+		zone := session.get(s, "view_zone_Left")
 		em := ui.font_size()
+		restore := session.get(s, "view_rail_restore").rect
+		testing.expectf(t, abs(restore.min.x - minimise.min.x) <= 1 && abs(restore.min.y - minimise.min.y) <= 1, "Restore where Minimise was: %v, %v", restore, minimise)
 		testing.expectf(t, abs((zone.rect.max.x - zone.rect.min.x) - SIDEBAR_RAIL_EM * em) <= 1.5, "the rail's width: %v", zone.rect)
 		testing.expect(t, session.find(s, "rail_new") != nil && session.find(s, "rail_search") != nil && session.find(s, "rail_server") != nil, "New session, Search, the server")
 		testing.expect(t, session.find(s, "view_rail_restore") != nil, "the zone's Restore at its top")
