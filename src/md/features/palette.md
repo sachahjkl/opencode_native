@@ -53,7 +53,7 @@ the palette; the button pressed again closes it too; it is lit while the form is
   reads its list when it opens: the answer shows at the next opening.
 
 **The agent button, and the model button on List, open `Palette.chooser`**, a second `ui.Command_Palette` with one
-source and no prefix: the toolkit's chooser (no Recent, no hint row), as Jump to message. Its agents' source,
+source and no prefix: the toolkit's chooser (no Recent, no hint row). Its agents' source,
 `chooser_agents`, is made by the same `agents_source` as `#`, with the prefix `.None`: one read, one mark, one choice
 (`choice_take`) for both places. Its models' source, `chooser_models`, is the chooser's alone; its rows are
 `model_choices`' labels and values, so the chooser and the form list the same models under the same words.
@@ -65,7 +65,7 @@ source and no prefix: the toolkit's chooser (no Recent, no hint row), as Jump to
   (`chooser_pane`). The chooser's marks and its choice are that pane's: a panel's (`/btw`) button sets its own
   session's model, on List as on Form. The marks of `#` are the main view's.
 - **Opened at the next build.** `chooser_toggle` notes the wish, as `palette_show` does; `chooser_build` runs after the
-  main palette and Jump to message, and at the top of a panel's own window's build. A button lit while its list is
+  main palette, and at the top of a panel's own window's build. A button lit while its list is
   shown closes it.
 - **Read again at each opening.** The opening asks the server for its agents or its models again. The answer bumps
   `catalog_version`, which the sources' `poll` follows.

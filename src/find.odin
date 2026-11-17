@@ -1,179 +1,116 @@
-// Find in the conversation (Ctrl+F): a bar over the top-right corner of the conversation, the toolkit's find in page
-// (gt:ui find.odin) on the text the conversation shows. Enter / F3 go to the next match, Shift+Enter / Shift+F3 to the
-// previous one, Escape closes. The current match is scrolled into view.
+// Find in a conversation (src/md/features/find.md): the toolkit's find (gt:ui find_bar), one per view, over the
+// conversation's scroll box. ocn gives it the messages as rows: each one's whole text (message_text, every fold open), a
+// stamp that moves when that text does, the way to open what holds a match (message_reveal), and the scopes All and Prompts.
 package ocn
 
-import host "gt:host"
-import "core:fmt"
-import "core:math"
+import "core:hash"
+import "core:strings"
 import "gt:ui"
-import lucide "gt:lucide"
 import i18n "gt:i18n"
 
-Find :: struct {
-	open:   bool,
-	fresh:  bool,           // opened in this frame: focus the field, select its text
-	field:  ui.Line_Edit,
-	index:  int,            // the current occurrence (-1: none yet)
-	needle: string,         // the needle of the last frame (a new one picks the first match from the view's top)
-	reveal: bool,           // scroll the current match into view
-	from_end: int,          // a page came in front of the current match: how far it is from the last one (0: not counted so)
-}
-
-find_open :: proc(app: ^App, pane: ^Chat_Pane) {
-	f := &pane.find
-	f.open, f.fresh = true, true
-	ui.line_edit_select_all(&f.field)
-}
-
-find_close :: proc(app: ^App, pane: ^Chat_Pane) {
-	pane.find.open = false
-	pane.find.from_end = 0
-	ui.find("", 0)
-	ui.find_set_current(-1)
-}
-
-// Another conversation: its matches are not this one's. The home page has none, the bar goes.
-find_chat_changed :: proc(app: ^App, pane: ^Chat_Pane) {
-	f := &pane.find
-	if !f.open { return }
-	if pane.chat.id == "" { find_close(app, pane); return }
-	f.index, f.reveal, f.from_end = -1, false, 0
-	ui.find_set_current(-1)
-	ui.find_refresh()
-}
-
-find_forget :: proc(app: ^App) { for &pane in app.panes { pane_find_forget(app, &pane) } }
-
-@(private = "file")
-pane_find_forget :: proc(app: ^App, pane: ^Chat_Pane) {
-	if pane.find.open { find_close(app, pane) }
-	pane.find.index = -1
-}
-
-// An older page came, in front of everything: the current match stays the one it is, so its number grows by what the page has.
-find_page_added :: proc(app: ^App, pane: ^Chat_Pane) {
-	f := &pane.find
-	if f.open && f.index >= 0 && f.from_end == 0 { f.from_end = ui.find_count() - f.index }
-	ui.find_refresh()
-}
-
-// The step to another match (+1 next, -1 previous), wrapping around.
-find_step :: proc(app: ^App, pane: ^Chat_Pane, d: int) {
-	f := &pane.find
-	n := ui.find_count()
-	if n == 0 { return }
-	f.index = f.index < 0 ? (d > 0 ? 0 : n - 1) : (f.index + d + n) % n
-	f.from_end = 0
-	f.reveal = true
-}
-
-FIND_SETTLE_MS        :: 1500   // a conversation just opened moves under the reader that long
-FIND_BOTTOM_MARGIN_EM :: 3      // a match nearer the bottom of the view is scrolled to
-FIND_REVEAL_AT        :: 0.35   // where it lands, from the top of the view
-
-// Called by conversation() before the scroll box is built: the needle for this build's layout, a new needle's first
-// match, and the scroll that brings the current match into view (from the rects of the last layout).
-find_update :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) {
-	f := &pane.find
-	needle := f.open ? ui.line_edit_string(&f.field) : ""
-	ui.find(needle, sb != nil ? sb.key : 0)
-	if !f.open { return }
-	ms := ui.find_all()   // (of the sweep, in the content: what is far from the view is not built)
-	n := ui.find_count()
-	if needle != f.needle {
-		delete(f.needle)
-		f.needle = fmt.aprintf("%s", needle)
-		// (the matches are the last layout's, still of the previous needle: choose on the next frame)
-		f.index = -1
-		f.from_end = 0
+// The bar over the conversation's scroll box `sb` (this build's or the last one's), built while the find is open over it.
+// Ctrl+F and --find are asked outside the build of the pane's window (a command runs after the frame): they open it here.
+conversation_find :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box) {
+	if sb == nil { return }
+	c := &pane.conversation
+	// (the home page has no conversation to search; --find given at a start waits for the session it opens)
+	if pane.chat.id == "" {
+		if ui.find_is_open(sb.key) { ui.find_close() }
 		return
 	}
-	if ui.find_pending() { return }
-	if n == 0 { f.index = -1; ui.find_set_current(-1); return }
-	if f.from_end > 0 { f.index = max(n - f.from_end, 0) }
-	// a conversation just opened is still loading and jumping to its bottom: its matches move under the reader
-	if f.index < 0 && (pane.chat.loading || ui.now_ms() - pane.view.opened_ms < FIND_SETTLE_MS) { return }
-	if f.index < 0 && sb != nil {
-		// (the first match from the top of the view down; when none is under it, the view is past the last one (at the bottom of
-		// a conversation): the nearest above it, not the conversation's first, a whole conversation away)
-		f.index = -1
-		for m in ms { if m.rect.min.y >= sb.view_off.y { f.index = m.index; break } }
-		if f.index < 0 {
-			low := min(f32)
-			for m in ms { if m.rect.min.y > low { low, f.index = m.rect.min.y, m.index } }
-			f.index = max(f.index, 0)
-		}
-		f.reveal = true
+	if c.find_due {
+		ui.find_open(sb.key, c.find_text)
+		find_unask(pane)
 	}
-	f.index = min(f.index, n - 1)
-	ui.find_set_current(f.index)
-	if f.reveal && sb != nil {
-		f.reveal = false
-		for m in ms {
-			if m.index != f.index { continue }
-			h := sb.size.y
-			y0, y1 := m.rect.min.y, m.rect.max.y
-			if y0 < sb.view_off.y + em || y1 > sb.view_off.y + h - em * FIND_BOTTOM_MARGIN_EM {
-				limit := max(0, sb.view_bounds.y - h)
-				sb.view_target.y = clamp(y0 - h * FIND_REVEAL_AT, 0, limit)
-				chat_scroll_event(pane, Scroll_Signal.Moved_Up)
-				host.host_settle(&app.window)   // (the sweep's answer comes with no input: the glide needs its frames)
-			}
-			break
-		}
-	}
+	scopes := make([]ui.Find_Scope, 2, context.temp_allocator)
+	scopes[0] = {name = i18n.tr("All")}
+	scopes[1] = {name = i18n.tr("Prompts"), keep = message_is_prompt}
+	ui.find_bar(sb, {placeholder = i18n.tr("Find in the conversation"), scopes = scopes})
 }
 
-// The bar, over the conversation's top-right corner (built after the conversation: on top of it, taking its clicks).
-find_bar :: proc(app: ^App, pane: ^Chat_Pane, em: f32, right, top: f32) {
-	f := &pane.find
-	if !f.open { return }
-	n := ui.find_count()
-	w := math.round(em * 24)
-	ui.next({fixed_x = right - w, fixed_y = top, width = ui.px(w), height = ui.children_sum(), axis = .X, cross = .Center, radius = FIND_RADIUS * ui.scale()})
-	// One box: the field and its buttons in a single well, its focus ring around all of it. (The plate under it is only its shadow:
-	// the same size and the same corners, all of it covered; a well inside a plate showed the plate's edge beside it. Its edge is
-	// drawn after the well: transparent, and no rim. Not a ui.card: a card's inset would part the well from the shadow.)
-	bar := ui.build_box({.Plate}, "###findbar")
-	bar.plate = ui.frame_new(ui.Plate_Look)
-	face := ui.theme_color("card background")
-	bar.plate^ = {top = face, bottom = face, border = Color{}, rim = 0, shadow = 8}
-	if ui.parent(bar) {
-		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.2)), cross = .Center, radius = FIND_RADIUS * ui.scale()})
-		if ui.well("###fw", .X, flags = {.Focus_Within, .Draw_Focus_Ring}) {
-			ui.space(ui.SPACE_2)
-			glyph(lucide.SEARCH, ui.theme_color("faint text"), math.round(em * ICON_SMALL))
-			if ui.tags("bare") {
-				ui.next({width = ui.fill(), height = ui.pct(1), text_pad = em * 0.3})
-				res := ui.line_edit("###ff", &f.field, {placeholder = i18n.tr("Find in the conversation")})
-				if f.fresh { ui.set_focus(res.box.key); f.fresh = false }
-				if ui.key_press(.Return, {.Shift}) { find_step(app, pane, -1) } else if res.committed { find_step(app, pane, 1) }
-				if res.cancelled { find_close(app, pane) }
-			}
-			needle := ui.line_edit_string(&f.field)
-			pending := ui.find_pending()   // (read so far, and how far: "no match" would be a lie before the end; nothing while the needle rests)
-			count := needle == "" ? "" : pending ? (ui.find_progress() < 1 ? fmt.tprintf("%d…  %s", n, i18n.percent(f64(int(ui.find_progress() * 100)) / 100)) : "") : n == 0 ? i18n.tr("no match") : fmt.tprintf("%d / %d", max(f.index, 0) + 1, n)
-			text("fc", count, n == 0 && !pending ? ui.hue(.Red) : ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION), height = ui.px(em * 1.5)})
-			ui.space(ui.SPACE_2)
-			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
-			if ui.button("fprev", icon = lucide.CHEVRON_UP).clicked { find_step(app, pane, -1) }
-			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
-			if ui.button("fnext", icon = lucide.CHEVRON_DOWN).clicked { find_step(app, pane, 1) }
-			ui.next({width = ui.px(math.round(em * GLYPH_BUTTON_EM)), height = ui.px(math.round(em * GLYPH_BUTTON_EM))})
-			if ui.button("fclose", icon = lucide.X).clicked { find_close(app, pane) }
-			ui.space(ui.SPACE_1)
-		}
-	}
+// Ctrl+F on pane `pane`, or --find's `text`: the find opens over its conversation at its next build.
+find_ask :: proc(app: ^App, pane: ^Chat_Pane, text := "") {
+	c := &pane.conversation
+	c.find_due = true
+	delete(c.find_text)
+	c.find_text = strings.clone(text)
 }
 
-FIND_RADIUS :: 7
+// The pane goes: the find over its view closes when it is open in the window being built (a pane in a window of its own goes
+// with that window's State).
+find_pane_closed :: proc(app: ^App, pane: ^Chat_Pane) {
+	find_unask(pane)
+	c := &pane.conversation
+	if ui.current_state() != nil && c.scroll_key != 0 && ui.find_is_open(c.scroll_key) { ui.find_close() }
+}
 
-// The keys that work anywhere in the window while the bar is open (Ctrl+F is the command session.find's).
-find_keys :: proc(app: ^App, pane: ^Chat_Pane) {
-	if pane.chat.id == "" || overlay_open(app) { return }
-	if pane.find.open {
-		if ui.key_press(.F3) { find_step(app, pane, 1) }
-		if ui.key_press(.F3, {.Shift}) { find_step(app, pane, -1) }
+// The server left: a find asked for is not opened over the next one's conversation. (One open goes with the home page each
+// pane goes to: conversation_find.)
+find_forget :: proc(app: ^App) { for &pane in app.panes { find_unask(&pane) } }
+
+@(private = "file")
+find_unask :: proc(pane: ^Chat_Pane) {
+	c := &pane.conversation
+	c.find_due = false
+	delete(c.find_text)
+	c.find_text = ""
+}
+
+// The scope "Prompts": the reader's own messages (it replaced Jump to message).
+message_is_prompt :: proc(user: rawptr, i: int) -> bool {
+	c := &(^Chat_Pane)(user).chat
+	return i >= 0 && i < len(c.messages) && c.messages[i].kind == .User
+}
+
+// Message `i`'s stamp (ui.Text_Rows.stamp): it moves whenever its whole text can have changed. A sum of what its text is made
+// of (lengths, states, the stream's clock), cheap enough to be asked of thousands of messages a frame; what a sub-agent's card
+// reads lives elsewhere in the conversation (its session, its result), so a message with one also takes the conversation's count
+// of changes. The preferences that shape the text (the reasoning hidden, the lines of a tool) go into every stamp.
+message_stamp :: proc(user: rawptr, i: int) -> u64 {
+	pane := (^Chat_Pane)(user)
+	c := &pane.chat
+	if i < 0 || i >= len(c.messages) { return 0 }
+	app := the_app
+	m := &c.messages[i]
+	h := u64(m.touched) * HASH_MIX_B
+	mix :: proc(h: ^u64, v: int) { h^ = (h^ ~ u64(v)) * 0x100000001b3 }
+	mix(&h, int(m.kind))
+	mix(&h, len(m.text))
+	mix(&h, len(m.parts))
+	mix(&h, len(m.jobs))
+	mix(&h, len(m.mcp_data))
+	mix(&h, app.prefs.tool_lines)
+	mix(&h, app.prefs.reasoning == "hidden" ? 1 : 0)
+	elsewhere := m.sub_child != ""
+	for &p in m.parts {
+		mix(&h, len(p.text))
+		mix(&h, len(p.output))
+		mix(&h, len(p.input))
+		mix(&h, len(p.patch))
+		mix(&h, len(p.stream.text))
+		mix(&h, int(p.status))
+		if p.kind == .Tool && !plain_tool(&p) { elsewhere = true }
 	}
+	if elsewhere {
+		mix(&h, int(c.changes))
+		mix(&h, int(c.children_ver))
+	}
+	return h
+}
+
+// The rows' version (ui.Text_Rows.version): another conversation, messages come or go, or any of them changed. A change makes
+// the find go over the rows' stamps again (a few thousand a frame), reading only the texts whose stamp moved.
+messages_version :: proc(c: ^Chat) -> u64 {
+	return c.gen * HASH_MIX_B ~ u64(len(c.messages)) << 40 ~ c.changes
+}
+
+// The find's current match is at byte `offset` of message `i`'s whole text, in a part that is folded (ui.Text_Rows.reveal): the
+// parts that hold it open, as a click on their headers would open them (a Mermaid diagram shows its text).
+message_reveal :: proc(user: rawptr, i: int, offset: int) {
+	pane := (^Chat_Pane)(user)
+	if i < 0 || i >= len(pane.chat.messages) { return }
+	t := Copy_Text{b = strings.builder_make(context.temp_allocator), whole = true, reveal = offset}
+	message_write(&t, pane, i)
+	app := the_app
+	for key in t.opens { app.expanded[hash.fnv64a(transmute([]u8)key)] = true }
 }

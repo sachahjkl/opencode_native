@@ -41,33 +41,6 @@ palette_up :: proc(s: ^session.Session, app: ^App) {
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return palette_shown((^App)(s.user)) && palette_settled(s) }, "the palette open")
 }
 
-// Jump to message (src/md/features/jump.md): Ctrl+Alt+G opens a chooser of the session's prompts, the newest first; a
-// few words find an earlier one, and Enter takes the conversation there (the first prompt, far above the view).
-@(test)
-jump_to_message_goes_to_an_earlier_prompt :: proc(t: ^testing.T) {
-	unwatched.run(t, proc(t: ^testing.T) {
-		context.allocator = runtime.heap_allocator()
-		app, s := bench_app(t)
-		settled :: proc(s: ^session.Session) -> bool {
-			j := &(^App)(s.user).jump.pal
-			return jump_shown((^App)(s.user)) && ui.palette_ranked_for(j, ui.line_edit_string(&j.field)) && !ui.palette_busy(j)
-		}
-		session.key(s, .G, {.Ctrl, .Alt})
-		session.wait_until(s, settled, "Jump to message open")
-		j := &app.jump
-		_, newest, _ := ui.palette_row(&j.pal, 0)
-		testing.expect_value(t, newest, fmt.tprintf("msg_%d_u", BENCH_TURNS - 1))
-		testing.expect(t, session.find(s, "msg_msg_0_u") == nil, "the first prompt is far above the view")
-		ui.line_edit_set(&j.pal.field, "Step 0: look")
-		session.wait_until(s, settled, "ranked")
-		_, first, _ := ui.palette_row(&j.pal, 0)
-		testing.expect_value(t, first, "msg_0_u")
-		session.key(s, .Return)
-		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "msg_msg_0_u") != nil }, "the conversation at the first prompt")
-		testing.expect(t, !jump_shown(app), "the chooser closed")
-	})
-}
-
 // The prefixes of the shared table that opencode native fills, each with its name: the server's commands are under `>`
 // with the commands, the agents alone under `#` (the models are Set the model's list), `/` is not filled yet (the
 // session's files: later).

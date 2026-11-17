@@ -73,7 +73,8 @@ md_table_copy :: proc(user: rawptr, t: ^markdown.Table, source: []string, size: 
 
 // The boxes markdown.view builds of `src` under `id` with md_config, as a copy reads them (message_text): each block's text
 // without its marks (no rule, no list marker), a table cell by cell, a code block or a mermaid one's text unless its
-// diagram shows. A doc of its own in temp memory: the views' docs and their runs stay as their builds left them.
+// diagram shows (whole: always, as its header's button shows it). A doc of its own in temp memory: the views' docs and their
+// runs stay as their builds left them.
 md_text :: proc(t: ^Copy_Text, app: ^App, id, src: string) {
 	d := markdown.Doc{alloc = context.temp_allocator}
 	markdown.read(&d, src)
@@ -89,9 +90,19 @@ md_text :: proc(t: ^Copy_Text, app: ^App, id, src: string) {
 		case .Rule:
 		case .Code:
 			code := markdown.block_text(&d, n)
-			if d.blocks[n].lang == "mermaid" {
-				dg, _ := mermaid_diagram(app, fmt.tprintf("###%s_b%d", id, n), code, d.blocks[n].closed)
-				if dg != nil && dg.why == "" { continue }   // (a diagram: no text)
+			if d.blocks[n].lang != "mermaid" { copy_box(t, code); break }
+			bid := fmt.tprintf("###%s_b%d", id, n)
+			// (the whole text for a count needs no layout: the text is there either way. Only a reveal asks whether the diagram
+			// shows, which is laid out then, as the build lays it out)
+			if !t.whole || t.reveal >= 0 {
+				dg, _ := mermaid_diagram(app, bid, code, d.blocks[n].closed)
+				shown := dg != nil && dg.why == ""   // (a diagram: no text)
+				if shown && !t.whole { break }
+				if copy_fold(t, bid, !shown) {
+					defer copy_unfold(t, !shown)
+					copy_box(t, code)
+				}
+				break
 			}
 			copy_box(t, code)
 		case .Table:

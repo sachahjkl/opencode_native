@@ -149,6 +149,6 @@ builds and draws): nothing to measure here; menus are denser and scroll (0.69.0)
 
   The rest of what an open command view costs is not its glyphs: the dialog's blurred backdrop (a copy of 12 MB and two blur
   passes, 1.0 to 1.2 ms of the GPU, which an offscreen frame waits for in its render step) and the dialog's build (+0.3 ms).
-- **Find** builds every message while its bar is open (the toolkit's find reads the text the layout placed): 45 to 60 ms a
-  frame on 150 turns, two thirds of it building. Building only what is seen would need the matches counted from the messages'
-  text and the match's message built whatever (`lazy_item(always)`): not done.
+- **Find** built every message while its bar was open (the toolkit's find read the text the layout placed): 45 to 60 ms a
+  frame on 150 turns, two thirds of it building. It counts the messages from their text now (the toolkit's find over the lazy
+  column's rows, `FIND_BYTES_PER_FRAME` a frame), and builds the match's message alone (src/md/features/find.md).

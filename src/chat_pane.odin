@@ -20,7 +20,6 @@ Chat_Pane :: struct {
 	chat:         Chat,
 	view:         Chat_View_State,    // where it is read, and how it moves (one per session shown: chat_view_start starts it over)
 	conversation: Conversation,       // its column, its scroll box, its opened parts, its prompt rail (conversation.odin)
-	find:         Find,               // find in it (find.odin)
 	composer:     Composer,           // composer.odin
 	read:         remote.Remote,      // the newest page of its conversation
 	queue:        Queue,              // what waits in the inbox of its session (queue.odin)
@@ -93,7 +92,7 @@ pane_close :: proc(app: ^App, pane: ^Chat_Pane) {
 	assert(pane != main_pane(app))
 	if !pane.shown { return }
 	draft_leave(app, pane)
-	find_close(app, pane)
+	find_pane_closed(app, pane)
 	chat_reset(&pane.chat)
 	pane_marked(pane)
 	queue_switch(app, pane)

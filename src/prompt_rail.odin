@@ -1,7 +1,8 @@
 // The prompts' marks on the conversation's scroll bar: a mark for each prompt of the reader's, where it stands in the
 // conversation (the toolkit's scroll_marks), the thumb over them where the view is. The pointer over a mark shows the prompt's
-// card (its number, when it was sent, its first lines), a click goes there at once and gives that prompt the keyboard;
-// a filter keeps the prompts that say what is typed. The setting conversation.prompt_rail shows them or not.
+// card (its number, when it was sent, its first lines), a click goes there at once and gives that prompt the keyboard.
+// The magnifier above them opens the conversation's find (the toolkit's), whose scope "Prompts" searches the prompts alone
+// (find.odin). The setting conversation.prompt_rail shows them or not.
 package ocn
 
 import "core:fmt"
@@ -36,8 +37,7 @@ prompt_rail :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) {
 	prompt_go(app, pane, ui.scroll_marks_id(&p.rail, i), em)
 }
 
-// The conversation goes to prompt `id`, and the prompt's plate takes the keyboard: a mark of the rail, a choice of Jump
-// to message (jump.odin).
+// The conversation goes to prompt `id`, and the prompt's plate takes the keyboard: a mark of the rail.
 prompt_go :: proc(app: ^App, pane: ^Chat_Pane, id: string, em: f32) {
 	p := &pane.conversation.prompt_rail
 	// (the view goes there now; the column keeps it on the prompt while the heights around it settle)

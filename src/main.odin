@@ -58,7 +58,6 @@ App :: struct {
 	activity:       Activity,          // what runs behind the conversation (activity.odin)
 	palette:        Palette,           // Ctrl+K: the toolkit's palette and ocn's sources; the composer's chooser (palette.odin)
 	changelog:      prefs_page.Changelog,   // What's new: CHANGELOG.md on a page of the settings, said once after an update
-	jump:           Jump,              // Ctrl+Alt+G: Jump to message, a chooser of the session's prompts (jump.odin)
 	term_zooms:     ui.Zoom_Memory,    // each shell's zoom, by its id: its grid's zone (terminal.odin)
 	session_zooms:  ui.Zoom_Memory,    // each session's conversation zoom, by its id: every pane's zone (conversation.odin)
 	stores:         Stores,            // what it remembers beside the preferences, written on workers (stores.odin)

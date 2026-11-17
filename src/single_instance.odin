@@ -140,7 +140,7 @@ cli_show :: proc(app: ^App, o: Cli_Options) {
 	if o.search != "" { ui.line_edit_set(&app.sidebar.search, o.search) }
 	if o.command == .Setup { prefs_page.install_open(&app.install) }
 	if o.add_server { server_edit_open(app, -1) }
-	if o.find != "" { find_open(app, main_pane(app)); ui.line_edit_set(&main_pane(app).find.field, o.find) }
+	if o.find != "" { find_ask(app, main_pane(app), o.find) }
 	if o.image != "" { image_view_start(app, o.image) }
 	for file in o.attach { attach_path(app, main_pane(app), file) }   // (what a paste gives, without the clipboard)
 	if o.diff != "" { diff_full_open_file(app, o.diff) }   // (a patch in the full view)

@@ -76,8 +76,6 @@ app_menu :: proc(app: ^App, key: string, em: f32) {
 }
 
 global_keys :: proc(app: ^App) {
-	// (Find is the main view's: chat-panes.md, Layer 2)
-	if keys_pane(app) == main_pane(app) { find_keys(app, main_pane(app)) }
 	commands_keys(app)
 }
 

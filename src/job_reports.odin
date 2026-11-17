@@ -257,12 +257,14 @@ job_reports :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32) {
 	ui.space(ui.SPACE_1)
 }
 
-// job_reports' selectable boxes as a copy reads them (message_text): each card open, its command and its output, or the
-// sub-agent's report.
+// job_reports' selectable boxes as a copy reads them (message_text): each card open (or the text whole), its command and its
+// output, or the sub-agent's report.
 job_reports_text :: proc(t: ^Copy_Text, app: ^App, m: ^Message) {
 	for &r, k in m.jobs {
 		key := fmt.tprintf("%s_job%d", m.id, k)
-		if !part_open(app, key) { continue }
+		open := part_open(app, key)
+		if !copy_fold(t, key, open) { continue }
+		defer copy_unfold(t, open)
 		switch r.kind {
 		case .Shell:
 			if r.command != "" { mono_well_text(t, fmt.tprintf("$ %s", r.command), JOB_OUTPUT_LINES) }

@@ -93,7 +93,7 @@ Otherwise it shows "Reading…" and grows or swaps a moment later.
 
 Every view that a command's own key opens has `View_Options.quick` (70 ms fade): the settings, What you missed, the
 Statistics, the shells, the Preview, the sidebar. It acts only when the view is a dialog. The toolkit's palettes (the
-commands, Jump to message, the composer's chooser) have it already. The keys sheet (F1), the rename question (F2) and the
+commands, the composer's chooser) have it already. The keys sheet (F1), the rename question (F2) and the
 file browser (Ctrl+P) are the toolkit's views, which have no `quick` yet.
 
 ## The image viewer

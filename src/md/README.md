@@ -28,8 +28,9 @@ purpose, the decisions, what was refused.
 - [features/chat-panes.md](features/chat-panes.md): conversation panes, the main view one of them; /btw forks the
   session into a panel on the right with the same composer; its menus in its window of its own; one draft for a
   session in both panes.
-- [features/jump.md](features/jump.md): Jump to message (Ctrl+Alt+G): a chooser over the session's prompts; why a
-  palette of its own.
+- [features/find.md](features/find.md): find in the conversation is the toolkit's, one per view; ocn gives the
+  messages' whole text (folded parts included), their stamp, the reveal of a fold, the scopes All and Prompts (which
+  replaced Jump to message).
 - [features/queue-first.md](features/queue-first.md): Alt+Enter queues a prompt first while a run works; the inbox
   re-admitted in order, admit before cancel, the reorder's state machine.
 - [features/escape-stop.md](features/escape-stop.md): Escape stops a run in two presses; the banner in the composer.

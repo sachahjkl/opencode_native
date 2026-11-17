@@ -64,8 +64,8 @@ model_initial :: proc(app: ^App, _: string) -> (string, bool) {
 @(private = "file") has_session :: proc(app: ^App) -> bool { return main_pane(app).chat.id != "" }
 @(private = "file") is_busy :: proc(app: ^App) -> bool { return main_pane(app).chat.busy }
 @(private = "file") can_go_back :: proc(app: ^App) -> bool { return nav_can(app, -1) || back_target(app) != "" }
-// (Find is the main view's: chat-panes.md, Layer 2; a panel with the keyboard keeps Ctrl+F from it)
-@(private = "file") can_find :: proc(app: ^App) -> bool { return has_session(app) && keys_pane(app) == main_pane(app) }
+// (each pane's view has its find: the one with the keyboard's, the panel's when it has it)
+@(private = "file") can_find :: proc(app: ^App) -> bool { return keys_pane(app).chat.id != "" }
 
 COMMANDS := [?]Command{
 	{id = "app.help", title = i18n.later("Keyboard shortcuts"), tags = "keys keybindings hotkeys help cheatsheet", group = i18n.later("General"), icon = lucide.LIST, keys = {{.F1, {}}}, run = help_toggle, scope = .Window},
@@ -94,7 +94,7 @@ COMMANDS := [?]Command{
 	{id = "session.stop", title = i18n.later("Stop the run"), tags = "cancel abort interrupt halt kill", group = i18n.later("Session"), icon = lucide.SQUARE, keys = {{.Escape, {.Ctrl}}}, run = proc(app: ^App) { interrupt_session(app, main_pane(app).chat.id) }, enabled = is_busy},
 	{id = "session.activity", title = i18n.later("What runs in the background"), tags = "jobs tasks processes activity running", group = i18n.later("Session"), icon = lucide.SQUARE_TERMINAL, keys = {{.J, {.Ctrl}}}, run = activity_toggle, enabled = has_session},
 	{id = "session.quote", title = i18n.later("Quote what is selected"), tags = "reply cite selection", group = i18n.later("Session"), icon = lucide.PENCIL, keys = {{.Q, {.Ctrl}}}, run = quote_selection, enabled = proc(app: ^App) -> bool { return ui.has_selection(&app.state) }},
-	{id = "session.find", title = i18n.later("Find in the conversation"), tags = "search look locate", group = i18n.later("Session"), icon = lucide.SEARCH, keys = {{.F, {.Ctrl}}}, run = proc(app: ^App) { find_open(app, main_pane(app)) }, enabled = can_find},
+	{id = "session.find", title = i18n.later("Find in the conversation"), tags = "search look locate", group = i18n.later("Session"), icon = lucide.SEARCH, keys = {{.F, {.Ctrl}}}, run = proc(app: ^App) { find_ask(app, keys_pane(app)) }, enabled = can_find},
 	{id = "session.stats", title = i18n.later("Show or hide the Statistics panel"), tags = "stats tokens cost usage numbers", group = i18n.later("Session"), icon = lucide.GAUGE, keys = {{.I, {.Ctrl}}}, run = stats_toggle, enabled = has_session, checked = proc(app: ^App) -> bool { return app.stats.open }},
 	{id = "session.rename", title = i18n.later("Rename the session…"), tags = "title name", group = i18n.later("Session"), icon = lucide.PENCIL, keys = {{.F2, {}}}, run = proc(app: ^App) { rename_open(app, main_pane(app).chat.id) }, enabled = has_session,
 		arguments = RENAME_ARGUMENTS[:], initial = rename_initial, take = proc(app: ^App, values: []string) { if len(values) == 1 { rename_to(app, main_pane(app).chat.id, values[0]) } }},
@@ -102,7 +102,6 @@ COMMANDS := [?]Command{
 	{id = "session.set_model", title = i18n.later("Set the model…"), tags = "llm provider switch change", group = i18n.later("Session"), icon = lucide.CPU, run = proc(app: ^App) { model_form_open(app, main_pane(app)) }, enabled = proc(app: ^App) -> bool { return len(app.models) > 0 },
 		arguments = MODEL_ARGUMENTS[:], initial = model_initial, choices = proc(app: ^App, _: string) -> (labels, values: []string) { return model_choices(app) },
 		take = proc(app: ^App, values: []string) { if len(values) == 1 { model_choose(app, model_pane(app), values[0]) } }},
-	{id = "session.jump", title = i18n.later("Jump to message…"), tags = "prompt find go earlier history search", group = i18n.later("Session"), icon = lucide.MESSAGE_SQUARE_TEXT, keys = {{.G, {.Ctrl, .Alt}}}, run = jump_show, enabled = has_session},
 	{id = "session.copy_id", title = i18n.later("Copy the session ID"), tags = "identifier ses clipboard", group = i18n.later("Session"), icon = lucide.HASH, run = proc(app: ^App) { session_id_copy(app, main_pane(app).chat.id) }, enabled = has_session},
 	{id = "session.fork", title = i18n.later("Fork the session"), tags = "branch copy duplicate split", group = i18n.later("Session"), icon = lucide.COPY, run = proc(app: ^App) { fork_session(app, main_pane(app).chat.id, "") }, enabled = has_session},
 	{id = "session.compact", title = i18n.later("Compact the conversation"), tags = "summarize shrink compress context", group = i18n.later("Session"), icon = lucide.LIST, run = proc(app: ^App) { request(app, .Action, "POST", fmt.tprintf("/api/session/%s/compact", main_pane(app).chat.id), "{}", main_pane(app).chat.id) }, enabled = has_session},

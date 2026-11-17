@@ -103,7 +103,6 @@ palette_start :: proc(app: ^App) {
 // Before the window's state goes (the last palette writes the usage memory).
 palette_destroy :: proc(app: ^App) {
 	p := &app.palette
-	jump_destroy(app)
 	ui.palette_destroy(&p.chooser)
 	ui.palette_destroy(&p.pal)
 	ui.shortcuts_sheet_destroy(&p.sheet)
@@ -149,7 +148,6 @@ palette_build :: proc(app: ^App) {
 	// (an open menu and the file dialog keep the window's keys: their Escape and their letters are theirs)
 	if !ui.file_dialog_shown(&app.state) { _ = ui.palette_keys(&p.pal) }
 	palette_choose(app)
-	jump_build(app)   // (Jump to message: a palette of its own, after this one, whose command may have asked for it)
 	chooser_build(app)
 }
 

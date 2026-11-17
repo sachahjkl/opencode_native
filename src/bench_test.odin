@@ -553,11 +553,11 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		ui.menu_close()
 		session.frames(s, 2)
 
-		// find: every message built, the needle typed a character a frame
+		// find: the needle typed a character a frame, every message counted from its text in slices, nothing more built
 		top_turn := bench_top_turn(s)
 		testing.expect(t, top_turn >= 0, "a turn at the view's top")
-		find_open(app, pane)
-		session.frames(s, 2)
+		session.key(s, .F, {.Ctrl})
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.find_is_open(session.get(s, "chat").key) }, "the find open")
 		finding := Bench_Case{name = "find"}
 		for i in 0 ..< min(BENCH_FRAMES, len(BENCH_FIND)) {
 			session.event(s, {kind = .Text, text = char_at(BENCH_FIND, i)})
@@ -566,41 +566,38 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		for len(finding.total) < BENCH_FRAMES { bench_frame(s, &finding) }
 		bench_report(&finding)
 		when OCN_BENCH {
-			sweep: f64   // (the one frame that builds everything)
-			for v in finding.total { sweep = max(sweep, v) }
-			fmt.printfln("find: its sweep %.1f ms", sweep)
+			slowest: f64   // (no frame reads the whole conversation: each reads a slice of it)
+			for v in finding.total { slowest = max(slowest, v) }
+			fmt.printfln("find: its slowest frame %.1f ms", slowest)
 		}
-		testing.expect_value(t, ui.line_edit_string(&pane.find.field), BENCH_FIND)
-		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() }, "the needle swept")
+		testing.expect_value(t, ui.find_needle(), BENCH_FIND)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() && ui.find_index() >= 0 }, "the needle counted")
 		session.frames(s, 3)
+		// (a turn has BENCH_FIND three times: its prompt, a paragraph, the table; the folded parts have none)
 		found := ui.find_count()
-		testing.expect(t, found > 1, "the sweep read the whole conversation")
+		testing.expect_value(t, found, 3 * BENCH_TURNS)
 		// (searched from where the reader is, where the wheel stopped (a few screens over the bottom, half the conversation up with
 		// OCN_BENCH's frames): the first match under the view's top, in view, not the conversation's first, a conversation away.
-		// A turn has BENCH_FIND three times (its prompt, a paragraph, the table): the match is of the turn at the top or the
-		// next one. The lazy column's estimates of the messages above once moved the view under the reader)
+		// The match is of the turn at the top or the next one. The lazy column's estimates of the messages above once moved the
+		// view under the reader)
 		{
-			chat := session.get(s, "chat")
-			turn := pane.find.index / 3
-			testing.expectf(t, turn == top_turn || turn == top_turn + 1, "a match of the turn at the view's top (%d): %d of %d, of turn %d", top_turn, pane.find.index, found, turn)
-			shown := false
-			for m in ui.find_matches() {
-				if m.index == pane.find.index { shown = m.rect.max.y > chat.rect.min.y && m.rect.min.y < chat.rect.max.y }   // (window coordinates)
-			}
-			testing.expectf(t, shown, "the current match %d in view", pane.find.index)
+			turn := ui.find_index() / 3
+			testing.expectf(t, turn == top_turn || turn == top_turn + 1, "a match of the turn at the view's top (%d): %d of %d, of turn %d", top_turn, ui.find_index(), found, turn)
+			session.wait_until(s, find_current_in_view, "the current match lit in view")
 		}
-		testing.expect(t, session.find(s, "msg_msg_0_a") == nil, "after the sweep, only what is near the view is built")
-		// the first match, far from anything built: the view goes there, and it is lit with its index of the sweep
-		pane.find.index = found - 1
-		find_step(app, pane, 1)
-		testing.expect_value(t, pane.find.index, 0)
-		session.wait_until(s, proc(s: ^session.Session) -> bool {
-			for m in ui.find_matches() { if m.index == 0 { return true } }
-			return false
-		}, "the first match built and lit")
-		testing.expect_value(t, ui.find_count(), found)
-		find_close(app, pane)
-		session.frames(s, 2)
+		testing.expect(t, session.find(s, "msg_msg_0_a") == nil, "only what is near the view is built")
+		// F3: the next one, lit and in view
+		at := ui.find_index()
+		session.key(s, .F3)
+		session.wait_until(s, find_current_in_view, "the next match lit in view")
+		testing.expect_value(t, ui.find_index(), at + 1)
+		// a needle of the first prompt alone, far from anything built: the view goes there, and it is lit
+		session.key(s, .F, {.Ctrl})   // (the field's text selected)
+		session.type_text(s, "Step 0: look")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() && ui.find_count() == 1 && find_current_in_view(s) }, "the first prompt built and lit")
+		testing.expect(t, session.find(s, "msg_msg_0_u") != nil, "built")
+		session.key(s, .Escape)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_is_open() }, "Escape closes it")
 
 		// the sidebar: the sessions it shows are built, the others when it scrolls to them
 		testing.expect(t, session.find(s, "ls_ses_1") != nil)
@@ -680,18 +677,24 @@ older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session)
 	testing.expect(t, sb.view_off.y > sb.size.y * OLDER_MARGIN, "the view is under the new page")
 	testing.expect_value(t, bench_count(.Older), 0)
 
-	// a find open: the current match stays the same one when a page comes in front of it
-	find_open(app, pane)
-	ui.line_edit_set(&pane.find.field, "zebra")
-	session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() && ui.find_count() == 60 }, "the needle swept")
-	session.frames(s, 2)
-	pane.find.index = 10
+	// a find open: the current match stays the same one when a page comes in front of it. (No page asked by the view: the steps
+	// take it near the top, and the page in front is the one asked here)
+	c.older = ""
+	session.key(s, .F, {.Ctrl})
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.find_is_open(session.get(s, "chat").key) }, "the find open")
+	session.type_text(s, "zebra")   // (over the last needle: it opens selected)
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() && ui.find_count() == 60 && ui.find_index() >= 0 }, "the needle counted")
+	for _ in 0 ..< 60 {
+		if ui.find_index() == 10 { break }
+		session.key(s, .F3)
+		session.wait_until(s, find_current_in_view, "the next match in view")
+	}
+	testing.expect_value(t, ui.find_index(), 10)
 	request(app, .Older, "GET", "/older", tag = c.id)
 	post_answer(app, bench_take(t, .Older), older_page(2000, 8, ""))
-	session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.find_count() == 68 }, "the page swept")
-	session.frames(s, 2)
-	testing.expect_value(t, pane.find.index, 18)
-	find_close(app, pane)
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() && ui.find_count() == 68 && ui.find_index() == 18 }, "the page counted, the match the same one")
+	session.key(s, .Escape)
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_is_open() }, "closed")
 
 	// a wheel turned up past the top while the page is read stops at the top; the page that comes carries that stop along. (It
 	// glided over all of the page to its top: the view jumped, and the next page was asked for at once.)
@@ -3299,7 +3302,7 @@ the_prompt_rail_goes_to_a_prompt_at_once :: proc(t: ^testing.T) {
 		pane := main_pane(app)
 		rail := &pane.conversation.prompt_rail.rail
 		sb := session.get(s, "chat")
-		testing.expect_value(t, len(ui.scroll_marks_shown(rail)), BENCH_TURNS)
+		testing.expect_value(t, len(rail.marks), BENCH_TURNS)
 		last: f32 = -1
 		for i in 0 ..< BENCH_TURNS {
 			at, ok := ui.scroll_marks_at(rail, sb, i)

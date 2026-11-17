@@ -61,8 +61,7 @@ a_second_start_reaches_the_first :: proc(t: ^testing.T) {
 		message := instance_message_make({find = "needle", search = "haystack", frames = -1}, "")
 		testing.expect_value(t, instance.send({name = name, wait_ms = 2000}, transmute([]u8)message), instance.Outcome.Forwarded)
 		session.wait_until(s, proc(s: ^session.Session) -> bool {
-			p := main_pane((^App)(s.user))
-			return p.find.open && ui.line_edit_string(&p.find.field) == "needle"
+			return ui.find_is_open(main_pane((^App)(s.user)).conversation.scroll_key) && ui.find_needle() == "needle"
 		}, "the find bar open with the second start's text")
 		testing.expect_value(t, ui.line_edit_string(&app.sidebar.search), "haystack")
 	})

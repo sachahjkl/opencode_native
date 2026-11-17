@@ -19,6 +19,9 @@ import i18n "gt:i18n"
 Conversation :: struct {
 	column_w:         f32,            // the conversation column, frame pixels (this frame)
 	scroll_box:       ^ui.Box,        // the conversation's scroll box, when built this frame
+	scroll_key:       ui.Key,         // ... its key, at its last build (what the find is open over)
+	find_due:         bool,           // the find opens over it at its next build, with find_text (find.odin find_ask)
+	find_text:        string,         // (owned)
 	column_drag_from: f32,            // the conversation's width when a handle of it was pressed (column_handles)
 	height:           f32,            // of the conversation, at the last frame
 	width:            f32,            // the conversation's room, frame pixels (this frame)
@@ -41,7 +44,7 @@ PAGE_SCROLL       :: 0.9    // of the view: the end of the last page stays in si
 LINE_SCROLL_EM    :: 3
 
 // `avail`: its width this frame (0: not known yet). The main view's and the panel's (btw.odin): what is the main view's alone
-// (its header, the column's handles, Find) is built in the main view only (chat-panes.md, Layer 2).
+// (its header, the column's handles) is built in the main view only (chat-panes.md, Layer 2); each has its find.
 conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32, avail: f32) {
 	is_main := pane == main_pane(app)
 	// The pane's whole column is its zoom zone, not the messages' scroll box alone: the zoom keys follow the keyboard
@@ -73,7 +76,6 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32, avail: f32) {
 			sb = ui.prev_box("###chat")
 			// (before the keys of the conversation: Up and Down are the marks' while they have the keyboard)
 			if prompt_rail_on(app, pane) && sb != nil { prompt_rail(app, pane, sb, em) }
-			if is_main { find_update(app, pane, sb, em) }
 			chat_scroll_place(app, pane, sb, em)
 			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.scroll_y("###chat") {
@@ -89,12 +91,13 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32, avail: f32) {
 				}
 			}
 			pane.conversation.scroll_box = ui.prev_box("###chat")
+			if b := pane.conversation.scroll_box; b != nil { pane.conversation.scroll_key = b.key }
+			// (each pane's view has its find: the toolkit's, one per window, moved to the view it is opened over)
+			conversation_find(app, pane, pane.conversation.scroll_box)
 		}
 		chat_scroll_settle(app, pane, sb)
 		if sb != nil && pane.chat.id != "" && is_main { column_handles(app, pane, sb, main, side, col, avail, em, zoom) }
 		dock(app, pane, em, side, col)
-		// the find bar over the conversation's top-right corner, under the header
-		if is_main { find_bar(app, pane, em, avail - em * 1.4, sb != nil ? sb.rect.min.y - main.rect.min.y + em * 0.6 : em * 4) }
 		go_bottom_pill(app, pane, sb, main, avail, em)
 	}
 }
@@ -232,17 +235,19 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	}
 	if view == .Failed { chat_failed(app, pane, em) }
 	// Only the messages near the view are built (the toolkit's lazy column): the others stand as a space of the height they
-	// had when last built. A long conversation, Markdown and all, made every frame slow. A find reads them all once for a needle,
-	// a slice at each frame (its sweep: the window never freezes on a long conversation); everything is built while the
+	// had when last built. A long conversation, Markdown and all, made every frame slow. Everything is built while the
 	// conversation loads; the last message always (it grows while streaming).
 	// (The item is the if's block, like a row's; the column ends with this block: the space of the last messages skipped
 	// goes before what follows.)
 	{
-		// (Find is the main view's: the toolkit has one find per window, and asking its sweep starts it)
-		// (the messages are the selection's rows: the toolkit builds the two that hold its ends wherever they are, and a copy
-		// reads the ones between that are not built by message_text. A message is a block: a blank line before it)
-		lz := ui.lazy_begin(all = pane.chat.loading, sweep = pane == main_pane(app) ? ui.find_sweep() : {},
-			rows = ui.Text_Rows{count = len(c.messages), text = message_text, id = message_row_id, user = pane, gap = "\n\n"})
+		// (the messages are the selection's rows and the find's: the toolkit builds the two that hold a selection's ends wherever
+		// they are, and a copy reads the ones between that are not built by message_text; the find reads every message's whole
+		// text, by its stamp, and builds and opens the one that holds its current match. A message is a block: a blank line
+		// before it)
+		lz := ui.lazy_begin(all = pane.chat.loading, rows = ui.Text_Rows{
+			count = len(c.messages), text = message_text, id = message_row_id, stamp = message_stamp, version = messages_version(c),
+			reveal = message_reveal, user = pane, gap = "\n\n",
+		})
 		// (a view going back to where it was: the column keeps it on its message, however the heights around it settle. A page read
 		// above: the message the view holds is built whatever, frame moves the view by as much as the page pushed it down. Copied:
 		// a click in this build changes the state that owns them)
@@ -365,15 +370,40 @@ message_block :: proc(item: ^ui.Box) {
 
 // What a copy reads of boxes not built: their texts in their order, joined as the toolkit joins selectable boxes (a line
 // break; a blank line before a block). Nothing before the first: the rows' gap goes there.
+// `whole`: the text of the boxes with every part that opens opened (the find's: what is folded is found). `reveal` >= 0: a byte
+// of that text, and `opens` the keys (part_open's) of the folded parts that hold it, outermost first.
 Copy_Text :: struct {
-	b:     strings.Builder,
-	boxes: int,
+	b:      strings.Builder,
+	boxes:  int,
+	whole:  bool,
+	reveal: int,
+	folds:  [dynamic]string,   // the folded parts being written (whole), outermost first (temp)
+	opens:  []string,
 }
 
 copy_box :: proc(t: ^Copy_Text, s: string, block := false) {
 	if t.boxes > 0 { strings.write_string(&t.b, block ? "\n\n" : "\n") }
+	at := strings.builder_len(t.b)
 	strings.write_string(&t.b, s)
 	t.boxes += 1
+	if t.opens == nil && t.reveal >= at && t.reveal < at + len(s) && t.reveal >= 0 {
+		t.opens = make([]string, len(t.folds), context.temp_allocator)
+		copy(t.opens, t.folds[:])
+	}
+}
+
+// A part that opens, `key` its part_open key: written when it is `open`, or when the text is whole (then noted as folded until
+// copy_unfold). Used as `if copy_fold(t, key, open) { defer copy_unfold(t, open); ... }`.
+copy_fold :: proc(t: ^Copy_Text, key: string, open: bool) -> bool {
+	if open { return true }
+	if !t.whole { return false }
+	if t.folds == nil { t.folds = make([dynamic]string, context.temp_allocator) }
+	append(&t.folds, key)
+	return true
+}
+
+copy_unfold :: proc(t: ^Copy_Text, open: bool) {
+	if !open && len(t.folds) > 0 { pop(&t.folds) }
 }
 
 // Message `i`'s identity (ui.Text_Rows.id): its id hashed. A page of older messages loaded above a selection shifts the
@@ -384,38 +414,53 @@ message_row_id :: proc(user: rawptr, i: int) -> u64 {
 	return hash.fnv64a(transmute([]u8)c.messages[i].id)
 }
 
-// Message `i` of the pane `user` as its boxes give it to a copy (ui.Text_Rows.text): the message a selection spans and the
-// lazy column did not build. Each part follows the selectable boxes its view builds, in the same state (open or folded, the
-// preferences); ok false: it builds none.
-message_text :: proc(user: rawptr, i: int, allocator: runtime.Allocator) -> (string, bool) {
+// Message `i` of the pane `user` as its boxes give it (ui.Text_Rows.text): to a copy, the message a selection spans and the
+// lazy column did not build, each part as its view builds its selectable boxes, in the same state (open or folded, the
+// preferences); `whole`, to the find, as they would be with every part that opens opened (folded reasoning unless the
+// preference hides it, folded tool calls, a closed sub-agent card or result, a job's report, a Mermaid diagram's text).
+// ok false: it builds none.
+message_text :: proc(user: rawptr, i: int, allocator: runtime.Allocator, whole: bool) -> (string, bool) {
 	pane := (^Chat_Pane)(user)
-	c := &pane.chat
-	if i < 0 || i >= len(c.messages) { return "", false }   // (another conversation since the build)
+	if i < 0 || i >= len(pane.chat.messages) { return "", false }   // (another conversation since the build)
+	t := Copy_Text{b = strings.builder_make(allocator), whole = whole, reveal = -1}
+	message_write(&t, pane, i)
+	if t.boxes == 0 { strings.builder_destroy(&t.b); return "", false }
+	return strings.to_string(t.b), true
+}
+
+// message_text's writing, into `t` (the find's reveal reads it too, to learn which folds hold a byte).
+message_write :: proc(t: ^Copy_Text, pane: ^Chat_Pane, i: int) {
 	app := the_app
-	t := Copy_Text{b = strings.builder_make(allocator)}
-	m := &c.messages[i]
+	m := &pane.chat.messages[i]
 	#partial switch m.kind {
-	case .User: copy_box(&t, m.text)
+	case .User: copy_box(t, m.text)
 	case .Assistant:
 		for &p, k in m.parts {
 			pid := fmt.tprintf("%s_%d", m.id, k)
 			switch p.kind {
-			case .Text:      if len(p.text) > 0 { md_text(&t, app, pid, string(p.text[:])) }
-			case .Reasoning: if app.prefs.reasoning != "hidden" && part_open(app, pid, app.prefs.reasoning == "expanded") { copy_box(&t, string(p.text[:])) }
-			case .Tool:      if plain_tool(&p) { tool_part_text(&t, app, pane, &p, pid) } else { subagent_card_text(&t, app, pane, &p, pid) }
+			case .Text: if len(p.text) > 0 { md_text(t, app, pid, string(p.text[:])) }
+			case .Reasoning:
+				open := part_open(app, pid, app.prefs.reasoning == "expanded")
+				if app.prefs.reasoning != "hidden" && copy_fold(t, pid, open) {
+					defer copy_unfold(t, open)
+					copy_box(t, string(p.text[:]))
+				}
+			case .Tool: if plain_tool(&p) { tool_part_text(t, app, pane, &p, pid) } else { subagent_card_text(t, app, pane, &p, pid) }
 			}
 		}
 	case .Synthetic:
 		if m.sub_child != "" {
-			if part_open(app, m.id) && m.text != "" { md_text(&t, app, fmt.tprintf("%s_sr", m.id), m.text) }
+			open := part_open(app, m.id)
+			if m.text != "" && copy_fold(t, m.id, open) {
+				defer copy_unfold(t, open)
+				md_text(t, app, fmt.tprintf("%s_sr", m.id), m.text)
+			}
 		} else if m.mcp_event != "" {
-			if m.mcp_data != "" { mono_well_text(&t, m.mcp_data, TOOL_INPUT_LINES_MAX) }
+			if m.mcp_data != "" { mono_well_text(t, m.mcp_data, TOOL_INPUT_LINES_MAX) }
 		} else if len(m.jobs) > 0 {
-			job_reports_text(&t, app, m)
+			job_reports_text(t, app, m)
 		}
 	}
-	if t.boxes == 0 { strings.builder_destroy(&t.b); return "", false }
-	return strings.to_string(t.b), true
 }
 
 // The first line of Markdown that says something, as text: a preview shows no marks (headings, quotes, lists, emphasis).

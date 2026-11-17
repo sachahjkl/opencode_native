@@ -255,8 +255,7 @@ a_server_left_leaves_nothing_behind :: proc(t: ^testing.T) {
 	show(app, "s")
 	append(&app.activity.jobs, Shell_Job{id = strings.clone("j"), status = .Running})
 	app.activity.open = true
-	pane.find.open = true
-	pane.find.index = 3
+	find_ask(app, pane, "needle")
 	bench_event(app, `{"type":"permission.asked","data":{"request":{"id":"p","sessionID":"s"}}}`)
 	waits_gone(app, "gone")
 	refresh_soon(app)
@@ -266,7 +265,7 @@ a_server_left_leaves_nothing_behind :: proc(t: ^testing.T) {
 	testing.expect(t, !app.cx.have_slash)
 	testing.expect_value(t, len(app.activity.jobs), 0)
 	testing.expect(t, !app.activity.open)
-	testing.expect(t, !pane.find.open)
+	testing.expect(t, !pane.conversation.find_due && pane.conversation.find_text == "", "no find opens over the next server's conversation")
 	testing.expect_value(t, len(app.permissions), 0)
 	testing.expect_value(t, len(app.cx.waits_gone.items), 0)
 	testing.expect_value(t, app.cx.due[.Refresh].due_ms, 0)
@@ -1024,22 +1023,6 @@ ctrl_p_is_the_files_alone :: proc(t: ^testing.T) {
 	for &c in COMMANDS {
 		for k in c.keys { if k == (ui.Chord{.P, {.Ctrl}}) { testing.expect_value(t, c.id, "session.files") } }
 	}
-}
-
-@(test)
-find_follows_the_conversation :: proc(t: ^testing.T) {
-	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	pane := main_pane(app)
-	show(app, "a")
-	pane.find.open = true
-	pane.find.index = 4
-	pane.find.reveal = true
-	show(app, "b")
-	testing.expect_value(t, pane.find.index, -1)
-	testing.expect(t, pane.find.open && !pane.find.reveal)
-	new_session(app)
-	testing.expect(t, !pane.find.open, "the home page has no conversation to search")
 }
 
 // A link that died in silence: only the stream has a limit on it, so its return is what opens the shells' sockets again. Not a first

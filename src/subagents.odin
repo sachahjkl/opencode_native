@@ -661,9 +661,13 @@ sub_fact_rows :: proc(app: ^App, v: ^Sub_View) -> []Sub_Fact {
 	return out[:]
 }
 
-// subagent_card's selectable boxes as a copy reads them (message_text): open, its session's facts, its prompt, its result.
+// subagent_card's selectable boxes as a copy reads them (message_text): open (or the text whole), its session's facts, its
+// prompt, its result.
 subagent_card_text :: proc(t: ^Copy_Text, app: ^App, pane: ^Chat_Pane, p: ^Part, pid: string) {
-	if !part_open(app, p.tool_id != "" ? p.tool_id : pid) { return }
+	key := p.tool_id != "" ? p.tool_id : pid
+	open := part_open(app, key)
+	if !copy_fold(t, key, open) { return }
+	defer copy_unfold(t, open)
 	v := sub_view(app, pane, p.sub_session != "" ? p.sub_session : sub_session_guess(&pane.chat, p), p)
 	if v.session != nil {
 		for f in sub_fact_rows(app, &v) {

@@ -13,8 +13,6 @@ program keeps no spacing constant of its own for these.
 - **A raised card is `ui.card`.** A permission, a form, the person's prompt, a sub-agent's card and its banner are
   `ui.card` with their own look (colours.md); the card puts `CARD_PAD` on its four sides, so what is inside them has
   no inset of its own. Inside, they use `ICON_GAP`, `CONTROL_GAP` and `LINE_GAP`; `ITEM_GAP` follows a dock's card.
-  The find bar keeps a `.Plate` box with a look and no card: it is only the shadow under its well, which an inset would
-  part from it.
 - **A list is one card.** The MCP servers of the settings are a `list_card` with a row each, split by hairlines, not a
   plate per server with gaps between.
 - **Dialogs and panels** (servers, schedules, artifacts, session tools, statistics) use `PAGE_MARGIN` at their sides;
@@ -39,7 +37,7 @@ program keeps no spacing constant of its own for these.
 - **Sizes that are no gap**: the terminal's pixel inset (`TERM_PAD`, part of the grid's size in cells), the image and
   diagram viewers' grips (`VIEWER_PAD_EM`), the home page's top (`HOME_TOP_EM`), the space under the last message
   (`CHAT_FOOT_EM`, a run's line lives in it), the line under the browser's tab (`TAB_LINE_INSET_EM`, an inset of a
-  drawn line), and the scroll margins (`PROMPT_RAIL_MARGIN_EM`, `FIND_BOTTOM_MARGIN_EM`, `OLDER_MARGIN`).
+  drawn line), and the scroll margins (`PROMPT_RAIL_MARGIN_EM`, `OLDER_MARGIN`).
 - **A control's inside**: the `text_pad` of a field or a composer's tool button (`COMPOSER_TOOL_PAD_EM`) is the inset of
   its text in the control, as a button's height is its size, not a gap between boxes.
 - **Indents that line up with a column**: a sub-agent's rows under their mark (`CARD_INDENT_EM`, the mark and

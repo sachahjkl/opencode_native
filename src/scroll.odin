@@ -177,10 +177,15 @@ chat_scroll_place :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) {
 	slack := auto ? AUTOSCROLL_SLACK_PX : BOTTOM_SLACK_PX * ui.scale()
 	by_hand := chat_keys(app, pane, sb, em) || st.scroll_delta != {} || ui.active_key() != 0 || auto
 	if scrollbar_held(app, sb) { chat_scroll_event(pane, Scroll_Signal.Restore_End) }   // (as the wheel and the keys do: main_input)
+	// (the find brings its match in after the layout, between two builds: a move of the reader's, which a way back or the
+	// bottom followed would undo)
+	found := ui.find_is_open(sb.key) && abs(sb.view_target.y - pane.view.chat_target) > 1
+	if found { chat_scroll_event(pane, Scroll_Signal.Restore_End) }
 	limit := ui.view_limit(sb)
 	// the scrollbar's drag, the wheel, the keyboard moved it: up means let go of the bottom, or following it would put it back at
-	// once and the thumb would stay stuck there. Only a hand: a box built anew starts at its top, and that is no reader going up.
-	if by_hand && sb.view_target.y < pane.view.chat_target - (auto ? 0 : 1) && sb.view_target.y < limit - slack {
+	// once and the thumb would stay stuck there. Only a hand (or the find): a box built anew starts at its top, and that is no
+	// reader going up.
+	if (by_hand || found) && sb.view_target.y < pane.view.chat_target - (auto ? 0 : 1) && sb.view_target.y < limit - slack {
 		chat_scroll_event(pane, Scroll_Signal.Moved_Up)
 	}
 	#partial switch s in pane.view.chat_scroll {

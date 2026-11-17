@@ -27,8 +27,8 @@ what opencode native decides on top of it.
   keyboard (elsewhere a shell's, or nothing in the composer); the conversation's zoom keys are its zone's (outside it
   they zoom the interface); Alt+F4 is the system's. Their own keys are shown (the palette, the help, the menus) and not
   read by `commands_keys`; a person's key on one of them is read as any.
-- **Ctrl+F is a key of `session.find`.** `find_keys` read it alone before; now a person's key moves it. The main view's
-  rule stays: the command can act only while the keyboard is not in a panel (`can_find`, chat-panes.md).
+- **Ctrl+F is a key of `session.find`.** `find_keys` read it alone before; now a person's key moves it. It opens the find
+  of the pane with the keyboard, the panel's too (`can_find`, find.md). F3 and the bar's own keys are the toolkit's.
 - **Every id is its own.** Two commands had the same id (`session.background`, `session.copy_id`): the keymap and the
   usage memory took them as one. The second "Copy the session ID" went (the first copies and says so); "Send running
   tools to the background" is `session.tools_background`. A test runs `ui.command_ids_check`.

@@ -314,9 +314,6 @@ fr Renommer la session…
 en Set the model…
 fr Choisir le modèle…
 
-en Jump to message…
-fr Aller à un message…
-
 en Fork the session
 fr Bifurquer la session
 
@@ -728,8 +725,8 @@ fr Fichiers de la session
 en Mention
 fr Mentionner
 
-en no match
-fr aucun résultat
+en Prompts
+fr Invites
 
 en Start a session in
 fr Démarrer une session dans
@@ -1049,12 +1046,6 @@ fr Sous-agent terminé (%s)
 
 en (no report)
 fr (aucun rapport)
-
-en Prompts
-fr Invites
-
-en Go
-fr Aller
 
 en The preferences could not be saved
 fr Impossible d'enregistrer les réglages

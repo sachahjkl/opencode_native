@@ -343,9 +343,9 @@ chat_shown_changed :: proc(app: ^App) {
 	pane_follow(app, main_pane(app))
 }
 
-// What follows the session a pane shows: its reading, its find, what failed for it.
+// What follows the session a pane shows: its reading, what failed for it. (Its find follows by itself: the toolkit counts the
+// other conversation's rows by their identities, and the home page closes it: conversation_find.)
 pane_follow :: proc(app: ^App, pane: ^Chat_Pane) {
-	find_chat_changed(app, pane)
 	if pane.chat.id != "" { chat_read(app, pane); goal_read(app, pane) }
 	outgoing_return(app, pane)
 }
@@ -698,7 +698,6 @@ chat_load :: proc(app: ^App, pane: ^Chat_Pane, v: json.Value, older: bool, asked
 		chat_scroll_event(pane, Scroll_Older_Page{c.view_msg})
 		inject_at(&page, len(page), ..c.messages[:])
 		c.messages = page
-		find_page_added(app, pane)   // (text a find has not read)
 	} else {
 		// (what the stream began after this page was asked for is not in it)
 		for m in c.messages {
