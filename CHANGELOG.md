@@ -4,6 +4,12 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.69.2] - 2026-11-17 10:24
+
+### Fixed
+- **The licence card shows the logo**: its front carries the opencode native logo and its back the logo raised, above "OPENCODE NATIVE · FROMENT SOFTWARE".
+- **The image viewer fits its bar**: on a small picture, the viewer is as wide as its bar needs, so Close stays inside. The bar no longer repeats the file name that the title shows. Made narrower, the size gives way and the buttons stay inside.
+
 ## [0.69.1] - 2026-11-16 22:10
 
 ### Fixed
@@ -1845,6 +1851,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.69.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.69.2
 [0.69.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.69.1
 [0.69.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.69.0
 [0.68.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.68.0
