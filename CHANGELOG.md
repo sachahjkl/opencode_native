@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.70.1] - 2026-11-17 12:53
+
+### Fixed
+- **Side panels stay in the window**: a wide bar in the middle no longer pushes the sidebar or a docked panel past the window's edge.
+
 ## [0.70.0] - 2026-11-17 11:46
 
 ### Changed
@@ -1861,6 +1866,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.70.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.70.1
 [0.70.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.70.0
 [0.69.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.69.2
 [0.69.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.69.1
