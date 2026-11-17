@@ -4,6 +4,16 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.71.0] - 2026-11-17 13:44
+
+### Added
+- **A list of the models behind an option**: Settings › Behaviour › Model picker set to List makes the composer's model button open a list of the models with their context sizes, as before Set the model; Form stays the default.
+- **Fold the sidebar from its corner**: the sidebar shows its Minimise at rest, at the place where the rail shows Restore.
+
+### Changed
+- **The model button says the provider**: the composer shows the model as the lists say it, "provider/name"; a long one is cut in its middle and said whole in its tip.
+- **The rail's session card shows at once and reads at a glance**: hovering a session's mark in the minimised sidebar shows its card with no delay, and the next mark's card follows the pointer down the rail. The card is denser: the title on up to two lines, the project and its folder on one line, the state with its lamp and the last activity on one line, then what waits with its icon.
+
 ## [0.70.1] - 2026-11-17 12:53
 
 ### Fixed
@@ -1866,6 +1876,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.71.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.71.0
 [0.70.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.70.1
 [0.70.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.70.0
 [0.69.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.69.2
