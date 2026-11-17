@@ -4,6 +4,17 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.74.0] - 2026-11-17 23:10
+
+### Changed
+- **One find in the conversation, folded text included**: Ctrl+F (or the magnifier above the prompt marks) counts every match, in folded tool outputs, folded reasoning, closed sub-agent cards, diagrams' text and messages far up the conversation; the step to a match opens what holds it. Every match is a tick on the scroll bar. The scope "Prompts" searches your prompts alone, and the /btw panel has its own find.
+
+### Removed
+- **Jump to message (Ctrl+Alt+G)**: the find's scope "Prompts" replaces it, with a count and the match lit; the prompt marks' filter field goes too, the magnifier opens the find.
+
+### Fixed
+- **/btw opens its panel at once**: the panel shows on the next frame, with its title and your question on its way, while the server makes the fork; it used to appear only when the fork was made, seconds later in a long conversation.
+
 ## [0.73.0] - 2026-11-17 20:37
 
 ### Changed
@@ -1891,6 +1902,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.74.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.74.0
 [0.73.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.73.0
 [0.72.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.72.0
 [0.71.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.71.1
