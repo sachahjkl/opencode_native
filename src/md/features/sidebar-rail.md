@@ -21,10 +21,20 @@ on hover. A person keeps their sessions in reach and gives the conversation the 
   the list's search field would need the width the rail gave away. The server's strip becomes its mark: the link's
   lamp on a server glyph, a click opens the server menu (every server, Add, Edit), its card says the name, the link's
   state and the address.
-- **The card says what the row said, and more.** `tooltip_beside` anchored on the mark, past the rail's edge: the
-  title; the project (the folder's last part) and, under it, the folder that holds it (the path said once); the state
-  in words, or, when it waits, what waits (each question, form or permission of it and of its sub-agents, three at
-  most and a count of the rest); the last activity.
+- **The card says what the row said, and more.** `tooltip_beside` anchored on the mark, past the rail's edge, at most
+  `RAIL_CARD_EM` wide, its lines on the toolkit's spacing scale with no text padding of their own:
+  - the title, bold, two lines at most (`rich_paragraph`'s `max_lines`, then "…");
+  - one weak line "project · folder": the project is the folder's last part, the folder the one that holds it (the path
+    said once), cut in its middle (`ui.elide` `.Middle`) so that both its root and its end show;
+  - the state line: the mark's lamp, then its words, its running sub-agents and the last activity, parted by " · "
+    ("Running · 2 sub-agents run · 3m ago"; at rest, the time alone). The time says "ago": no "Last active" label;
+  - when it waits, what waits: each question, form or permission of it and of its sub-agents, one line each with its
+    kind's icon under the lamp's column, three at most and "and N more".
+- **At once under the pointer.** The pointer on a mark shows its card on that build (`Signal.hovering`, not
+  `ui.hovered_for`): the rail is a column of faces, the card is what reads them, and the person runs the pointer down the
+  rail to find a session. Each mark the pointer reaches shows its card at once; the toolkit's one tooltip box stays up and
+  takes the new mark's content. The other buttons of the rail (New session, Search, the server) keep the delay: their
+  tooltips name a button already known.
 - **Keys and pointer.** A click opens the session, as a row does; a right click opens the row's menu (`session_menu`).
   Up and Down move the keyboard along the marks (`ui.focus_by_keys`: its ring shows, the mark comes into view); the card
   follows the keyboard (`ui.keyboard_focused`) while the pointer is off the rail. Enter opens, as on every button.
@@ -41,3 +51,9 @@ on hover. A person keeps their sessions in reach and gives the conversation the 
   while the pointer is off the rail, which also keeps a button's own tooltip (New session, Search) alone.
 - **No fold of ocn's own.** A width threshold or a button in ocn would differ from every other panel's.
 - **The card beside the mark, not the pointer.** Beside the pointer it covered the rail's own marks.
+- **No delay on the marks.** With `Feel.tooltip_delay_ms` (500 ms) the card came only once the pointer rested, and
+  each move to the next mark started the wait again: a person who scans the rail saw no card at all. A mark has no
+  label to read without its card, so the card is its label. The delay stays a toolkit setting for every other tooltip.
+- **Dense lines, not tooltip_text.** `tooltip_text` gives each line the style's text padding: five facts took five
+  loose lines with a gap of a line between each. The card lays its own lines out with `text_pad = 0`, `SPACE_1`
+  between lines of a group and `SPACE_2` between the title group and the state group.

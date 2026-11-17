@@ -31,7 +31,8 @@ bench_title :: proc(i: int) -> string { return fmt.tprintf("Session %d about the
 
 // The sidebar's zone minimised builds the sidebar as its rail (src/md/features/sidebar-rail.md): New session, Search, the
 // server's mark, then a mark per session in the list's order (what waits first; no sub-agent, its parent's lamp says it
-// runs), each lit as its row. A hover shows its card (title, project, folder, what waits), a click opens the session,
+// runs), each lit as its row. A hover shows its card at once (title, project · folder, state, what waits) and the next
+// mark's as the pointer goes down, a click opens the session,
 // Down moves the keyboard to the next mark and its card follows; Restore brings the list back. A window too narrow for
 // the sidebar and the conversation folds it to the same rail.
 @(test)
@@ -86,16 +87,26 @@ the_sidebar_minimised_is_a_rail_of_marks :: proc(t: ^testing.T) {
 		testing.expect(t, !lit(s, bench_title(1), "busy") && !lit(s, bench_title(1), "waits"), "one at rest: no lamp")
 		session.save_png(s, "rail.png")
 
-		// a hover: the card
+		// a hover: the card at once, not after Feel.tooltip_delay_ms (a move is INPUT_FRAMES frames: 33 ms of the clock)
+		in_card :: proc(s: ^session.Session, text: string) -> bool {
+			tip := session.find(s, "tooltip")
+			return tip != nil && tip.transparency < 1 && ui.box_find(s.state, "", text, 0, tip) != nil
+		}
 		session.move(s, session.center(marks[0]))
-		session.wait_text(s, bench_title(6))
-		testing.expect(t, session.find_text(s, "project_6") != nil, "its project")
-		testing.expect(t, session.find_text(s, "C:/code") != nil, "the folder that holds it")
-		testing.expect(t, session.find_text(s, "Asks permission: Edit src/main.odin") != nil, "what waits")
-		session.frames(s, 2)
+		testing.expect(t, in_card(s, bench_title(6)), "the card at once: its title")
+		testing.expect(t, in_card(s, "project_6 · C:/code"), "its project and the folder that holds it, on one line")
+		testing.expect(t, in_card(s, "Waits for you · "), "its state in words, then its last activity")
+		testing.expect(t, in_card(s, "Edit src/main.odin"), "what waits")
+		testing.expect(t, !in_card(s, "Last active"), "the time says itself: no label")
 		tip := session.find(s, "tooltip")
 		testing.expectf(t, tip != nil && tip.rect.min.x >= zone.rect.max.x, "the card past the rail's edge: %v, the rail %v", tip.rect if tip != nil else ui.Rect{}, zone.rect)
-		session.save_png(s, "rail-tooltip.png")
+		testing.expectf(t, tip != nil && tip.rect.max.x - tip.rect.min.x <= RAIL_CARD_EM * em + 1, "the card at most RAIL_CARD_EM wide: %v", tip.rect if tip != nil else ui.Rect{})
+		session.save_png(s, "rail-card.png")
+		// the pointer down the rail: the next mark's card at once
+		session.move(s, session.center(marks[1]))
+		testing.expect(t, in_card(s, bench_title(3)) && !in_card(s, bench_title(6)), "the next mark: its card at once")
+		testing.expect(t, in_card(s, "Running · "), "it runs")
+		session.save_png(s, "rail-card-running.png")
 
 		// a click opens the session; Down moves the keyboard to the next mark, its card beside it
 		other := rail_mark_of(s, bench_title(2))

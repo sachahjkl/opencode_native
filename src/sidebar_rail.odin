@@ -15,6 +15,9 @@ SIDEBAR_RAIL_EM :: 3.5   // the rail's width: a mark, its lamp, and the toolkit'
 RAIL_MARK_EM    :: 2.6   // a session's row in the rail
 RAIL_FACE_EM    :: 1.9   // its avatar (as tall as the inbox's)
 RAIL_WAITS_MAX  :: 3     // what waits, said one by one up to this many in the card
+RAIL_CARD_EM    :: 24    // the card at its widest, its insets included: a title of about forty letters a line
+RAIL_TITLE_LINES :: 2    // the card's title, then "…"
+RAIL_LEAD_EM    :: 0.85  // the card's column of the lamp and the icons of what waits (session_lamp's box)
 
 // What the rail keeps between builds: where the keyboard is among the marks. The marks are built lazily, as the list's
 // rows: the one with the keyboard and its two neighbours stay built, so that Up and Down land on a box laid out.
@@ -150,7 +153,9 @@ rail_marks :: proc(app: ^App, rail: ^ui.Box, keys_card: bool, em: f32) {
 							}
 						}
 					}
-					if ui.hovered_for(sig) || (card == nil && keys_card && ui.keyboard_focused(sig)) { card, card_at = s, b.rect }
+					// (at once, not after Feel.tooltip_delay_ms: a mark has no label but its card, and a pointer run down
+					// the rail must read each mark it passes)
+					if sig.hovering || (card == nil && keys_card && ui.keyboard_focused(sig)) { card, card_at = s, b.rect }
 				}
 				if step && built == nil {
 					// (past the marks built: this one takes the keyboard once it is, at the next build)
@@ -230,69 +235,146 @@ rail_kids_running :: proc(app: ^App, kids: map[string][dynamic]int, id: string) 
 	return n
 }
 
-// The card of a mark: what its row said, and more. Its title; its project and the folder that holds it; its state in
-// words, or what waits for the person; its last activity. Each fact once.
+// The card of a mark: what its row said, and more (src/md/features/sidebar-rail.md). The title; "project · folder"; the
+// lamp with the state, the sub-agents that run and the last activity on one line; what waits, a line each. Each fact once.
 @(private = "file")
 rail_card :: proc(app: ^App, s: ^Session_Info, kids: map[string][dynamic]int, em: f32) {
-	title := s.title != "" ? s.title : i18n.tr("Untitled")
-	if ui.style({fg = ui.theme_color("bright text"), font = ui.styled_face(app.font, true, false)}) { ui.tooltip_text(title) }
-	if s.directory != "" {
-		// (the project is the folder's last part, the line under it the rest: the path said once)
-		project := base_name(s.directory)
-		whole := strings.trim_right(s.directory, "\\/")
-		holder := strings.trim_right(whole[:len(whole) - len(project)], "\\/")
-		ui.tooltip_text(project)
-		if holder != "" { if ui.style({fg = ui.theme_color("weak text"), font_size = math.round(em * FS_SMALL)}) { ui.tooltip_text(holder) } }
-	} else {
-		ui.tooltip_text(i18n.tr("(no folder)"))
-	}
-	ui.space(ui.SPACE_1)
-	for line in rail_state_words(app, s, rail_kids_running(app, kids, s.id)) { ui.tooltip_text(line) }
-	if age := age_text(now_epoch_ms(), s.updated); age != "" {
-		if ui.style({fg = ui.theme_color("weak text"), font_size = math.round(em * FS_SMALL)}) {
-			ui.tooltip_text(age == "now" ? i18n.tr("Active just now") : fmt.tprintf(i18n.tr("Last active %s ago"), age))
+	inner := math.round(em * (RAIL_CARD_EM - 2 * ui.SPACE_3))
+	// (no text padding: tooltip_text's gave each line the room of two; the insets and gaps are the spacing scale's)
+	if ui.style({text_pad = 0}) {
+		ui.next({width = ui.children_sum(), height = ui.children_sum(), axis = .X})
+		if ui.parent(ui.build_box({}, "###rail_card")) {
+			ui.space(ui.SPACE_3)
+			rail_card_lines(app, s, kids, em, inner)
+			ui.space(ui.SPACE_3)
 		}
 	}
 }
 
-// A session's state in words, as its lamp says it (session_light). Waiting: what waits, one line each (its own and its
-// sub-agents'), up to RAIL_WAITS_MAX. At rest and seen: nothing to say.
-rail_state_words :: proc(app: ^App, s: ^Session_Info, kids_running: int) -> []string {
-	lines := make([dynamic]string, context.temp_allocator)
+// The card's column of lines, `inner` pixels at most.
+@(private = "file")
+rail_card_lines :: proc(app: ^App, s: ^Session_Info, kids: map[string][dynamic]int, em, inner: f32) {
+	lead := math.round(em * RAIL_LEAD_EM)
+	small := math.round(em * FS_SMALL)
+	weak := ui.theme_color("weak text")
+	face := ui.top_style().font
+	ui.next({width = ui.children_sum(), height = ui.children_sum(), axis = .Y})
+	if ui.parent(ui.build_box({}, "###lines")) {
+		ui.space(ui.SPACE_2)
+		title := s.title != "" ? s.title : i18n.tr("Untitled")
+		bold := ui.styled_face(app.font, true, false)
+		ui.next({width = ui.px(math.ceil(min(ui.text_width(bold, ui.font_size(), title), inner))), font = bold, fg = ui.theme_color("bright text")})
+		ui.rich_paragraph("###card_title", {{text = title}}, max_lines = RAIL_TITLE_LINES, selectable = false)
+		ui.space(ui.SPACE_1)
+		meta := i18n.tr("(no folder)")
+		if s.directory != "" {
+			// (the project is the folder's last part, the folder the one that holds it: the path said once)
+			project := base_name(s.directory)
+			whole := strings.trim_right(s.directory, "\\/")
+			holder := strings.trim_right(whole[:len(whole) - len(project)], "\\/")
+			meta = project
+			if holder != "" {
+				head := fmt.tprintf("%s · ", project)
+				meta = fmt.tprintf("%s%s", head, ui.elide(face, small, holder, inner - ui.text_width(face, small, head), .Middle))
+			}
+		}
+		if ui.style({fg = weak, font_size = small}) { rail_card_text(ui.elide(face, small, meta, inner), "card_meta") }
+		ui.space(ui.SPACE_2)
+		running := rail_kids_running(app, kids, s.id)
+		light := session_light(app, s)
+		lit := light
+		if lit < .Running && running > 0 { lit = .Running }   // (as its mark: lit by its sub-agents)
+		ui.next({width = ui.children_sum(), height = ui.children_sum(), axis = .X, cross = .Center})
+		if ui.parent(ui.build_box({}, "###card_state")) {
+			if lit != .Rest {
+				session_light_lamp(s, lit, em)
+				ui.space(ui.SPACE_2)
+			}
+			rail_card_text(rail_state_line(app, s, light, running), "card_state_words")
+		}
+		waits, n := rail_waits(app, s)
+		for w, i in waits {
+			ui.space(ui.SPACE_1)
+			ui.next({width = ui.children_sum(), height = ui.children_sum(), axis = .X, cross = .Center})
+			if ui.parent(ui.build_box({}, fmt.tprintf("###card_wait%d", i))) {
+				glyph(w.icon, w.color, math.round(em * ICON_SMALL), lead)
+				ui.space(ui.SPACE_2)
+				rail_card_text(ui.elide(face, ui.font_size(), w.text, inner - lead - math.round(em * ui.SPACE_2)), "card_wait")
+			}
+		}
+		if n > len(waits) {
+			ui.space(ui.SPACE_1)
+			ui.next({width = ui.children_sum(), height = ui.children_sum(), axis = .X})
+			if ui.parent(ui.build_box({}, "###card_more")) {
+				ui.space(RAIL_LEAD_EM + ui.SPACE_2)   // (under the words of what waits, past their icons)
+				if ui.style({fg = weak, font_size = small}) {
+					rail_card_text(fmt.tprintf(i18n.tr(n - len(waits), "and %d more", "and %d more"), n - len(waits)), "card_more_words")
+				}
+			}
+		}
+		ui.space(ui.SPACE_2)
+	}
+}
+
+// A line of the card, as wide as its text (cut before it is built: no wrap).
+@(private = "file")
+rail_card_text :: proc(text, id: string) {
+	ui.next({width = ui.text_size(), height = ui.text_size()})
+	ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###%s", label_safe(text), id))
+}
+
+// The card's state line: the state in words as the lamp says it (session_light), the sub-agents that run, the last
+// activity, parted by " · ". At rest and seen, the time alone.
+rail_state_line :: proc(app: ^App, s: ^Session_Info, light: Session_Light, kids_running: int) -> string {
+	parts := make([dynamic]string, 0, 3, context.temp_allocator)
+	switch light {
+	case .Waits:      append(&parts, i18n.tr("Waits for you"))
+	case .Running:    append(&parts, i18n.tr("Running"))
+	case .Background: append(&parts, i18n.tr("Its commands run in the background"))
+	case .Unseen:
+		st, _ := state_of_word(s.outcome)
+		#partial switch st {
+		case .Failed:    append(&parts, i18n.tr("Failed, not seen yet"))
+		case .Cancelled: append(&parts, i18n.tr("Stopped, not seen yet"))
+		case:            append(&parts, i18n.tr("Finished, not seen yet"))
+		}
+	case .Rest:
+	}
+	if kids_running > 0 { append(&parts, fmt.tprintf(i18n.tr(kids_running, "%d sub-agent runs", "%d sub-agents run"), kids_running)) }
+	if s.updated > 0 {
+		now := now_epoch_ms()
+		// (timefmt.age says "now" under a minute: "now ago" does not read)
+		append(&parts, now - s.updated < SECS_PER_MINUTE * MS_PER_S ? i18n.tr("just now") : fmt.tprintf(i18n.tr("%s ago"), age_text(now, s.updated)))
+	}
+	return strings.join(parts[:], " · ", context.temp_allocator)
+}
+
+// One thing that waits for the person, as the card says it: its kind's icon, its words.
+Rail_Wait :: struct {
+	icon:  string,
+	color: Color,
+	text:  string,
+}
+
+// What waits on a session, its own and its sub-agents': the first RAIL_WAITS_MAX (temp memory), and how many in all.
+rail_waits :: proc(app: ^App, s: ^Session_Info) -> (first: []Rail_Wait, n: int) {
+	list := make([dynamic]Rail_Wait, 0, RAIL_WAITS_MAX, context.temp_allocator)
 	ours :: proc(app: ^App, s: ^Session_Info, owner: string) -> bool {
 		if owner == s.id { return true }
 		o := find_session(app, owner)
 		return o != nil && o.parent == s.id
 	}
-	light := session_light(app, s)
-	switch light {
-	case .Waits:
-		n := 0
-		for f in app.cx.forms {
-			if !ours(app, s, f.session) { continue }
-			if n < RAIL_WAITS_MAX { append(&lines, fmt.tprintf(f.question ? i18n.tr("Asks: %s") : i18n.tr("Waits on a form: %s"), f.title)) }
-			n += 1
+	for f in app.cx.forms {
+		if !ours(app, s, f.session) { continue }
+		if n < RAIL_WAITS_MAX {
+			append(&list, f.question ? Rail_Wait{lucide.MESSAGE_CIRCLE_QUESTION_MARK, ui.hue(.Accent), f.title} : Rail_Wait{lucide.CLIPBOARD_LIST, ui.hue(.Accent), f.title})
 		}
-		for p in app.permissions {
-			if !ours(app, s, p.session) { continue }
-			if n < RAIL_WAITS_MAX { append(&lines, fmt.tprintf(i18n.tr("Asks permission: %s"), p.message != "" ? p.message : p.action)) }
-			n += 1
-		}
-		if n > RAIL_WAITS_MAX { append(&lines, fmt.tprintf(i18n.tr(n - RAIL_WAITS_MAX, "and %d more", "and %d more"), n - RAIL_WAITS_MAX)) }
-		if n == 0 { append(&lines, i18n.tr("Waits for you")) }
-	case .Running:    append(&lines, i18n.tr("Runs"))
-	case .Background: append(&lines, i18n.tr("Its commands run in the background"))
-	case .Unseen:
-		st, _ := state_of_word(s.outcome)
-		#partial switch st {
-		case .Failed:    append(&lines, i18n.tr("Failed, not seen yet"))
-		case .Cancelled: append(&lines, i18n.tr("Stopped, not seen yet"))
-		case:            append(&lines, i18n.tr("Finished, not seen yet"))
-		}
-	case .Rest:
+		n += 1
 	}
-	if kids_running > 0 && light != .Waits {
-		append(&lines, fmt.tprintf(i18n.tr(kids_running, "%d sub-agent runs", "%d sub-agents run"), kids_running))
+	for p in app.permissions {
+		if !ours(app, s, p.session) { continue }
+		if n < RAIL_WAITS_MAX { append(&list, Rail_Wait{lucide.SHIELD, ui.hue(.Yellow), p.message != "" ? p.message : p.action}) }
+		n += 1
 	}
-	return lines[:]
+	return list[:], n
 }
