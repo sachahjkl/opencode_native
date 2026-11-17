@@ -733,7 +733,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 		custom_names = CUSTOM_PREFS[:],
 		custom = proc(user: rawptr, name: string, em: f32) { font_button((^App)(user), name, em) },
 		page_foot = settings_page_foot,
-		licence = licence_page(app), install = &app.install, diagnostics = &app.window,
+		licence = licence_page(app), install = &app.install, diagnostics = prefs_page.diagnostics_of(&app.window),
 		changelog = &app.changelog,   // (What's new: CHANGELOG.md as a page of the settings)
 	}
 }
