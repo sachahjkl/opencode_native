@@ -367,7 +367,6 @@ Image_Viewer :: struct {
 	focus:       bool,        // just opened: the keyboard goes to the picture (its keys zoom and move it)
 	grown:       bool,        // the person sized the dialog since it opened: it keeps their size, no longer the picture's
 	opened:      bool,        // a picture was just given to it: the size the person gave the last one goes (image_view)
-	asked:       [2]f32,      // the size its last build asked (ui.view_size, ems): the one this build is laid out at
 	start:       Image_Ref,   // --image=<file>: opened in the viewer once it is decoded (its data owned)
 }
 
@@ -418,14 +417,10 @@ image_view :: proc(v: ^ui.View, app: ^App) {
 		// back. The picture then fits the area their size leaves, and that area is the share the next pictures open at.
 		// view_size first: it drops the size remembered from another opening, which is not this one's resize. It drops it
 		// only when the size asked changes: a picture given to the viewer still open asks once for the kind's size first)
-		if app.viewer.opened { ui.view_size(v, 0, 0); app.viewer.opened, app.viewer.asked = false, {} }
-		if !app.viewer.grown {
-			// (a size asked in a build is the next build's: this one was laid out at the size asked before. A dialog of a
-			// known size shows in its first build, so that one waits for the hug)
-			if app.viewer.asked != asked { ui.view_not_ready(v) }
-			ui.view_size(v, asked.x, asked.y)
-		}
-		app.viewer.asked = asked
+		// (a new size asked while the dialog is unseen keeps it unseen one more build, laid out at it: the toolkit's
+		// view_size, so the guess before the bar's measure is never shown)
+		if app.viewer.opened { ui.view_size(v, 0, 0); app.viewer.opened = false }
+		if !app.viewer.grown { ui.view_size(v, asked.x, asked.y) }
 		size := ui.view_dialog_size(&app.program_views, IMAGE_VIEW)
 		if size != {} && size != asked { app.viewer.grown = true }
 		if app.viewer.grown {

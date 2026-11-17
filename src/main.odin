@@ -29,7 +29,6 @@ import process "gt:process"
 import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
-import update "gt:update"
 
 // A face of the fonts. (Inside App, `font` names the face of the interface, from host.Shared: not the package.)
 Face_Id :: font.Font_Id
@@ -65,8 +64,7 @@ App :: struct {
 	stores:         Stores,            // what it remembers beside the preferences, written on workers (stores.odin)
 	preview:        Preview,           // the page beside the conversation (preview.odin)
 	browser:        Browser,           // the agents' tools on that page (browser_mcp.odin)
-	updater:        ^update.Updater,   // a new version: checked, downloaded, in place (updates.odin; nil: none started)
-	update_serial:  int,               // the updater's state last said (updates_follow)
+	updates:        prefs_page.Updates,   // a new version: checked, downloaded, in place (updates.odin; updater nil: none started)
 	program_views:  ui.Views,          // the dialogs, the sidebar, the panels, the windows of their own, and how each was last shown (window_views.odin; `views` is host.Shared's: their windows)
 	rename:         Rename,            // a session's title (context_menus.odin)
 	scale:          f32,               // --scale=<factor>: the interface's scale whatever the screen says (0: the screen's)
@@ -125,7 +123,7 @@ App :: struct {
 	crash_bar:        crash_bar.Bar,        // the last session's crash, said in a bar under the title bar
 	quit:             bool,
 	// the program's file as it started (heap): an update moves the running file aside (<exe>.old on Windows), after which the
-	// system names the moved one; the updater, the install's record and Restart need the place, which holds the new copy
+	// system names the moved one; Restart needs the place, which holds the new copy (the updater finds its own)
 	exe:              string,
 	launch_after:     string,   // Restart: the file started at main's very end, once the single instance is let go ("": none)
 	frame_times:      Frame_Times,   // the last frame's steps
@@ -223,12 +221,12 @@ frame :: proc(app: ^App, inner := false) {
 main_window_adopt :: proc(app: ^App) {
 	host.host_adopt(&app.window, &app.gfx, app.win, nil, app)
 	h := &app.window
-	h.after_input = FRAMES_AFTER_INPUT
 	h.background = draw.hex(theme_colors().steps[1])   // (before any build: the theme's own page)
 	h.dragging = main_dragging
 	h.before_input = proc(h: ^host.Host) {
 		app := (^App)(h.user)
 		film_slow_tick(app)
+		updates_follow(app)   // (its news wakes the window; update.auto follows the preferences and the install)
 		pictures.frame(&app.pictures)   // (before the builds ask for pictures)
 		devtools.service(app.devtools, &app.state, &app.r)
 	}
@@ -251,7 +249,6 @@ main_dragging :: proc(h: ^host.Host) -> bool {
 	return ui.active_key() != 0 || moving
 }
 
-FRAMES_AFTER_INPUT :: 3        // still drawn after an event, and at start: what it set off settles
 ANCHOR_BUILDS_MAX  :: 4        // builds spent on keeping a part header in place
 SNAP_BUILDS_MAX    :: 4        // builds spent on reaching the bottom of a page just read, while what they build moves it
 
@@ -440,7 +437,7 @@ due_run :: proc(app: ^App, k: Due) {
 	case .Children:  for &pane, i in app.panes { if pane_is_shown(app, i) { load_children(app, &pane) } }
 	case .Context:   if app.stats.open { context_ask(app) }
 	case .Term_Size: terms_size_due(app)
-	case .Side_Wake: app.settle = max(app.settle, FRAMES_AFTER_INPUT)   // (the build sees the pointer has rested)
+	case .Side_Wake: host.host_settle(&app.window)   // (the build sees the pointer has rested)
 	case .Drafts:    drafts_save(app)
 	}
 }
@@ -583,7 +580,7 @@ app_init :: proc(app: ^App, prefs_file: string) {
 	views_start(app, views_path(prefs_file))   // (ui.init selected the state: the sidebar's owner)
 	palette_start(app)   // (after the preferences: the settings source reads them)
 	prefs_page.install_init(&app.install, &app.cfg_prefs, setup_options())
-	app.install.vendor_mark, _ = setup.logo_make(&app.r, APP_PUBLISHER_MARK)   // (the setup's "By" line, as the site's foot)
+	prefs_page.install_vendor_mark(&app.install, &app.r, APP_PUBLISHER_MARK)   // (the setup's "By" line, as the site's foot)
 	licence_init(app)
 	zooms_load(app)
 	ui.post_configure(&app.state, capacity = POSTS_CAPACITY, overflow = .Block, per_build = POSTS_PER_BUILD, on_drop = on_drop)
@@ -629,8 +626,9 @@ main :: proc() {
 	// one window per person: a second start hands what it asks to the first and ends, before it writes or shows anything
 	forwarded, owner, owns := instance_acquire(opts)
 	if forwarded { os.exit(0) }
-	logger, crashed := log_start()
-	context.logger = logger
+	// (the files keep the technical name; their folders are the program's, in its vendor's)
+	program := host.program_start({name = APP_SLUG, folder = APP_FOLDER, version = APP_VERSION}, runtime.heap_allocator())
+	context.logger = program.logger
 	// the graphics device on a thread of its own while the rest starts (the driver's load is the longest step: 160 ms here)
 	render.preload_device()
 	set_app_id()           // (before the first window: the taskbar groups it under the shortcuts)
@@ -672,9 +670,8 @@ main :: proc() {
 	// (the host was made after the preferences: the user's rendering.partial_redraw, if any, over its own default)
 	// (the client's own faces again: standard_apply sets the text faces it is given)
 	prefs_page.standard_apply(&app.cfg_prefs, &app.state, {partial_redraw = &app.window.partial_redraw, faces = own_text_faces(app)})
-	crash_bar.init(&app.crash_bar, crashed)
-	delete(crashed)
-	app.settle = FRAMES_AFTER_INPUT
+	crash_bar.init(&app.crash_bar, program.last_crash)
+	host.host_settle(&app.window)
 
 	// the event stream: its first connection loads everything (stream_up)
 	server_connect(app, app.server, all = true)   // (once what it needs is read, on a chore)
@@ -688,7 +685,7 @@ main :: proc() {
 		}
 		fmt.printfln("opencode-native: %d frames, %d boxes, online=%v, %d sessions, %d messages, first frame %.1f ms", frames, app.state.boxes_built, online(app), len(app.sessions), len(main_pane(app).chat.messages), time.duration_milliseconds(first))
 		stores_close(app)
-		log_stop(logger)
+		host.program_end(&program)
 		os.exit(0)
 	}
 
@@ -732,7 +729,7 @@ main :: proc() {
 	prefs_page.install_launch(&app.install)   // (the window is gone: the installed copy the install's dialog opened starts)
 	app_launch_after(app)
 	delete(app.exe, runtime.heap_allocator())
-	log_stop(logger)
+	host.program_end(&program)
 	os.exit(0)
 }
 

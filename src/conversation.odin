@@ -2,6 +2,7 @@
 // message by kind (the reader's, the agent's steps, the lines between turns).
 package ocn
 
+import host "gt:host"
 import "base:runtime"
 import "core:fmt"
 import "core:hash"
@@ -48,7 +49,9 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32, avail: f32) {
 	// session shows its own zoom in this build; the home page ("") has the zone's own, not remembered.
 	zoom := ui.zoom_zone(&pane.zone, pane.chat.id)
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = ui.theme_color("background"), radius = 0})
-	if ui.column(flags = {.Draw_Background}, id = "###main") {
+	// (.Fits_Width: its column and its dock are sized from `avail`, the width it had, in pixels; counted as what it needs,
+	// that width could never shrink, and a narrow window pushed the panel beside it past the edge)
+	if ui.column(flags = {.Draw_Background, .Fits_Width}, id = "###main") {
 		pane.conversation.root = ui.parent_box().key
 		pane.conversation.pointer_item = 0
 		sc := ui.scale()
@@ -283,7 +286,7 @@ messages :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 			// (what the first layouts say of the heights around it is not what the next ones find: it stays a few builds)
 			found, moved := ui.lazy_pinned(lz)
 			chat_scroll_event(pane, Scroll_Restore_Held{found, moved})
-			app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+			host.host_settle(&app.window)
 		}
 	}
 	// The line of a run stands in the room the end of the conversation keeps anyway: the height is the same with it and without it, so

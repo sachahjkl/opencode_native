@@ -3,6 +3,7 @@
 // once, at the end of the build, for what was noted.
 package ocn
 
+import host "gt:host"
 import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
@@ -347,7 +348,7 @@ quote_chip :: proc(app: ^App, em: f32) {
 	if !q.open { return }
 	at, shown := quote_anchor(q, s)
 	// (its anchor is the last layout's: a scroll moves it one build late, and the build after the last move puts it right)
-	if at != q.shown { app.settle = max(app.settle, FRAMES_AFTER_INPUT) }
+	if at != q.shown { host.host_settle(&app.window) }
 	q.shown = at
 	if !shown { return }
 	if ui.popover(id, at, math.round(em * QUOTE_CHIP_W_EM), .Above, align_right = false) {

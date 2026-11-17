@@ -5,6 +5,7 @@
 // sub-agents; and the project's totals from the server (GET /api/experimental/session/stats?project=..&tools=detail).
 package ocn
 
+import host "gt:host"
 import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
@@ -115,13 +116,13 @@ stats_open :: proc(app: ^App) {
 	ui.view_open(&app.program_views, STATS_VIEW, app, owner = &app.state)   // (one open comes forward: its tab in front)
 	stats_ask(app)
 	context_ask(app)
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 stats_close :: proc(app: ^App) {
 	app.stats.open = false
 	ui.view_close(&app.program_views, STATS_VIEW)
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 // Shown, hidden. (Open, but under the Preview's tab: it comes up. What the pill is for is to see it.)
@@ -130,7 +131,7 @@ stats_toggle :: proc(app: ^App) {
 	case !app.stats.open:                                stats_open(app)
 	case !view_seen(app, STATS_VIEW, app.stats.built):
 		ui.view_open(&app.program_views, STATS_VIEW, app, owner = &app.state)
-		app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+		host.host_settle(&app.window)
 	case:                                                stats_close(app)
 	}
 }

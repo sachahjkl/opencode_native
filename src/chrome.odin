@@ -379,7 +379,9 @@ status_bar :: proc(app: ^App, em: f32) {
 	}
 }
 
-// At most `n` characters (an ellipsis replaces the rest).
+// At most `n` characters (an ellipsis replaces the rest). Not ui.elide, which cuts to a width: this caps words that have no
+// width of their own (a toast, a menu's item, a view's title, an accessible name) and what a server can make any length
+// before it is shaped; a box that shows the result still cuts it to its width.
 ellipsize :: proc(s: string, n: int) -> string {
 	count := 0
 	for _, i in s {

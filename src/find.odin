@@ -3,6 +3,7 @@
 // previous one, Escape closes. The current match is scrolled into view.
 package ocn
 
+import host "gt:host"
 import "core:fmt"
 import "core:math"
 import "gt:ui"
@@ -117,7 +118,7 @@ find_update :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) {
 				limit := max(0, sb.view_bounds.y - h)
 				sb.view_target.y = clamp(y0 - h * FIND_REVEAL_AT, 0, limit)
 				chat_scroll_event(pane, Scroll_Signal.Moved_Up)
-				app.settle = max(app.settle, FRAMES_AFTER_INPUT)   // (the sweep's answer comes with no input: the glide needs its frames)
+				host.host_settle(&app.window)   // (the sweep's answer comes with no input: the glide needs its frames)
 			}
 			break
 		}

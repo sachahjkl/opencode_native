@@ -1,22 +1,21 @@
-// Updates: gui_toolkit's Updater (gt:update, its docs/update.md) on this program's channels, as in every program of the
-// toolkit. A release publishes a signed manifest per platform and channel (docs/updates.md); the Updater checks it on its
-// own thread, downloads the program it names and puts it in place of the running one, with this program's product
-// (src/update). The settings' Updates page is the toolkit's: update.auto, update.channel (a choice of UPDATE_CHANNELS) and
-// update.base_url, the state under them and their buttons. A Nix package is never updated here: Nix updates it.
+// Updates: gui_toolkit's Updater (gt:update, its docs/update.md) on this program's channels, run by the toolkit's
+// prefs_page.updates_* as in every program of the toolkit. A release publishes a signed manifest per platform and channel
+// (docs/updates.md); the Updater checks it on its own thread, downloads the program it names and puts it in place of the
+// running one, with this program's product (src/update). The settings' Updates page is the toolkit's: update.auto (the
+// installed copy only), update.channel (a choice of UPDATE_CHANNELS) and update.base_url, the state under them and their
+// buttons; the installed copy's manifest takes the new version on a chore. A Nix package is never updated here: Nix
+// updates it. What stays here: the words said once, and Restart.
 package ocn
 
-import "base:runtime"
-
-import "core:fmt"
 import "core:log"
 import "core:math"
-import "core:strings"
+import host "gt:host"
+import i18n "gt:i18n"
 import prefs_page "gt:prefs_page"
 import setup "gt:setup"
 import "gt:ui"
-import ocn_update "update"
 import update "gt:update"
-import i18n "gt:i18n"
+import ocn_update "update"
 
 // The channels of the releases, and the folder of each one's files (ocntools release publish: the latest release, and the
 // rolling pre-release channel-beta, which every release and every beta goes to).
@@ -31,85 +30,38 @@ UPDATE_CHANNEL_LABELS := [?]string{i18n.later("Stable"), i18n.later("Beta")}
 
 // At the start, once the preferences are read. A run without a preferences' file (a test) starts none.
 updates_start :: proc(app: ^App) {
-	if app.updater != nil || app.prefs_file == "" { return }
-	folder, channel := prefs_page.update_source(&app.cfg_prefs)
-	app.updater = update.updater_start({
-		product = ocn_update.PRODUCT, folder = folder, channels = UPDATE_CHANNELS[:], channel = channel, current = APP_VERSION,
-		exe = app.exe, user_agent = fmt.tprintf("opencode-native/%s", APP_VERSION),
-		// (the updater's thread: its news comes to the interface's thread, which reads the state there)
-		news = proc(user: rawptr) { _ = ui.post(&(^App)(user).state, on_update_news, user) }, user = app,
+	if app.updates.updater != nil || app.prefs_file == "" { return }
+	prefs_page.updates_start(&app.updates, {
+		product = ocn_update.PRODUCT, repository = "sachahjkl/opencode_native", version = APP_VERSION,
+		channels = UPDATE_CHANNELS[:], prefs = &app.cfg_prefs, install = &app.install, state = &app.state, window = app.win,
 	})
-	updates_prefs(app)
-}
-
-// update.auto and update.channel, read again when the preferences change.
-updates_prefs :: proc(app: ^App) {
-	if app.updater == nil { return }
-	update.set_auto(app.updater, app.prefs.update_auto ? .Install : .Off)
-	_, channel := prefs_page.update_source(&app.cfg_prefs)
-	update.set_channel(app.updater, channel)
 }
 
 // At the end, before the interface's state goes: no news after it.
-updates_stop :: proc(app: ^App) {
-	update.updater_stop(app.updater)
-	app.updater = nil
-}
+updates_stop :: proc(app: ^App) { prefs_page.updates_stop(&app.updates) }
 
-@(private = "file")
-on_update_news :: proc(data: rawptr, _: u64) { updates_follow((^App)(data)) }
-
-// What changed is said once. The status bar's pill shows the phase and its button (a version on offer, its download, a
-// restart): a toast says only what the pill cannot (update.notice).
+// Each frame (main_window_adopt's before_input): the window woke for the updater's news, or the preferences or the
+// install changed what update.auto asks. What changed is said once. The status bar's pill shows the phase and its button
+// (a version on offer, its download, a restart): a toast says only what the pill cannot (update.notice).
 updates_follow :: proc(app: ^App) {
-	if app.updater == nil { return }
-	st := update.status(app.updater)
-	if st.serial == app.update_serial { return }
-	app.update_serial = st.serial
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)   // (the status bar and the settings show the state)
+	changed, st := prefs_page.updates_follow(&app.updates)
+	if !changed { return }
+	host.host_settle(&app.window)   // (the status bar and the settings show the state)
 	if words, bad := update.notice(st); words != "" { ui.announce(&app.announcer, bad ? .Bad : .Good, words) }
-	if st.phase == .Installed { installed_record(app, st.version) }
-}
-
-// The installed copy: its manifest and its system's record take the new version (desktop_updated), on a task: they are
-// files and, on Windows, the registry.
-@(private = "file")
-Installed_Job :: struct { exe, version: string }
-
-// (the place the program started from: the running file is <exe>.old by now on Windows, and the record names the place)
-@(private = "file")
-installed_record :: proc(app: ^App, version: string) {
-	h := runtime.heap_allocator()
-	j := new(Installed_Job, h)
-	j^ = {exe = strings.clone(app.exe, h), version = strings.clone(version, h)}
-	ui.task(&app.state, proc(data: rawptr) {
-		defer installed_free(data)
-		j := (^Installed_Job)(data)
-		if ok, why := desktop_updated(j.exe, j.version); !ok { log.errorf("the update is in place, but %s", why) }
-	}, nil, j, installed_free)
-}
-
-@(private = "file")
-installed_free :: proc(data: rawptr) {
-	h := runtime.heap_allocator()
-	j := (^Installed_Job)(data)
-	delete(j.exe, h)
-	delete(j.version, h)
-	free(j, h)
 }
 
 // "Check for updates" (the palette): its answer is said whatever it is.
 update_check_now :: proc(app: ^App) {
-	if app.updater != nil { update.check_now(app.updater) }
+	if app.updates.updater != nil { update.check_now(app.updates.updater) }
 }
 
 update_install_now :: proc(app: ^App) {
-	if app.updater != nil { update.install_now(app.updater) }
+	if app.updates.updater != nil { update.install_now(app.updates.updater) }
 }
 
 update_phase :: proc(app: ^App) -> update.Phase {
-	if app.updater == nil { return .Idle }
-	return update.status(app.updater).phase
+	if app.updates.updater == nil { return .Idle }
+	return update.status(app.updates.updater).phase
 }
 
 // The program starts again: this one ends, then another of it starts from the same file (the same one, or the one an update
@@ -137,5 +89,5 @@ update_pill :: proc(app: ^App, em: f32) {
 	case: return
 	}
 	ui.next({height = ui.px(math.round(em * PILL_H_EM))})
-	if prefs_page.update_badge(app.updater, proc(user: rawptr) { app_restart((^App)(user)) }, app) != nil { ui.space(ui.SPACE_2) }
+	if prefs_page.update_badge(app.updates.updater, proc(user: rawptr) { app_restart((^App)(user)) }, app) != nil { ui.space(ui.SPACE_2) }
 }

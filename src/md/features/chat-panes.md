@@ -82,6 +82,9 @@ Everything that read `app.chat` or `app.composer` reads the pane it is given.
 - **The same build**: `conversation(app, pane, em, width)` builds both; the panel gives its room (`ui.view_room`). What is
   the main view's stays out of the panel: the session header, the column's handles (they set a preference), the
   activity strip and tray, Find (the toolkit has one find per window: two panes would take it from each other).
+- **A pane needs no width of its own** (`.Fits_Width` on `###main`, and on the composer's bar, which folds by itself:
+  `composer_fit`). A pane sizes its column and its dock in pixels from the width it had. Counted as what it needs (the
+  toolkit's least width), that width never shrank: the panel kept its width and went past the window's edge.
 - **The keyboard's pane** (`keys_pane`): the panel's when the focus is in its view, else the main view's. Page Up and
   Down scroll that pane only. Each composer reads its own keys (Enter, Escape twice, `@`, `/`, the history) while it
   has the focus; typing with nothing focused goes to the main composer. The armed stop is cleared only by the pane

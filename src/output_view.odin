@@ -9,6 +9,7 @@ package ocn
 // for as long as it keeps the command, or from the call's own text once it does not. A pipe's lines end in a bare newline where a terminal
 // expects the return with it: output_view_feed adds it.
 
+import host "gt:host"
 import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
@@ -82,7 +83,7 @@ output_view_new :: proc(app: ^App, shell, tool, command, dir: string) -> ^Output
 output_view_show :: proc(app: ^App, v: ^Output_View) {
 	v.focused_once = false
 	ui.view_open(&app.program_views, OUTPUT_VIEW, v, v.name)
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 // A command of the server, running or ended.
@@ -191,7 +192,7 @@ output_view_ask_state :: proc(app: ^App, v: ^Output_View) {
 output_view_ends :: proc(app: ^App, v: ^Output_View, seen: bool) {
 	v.over, v.draining, v.seen_end = true, false, seen
 	if v.cursor == 0 && len(v.raw) == 0 && v.fallback != "" { output_view_feed(v, v.fallback) }
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 // GET /api/shell/:id/output. Printing, it is read again at once while there is more; at rest, what is to say is whether it ended.
@@ -202,7 +203,7 @@ output_view_output_load :: proc(app: ^App, data: json.Value, id: string) {
 	if tk_json.boolean(data, "data", "truncated") { v.dropped = true }
 	if c := int(tk_json.number(data, "data", "cursor")); c > v.cursor { v.cursor = c }
 	output_view_feed(v, out)
-	if out != "" { app.settle = max(app.settle, FRAMES_AFTER_INPUT) }
+	if out != "" { host.host_settle(&app.window) }
 	switch {
 	case v.cursor < int(tk_json.number(data, "data", "size")): output_view_read(app, v)
 	case v.draining:                                 output_view_ends(app, v, v.watched)
@@ -244,7 +245,7 @@ output_view_failed :: proc(app: ^App, r: ^Request) {
 output_view_close :: proc(app: ^App, v: ^Output_View) {
 	v.gone = true
 	ui.view_close(&app.program_views, OUTPUT_VIEW, v.name)
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 @(private = "file")

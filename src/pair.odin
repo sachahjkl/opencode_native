@@ -9,6 +9,7 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:math"
 import "core:strings"
+import "gt:timefmt"
 import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
@@ -150,8 +151,7 @@ pair_body :: proc(app: ^App, v: ^ui.View, em: f32) {
 			pair_link_row(app, fmt.tprintf("###pl%d", i), url_is_here(u) ? i18n.tr("This computer") : i18n.tr("Link"), pair_link(u, p.code), em)
 		}
 		ui.space(ui.SPACE_2)
-		mins, secs := int(left) / 60, int(left) % 60
-		pair_note("###x", fmt.tprintf(i18n.tr("The code expires in %d:%02d."), mins, secs), ui.theme_color("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+		pair_note("###x", fmt.tprintf(i18n.tr("The code expires in %s."), timefmt.stopwatch(left * 1000)), ui.theme_color("weak text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 		ui.wake_within(built_state(app), PAIR_TICK_MS)
 	} else {
 		pair_note("###x", i18n.tr("This code expired."), ui.theme_color("weak text"), soft)

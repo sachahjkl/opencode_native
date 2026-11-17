@@ -164,7 +164,8 @@ composer :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 		// toolbar
 		fit := composer_fit(app, pane, em)
 		ui.next({width = ui.fill(), height = ui.px(math.round(em * 2.8)), axis = .X, cross = .Center})
-		if ui.row(.Center, id = "###tools") {
+		// (.Fits_Width: it folds to its width itself, composer_fit; what it holds unfolded is not what it needs)
+		if ui.row(.Center, id = "###tools", flags = {.Fits_Width}) {
 			ui.space(ui.SPACE_2)
 			// what goes with the prompt, then who answers it and with what
 			ui.a11y({role = .Button, name = i18n.tr("Attach files")})

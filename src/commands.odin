@@ -3,6 +3,7 @@
 // frame still read.
 package ocn
 
+import host "gt:host"
 import "core:fmt"
 import "gt:config"
 import prefs_page "gt:prefs_page"
@@ -154,7 +155,7 @@ commands_apply :: proc(app: ^App) {
 	if len(app.cx.commands_due) == 0 { return }
 	for i := 0; i < len(app.cx.commands_due); i += 1 { app.cx.commands_due[i].run(app) }
 	clear(&app.cx.commands_due)
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 // Whether its key does something now: what is open over the window has the keyboard, unless the command is meant to work

@@ -7,7 +7,7 @@ what it chose on top of it.
 
 - **`APP_FOLDER` is `FromentSoftware` + `platform.USER_DIR_SEPARATOR` + `OpencodeNative`.** Every folder of the program
   is in it: the configuration (`config_dir`: settings, servers, drafts, views, licence, the palette's memory), the
-  state (the log and the crash reports: `log_start` gives their folders, their files keep the name `opencode-native`).
+  state (the log and the crash reports: `host.program_start` in `main` gives their folders, their files keep the name `opencode-native`).
   The folder name is the title without its space: a path a person types in a terminal.
 - **The earlier folders move once** (`folders_move`, `platform.user_dirs_move("opencode-native", APP_FOLDER)`), first
   in `main`, before `--status`, the single instance and the log read anything. It is the toolkit's move, not a migration

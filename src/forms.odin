@@ -3,6 +3,7 @@
 // it, so it must not go unseen: a sub-agent's shows in the conversation of its parent, and the sidebar lights the session that waits.
 package ocn
 
+import host "gt:host"
 import tk_json "gt:json"
 import "core:encoding/json"
 import "core:fmt"
@@ -53,7 +54,7 @@ form_add :: proc(app: ^App, v: json.Value) {
 	f.born = app.cx.stream_seq
 	append(&app.cx.forms, f)
 	marks_changed(app)
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 // What the server says a session asks: as permissions_replace. A form that stays keeps what the person has filled in.

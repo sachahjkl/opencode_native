@@ -4,6 +4,7 @@
 // app: there is nothing here to run it.
 package ocn
 
+import fsx "gt:fsx"
 import tk_json "gt:json"
 import "base:runtime"
 
@@ -572,7 +573,7 @@ artifact_write_work :: proc(data: rawptr) {
 	job := (^Artifact_Write)(data)
 	temp, no_temp := os.temp_directory(context.temp_allocator)
 	if no_temp != nil { job.no_temp = true; return }
-	root, _ := filepath.join({temp, "opencode-artifacts", file_safe(job.id)}, context.temp_allocator)
+	root, _ := filepath.join({temp, "opencode-artifacts", fsx.safe_file_name(job.id, "artifact")}, context.temp_allocator)
 	entry := ""
 	for f in job.files {
 		if !artifact_path_safe(f.path) { append(&job.left_out, f.path); continue }

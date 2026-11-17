@@ -332,7 +332,9 @@ a_question_wants_an_answer :: proc(t: ^testing.T) {
 @(test)
 an_export_is_what_the_import_takes :: proc(t: ^testing.T) {
 	testing.expect_value(t, export_body(`{"data":{"info":{"id":"s"},"messages":[]}}`), `{"info":{"id":"s"},"messages":[]}`)
-	testing.expect_value(t, file_safe(`a/b: "c"?`), `a-b- -c--`)
+	testing.expect_value(t, export_name(`a/b: "c"?`), `a_b_ _c__.json`)
+	testing.expect_value(t, export_name(" con. "), "_con.json")   // (a device's name and a dot Windows would drop)
+	testing.expect_value(t, export_name("..."), "session.json")
 }
 
 // `@` names something at the start of a word only, up to the caret.

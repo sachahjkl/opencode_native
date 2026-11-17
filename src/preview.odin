@@ -6,6 +6,7 @@
 // here is the session shown's, and what it does to the page it does to its front tab, unless it is given another.
 package ocn
 
+import host "gt:host"
 import "core:fmt"
 import "core:math"
 import "core:strings"
@@ -110,7 +111,7 @@ preview_close :: proc(app: ^App) {
 	app.preview.open = false
 	preview_home(app)
 	ui.view_close(&app.program_views, PREVIEW_VIEW)
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 // (read once: this is asked at every frame, and it is a look in the registry)
@@ -144,7 +145,7 @@ preview_show :: proc(app: ^App, by := Asked_By.User) {
 	preview_revive(app, t)
 	ui.view_open(&app.program_views, PREVIEW_VIEW, app, owner = &app.state)   // (one open comes forward: its tab in front)
 	t.focus_address = by == .User && t.url == ""   // (nothing to show yet: what comes next is an address)
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 // As preview_show, for any session's: a parked one opens where it is, out of sight, and shows when its session does.
@@ -197,7 +198,7 @@ web_event_add :: proc(v: ^Web_View, kind: Web_Event_Kind, id: u64, data: []u8, c
 	own := make([]u8, len(data))
 	copy(own, data)
 	append(&v.events, Web_Event{kind, id, own, ctrl})
-	v.app.settle = max(v.app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&v.app.window)
 }
 
 web_events_drop :: proc(v: ^Web_View) {

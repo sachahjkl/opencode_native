@@ -367,3 +367,39 @@ the_panels_composer_acts_on_the_fork :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 	})
 }
+
+// The panel stays in the window, however narrow the window gets, and each pane's column stays in its zone. A pane sizes its column from the width
+// it had, in pixels, and its composer's bar holds a model's name: counted as what the pane needs (the toolkit's least
+// width, ext/gui_toolkit/src/md/features/least-width.md), they held the panes at their width, and the panel went past
+// the window's edge.
+@(test)
+a_narrow_window_keeps_the_panel_in_it :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		bench_clear(app)
+		_ = btw_open(app, "ses_3")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return bench_count(.Messages) > 0 }, "the panel's page asked")
+		bench_answer(app, bench_take(t, .Messages), 200, btw_page("ses_3", "the aside"))
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return session.find(s, "msg_ses_3_u") != nil }, "the panel shown")
+		em := ui.font_size()
+		// (down to the sidebar and the panel's zone side by side: narrower, the toolkit's zones of their own width are
+		// wider than the window, whatever the panes need)
+		for width_em in ([]f32{90, 70, 55}) {
+			width := int(width_em * em)
+			session.resize(s, {width, BENCH_SIZE.y})
+			session.frames(s, 4)
+			for pane, i in ([]^Chat_Pane{main_pane(app), btw_pane(app)}) {
+				column := app.state.boxes[pane.conversation.root] or_else nil
+				if !testing.expectf(t, column != nil && column.parent != nil, "%.0f em: pane %d built", width_em, i) { continue }
+				zone := column.parent.rect
+				testing.expectf(t, column.rect.max.x <= zone.max.x + 0.5, "%.0f em: pane %d's column %v past its zone %v", width_em, i, column.rect, zone)
+				testing.expectf(t, zone.max.x <= f32(width) + 0.5, "%.0f em (%d px): pane %d's zone %v past the window", width_em, width, i, zone)
+			}
+		}
+		btw_close(app)
+		session.frames(s, 2)
+	})
+}

@@ -5,6 +5,7 @@
 // parked page goes on loading, and an agent can go on driving it.
 package ocn
 
+import host "gt:host"
 import "core:fmt"
 import "core:strings"
 import "gt:platform"
@@ -244,7 +245,7 @@ preview_tab_front :: proc(app: ^App, p: ^Preview, t: ^Preview_Tab) {
 	if shown && old != nil { tab_leave(app, old) }
 	for it, i in p.tabs { if it == t { p.front = i } }
 	if shown { tab_bring(app, t) }
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 @(private = "file")
@@ -274,7 +275,7 @@ preview_tab_close :: proc(app: ^App, p: ^Preview, t: ^Preview_Tab) {
 		p.front = min(at, len(p.tabs) - 1)
 		if p == &app.preview { tab_bring(app, preview_front(p)) }
 	}
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 // The palette's and the keys'. (The panel closed: opening it is what was asked, with a tab of its own if it had others.)
@@ -423,7 +424,7 @@ preview_switch :: proc(app: ^App, key: string) {
 			ui.view_open(vs, PREVIEW_VIEW, app, owner = &app.state)
 		}
 	}
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 // What holds nothing is not kept: going through a hundred sessions leaves nothing behind.

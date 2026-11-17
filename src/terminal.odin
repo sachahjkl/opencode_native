@@ -16,6 +16,7 @@
 // about it goes by, and leaving that server leaves its shells running there (terminals_forget).
 package ocn
 
+import host "gt:host"
 import tk_json "gt:json"
 import "base:runtime"
 import "core:encoding/json"
@@ -365,7 +366,7 @@ term_news :: proc(data: rawptr, word: u64) {
 	if t == nil { return }   // (a shell closed, a server left)
 	if d.is_link { term_link_set(app, t, d.link, d.given_up) } else { term_feed(t, d.text) }
 	if t.told_ms != 0 { ui.deferred_ask(&app.cx.due[.Term_Size], TERM_PAINT_QUIET_MS, TERM_PAINT_MOST_MS) }
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 term_link_set :: proc(app: ^App, t: ^Term, link: Term_Link, given_up := false) {
@@ -480,7 +481,7 @@ terminal_toggle :: proc(app: ^App) {
 	case:
 		terminals_hide(app)
 	}
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 // (the palette) Another shell, the panel opened for it if need be.
@@ -1313,7 +1314,7 @@ terms_size_due :: proc(app: ^App) {
 			t.told_ms = 0
 		}
 	}
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 ////////////////////////////////

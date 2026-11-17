@@ -12,6 +12,7 @@
 // server was left.
 package ocn
 
+import fsx "gt:fsx"
 import tk_json "gt:json"
 import "base:runtime"
 
@@ -62,7 +63,7 @@ session_export_save :: proc(app: ^App, id, raw: string) {
 	if s := find_session(app, id); s != nil && s.title != "" { title = s.title }
 	filters := []platform.File_Filter{{name = i18n.tr("Session"), patterns = {"*.json"}}}
 	// (the dialog, then the file written: both on the chores)
-	ui.file_dialog(&app.state, .Save, {owner = app.win, title = i18n.tr("Export the session"), filters = filters, suggested_name = fmt.tprintf("%s.json", file_safe(title)), default_ext = "json", remember_id = "session_export", overwrite_prompt = true}, proc(r: platform.Dialog_Result, user: rawptr) {
+	ui.file_dialog(&app.state, .Save, {owner = app.win, title = i18n.tr("Export the session"), filters = filters, suggested_name = export_name(title), default_ext = "json", remember_id = "session_export", overwrite_prompt = true}, proc(r: platform.Dialog_Result, user: rawptr) {
 		f := (^Session_File)(user)
 		if r.status != .Chosen || len(r.paths) == 0 { session_file_free(f); return }
 		f.path = strings.clone(r.paths[0], runtime.heap_allocator())
@@ -83,12 +84,8 @@ export_body :: proc(raw: string) -> string {
 	return body
 }
 
-// A title as a file name, in the temporary allocator.
-file_safe :: proc(s: string) -> string {
-	b := strings.builder_make(context.temp_allocator)
-	for r in s { strings.write_rune(&b, strings.contains_rune(`\/:*?"<>|`, r) || r < ' ' ? '-' : r) }
-	return strings.to_string(b)
-}
+// The file an export suggests: the session's title as a name every system accepts (temp memory).
+export_name :: proc(title: string) -> string { return fmt.tprintf("%s.json", fsx.safe_file_name(title, "session")) }
 
 session_import_pick :: proc(app: ^App) {
 	filters := []platform.File_Filter{{name = i18n.tr("Session"), patterns = {"*.json"}}}

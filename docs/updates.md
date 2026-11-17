@@ -1,7 +1,9 @@
 # Updates
 
-The toolkit's Updater (`gt:update`, its docs/update.md, "Channels"), as in every program of the toolkit (`src/updates.odin`).
-With `update.auto` on, it looks for a new version a while after the start, then every day, and installs it: the new
+The toolkit's Updater (`gt:update`, its docs/update.md, "Channels"), started by `prefs_page.updates_start` as in every
+program of the toolkit (`src/updates.odin`). With `update.auto` on, the installed copy looks for a new version a while
+after the start, then every day, and installs it (a copy that was not installed, run from where it was unpacked, only
+says that one exists): the new
 program runs at the next start, or at once from "Restart now". The palette's "Check for updates" and the settings' Check
 now ask at any time. The settings' Updates page is the toolkit's: `update.auto`, `update.channel` (Stable or Beta: followed
 at once) and `update.base_url`, the state and the buttons under them. Windows and Linux. A Nix package (a program that

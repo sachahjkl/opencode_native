@@ -118,7 +118,6 @@ Prefs :: struct {
 	throbber:     string,
 	browser_tools: bool,
 	experimental: bool,
-	update_auto:  bool,
 	system_title: bool,    // window.system_title (title_apply)
 	new_sessions: Approval,   // permission.new_sessions: the preset a session made here starts with
 }
@@ -220,11 +219,9 @@ prefs_refresh :: proc(app: ^App) {
 	s.throbber = config.string_of(p, "appearance.throbber")
 	s.browser_tools = config.bool_of(p, "browser.tools")
 	s.experimental = config.bool_of(p, "advanced.experimental")
-	s.update_auto = config.bool_of(p, "update.auto")
 	s.system_title = config.bool_of(p, "window.system_title")
 	app.announcer.mode = prefs_page.announce_mode(p)
 	s.new_sessions = approval_of_pref(config.string_of(p, "permission.new_sessions"))
-	updates_prefs(app)
 	title_apply(app)
 
 	// the shells' family, loaded on a chore (the same family again: nothing); the interface's, the answers' and code's
@@ -729,7 +726,7 @@ settings_options :: proc(app: ^App) -> prefs_page.Page_Options {
 		themes = themes(app), themes_light = app.cx.theme.light,
 		themes_file = app.cx.theme.file.path != "" ? &app.cx.theme.file : nil,
 		// (the Updates page: the Updater's state and its buttons under update.auto, as in every program of the toolkit)
-		updater = app.updater, restart = proc(user: rawptr) { app_restart((^App)(user)) },
+		updater = app.updates.updater, restart = proc(user: rawptr) { app_restart((^App)(user)) },
 		custom_names = CUSTOM_PREFS[:],
 		custom = proc(user: rawptr, name: string, em: f32) { font_button((^App)(user), name, em) },
 		page_foot = settings_page_foot,

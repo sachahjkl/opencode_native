@@ -3,6 +3,7 @@ package ocn
 // What a review set out to break, and did: each case as it was shown, so that it stays mended. (The file of what is reviewed: a test that
 // belongs to a feature lives with it.)
 
+import host "gt:host"
 import tk_json "gt:json"
 import "base:runtime"
 import "core:fmt"
@@ -49,7 +50,7 @@ told_after_drag :: proc(t: ^testing.T, stop: int) -> bool {
 		term.size_set(&s.view, int(cols), 30, {8, 16})
 		if ms < stop { bench_clock += 10 }
 	}
-	app.settle = FRAMES_AFTER_INPUT
+	app.settle = host.AFTER_INPUT   // (what the drag's last event owes)
 	next_frame := bench_clock + 17
 	for _ in 0 ..< 3000 {
 		bench_clock += 1

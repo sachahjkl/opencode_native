@@ -1261,8 +1261,8 @@ fr Cet ordinateur
 en Link
 fr Lien
 
-en The code expires in %d:%02d.
-fr Le code expire dans %d:%02d.
+en The code expires in %s.
+fr Le code expire dans %s.
 
 en This code expired.
 fr Ce code a expiré.

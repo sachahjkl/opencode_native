@@ -3,6 +3,7 @@
 // and quit).
 package ocn
 
+import host "gt:host"
 import "base:runtime"
 import "core:os"
 import "core:path/filepath"
@@ -12,28 +13,23 @@ import "gt:platform"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
 
-// How long a second start waits for the first while it is starting or closing.
-@(private = "file") INSTANCE_WAIT_MS :: 2000
 // The separator of the message's words: a value of the command line can hold a new line, never a NUL.
 @(private = "file") MESSAGE_SEPARATOR :: "\x00"
 // Marks the first word as the launcher's activation token: no option starts with it.
 @(private = "file") MESSAGE_TOKEN :: "\x01"
 
-// The person's name: their folder of state; a debug build has its own channel. (Letters, digits and dots only.)
+// The person's name: their folder of state; a debug build has its own channel. (Letters, digits and dots only.) A second
+// start waits the toolkit's default for the first while it is starting or closing.
 @(private = "file")
 instance_options :: proc() -> instance.Instance_Options {
-	return {name = instance.key(ODIN_DEBUG ? "opencodenative.dev" : "opencodenative", config_dir()), wait_ms = INSTANCE_WAIT_MS}
+	return {name = instance.key(ODIN_DEBUG ? "opencodenative.dev" : "opencodenative", config_dir())}
 }
 
 // Whether an opencode native runs and answers (--status: setup.Setup_Options.running).
-instance_running :: proc() -> bool {
-	return instance.send(instance_options(), transmute([]u8)string(instance.MESSAGE_PING)) == .Forwarded
-}
+instance_running :: proc() -> bool { return instance.running(instance_options()) }
 
 // Asks the window that runs to end as its Quit does (--quit: setup.Setup_Options.quit); true when it took the request.
-instance_quit :: proc() -> bool {
-	return instance.send(instance_options(), transmute([]u8)string(instance.MESSAGE_QUIT)) == .Forwarded
-}
+instance_quit :: proc() -> bool { return instance.quit(instance_options()) }
 
 // A start that changes the run itself (another server, a look, a check, the tools): it neither hands over nor takes the
 // name, so a tool's window never takes the person's starts.
@@ -135,7 +131,7 @@ instance_show :: proc(data: rawptr, word: u64) {
 	if o.session != "" { open_root(app, o.session) }
 	cli_show(app, o)
 	platform.raise_window_token(app.win, token)
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 // What the command line asks to see (a start's, or a second start's handed over), the session left out: a start opens

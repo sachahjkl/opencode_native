@@ -12,8 +12,8 @@
 // and in the install folder the manifest (MANIFEST_NAME): the version and the files placed, which the uninstall removes.
 package ocn
 
+import "base:runtime"
 import "core:fmt"
-import "core:os"
 import "core:path/filepath"
 import desktop "gt:desktop"
 import "gt:platform"
@@ -29,6 +29,7 @@ APP_NOT_THEIRS := i18n.later("An independent project: not built by the OpenCode 
 APP_PUBLISHER :: "Froment Software"
 APP_PUBLISHER_URL :: "https://froment.software"   // (the setup's "By" line opens it)
 APP_PUBLISHER_MARK :: #load("../site/img/froment-software-64.png")
+// (the vendor's key as a constant: APP_FOLDER is one, and desktop.identity_of makes the identity's at run time)
 APP_VENDOR_KEY :: "FromentSoftware"
 // The program's folder in its vendor's: its settings, its state and its cache (APP_FOLDER), and its install folder. The
 // title without its space: a path a person types in a terminal.
@@ -52,20 +53,27 @@ NIXOS_LIBRARIES := [?]string{
 }
 
 // The names and marks of opencode native on the desktop. They are what an install already carries on users' machines:
-// changing one leaves those files and keys behind, unrecognised.
-identity :: proc() -> desktop.Identity {
-	return desktop.Identity{
-		name = APP_TITLE, key = "OpencodeNative", slug = APP_SLUG,   // (the AppUserModelID: the vendor's and the name's, desktop.identity_aumid)
-		description = "A native desktop client for opencode. Not affiliated with the OpenCode team.",
-		vendor = APP_PUBLISHER,
-		entry_marker = "X-OpencodeNative-Integration", registry_mark = "OpencodeNativeIntegration", vendor_key = APP_VENDOR_KEY,
-		manifest_name = MANIFEST_NAME,
-		manifest_header = "Written by Opencode Native's Setup: the files it placed in this folder. Uninstalling removes exactly these.",
-		uninstall_arguments = "--setup",   // (Settings > Apps: the install's dialog, its Uninstall)
-		generic_name = "opencode client", categories = "Development;",
-		nix_runtime_name = "opencode-native-runtime", nixos_libraries = NIXOS_LIBRARIES[:],
-		cleanup_name = "opencode-native-uninstall",
-	}
+// changing one leaves those files and keys behind, unrecognised. The toolkit derives the key (OpencodeNative, the
+// AppUserModelID's part), the vendor's key and the marks from the vendor, the title and the slug; the manifest keeps its
+// earlier name, which installed copies carry.
+identity :: proc() -> desktop.Identity { return the_identity }
+
+// (made once for the process: identity_of allocates, and the setup's jobs share its strings for as long as they run)
+@(private = "file") the_identity: desktop.Identity
+
+@(init)
+@(private = "file")
+identity_init :: proc "contextless" () {
+	context = runtime.default_context()
+	id := desktop.identity_of(APP_PUBLISHER, APP_TITLE, APP_SLUG, runtime.heap_allocator())
+	id.manifest_name = MANIFEST_NAME
+	id.description = "A native desktop client for opencode. Not affiliated with the OpenCode team."
+	id.manifest_header = "Written by Opencode Native's Setup: the files it placed in this folder. Uninstalling removes exactly these."
+	id.uninstall_arguments = "--setup"   // (Settings > Apps: the install's dialog, its Uninstall)
+	id.generic_name, id.categories = "opencode client", "Development;"
+	id.nix_runtime_name, id.nixos_libraries = "opencode-native-runtime", NIXOS_LIBRARIES[:]
+	id.cleanup_name = "opencode-native-uninstall"
+	the_identity = id
 }
 
 // This copy is a Nix package: it runs from the store, and Nix installs and updates it.
@@ -85,21 +93,6 @@ setup_options :: proc() -> setup.Setup_Options {
 		// (the dialog in opencode's look: its blurred backdrop, behind it as a dialog only)
 		backdrop = view_backdrop,
 	}
-}
-
-// The updater replaced `exe`: when it is the installed copy, its manifest takes the new version, its system's record too,
-// and on NixOS the new program is made to run by itself again (the update is the release, made for a usual Linux).
-desktop_updated :: proc(exe, version: string) -> (ok: bool, msg: string) {
-	failure :: proc(r: desktop.Result) -> string { return r.detail != "" ? r.detail : desktop.error_text(r.error) }
-	o, _ := setup.options(setup_options())
-	dir := process.parent_dir(exe)
-	if !os.exists(pjoin({dir, MANIFEST_NAME})) || !desktop.same_path(dir, o.install_dir) { return true, "" }
-	exe_name := desktop.exe_name_of(o.identity)
-	plan := desktop.Install_Plan{identity = o.identity, src_exe = exe, dir = dir, exe_name = exe_name, version = version, channel = "release", adapt = true}
-	if r := desktop.files_install(plan); r.error != .None { return false, failure(r) }
-	o.exe = exe
-	if r := desktop.record_install(&o, dir, version); r.error != .None { return false, failure(r) }
-	return true, ""
 }
 
 // The windows of this process group under the shortcuts' AppUserModelID (Windows), and say they are opencode native: the

@@ -4,6 +4,7 @@
 // the menu of a session's sub-agents, and their tree in the sidebar.
 package ocn
 
+import host "gt:host"
 import "core:fmt"
 import "core:hash"
 import "core:math"
@@ -326,7 +327,7 @@ nav_apply :: proc(app: ^App) {
 		delete(st.id)
 	}
 	clear(&app.nav.steps)
-	app.settle = max(app.settle, FRAMES_AFTER_INPUT)
+	host.host_settle(&app.window)
 }
 
 // A place of the history: a session ("": the home page), and where the reader was in it: the message at the top of the view and how
