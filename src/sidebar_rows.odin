@@ -17,6 +17,12 @@ import i18n "gt:i18n"
 
 Item_Draw :: struct { selected: bool }
 
+// The ground of the session shown: the theme's own navigation fill when it gives one, else ocn's (chosen_ground).
+session_ground :: proc() -> Color {
+	if fill, ok := chosen_fill(.Nav); ok { return fill }
+	return chosen_ground()
+}
+
 item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Item_Draw)(user)
 	// the one shown: a ground of the accent, nothing more (its mark and its lamp say the rest); under the pointer, a lighter
@@ -25,7 +31,7 @@ item_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	r := b.rect
 	if b.parent != nil { r.min.x, r.max.x = b.parent.rect.min.x, b.parent.rect.max.x }
 	if d.selected {
-		draw.rect(dc, r, chosen_ground())
+		draw.rect(dc, r, session_ground())
 	} else if b.hot_t > FADE_VISIBLE {
 		draw.rect(dc, r, ui.with_alpha(ui.theme_color("text"), ITEM_HOVER_TINT * b.hot_t))
 	}
@@ -246,7 +252,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 	if ui.row(.Center, id = fmt.tprintf("###r_%s", s.id)) {
 		ui.spacer(ui.px(em * (ui.SPACE_2 + 1.1 * f32(depth))))   // (1.1: a level of the tree, under its parent's badge)
 		ui.next({width = ui.fill(), height = ui.pct(1), axis = .X, cross = .Center})
-		b := ui.build_box({.Clickable, .Focusable}, "###item")
+		b := chosen_box({.Clickable, .Focusable}, "###item", selected, .Nav)
 		d := ui.frame_new(Item_Draw)
 		d.selected = selected
 		b.custom = item_draw
@@ -278,7 +284,7 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 				if busy { st = .Running }
 				state_mark("###st", st, size = em * 0.75)
 				ui.space(ui.SPACE_1)
-				text("ag", s.agent, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
+				text("ag", s.agent, inked(b, ui.theme_color("faint text")), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_CAPTION)})
 				ui.space(ui.SPACE_1)
 			} else if light := session_light(app, s); light != .Rest {
 				session_light_lamp(s, light, em)
@@ -288,9 +294,9 @@ session_item :: proc(app: ^App, s: ^Session_Info, em: f32, now: f64, depth := 0,
 			// a sub-agent: lit while it runs, dimmed once it is done
 			tcol := ui.theme_color("soft text")
 			if depth > 0 { tcol = busy ? ui.theme_color("text") : ui.theme_color("weak text") }
-			ground := selected ? chosen_ground() : ui.theme_color("bar background")
-			if selected { tcol = ui.readable(ui.theme_color("bright text"), ground, READABLE_TEXT) }
-			quiet := selected ? ui.readable(ui.theme_color("weak text"), ground, READABLE_QUIET) : ui.theme_color("faint text")   // (the folder, the age)
+			ground := selected ? session_ground() : ui.theme_color("bar background")
+			if selected { tcol = inked(b, ui.readable(ui.theme_color("bright text"), ground, READABLE_TEXT)) }
+			quiet := selected ? inked(b, ui.readable(ui.theme_color("weak text"), ground, READABLE_QUIET)) : ui.theme_color("faint text")   // (the folder, the age)
 			title_style := ui.Style_Mod{font_size = math.round(em * (depth > 0 ? FS_NOTE : FS_LABEL))}
 			if project {
 				ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})

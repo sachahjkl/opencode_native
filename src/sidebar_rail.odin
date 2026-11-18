@@ -196,7 +196,7 @@ rail_mark :: proc(app: ^App, s: ^Session_Info, kids: map[string][dynamic]int, em
 	pane := main_pane(app)
 	selected := s.id == pane.chat.id
 	ui.next({width = ui.fill(), height = ui.px(math.round(em * RAIL_MARK_EM)), axis = .X, cross = .Center})
-	b := ui.build_box({.Clickable, .Focusable}, "###rail_mark")
+	b := chosen_box({.Clickable, .Focusable}, "###rail_mark", selected, .Nav)
 	d := ui.frame_new(Item_Draw)
 	d.selected = selected
 	b.custom, b.custom_user = item_draw, d

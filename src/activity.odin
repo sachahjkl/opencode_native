@@ -818,7 +818,8 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	s := ui.scale()
 	r := b.rect   // (flush: a highlight runs from one edge of the list to the other)
 	if (^Row_Draw)(user).selected {
-		draw.rect(dc, r, ui.theme_color("card background"))   // (square: a row)
+		fill, own := chosen_fill(.List)
+		draw.rect(dc, r, own ? fill : ui.theme_color("card background"))   // (square: a row)
 		draw.rect(dc, {{r.min.x + 2 * s, r.min.y + 5 * s}, {r.min.x + 4 * s, r.max.y - 5 * s}}, ui.hue(.Accent), 1 * s)
 	} else if b.hot_t > FADE_VISIBLE {
 		draw.rect(dc, r, {1, 1, 1, 0.025 * b.hot_t})
@@ -835,7 +836,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 	if running { animate(app) }
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	ui.a11y({role = .Button, name = fmt.tprintf("%s, %s: %s", sub_state_label(r.state), r.name, r.title)})
-	b := ui.build_box({.Clickable, .Hot_Within}, fmt.tprintf("###row_%s", r.id))
+	b := chosen_box({.Clickable, .Hot_Within}, fmt.tprintf("###row_%s", r.id), selected, .List)
 	d := ui.frame_new(Row_Draw)
 	d.selected = selected
 	b.custom = row_draw
@@ -850,17 +851,17 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 			ui.space(ui.CARD_PAD)
 			state_mark("###st", r.state, size = em * 0.8)
 			ui.space(ui.ICON_GAP)
-			text("n", r.name, running ? ui.theme_color("weak text") : ui.theme_color("faint text"), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
+			text("n", r.name, inked(b, running ? ui.theme_color("weak text") : ui.theme_color("faint text")), ui.Style_Mod{font = app.mono_bold, font_size = math.round(em * FS_SMALL)})
 			ui.space(ui.SPACE_2)
-			text("t", r.title, running ? ui.theme_color("text") : ui.theme_color("weak text"), ui.Style_Mod{font = r.kind == .Agent ? app.font : app.mono, font_size = math.round(em * (r.kind == .Agent ? FS_LABEL : FS_SMALL))}, ui.fill())
+			text("t", r.title, inked(b, running ? ui.theme_color("text") : ui.theme_color("weak text")), ui.Style_Mod{font = r.kind == .Agent ? app.font : app.mono, font_size = math.round(em * (r.kind == .Agent ? FS_LABEL : FS_SMALL))}, ui.fill())
 			ui.space(ui.SPACE_2)
 			if r.what != "" {
-				text("w", ellipsize(r.what, CHIP_ACTIVITY_CHARS), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				text("w", ellipsize(r.what, CHIP_ACTIVITY_CHARS), inked(b, ui.theme_color("faint text")), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.space(ui.SPACE_2)
 			}
 			end := r.ended > 0 ? r.ended : (running ? now : 0)
 			if dur := state_when(r.state, r.started, end); dur != "" {
-				text("d", dur, sub_state_ink(r.state), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+				text("d", dur, inked(b, sub_state_ink(r.state)), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 				ui.space(ui.SPACE_2)
 			}
 			if selected || sig.hovering {
@@ -899,7 +900,7 @@ activity_row :: proc(app: ^App, r: Act_Row, i: int, em: f32, now: f64) {
 				ui.next({width = ui.fill(), height = ui.px(line_h), axis = .X, cross = .Center})
 				if ui.row(.Center, id = fmt.tprintf("###o%d", k)) {
 					ui.spacer(ui.px(math.round(em * (ui.CARD_PAD + 1.2))))   // (under the row's title: the inset, its mark and the gap)
-					text("x", ellipsize(l, ACT_LINE_CHARS), ui.theme_color("soft text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
+					text("x", ellipsize(l, ACT_LINE_CHARS), inked(b, ui.theme_color("soft text")), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)}, ui.fill())
 					ui.space(ui.SPACE_2)
 				}
 			}

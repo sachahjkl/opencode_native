@@ -231,25 +231,25 @@ completion_list :: proc(app: ^App, id: string, rows: []Completion_Row, sel: int,
 		list = ui.parent_box().key
 		for &r, k in rows {
 			ui.next({width = ui.fill(), height = ui.px(math.round(em * 1.9)), axis = .X, cross = .Center, cursor = .Hand})
-			row := ui.build_box({.Clickable}, fmt.tprintf("###row_%d", k))
+			row := chosen_box({.Clickable}, fmt.tprintf("###row_%d", k), k == sel, .List)
 			d := ui.frame_new(Completion_Row_Draw)
 			d.selected = k == sel
 			row.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 				if (^Completion_Row_Draw)(user).selected {
 					r := b.rect   // (flush: a highlight runs from one edge of the list to the other)
-					draw_well(dc, r, 0, ui.theme_color("background"))   // (square: a row)
+					if fill, own := chosen_fill(.List); own { draw.rect(dc, r, fill) } else { draw_well(dc, r, 0, ui.theme_color("background")) }   // (square: a row)
 				}
 			}
 			row.custom_user = d
 			if ui.signal(row).clicked { clicked = k }
 			if ui.parent(row) {
 				ui.space(ui.SPACE_4)
-				glyph(r.icon, ui.theme_color("faint text"), math.round(em * ICON_SMALL), em * 1.1)
+				glyph(r.icon, inked(row, ui.theme_color("faint text")), math.round(em * ICON_SMALL), em * 1.1)
 				ui.space(ui.SPACE_1)
-				text("n", r.label, ui.theme_color("text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
+				text("n", r.label, inked(row, ui.theme_color("text")), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_SMALL)})
 				if r.detail != "" {
 					ui.space(ui.SPACE_3)
-					text("d", ellipsize(r.detail, MENTION_DETAIL_CHARS), ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)})
+					text("d", ellipsize(r.detail, MENTION_DETAIL_CHARS), inked(row, ui.theme_color("faint text")), ui.Style_Mod{font_size = math.round(em * FS_CAPTION)})
 				}
 			}
 		}

@@ -56,11 +56,15 @@ theme_entries :: proc(t: ^ui.Theme, set: bool) {
 	faint, weak, text, bright := draw.hex(c.texts[0]), draw.hex(c.texts[1]), draw.hex(c.texts[2]), draw.hex(c.texts[3])
 	accent, blue, green, red := draw.hex(c.hues[0]), draw.hex(c.hues[1]), draw.hex(c.hues[3]), draw.hex(c.hues[5])
 	soft := ui.srgb_step(weak, text, ui.SOFT_STEP)   // (the palette's "soft text")
+	// (these entries win over the palette's: a theme's own text selection, Old Head's white on navy, is kept through them)
+	own := theme_shown().look.selections[.Text]
+	selection := own.fill != 0 ? draw.hex(own.fill) : ui.with_alpha(accent, SELECTION_ALPHA)
+	selection_text := own.ink != 0 ? draw.hex(own.ink) : bright
 	Entry :: struct { tags: string, c: Color }
 	entries := [?]Entry{
 		{"link", blue},
-		{"selection", ui.with_alpha(accent, SELECTION_ALPHA)},
-		{"selection text", bright},   // (over the selection, whatever the text's own colour: a faint one was lost on it)
+		{"selection", selection},
+		{"selection text", selection_text},   // (over the selection, whatever the text's own colour: a faint one was lost on it)
 		// a diff (gt:diff): a line on a tint of its hue over the page, what changed in it on a stronger one, its words tinted
 		{"diff_added background", ui.srgb_step(page, green, 0.12)}, {"diff_removed background", ui.srgb_step(page, red, 0.13)},
 		{"diff_added mark", ui.srgb_step(page, green, 0.33)}, {"diff_removed mark", ui.srgb_step(page, red, 0.4)},
@@ -86,9 +90,15 @@ theme_refresh :: proc(t: ^ui.Theme) {
 themed_palette :: proc() -> ui.Palette {
 	app := the_app
 	if app == nil { return ui.theme_palette(THEME_OPENCODE, false, .Machined) }
+	return ui.theme_palette(theme_shown(), app.cx.theme.light, app.prefs.finish)
+}
+
+// The theme shown; OpenCode before one is (a test, the first frame).
+theme_shown :: proc() -> ui.Theme_Def {
+	app := the_app
+	if app == nil { return THEME_OPENCODE }
 	all := themes(app)
-	def := app.cx.theme.at < len(all) ? all[app.cx.theme.at] : THEME_OPENCODE
-	return ui.theme_palette(def, app.cx.theme.light, app.prefs.finish)
+	return app.cx.theme.at < len(all) ? all[app.cx.theme.at] : THEME_OPENCODE
 }
 
 // The flat style: surfaces plain, edges as thin lines, no reliefs nor halos (appearance.style, or a light version: the
@@ -444,3 +454,24 @@ chosen_ground :: proc() -> Color {
 	acc := ui.to_oklch(draw.hex(c.hues[0]))
 	return ui.from_oklch({clamp(base[0] + CHOSEN_LIGHTNESS, 0, 1), CHOSEN_CHROMA, acc[2]})
 }
+
+// A selected row of ocn's own, as the toolkit's rows are (gui_toolkit docs/themes.md, "A theme's selections"): built
+// `.Chosen` under its role's tags, it reads the theme's ink (Box.ink), which its words take (inked). Not selected: a plain box.
+// `.Nav`: the session shown (the sidebar, the rail); `.List`: the row the keys are on in a list.
+chosen_box :: proc(flags: ui.Box_Flags, id: string, selected: bool, role: ui.Selection_Role) -> ^ui.Box {
+	if !selected { return ui.build_box(flags, id) }
+	if role == .Nav { ui.push_tags("nav", "selected") } else { ui.push_tags("selected") }
+	defer ui.pop_tags()
+	return ui.build_box(flags + {.Chosen}, id)
+}
+
+// The fill a theme gives a selected row of this role (Old Head's navy). ok false: it gives none, the row keeps ocn's own
+// ground, made for the themes that say nothing.
+chosen_fill :: proc(role: ui.Selection_Role) -> (fill: Color, ok: bool) {
+	f := theme_shown().look.selections[role].fill
+	return draw.hex(f), f != 0
+}
+
+// The colour of words on a row: the theme's ink when the row is selected and the theme gives one, else `c`. (ocn's words
+// give their own colour, which the toolkit keeps over the ink: the row says it.)
+inked :: proc(row: ^ui.Box, c: Color) -> Color { return row != nil && row.ink.a > 0 ? row.ink : c }

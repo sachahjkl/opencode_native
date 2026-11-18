@@ -20,8 +20,9 @@ import "gt:ui"
 @(private = "file") WHITE_TEXTS :: [4]u32{0xa3a3a3ff, 0x6b6b6bff, 0x1c1c1cff, 0x000000ff}
 @(private = "file") WHITE_HUES  :: [8]u32{0xc8622aff, 0x2f6fdbff, 0x7c4dd8ff, 0x2f8a3aff, 0xb57d07ff, 0xc9303eff, 0x12838fff, 0xc83e6aff}
 
-// opencode's black with its peach; in the light version white and a deeper orange.
-THEME_OPENCODE :: ui.Theme_Def{"OpenCode", {BLACK_STEPS, BLACK_TEXTS, BLACK_HUES}, {WHITE_STEPS, WHITE_TEXTS, WHITE_HUES}, .Both, nil, false, 0}
+// opencode's black with its peach; in the light version white and a deeper orange. Its look is the toolkit's ({}): its corners,
+// focus, motion and font are the program's own (its font: fonts_init).
+THEME_OPENCODE :: ui.Theme_Def{"OpenCode", {BLACK_STEPS, BLACK_TEXTS, BLACK_HUES}, {WHITE_STEPS, WHITE_TEXTS, WHITE_HUES}, .Both, nil, false, 0, {}}
 
 // The colours of the version shown; OpenCode's dark before one is (a test, the first frame). For what the interface does not
 // draw: the window's clear colour, the terminal's palette, the logo's tint.

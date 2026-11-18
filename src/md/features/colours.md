@@ -24,11 +24,25 @@ The toolkit's palette has the five texts of every theme: `faint text`, `weak tex
 to text, `ui.SOFT_STEP`: tool output, quiet labels), `text`, `bright text`. ocn registers in the toolkit's theme, from
 the version shown (`theme_entries` in `src/style.odin`), only what the palette lacks:
 
-- `link` (blue), `selection` (the accent, translucent), `selection text` (bright);
+- `link` (blue), `selection` (the accent, translucent), `selection text` (bright); a theme's own text selection
+  (`Theme_Look.selections[.Text]`, Old Head's white on navy) replaces both;
 - the diff's entries: tints of green and red over the page, the line numbers between the line and the faint text.
 
 They are added ahead of the palette's (ties go to the first). When the toolkit's palette gets them, the program's
 entries go.
+
+## The rows ocn selects itself
+
+A row ocn draws itself and shows as selected (the session shown in the sidebar and on its rail: `.Nav`; the row the
+keys are on in the activity tray, the `@` and `/` lists, What you missed's list: `.List`) is built by `chosen_box`:
+`.Chosen` under its role's tags, as the toolkit's rows are. The theme's selection then reaches it:
+
+- its fill (`chosen_fill`): the theme's when it gives one, else ocn's own ground (`chosen_ground`, a well);
+- its words: ocn's give their own colour, which the toolkit keeps over the row's ink, so each asks `inked(row, colour)`:
+  the theme's ink when it gives one, else the colour.
+
+A theme that gives no selection (OpenCode, and every theme before 0.316 of the toolkit) draws these rows as before.
+The servers' tabs are not rows: a tab keeps its own plate, as the toolkit's tabs do.
 
 ## Decisions
 

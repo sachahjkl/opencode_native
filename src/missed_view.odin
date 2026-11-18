@@ -429,14 +429,16 @@ missed_entry_row :: proc(app: ^App, r: ^Missed_Row, k: int, selected, cursor: bo
 	open := app.missed.unfolded[e.id]
 	ui.next({width = ui.fill(), height = open ? ui.children_sum() : ui.px(h), axis = .Y})
 	ui.a11y({role = .Button, name = missed_words(e), description = e.text})
-	rb := ui.build_box({.Clickable}, ui.vlist_row_name(k))
+	rb := chosen_box({.Clickable}, ui.vlist_row_name(k), selected, .List)
 	rd := ui.frame_new(Missed_Row_Draw)
 	rd.selected, rd.cursor = selected, cursor
 	rb.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		d := (^Missed_Row_Draw)(user)
 		s := ui.scale()
 		r := b.rect
-		if d.selected { draw_well(dc, r, 0, ui.theme_color("background")) }
+		if d.selected {
+			if fill, own := chosen_fill(.List); own { draw.rect(dc, r, fill) } else { draw_well(dc, r, 0, ui.theme_color("background")) }
+		}
 		if d.cursor { draw.rect(dc, {{r.min.x + 2 * s, r.min.y + 6 * s}, {r.min.x + 4 * s, r.max.y - 6 * s}}, ui.hue(.Accent), 1 * s) }
 	}
 	rb.custom_user = rd
@@ -453,11 +455,11 @@ missed_entry_row :: proc(app: ^App, r: ^Missed_Row, k: int, selected, cursor: bo
 			missed_mark(e, em)
 			ui.space(ui.SPACE_2)
 			ink := acked ? ui.theme_color("faint text") : e.state == .New ? ui.theme_color("bright text") : ui.theme_color("text")
-			text("w", missed_words(e), ink, ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
+			text("w", missed_words(e), inked(rb, ink), ui.Style_Mod{font_size = math.round(em * FS_LABEL)})
 			ui.space(ui.SPACE_2)
-			text("x", e.text, ui.theme_color("faint text"), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
+			text("x", e.text, inked(rb, ui.theme_color("faint text")), ui.Style_Mod{font_size = math.round(em * FS_SMALL)}, ui.fill())
 			ui.space(ui.SPACE_2)
-			text("a", age_text(now, f64(e.at)), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			text("a", age_text(now, f64(e.at)), inked(rb, ui.theme_color("faint text")), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			ui.space(ui.SPACE_2)
 			if missed_is_wait(e) && !acked {
 				button = ui.button("answer", i18n.tr("Answer"), lucide.ARROW_RIGHT, {intent = .Primary, height = small, quiet = true}).clicked
