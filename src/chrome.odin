@@ -353,6 +353,7 @@ status_bar :: proc(app: ^App, em: f32) {
 		text("ocn_v", APP_TITLE + " " + APP_VERSION, ui.theme_color("faint text"), small)
 		ui.spacer(ui.fill())
 		update_pill(app, em)
+		downloads_pill(app, em)
 		pend := int(app.pending)
 		if pend == 0 { app.chrome.pending_since = 0 } else if app.chrome.pending_since == 0 { app.chrome.pending_since = ui.now_ms() }
 		if pend > 0 && ui.now_ms() - app.chrome.pending_since >= PENDING_SHOW_MS {

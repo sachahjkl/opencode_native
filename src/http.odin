@@ -5,6 +5,7 @@ package ocn
 
 import "core:encoding/base64"
 import "core:fmt"
+import "core:strconv"
 import "core:strings"
 import "core:time"
 import tk_http "gt:http"
@@ -71,6 +72,52 @@ http_request :: proc(h: ^Http, method, path: string, body := "", allocator := co
 	res.body = nil
 	tk_http.response_destroy(&res, allocator)
 	return status, resp, true
+}
+
+// What a range of a file brings back (Transport.range). body and etag are in the allocator given.
+Range_Answer :: struct {
+	ok:     bool,     // the server was reached (false: `why` says how it was not)
+	why:    string,   // (static)
+	status: int,      // 206: the range; 200: the whole file; 416: no such range (an empty file says `bytes */0`)
+	body:   []u8,
+	total:  i64,      // the file's size, from Content-Range (or a 200's body); -1: not said
+	etag:   string,   // "": none
+}
+
+range_answer_destroy :: proc(a: ^Range_Answer, allocator := context.allocator) {
+	delete(a.body, allocator)
+	delete(a.etag, allocator)
+	a^ = {}
+}
+
+// The total of a Content-Range: "bytes 0-99/39674" and "bytes */0" say it, "bytes 0-99/*" does not (-1).
+content_range_total :: proc(v: string) -> i64 {
+	slash := strings.last_index_byte(v, '/')
+	if slash < 0 { return -1 }
+	n, ok := strconv.parse_i64(strings.trim_space(v[slash + 1:]))
+	return ok && n >= 0 ? n : -1
+}
+
+// The bytes `from` to `to` (included) of what a GET of `path` gives (`if_range`: the ETag the first range came with: a
+// file changed since answers 200 whole). Not compressed: a range of a compressed body is no range of the file, and
+// gt:http drops the length of a body it decodes. A server that ignores Range answers 200 with the whole file, up to
+// REQUEST_MAX_BYTES.
+http_range :: proc(h: ^Http, path: string, from, to: i64, if_range: string, allocator := context.allocator) -> Range_Answer {
+	asked := tk_http.Header{"Range", fmt.tprintf("bytes=%d-%d", from, to)}
+	headers := if_range != "" ? http_headers(h, asked, {"If-Range", if_range}) : http_headers(h, asked)
+	req := tk_http.Request{max_bytes = REQUEST_MAX_BYTES, user_agent = USER_AGENT, timeout = REQUEST_TIMEOUT, connect_timeout = CONNECT_TIMEOUT, headers = headers}
+	res, err := tk_http.request("GET", strings.concatenate({h.base, path}, context.temp_allocator), req, allocator)
+	if err != .None { return {why = tk_http.error_text(err)} }
+	a := Range_Answer{ok = true, status = res.status, body = res.body, total = -1}
+	if v, ok := tk_http.header_value(res.headers, "Content-Range"); ok {
+		a.total = content_range_total(v)
+	} else if res.status == 200 {
+		a.total = i64(len(res.body))
+	}
+	if v, ok := tk_http.header_value(res.headers, "ETag"); ok { a.etag = strings.clone(v, allocator) }
+	res.body = nil
+	tk_http.response_destroy(&res, allocator)
+	return a
 }
 
 // What the event stream takes: no limit of its own but its silence, and its connection's. Not compressed: a server's

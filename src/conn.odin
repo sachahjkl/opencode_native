@@ -38,10 +38,18 @@ Transport :: struct {
 	fetch:   proc(c: ^Conn, method, path, body: string, allocator: mem.Allocator) -> (status: int, resp: string, ok: bool),
 	// A shell's socket (nil: this transport has none, no shell's thread starts).
 	ws_open: proc(h: ^Http, path: string) -> ^tk_http.Socket,
+	// The bytes `from` to `to` (included) of the file a GET of `path` gives, `if_range`: its ETag ("": the first range).
+	// nil: this transport downloads nothing (download.odin).
+	range:   proc(c: ^Conn, path: string, from, to: i64, if_range: string, allocator: mem.Allocator) -> Range_Answer,
 	close:   proc(c: ^Conn),   // the connection is freed: what the transport holds goes
 }
 
-HTTP_TRANSPORT :: Transport{call = http_call, fetch = http_fetch, ws_open = http_ws_open, close = http_close}
+HTTP_TRANSPORT :: Transport{call = http_call, fetch = http_fetch, ws_open = http_ws_open, range = http_range_call, close = http_close}
+
+@(private = "file")
+http_range_call :: proc(c: ^Conn, path: string, from, to: i64, if_range: string, allocator: mem.Allocator) -> Range_Answer {
+	return http_range(&c.http, path, from, to, if_range, allocator)
+}
 
 @(private = "file")
 http_call :: proc(c: ^Conn, r: ^Request) -> bool {

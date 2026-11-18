@@ -161,6 +161,9 @@ message_menu :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message) {
 		if ui.menu_item(i18n.tr("Quote"), "", icon = lucide.QUOTE).clicked { quote_text(app, pane, sel, false) }
 		if ui.menu_item(i18n.tr("Quote with a comment"), command_shortcut(app, "session.quote"), icon = lucide.MESSAGE_SQUARE_QUOTE).clicked { quote_text(app, pane, sel, true) }
 		if ui.menu_item(i18n.tr("Copy the selection"), "Ctrl+C", icon = lucide.COPY).clicked { copied(sel, i18n.tr("Selection copied")) }
+		if path, ok := download_path_of(sel); ok {
+			if ui.menu_item(i18n.tr("Download the selected path…"), icon = lucide.DOWNLOAD).clicked { download_ask(app, path, pane_dir(app, pane)) }
+		}
 		ui.menu_separator()
 	}
 	switch m.kind {
@@ -208,6 +211,8 @@ tool_menu :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, p: ^Part) {
 	if path := p.file_path; path != "" {
 		if ui.menu_item(i18n.tr("Copy the path"), icon = lucide.FILE).clicked { copied(path, i18n.tr("Path copied")) }
 		if ui.menu_item(i18n.tr("Show in the folder"), icon = lucide.FOLDER).clicked { reveal_path(path) }
+		// (the file is the server's, which may be another computer: it comes here)
+		if ui.menu_item(i18n.tr("Download…"), icon = lucide.DOWNLOAD).clicked { download_ask(app, path, pane_dir(app, pane)) }
 	}
 	if ui.menu_item(i18n.tr("Copy the input"), icon = lucide.COPY, disabled = p.input == "").clicked { copied(p.input, i18n.tr("Input copied")) }
 	if url := first_url(p.output); url != "" {

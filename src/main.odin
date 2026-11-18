@@ -49,6 +49,7 @@ App :: struct {
 
 	cx:             App_Context,       // what the window keeps from frame to frame, beside the panels' own state
 	server_files:   Server_Files,      // the server's files, for the toolkit's file browser (folders.odin)
+	downloads:      Downloads,         // the server's files on their way to this computer (download.odin)
 
 	// the server
 	servers:        [dynamic]Server,   // (servers.odin) this computer's first
@@ -718,6 +719,7 @@ main :: proc() {
 	ui.views_destroy(&app.program_views)
 	threads_stop(app)
 	updates_stop(app)   // (before the state's posts close: no news after it)
+	downloads_stop(app)   // (their temps removed: the window is gone, nothing waits on a frame)
 	if app.cx.due[.Drafts].due_ms != 0 { drafts_save(app) }   // (what was typed in the last second)
 	config.user_writer_stop(&app.prefs_writer, &app.cfg_prefs)
 	stores_close(app)   // (waits for the disk: the window is gone, nothing waits on a frame)

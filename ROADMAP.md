@@ -23,3 +23,11 @@
   absolute path or offers a read without a location.
 - **Sizes and dates of a remote server's files.** /api/fs/list gives only a path and a type, so the file browser hides
   these columns for a server; show them when the server gives them.
+
+## Maybe
+
+- **Download a folder of the server.** A folder comes as one archive, the way a file comes
+  ([remote-download.md](src/md/features/remote-download.md)). This waits for the server to offer an archive of a folder;
+  one request per file over /api/fs/list is the other way open, slower and with no archive.
+- **"Download…" in the file browser's own menu.** It waits for gui_toolkit's browser to take a program's actions on an
+  entry; until then the palette's "Download a file…" opens the browser in a pick mode.

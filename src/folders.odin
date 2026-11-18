@@ -142,7 +142,6 @@ server_files_find :: proc(src: ^ui.File_Source, folder, query: string, limit: in
 }
 
 // A path in the address of a request: each part escaped, the slashes kept.
-@(private = "file")
 path_escape :: proc(p: string) -> string {
 	b := strings.builder_make(context.temp_allocator)
 	rest := p
