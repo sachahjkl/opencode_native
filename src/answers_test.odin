@@ -255,7 +255,8 @@ a_server_left_leaves_nothing_behind :: proc(t: ^testing.T) {
 	show(app, "s")
 	append(&app.activity.jobs, Shell_Job{id = strings.clone("j"), status = .Running})
 	app.activity.open = true
-	find_ask(app, pane, "needle")
+	find_show(app, pane, "needle")   // (never built: no view yet, the text waits)
+	testing.expect_value(t, pane.conversation.find_waits, "needle")
 	bench_event(app, `{"type":"permission.asked","data":{"request":{"id":"p","sessionID":"s"}}}`)
 	waits_gone(app, "gone")
 	refresh_soon(app)
@@ -265,7 +266,7 @@ a_server_left_leaves_nothing_behind :: proc(t: ^testing.T) {
 	testing.expect(t, !app.cx.have_slash)
 	testing.expect_value(t, len(app.activity.jobs), 0)
 	testing.expect(t, !app.activity.open)
-	testing.expect(t, !pane.conversation.find_due && pane.conversation.find_text == "", "no find opens over the next server's conversation")
+	testing.expect(t, pane.conversation.find_waits == "", "no find opens over the next server's conversation")
 	testing.expect_value(t, len(app.permissions), 0)
 	testing.expect_value(t, len(app.cx.waits_gone.items), 0)
 	testing.expect_value(t, app.cx.due[.Refresh].due_ms, 0)

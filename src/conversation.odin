@@ -20,8 +20,8 @@ Conversation :: struct {
 	column_w:         f32,            // the conversation column, frame pixels (this frame)
 	scroll_box:       ^ui.Box,        // the conversation's scroll box, when built this frame
 	scroll_key:       ui.Key,         // ... its key, at its last build (what the find is open over)
-	find_due:         bool,           // the find opens over it at its next build, with find_text (find.odin find_ask)
-	find_text:        string,         // (owned)
+	find_waits:       string,         // --find's text while the pane shows no conversation: its first one opens it (find.odin find_show) (owned)
+	find_over:        bool,           // the find was open over it at its last build (find_pane_closed)
 	column_drag_from: f32,            // the conversation's width when a handle of it was pressed (column_handles)
 	height:           f32,            // of the conversation, at the last frame
 	width:            f32,            // the conversation's room, frame pixels (this frame)
@@ -76,7 +76,11 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32, avail: f32) {
 			sb = ui.prev_box("###chat")
 			// (before the keys of the conversation: Up and Down are the marks' while they have the keyboard)
 			if prompt_rail_on(app, pane) && sb != nil { prompt_rail(app, pane, sb, em) }
-			chat_scroll_place(app, pane, sb, em)
+			// (each pane's view has its find: the toolkit's, one per window, moved to the view it is opened over. Its bar is built
+			// before the content, so that what the find did to the view since the last build reaches chat_scroll_place; after the
+			// marks, so that their magnifier's press shows it in this build)
+			find_scrolled := conversation_find(app, pane, sb)
+			chat_scroll_place(app, pane, sb, em, find_scrolled)
 			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.scroll_y("###chat") {
 				ui.next({width = ui.fill(), height = ui.children_sum(), axis = .X})
@@ -92,8 +96,6 @@ conversation :: proc(app: ^App, pane: ^Chat_Pane, em: f32, avail: f32) {
 			}
 			pane.conversation.scroll_box = ui.prev_box("###chat")
 			if b := pane.conversation.scroll_box; b != nil { pane.conversation.scroll_key = b.key }
-			// (each pane's view has its find: the toolkit's, one per window, moved to the view it is opened over)
-			conversation_find(app, pane, pane.conversation.scroll_box)
 		}
 		chat_scroll_settle(app, pane, sb)
 		if sb != nil && pane.chat.id != "" && is_main { column_handles(app, pane, sb, main, side, col, avail, em, zoom) }

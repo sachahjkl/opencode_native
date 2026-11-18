@@ -165,7 +165,8 @@ chat_scroll_restore_check :: proc(app: ^App, pane: ^Chat_Pane) {
 }
 
 // Before the conversation is built: what a hand did to the box since the last build (begin_build moved it), then the state put on it.
-chat_scroll_place :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) {
+// `found`: the find moved it to a match since the last build (Find_Result.scrolled).
+chat_scroll_place :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32, found: bool) {
 	if pane.chat.id == "" { chat_scroll_event(pane, Scroll_Signal.Off_Bottom) }   // (the home page is read from its top)
 	if sb == nil { return }
 	// (the wheel's click scrolls it by steps of a pixel a frame or less: under any slack, each one counts)
@@ -179,7 +180,6 @@ chat_scroll_place :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box, em: f32) {
 	if scrollbar_held(app, sb) { chat_scroll_event(pane, Scroll_Signal.Restore_End) }   // (as the wheel and the keys do: main_input)
 	// (the find brings its match in after the layout, between two builds: a move of the reader's, which a way back or the
 	// bottom followed would undo)
-	found := ui.find_is_open(sb.key) && abs(sb.view_target.y - pane.view.chat_target) > 1
 	if found { chat_scroll_event(pane, Scroll_Signal.Restore_End) }
 	limit := ui.view_limit(sb)
 	// the scrollbar's drag, the wheel, the keyboard moved it: up means let go of the bottom, or following it would put it back at

@@ -38,23 +38,29 @@ The messages are the rows of the lazy column (`ui.Text_Rows`), the same rows the
 
 ## The bar in each pane
 
-Each pane's conversation calls `ui.find_bar` after its scroll box (`conversation_find`): the main view and the /btw panel
-each have their find. The toolkit's State holds one find, so a pane in the main window and the main view share it (Ctrl+F
-moves it to the view with the keyboard); a panel in a window of its own has its window's.
+Each pane's conversation calls `ui.find_bar` over its scroll box of the last build, before the content
+(`conversation_find`): the main view and the /btw panel each have their find. The bar comes before the content so that its
+result reaches `chat_scroll_place` in the same build (The view's place). The toolkit's State holds one find, so a pane in
+the main window and the main view share it (Ctrl+F moves it to the view with the keyboard); a panel in a window of its own
+has its window's.
 
-Ctrl+F (`session.find`, the pane with the keyboard: `keys_pane`) and `--find` do not open it themselves: a command runs
-after the frame, outside the build of the pane's window, where `ui.find_open` would act on another window's State. They
-ask (`find_ask`), and the pane's next build opens it over its scroll box with the text. The home page closes it (no
-conversation to search); `--find` given at a start waits for the session the start opens.
+Ctrl+F (`session.find`, the pane with the keyboard: `keys_pane`) and `--find` open it at once (`find_show`), with the State
+of the pane's window (`pane_window`): the toolkit's `find_open` takes it, and works between two builds. ocn no longer asks
+the pane's next build to open it. The home page closes it (no conversation to search). A pane with no conversation yet has
+no view to open it over: `--find` given at a start keeps its text (`find_waits`), and the first conversation opens it.
+
+A closed pane closes the find if its last build had it open over its view (`find_over`): the toolkit says where the find is
+only for the window being built.
 
 The magnifier above the prompt marks is the toolkit's: it opens and closes this find. ocn wires nothing for it.
 
 ## The view's place
 
 The toolkit brings a match in by moving the scroll box's target after the layout. The conversation's scroll state
-(scroll.odin) would undo it: following the bottom puts the view back at the end, a way back pins its message. So a target
-that moved between two builds while the find is open over the view counts as the reader's move (`chat_scroll_place`): it
-ends a way back and lets go of the bottom.
+(scroll.odin) would undo it: following the bottom puts the view back at the end, a way back pins its message. So a move of
+the find counts as the reader's move (`chat_scroll_place`): it ends a way back and lets go of the bottom. The find says
+when it moved the view (`Find_Result.scrolled`); ocn no longer guesses it from a target that moved while the find was open,
+which also took any other move of the target for the find's.
 
 ## Refused
 
