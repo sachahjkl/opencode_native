@@ -4,6 +4,14 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.75.0] - 2026-11-18 10:07
+
+### Added
+- **Download a file of the server**: a read, edit or write call's menu, a path selected in a message and the palette's "Download a file…" save a file of the server's computer to this one, wherever the server runs. The status bar shows the progress, with Cancel, then Open and Show in its folder.
+
+### Changed
+- **The settings fold to a rail in a narrow window**: when the page would get less than 26 ems, or by the fold button at the start of the search row, the settings sidebar becomes a column of the pages' icons, a magnifier that opens it with the search focused, and a … menu with the version, the settings file, Export and Import; a pull of its edge opens it. What's new stacks its changes under each kind on a narrow page; a sidebar folded or opened by hand stays so until the window crosses the width where it folds by itself.
+
 ## [0.74.1] - 2026-11-17 23:54
 
 ### Fixed
@@ -1907,6 +1915,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.75.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.75.0
 [0.74.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.74.1
 [0.74.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.74.0
 [0.73.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.73.0
