@@ -34,7 +34,8 @@ bench_title :: proc(i: int) -> string { return fmt.tprintf("Session %d about the
 // runs), each lit as its row. A hover shows its card at once (title, project · folder, state, what waits) and the next
 // mark's as the pointer goes down, a click opens the session,
 // Down moves the keyboard to the next mark and its card follows; Restore brings the list back. A window too narrow for
-// the sidebar and the conversation folds it to the same rail.
+// the sidebar and the conversation folds it to the same rail. A Minimise or a Restore by hand holds until the width next
+// crosses the threshold where the sidebar folds by itself.
 @(test)
 the_sidebar_minimised_is_a_rail_of_marks :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
@@ -173,10 +174,37 @@ the_sidebar_minimised_is_a_rail_of_marks :: proc(t: ^testing.T) {
 		session.save_png(s, "fold-B-pulled.png")
 
 		// a window too narrow for the sidebar and the conversation folds it to the rail; wide again, the list
-		session.resize(s, {int((SIDEBAR_EM + ui.DOCK_MIN_EM * 0.5) * em), BENCH_SIZE.y})
+		narrow := [2]int{int((SIDEBAR_EM + ui.DOCK_MIN_EM * 0.5) * em), BENCH_SIZE.y}
+		session.resize(s, narrow)
 		session.wait_box(s, "sidebar_rail")
 		testing.expect(t, rail_mark_of(s, bench_title(6)) != nil, "folded: the marks")
 		session.resize(s, BENCH_SIZE)
 		session.wait_box(s, "sidebar")
+
+		// a choice by hand holds until the width next crosses the threshold (side-panels.md): a Restore while narrow keeps
+		// the list at another narrow width, and a crossing ends it
+		session.resize(s, narrow)
+		session.wait_box(s, "sidebar_rail")
+		session.click(s, "view_fold")
+		session.wait_box(s, "sidebar")
+		session.resize(s, {int((SIDEBAR_EM + ui.DOCK_MIN_EM * 0.75) * em), BENCH_SIZE.y})
+		session.wait_idle(s)
+		testing.expect(t, session.find(s, "sidebar") != nil && session.find(s, "sidebar_rail") == nil, "restored while narrow: the list holds, still narrow")
+		session.resize(s, BENCH_SIZE)
+		session.wait_idle(s)
+		testing.expect(t, session.find(s, "sidebar") != nil, "wide: the list")
+		// a Minimise while wide holds while wide, and the next crossing gives the automatic state back: narrow the rail,
+		// wide again the list, not the rail asked before
+		session.click(s, "view_fold")
+		session.wait_box(s, "sidebar_rail")
+		session.resize(s, {BENCH_SIZE.x - 40, BENCH_SIZE.y})
+		session.wait_idle(s)
+		testing.expect(t, session.find(s, "sidebar_rail") != nil, "minimised while wide: the rail holds at another wide width")
+		session.resize(s, narrow)
+		session.wait_idle(s)
+		testing.expect(t, session.find(s, "sidebar_rail") != nil, "narrow: the rail")
+		session.resize(s, BENCH_SIZE)
+		session.wait_box(s, "sidebar")
+		testing.expect(t, session.find(s, "sidebar_rail") == nil, "wide again: the list, the Minimise gone with the crossing")
 	})
 }
