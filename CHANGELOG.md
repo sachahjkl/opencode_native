@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.76.0] - 2026-11-18 13:56
+
+### Added
+- **The theme Old Head**: Windows 95 in grey, square corners, bevels and a dotted focus, white on navy for every selection, no motion. Pick it in Settings, Appearance. The session shown in the sidebar and on its rail, the lists of the activity tray, of @ and / in the composer and of What you missed take its selection too.
+
 ## [0.75.1] - 2026-11-18 12:42
 
 ### Changed
@@ -1920,6 +1925,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.76.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.76.0
 [0.75.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.75.1
 [0.75.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.75.0
 [0.74.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.74.1
