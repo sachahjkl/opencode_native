@@ -18,6 +18,9 @@ DEMO_SESSION    :: "ses_e5584daa0ffe0rZ9lqsYByWGPw"
 LIVE_DIR        :: "build/live"   // (not build/ocntools: the tool's own executable, as AGENTS.md builds it)
 SNAPSHOT        :: LIVE_DIR + "/before.txt"
 START_LIMIT     :: 20 * time.Second
+// (the poll of the program's first connection: measure publishes the time to the first screen from it, and the toolkit's
+// 50 ms default would add up to 50 ms to that figure)
+START_STEP      :: 2 * time.Millisecond
 STEP_LIMIT      :: 20 * time.Second
 BACK_LIMIT      :: 15 * time.Second
 TURN_LIMIT      :: 60 * time.Second

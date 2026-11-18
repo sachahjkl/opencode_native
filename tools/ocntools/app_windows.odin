@@ -22,7 +22,7 @@ app_start :: proc(app: ^App, command: []string) -> bool {
 	p, start_err := os.process_start({command = command, env = env, stdout = log, stderr = log})
 	if start_err != nil { fmt.eprintfln("live: %s does not start: %v", command[0], start_err); return false }
 	app.process = p
-	dt, connected, ended := cdp.connect_wait(port, START_LIMIT, p)
+	dt, connected, ended := cdp.connect_wait(port, START_LIMIT, p, START_STEP)
 	if connected { app.dt = dt; return true }
 	if ended.exited {
 		fmt.eprintfln("live: the program ended at the start, code %d: see %s", ended.exit_code, app.log)
