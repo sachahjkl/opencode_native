@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.76.1] - 2026-11-18 16:40
+
+### Changed
+- **Old Head goes all the way**: under the Old Head theme the title bar has its active and inactive band and square buttons, the scroll bars take its shape, and every control its ringed relief.
+
 ## [0.76.0] - 2026-11-18 13:56
 
 ### Added
@@ -1925,6 +1930,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.76.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.76.1
 [0.76.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.76.0
 [0.75.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.75.1
 [0.75.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.75.0
