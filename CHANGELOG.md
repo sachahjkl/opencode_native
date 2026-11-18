@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.77.0] - 2026-11-18 21:48
+
+### Added
+- **A right click at the top of a panel opens its menu**: detach, open in a window, maximise or close the sidebar or the /btw panel from a right click in the free part of its top.
+
 ## [0.76.2] - 2026-11-18 17:50
 
 ### Fixed
@@ -1935,6 +1940,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.77.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.77.0
 [0.76.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.76.2
 [0.76.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.76.1
 [0.76.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.76.0
