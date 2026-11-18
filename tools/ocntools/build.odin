@@ -160,13 +160,20 @@ fetch_zig :: proc() -> (zig: string, ok: bool) {
 	return absolute, true
 }
 
+// The fetch of every package libghostty-vt's build may need, before the build. Zig 0.17.0's build runner crashes at random
+// while it fetches lazy packages during a build on a cold cache (a general protection fault on Linux, a segmentation
+// fault on Windows: 0.75.0's release failed on both, three times, -j1 too); with every package fetched first, the build
+// fetches nothing and went through every time on a cold cache.
+vt_fetch_command :: proc(zig: string) -> []string {
+	args := make([]string, 3, context.temp_allocator)
+	args[0], args[1], args[2] = zig, "build", "--fetch=all"
+	return args
+}
+
 // The build of libghostty-vt. ReleaseFast: a debug build of it is very slow. The target: the ABI of the linker Odin uses.
-// -j1: Zig 0.17.0's build runner crashes at random with jobs in parallel on a cold cache (a general protection fault on
-// Linux, a segmentation fault on Windows: 0.75.0's release failed on both, twice); one job at a time builds every time,
-// and only a build with no cache (a release) pays for it.
 vt_build_command :: proc(zig: string) -> []string {
-	args := make([]string, 6, context.temp_allocator)
-	args[0], args[1], args[2], args[3], args[4], args[5] = zig, "build", "-Demit-lib-vt=true", "-Doptimize=ReleaseFast", "-Dtarget=" + VT_TARGET, "-j1"
+	args := make([]string, 5, context.temp_allocator)
+	args[0], args[1], args[2], args[3], args[4] = zig, "build", "-Demit-lib-vt=true", "-Doptimize=ReleaseFast", "-Dtarget=" + VT_TARGET
 	return args
 }
 
@@ -185,6 +192,7 @@ build_vt :: proc(force: bool) -> bool {
 	}
 	if !run("git", "-C", VT_SOURCE, "fetch", "-q", "--depth", "1", "origin", GHOSTTY_COMMIT) { return false }
 	if !run("git", "-C", VT_SOURCE, "-c", "advice.detachedHead=false", "checkout", "-q", "--force", GHOSTTY_COMMIT) { return false }
+	if !toolbox.run(vt_fetch_command(zig), {dir = VT_SOURCE, echo = true}) { return false }
 	if !toolbox.run(vt_build_command(zig), {dir = VT_SOURCE, echo = true}) { return false }
 	made := make([dynamic]string, context.temp_allocator)
 	files_under(VT_SOURCE + "/zig-out/lib", &made)

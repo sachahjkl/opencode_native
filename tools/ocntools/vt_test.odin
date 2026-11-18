@@ -4,13 +4,15 @@ import "core:slice"
 import "core:strings"
 import "core:testing"
 
-// libghostty-vt is built one job at a time: Zig 0.17.0's build runner crashed at random with parallel jobs on a cold cache.
+// libghostty-vt's packages are all fetched before its build: Zig 0.17.0's build runner crashed at random fetching lazy
+// packages during a build on a cold cache.
 @(test)
-the_vt_builds_one_job_at_a_time :: proc(t: ^testing.T) {
-	args := vt_build_command("zig")
-	testing.expect(t, slice.contains(args, "-j1"), "-j1")
-	testing.expect(t, slice.contains(args, "-Doptimize=ReleaseFast") && slice.contains(args, "-Demit-lib-vt=true"), "the lib, optimised")
-	testing.expect_value(t, args[0], "zig")
+the_vt_packages_are_fetched_before_its_build :: proc(t: ^testing.T) {
+	fetch := vt_fetch_command("zig")
+	testing.expect(t, fetch[0] == "zig" && slice.contains(fetch, "--fetch=all"), "every package fetched")
+	build := vt_build_command("zig")
+	testing.expect(t, slice.contains(build, "-Doptimize=ReleaseFast") && slice.contains(build, "-Demit-lib-vt=true"), "the lib, optimised")
+	testing.expect(t, !slice.contains(build, "--fetch=all"), "the build fetches nothing of its own")
 }
 
 VT_SAMPLE :: `
