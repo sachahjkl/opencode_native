@@ -1,7 +1,17 @@
 package ocntools
 
+import "core:slice"
 import "core:strings"
 import "core:testing"
+
+// libghostty-vt is built one job at a time: Zig 0.17.0's build runner crashed at random with parallel jobs on a cold cache.
+@(test)
+the_vt_builds_one_job_at_a_time :: proc(t: ^testing.T) {
+	args := vt_build_command("zig")
+	testing.expect(t, slice.contains(args, "-j1"), "-j1")
+	testing.expect(t, slice.contains(args, "-Doptimize=ReleaseFast") && slice.contains(args, "-Demit-lib-vt=true"), "the lib, optimised")
+	testing.expect_value(t, args[0], "zig")
+}
 
 VT_SAMPLE :: `
 /* a comment with typedef enum { NOT_ONE = 9 } in it */
