@@ -110,9 +110,10 @@ watch_release :: proc(id: string) -> bool {
 }
 
 // Whether a failed run's log says the network failed, not the build: a server's 5xx, or a name the runner could not resolve (its
-// package mirror, apt's "Temporary failure resolving"), or a connection the other end dropped (zig's package fetch).
+// package mirror, apt's "Temporary failure resolving"), or a connection the other end dropped or a body cut short (zig's
+// package fetch: its packages are pinned by hash, so a tarball it could not read is the network's, never the build's).
 network_hiccup :: proc(log: string) -> bool {
-	for words in ([]string{"error: 50", "returned error: 5", "Temporary failure resolving", "Could not resolve host", "ConnectionResetByPeer"}) {
+	for words in ([]string{"error: 50", "returned error: 5", "Temporary failure resolving", "Could not resolve host", "ConnectionResetByPeer", "unable to unpack tarball"}) {
 		if strings.contains(log, words) { return true }
 	}
 	return false

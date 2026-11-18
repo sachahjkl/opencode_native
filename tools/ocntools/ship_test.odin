@@ -69,5 +69,7 @@ a_network_hiccup_is_tried_again :: proc(t: ^testing.T) {
 	testing.expect(t, network_hiccup("curl: (22) The requested URL returned error: 503"), "a 5xx")
 	// (zig fetching a package of libghostty-vt: 0.73.0's Windows build stopped on it)
 	testing.expect(t, network_hiccup("pkg/highway\\build.zig.zon:9:20: error: HTTP response read failure: ConnectionResetByPeer"), "a connection reset")
+	// (0.76.0's Windows release: the fetch of libghostty-vt's packages read a tarball cut short)
+	testing.expect(t, network_hiccup("pkg/libxml2\\build.zig.zon:8:20: error: unable to unpack tarball to temporary directory: ReadFailed"), "a tarball cut short")
 	testing.expect(t, !network_hiccup("src/main.odin(12:3) Error: Undeclared name: x"), "a build that fails")
 }
