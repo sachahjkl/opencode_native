@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.75.1] - 2026-11-18 12:42
+
+### Changed
+- **The panel controls wait for you**: the bar of a panel's controls shows only after the pointer rests at its top, and stays while the pointer is in the panel, so nothing moves under a pointer on its way to the fold button; a right click on the fold button opens the panel's menu.
+
 ## [0.75.0] - 2026-11-18 10:07
 
 ### Added
@@ -1915,6 +1920,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.75.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.75.1
 [0.75.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.75.0
 [0.74.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.74.1
 [0.74.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.74.0
