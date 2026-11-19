@@ -2264,6 +2264,9 @@ fr Poser une question en aparté : une bifurcation de cette session, dans un pan
 en %s first token
 fr premier jeton en %s
 
+en ≥ %.0f tokens/s
+fr ≥ %.0f jetons/s
+
 en %.0f tokens/s
 fr %.0f jetons/s
 

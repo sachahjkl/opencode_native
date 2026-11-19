@@ -126,15 +126,16 @@ a_steps_speed_comes_from_its_first_token :: proc(t: ^testing.T) {
 	l := local_stats(app)
 	testing.expect_value(t, len(l.models), 2)
 	for mc in l.models {
-		lat, rate := model_speed(mc)
+		lat, rate, floor := model_speed(mc)
 		switch mc.name {
 		case "fast":
 			testing.expect_value(t, mc.timed, 2)
 			testing.expect_value(t, lat, 1000)                    // (500 and 1500)
 			testing.expect_value(t, rate, (200.0 + 300) / 4)      // (500 tokens in 2 s and 2 s)
+			testing.expect(t, !floor)
 		case "old":
 			testing.expect_value(t, mc.timed, 0)
-			testing.expect_value(t, speed_text(lat, rate), "")
+			testing.expect_value(t, speed_text(lat, rate, floor), "")
 		}
 	}
 
@@ -143,6 +144,79 @@ a_steps_speed_comes_from_its_first_token :: proc(t: ^testing.T) {
 	m = find_message(c, "a1")
 	testing.expect_value(t, m.latency_ms, 0)
 	testing.expect_value(t, m.first_token, 0)
+}
+
+// claude-agent sends an answer's text whole: its first token is the arrival of the text, and the writing time is a few tens
+// of milliseconds. Two answers as the server stores them (times shifted): the footer says a floor over the whole step, and
+// no first token. Before, the first said "4.9 s first token · 6881 tokens/s", the second "5.9 s first token" and no speed.
+@(test)
+an_answer_sent_at_once_shows_a_floor_of_its_speed :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	pane := main_pane(app)
+	open_chat(app, "s")
+	bench_clear(app)
+	c := &pane.chat
+	page := `{"data":[` +
+		`{"id":"a1","type":"assistant","agent":"build","model":{"id":"opus","providerID":"claude-agent","variant":"default"},` +
+		`"time":{"created":162415,"firstToken":167309,"streamed":167368,"completed":167386},"finish":"stop","rawFinish":"end_turn","cost":0,` +
+		`"tokens":{"input":2,"output":406,"reasoning":0,"cache":{"read":811721,"write":2180}},"content":[{"type":"text","text":"done"}]},` +
+		`{"id":"a2","type":"assistant","agent":"build","model":{"id":"opus","providerID":"claude-agent","variant":"default"},` +
+		`"time":{"created":200000,"firstToken":205875,"streamed":205921,"completed":205940},"finish":"stop","cost":0,` +
+		`"tokens":{"input":4,"output":496,"reasoning":0,"cache":{"read":316000,"write":0}},"content":[{"type":"text","text":"done"}]},` +
+		// a step that streamed its reasoning, then its text: its first token is one
+		`{"id":"a3","type":"assistant","agent":"build","model":{"id":"opus","providerID":"claude-agent","variant":"default"},` +
+		`"time":{"created":115131,"firstToken":121671,"streamed":131680,"completed":134624},"finish":"tool-calls","cost":0,` +
+		`"tokens":{"input":4,"output":656,"reasoning":428,"cache":{"read":6513,"write":802173}},"content":[]}]}`
+	chat_load(app, pane, json_of(page), false)
+	m1, m2, m3 := find_message(c, "a1"), find_message(c, "a2"), find_message(c, "a3")
+	testing.expect(t, m1.write_floor && m2.write_floor && !m3.write_floor)
+	testing.expect_value(t, speed_text(m1.latency_ms, m1.write_rate, m1.write_floor), "≥ 82 tokens/s")   // (406 in 4.953 s)
+	testing.expect_value(t, speed_text(m2.latency_ms, m2.write_rate, m2.write_floor), "≥ 84 tokens/s")   // (496 in 5.921 s)
+	testing.expect_value(t, speed_text(m3.latency_ms, m3.write_rate, m3.write_floor), "6.5 s first token · 108 tokens/s")
+
+	l := local_stats(app)
+	testing.expect_value(t, len(l.models), 1)
+	_, rate, floor := model_speed(l.models[0])
+	testing.expect(t, floor, "one of its speeds is a floor")
+	testing.expect(t, rate > 0)
+}
+
+// While a run streams, the stream counts no token before a step ends: the step that streams shows the speed of the run's steps
+// that ended, from their real counts, made again at each step; a prompt starts another run.
+@(test)
+a_streaming_answer_shows_the_speed_of_its_ended_steps :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	app := bench_new()
+	pane := main_pane(app)
+	open_chat(app, "s")
+	bench_clear(app)
+	c := &pane.chat
+	started :: proc(app: ^App, id: string, at: int) {
+		bench_event(app, fmt.tprint(`{"type":"session.step.started","created":`, at, `,"data":{"sessionID":"s","assistantMessageID":"`, id, `","agent":"build","model":{"id":"opus","providerID":"p"},"started":`, at, "}}", sep = ""))
+	}
+	started(app, "a1", 1000)
+	testing.expect_value(t, find_message(c, "a1").run_rate, 0)   // (the first step: nothing ended before it)
+	bench_event(app, `{"type":"session.step.first-token","created":1500,"data":{"sessionID":"s","assistantMessageID":"a1"}}`)
+	bench_event(app, `{"type":"session.reasoning.delta","created":1500,"data":{"sessionID":"s","assistantMessageID":"a1","ordinal":0,"delta":"thinking"}}`)
+	bench_event(app, `{"type":"session.step.streamed","created":3500,"data":{"sessionID":"s","assistantMessageID":"a1"}}`)
+	bench_event(app, `{"type":"session.step.ended","created":4000,"data":{"sessionID":"s","assistantMessageID":"a1","finish":"tool-calls","tokens":{"input":1,"output":150,"reasoning":50,"cache":{"read":0,"write":0}}}}`)   // (200 tokens in 2 s)
+	started(app, "a2", 4100)
+	testing.expect_value(t, speed_text(0, find_message(c, "a2").run_rate, find_message(c, "a2").run_floor), "100 tokens/s")
+	// a2 ends, then a3 starts: the speed counts both (200 + 400 tokens in 2 s + 2 s)
+	bench_event(app, `{"type":"session.step.first-token","created":4600,"data":{"sessionID":"s","assistantMessageID":"a2"}}`)
+	bench_event(app, `{"type":"session.step.streamed","created":6600,"data":{"sessionID":"s","assistantMessageID":"a2"}}`)
+	bench_event(app, `{"type":"session.step.ended","created":6700,"data":{"sessionID":"s","assistantMessageID":"a2","finish":"tool-calls","tokens":{"output":400,"reasoning":0}}}`)
+	started(app, "a3", 6800)
+	testing.expect_value(t, find_message(c, "a3").run_rate, 150)
+	// a step that sent its output at once makes the run's speed a floor
+	bench_event(app, `{"type":"session.step.first-token","created":11950,"data":{"sessionID":"s","assistantMessageID":"a3"}}`)
+	bench_event(app, `{"type":"session.step.streamed","created":12000,"data":{"sessionID":"s","assistantMessageID":"a3"}}`)
+	bench_event(app, `{"type":"session.step.ended","created":12010,"data":{"sessionID":"s","assistantMessageID":"a3","finish":"tool-calls","tokens":{"output":520,"reasoning":0}}}`)
+	started(app, "a4", 12100)
+	a4 := find_message(c, "a4")
+	testing.expect(t, a4.run_floor)
+	testing.expectf(t, abs(a4.run_rate - (200.0 + 400 + 520) / (2 + 2 + 5.2)) < 1e-9, "run rate %v", a4.run_rate)
 }
 
 // The stream's MCP events: kept once each (delivery is at least once), at most MCP_EVENTS_KEPT, gone with the server.

@@ -23,18 +23,28 @@ import remote "gt:remote"
 import i18n "gt:i18n"
 
 Tool_Count :: struct { name: string, calls, failed: int, p50: f64 }
-// (timed, latency_ms, written, write_ms: the steps that say their first token, and their sums: step-speed.md)
-Model_Count :: struct { name: string, steps: int, tokens_in, tokens_out, cost: f64, timed: int, latency_ms, written, write_ms: f64 }
+// (timed, latency_ms, written, write_ms: the steps that say their first token, and their sums; floor: one of their speeds is a
+// floor: step-speed.md)
+Model_Count :: struct { name: string, steps: int, tokens_in, tokens_out, cost: f64, timed: int, latency_ms, written, write_ms: f64, floor: bool }
 
 // A step's latency (first token − start) and writing speed ((output + reasoning) / (end of writing − first token)), kept in the
 // message when what they come from changes: the end of writing is `streamed`, else `completed`, which waits for the tools.
+// A provider that sends its output at once (claude-agent's text) sets the first token at the end: that time is no first token,
+// and the speed is a floor over the whole step (step-speed.md).
 step_speed_set :: proc(m: ^Message) {
-	m.latency_ms, m.write_rate = 0, 0
+	m.latency_ms, m.write_rate, m.write_floor = 0, 0, false
 	if m.first_token <= 0 || m.created <= 0 || m.first_token < m.created { return }
-	m.latency_ms = m.first_token - m.created
 	end := m.streamed > 0 ? m.streamed : m.completed
-	if written := step_written(m); end - m.first_token >= STEP_WRITE_MIN_MS && written > 0 {
-		m.write_rate = written / ((end - m.first_token) / MS_PER_S)
+	if end <= 0 {   // (still writing: only the first token is known)
+		m.latency_ms = m.first_token - m.created
+		return
+	}
+	writing, whole := end - m.first_token, end - m.created
+	m.write_floor = writing < STEP_BURST_SHARE * whole
+	if !m.write_floor { m.latency_ms = m.first_token - m.created }
+	span := m.write_floor ? whole : writing
+	if written := step_written(m); span >= STEP_WRITE_MIN_MS && written > 0 {
+		m.write_rate = written / (span / MS_PER_S)
 	}
 }
 
@@ -42,19 +52,38 @@ step_speed_set :: proc(m: ^Message) {
 @(private = "file")
 step_written :: proc(m: ^Message) -> f64 { return m.tokens_out + m.reasoning }
 
-// "0.8 s first token · 92 tokens/s", or what of it is known ("": nothing).
-speed_text :: proc(latency_ms, rate: f64) -> string {
+// The writing speed of the steps of `m`'s run that ended before it, back to its prompt: a step that streams shows it, since the
+// stream counts no token before a step ends. Made when the step starts (step-speed.md), not at each frame.
+run_speed_set :: proc(c: ^Chat, m: ^Message) {
+	at := -1
+	#reverse for &o, i in c.messages { if &o == m { at = i; break } }   // (the last one, as a rule)
+	if at < 0 { return }
+	written, ms := 0.0, 0.0
+	floor := false
+	#reverse for &o in c.messages[:at] {
+		if o.kind != .Assistant { break }
+		if o.write_rate <= 0 { continue }
+		w := step_written(&o)
+		written += w
+		ms += w / o.write_rate * MS_PER_S
+		floor ||= o.write_floor
+	}
+	m.run_rate, m.run_floor = ms > 0 ? written / (ms / MS_PER_S) : 0, floor
+}
+
+// "0.8 s first token · 92 tokens/s", or what of it is known ("": nothing). `floor`: the speed is at least that.
+speed_text :: proc(latency_ms, rate: f64, floor := false) -> string {
 	lat := latency_ms > 0 ? fmt.tprintf(i18n.tr("%s first token"), seconds_text(latency_ms)) : ""
-	speed := rate > 0 ? fmt.tprintf(i18n.tr("%.0f tokens/s"), rate) : ""
+	speed := rate <= 0 ? "" : floor ? fmt.tprintf(i18n.tr("≥ %.0f tokens/s"), rate) : fmt.tprintf(i18n.tr("%.0f tokens/s"), rate)
 	if lat != "" && speed != "" { return fmt.tprintf("%s · %s", lat, speed) }
 	return lat != "" ? lat : speed
 }
 
-// A model's mean latency and its writing speed over the steps that say them (0: not known).
-model_speed :: proc(m: Model_Count) -> (latency_ms, rate: f64) {
+// A model's mean latency and its writing speed over the steps that say them (0: not known), and whether that speed is a floor.
+model_speed :: proc(m: Model_Count) -> (latency_ms, rate: f64, floor: bool) {
 	if m.timed > 0 { latency_ms = m.latency_ms / f64(m.timed) }
 	if m.write_ms > 0 { rate = m.written / (m.write_ms / MS_PER_S) }
-	return
+	return latency_ms, rate, m.floor
 }
 
 // A short wait in seconds, with a tenth under ten.
@@ -377,7 +406,7 @@ local_stats_of :: proc(c: ^Chat, a: mem.Allocator) -> (l: Local_Stats) {
 			mc.steps += 1; mc.tokens_in += m.tokens_in + m.cache_read; mc.tokens_out += m.tokens_out; mc.cost += m.cost
 			if m.latency_ms > 0 { mc.timed += 1; mc.latency_ms += m.latency_ms }
 			// (the speed is the whole's: tokens over time summed, so a long step weighs as much as it wrote)
-			if m.write_rate > 0 { w := step_written(&m); mc.written += w; mc.write_ms += w / m.write_rate * MS_PER_S }
+			if m.write_rate > 0 { w := step_written(&m); mc.written += w; mc.write_ms += w / m.write_rate * MS_PER_S; mc.floor ||= m.write_floor }
 			for &p in m.parts {
 				if p.kind != .Tool { continue }
 				l.calls += 1

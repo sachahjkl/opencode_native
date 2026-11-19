@@ -657,8 +657,14 @@ assistant_message :: proc(app: ^App, pane: ^Chat_Pane, m: ^Message, em: f32, con
 			ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 			if ui.row(.Center, id = "###foot") {
 				usage := m.cost > 0 ? fmt.tprintf(i18n.tr("%s in · %s out · %s"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out), dollars(m.cost, 3)) : fmt.tprintf(i18n.tr("%s in · %s out"), kfmt(m.tokens_in + m.cache_read), kfmt(m.tokens_out))
-				if s := speed_text(m.latency_ms, m.write_rate); s != "" { usage = fmt.tprintf("%s · %s", usage, s) }   // (kept in the message: step_speed_set)
+				if s := speed_text(m.latency_ms, m.write_rate, m.write_floor); s != "" { usage = fmt.tprintf("%s · %s", usage, s) }   // (kept in the message: step_speed_set)
 				text("tk", usage, ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
+			}
+		} else if app.prefs.usage && m.streaming && m.run_rate > 0 {
+			// (the stream counts no token before a step ends: the speed of the run's steps that did, kept when this one started)
+			ui.next({width = ui.fill(), height = ui.px(em * 1.5), axis = .X, cross = .Center})
+			if ui.row(.Center, id = "###foot") {
+				text("tk", speed_text(0, m.run_rate, m.run_floor), ui.theme_color("faint text"), ui.Style_Mod{font = app.mono, font_size = math.round(em * FS_CAPTION)})
 			}
 		}
 	}

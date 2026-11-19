@@ -109,6 +109,10 @@ Message :: struct {
 	// a step: when its first token came, when the provider's response ended (0: not said), and what step_speed_set made of them
 	first_token, streamed: f64,
 	latency_ms, write_rate: f64,   // first token − start; tokens written a second (0: not known)
+	write_floor: bool,             // the output came at once: write_rate is a floor, over the whole step (step-speed.md)
+	// a step: the writing speed of the steps of its run that ended before it, while it streams (0: none)
+	run_rate:  f64,
+	run_floor: bool,
 	agent, model, provider, finish: string,
 	variant:   string,        // how hard the model thought ("": its default)
 	text:      string,        // user, synthetic, shell; a switch: what it is now ("opus · high", a folder)
@@ -719,6 +723,8 @@ chat_load :: proc(app: ^App, pane: ^Chat_Pane, v: json.Value, older: bool, asked
 		if m.kind == .Switch && m.switched == .Model && m.model != "" { c.model, c.provider, c.variant = m.model, m.provider, m.variant }
 		if m.kind == .Switch && m.switched == .Agent && m.agent != "" { c.agent = m.agent }
 	}
+	// (a run read in its middle: its step that streams says the speed of those that ended, as a step.started would)
+	if n := len(c.messages); n > 0 && c.messages[n - 1].kind == .Assistant && c.messages[n - 1].streaming { run_speed_set(c, &c.messages[n - 1]) }
 	subs_changed(c)   // (a page: messages before the others, results of sub-agents, calls with their sessions)
 }
 
@@ -1374,6 +1380,7 @@ pane_event :: proc(app: ^App, pane: ^Chat_Pane, kind, sid: string, d, ev: json.V
 		// (a step started again under the same id: what the last try said of its time is not this one's)
 		m.first_token, m.streamed, m.completed = 0, 0, 0
 		step_speed_set(m)
+		run_speed_set(c, m)
 		c.model, c.provider, c.agent, c.variant = m.model, m.provider, m.agent, m.variant
 	case "session.step.first-token":
 		m := assistant(c, mid)

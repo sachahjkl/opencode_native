@@ -35,6 +35,7 @@ CTX_ITEMS_SHOWN     :: 12     // of a part, unfolded
 CTX_OPEN_LINES      :: 40     // of an item, opened
 CTX_ITEM_CHARS      :: 90     // of its name
 STEP_WRITE_MIN_MS   :: 50     // a step wrote for less: no speed (a few tokens in one chunk give an absurd rate)
+STEP_BURST_SHARE    :: 0.2    // the writing took less of the step: its output came at once (real steps: streamed ≥ 37 %, bursts ≤ 9 %)
 CTX_SHADE_FIRST     :: 0.95   // the bar: the accent, fainter from part to part
 CTX_SHADE_STEP      :: 0.14
 CTX_SHADE_LAST      :: 0.2
