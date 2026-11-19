@@ -4,6 +4,16 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.79.0] - 2026-11-19 21:21
+
+### Added
+- **Tokens per second while an answer runs**: the step that streams shows the speed of the steps of its run that ended, from their real token counts.
+- **Views in the file picker**: the server's files show as details, names, columns or cards (Ctrl+wheel, Ctrl+= and Ctrl+-); each picker keeps its view.
+
+### Fixed
+- **An answer's tokens per second shows again**: when the provider sends the text at once (claude-agent), the footer and the Statistics panel show a floor over the whole step, such as "≥ 82 tokens/s", instead of no speed, an absurd one, or a false first-token time.
+- **The file picker's note stays in its pane**: in a narrow preview, the note that only the session's folder is shown no longer runs over the list beside it.
+
 ## [0.78.1] - 2026-11-19 08:50
 
 ### Fixed
@@ -1954,6 +1964,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.79.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.79.0
 [0.78.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.78.1
 [0.78.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.78.0
 [0.77.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.77.0
