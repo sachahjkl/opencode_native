@@ -1,7 +1,7 @@
 // A file of the server's computer, which may be another one, downloaded to this computer: asked from a tool call's menu, a
 // path selected in a message, the palette, or a row of the file browser; one streamed request on the downloads' own
-// workers, through a temp that takes the target's name at the end; its progress in a notification of the system, else
-// the status bar's pill. src/md/features/remote-download.md says why it is made this way.
+// workers, through a temp that takes the target's name at the end; its progress in the status bar's pill, and in a
+// notification of the system when there is one. src/md/features/remote-download.md says why it is made this way.
 package ocn
 
 import "base:runtime"
@@ -13,6 +13,7 @@ import "core:strings"
 import "core:sync"
 import "core:time"
 import fsx "gt:fsx"
+import "gt:host"
 import tk_http "gt:http"
 import "gt:platform"
 import tasks "gt:tasks"
@@ -25,8 +26,9 @@ import i18n "gt:i18n"
 DOWNLOAD_WORKERS :: 3
 // How long the program's end waits for its downloads to see their stop.
 DOWNLOAD_STOP_BOUND :: 3 * time.Second
-// How often a worker wakes the interface at most: the pill's percent and the notification's bar move this often.
-DOWNLOAD_STEP :: 250 * time.Millisecond
+// How often the interface looks at a download's bytes while they come: the pill's percent and the notification's bar
+// move this often, and the window rests once a look finds nothing new.
+DOWNLOAD_STEP_MS :: 250
 // The menu of the status bar's pill.
 DOWNLOADS_MENU_KEY :: "downloads_menu"
 // The buttons of a download's notification.
@@ -53,7 +55,11 @@ Download :: struct {
 	got:     i64,
 	total:   i64,    // -1: not known
 	running: bool,
+	// the interface looks at the counts every step (downloads_look): a chunk then posts nothing. False: the next chunk
+	// posts, and the looks start again
+	watched: bool,
 	stop:    tk_http.Stop,   // asked: by Cancel, or the program's end
+	shown:   i64,            // (the interface's) the bytes its last look showed
 	// the temp's name between its worker and the program's end (under lock)
 	lock:      sync.Mutex,
 	temp:      string,   // (heap) "" until the writer opened
@@ -229,8 +235,15 @@ downloads_clear :: proc(app: ^App) {
 	}
 }
 
-// A download the pill shows: it has no notification.
-download_in_pill :: proc(d: ^Download) -> bool { return d.note == .Off || d.note == .Gone }
+// A download the pill shows: every one that runs, whether its notification shows or not (a toast the system muted
+// cannot be told from one it shows: the window is the one place sure to be seen); a finished one when it has no
+// notification to say its end.
+download_in_pill :: proc(d: ^Download) -> bool {
+	#partial switch d.state {
+	case .Queued, .Running: return true
+	}
+	return d.note == .Off || d.note == .Gone
+}
 
 // Out of the list, and freed.
 @(private = "file")
@@ -257,7 +270,7 @@ download_run :: proc(data: rawptr) {
 	// (the pool's context is the one it started in, a test's tracker maybe: what this thread allocates is the heap's)
 	context.allocator = runtime.heap_allocator()
 	sync.atomic_store(&d.running, true)
-	_ = ui.post(&d.app.state, download_moved, d)
+	download_wake(d)
 	d.ended = download_transfer(d)
 	free_all(context.temp_allocator)
 	_ = ui.post(&d.app.state, download_ended, d)
@@ -270,7 +283,13 @@ Download_Sink :: struct {
 	w:    fsx.Writer,
 	open: bool,
 	why:  string,      // the disk refused: the reason (static)
-	last: time.Tick,   // the last wake of the interface
+}
+
+// The interface told that bytes came, unless it already looks at them every step. (A wake per step from here would leave
+// the bytes of the step's end unshown while the server is silent: only the interface's own timer comes back for them.)
+@(private = "file")
+download_wake :: proc(d: ^Download) {
+	if !sync.atomic_exchange(&d.watched, true) { _ = ui.post(&d.app.state, download_moved, d) }
 }
 
 // The stream to the writer; the writer committed at a whole body, aborted on any other end.
@@ -319,7 +338,7 @@ download_transfer :: proc(d: ^Download) -> Download_State {
 	return end
 }
 
-// One chunk to the temp; the interface woken at most every DOWNLOAD_STEP.
+// One chunk to the temp; the interface told when it does not look already.
 @(private = "file")
 download_part :: proc(user: rawptr, part: tk_http.Body_Part) -> tk_http.Keep_Going {
 	s := (^Download_Sink)(user)
@@ -333,10 +352,7 @@ download_part :: proc(user: rawptr, part: tk_http.Body_Part) -> tk_http.Keep_Goi
 	if download_io_hook != nil { download_io_hook(s.w.temp) }
 	if !fsx.writer_append(&s.w, part.bytes) { s.why = i18n.tr("the file could not be written"); return .Stop }
 	sync.atomic_store(&d.got, part.received)
-	if s.last == {} || time.tick_since(s.last) >= DOWNLOAD_STEP {
-		s.last = time.tick_now()
-		_ = ui.post(&d.app.state, download_moved, d)
-	}
+	download_wake(d)
 	return .Continue
 }
 
@@ -384,12 +400,51 @@ download_refusal :: proc(status: int) -> string {
 ////////////////////////////////
 // Back on the interface's thread
 
-// Its worker moved: the post woke the window, the pill reads the counts; a notification is sent again.
+// Its worker started, or bytes came while the interface did not look: the post woke the window, whose build reads the
+// counts; the looks start.
 @(private = "file")
 download_moved :: proc(data: rawptr, word: u64) {
 	d := (^Download)(data)
 	if d.state == .Queued { d.state = .Running }
+	download_shown(d)
+	downloads_look_ask(d.app)
+}
+
+// What came is shown: the pill reads the counts at its build; a notification is sent again.
+@(private = "file")
+download_shown :: proc(d: ^Download) {
+	d.shown = sync.atomic_load(&d.got)
 	if d.state == .Running { download_note_send(d) }
+}
+
+@(private = "file")
+downloads_look_ask :: proc(app: ^App) {
+	if app.cx.due[.Downloads].due_ms == 0 { ui.deferred_ask(&app.cx.due[.Downloads], DOWNLOAD_STEP_MS) }
+}
+
+// A step after the last look (Due.Downloads, after a frame): the bytes that came since are shown, and the looks go on;
+// a download with none goes back to its worker's post, and the window rests. A frame per step while bytes come, one
+// more after they stop: never a wake while nothing comes.
+downloads_look :: proc(app: ^App) {
+	again := false
+	for d in app.downloads.list {
+		if d.state != .Running || !sync.atomic_load(&d.watched) { continue }
+		if sync.atomic_load(&d.got) != d.shown {
+			download_shown(d)
+			again = true
+			continue
+		}
+		sync.atomic_store(&d.watched, false)
+		// (a chunk between the look and the store found it watched, and posted nothing)
+		if sync.atomic_load(&d.got) != d.shown && !sync.atomic_exchange(&d.watched, true) {
+			download_shown(d)
+			again = true
+		}
+	}
+	if again {
+		host.host_settle(&app.window)   // (after the frame's build: the next one shows it)
+		downloads_look_ask(app)
+	}
 }
 
 // Its end, said once: in its notification, else by a toast. A cancel says nothing: the person did it.

@@ -439,6 +439,7 @@ due_run :: proc(app: ^App, k: Due) {
 	case .Term_Size: terms_size_due(app)
 	case .Side_Wake: host.host_settle(&app.window)   // (the build sees the pointer has rested)
 	case .Drafts:    drafts_save(app)
+	case .Downloads: downloads_look(app)
 	}
 }
 

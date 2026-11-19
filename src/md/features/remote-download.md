@@ -50,28 +50,43 @@ system on its chores).
 
 ## What the person sees
 
-- **A notification of the system with a progress bar** (`Notification.progress`), when the person's messages go to the
-  system (`Announcer.mode == .System`) and the system shows one. Its title is the file's name; the bar's words are
-  "45 % (12 MB of 27 MB)" ("12 MB" without a size); its button is Cancel. The worker wakes the interface at most every
-  `DOWNLOAD_STEP` (250 ms) and the notification is sent again with `replace`: Windows moves its bar in place.
-- **Its end in the same notification**: "Downloaded logo.png" with the target, its buttons Open and Show in folder (a
-  click shows it in its folder), or "logo.png was not downloaded" with the reason. Another shape: the system shows it
-  again, the end is news. A cancel closes it: the person did it.
-- **The status bar's pill holds the downloads that have no notification**: the system shows none, the messages go to
-  the window, or the person closed the notification while it ran (Linux servers also close it when it expires). Its
-  icon and the progress of its running ones ("45 %", or the count when no total is known); its menu: Cancel (running),
-  Open and Show in the folder (done), the reason (failed), then "Clear the finished ones". A download is in one place at
-  a time: each fact is said once. The end of a download of the pill is said by `ui.announce` (a click shows the file).
+- **The status bar's pill holds every running download**, whether a notification shows it or not. Its icon and the
+  progress of the running ones ("45 %", or the count when no total is known); its menu: Cancel (running), Open and Show
+  in the folder (done), the reason (failed), then "Clear the finished ones". Why always: a system that mutes the
+  program's notifications (Windows' Focus, notifications off for the app) accepts the toast and shows nothing, and its
+  answer cannot be told from a toast shown. The window is the one place ocn is sure the person sees.
+- **A notification of the system with a progress bar** (`Notification.progress`) as well, when the person's messages go
+  to the system (`Announcer.mode == .System`) and the system takes one. Its title is the file's name; the bar's words
+  are "45 % (12 MB of 27 MB)" ("12 MB" without a size); its button is Cancel. It is sent again with `replace` at each
+  look of the interface (below): Windows moves its bar in place.
+- **Its end in the notification**: "Downloaded logo.png" with the target, its buttons Open and Show in folder (a click
+  shows it in its folder), or "logo.png was not downloaded" with the reason. Another shape: the system shows it again,
+  the end is news. A cancel closes it: the person did it. A finished download leaves the pill when its notification
+  says its end; it stays in the pill when it has none (the system took none, the messages go to the window, or the
+  person closed it while it ran; Linux servers also close it when it expires), and `ui.announce` says its end (a click
+  shows the file).
+- **The progress moves while the window rests.** The worker posts when bytes come and the interface does not look at
+  them yet (`Download.watched`); the interface then looks at the counts every `DOWNLOAD_STEP_MS` (250 ms,
+  `Due.Downloads`), shows what came and sends the notification again, until a look finds nothing new: the next chunk
+  posts again. A frame per step while bytes come, one more when they stop, none while nothing comes. A worker that
+  posted at most once a step left the bytes of a step's end unshown while the server was silent, until another event
+  made a frame: only the interface's own timer comes back for them.
 - **A server on this computer works the same way.** The download is then a copy. One path for both is simpler and
   testable; "Show in the folder" of a tool call already shows the original.
 
 ## The state machines
 
-- **A download**: `Queued → Running → Done | Failed | Cancelled`. The worker writes `got`, `total` atomically and asks
-  nothing of the interface; its end comes back by a post (`download_ended`), which alone changes the state to an end.
-  The interface reads the atomics when it builds the pill or a notification: no work in proportion to the bytes.
+- **A download**: `Queued → Running → Done | Failed | Cancelled`. The worker writes `got`, `total` atomically; its
+  start and its end come back by posts (`download_moved`, `download_ended`), and only `download_ended` changes the
+  state to an end. The interface reads the atomics when it builds the pill or a notification: no work in proportion to
+  the bytes.
+- **Who tells of the bytes** (`Download.watched`): false, the worker's next chunk posts `download_moved` and sets it;
+  true, the interface looks every step and the worker posts nothing. A look that finds nothing new clears it, then
+  reads the count again: a chunk between the two found it set and posted nothing.
+- **Where it is shown**: a running one in the pill always, and in its notification when it has one; a finished one in
+  its notification (`Shown`), else in the pill (`Off`, `Gone`).
 - **Its notification** (`Download.note`): `Off → Asking → Shown → Gone`, or `Asking → Off` when the system refuses.
-  `Off` and `Gone` are the pill's. A change while `Asking` is sent once the id came (`note_again`). A download whose
+  A change while `Asking` is sent once the id came (`note_again`). A download whose
   notification is `Asking` is never freed: the answer's callback holds it. A `Shown` one that ended is freed when its
   notification is closed (`Notification_Closed`); a notification event of an id that is no download's goes on to
   what was missed (settings.odin `notify_event`).
@@ -92,6 +107,9 @@ when it opens the writer and marks it gone when it commits or aborts, under the 
   after the body, before the commit.
 - **The server's message of a refusal** by a second request: a second GET of a file that now exists would stream a
   whole file to read an error.
-- **The pill and the notification at once.** The same progress and the same Cancel twice.
+- **A running download in its notification only.** The same progress and the same Cancel twice was the cost of the
+  pill beside it; a muted toast showed the progress nowhere, and nothing tells ocn that a toast is muted.
+- **A wake per step from the worker.** It cannot come back for the bytes of a step's end while the server is silent;
+  a thread of timers for it is one more thread for what the interface's own timer does.
 - **A Save dialog from the browser's row action.** One toolkit file dialog shows at a time: the Save dialog would close
   the browser and lose a multiple selection. The row's Download goes to Downloads; "Download…" asks.
