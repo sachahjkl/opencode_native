@@ -4,6 +4,14 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.78.0] - 2026-11-19 03:34
+
+### Changed
+- **A download shows its progress in a notification of the system**: the bar moves in place, with Cancel, and its end offers Open and Show in folder; the status bar keeps only the downloads that have no notification. A file of the file browser (Ctrl+P, Download a file…) has Download in its right-click menu, which sends it straight to the Downloads folder, and the browser stays open. A download is now one request: it starts sooner and a cancel takes effect at once.
+
+### Fixed
+- **The /btw panel and the image viewer fit a narrow space**: in a narrow window the /btw panel narrows, then folds to its rail, and stays inside the window; the image viewer can no longer be dragged narrower than its buttons.
+
 ## [0.77.0] - 2026-11-18 21:48
 
 ### Added
@@ -1940,6 +1948,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.78.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.78.0
 [0.77.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.77.0
 [0.76.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.76.2
 [0.76.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.76.1
