@@ -23,7 +23,7 @@ find_current_in_view :: proc(s: ^session.Session) -> bool {
 }
 
 @(private = "file")
-find_opened :: proc(s: ^session.Session) -> bool { return ui.find_is_open(session.get(s, "chat").key) }
+find_opened :: proc(s: ^session.Session) -> bool { return ui.find_is_open(s.state, session.get(s, "chat").key) }
 
 @(private = "file")
 find_counted :: proc(s: ^session.Session) -> bool { return !ui.find_pending() && ui.find_index() >= 0 }
@@ -104,7 +104,7 @@ the_prompts_scope_counts_only_prompts :: proc(t: ^testing.T) {
 		testing.expect(t, session.find(s, "u_msg_0_u") != nil, "the conversation at the first prompt")
 		// the home page has no conversation to search: the find goes with it
 		new_session(app)
-		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_is_open() }, "closed on the home page")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_is_open(s.state) }, "closed on the home page")
 	})
 }
 
@@ -134,7 +134,7 @@ the_magnifier_opens_the_find :: proc(t: ^testing.T) {
 		over(app.state.root, bar, &others)
 		testing.expect_value(t, others, 0)
 		session.click(s, "prompt_rail")
-		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_is_open() }, "closed")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_is_open(s.state) }, "closed")
 	})
 }
 

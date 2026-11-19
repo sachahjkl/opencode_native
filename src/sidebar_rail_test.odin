@@ -173,8 +173,9 @@ the_sidebar_minimised_is_a_rail_of_marks :: proc(t: ^testing.T) {
 		testing.expectf(t, docked && abs((line.min.x + line.max.x) * 0.5 - to.x) <= 2, "the list's edge at the pointer: %v, %v", line, to)
 		session.save_png(s, "fold-B-pulled.png")
 
-		// a window too narrow for the sidebar and the conversation folds it to the rail; wide again, the list
-		narrow := [2]int{int((SIDEBAR_EM + ui.DOCK_MIN_EM * 0.5) * em), BENCH_SIZE.y}
+		// a window too narrow for the sidebar at its least and the conversation folds it to the rail (it narrows to its
+		// least first); wide again, the list
+		narrow := [2]int{int((SIDEBAR_MIN_EM + ui.DOCK_MIN_EM * 0.5) * em), BENCH_SIZE.y}
 		session.resize(s, narrow)
 		session.wait_box(s, "sidebar_rail")
 		testing.expect(t, rail_mark_of(s, bench_title(6)) != nil, "folded: the marks")
@@ -187,7 +188,7 @@ the_sidebar_minimised_is_a_rail_of_marks :: proc(t: ^testing.T) {
 		session.wait_box(s, "sidebar_rail")
 		session.click(s, "view_fold")
 		session.wait_box(s, "sidebar")
-		session.resize(s, {int((SIDEBAR_EM + ui.DOCK_MIN_EM * 0.75) * em), BENCH_SIZE.y})
+		session.resize(s, {int((SIDEBAR_MIN_EM + ui.DOCK_MIN_EM * 0.75) * em), BENCH_SIZE.y})
 		session.wait_idle(s)
 		testing.expect(t, session.find(s, "sidebar") != nil && session.find(s, "sidebar_rail") == nil, "restored while narrow: the list holds, still narrow")
 		session.resize(s, BENCH_SIZE)

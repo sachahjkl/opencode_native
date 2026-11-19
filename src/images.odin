@@ -289,7 +289,7 @@ image_view_shown :: proc(app: ^App) -> bool { return ui.view_is_open(&app.progra
 IMAGE_NAME_CHARS :: 80
 VIEWER_PAD_EM    :: 0.5   // around the picture (the edges' grips are there)
 VIEWER_BAR_EM    :: 2.6   // the size and the buttons, under the picture (the name is the header's)
-VIEWER_MIN_W_EM  :: 26    // the least its grips give it, and its width before a bar was laid out (viewer_bar_need measures the bar)
+VIEWER_MIN_W_EM  :: 26    // its least before a bar was laid out (then viewer_bar_need's measure, if wider, is the least)
 VIEWER_SCALE_MIN :: 0.2   // the smallest viewer, of the most the window gives a picture (conversation.image_viewer_size)
 VIEW_NATIVE_MAX  :: 8     // times the image's pixels at the interface's scale (ui.preview's zoom_max)
 
@@ -366,6 +366,7 @@ Image_Viewer :: struct {
 	view:        ui.Preview,  // the zoom (times what fits) and the pan of the picture
 	focus:       bool,        // just opened: the keyboard goes to the picture (its keys zoom and move it)
 	grown:       bool,        // the person sized the dialog since it opened: it keeps their size, no longer the picture's
+	asked:       [2]f32,      // the size last asked of ui.view_size (em): grown, it is asked again with the least alone moving
 	opened:      bool,        // a picture was just given to it: the size the person gave the last one goes (image_view)
 	start:       Image_Ref,   // --image=<file>: opened in the viewer once it is decoded (its data owned)
 }
@@ -419,8 +420,12 @@ image_view :: proc(v: ^ui.View, app: ^App) {
 		// only when the size asked changes: a picture given to the viewer still open asks once for the kind's size first)
 		// (a new size asked while the dialog is unseen keeps it unseen one more build, laid out at it: the toolkit's
 		// view_size, so the guess before the bar's measure is never shown)
-		if app.viewer.opened { ui.view_size(v, 0, 0); app.viewer.opened = false }
-		if !app.viewer.grown { ui.view_size(v, asked.x, asked.y) }
+		// (the bar's need is the opening's least: the grips stop there, so the buttons stay whole and inside. Grown, the
+		// size asked last is asked again: a new least alone keeps the person's size)
+		least := min_w / em
+		if app.viewer.opened { ui.view_size(v, 0, 0, least); app.viewer.opened = false }
+		if !app.viewer.grown { app.viewer.asked = asked }
+		ui.view_size(v, app.viewer.asked.x, app.viewer.asked.y, least)
 		size := ui.view_dialog_size(&app.program_views, IMAGE_VIEW)
 		if size != {} && size != asked { app.viewer.grown = true }
 		if app.viewer.grown {
@@ -465,13 +470,13 @@ image_view :: proc(v: ^ui.View, app: ^App) {
 				}
 				ui.spacer(ui.px(pad))
 			}
-			// (a stable key: viewer_bar_need reads its last layout. Clipped: past the grips' least, in a long language, nothing
-			// draws past the dialog's edge)
+			// (a stable key: viewer_bar_need reads its last layout. Clipped: a window narrower than the bar's need holds the
+			// dialog under its least, and nothing draws past the dialog's edge)
 			ui.next({width = ui.fill(), height = ui.px(bar), axis = .X, cross = .Center})
 			if ui.row(.Center, {.Clip}, "###view_bar") {
 				ui.space(ui.SPACE_4)
-				// (no name: the header says it. The size is the bar's one part that gives way under the grips, after the
-				// empty space before the buttons: the buttons stay whole and inside)
+				// (no name: the header says it. The size is the bar's one part that gives way in a window narrower than
+				// the bar, after the empty space before the buttons: the buttons stay whole and inside)
 				zoom := fit * app.viewer.view.zoom / sc * 100
 				dims_of :: proc(source: [2]f32, zoom: f32) -> string {
 					return fmt.tprintf("%d × %d  ·  %s", int(source.x), int(source.y), i18n.percent(f64(zoom) / 100))

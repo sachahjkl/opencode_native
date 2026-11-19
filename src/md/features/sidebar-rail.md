@@ -10,8 +10,9 @@ on hover. A person keeps their sessions in reach and gives the conversation the 
   the toolkit's fold when the window leaves the conversation less than `DOCK_MIN_EM`, keep that column and build the
   view in it with `View.rail`: `sidebar_pane` then builds `sidebar_rail` (`src/sidebar_rail.odin`) in place of the list.
   No preference and no command of ocn's own fold it: one gesture for every side panel of every program. The toolkit's
-  rule (`ext/gui_toolkit/src/md/features/side-panels.md`): the zone folds when the room leaves the conversation less than
-  `DOCK_MIN_EM`, and opens again 1 em past it. A Minimise, a Restore or a pull by hand holds only until the width next
+  rule (`ext/gui_toolkit/src/md/features/side-panels.md`): the zone first narrows to its least (`SIDEBAR_MIN_EM`), and
+  folds when even that leaves the conversation less than `DOCK_MIN_EM`; it opens again 1 em past it. A panel at the
+  right gives way first: it narrows and folds before the sidebar does. A Minimise, a Restore or a pull by hand holds only until the width next
   crosses that threshold, either way: a list restored in a narrow window stays the list while the window stays narrow,
   and a rail minimised in a wide window opens again when the window goes narrow and then wide. Ctrl+B still
   shows or hides the sidebar, rail or list. Pulling the rail's edge outward opens the list at the pointer (the

@@ -86,6 +86,10 @@ Everything that read `app.chat` or `app.composer` reads the pane it is given.
 - **A pane needs no width of its own** (`.Fits_Width` on `###main`, and on the composer's bar, which folds by itself:
   `composer_fit`). A pane sizes its column and its dock in pixels from the width it had. Counted as what it needs (the
   toolkit's least width), that width never shrank: the panel kept its width and went past the window's edge.
+- **A narrow window keeps the panel in it**: the toolkit fits both side zones (gui_toolkit 0.324,
+  `side-panels.md`, Two sides). The panel's zone narrows to its least (`PANEL_MIN_EM`), then folds to its rail; then
+  the sidebar narrows to `SIDEBAR_MIN_EM` and folds. ocn adds nothing for it. Before, under about 52 em, the two zones
+  at their own widths went past the window's edge (`a_narrow_window_keeps_the_panel_in_it` stopped at 55 em).
 - **The keyboard's pane** (`keys_pane`): the panel's when the focus is in its view, else the main view's. Page Up and
   Down scroll that pane only. Each composer reads its own keys (Enter, Escape twice, `@`, `/`, the history) while it
   has the focus; typing with nothing focused goes to the main composer. The armed stop is cleared only by the pane

@@ -49,8 +49,8 @@ of the pane's window (`pane_window`): the toolkit's `find_open` takes it, and wo
 the pane's next build to open it. The home page closes it (no conversation to search). A pane with no conversation yet has
 no view to open it over: `--find` given at a start keeps its text (`find_waits`), and the first conversation opens it.
 
-A closed pane closes the find if its last build had it open over its view (`find_over`): the toolkit says where the find is
-only for the window being built.
+A closed pane closes the find if it is open over its view in the pane's window (`find_pane_closed`): the toolkit's
+`find_is_open` takes the window's State and answers between two builds, so ocn keeps no flag of its own.
 
 The magnifier above the prompt marks is the toolkit's: it opens and closes this find. ocn wires nothing for it.
 

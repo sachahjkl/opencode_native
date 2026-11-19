@@ -557,7 +557,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		top_turn := bench_top_turn(s)
 		testing.expect(t, top_turn >= 0, "a turn at the view's top")
 		session.key(s, .F, {.Ctrl})
-		session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.find_is_open(session.get(s, "chat").key) }, "the find open")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.find_is_open(s.state, session.get(s, "chat").key) }, "the find open")
 		finding := Bench_Case{name = "find"}
 		for i in 0 ..< min(BENCH_FRAMES, len(BENCH_FIND)) {
 			session.event(s, {kind = .Text, text = char_at(BENCH_FIND, i)})
@@ -597,7 +597,7 @@ a_long_conversation_builds_what_is_seen :: proc(t: ^testing.T) {
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() && ui.find_count() == 1 && find_current_in_view(s) }, "the first prompt built and lit")
 		testing.expect(t, session.find(s, "msg_msg_0_u") != nil, "built")
 		session.key(s, .Escape)
-		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_is_open() }, "Escape closes it")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_is_open(s.state) }, "Escape closes it")
 
 		// the sidebar: the sessions it shows are built, the others when it scrolls to them
 		testing.expect(t, session.find(s, "ls_ses_1") != nil)
@@ -681,20 +681,17 @@ older_pages_keep_the_view :: proc(t: ^testing.T, app: ^App, s: ^session.Session)
 	// take it near the top, and the page in front is the one asked here)
 	c.older = ""
 	session.key(s, .F, {.Ctrl})
-	session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.find_is_open(session.get(s, "chat").key) }, "the find open")
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.find_is_open(s.state, session.get(s, "chat").key) }, "the find open")
 	session.type_text(s, "zebra")   // (over the last needle: it opens selected)
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() && ui.find_count() == 60 && ui.find_index() >= 0 }, "the needle counted")
-	for _ in 0 ..< 60 {
-		if ui.find_index() == 10 { break }
-		session.key(s, .F3)
-		session.wait_until(s, find_current_in_view, "the next match in view")
-	}
-	testing.expect_value(t, ui.find_index(), 10)
+	// (a jump over rows never built: the view follows the match until it rests with the match in it)
+	ui.find_set_current(&app.state, 10)
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return ui.find_index() == 10 && find_current_in_view(s) }, "match 10 lit in view")
 	request(app, .Older, "GET", "/older", tag = c.id)
 	post_answer(app, bench_take(t, .Older), older_page(2000, 8, ""))
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_pending() && ui.find_count() == 68 && ui.find_index() == 18 }, "the page counted, the match the same one")
 	session.key(s, .Escape)
-	session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_is_open() }, "closed")
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.find_is_open(s.state) }, "closed")
 
 	// a wheel turned up past the top while the page is read stops at the top; the page that comes carries that stop along. (It
 	// glided over all of the page to its top: the view jumped, and the next page was asked for at once.)
@@ -1260,8 +1257,8 @@ the_viewer_shows_at_once_around_its_picture :: proc(t: ^testing.T) {
 
 // The viewer on a small picture (a paste of 253 × 62): its bar is the wider, and the dialog is as wide as the bar needs from its
 // first frame shown. Every button inside the dialog, the size whole ("Close" once ran past the dialog's right edge, when the
-// least width was a guess of what the bar needs). The name is the header's alone: the bar does not say it again. Made narrower
-// by its grips, the buttons still stay inside.
+// least width was a guess of what the bar needs). The name is the header's alone: the bar does not say it again. Its grips
+// cannot make it narrower than the bar.
 @(test)
 the_viewer_s_bar_fits_a_small_picture :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
@@ -1298,7 +1295,11 @@ the_viewer_s_bar_fits_a_small_picture :: proc(t: ^testing.T) {
 		start := time.tick_now()
 		for dialog_shown(s, IMAGE_VIEW) < 1 && time.tick_since(start) < 30 * time.Second { session.frame(s) }
 		session.save_png(s, "viewer-small.png")
-		// its left edge's grip, inward as far as it goes: the grips' least, the bar inside it still
+		// its left edge's grip, inward as far as it goes: it stops at the bar's need (the opening's least), every part of
+		// the bar whole. (Before, the kind's least let the grips go under it, and the size text gave way)
+		em := ui.font_size()
+		border := max(1, math.round(ui.scale()))
+		least := max(math.round(em * VIEWER_MIN_W_EM), math.ceil(ui.natural_width(session.get(s, "view_bar"))) + 2 * border)
 		edge := [2]f32{dialog.min.x + 2, (dialog.min.y + dialog.max.y) * 0.5}
 		session.press(s, edge)
 		session.move(s, edge + {200, 0})
@@ -1306,8 +1307,10 @@ the_viewer_s_bar_fits_a_small_picture :: proc(t: ^testing.T) {
 		session.release(s, edge + {400, 0})
 		session.frames(s, 2)
 		narrow := session.get(s, "modal_view_image").rect
-		testing.expectf(t, narrow.max.x - narrow.min.x < dialog.max.x - dialog.min.x, "made narrower: %v from %v", narrow, dialog)
-		inside(t, s, narrow, "made narrower")
+		testing.expectf(t, abs((narrow.max.x - narrow.min.x) - least) <= 1, "stopped at the bar's need %v: %v", least, narrow)
+		inside(t, s, narrow, "dragged inward")
+		dims = session.get(s, "view_dims")
+		testing.expectf(t, dims.rect.max.x - dims.rect.min.x >= dims.text_dim.x, "dragged inward, the size whole: %v for %v", dims.rect, dims.text_dim.x)
 	})
 }
 

@@ -12,19 +12,17 @@ import i18n "gt:i18n"
 // find moved the view since the last build (a move of the reader's: chat_scroll_place).
 conversation_find :: proc(app: ^App, pane: ^Chat_Pane, sb: ^ui.Box) -> (scrolled: bool) {
 	c := &pane.conversation
-	c.find_over = false
 	if sb == nil { return }
 	st := ui.current_state()
 	// (the home page has no conversation to search)
 	if pane.chat.id == "" {
-		if ui.find_is_open(sb.key) { ui.find_close(st) }
+		if ui.find_is_open(st, sb.key) { ui.find_close(st) }
 		return
 	}
 	if c.find_waits != "" {
 		ui.find_open(st, sb.key, c.find_waits)
 		find_unwait(pane)
 	}
-	c.find_over = ui.find_is_open(sb.key)
 	scopes := make([]ui.Find_Scope, 2, context.temp_allocator)
 	scopes[0] = {name = i18n.tr("All")}
 	scopes[1] = {name = i18n.tr("Prompts"), keep = message_is_prompt}
@@ -45,13 +43,12 @@ find_show :: proc(app: ^App, pane: ^Chat_Pane, text := "") {
 	c.find_waits = strings.clone(text)
 }
 
-// The pane goes: the find over its view closes, in its window. (Its last build says whether it is over it: the toolkit
-// answers that only for the window being built.)
+// The pane goes: the find over its view closes, in its window. (A pane never built has no view: key 0 would mean any.)
 find_pane_closed :: proc(app: ^App, pane: ^Chat_Pane) {
 	find_unwait(pane)
-	c := &pane.conversation
-	if c.find_over { ui.find_close(pane_window(app, pane)) }
-	c.find_over = false
+	key := pane.conversation.scroll_key
+	st := pane_window(app, pane)
+	if key != 0 && ui.find_is_open(st, key) { ui.find_close(st) }
 }
 
 // The server left: --find's text is not opened over the next one's conversation. (One open goes with the home page each

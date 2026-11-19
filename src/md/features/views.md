@@ -113,14 +113,17 @@ picture's area is all the body leaves above the bar, and the picture fits it (`u
 - **The dialog is as wide as its bar needs, measured.** The need is read from the last layout (`viewer_bar_need`):
   every part as wide as it asks, plus the border. A picture narrower than that gets room on its sides. The size asked
   changes while the measure settles, so the dialog stays unseen until it is right. `VIEWER_MIN_W_EM` is only the width
-  before a first layout and the grips' least.
+  before a first layout, and the floor of the least.
 - **Refused: a constant for the bar's width.** 26 em was a guess. At some sizes of the interface it was too narrow,
   and Close ran past the dialog's edge. Labels in another language need more again.
 - **The size text keeps the width of its widest zoom** (`VIEW_NATIVE_MAX`). Otherwise a zoom with one more digit
   changes the need, and the dialog resizes under the person's zoom.
-- **Narrowed by the grips, the buttons stay inside.** The toolkit takes a resizable dialog's least width from its kind,
-  fixed at registration, so the grips can go under the bar's need. The empty space before the buttons gives way
-  first, then the size text, the only part of the bar that shrinks. The buttons stay whole, and the bar clips. A least
-  width per opening belongs in the toolkit.
+- **The grips stop at the bar's need.** The bar's need is the opening's least width (`ui.view_size`'s `min_width_em`,
+  gui_toolkit 0.324), asked at each build: a grown dialog asks its last size again (`Image_Viewer.asked`), so a new
+  least alone keeps the person's size. Before, the least was the kind's, fixed at registration, and the grips went
+  under the need.
+- **A window narrower than the bar.** The window's edge still holds the dialog under its least. Then the empty space
+  before the buttons gives way first, then the size text, the only part of the bar that shrinks. The buttons stay
+  whole, and the bar clips. This is the only reason for both now.
 - **A new picture is a new opening.** The record of a viewer still open keeps the person's size; the first build after
   `image_view_open` asks for the kind's size once, so the asked size changes and the person's size goes.
