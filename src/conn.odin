@@ -38,17 +38,17 @@ Transport :: struct {
 	fetch:   proc(c: ^Conn, method, path, body: string, allocator: mem.Allocator) -> (status: int, resp: string, ok: bool),
 	// A shell's socket (nil: this transport has none, no shell's thread starts).
 	ws_open: proc(h: ^Http, path: string) -> ^tk_http.Socket,
-	// The bytes `from` to `to` (included) of the file a GET of `path` gives, `if_range`: its ETag ("": the first range).
+	// A GET of `path` whose body goes to `on_part` chunk by chunk on the calling thread; `stop` ends it.
 	// nil: this transport downloads nothing (download.odin).
-	range:   proc(c: ^Conn, path: string, from, to: i64, if_range: string, allocator: mem.Allocator) -> Range_Answer,
+	receive: proc(c: ^Conn, path: string, on_part: tk_http.Part_Proc, user: rawptr, stop: ^tk_http.Stop) -> Receive_Answer,
 	close:   proc(c: ^Conn),   // the connection is freed: what the transport holds goes
 }
 
-HTTP_TRANSPORT :: Transport{call = http_call, fetch = http_fetch, ws_open = http_ws_open, range = http_range_call, close = http_close}
+HTTP_TRANSPORT :: Transport{call = http_call, fetch = http_fetch, ws_open = http_ws_open, receive = http_receive_call, close = http_close}
 
 @(private = "file")
-http_range_call :: proc(c: ^Conn, path: string, from, to: i64, if_range: string, allocator: mem.Allocator) -> Range_Answer {
-	return http_range(&c.http, path, from, to, if_range, allocator)
+http_receive_call :: proc(c: ^Conn, path: string, on_part: tk_http.Part_Proc, user: rawptr, stop: ^tk_http.Stop) -> Receive_Answer {
+	return http_receive(&c.http, path, on_part, user, stop)
 }
 
 @(private = "file")

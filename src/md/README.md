@@ -63,6 +63,7 @@ purpose, the decisions, what was refused.
 - [features/step-speed.md](features/step-speed.md): a step's latency and writing speed from `time.firstToken`, per model
   in the Statistics panel and at the end of an answer.
 - [features/remote-download.md](features/remote-download.md): a file of the server's computer downloaded here: in
-  ranges on a worker, to a temp file renamed at the end; the status bar's pill; why no stream of gt:http, no toast.
+  one streamed request on a worker, through a temp that takes the target's name at the end; its progress in a
+  notification of the system, else the status bar's pill; the file browser's row action.
 - [infrastructure/transport.md](infrastructure/transport.md): requests, the event stream and the sockets over the
   toolkit's gt:http; the limits, the stream up at its first event, why sockets send from their own thread.

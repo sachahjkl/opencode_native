@@ -1,8 +1,8 @@
 package ocn
 
-// The downloads of the server's files (download.odin): a connection whose transport serves a file in ranges as opencode
-// does (206, Content-Range, 416 `bytes */0` for an empty file), the downloads' real workers, and the hook that sees each
-// file operation on the thread that makes it.
+// The downloads of the server's files (download.odin): a connection whose transport streams a file in chunks as
+// gt:http.receive gives them (a refusal gives no chunk), the downloads' real workers, and the hook that sees each file
+// operation on the thread that makes it.
 
 import "base:runtime"
 import "core:fmt"
@@ -13,48 +13,53 @@ import "core:testing"
 import "core:thread"
 import "core:time"
 import fsx "gt:fsx"
+import tk_http "gt:http"
 import "gt:ui"
 import i18n "gt:i18n"
 import session "gt:testkit/session"
 import "gt:testkit/unwatched"
 
+// The bytes of one chunk the fake server gives.
+@(private = "file") FAKE_CHUNK :: 4
+
 // What a fake server holds for one connection.
 @(private = "file")
 Fake_File :: struct {
 	bytes:      []u8,
-	status:     int,      // not 0: every answer is this status, with `refusal`
-	refusal:    string,
-	hold_after: int,      // the ranges served before one waits for `gate` (-1: none waits)
-	changed_at: int,      // the range from which the file answers 200 whole, as a file changed since (-1: never)
+	status:     int,   // not 0: the answer is this status, without a chunk (receive gives none of a refusal)
+	short:      int,   // the body ends this many bytes before the length it announced (a file cut while it is read)
+	hold_after: int,   // the chunks given before one waits for `gate` (-1: none waits)
 	gate:       sync.Sema,
-	served:     int,      // (atomic)
+	given:      int,   // (atomic)
 	lock:       sync.Mutex,
 	paths:      [dynamic]string,   // what was asked (under lock)
-	if_ranges:  [dynamic]string,
 }
 
 @(private = "file") fakes_lock: sync.Mutex
 @(private = "file") fakes: map[^Conn]^Fake_File
 
 @(private = "file")
-fake_range :: proc(c: ^Conn, path: string, from, to: i64, if_range: string, allocator: runtime.Allocator) -> Range_Answer {
+fake_receive :: proc(c: ^Conn, path: string, on_part: tk_http.Part_Proc, user: rawptr, stop: ^tk_http.Stop) -> Receive_Answer {
 	sync.lock(&fakes_lock)
 	f := fakes[c]
 	sync.unlock(&fakes_lock)
 	sync.lock(&f.lock)
 	append(&f.paths, strings.clone(path, runtime.heap_allocator()))
-	append(&f.if_ranges, strings.clone(if_range, runtime.heap_allocator()))
 	sync.unlock(&f.lock)
-	n := sync.atomic_add(&f.served, 1)
-	if f.hold_after >= 0 && n >= f.hold_after { sync.sema_wait(&f.gate) }
-	if f.status != 0 { return {ok = true, status = f.status, body = transmute([]u8)strings.clone(f.refusal, allocator), total = -1} }
-	size := i64(len(f.bytes))
-	if f.changed_at >= 0 && n >= f.changed_at {
-		return {ok = true, status = 200, body = transmute([]u8)strings.clone(string(f.bytes), allocator), total = size}
+	if f.status != 0 { return {status = f.status} }
+	size := len(f.bytes)
+	sent := size - f.short
+	// (the chunk's bytes copied: valid during the call only, as the clients' reused buffers)
+	buf: [FAKE_CHUNK]u8
+	for at := 0; at < sent; at += FAKE_CHUNK {
+		n := sync.atomic_add(&f.given, 1)
+		if f.hold_after >= 0 && n >= f.hold_after { sync.sema_wait(&f.gate) }
+		if sync.atomic_load(&stop.asked) { return {err = .Stopped, status = 200} }
+		hi := min(at + FAKE_CHUNK, sent)
+		copy(buf[:], f.bytes[at:hi])
+		if on_part(user, {bytes = buf[:hi - at], status = 200, received = i64(hi), length = i64(size)}) == .Stop { return {status = 200} }
 	}
-	if size == 0 || from >= size { return {ok = true, status = 416, total = size} }
-	hi := min(to, size - 1)
-	return {ok = true, status = 206, body = transmute([]u8)strings.clone(string(f.bytes[from:hi + 1]), allocator), total = size, etag = strings.clone(`W/"5-x"`, allocator)}
+	return {status = 200}
 }
 
 @(private = "file")
@@ -90,8 +95,7 @@ io_on_ui_count :: proc() -> int {
 	return io_on_ui
 }
 
-// A bench App with a connection to the fake server holding `bytes`, chunks of 4 bytes, and a folder of its own for the
-// files it downloads.
+// A bench App with a connection to the fake server holding `bytes`, and a folder of its own for the files it downloads.
 @(private = "file")
 dl_bench :: proc(t: ^testing.T, bytes: string, name: string) -> (app: ^App, c: ^Conn, f: ^Fake_File, dir: string) {
 	sync.once_do(&io_once, proc() {
@@ -103,11 +107,10 @@ dl_bench :: proc(t: ^testing.T, bytes: string, name: string) -> (app: ^App, c: ^
 	append(&io_ui_threads, sync.current_thread_id())
 	sync.unlock(&io_lock)
 	app = bench_new()
-	app.downloads.chunk = 4
-	c = conn_make(app, {}, Transport{call = bench_call, fetch = bench_fetch, close = fake_close, range = fake_range}, 0, &bench_pool_ms)
+	c = conn_make(app, {}, Transport{call = bench_call, fetch = bench_fetch, close = fake_close, receive = fake_receive}, 0, &bench_pool_ms)
 	app.conn = c
 	f = new(Fake_File)
-	f^ = {bytes = transmute([]u8)strings.clone(bytes), hold_after = -1, changed_at = -1}
+	f^ = {bytes = transmute([]u8)strings.clone(bytes), hold_after = -1}
 	sync.lock(&fakes_lock)
 	fakes[c] = f
 	sync.unlock(&fakes_lock)
@@ -134,7 +137,7 @@ dl_until :: proc(app: ^App, done: proc(app: ^App, user: rawptr) -> bool, user: r
 @(private = "file")
 dl_got :: proc(app: ^App, user: rawptr) -> bool {
 	d := (^Download)(user)
-	return sync.atomic_load(&d.got) >= 4 && d.state == .Running
+	return sync.atomic_load(&d.got) >= FAKE_CHUNK && d.state == .Running
 }
 
 @(private = "file")
@@ -149,6 +152,13 @@ dl_none :: proc(app: ^App, user: rawptr) -> bool { return len(app.downloads.list
 @(private = "file")
 dl_exists :: proc(path: string) -> bool { return os.exists(path) }
 
+// The names in `dir`: what a download left there, its temps included.
+@(private = "file")
+dl_files :: proc(dir: string) -> int {
+	entries, err := os.read_directory_by_path(dir, -1, context.temp_allocator)
+	return err == nil ? len(entries) : -1
+}
+
 // The toasts alive whose words hold `s`.
 @(private = "file")
 toasts_saying :: proc(app: ^App, s: string) -> int {
@@ -159,9 +169,9 @@ toasts_saying :: proc(app: ^App, s: string) -> int {
 	return n
 }
 
-// The file comes whole, a NUL and a 0xFF in it, in ranges, through a temp beside the target that holds what came so far,
-// renamed at the end; each range after the first carries the first's ETag; the progress says the bytes and the total;
-// the interface's thread makes no file operation.
+// The file comes whole, a NUL and a 0xFF in it, in one request, through a temp beside the target that holds what came
+// so far, renamed at the end; the progress says the bytes and the total, in the pill and in the notification with its
+// Cancel; the interface's thread makes no file operation.
 @(test)
 a_download_writes_its_bytes_through_a_temp :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
@@ -172,16 +182,22 @@ a_download_writes_its_bytes_through_a_temp :: proc(t: ^testing.T) {
 	target := fmt.tprintf("%s/f.bin", dir)
 	read := download_read_path("/srv/p", "/srv/p/data/f.bin")
 	d := download_start(app, c, read, "f.bin", target)
-	testing.expect(t, dl_until(app, dl_got, d), "the first range came")
-	temp := d.temp
+	testing.expect(t, dl_until(app, dl_got, d), "the first chunk came")
+	temp := strings.clone(d.temp, context.temp_allocator)
 	testing.expect(t, strings.has_prefix(temp, target) && temp != target, "the temp is beside the target")
 	testing.expect(t, dl_exists(temp), "what came so far is in the temp")
 	testing.expect(t, !dl_exists(target), "the target is not written before the end")
 	testing.expect_value(t, sync.atomic_load(&d.total), i64(10))
-	testing.expect_value(t, download_progress_words(d), fmt.tprintf("%s (4 B of 10 B)", i18n.percent(0.4)))
+	words := fmt.tprintf("%s (4 B of 10 B)", i18n.percent(0.4))
+	testing.expect_value(t, download_progress_words(d), words)
 	share, running := downloads_share(app)
 	testing.expect_value(t, running, 1)
 	testing.expect(t, share > 0.39 && share < 0.41, "the pill's share")
+	n := download_notification(d)
+	testing.expect(t, n.progress.shown && n.progress.value > 0.39 && n.progress.value < 0.41, "the notification's bar")
+	testing.expect_value(t, n.progress.status, words)
+	testing.expect(t, len(n.actions) == 1 && n.actions[0].id == DOWNLOAD_ACT_CANCEL, "its Cancel")
+	testing.expect(t, n.silent, "an update makes no sound")
 	for _ in 0 ..< 8 { sync.sema_post(&f.gate) }
 	testing.expect(t, dl_until(app, dl_ended, d), "it ended")
 	testing.expect_value(t, d.state, Download_State.Done)
@@ -189,15 +205,17 @@ a_download_writes_its_bytes_through_a_temp :: proc(t: ^testing.T) {
 	testing.expect(t, err == nil, "the target is there")
 	testing.expect_value(t, string(data), CONTENT)
 	testing.expect(t, !dl_exists(temp), "the temp was renamed")
-	testing.expect(t, io_count(temp) >= 3, "the temp was written range by range")
+	testing.expect_value(t, dl_files(dir), 1)
+	testing.expect(t, io_count(temp) >= 3, "the temp was written chunk by chunk")
 	testing.expect_value(t, io_on_ui_count(), 0)
 	sync.lock(&f.lock)
-	testing.expect_value(t, len(f.paths), 3)
+	testing.expect_value(t, len(f.paths), 1)
 	for p in f.paths { testing.expect_value(t, p, "/api/fs/read/data/f.bin?location[directory]=%2Fsrv%2Fp") }
-	testing.expect_value(t, f.if_ranges[0], "")
-	testing.expect_value(t, f.if_ranges[2], `W/"5-x"`)
 	sync.unlock(&f.lock)
 	testing.expect_value(t, toasts_saying(app, "f.bin"), 1)
+	end := download_notification(d)
+	testing.expect(t, !end.progress.shown && end.body == target, "the end: its target, no bar")
+	testing.expect(t, len(end.actions) == 2 && end.actions[0].id == DOWNLOAD_ACT_OPEN && end.actions[1].id == DOWNLOAD_ACT_SHOW, "Open and Show in folder")
 }
 
 // Cancel: the temp goes, no file is made, nothing is said, and it leaves the list.
@@ -209,36 +227,38 @@ a_cancelled_download_removes_its_temp :: proc(t: ^testing.T) {
 	f.hold_after = 1
 	target := fmt.tprintf("%s/c.bin", dir)
 	d := download_start(app, c, download_read_path("/srv", "/srv/c.bin"), "c.bin", target)
-	testing.expect(t, dl_until(app, dl_got, d), "the first range came")
+	testing.expect(t, dl_until(app, dl_got, d), "the first chunk came")
 	temp := strings.clone(d.temp, context.temp_allocator)
-	testing.expect(t, dl_exists(temp), "the temp holds the first range")
+	testing.expect(t, dl_exists(temp), "the temp holds the first chunk")
 	download_cancel(d)
 	sync.sema_post(&f.gate)
 	testing.expect(t, dl_until(app, dl_none, nil), "it left the list")
 	testing.expect(t, !dl_exists(temp), "the temp is gone")
 	testing.expect(t, !dl_exists(target), "no file")
+	testing.expect_value(t, dl_files(dir), 0)
 	testing.expect_value(t, toasts_saying(app, "c.bin"), 0)
 	testing.expect_value(t, io_on_ui_count(), 0)
 }
 
-// A 404: the server's reason, said once; no file, no temp.
+// A 404: why, said once; no file, no temp, not even opened.
 @(test)
 a_missing_file_says_why_and_writes_nothing :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app, c, f, dir := dl_bench(t, "", "missing")
 	defer downloads_stop(app)
-	f.status, f.refusal = 404, `{"_tag":"FileNotFoundError","message":"File not found: gone.txt"}`
+	f.status = 404
 	target := fmt.tprintf("%s/gone.txt", dir)
 	d := download_start(app, c, download_read_path("/srv", "/srv/gone.txt"), "gone.txt", target)
 	testing.expect(t, dl_until(app, dl_ended, d), "it ended")
 	testing.expect_value(t, d.state, Download_State.Failed)
-	testing.expect(t, strings.contains(d.why, "File not found: gone.txt"), d.why)
-	testing.expect(t, !dl_exists(target) && !dl_exists(d.temp), "nothing written")
-	testing.expect_value(t, io_count(d.temp), 0)
-	testing.expect_value(t, toasts_saying(app, "File not found: gone.txt"), 1)
+	testing.expect(t, strings.contains(d.why, "not on the server"), d.why)
+	testing.expect(t, !dl_exists(target), "nothing written")
+	testing.expect_value(t, dl_files(dir), 0)
+	testing.expect_value(t, io_count(target), 0)
+	testing.expect_value(t, toasts_saying(app, "not on the server"), 1)
 }
 
-// An empty file has no first byte: the server's 416 `bytes */0` makes an empty file, not a failure.
+// An empty file is a whole body without a chunk: an empty file, not a failure.
 @(test)
 an_empty_file_downloads_empty :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
@@ -250,20 +270,24 @@ an_empty_file_downloads_empty :: proc(t: ^testing.T) {
 	testing.expect_value(t, d.state, Download_State.Done)
 	size, _, ok := fsx.stat(target)
 	testing.expect(t, ok && size == 0, "an empty file")
+	testing.expect_value(t, dl_files(dir), 1)
 }
 
-// A file changed during the download answers its If-Range whole: the download fails, not a file of two versions.
+// A file cut while it is read ends before the length the server announced: the download fails, not a file of two
+// versions, and nothing is left.
 @(test)
 a_file_changed_during_the_download_fails :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
 	app, c, f, dir := dl_bench(t, "0123456789", "changed")
 	defer downloads_stop(app)
-	f.changed_at = 1
+	f.short = 4
 	target := fmt.tprintf("%s/x.bin", dir)
 	d := download_start(app, c, download_read_path("/srv", "/srv/x.bin"), "x.bin", target)
 	testing.expect(t, dl_until(app, dl_ended, d), "it ended")
 	testing.expect_value(t, d.state, Download_State.Failed)
-	testing.expect(t, !dl_exists(target) && !dl_exists(d.temp), "nothing left")
+	testing.expect(t, strings.contains(d.why, "changed"), d.why)
+	testing.expect(t, !dl_exists(target), "no file")
+	testing.expect_value(t, dl_files(dir), 0)
 }
 
 // The program's end stops the downloads; a temp whose worker is still in a request is removed all the same.
@@ -274,7 +298,7 @@ the_end_removes_the_temps :: proc(t: ^testing.T) {
 	f.hold_after = 1
 	target := fmt.tprintf("%s/z.bin", dir)
 	d := download_start(app, c, download_read_path("/srv", "/srv/z.bin"), "z.bin", target)
-	testing.expect(t, dl_until(app, dl_got, d), "the first range came")
+	testing.expect(t, dl_until(app, dl_got, d), "the first chunk came")
 	temp := strings.clone(d.temp, context.temp_allocator)
 	testing.expect(t, dl_exists(temp))
 	downloads_stop(app, 50 * time.Millisecond)   // (its worker waits on the gate: past the bound)
@@ -297,9 +321,6 @@ a_download_reads_from_the_right_folder :: proc(t: ^testing.T) {
 	testing.expect(t, !ok, "words are no path")
 	p, ok2 := download_path_of(" `src/main.odin` ")
 	testing.expect(t, ok2 && p == "src/main.odin", p)
-	testing.expect_value(t, content_range_total("bytes 0-99/39674"), i64(39674))
-	testing.expect_value(t, content_range_total("bytes */0"), i64(0))
-	testing.expect_value(t, content_range_total("bytes 0-99/*"), i64(-1))
 }
 
 // A read, edit or write call's menu offers to download its file.
@@ -314,5 +335,32 @@ a_tool_call_s_file_can_be_downloaded :: proc(t: ^testing.T) {
 		testing.expect(t, session.find_text(s, "Download…") != nil, "Download… in the tool call's menu")
 		session.event(s, {kind = .Key_Press, key = .Escape})
 		session.frames(s, 2)
+	})
+}
+
+// The session's files (Ctrl+P): a file's row menu offers Download, a folder's offers nothing.
+@(test)
+a_file_of_the_browser_can_be_downloaded :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		app, s := bench_app(t)
+		pane := main_pane(app)
+		app.conn = bench_conn(app)
+		defer { bench_clear(app); app.conn = nil }
+		files_open(app, pane)
+		session.frames(s, 3)
+		bench_answer(app, bench_take(t, .Server_Files_List), 200, `{"data":[{"path":"src/","type":"directory"},{"path":"README.md","type":"file"}]}`)
+		session.wait_idle(s)
+		session.key(s, .Down)   // (the folder)
+		session.key(s, .F10, {.Shift})
+		session.frames(s, 2)
+		testing.expect(t, session.find_text(s, "Download") == nil, "no Download on a folder")
+		session.key(s, .Down)   // (README.md)
+		session.key(s, .F10, {.Shift})
+		session.frames(s, 2)
+		testing.expect(t, session.find_text(s, "Download") != nil, "Download in a file's row menu")
+		session.key(s, .Escape)
+		session.key(s, .Escape)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.file_dialog_shown(&(^App)(s.user).state) }, "closed")
 	})
 }

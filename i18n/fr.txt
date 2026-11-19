@@ -734,17 +734,35 @@ fr Télécharger un fichier
 en the program is ending
 fr le programme se termine
 
-en the server sent no bytes
-fr le serveur n'a envoyé aucun octet
+en the connection was cut during the download
+fr la connexion a été coupée pendant le téléchargement
 
-en the file changed during the download
-fr le fichier a changé pendant le téléchargement
+en the file changed or the connection was cut during the download
+fr le fichier a changé ou la connexion a été coupée pendant le téléchargement
+
+en the file could not be made
+fr le fichier n'a pas pu être créé
+
+en the file could not be put in its place
+fr le fichier n'a pas pu être mis à sa place
+
+en the file could not be written
+fr le fichier n'a pas pu être écrit
+
+en this computer has no Downloads folder
+fr cet ordinateur n'a pas de dossier Téléchargements
+
+en the Downloads folder has too many files of this name
+fr le dossier Téléchargements a trop de fichiers de ce nom
+
+en the file is not on the server
+fr le fichier n'est pas sur le serveur
 
 en Authentication refused by the server
 fr Authentification refusée par le serveur
 
-en the file could not be put in its place
-fr le fichier n'a pas pu être mis à sa place
+en the server refused to give this file
+fr le serveur a refusé de donner ce fichier
 
 en the server answered %d
 fr le serveur a répondu %d
@@ -754,6 +772,12 @@ fr %s téléchargé
 
 en %s was not downloaded
 fr %s n'a pas été téléchargé
+
+en Show in folder
+fr Afficher dans le dossier
+
+en Cancel
+fr Annuler
 
 en waiting
 fr en attente
@@ -1034,9 +1058,6 @@ fr La clé
 
 en A name for it (optional)
 fr Un nom pour elle (facultatif)
-
-en Cancel
-fr Annuler
 
 en Connecting…
 fr Connexion…

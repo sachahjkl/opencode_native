@@ -1,18 +1,19 @@
 // A file of the server's computer, which may be another one, downloaded to this computer: asked from a tool call's menu, a
-// path selected in a message, or the palette; saved where the person says, in ranges on the downloads' own workers, to a
-// temp file renamed at the end. src/md/features/remote-download.md says why it is made this way.
+// path selected in a message, the palette, or a row of the file browser; one streamed request on the downloads' own
+// workers, through a temp that takes the target's name at the end; its progress in a notification of the system, else
+// the status bar's pill. src/md/features/remote-download.md says why it is made this way.
 package ocn
 
 import "base:runtime"
-import tk_json "gt:json"
-import "core:encoding/json"
 import "core:fmt"
 import "core:math"
 import "core:os"
+import "core:path/filepath"
 import "core:strings"
 import "core:sync"
 import "core:time"
 import fsx "gt:fsx"
+import tk_http "gt:http"
 import "gt:platform"
 import tasks "gt:tasks"
 import "gt:timefmt"
@@ -20,37 +21,51 @@ import "gt:ui"
 import lucide "gt:lucide"
 import i18n "gt:i18n"
 
-// One request per chunk: the memory a download holds, and how late a cancel is at most.
-DOWNLOAD_CHUNK_BYTES :: 4 << 20
 // Downloads at once; the others wait their turn. Not the connection's workers: a long one would hold one of theirs.
 DOWNLOAD_WORKERS :: 3
 // How long the program's end waits for its downloads to see their stop.
 DOWNLOAD_STOP_BOUND :: 3 * time.Second
+// How often a worker wakes the interface at most: the pill's percent and the notification's bar move this often.
+DOWNLOAD_STEP :: 250 * time.Millisecond
 // The menu of the status bar's pill.
 DOWNLOADS_MENU_KEY :: "downloads_menu"
+// The buttons of a download's notification.
+DOWNLOAD_ACT_CANCEL :: 1
+DOWNLOAD_ACT_OPEN :: 2
+DOWNLOAD_ACT_SHOW :: 3
 
 Download_State :: enum u8 { Queued, Running, Done, Failed, Cancelled }
+
+// Where a download is shown: Off and Gone are the pill's (no notification, or the person closed it).
+Download_Note :: enum u8 { Off, Asking, Shown, Gone }
 
 Download :: struct {
 	app:    ^App,
 	conn:   ^Conn,     // held until its end (download_ended): it goes by the server it was asked of
-	n:      int,       // its number in this run: its temp's name, its menu's lines
+	n:      int,       // its number in this run
 	name:   string,    // the file's name (owned)
 	read:   string,    // the GET's path and query (owned)
-	target: string,    // where it goes (owned)
-	temp:   string,    // beside it, renamed to it at the end (owned)
-	chunk:  i64,
+	target: string,    // where it goes (heap). "" with `to_downloads`: its worker chooses it before it starts
+	to_downloads: bool,   // the row action's: into this computer's Downloads, under a name not taken there
 	// (the interface's) only download_ended moves it to an end
 	state:  Download_State,
 	// (atomic) written by its worker, read by the interface
-	got:       i64,
-	total:     i64,    // -1: not known yet
-	running:   bool,
-	stop:      bool,   // asked: by Cancel, or the program's end
-	temp_gone: bool,   // its worker renamed or removed the temp
+	got:     i64,
+	total:   i64,    // -1: not known
+	running: bool,
+	stop:    tk_http.Stop,   // asked: by Cancel, or the program's end
+	// the temp's name between its worker and the program's end (under lock)
+	lock:      sync.Mutex,
+	temp:      string,   // (heap) "" until the writer opened
+	temp_gone: bool,     // its worker committed or aborted it, or the end removed it
+	ending:    bool,     // the program's end came: the worker opens no file and commits nothing
 	// written by its worker before it posts its end
 	ended: Download_State,
-	why:   string,     // Failed: the reason, said once (owned)
+	why:   string,     // Failed: the reason, said once (heap)
+	// its notification (the interface's)
+	note:       Download_Note,
+	note_id:    platform.Notification_Id,
+	note_again: bool,   // it changed while the first one was asked: sent once its id came
 }
 
 Downloads :: struct {
@@ -58,10 +73,7 @@ Downloads :: struct {
 	pool:    tasks.Pool,
 	started: bool,
 	seq:     int,
-	folder:  string,   // this computer's Downloads folder (owned), known once a chore read it
-	known:   bool,
-	chunk:   i64,      // 0: DOWNLOAD_CHUNK_BYTES (a test's is smaller)
-	shown:   string,   // the last file downloaded: a click on its toast shows it (owned)
+	shown:   string,   // the last file of the pill downloaded: a click on its toast shows it (owned)
 }
 
 // A test sees each file operation of a download here, on the thread that makes it: never the interface's. nil: none.
@@ -105,6 +117,16 @@ download_path_of :: proc(sel: string) -> (path: string, ok: bool) {
 	return s, true
 }
 
+// A connection that can download, else said.
+@(private = "file")
+download_conn :: proc(app: ^App) -> ^Conn {
+	if app.conn == nil || app.conn.transport.receive == nil {
+		ui.announce(&app.announcer, .Warn, i18n.tr("Not connected"))
+		return nil
+	}
+	return app.conn
+}
+
 @(private = "file")
 Download_Ask :: struct {
 	app:  ^App,
@@ -114,43 +136,16 @@ Download_Ask :: struct {
 }
 
 // "Download…": where to put the file `path` of the server (absolute, or from `dir`) is asked, then it comes. The save
-// dialog starts in this computer's Downloads folder, which a chore reads the first time.
+// dialog starts where the last download went, else in this computer's Downloads (the toolkit asks the system).
 download_ask :: proc(app: ^App, path, dir: string) {
-	if app.conn == nil || app.conn.transport.range == nil {
-		ui.announce(&app.announcer, .Warn, i18n.tr("Not connected"))
-		return
-	}
+	c := download_conn(app)
+	if c == nil { return }
 	name := download_name(path)
 	if name == "" { return }
 	a := new(Download_Ask)
-	a^ = {app, app.conn, strings.clone(name), strings.clone(download_read_path(dir, path))}
-	conn_hold(a.conn)
-	if app.downloads.known { download_dialog(a); return }
-	Folder :: struct { ask: ^Download_Ask, path: string }
-	f := new(Folder, runtime.heap_allocator())
-	f.ask = a
-	ui.task(&app.state, proc(data: rawptr) {
-		f := (^Folder)(data)
-		f.path = platform.known_folder_path(.Downloads, runtime.heap_allocator())
-	}, proc(data: rawptr, _: u64) {
-		f := (^Folder)(data)
-		d := &f.ask.app.downloads
-		if !d.known { d.folder, d.known = strings.clone(f.path), true }
-		delete(f.path, runtime.heap_allocator())
-		a := f.ask
-		free(f, runtime.heap_allocator())
-		download_dialog(a)
-	}, f, lost = proc(data: rawptr) {
-		f := (^Folder)(data)
-		delete(f.path, runtime.heap_allocator())
-		free(f, runtime.heap_allocator())
-	})
-}
-
-@(private = "file")
-download_dialog :: proc(a: ^Download_Ask) {
-	app := a.app
-	ui.file_dialog(&app.state, .Save, {owner = app.win, title = fmt.tprintf(i18n.tr("Download %s"), a.name), start_dir = app.downloads.folder, suggested_name = a.name, remember_id = "download", overwrite_prompt = true, act = i18n.tr("Download")}, proc(r: platform.Dialog_Result, user: rawptr) {
+	a^ = {app, c, strings.clone(name), strings.clone(download_read_path(dir, path))}
+	conn_hold(c)
+	ui.file_dialog(&app.state, .Save, {owner = app.win, title = fmt.tprintf(i18n.tr("Download %s"), a.name), start_known = .Downloads, suggested_name = a.name, remember_id = "download", overwrite_prompt = true, act = i18n.tr("Download")}, proc(r: platform.Dialog_Result, user: rawptr) {
 		a := (^Download_Ask)(user)
 		defer {
 			conn_release(a.app, a.conn)
@@ -162,7 +157,20 @@ download_dialog :: proc(a: ^Download_Ask) {
 	}, a)
 }
 
-// "Download a file…" (the palette): the server's files in the file browser, one chosen, then where it goes.
+// The file browser's "Download" on a row: the file goes straight to this computer's Downloads, and the browser stays
+// open (one toolkit dialog shows at a time: a Save dialog would close it).
+download_row_action :: proc(app: ^App) -> platform.File_Row_Action {
+	return {label = i18n.tr("Download"), icon = lucide.DOWNLOAD, act = proc(user: rawptr, path: string) {
+		app := (^App)(user)
+		c := download_conn(app)
+		name := download_name(path)
+		if c == nil || name == "" { return }
+		download_start(app, c, download_read_path(pane_dir(app, main_pane(app)), path), name, "")
+	}, user = app}
+}
+
+// "Download a file…" (the palette): the server's files in the file browser, one chosen, then where it goes; a row's
+// Download sends a file to Downloads at once.
 download_pick :: proc(app: ^App) {
 	pane := main_pane(app)
 	dir := pane_dir(app, pane)
@@ -172,14 +180,15 @@ download_pick :: proc(app: ^App) {
 	Pick :: struct { app: ^App, dir: string }
 	p := new(Pick)
 	p^ = {app, strings.clone(dir)}
-	ui.file_dialog(&app.state, .Open, {owner = app.win, title = i18n.tr("Download a file"), start_dir = dir, places = places, all_files = true, find_deep = true, act = i18n.tr("Download"), remember_id = "download_pick"}, proc(r: platform.Dialog_Result, user: rawptr) {
+	acts := []platform.File_Row_Action{download_row_action(app)}
+	ui.file_dialog(&app.state, .Open, {owner = app.win, title = i18n.tr("Download a file"), start_dir = dir, places = places, all_files = true, find_deep = true, act = i18n.tr("Download"), remember_id = "download_pick", row_actions = acts}, proc(r: platform.Dialog_Result, user: rawptr) {
 		p := (^Pick)(user)
 		defer { delete(p.dir); free(p) }
 		if r.status == .Chosen && len(r.paths) > 0 { download_ask(p.app, r.paths[0], p.dir) }
 	}, p, source = folders_are_here(app) ? nil : server_files(app, dir))
 }
 
-// The download, on its way: `c` is held for it until its end.
+// The download, on its way: `c` is held for it until its end. `target` "": into this computer's Downloads.
 download_start :: proc(app: ^App, c: ^Conn, read, name, target: string) -> ^Download {
 	ds := &app.downloads
 	if !ds.started {
@@ -187,26 +196,31 @@ download_start :: proc(app: ^App, c: ^Conn, read, name, target: string) -> ^Down
 		ds.started = true
 	}
 	ds.seq += 1
+	h := runtime.heap_allocator()
 	d := new(Download)
-	d^ = {app = app, conn = c, n = ds.seq, name = strings.clone(name), read = strings.clone(read), target = strings.clone(target), total = -1, chunk = ds.chunk > 0 ? ds.chunk : DOWNLOAD_CHUNK_BYTES}
-	d.temp = fmt.aprintf("%s.ocn-%d.part", target, d.n)
+	d^ = {app = app, conn = c, n = ds.seq, name = strings.clone(name), read = strings.clone(read), target = strings.clone(target, h), to_downloads = target == "", total = -1}
 	conn_hold(c)
 	append(&ds.list, d)
+	// (a system's notification when the person's messages go to the system; else the pill)
+	if app.win != nil && app.announcer.mode == .System && !app.announcer.missing {
+		d.note = .Asking
+		if !platform.notify_async(app.win, download_notification(d), download_noted, d) { d.note = .Off }
+	}
 	if !tasks.add(&ds.pool, download_run, d) {
-		d.ended, d.why = .Failed, strings.clone(i18n.tr("the program is ending"), runtime.heap_allocator())
+		d.ended, d.why = .Failed, strings.clone(i18n.tr("the program is ending"), h)
 		download_ended(d, 0)
 	}
 	return d
 }
 
-download_cancel :: proc(d: ^Download) { sync.atomic_store(&d.stop, true) }
+download_cancel :: proc(d: ^Download) { tk_http.stop_ask(&d.stop) }
 
-// The finished ones leave the pill's menu.
+// The finished ones of the pill leave it.
 downloads_clear :: proc(app: ^App) {
 	ds := &app.downloads
 	for i := 0; i < len(ds.list); {
 		d := ds.list[i]
-		if d.state == .Done || d.state == .Failed {
+		if download_in_pill(d) && (d.state == .Done || d.state == .Failed) {
 			ordered_remove(&ds.list, i)
 			download_free(d)
 		} else {
@@ -215,10 +229,22 @@ downloads_clear :: proc(app: ^App) {
 	}
 }
 
+// A download the pill shows: it has no notification.
+download_in_pill :: proc(d: ^Download) -> bool { return d.note == .Off || d.note == .Gone }
+
+// Out of the list, and freed.
+@(private = "file")
+download_drop :: proc(d: ^Download) {
+	ds := &d.app.downloads
+	for x, i in ds.list { if x == d { ordered_remove(&ds.list, i); break } }
+	download_free(d)
+}
+
 @(private = "file")
 download_free :: proc(d: ^Download) {
-	delete(d.name); delete(d.read); delete(d.target); delete(d.temp)
-	delete(d.why, runtime.heap_allocator())
+	h := runtime.heap_allocator()
+	delete(d.name); delete(d.read)
+	delete(d.target, h); delete(d.temp, h); delete(d.why, h)
 	free(d)
 }
 
@@ -233,110 +259,140 @@ download_run :: proc(data: rawptr) {
 	sync.atomic_store(&d.running, true)
 	_ = ui.post(&d.app.state, download_moved, d)
 	d.ended = download_transfer(d)
+	free_all(context.temp_allocator)
 	_ = ui.post(&d.app.state, download_ended, d)
 }
 
-// The ranges, one after the other, appended to the temp; the temp renamed to the target at the end, removed on any other.
+// What a transfer's chunks share, on the request's thread.
+@(private = "file")
+Download_Sink :: struct {
+	d:    ^Download,
+	w:    fsx.Writer,
+	open: bool,
+	why:  string,      // the disk refused: the reason (static)
+	last: time.Tick,   // the last wake of the interface
+}
+
+// The stream to the writer; the writer committed at a whole body, aborted on any other end.
 @(private = "file")
 download_transfer :: proc(d: ^Download) -> Download_State {
-	c := d.conn
-	from: i64 = 0
-	etag := ""
-	defer delete(etag)
+	if d.to_downloads {
+		t, why := download_free_target(d.name)
+		if why != "" { d.why = strings.clone(why); return .Failed }
+		d.target = t
+	}
+	s := Download_Sink{d = d}
+	a := d.conn.transport.receive(d.conn, d.read, download_part, &s, &d.stop)
+	got, total := sync.atomic_load(&d.got), sync.atomic_load(&d.total)
 	end := Download_State.Done
 	why := ""
-	written := false   // the temp exists
-	loop: for {
-		if sync.atomic_load(&d.stop) { end = .Cancelled; break }
-		a := c.transport.range(c, d.read, from, from + d.chunk - 1, etag, context.allocator)
-		defer range_answer_destroy(&a, context.allocator)
-		if !a.ok { end, why = .Failed, a.why; break }
-		whole := false
-		switch a.status {
-		case 206:
-			if from == 0 {
-				etag = strings.clone(a.etag)
-				sync.atomic_store(&d.total, a.total)
-			}
-			if len(a.body) == 0 { end, why = .Failed, i18n.tr("the server sent no bytes"); break loop }
-		case 200:
-			// (a file changed since the first range comes whole: not a file made of two versions)
-			if from > 0 { end, why = .Failed, i18n.tr("the file changed during the download"); break loop }
-			whole = true
-			sync.atomic_store(&d.total, i64(len(a.body)))
-		case 416:
-			if from == 0 && a.total == 0 {   // (an empty file has no first byte)
-				sync.atomic_store(&d.total, 0)
-				whole = true
-				break
-			}
-			end, why = .Failed, download_refusal(a); break loop
-		case 401:
-			end, why = .Failed, i18n.tr("Authentication refused by the server"); break loop
-		case:
-			end, why = .Failed, download_refusal(a); break loop
+	switch {
+	case s.why != "":
+		end, why = .Failed, s.why
+	case sync.atomic_load(&d.stop.asked) || a.err == .Stopped:
+		end = .Cancelled
+	case a.err != .None:
+		end, why = .Failed, got > 0 ? i18n.tr("the connection was cut during the download") : tk_http.error_text(a.err)
+	case a.status < 200 || a.status > 299:
+		end, why = .Failed, download_refusal(a.status)
+	case total >= 0 && got != total:
+		// (a file truncated or rewritten while it is read ends before the length the server announced)
+		end, why = .Failed, i18n.tr("the file changed or the connection was cut during the download")
+	case !s.open:
+		// (an empty file: a whole body, and no chunk)
+		if !download_open(d, &s) { end, why = .Failed, i18n.tr("the file could not be made") }
+	}
+	sync.lock(&d.lock)
+	if s.open {
+		if end == .Done && !d.ending {
+			if download_io_hook != nil { download_io_hook(d.target) }
+			if !fsx.writer_commit(&s.w) { end, why = .Failed, i18n.tr("the file could not be put in its place") }
+		} else {
+			if download_io_hook != nil { download_io_hook(s.w.temp) }
+			fsx.writer_abort(&s.w)
+			if end == .Done { end = .Cancelled }
 		}
-		if w := download_append(d.temp, a.body, !written); w != "" { end, why = .Failed, w; break }
-		written = true
-		from += i64(len(a.body))
-		sync.atomic_store(&d.got, from)
-		_ = ui.post(&d.app.state, download_moved, d)
-		total := sync.atomic_load(&d.total)
-		if whole || (total >= 0 && from >= total) { break }
-		// (a long download's words of each range; not on a way out: `why` may be among them)
-		free_all(context.temp_allocator)
 	}
-	if end == .Done && sync.atomic_load(&d.stop) { end = .Cancelled }
-	if end == .Done {
-		if download_io_hook != nil { download_io_hook(d.target) }
-		if !fsx.replace(d.temp, d.target, false) { end, why = .Failed, i18n.tr("the file could not be put in its place") }
-	}
-	if end != .Done && written {
-		if download_io_hook != nil { download_io_hook(d.temp) }
-		_ = os.remove(d.temp)
-	}
-	sync.atomic_store(&d.temp_gone, true)
-	if why != "" { d.why = strings.clone(why, runtime.heap_allocator()) }
+	d.temp_gone = true
+	sync.unlock(&d.lock)
+	if why != "" { d.why = strings.clone(why) }
 	return end
 }
 
-// What the server said when it refused: its message, else its status.
+// One chunk to the temp; the interface woken at most every DOWNLOAD_STEP.
 @(private = "file")
-download_refusal :: proc(a: Range_Answer) -> string {
-	v, _ := json.parse(a.body, parse_integers = true, allocator = context.temp_allocator)
-	if msg := tk_json.text(v, "message"); msg != "" { return fmt.tprintf("%s (%d)", msg, a.status) }
-	return fmt.tprintf(i18n.tr("the server answered %d"), a.status)
+download_part :: proc(user: rawptr, part: tk_http.Body_Part) -> tk_http.Keep_Going {
+	s := (^Download_Sink)(user)
+	d := s.d
+	context.allocator = runtime.heap_allocator()
+	if sync.atomic_load(&d.stop.asked) { return .Stop }
+	if !s.open {
+		if !download_open(d, s) { s.why = i18n.tr("the file could not be made"); return .Stop }
+		sync.atomic_store(&d.total, part.length)
+	}
+	if download_io_hook != nil { download_io_hook(s.w.temp) }
+	if !fsx.writer_append(&s.w, part.bytes) { s.why = i18n.tr("the file could not be written"); return .Stop }
+	sync.atomic_store(&d.got, part.received)
+	if s.last == {} || time.tick_since(s.last) >= DOWNLOAD_STEP {
+		s.last = time.tick_now()
+		_ = ui.post(&d.app.state, download_moved, d)
+	}
+	return .Continue
 }
 
-// `bytes` at the end of `path` (`first`: made, or emptied). Opened and closed each time: the program's end can then remove
-// a temp a worker still has, on Windows too. The reason when it failed ("": written).
+// The writer opened beside the target, its temp's name published for the program's end. False: it cannot be made, or
+// the program is ending.
 @(private = "file")
-download_append :: proc(path: string, bytes: []u8, first: bool) -> string {
-	if download_io_hook != nil { download_io_hook(path) }
-	flags := first ? os.File_Flags{.Write, .Create, .Trunc} : os.File_Flags{.Write, .Append}
-	f, err := os.open(path, flags, os.Permissions_Default_File)
-	if err != nil { return os.error_string(err) }
-	rest := bytes
-	for len(rest) > 0 {
-		n, werr := os.write(f, rest)
-		if werr != nil { os.close(f); return os.error_string(werr) }
-		rest = rest[n:]
+download_open :: proc(d: ^Download, s: ^Download_Sink) -> bool {
+	sync.lock(&d.lock)
+	defer sync.unlock(&d.lock)
+	if d.ending { return false }
+	if download_io_hook != nil { download_io_hook(d.target) }
+	if !fsx.writer_open(&s.w, d.target) { return false }
+	d.temp = strings.clone(s.w.temp, runtime.heap_allocator())
+	s.open = true
+	return true
+}
+
+// A path in this computer's Downloads for `name` that no file takes: "a.txt", else "a (1).txt", "a (2).txt"...
+@(private = "file")
+download_free_target :: proc(name: string) -> (path, why: string) {
+	folder := platform.known_folder_path(.Downloads, context.temp_allocator)
+	if folder == "" { return "", i18n.tr("this computer has no Downloads folder") }
+	stem, ext := name, ""
+	if dot := strings.last_index_byte(name, '.'); dot > 0 { stem, ext = name[:dot], name[dot:] }
+	for i in 0 ..< 1000 {
+		n := i == 0 ? name : fmt.tprintf("%s (%d)%s", stem, i, ext)
+		p, _ := filepath.join({folder, n}, context.temp_allocator)
+		if download_io_hook != nil { download_io_hook(p) }
+		if !os.exists(p) { return strings.clone(p), "" }
 	}
-	if cerr := os.close(f); cerr != nil { return os.error_string(cerr) }
-	return ""
+	return "", i18n.tr("the Downloads folder has too many files of this name")
+}
+
+// Why the server refused, from its status: receive gives no body of a refusal.
+@(private = "file")
+download_refusal :: proc(status: int) -> string {
+	switch status {
+	case 404: return i18n.tr("the file is not on the server")
+	case 401: return i18n.tr("Authentication refused by the server")
+	case 403: return i18n.tr("the server refused to give this file")
+	}
+	return fmt.tprintf(i18n.tr("the server answered %d"), status)
 }
 
 ////////////////////////////////
 // Back on the interface's thread
 
-// Its worker moved: the post woke the window, the pill reads the counts.
+// Its worker moved: the post woke the window, the pill reads the counts; a notification is sent again.
 @(private = "file")
 download_moved :: proc(data: rawptr, word: u64) {
 	d := (^Download)(data)
 	if d.state == .Queued { d.state = .Running }
+	if d.state == .Running { download_note_send(d) }
 }
 
-// Its end, said once. A cancel says nothing: the person did it, and it leaves the menu.
+// Its end, said once: in its notification, else by a toast. A cancel says nothing: the person did it.
 @(private = "file")
 download_ended :: proc(data: rawptr, word: u64) {
 	d := (^Download)(data)
@@ -346,6 +402,25 @@ download_ended :: proc(data: rawptr, word: u64) {
 	d.conn = nil
 	switch d.state {
 	case .Queued, .Running:
+	case .Done, .Failed:
+		if download_in_pill(d) { download_announce(d) } else { download_note_send(d) }
+	case .Cancelled:
+		switch d.note {
+		case .Asking:   // (its answer drops it)
+		case .Shown:
+			platform.notify_close(app.win, d.note_id)
+			download_drop(d)
+		case .Off, .Gone:
+			download_drop(d)
+		}
+	}
+}
+
+// The end of a download of the pill, as a toast.
+@(private = "file")
+download_announce :: proc(d: ^Download) {
+	app := d.app
+	#partial switch d.state {
 	case .Done:
 		delete(app.downloads.shown)
 		app.downloads.shown = strings.clone(d.target)
@@ -355,10 +430,6 @@ download_ended :: proc(data: rawptr, word: u64) {
 		}, user = app)
 	case .Failed:
 		ui.announce(&app.announcer, .Bad, fmt.tprintf(i18n.tr("%s was not downloaded"), d.name), d.why)
-	case .Cancelled:
-		ds := &app.downloads
-		for x, i in ds.list { if x == d { ordered_remove(&ds.list, i); break } }
-		download_free(d)
 	}
 }
 
@@ -371,8 +442,92 @@ downloads_stop :: proc(app: ^App, bound := DOWNLOAD_STOP_BOUND) {
 	_ = tasks.stop(&ds.pool, bound = bound)
 	ds.started = false
 	for d in ds.list {
-		if sync.atomic_load(&d.running) && !sync.atomic_load(&d.temp_gone) { _ = os.remove(d.temp) }
+		sync.lock(&d.lock)
+		d.ending = true
+		if d.temp != "" && !d.temp_gone {
+			_ = os.remove(d.temp)
+			d.temp_gone = true
+		}
+		sync.unlock(&d.lock)
 	}
+}
+
+////////////////////////////////
+// Its notification
+
+// The share of its bytes that came: 0 to 1; -1 when no size is known.
+download_share :: proc(d: ^Download) -> f32 {
+	got, total := sync.atomic_load(&d.got), sync.atomic_load(&d.total)
+	return total > 0 ? f32(f64(got) / f64(total)) : -1
+}
+
+// The notification of `d` as it stands: its bar and Cancel while it runs; what came of it at its end (another shape: the
+// system shows it again). Its texts are in the temp allocator.
+download_notification :: proc(d: ^Download) -> platform.Notification {
+	#partial switch d.state {
+	case .Done:
+		acts := make([]platform.Notification_Action, 2, context.temp_allocator)
+		acts[0], acts[1] = {DOWNLOAD_ACT_OPEN, i18n.tr("Open")}, {DOWNLOAD_ACT_SHOW, i18n.tr("Show in folder")}
+		return {title = fmt.tprintf(i18n.tr("Downloaded %s"), d.name), body = d.target, actions = acts, replace = d.note_id}
+	case .Failed:
+		return {title = fmt.tprintf(i18n.tr("%s was not downloaded"), d.name), body = d.why, replace = d.note_id}
+	}
+	acts := make([]platform.Notification_Action, 1, context.temp_allocator)
+	acts[0] = {DOWNLOAD_ACT_CANCEL, i18n.tr("Cancel")}
+	return {title = d.name, actions = acts, silent = true, replace = d.note_id, progress = {shown = true, value = download_share(d), status = download_progress_words(d)}}
+}
+
+// Its notification sent again as it stands, when it has one.
+@(private = "file")
+download_note_send :: proc(d: ^Download) {
+	switch d.note {
+	case .Off, .Gone: return
+	case .Asking:     d.note_again = true; return
+	case .Shown:
+	}
+	if !platform.notify_async(d.app.win, download_notification(d)) {
+		d.note = .Gone
+		if d.state == .Done || d.state == .Failed { download_announce(d) }
+	}
+}
+
+// The system's answer to its first notification: its id, or none (the pill then).
+@(private = "file")
+download_noted :: proc(user: rawptr, id: platform.Notification_Id, ok: bool) {
+	d := (^Download)(user)
+	again := d.note_again
+	d.note_again = false
+	d.note, d.note_id = ok ? .Shown : .Off, ok ? id : 0
+	switch d.state {
+	case .Queued, .Running:
+		if again { download_note_send(d) }
+	case .Done, .Failed:
+		if ok { download_note_send(d) } else { download_announce(d) }
+	case .Cancelled:
+		if ok { platform.notify_close(d.app.win, id) }
+		download_drop(d)
+	}
+}
+
+// What a download's notification came back with. False: the id is no download's.
+downloads_notification_event :: proc(app: ^App, e: platform.Event) -> bool {
+	d: ^Download
+	for x in app.downloads.list { if x.note == .Shown && x.note_id == e.notification.id { d = x; break } }
+	if d == nil { return false }
+	#partial switch e.kind {
+	case .Notification_Action:
+		switch e.notification.action {
+		case DOWNLOAD_ACT_CANCEL: download_cancel(d)
+		case DOWNLOAD_ACT_OPEN:   if d.state == .Done { ui.open(d.target, .Path) }
+		case DOWNLOAD_ACT_SHOW:   if d.state == .Done { reveal_path(d.target) }
+		}
+	case .Notification_Click:
+		if d.state == .Done { reveal_path(d.target) }
+	case .Notification_Closed:
+		// (an end said and seen goes; a running one the person closed goes on in the pill, its Cancel there)
+		if d.state == .Done || d.state == .Failed { download_drop(d) } else { d.note = .Gone }
+	}
+	return true
 }
 
 ////////////////////////////////
@@ -387,12 +542,12 @@ download_progress_words :: proc(d: ^Download) -> string {
 	return timefmt.size(got)
 }
 
-// The share of the running ones' bytes that came, and how many run (share < 0: no total known).
+// The share of the pill's running ones' bytes that came, and how many run (share < 0: no total known).
 downloads_share :: proc(app: ^App) -> (share: f64, running: int) {
 	got, total: i64
 	known := true
 	for d in app.downloads.list {
-		if d.state != .Queued && d.state != .Running { continue }
+		if !download_in_pill(d) || (d.state != .Queued && d.state != .Running) { continue }
 		running += 1
 		t := sync.atomic_load(&d.total)
 		if t < 0 { known = false; continue }
@@ -404,14 +559,15 @@ downloads_share :: proc(app: ^App) -> (share: f64, running: int) {
 }
 
 downloads_pill :: proc(app: ^App, em: f32) {
-	ds := &app.downloads
-	if len(ds.list) == 0 { return }
+	shown := 0
+	for d in app.downloads.list { if download_in_pill(d) { shown += 1 } }
+	if shown == 0 { return }
 	share, running := downloads_share(app)
 	label: string
 	switch {
 	case running > 0 && share >= 0: label = i18n.percent(share)
 	case running > 0:               label = fmt.tprintf("%d", running)
-	case:                           label = fmt.tprintf("%d", len(ds.list))
+	case:                           label = fmt.tprintf("%d", shown)
 	}
 	sig := ui.button("###downloads", label, lucide.DOWNLOAD, o = {face = .Ghost, height = math.round(em * PILL_H_EM)})
 	if sig.clicked { ui.menu_open(DOWNLOADS_MENU_KEY, sig.box.rect, sig.box.key, search = false, align = .End) }
@@ -421,9 +577,9 @@ downloads_pill :: proc(app: ^App, em: f32) {
 
 @(private = "file")
 downloads_menu :: proc(app: ^App) {
-	ds := &app.downloads
 	finished := 0
-	for d in ds.list {
+	for d in app.downloads.list {
+		if !download_in_pill(d) { continue }
 		switch d.state {
 		case .Queued, .Running:
 			if ui.menu_item(fmt.tprintf(i18n.tr("Cancel %s, %s"), d.name, download_progress_words(d)), icon = lucide.X, keep_open = true).clicked { download_cancel(d) }

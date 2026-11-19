@@ -336,7 +336,8 @@ files_open :: proc(app: ^App, pane: ^Chat_Pane) {
 	j^ = {app, pane, strings.clone(dir)}
 	places: []platform.File_Place
 	if dir != "" { places = {{name = base_name(dir), path = dir}} }
-	ui.file_dialog(&app.state, .Open, {owner = app.win, title = i18n.tr("Files of the session"), start_dir = dir, places = places, multiple = true, all_files = true, find_deep = true, act = i18n.tr("Mention"), remember_id = "session_files"}, proc(r: platform.Dialog_Result, user: rawptr) {
+	acts := []platform.File_Row_Action{download_row_action(app)}
+	ui.file_dialog(&app.state, .Open, {owner = app.win, title = i18n.tr("Files of the session"), start_dir = dir, places = places, multiple = true, all_files = true, find_deep = true, act = i18n.tr("Mention"), remember_id = "session_files", row_actions = acts}, proc(r: platform.Dialog_Result, user: rawptr) {
 		j := (^Files_Job)(user)
 		defer { delete(j.dir); free(j) }
 		if r.status != .Chosen { return }

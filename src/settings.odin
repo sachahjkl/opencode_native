@@ -394,6 +394,7 @@ notify_sent_free :: proc(n: ^Notify_Sent) {
 
 // What a notification of the system came back with: a click opens its session, in front; closed, its entry no longer has it.
 notify_event :: proc(app: ^App, e: platform.Event) {
+	if downloads_notification_event(app, e) { return }
 	#partial switch e.kind {
 	case .Notification_Click, .Notification_Action:
 		missed_notification_click(app, e.notification.id)
