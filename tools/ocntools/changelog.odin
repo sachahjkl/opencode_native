@@ -40,7 +40,7 @@ say_errors :: proc(what: string, errors: []string) -> bool {
 	return len(errors) == 0
 }
 
-// What `check` and `changelog check` run.
+// What `prepare` runs before and after it assembles (`check` runs the toolkit's `changelog check`, the same rules).
 changelog_check :: proc(release := "") -> bool {
 	errors, n := tk_changelog.check(changelog_options(), release)
 	if changelog_version(".", nil) == "" { append(&errors, fmt.tprintf("APP_VERSION not found in %s", SETUP_FILE)) }

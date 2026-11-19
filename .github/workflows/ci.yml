@@ -50,8 +50,9 @@ jobs:
       - name: Starts (its icon, its console launcher's version)
         run: build/ocntools.exe launcher
 
+      # (the program's, src/update's and the tool's, with the program's defines; one test with a window at a time)
       - name: Tests
-        run: odin test src -collection:gt=ext/gui_toolkit/src -out:build/test.exe -define:ODIN_TEST_THREADS=1 -define:MERMAID_NATIVE_LINK=false -define:IMAGE_WEBP=true -define:IMAGE_WEBP_NATIVE_LINK=false   # (one test with a window at a time)
+        run: build/ocntools.exe test
 
       - uses: actions/upload-artifact@v7
         with:

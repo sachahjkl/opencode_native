@@ -46,8 +46,8 @@ release_notes :: proc(root, version: string) -> (notes: string, ok: bool) {
 // What is published is optimized: a program built otherwise (build.bat with no word, debug) is no release.
 @(private = "file")
 package_is_release :: proc(program: string) -> bool {
-	if mode := build_mode_of(program); mode != "release" {
-		fmt.eprintfln("package: %s was built %s, not for release: build release (build.bat release, ./build.sh release)", program, mode != "" ? mode : "in a way not known")
+	if mode, known := toolbox.build_mode_of(program); !known || mode != .Release {
+		fmt.eprintfln("package: %s was built %s, not for release: build release (build.bat release, ./build.sh release)", program, known ? toolbox.build_mode_name(mode) : "in a way not known")
 		return false
 	}
 	return true

@@ -500,7 +500,12 @@ run_shots :: proc(args: []string) -> cli.Exit {
 		if !built { fmt.eprintln("shots: the build in WSL failed"); return .Failed }
 		s.linux = program
 	}
-	if build && !build_program({gt = gt, out = s.live.exe}) { return .Failed }
+	if build {
+		o := build_options()
+		o.program = s.live.exe
+		if gt != "" { o.toolkit = gt }
+		if !toolbox.program_build(o) { return .Failed }
+	}
 	if s.linux == "" && !os.exists(s.live.exe) { fmt.eprintfln("shots: %s is missing: run with --build", s.live.exe); return .Failed }
 	pictures := PICTURES
 	for p in pictures {

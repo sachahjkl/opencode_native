@@ -10,13 +10,23 @@ import product "../../src/product"
 
 // What opencode native is to the toolkit's tools: its name, its repository, where it keeps its version, what it takes of
 // the toolkit (Mermaid; the CDP endpoint in a release build too, which shots, live and measure drive; only the Lucide icons
-// it names, in a release build), what Windows shows of it, and the rules of its console launcher (opencode-native.com:
-// what prints waits, the rest opens a window).
-OCN_PROJECT :: toolbox.Project{
+// it names), what Windows shows of it, and the rules of its console launcher (opencode-native.com: what prints waits, the
+// rest opens a window). A variable, not a constant: a constant's slices are made anew on the stack of each procedure that
+// copies it, and the toolkit's commands keep the copy of build_options after it returns.
+OCN_PROJECT := toolbox.Project{
 	name = "opencode-native", repository = "https://github.com/sachahjkl/opencode_native",
 	version_file = SETUP_FILE, version_line = "APP_VERSION :: ",
 	program = OUT_DEFAULT,
 	features = {.Mermaid, .Devtools, .Lucide_Subset},
+	// (the toolkit's Mermaid diagrams, its WebP and, on Linux, its text backend are built into native/ocn_native, not
+	// linked on their own; gt:image decodes every picture, WebP included)
+	defines = {"-define:MERMAID_NATIVE_LINK=false", "-define:IMAGE_WEBP=true", "-define:IMAGE_WEBP_NATIVE_LINK=false"},
+	linux_defines = {"-define:FONT_NATIVE_LINK=false"},
+	// (no vcruntime140.dll to ship; a Linux release's symbol table is a quarter of the file, and nothing reads it)
+	link = {static_vcruntime = true, strip = true},
+	// (native/ocn_native carries the toolkit's crates: the toolkit builds none of its own library, which nothing links)
+	native_carried = true,
+	systems = {.Windows, .Linux},
 	launcher = {others = "--help,--version,--status,--install,--uninstall,--frames"},
 	title = "Opencode Native", publisher = "Froment Software",
 	description = "A native desktop client for the opencode server. Not built by the OpenCode team, and not affiliated with them.",
@@ -44,13 +54,12 @@ OCN_LICENCE_TOOL :: toolbox.Licence_Tool{
 }
 
 COMMANDS :: [?]toolbox.Command{
-	{name = "build", usage = "[debug] [--force]: the Rust library, Ghostty's emulation, the program (GT=<folder>, OUT=<file>)", run = run_build},
+	{name = "build", usage = "[dev|release|debug] [--force]: the Rust library, Ghostty's emulation, then the program: dev (-o:minimal, also with no word), release (what ships), debug (GT=<folder>, OUT=<file>; --force: the Rust library and the emulation again)", run = run_build},
 	{name = "package", usage = "[version]: the release files of a finished build, in build/dist", run = run_package},
 	{name = "update", usage = "keygen | pubkey | manifest | verify: the signed manifests of a release", run = run_update},
 	{name = "shots", usage = "[--only name,name] [--out folder] [--build] ...: the pictures of the documentation and the site, the program's own frames", run = run_shots},
 	{name = "logo", usage = "[--out folder] [--hint 0|1|2]: the logo (assets/logo*.png) and the icon (opencode-native.ico), drawn by the toolkit's paint package", run = run_logo},
 	{name = "vt", usage = "[--check] [--headers folder]: src/vt_gen.odin, the numbers and calls of libghostty-vt, from its headers", run = run_vt},
-	{name = "check", usage = "[--out file]: the tests of the program, of its Rust code and of this tool, then a build that must be new", run = run_check},
 	{name = "launcher", usage = "(Windows) the built program starts: its icon, and its console launcher answers its version", run = run_launcher},
 	{name = "live", usage = "[link|password|prompt|diff|browser|folders] [--exe file]: the real program on the real server, failures made to happen; what it made is removed", run = run_live},
 	{name = "clean", usage = "what a live run that did not end left in the demo folder, and only that", run = run_clean},
@@ -74,7 +83,9 @@ main :: proc() {
 	commands := make([dynamic]toolbox.Command)
 	own := COMMANDS
 	append(&commands, ..own[:])
-	append(&commands, tk_changelog.command(OCN_PROJECT), lic[0], lic[1], toolbox.i18n_command({dirs = {"src"}, folder = "i18n"}), toolbox.notices_command(OCN_PROJECT))
+	// (the toolkit's test and check; its build is run_build's, which adds --force)
+	b := toolbox.build_commands(build_options())
+	append(&commands, b[1], b[2], tk_changelog.command(OCN_PROJECT), lic[0], lic[1], toolbox.i18n_command(OCN_I18N), toolbox.notices_command(OCN_PROJECT))
 	// (a copy of the tree with no .git, which wsl_build builds from, has the mark too: the root is found by it)
 	toolbox.tool_main("ocntools", commands[:], toolbox.ROOT_MARK_DEFAULT)
 }

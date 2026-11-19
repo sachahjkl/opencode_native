@@ -142,7 +142,7 @@ api_delete :: proc(l: ^Live, what, id: string) -> bool {
 }
 
 live_setup :: proc(l: ^Live, args: []string) -> bool {
-	l.exe, l.session, l.dir = CHECK_OUT, DEMO_SESSION, DEMO_DIR
+	l.exe, l.session, l.dir = OCN_PROJECT.program, DEMO_SESSION, DEMO_DIR
 	home := os.get_env("USERPROFILE", context.temp_allocator)
 	if home == "" { home = os.get_env("HOME", context.temp_allocator) }
 	text := read_text(fmt.tprintf("%s/.local/state/opencode/service.json", home))
@@ -283,7 +283,8 @@ scenario_diff :: proc(l: ^Live) {
 	o, _ := r.(json.Object)
 	w, h := cdp.number(o["width"]), cdp.number(o["height"])
 	// (speed is measured on what is published only: a dev build's frames say how it was compiled)
-	timed := build_mode_of(l.exe) == "release"
+	mode, known := toolbox.build_mode_of(l.exe)
+	timed := known && mode == .Release
 	if !timed { fmt.printfln("        (%s is no release build: its frames are not measured; build release to measure them)", l.exe) }
 	frame_p95(dt)
 	for _ in 0 ..< 40 {

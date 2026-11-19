@@ -13,9 +13,11 @@ Every step is a command of `tools/ocntools` (`help` lists them), on Windows and 
 
     odin run tools/ocntools -collection:gt=ext/gui_toolkit/src -out:build/ocntools -keep-executable -- <command>
 
-- `build [debug|release]` builds the program (`build.bat` and `./build.sh` are its shortcuts). `GT=<folder>` builds against
-  another toolkit checkout.
-- `check` runs the tests of the program, of its Rust code and of the tool, then a build that must be new.
+- `build [release|debug] [--force]` builds the program into `build/opencode-native` (`build.bat` and `./build.sh` are its
+  shortcuts): dev (`-o:minimal`) with no word. `GT=<folder>` builds against another toolkit checkout.
+- `test` runs the tests of the program, of `src/update` and of the tool.
+- `check` is the toolkit's check (`toolbox.build_commands`): the changelog, the scopes, the Rust tests, the catalogues, the
+  notices, `odin check` of each system, the tests, then a release build that takes the program's place.
 - `ship <version>` publishes a release from the branch `release/<version>`: CI, tag, release, master, the site.
 - Linux: `nix develop` first (`flake.nix`).
 

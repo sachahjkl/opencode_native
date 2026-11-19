@@ -1,31 +1,21 @@
 package ocntools
 
-// The program built, the same steps on Windows and Linux: the Rust library, Ghostty's emulation, the numbers of the version, then
-// the program. What is pinned is here: Ghostty by the commit of its tag vt-1.0.0, libghostty-vt's first stable version, Zig by version
-// and SHA-256, the crates by native/Cargo.lock (--locked). Ghostty's source and Zig are fetched into build/vt, and nowhere else.
+// The program's build, test and check are the toolkit's (toolbox.build_commands, src/md/infrastructure/build-commands.md
+// of the toolkit); this file gives what is opencode native's own: the Rust library and Ghostty's emulation, built before
+// any odin command of the program (prepare), and the checks of that Rust and of the emulation's headers. What is pinned
+// is here: Ghostty by the commit of its tag vt-1.0.0, libghostty-vt's first stable version, Zig by version and SHA-256,
+// the crates by native/Cargo.lock (--locked). Ghostty's source and Zig are fetched into build/vt, and nowhere else.
 
 import "core:fmt"
 import "core:os"
-import "core:path/filepath"
 import "core:slice"
 import "core:strings"
 import cli "gt:cli"
+import tk_changelog "gt:changelog"
 import toolbox "gt:toolbox"
 
-// What the program needs on Linux, built or tested: the text backend is the toolkit's native one (its default there), inside
-// the Rust library; wgpu-native is a second Rust library: both carry Rust's standard library, whose few unmangled symbols
-// (rust_eh_personality) are the same code.
-LINUX_LINK  :: "-Wl,--allow-multiple-definition"
-LINUX_FLAGS :: [?]string{"-define:FONT_NATIVE_LINK=false", "-extra-linker-flags:" + LINUX_LINK}
-// A release on Linux is stripped: its symbol table is a quarter of the file, and nothing reads it (a panic says its place
-// from #caller_location, not from symbols). Windows' has none without -debug.
-LINUX_RELEASE_FLAGS :: [?]string{"-define:FONT_NATIVE_LINK=false", "-extra-linker-flags:" + LINUX_LINK + " -s"}
-// On every system: the toolkit's Mermaid diagrams and its WebP are built into native/ocn_native (gt_mermaid, gt_webp),
-// not linked on their own; gt:image decodes every picture, WebP included.
-NATIVE_FLAGS :: [?]string{"-define:MERMAID_NATIVE_LINK=false", "-define:IMAGE_WEBP=true", "-define:IMAGE_WEBP_NATIVE_LINK=false"}
-
-GT_DEFAULT  :: "ext/gui_toolkit"
-GT_BESIDE   :: "../gui_toolkit"
+EXE         :: toolbox.EXE_SUFFIX
+GT_DEFAULT  :: toolbox.TOOLKIT_DEFAULT
 OUT_DEFAULT :: "build/opencode-native" + EXE
 
 NATIVE_DIR :: "native"
@@ -34,6 +24,8 @@ NATIVE_OUT :: "build/native"
 VT_OUT     :: "build/vt"
 VT_SOURCE  :: VT_OUT + "/ghostty"
 SETUP_FILE :: "src/setup.odin"
+// (not native/target: that one is cargo's own default, and a stale copy of the library has no place beside the crates)
+RUST_TEST_DIR :: "../../build/native/test"
 
 GHOSTTY_COMMIT :: "0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec"
 GHOSTTY_REMOTE :: "https://github.com/ghostty-org/ghostty.git"
@@ -62,21 +54,47 @@ when ODIN_OS == .Windows {
 }
 ZIG_NAME :: "zig-x86_64-" + ZIG_SYSTEM + "-" + ZIG_VERSION
 
-Build :: struct {
-	gt, out: string,
-	mode:    Build_Mode,
-	force:   bool,
+// The tests: the program's take the toolkit's one test session (one at a time); the tool's link nothing of the program.
+@(rodata) OCN_TESTS := [?]toolbox.Test_Package{{path = "src", one_thread = true}, {path = "src/update"}, {path = OCN_TOOL}}
+@(rodata) OCN_CHECKS := [?]toolbox.Build_Check{check_vt_headers, check_rust}
+OCN_TOOL :: "tools/ocntools"
+// (a variable, as OCN_PROJECT is: a constant's slice would live on the stack of build_options)
+OCN_I18N := toolbox.I18n_Catalogues{dirs = {"src"}, folder = "i18n"}
+
+// What the toolkit's build, test and check get: GT=<folder> another toolkit (the toolkit reads it), OUT=<file> the
+// program elsewhere. Dev is the build with no word: every check, every try and every picture runs one, in a second.
+// Fresh: a build never writes the program that runs (Windows refuses it); the check's release build takes its place.
+build_options :: proc() -> toolbox.Build_Options {
+	p := OCN_PROJECT
+	if out := os.get_env("OUT", context.temp_allocator); out != "" { p.program = out }
+	return {
+		project = p, changelog_command = tk_changelog.command(p), tests = OCN_TESTS[:], tool = OCN_TOOL,
+		catalogues = OCN_I18N, notices = true, prepare = prepare_native, checks = OCN_CHECKS[:],
+		iterate = .Dev, fresh = true, pinned_odin = true,
+	}
 }
 
-// How a program is compiled. Dev: at once (-o:minimal: modules apart, kept between builds; a second at most), what every check, every
-// try and every picture runs. Release: optimized (-o:speed: a minute), what is published, and what alone is measured for speed (the
-// diff's frames in live). Debug: debug information, the console.
-Build_Mode :: enum u8 { Dev, Release, Debug }
+// build --force: the Rust library and Ghostty's emulation built again, whatever their stamps say.
+@(private = "file")
+force_native: bool
 
-BUILD_MODE_NAMES := [Build_Mode]string{.Dev = "dev", .Release = "release", .Debug = "debug"}
-
-// The mode a program was built in, as the build wrote it beside it (<program>.mode); "": not known (built otherwise).
-build_mode_of :: proc(program: string) -> string { return strings.trim_space(read_text(fmt.tprintf("%s.mode", program))) }
+// The toolkit's build with --force, which is this program's alone.
+run_build :: proc(args: []string) -> cli.Exit {
+	release, debug := false, false
+	for a in args {
+		switch a {
+		case "dev":     // (the build with no word, Build_Options.iterate)
+		case "release": release = true
+		case "debug":   debug = true
+		case "--force": force_native = true
+		case:
+			fmt.eprintfln("build: what is %s?", a)
+			return .Usage
+		}
+	}
+	if release && debug { fmt.eprintln("build: release or debug, not both"); return .Usage }
+	return toolbox.ended(toolbox.program_build(build_options(), release, debug))
+}
 
 // Every file under `dir`.
 files_under :: proc(dir: string, out: ^[dynamic]string) {
@@ -86,6 +104,19 @@ files_under :: proc(dir: string, out: ^[dynamic]string) {
 		if e.type == .Directory { files_under(e.fullpath, out); continue }
 		append(out, e.fullpath)
 	}
+}
+
+// What every odin command of the program links of its own: the Rust library, then Ghostty's emulation.
+@(private = "file")
+prepare_native :: proc(p: toolbox.Project) -> bool { return build_native(force_native) && build_vt(force_native) }
+
+// (where the headers are: a build of the emulation is what brings them, and the CI keeps only its library)
+@(private = "file")
+check_vt_headers :: proc(p: toolbox.Project) -> bool { return !os.exists(VT_HEADERS) || vt_run(VT_HEADERS, true) == .Done }
+
+@(private = "file")
+check_rust :: proc(p: toolbox.Project) -> bool {
+	return toolbox.run({"cargo", "test", "--release", "--locked", "--target-dir", RUST_TEST_DIR}, {dir = "native/ocn_native", echo = true})
 }
 
 // What the Rust library is made of. (Not native/target, which cargo test may leave there: only the crates' own folders.)
@@ -121,6 +152,7 @@ write_text :: proc(path, text: string) -> bool {
 	return false
 }
 
+@(private = "file")
 build_native :: proc(force: bool) -> bool {
 	stamp_file := NATIVE_OUT + "/STAMP"
 	stamp := native_stamp()
@@ -207,89 +239,5 @@ build_vt :: proc(force: bool) -> bool {
 	return false
 }
 
-@(private = "file")
-odin_is_pinned :: proc(odin: string) -> bool {
-	if os.get_env("OCN_ANY_ODIN", context.temp_allocator) != "" { return true }
-	want := strings.trim_space(read_text("odin.version"))
-	got, code := toolbox.capture({odin, "version"})
-	if code == 0 && strings.contains(got, want) { return true }
-	fmt.eprintfln("This tree needs Odin %s (odin.version); found: %s", want, strings.trim_space(got))
-	fmt.eprintln("Install that release, or set OCN_ANY_ODIN=1 to build anyway.")
-	return false
-}
-
-// The toolkit: the one asked for, else the submodule, else a copy beside this repository.
-toolkit_folder :: proc(asked: string) -> (gt: string, ok: bool) {
-	if asked != "" { return asked, os.exists(fmt.tprintf("%s/src/ui", asked)) }
-	if os.exists(GT_DEFAULT + "/src/ui") { return GT_DEFAULT, true }
-	if os.exists(GT_BESIDE + "/src/ui") { return GT_BESIDE, true }
-	return "", false
-}
-
 // The collection of the toolkit at `gt` (its packages are in its src folder).
 gt_collection :: proc(gt: string) -> string { return fmt.tprintf("-collection:gt=%s/src", gt) }
-
-build_program :: proc(b: Build) -> bool {
-	gt, found := toolkit_folder(b.gt)
-	if !found { fmt.eprintln("the toolkit is missing: git submodule update --init"); return false }
-	out := b.out != "" ? b.out : OUT_DEFAULT
-	odin := os.get_env("ODIN", context.temp_allocator)
-	if odin == "" { odin = "odin" }
-	if !odin_is_pinned(odin) { return false }
-	if !build_native(b.force) || !build_vt(b.force) { return false }
-	if !make_folder(filepath.dir(out)) { return false }
-
-	cmd := make([dynamic]string, context.temp_allocator)
-	append(&cmd, odin, "build", "src", gt_collection(gt), fmt.tprintf("-out:%s", out), "-vet")
-	native_flags := NATIVE_FLAGS
-	append(&cmd, ..native_flags[:])
-	// what the program takes of the toolkit (OCN_PROJECT.features): a release build only the Lucide icons it names
-	lucide := ""
-	if b.mode == .Release {
-		why: string
-		if lucide, why = toolbox.lucide_subset(OCN_PROJECT); why != "" { fmt.eprintfln("build: the Lucide subset: %s", why); return false }
-	}
-	append(&cmd, ..toolbox.feature_defines(OCN_PROJECT.features, ODIN_OS, lucide))
-	when ODIN_OS == .Windows {
-		// (what every program of the toolkit gets from its Project: the resource, the console launcher it embeds, the
-		// AppUserModelID of its windows)
-		p := OCN_PROJECT
-		p.toolkit = gt
-		if !toolbox.build_windows(p) { return false }
-		append(&cmd, ..toolbox.windows_flags(p, true))
-		// (the C runtime linked in: no vcruntime140.dll to ship)
-		append(&cmd, "-extra-linker-flags:/NODEFAULTLIB:vcruntime.lib /DEFAULTLIB:libvcruntime.lib")
-		if b.mode != .Debug { append(&cmd, "-subsystem:windows") }
-	} else {
-		flags := LINUX_FLAGS
-		release := LINUX_RELEASE_FLAGS
-		append(&cmd, ..(b.mode == .Release ? release[:] : flags[:]))
-	}
-	switch b.mode {
-	case .Dev:     append(&cmd, "-o:minimal")
-	case .Release: append(&cmd, "-o:speed")
-	case .Debug:   append(&cmd, "-debug")
-	}
-	if !run(..cmd[:]) { return false }
-	if !write_text(fmt.tprintf("%s.mode", out), BUILD_MODE_NAMES[b.mode]) { return false }
-	fmt.printfln("built %s, %s (toolkit: %s)", out, BUILD_MODE_NAMES[b.mode], gt)
-	return true
-}
-
-run_build :: proc(args: []string) -> cli.Exit {
-	b := Build {
-		gt  = os.get_env("GT", context.temp_allocator),
-		out = os.get_env("OUT", context.temp_allocator),
-	}
-	for a in args {
-		switch a {
-		case "debug":   b.mode = .Debug
-		case "release": b.mode = .Release
-		case "--force": b.force = true
-		case:
-			fmt.eprintfln("build: what is %s?", a)
-			return .Usage
-		}
-	}
-	return toolbox.ended(build_program(b))
-}

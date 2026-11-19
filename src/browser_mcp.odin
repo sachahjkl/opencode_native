@@ -23,7 +23,7 @@ import tk_http "gt:http"
 import "core:log"
 import "core:strings"
 import "core:sync"
-import "core:thread"
+@(require) import "core:thread"   // (its only use is under `when !ODIN_TEST`: the tests' -vet would refuse it)
 import "core:time"
 import "gt:ui"
 

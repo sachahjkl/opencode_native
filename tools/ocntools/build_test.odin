@@ -1,10 +1,46 @@
 package ocntools
 
+import "base:runtime"
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strings"
 import "core:testing"
+import toolbox "gt:toolbox"
+
+// What the toolkit's check and build must keep of what opencode native's own did: every step on each system, the Rust
+// tests and the emulation's headers, every test package, the build that never overwrites the running program, the
+// pinned Odin, and the linker flags of each system.
+@(test)
+the_build_keeps_what_ocn_needs :: proc(t: ^testing.T) {
+	o := build_options()
+	for system in ([]runtime.Odin_OS_Type{.Linux, .Windows}) {
+		steps := toolbox.check_steps(o, system)
+		want := toolbox.Check_Steps{.Changelog, .Scopes, .Checks, .Catalogues, .Notices, .Odin_Check, .Tool, .Tests, .Release_Build}
+		testing.expectf(t, want <= steps, "%v: the check lost %v", system, want - steps)
+	}
+	testing.expect(t, .Check_Windows in toolbox.check_steps(o, .Linux))
+	// (no macOS code; the Rust library carries the toolkit's crates, which the toolkit then does not build)
+	testing.expect(t, .Check_Darwin not_in toolbox.check_steps(o, .Linux))
+	testing.expect(t, o.native_carried)
+	testing.expect(t, .Launcher in toolbox.check_steps(o, .Windows))
+	testing.expect_value(t, len(o.checks), 2)
+	testing.expect(t, o.prepare != nil)
+	paths := make([dynamic]string, context.temp_allocator)
+	for p in o.tests { append(&paths, p.path) }
+	testing.expect_value(t, strings.join(paths[:], " ", context.temp_allocator), "src src/update tools/ocntools")
+	testing.expect(t, o.tests[0].one_thread)
+	testing.expect_value(t, o.iterate, toolbox.Build_Mode.Dev)
+	testing.expect(t, o.fresh && o.pinned_odin && o.notices)
+	testing.expect_value(t, toolbox.linker_flag(o.project, .Windows, "build", true), "-extra-linker-flags:" + toolbox.WINDOWS_STATIC_VCRUNTIME)
+	testing.expect_value(t, toolbox.linker_flag(o.project, .Linux, "build", true), "-extra-linker-flags:" + toolbox.LINUX_LINK + " -s")
+	testing.expect_value(t, toolbox.linker_flag(o.project, .Linux, "build", false), "-extra-linker-flags:" + toolbox.LINUX_LINK)
+	for d in ([]string{"-define:MERMAID_NATIVE_LINK=false", "-define:IMAGE_WEBP=true", "-define:IMAGE_WEBP_NATIVE_LINK=false"}) {
+		testing.expectf(t, slice.contains(o.defines, d), "%s on every system", d)
+	}
+	testing.expect(t, slice.contains(o.linux_defines, "-define:FONT_NATIVE_LINK=false"))
+}
 
 CHANGELOG_SAMPLE :: "# Changelog\r\n\r\n## [0.2.0] - 2026-01-02\r\n\r\n### Added\r\n- **Two**\r\n\r\n## [0.1.0] - 2026-01-01\r\n\r\n### Added\r\n- **One**\r\n\r\n[0.2.0]: https://x\r\n"
 
