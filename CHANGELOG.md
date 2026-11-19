@@ -4,6 +4,12 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.78.1] - 2026-11-19 08:50
+
+### Fixed
+- **A running download always shows in the status bar**: with the system's notifications muted, its progress and its Cancel stay in the window; its notification, when shown, still says its end.
+- **A download's progress moves on its own**: the status bar and the notification follow the bytes while the window is idle, instead of waiting at 0 B until another action.
+
 ## [0.78.0] - 2026-11-19 03:34
 
 ### Changed
@@ -1948,6 +1954,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.78.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.78.1
 [0.78.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.78.0
 [0.77.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.77.0
 [0.76.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.76.2
