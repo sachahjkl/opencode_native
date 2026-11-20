@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.80.0] - 2026-11-20 05:36
+
+### Added
+- **Pictures in the cards of the server's files**: with a server on another computer, the file browser's card views show a thumbnail of each picture of the session's folder (PNG, JPEG, BMP, WebP, GIF up to 20 MB); other files show their icon.
+
 ## [0.79.1] - 2026-11-19 22:33
 
 ### Fixed
@@ -1969,6 +1974,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.80.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.80.0
 [0.79.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.79.1
 [0.79.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.79.0
 [0.78.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.78.1
