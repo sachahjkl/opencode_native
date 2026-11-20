@@ -94,7 +94,7 @@ approval_button :: proc(app: ^App, pane: ^Chat_Pane, em: f32) {
 	key := "approval_menu"
 	composer_tool_pad(em)
 	sig := ui.button("approval", ui.text_shown(i18n.tr(APPROVAL_SHORT[mode])), lucide.SHIELD, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true, lit = ui.menu_is_open(key), icon_color = color})
-	if sig.clicked { ui.menu_open(key, sig.box.rect, sig.box.key, search = false) }
+	if sig.clicked { ui.menu_open(key, sig.box.rect, sig.box.key) }
 	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(fmt.tprintf(i18n.tr("Approvals: %s (%s)"), i18n.tr(APPROVAL_WORDS[mode]), i18n.tr(APPROVAL_DETAIL[mode]))) } }
 	if ui.menu(key) {
 		ui.menu_heading(i18n.tr("Approvals in this session"))

@@ -625,7 +625,7 @@ downloads_pill :: proc(app: ^App, em: f32) {
 	case:                           label = fmt.tprintf("%d", shown)
 	}
 	sig := ui.button("###downloads", label, lucide.DOWNLOAD, o = {face = .Ghost, height = math.round(em * PILL_H_EM)})
-	if sig.clicked { ui.menu_open(DOWNLOADS_MENU_KEY, sig.box.rect, sig.box.key, search = false, align = .End) }
+	if sig.clicked { ui.menu_open(DOWNLOADS_MENU_KEY, sig.box.rect, sig.box.key, align = .End) }
 	ui.space(ui.SPACE_2)
 	if ui.menu(DOWNLOADS_MENU_KEY) { downloads_menu(app) }
 }

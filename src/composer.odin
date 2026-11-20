@@ -425,7 +425,7 @@ variant_button :: proc(app: ^App, pane: ^Chat_Pane, em: f32, glyph := false) {
 	composer_tool_pad(em)
 	sig := ui.button("variant", ui.text_shown(glyph ? "" : name), lucide.GAUGE, {face = .Ghost, height = math.round(em * BUTTON_COMPACT_H_EM), quiet = true})
 	key := "variant_menu"
-	if sig.clicked { ui.menu_open(key, sig.box.rect, sig.box.key, search = false) }
+	if sig.clicked { ui.menu_open(key, sig.box.rect, sig.box.key) }
 	if ui.hovered_for(sig) { if ui.tooltip() { ui.tooltip_text(glyph ? fmt.tprintf(i18n.tr("How hard the model thinks: %s"), name) : i18n.tr("How hard the model thinks")) } }
 	if ui.menu(key, em * 12) {
 		if ui.menu_item(fmt.tprintf("%s###v_default", i18n.tr("default")), "", current == "").clicked { choose_variant(app, pane, "") }
