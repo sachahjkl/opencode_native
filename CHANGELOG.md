@@ -4,6 +4,15 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.82.0] - 2026-11-20 12:10
+
+### Changed
+- **Smoother animations and scrolls on Linux**: each frame starts as late as it can and still reaches the screen in time, so it shows the latest input.
+- **Every menu filters what you type**: the menus of the file picker rows, the downloads, the approvals, the composer and the views show a field at their top; the first match is selected and Enter chooses it.
+
+### Fixed
+- **`nix run github:sachahjkl/opencode_native` works.** A flake fetched from GitHub is a tarball without the gui_toolkit submodule, and the build stopped at once; the package now takes the toolkit from an input pinned to the submodule's commit.
+
 ## [0.81.0] - 2026-11-20 09:27
 
 ### Added
@@ -1989,6 +1998,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.82.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.82.0
 [0.81.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.81.0
 [0.80.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.80.2
 [0.80.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.80.1
