@@ -768,6 +768,8 @@ stream_up :: proc(app: ^App) {
 	app.link = .Online
 	if was == .Online { return }
 	app.cx.waits_unread = true
+	// (.Connecting: a server just chosen, whose generation server_forget already changed)
+	if was != .Connecting { server_files_renew(app) }
 	if was == .Retrying {
 		terminals_renew(app)
 		browser_renew(app)

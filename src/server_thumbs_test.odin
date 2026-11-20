@@ -281,24 +281,37 @@ a_server_switch_stops_a_thumbnail_and_answers_it :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(app.server_files.thumbs.jobs), 0)
 }
 
-// The toolkit keys its thumbnails by the source's `user`: one per server address, the same when a server comes back.
+// The toolkit keys its thumbnails by the source's `user` and `generation`. The user is the App, always; the
+// generation stays while the connection does, and changes at a reconnection and at each server switch, a server come
+// back included: no two servers, and no server before and after a gap, share a thumbnail.
 @(test)
-each_server_has_its_own_thumbnails :: proc(t: ^testing.T) {
+a_reconnection_or_a_switch_gives_the_thumbnails_a_new_generation :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()
-	app := bench_new()
-	defer thumb_bench_end(app)
-	a := conn_make(app, {base = "http://a:4096"}, BENCH_TRANSPORT, 0, &bench_pool_ms)
-	b := conn_make(app, {base = "http://b:4096"}, BENCH_TRANSPORT, 0, &bench_pool_ms)
-	app.conn = a
-	of_a := server_files(app, "/p").user
-	app.conn = b
-	of_b := server_files(app, "/p").user
-	app.conn = a
-	again := server_files(app, "/p").user
-	testing.expect(t, of_a != of_b, "two servers, two keys")
-	testing.expect(t, of_a == again, "a server come back finds its own")
-	testing.expect(t, server_files_app(server_files(app)) == app, "the source's calls find the App")
-	app.conn = nil
+	app, src, _ := thumb_bench()
+	defer { bench_clear(app); thumb_bench_end(app) }
+	testing.expect(t, (^App)(src.user) == app, "the source's calls find the App")
+	first := src.generation
+	testing.expect_value(t, server_files(app, "/p").generation, first)   // (the same connection: the same thumbnails)
+	stream_down(app, 200)
+	stream_up(app)
+	again := server_files(app, "/p")
+	testing.expect(t, again.generation != first, "a reconnection: a new generation")
+	testing.expect(t, (^App)(again.user) == app, "the same user")
+	back := again.generation
+	stream_up(app)   // (already up: nothing was missed)
+	testing.expect_value(t, server_files(app, "/p").generation, back)
+	seen: [dynamic]u64
+	defer delete(seen)
+	append(&seen, first, back)
+	// to another server and back to this one: each a generation not seen before, the one come back fetches afresh
+	for _ in 0 ..< 2 {
+		server_forget(app)
+		gen := server_files(app, "/p").generation
+		for g in seen { testing.expectf(t, gen != g, "a switch: generation %d is new", gen) }
+		append(&seen, gen)
+		stream_up(app)   // (the first word of the server chosen: its generation is already its own)
+		testing.expect_value(t, server_files(app, "/p").generation, gen)
+	}
 }
 
 // The file browser on the session's folder of a server elsewhere, in its cards: the pictures' thumbnails come, the

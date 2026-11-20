@@ -29,13 +29,10 @@ Server_Files :: struct {
 	find:     Server_Files_Wait,
 	found_in: string,              // the folder searched, from the location ("": itself), with a '/' at its end (owned)
 	thumbs:   Server_Thumbs,
-	// the source's `user`, one per server address for the program's run: the toolkit's thumbnails are keyed by it, so
-	// a path of one server never shows the picture of another's, and a server come back finds its own (owned)
-	owners:   map[string]^Server_Files_Owner,
+	// the source's `generation`: the toolkit's thumbnails are keyed by it, so a server switch or a reconnection asks
+	// them again (a picture of another server, or changed during the gap, is never shown)
+	generation: u64,
 }
-
-// What a source's `user` points to. Never freed before the program's end: an address freed could be another server's.
-Server_Files_Owner :: struct { app: ^App }
 
 // A reply of the browser and the request that answers it.
 Server_Files_Wait :: struct {
@@ -96,7 +93,8 @@ server_files :: proc(app: ^App, location := "") -> ^ui.File_Source {
 	f := &app.server_files
 	delete(f.location)
 	f.location = strings.clone(path_clean(location))
-	f.source = {user = server_files_owner(app), separator = '/', list = server_files_list}
+	// (the browser calls with its copy of the source: `user` is what finds the App)
+	f.source = {user = app, generation = f.generation, separator = '/', list = server_files_list}
 	if f.location != "" {
 		f.source.caps = {.Read}
 		f.source.read, f.source.find, f.source.thumbnail = server_files_read, server_files_find, server_thumbnail
@@ -104,28 +102,13 @@ server_files :: proc(app: ^App, location := "") -> ^ui.File_Source {
 	return &f.source
 }
 
-// The owner of the server connected now (its address; "": none).
-@(private = "file")
-server_files_owner :: proc(app: ^App) -> ^Server_Files_Owner {
-	f := &app.server_files
-	base := app.conn != nil ? app.conn.http.base : ""
-	if o, ok := f.owners[base]; ok { return o }
-	o := new(Server_Files_Owner)
-	o.app = app
-	f.owners[strings.clone(base)] = o
-	return o
-}
+// The stream came back after a loss: what changed meanwhile is unknown, so the thumbnails are asked again.
+server_files_renew :: proc(app: ^App) { app.server_files.generation += 1 }
 
-// The App of a source's call (the browser calls with its copy of the source: its `user` is what tells).
-server_files_app :: proc(src: ^ui.File_Source) -> ^App { return (^Server_Files_Owner)(src.user).app }
-
-// The program's end: the thumbnails stop, the owners go.
+// The program's end: the thumbnails stop.
 server_files_end :: proc(app: ^App) {
 	f := &app.server_files
 	server_thumbs_stop(app)
-	for base, o in f.owners { delete(base); free(o) }
-	delete(f.owners)
-	f.owners = nil
 	// (a job that outlived the bound posts into a closed queue and touches the list no more)
 	delete(f.thumbs.jobs)
 	f.thumbs.jobs = nil
@@ -133,7 +116,7 @@ server_files_end :: proc(app: ^App) {
 
 @(private = "file")
 server_files_list :: proc(src: ^ui.File_Source, path: string, reply: ui.File_Reply) {
-	app := server_files_app(src)
+	app := (^App)(src.user)
 	tag := server_files_wait(&app.server_files.list, reply)
 	request(app, .Server_Files_List, "GET", path != "" ? fmt.tprintf("/api/fs/list?path=%s", tk_http.component_encode(path, context.temp_allocator)) : "/api/fs/list", tag = tag)
 }
@@ -148,7 +131,7 @@ server_files_within :: proc(f: ^Server_Files, path: string) -> (rel: string, ok:
 
 @(private = "file")
 server_files_read :: proc(src: ^ui.File_Source, path: string, max: int, reply: ui.File_Reply) {
-	app := server_files_app(src)
+	app := (^App)(src.user)
 	f := &app.server_files
 	rel, ok := server_files_within(f, path)
 	if !ok || rel == "" {
@@ -162,7 +145,7 @@ server_files_read :: proc(src: ^ui.File_Source, path: string, max: int, reply: u
 
 @(private = "file")
 server_files_find :: proc(src: ^ui.File_Source, folder, query: string, limit: int, reply: ui.File_Reply) {
-	app := server_files_app(src)
+	app := (^App)(src.user)
 	f := &app.server_files
 	rel, ok := server_files_within(f, folder)
 	if !ok {
@@ -213,6 +196,7 @@ server_files_forget :: proc(app: ^App) {
 	}
 	delete(f.location); delete(f.found_in)
 	f.location, f.found_in = "", ""
+	f.generation += 1   // (the next server's paths are not this one's: its thumbnails are its own)
 	server_thumbs_forget(app)
 }
 

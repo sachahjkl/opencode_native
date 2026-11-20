@@ -51,7 +51,7 @@ server_thumb_hook: proc(step: Server_Thumb_Step)
 // File_Source.thumbnail of the server's files: a picture gt:image decodes, in the session's folder, is fetched; any
 // other file is answered at once (its card keeps its kind's icon).
 server_thumbnail :: proc(src: ^ui.File_Source, path: string, px: int, reply: ui.File_Reply) {
-	app := server_files_app(src)
+	app := (^App)(src.user)
 	f := &app.server_files
 	rel, inside := server_files_within(f, path)
 	c := app.conn

@@ -34,12 +34,19 @@ The toolkit's file browser shows cards with a thumbnail of each file when its so
   with a count and a byte budget (least used first), and it outlives the dialog: a second view of the same folder, or the
   next dialog, shows them without a request. A second cache here was refused: it holds the same pixels twice, and the
   source is asked again only after the toolkit dropped an entry over its budget.
-- **The source's identity is its server.** The toolkit puts `File_Source.user` in the key, so `user` is a number that a
-  server switch changes (`Server_Files.server`), not the App: a path of the new server never shows a picture of the
-  old one. The procedures find the App from the source's address (`container_of`), not from `user`. A number, not a
-  pointer: an object freed at a switch can be allocated again at the same address, and its key would come back.
+- **One `user`, a generation per connection.** The toolkit keys a thumbnail by `File_Source.user`,
+  `File_Source.generation` and the file. `user` is the App, for the program's run; `Server_Files.generation` is the
+  generation, and the source takes it each time it is built. It goes up at a server switch (`server_files_forget`) and
+  when the stream comes back after a loss (`server_files_renew` from `stream_up`): a path of another server, or of the
+  same one after a gap, never shows a picture kept before. The browser reads it when a dialog opens; the old entries are
+  no longer asked, and the cache's budget drops them.
+- **The price: a server come back fetches its pictures again.** A key per server address (one owner each, kept for the
+  run) let a server come back find its thumbnails; it was refused, since they could be stale and the owners were never
+  freed. A switch back and forth fetches the folder's pictures once more.
 - **What the cache cannot see.** The listing gives no size and no date: a picture changed on the server keeps its old
-  thumbnail until the toolkit drops it or the server changes.
+  thumbnail until the toolkit drops it, a reconnection, or a server switch. F5 in the browser lists the folder again
+  but keeps the thumbnails: it is the toolkit's act, ocn is not told of it, and the generation is read only when a
+  dialog opens.
 
 ## The state machine of an ask
 
