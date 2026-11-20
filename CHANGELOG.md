@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.81.0] - 2026-11-20 09:27
+
+### Added
+- **More acts on a file in the file picker**: its context menu copies the path, the name or the path relative to the session folder, opens the file with its program, shows it in its folder, renames it in place (F2) or moves it to the trash (Del, undone from a toast). Each shows when the folder allows it: a remote server offers the copies and Download.
+
 ## [0.80.2] - 2026-11-20 07:41
 
 ### Fixed
@@ -1984,6 +1989,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.81.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.81.0
 [0.80.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.80.2
 [0.80.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.80.1
 [0.80.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.80.0
