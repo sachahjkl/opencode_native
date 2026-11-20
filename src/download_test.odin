@@ -459,7 +459,7 @@ a_running_download_shows_in_the_pill_beside_its_notification :: proc(t: ^testing
 	})
 }
 
-// The session's files (Ctrl+P): a file's row menu offers Download, a folder's offers nothing.
+// The session's files (Ctrl+P): a file's row menu offers Download, a folder's only the toolkit's copies.
 @(test)
 a_file_of_the_browser_can_be_downloaded :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
@@ -476,10 +476,15 @@ a_file_of_the_browser_can_be_downloaded :: proc(t: ^testing.T) {
 		session.key(s, .F10, {.Shift})
 		session.frames(s, 2)
 		testing.expect(t, session.find_text(s, "Download") == nil, "no Download on a folder")
+		testing.expect(t, session.find_text(s, "Copy path") != nil, "the toolkit's copies on a folder")
+		session.key(s, .Escape)   // (the folder's menu, else Down moves in it)
+		session.frames(s, 2)
 		session.key(s, .Down)   // (README.md)
 		session.key(s, .F10, {.Shift})
 		session.frames(s, 2)
 		testing.expect(t, session.find_text(s, "Download") != nil, "Download in a file's row menu")
+		// (the server's files: it has no write API and they are not on this computer)
+		testing.expect(t, session.find_text(s, "Rename") == nil && session.find_text(s, "Show in folder") == nil, "no local acts on the server's files")
 		session.key(s, .Escape)
 		session.key(s, .Escape)
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return !ui.file_dialog_shown(&(^App)(s.user).state) }, "closed")
