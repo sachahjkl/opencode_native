@@ -65,5 +65,7 @@ purpose, the decisions, what was refused.
 - [features/remote-download.md](features/remote-download.md): a file of the server's computer downloaded here: in
   one streamed request on a worker, through a temp that takes the target's name at the end; its progress in a
   notification of the system, else the status bar's pill; the file browser's row action.
+- [features/server-thumbnails.md](features/server-thumbnails.md): the cards of the file browser show the server's
+  pictures: fetched and reduced on two workers of their own, bounded in bytes; the toolkit's cache keyed by the server.
 - [infrastructure/transport.md](infrastructure/transport.md): requests, the event stream and the sockets over the
   toolkit's gt:http; the limits, the stream up at its first event, why sockets send from their own thread.

@@ -721,6 +721,7 @@ main :: proc() {
 	threads_stop(app)
 	updates_stop(app)   // (before the state's posts close: no news after it)
 	downloads_stop(app)   // (their temps removed: the window is gone, nothing waits on a frame)
+	server_files_end(app)   // (the thumbnails' workers stop before the state's posts close)
 	if app.cx.due[.Drafts].due_ms != 0 { drafts_save(app) }   // (what was typed in the last second)
 	config.user_writer_stop(&app.prefs_writer, &app.cfg_prefs)
 	stores_close(app)   // (waits for the disk: the window is gone, nothing waits on a frame)

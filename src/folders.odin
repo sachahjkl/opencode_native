@@ -19,7 +19,8 @@ Folder_Purpose :: enum u8 { New_Session, Move_Session }
 // The server's files as a source of the file browser. It lists any folder of the server (GET /api/fs/list with an absolute
 // path). It reads a file and searches subfolders only inside its location, a session's folder: the server does both only
 // inside one of its locations, and loads and keeps one for every folder it is asked about, so no other folder is asked.
-// One request of each kind is on its way at a time; a reply replaced is never answered (its dialog moved on).
+// One request of each kind is on its way at a time; a reply replaced is never answered (its dialog moved on). Thumbnails
+// are asked several at a time: server_thumbs.odin.
 Server_Files :: struct {
 	source:   ui.File_Source,
 	location: string,              // the session's folder, with '/' ("": none: no preview, no search) (owned)
@@ -27,7 +28,14 @@ Server_Files :: struct {
 	read:     Server_Files_Wait,
 	find:     Server_Files_Wait,
 	found_in: string,              // the folder searched, from the location ("": itself), with a '/' at its end (owned)
+	thumbs:   Server_Thumbs,
+	// the source's `user`, one per server address for the program's run: the toolkit's thumbnails are keyed by it, so
+	// a path of one server never shows the picture of another's, and a server come back finds its own (owned)
+	owners:   map[string]^Server_Files_Owner,
 }
+
+// What a source's `user` points to. Never freed before the program's end: an address freed could be another server's.
+Server_Files_Owner :: struct { app: ^App }
 
 // A reply of the browser and the request that answers it.
 Server_Files_Wait :: struct {
@@ -88,23 +96,49 @@ server_files :: proc(app: ^App, location := "") -> ^ui.File_Source {
 	f := &app.server_files
 	delete(f.location)
 	f.location = strings.clone(path_clean(location))
-	f.source = {user = app, separator = '/', list = server_files_list}
+	f.source = {user = server_files_owner(app), separator = '/', list = server_files_list}
 	if f.location != "" {
 		f.source.caps = {.Read}
-		f.source.read, f.source.find = server_files_read, server_files_find
+		f.source.read, f.source.find, f.source.thumbnail = server_files_read, server_files_find, server_thumbnail
 	}
 	return &f.source
 }
 
+// The owner of the server connected now (its address; "": none).
+@(private = "file")
+server_files_owner :: proc(app: ^App) -> ^Server_Files_Owner {
+	f := &app.server_files
+	base := app.conn != nil ? app.conn.http.base : ""
+	if o, ok := f.owners[base]; ok { return o }
+	o := new(Server_Files_Owner)
+	o.app = app
+	f.owners[strings.clone(base)] = o
+	return o
+}
+
+// The App of a source's call (the browser calls with its copy of the source: its `user` is what tells).
+server_files_app :: proc(src: ^ui.File_Source) -> ^App { return (^Server_Files_Owner)(src.user).app }
+
+// The program's end: the thumbnails stop, the owners go.
+server_files_end :: proc(app: ^App) {
+	f := &app.server_files
+	server_thumbs_stop(app)
+	for base, o in f.owners { delete(base); free(o) }
+	delete(f.owners)
+	f.owners = nil
+	// (a job that outlived the bound posts into a closed queue and touches the list no more)
+	delete(f.thumbs.jobs)
+	f.thumbs.jobs = nil
+}
+
 @(private = "file")
 server_files_list :: proc(src: ^ui.File_Source, path: string, reply: ui.File_Reply) {
-	app := (^App)(src.user)
+	app := server_files_app(src)
 	tag := server_files_wait(&app.server_files.list, reply)
 	request(app, .Server_Files_List, "GET", path != "" ? fmt.tprintf("/api/fs/list?path=%s", tk_http.component_encode(path, context.temp_allocator)) : "/api/fs/list", tag = tag)
 }
 
 // `path` from the location ("": the location itself), false when it is not in it.
-@(private = "file")
 server_files_within :: proc(f: ^Server_Files, path: string) -> (rel: string, ok: bool) {
 	p := path_clean(path)
 	if p == f.location { return "", true }
@@ -114,7 +148,7 @@ server_files_within :: proc(f: ^Server_Files, path: string) -> (rel: string, ok:
 
 @(private = "file")
 server_files_read :: proc(src: ^ui.File_Source, path: string, max: int, reply: ui.File_Reply) {
-	app := (^App)(src.user)
+	app := server_files_app(src)
 	f := &app.server_files
 	rel, ok := server_files_within(f, path)
 	if !ok || rel == "" {
@@ -128,7 +162,7 @@ server_files_read :: proc(src: ^ui.File_Source, path: string, max: int, reply: u
 
 @(private = "file")
 server_files_find :: proc(src: ^ui.File_Source, folder, query: string, limit: int, reply: ui.File_Reply) {
-	app := (^App)(src.user)
+	app := server_files_app(src)
 	f := &app.server_files
 	rel, ok := server_files_within(f, folder)
 	if !ok {
@@ -179,6 +213,7 @@ server_files_forget :: proc(app: ^App) {
 	}
 	delete(f.location); delete(f.found_in)
 	f.location, f.found_in = "", ""
+	server_thumbs_forget(app)
 }
 
 ////////////////////////////////
