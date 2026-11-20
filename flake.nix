@@ -2,8 +2,12 @@
   description = "opencode native: a native desktop client for opencode";
 
   inputs = {
-    # the toolkit is a submodule: the package builds from it
-    self.submodules = true;
+    # The toolkit, at the submodule's commit: a flake fetched from GitHub is a tarball without submodules
+    # (gui_toolkit docs/toolbox.md, "The flake's toolkit").
+    gui_toolkit = {
+      url = "github:sachahjkl/gui_toolkit/f533e5629804e0907dec7de78e4e34b9f1e0bcfc";
+      flake = false;
+    };
     nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
     git-hooks = {
       url = "https://flakehub.com/f/cachix/git-hooks.nix/0.1";
@@ -14,6 +18,7 @@
   outputs = {
     nixpkgs,
     git-hooks,
+    gui_toolkit,
     ...
   }: let
     system = "x86_64-linux";
@@ -124,8 +129,15 @@
       src = lib.fileset.toSource {
         root = ./.;
         # (the site stays out, but the vendor's mark the setup screen #loads from it comes along)
-        fileset = lib.fileset.union ./site/img/froment-software-64.png (lib.fileset.difference ./. (lib.fileset.unions (map lib.fileset.maybeMissing [./site ./docs ./build])));
+        fileset = lib.fileset.union ./site/img/froment-software-64.png (lib.fileset.difference ./. (lib.fileset.unions (map lib.fileset.maybeMissing [./site ./docs ./build ./ext/gui_toolkit])));
       };
+      # (the toolkit from its input, where the submodule goes; writable: its build writes the native library there,
+      # and native/Cargo.toml reaches its crates by path)
+      postUnpack = ''
+        mkdir -p $sourceRoot/ext
+        cp -r ${gui_toolkit} $sourceRoot/ext/gui_toolkit
+        chmod -R u+w $sourceRoot/ext/gui_toolkit
+      '';
       cargoDeps = pkgs.rustPlatform.importCargoLock {lockFile = ./native/Cargo.lock;};
 
       nativeBuildInputs = [
