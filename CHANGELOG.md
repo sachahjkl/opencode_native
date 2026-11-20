@@ -4,6 +4,11 @@ All notable changes to opencode native. The format is based on [Keep a Changelog
 project follows [semantic versioning](https://semver.org). What is not released yet is in `changelog.d/`, not under "Unreleased":
 two branches never conflict on this file.
 
+## [0.80.2] - 2026-11-20 07:41
+
+### Fixed
+- **Full frame rate on a fast screen under Wayland**: a window on a 144 Hz screen draws at that rate, not at the rate of the first screen found.
+
 ## [0.80.1] - 2026-11-20 06:54
 
 ### Fixed
@@ -1979,6 +1984,7 @@ Schedules and artifacts are experimental on the server: where its configuration 
 - First version: sessions grouped by folder, the conversation streamed from the event stream with Markdown, reasoning and
   tool cards, the composer with the agent and the model, permission requests, the integrated title bar.
 
+[0.80.2]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.80.2
 [0.80.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.80.1
 [0.80.0]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.80.0
 [0.79.1]: https://github.com/sachahjkl/opencode_native/releases/tag/v0.79.1
